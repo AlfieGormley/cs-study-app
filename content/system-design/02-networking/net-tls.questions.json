@@ -1,0 +1,379 @@
+[
+  {
+    "id": "net-tls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a TLS 1.3 full handshake need only one round trip, when TLS 1.2 needed two?",
+    "options": [
+      {
+        "text": "The client sends its key share in the very first message, guessing the key-exchange group, so both sides can derive keys after one exchange",
+        "explanation": "Correct. In TLS 1.2, the client only sends its key share in the second round trip, after seeing the server's choice. TLS 1.3 collapses this by having the client send a key share up front."
+      },
+      {
+        "text": "TLS 1.3 skips certificate verification",
+        "explanation": "TLS 1.3 still sends and verifies the server certificate on every full handshake; it just encrypts it. Authentication wasn't removed."
+      },
+      {
+        "text": "TLS 1.3 runs over UDP",
+        "explanation": "TLS 1.3 normally runs over TCP. QUIC uses TLS 1.3 over UDP, but the 1-RTT handshake is a property of TLS 1.3 itself."
+      },
+      {
+        "text": "TLS 1.3 uses smaller certificates",
+        "explanation": "Certificate size affects bytes, not the number of round trips. The saving comes from restructuring the key exchange."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. TLS 1.2: RTT 1 = client offers options, server picks a cipher and sends its certificate and key parameters; RTT 2 = client sends its key share, then both exchange Finished.\n2. TLS 1.3: the ClientHello already contains an (EC)DHE public key for a likely group (e.g. X25519).\n3. The server replies with its own share and can immediately encrypt the certificate and Finished.\n4. Client verifies and sends Finished **plus its HTTP request**.\n5. Saving at 100 ms RTT: 100 ms per new connection. (If the guess is wrong, a HelloRetryRequest costs an extra RTT.)",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "net-tls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A wildcard certificate is issued for `*.example.com`. Which hostname will it **not** be valid for?",
+    "options": [
+      {
+        "text": "`shop.example.com`",
+        "explanation": "A wildcard matches exactly one label in the leftmost position, and `shop` is one label, so this is covered."
+      },
+      {
+        "text": "`api.example.com`",
+        "explanation": "`api` is a single leftmost label, so `*.example.com` covers it."
+      },
+      {
+        "text": "`eu.api.example.com`",
+        "explanation": "Correct. The wildcard matches only one label. `eu.api` is two labels, so you'd need `*.api.example.com` or an explicit name."
+      },
+      {
+        "text": "`www.example.com`",
+        "explanation": "`www` is a single label, so it matches the wildcard."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `*` replaces exactly **one** DNS label (the text between dots), in the leftmost position.\n2. `shop.example.com`, `api.example.com`, `www.example.com` → one label before `example.com` → valid.\n3. `eu.api.example.com` → two labels → **invalid**.\n4. Also note `*.example.com` doesn't cover the bare `example.com`; add it as a separate SAN.",
+    "link": {
+      "title": "Public key certificate (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Public_key_certificate"
+    }
+  },
+  {
+    "id": "net-tls-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After a certificate renewal, your site works in Chrome on desktop, but your Android app and `curl` fail with 'unable to verify the first certificate'. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The new certificate uses TLS 1.3",
+        "explanation": "Certificates are not tied to a single TLS version. The reported error concerns chain validation; TLS-version support depends on the particular client and library."
+      },
+      {
+        "text": "The root CA was removed from all trust stores",
+        "explanation": "If the root were untrusted, desktop Chrome would fail too. The fact that only some clients fail points to a missing intermediate."
+      },
+      {
+        "text": "DNS is returning the wrong IP for the app",
+        "explanation": "A wrong IP would usually give a name mismatch or connection error. 'Unable to verify the first certificate' specifically means the client couldn't find the issuer of the leaf."
+      },
+      {
+        "text": "The server is sending only the leaf certificate, not the intermediate; desktop browsers fill the gap themselves but other clients don't",
+        "explanation": "Correct. Browsers can cache intermediates or fetch them via the certificate's AIA URL. Many other clients don't, so the chain to a trusted root is broken."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The client needs a path: leaf → intermediate → root (in its trust store).\n2. The server must send **leaf + intermediate(s)**; the root is already on the client.\n3. After renewal, the config often points at `cert.pem` (leaf only) instead of `fullchain.pem`.\n4. Chrome on desktop hides this by fetching the intermediate itself; `curl` and many mobile stacks don't.\n5. Check with `openssl s_client -connect host:443 -showcerts` and fix the chain file.",
+    "link": {
+      "title": "High Performance Browser Networking: TLS",
+      "url": "https://hpbn.co/transport-layer-security-tls/"
+    }
+  },
+  {
+    "id": "net-tls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want your load balancer to route `/api/*` to one service and `/static/*` to another, while traffic between the load balancer and services must also be encrypted. Which TLS pattern fits?",
+    "options": [
+      {
+        "text": "TLS passthrough to the services",
+        "explanation": "With passthrough the load balancer never decrypts, so it can't see the URL path and can't route on `/api` vs `/static`. It could only route by SNI."
+      },
+      {
+        "text": "Terminate at the load balancer and re-encrypt to the services (or use mTLS)",
+        "explanation": "Correct. Decrypting at the load balancer lets it read paths and headers for L7 routing; opening a new TLS connection to each backend keeps the internal hop encrypted."
+      },
+      {
+        "text": "Terminate at the load balancer, then plain HTTP to the services",
+        "explanation": "This allows path routing but leaves the internal hop unencrypted, which breaks the requirement."
+      },
+      {
+        "text": "Use a single TLS session from the client through to every service",
+        "explanation": "A TLS session is between two endpoints. One session can't fan out to multiple services and still let the middle box read the path."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Requirement A: route by path → the LB must **see HTTP** → it must decrypt.\n2. Requirement B: internal hop encrypted → the LB must **open a new TLS connection** to backends.\n3. Passthrough fails A; edge-only termination fails B.\n4. Re-encryption satisfies both. The cost is two TLS sessions per request path, mitigated by keeping the LB→backend connections pooled.",
+    "link": {
+      "title": "What is an Application Load Balancer? (AWS)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html"
+    }
+  },
+  {
+    "id": "net-tls-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A mobile app's users are 150 ms from your only region. Which measures reduce the latency added by TLS for them? Select all that apply.",
+    "options": [
+      {
+        "text": "Upgrade from TLS 1.2 to TLS 1.3",
+        "explanation": "Correct. That removes one round trip from every full handshake: 150 ms saved per new connection."
+      },
+      {
+        "text": "Terminate TLS at CDN edges close to users",
+        "explanation": "Correct. The handshake round trips now cost the short RTT to the edge (e.g. 10 ms) instead of 150 ms; the edge keeps warm connections to the origin."
+      },
+      {
+        "text": "Keep connections alive and reuse them across requests",
+        "explanation": "Correct. A reused connection pays no handshake at all for subsequent requests."
+      },
+      {
+        "text": "Switch from ECDSA to RSA-4096 certificates",
+        "explanation": "This makes things worse: RSA-4096 certificates and signatures are larger and much slower to compute than ECDSA, adding bytes and server CPU."
+      },
+      {
+        "text": "Enable session resumption with 0-RTT for requests the application can safely tolerate being replayed",
+        "explanation": "Correct. Returning clients can send `GET` requests in the first flight, removing the TLS round trip on resumption."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Baseline, new connection, TLS 1.2: TCP 1 + TLS 2 = **3 RTT = 450 ms** before the request.\n\n- TLS 1.3 → 2 RTT = 300 ms.\n- 0-RTT on resume → 1 RTT (TCP only) = 150 ms.\n- Edge at 10 ms RTT → setup ≈ 20 ms, plus one origin round trip over a warm connection.\n- Connection reuse → 0 ms setup for later requests.\n\nRSA-4096 only adds cost.",
+    "link": {
+      "title": "Introducing 0-RTT (Cloudflare blog)",
+      "url": "https://blog.cloudflare.com/introducing-0-rtt/"
+    }
+  },
+  {
+    "id": "net-tls-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your team proposes enabling TLS 1.3 0-RTT for all API endpoints, including `POST /payments`. What's the main risk?",
+    "options": [
+      {
+        "text": "0-RTT data is sent unencrypted",
+        "explanation": "Early data is encrypted, but it can be replayed and lacks forward secrecy against later compromise of its PSK."
+      },
+      {
+        "text": "0-RTT breaks forward secrecy for all later traffic",
+        "explanation": "With PSK plus fresh (EC)DHE, later application traffic retains forward secrecy even though early data does not. PSK-only mode has different forward-secrecy properties."
+      },
+      {
+        "text": "An attacker can capture and replay the early-data request, so the payment could be processed twice",
+        "explanation": "Correct. Captured early data can be replayed across connections. Reject payment requests in early data unless the application has explicitly designed and validated replay-safe handling; an idempotency key alone is not a complete transport replay policy."
+      },
+      {
+        "text": "0-RTT doubles the handshake latency",
+        "explanation": "0-RTT removes handshake latency on resumption; that's the whole point. Its cost is security, not speed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Early data uses keys derived from a PSK established by a previous handshake.\n2. An attacker can record and replay the first flight, potentially to a different server.\n3. A correctly implemented safe product read can tolerate repetition; a payment may charge twice.\n4. Clients should use safe methods unless they have additional safety information. A proxy marks forwarded early requests with `Early-Data: 1`; an origin that cannot process them safely replies `425 Too Early`. Use payment idempotency controls independently.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "net-tls-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A TLS-passthrough L4 load balancer fronts 200 customer domains, each with its own certificate on different backend clusters. How can it send each connection to the right cluster without decrypting?",
+    "options": [
+      {
+        "text": "It reads the SNI hostname from the unencrypted ClientHello",
+        "explanation": "Correct. SNI is sent in clear in the ClientHello (unless Encrypted Client Hello is used), so an L4/TLS-aware proxy can route on it without holding any keys."
+      },
+      {
+        "text": "It reads the `Host` header",
+        "explanation": "The `Host` header is inside the encrypted HTTP request, so a passthrough balancer can't see it."
+      },
+      {
+        "text": "It uses a different destination port for each domain",
+        "explanation": "Clients all connect to port 443 for HTTPS, so ports can't distinguish 200 domains."
+      },
+      {
+        "text": "It can't; passthrough requires one IP address per domain",
+        "explanation": "That was true before SNI was widely supported. Today SNI-based routing makes shared IPs work with passthrough."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Passthrough means the LB sees only TCP plus the cleartext parts of TLS.\n2. The ClientHello includes `server_name` (SNI), e.g. `shop.customer42.com`.\n3. The LB peeks at it (HAProxy `req.ssl_sni`, Envoy's TLS inspector) and picks the backend cluster.\n4. Caveat: **Encrypted Client Hello (ECH)** hides the real SNI behind an outer, public name, which would break this unless the LB itself holds the ECH keys.",
+    "link": {
+      "title": "Server Name Indication (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Server_Name_Indication"
+    }
+  },
+  {
+    "id": "net-tls-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A returning client reconnects over TCP using TLS 1.3 session resumption with a valid ticket, but the server has early data (0-RTT) **disabled**. RTT is 50 ms. How long after starting does the client's HTTP request leave?",
+    "options": [
+      {
+        "text": "Immediately, because resumption is 0-RTT",
+        "explanation": "Resumption and 0-RTT are separate. Without early data, the client must still finish a 1-RTT handshake before sending application data."
+      },
+      {
+        "text": "After about 50 ms",
+        "explanation": "That counts only the TCP handshake, as if TLS resumption needed no round trip. Without early data it still needs one."
+      },
+      {
+        "text": "After about 150 ms",
+        "explanation": "That's a full TLS 1.2 handshake over TCP (3 RTT). TLS 1.3, resumed or not, needs one TLS round trip."
+      },
+      {
+        "text": "After about 100 ms: one RTT for TCP and one for the resumed TLS handshake",
+        "explanation": "Correct. Resumption skips the certificate and its verification (saving CPU and bytes), but the round-trip count is the same as a full TLS 1.3 handshake: 2 RTT over TCP."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Count the round trips:\n\n| Step | RTT |\n|---|---|\n| TCP SYN / SYN-ACK | 1 |\n| ClientHello + PSK / ServerHello + Finished | 1 |\n| Then the request goes out | |\n\n2 × 50 ms = **100 ms**.\n\nWith 0-RTT enabled, the request would ride with the ClientHello: 50 ms. With QUIC and 0-RTT: 0 ms of setup before the request leaves.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "net-tls-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about a certificate-authenticated TLS 1.3 full handshake using (EC)DHE, without ECH, are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The server's certificate travels encrypted",
+        "explanation": "Correct. Keys are derived right after ServerHello, so the certificate, CertificateVerify and Finished are all encrypted, unlike in TLS 1.2."
+      },
+      {
+        "text": "The SNI hostname is encrypted by default",
+        "explanation": "SNI sits in the ClientHello, before any keys exist, so it's in the clear unless Encrypted Client Hello is used."
+      },
+      {
+        "text": "This handshake uses ephemeral (EC)DHE, so later theft of the certificate private key does not decrypt recorded sessions",
+        "explanation": "Correct. TLS 1.3 removed static RSA key exchange; the long-term key only signs the handshake, giving forward secrecy."
+      },
+      {
+        "text": "Static RSA key exchange is still allowed for compatibility",
+        "explanation": "It was removed precisely because it gives no forward secrecy. RSA keys can still be used for *signatures*, just not for key transport."
+      },
+      {
+        "text": "If the server doesn't support the key-exchange group the client guessed, a HelloRetryRequest costs an extra round trip",
+        "explanation": "Correct. The client then resends its ClientHello with a share for a group the server accepts."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Go message by message:\n\n1. **ClientHello** (clear): versions, ciphers, key share, SNI, ALPN.\n2. **ServerHello** (clear): chosen parameters and the server's key share. Both sides now derive handshake keys.\n3. **Certificate, CertificateVerify, Finished**: encrypted.\n4. Key shares are fresh for each connection → **forward secrecy**.\n5. Wrong group guess → HelloRetryRequest → +1 RTT; clients guess common groups (X25519, or a hybrid post-quantum group) to avoid it.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "net-tls-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team previously bought one-year publicly trusted TLS certificates and renewed them by hand each January. What do the CA/Browser Forum's lifetime changes mean for that process?",
+    "options": [
+      {
+        "text": "Nothing, because one-year certificates remain valid for public websites",
+        "explanation": "Public TLS certificate lifetimes are being cut in stages, starting at 200 days in March 2026, so one-year certificates can no longer be issued for public sites."
+      },
+      {
+        "text": "They can avoid the change by buying certificates in bulk in advance",
+        "explanation": "Certificates issued now still carry the shorter maximum lifetime, so stockpiling doesn't help."
+      },
+      {
+        "text": "Maximum lifetimes drop to 200 days from March 2026, 100 days from 2027 and 47 days from 2029, so they need automated renewal (for example ACME) rather than a yearly manual task",
+        "explanation": "Correct. Maximum validity periods shorten in stages, so an annual renewal task no longer suffices. Automation and expiry monitoring reduce the operational risk of more frequent replacement."
+      },
+      {
+        "text": "Shorter lifetimes only apply to Let's Encrypt certificates",
+        "explanation": "The CA/Browser Forum baseline requirements apply to every publicly trusted CA, paid or free."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The public-TLS maximum becomes 200 days on 15 March 2026, 100 days on 15 March 2027 and 47 days on 15 March 2029.\n2. With a 47-day certificate, renewal at two-thirds of its lifetime is about 31 days.\n3. Frequent manual renewal increases the chance of an operational mistake; an outage is not inevitable.\n4. Use ACME or managed certificates, test renewal and monitor expiry. Private PKI has its own policy.",
+    "link": {
+      "title": "CA/Browser Forum ballot SC081v3",
+      "url": "https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/"
+    }
+  },
+  {
+    "id": "net-tls-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run 20 TLS-terminating nodes using encrypted stateless session tickets. Reconnecting clients are distributed uniformly and independently across nodes, and every node generates a different ticket-encryption key. Clients support tickets, but resumption succeeds only about 5% of the time. Why?",
+    "options": [
+      {
+        "text": "Clients don't support session tickets",
+        "explanation": "Almost every modern TLS client supports resumption; a 5% rate points at the servers, not the clients."
+      },
+      {
+        "text": "A returning client usually lands on a different node, which can't decrypt a ticket issued with another node's key, so it falls back to a full handshake",
+        "explanation": "Correct. With 20 independent keys, a client has roughly a 1 in 20 chance of reaching the node that issued its ticket, which matches the 5% resumption rate. Share ticket keys across the fleet (rotated frequently and distributed securely)."
+      },
+      {
+        "text": "TLS 1.3 doesn't support resumption",
+        "explanation": "TLS 1.3 supports resumption via pre-shared keys from session tickets; it's also what 0-RTT is built on."
+      },
+      {
+        "text": "Anycast encrypts tickets differently per region",
+        "explanation": "Anycast is a routing technique and has nothing to do with ticket encryption."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. This implementation encrypts resumable state into a stateless ticket; other implementations can use opaque identifiers and server-side state.\n2. A returning client presents its ticket to a uniformly chosen node.\n3. Only the original node has the right key: 1/20 = 5%.\n4. Share a securely distributed, rotated ticket-key set or use another compatible resumption design.\n5. Ticket-key compromise can enable impersonation and expose early data or PSK-only traffic; it does not automatically decrypt past post-handshake traffic protected by fresh (EC)DHE.",
+    "link": {
+      "title": "High Performance Browser Networking: TLS",
+      "url": "https://hpbn.co/transport-layer-security-tls/"
+    }
+  },
+  {
+    "id": "net-tls-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume TCP's initial congestion window is ten 1,460-byte segments and the server has no earlier opportunity to grow it. After a switch to an RSA-4096 leaf and two intermediates (about 18 KB of certificates), distant clients need an extra handshake round trip. Why?",
+    "options": [
+      {
+        "text": "RSA-4096 is not supported by TLS 1.3",
+        "explanation": "TLS 1.3 accepts RSA certificates for signatures. Support isn't the issue; size is."
+      },
+      {
+        "text": "Clients must download intermediates separately",
+        "explanation": "The server is sending the intermediates, which is why the flight is so large. The problem is the size of that flight."
+      },
+      {
+        "text": "The server's first flight is larger than TCP's initial congestion window (about 14 KB), so the server must wait for the client's ACK before sending the rest",
+        "explanation": "Correct. The certificates overflow the initial window, so the handshake spills into a second round trip. A smaller ECDSA certificate and a trimmed chain fit in one flight."
+      },
+      {
+        "text": "Longer keys always add a round trip to key exchange",
+        "explanation": "Key exchange uses ephemeral (EC)DHE shares regardless of the certificate's key size; a bigger certificate key doesn't add round trips by itself."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Initial congestion window ≈ 10 × 1,460 B ≈ **14 KB**.\n2. Server first flight = ServerHello + extensions + ~18 KB of certificates + CertificateVerify + Finished ≈ 19 KB.\n3. 19 KB > 14 KB → the server sends 14 KB, waits one RTT for ACKs, then sends the remainder.\n4. Fixes:\n  - ECDSA P-256 certificates (far smaller than RSA-4096).\n  - Don't send the root or unneeded cross-signs.\n  - Certificate compression (RFC 8879), when both endpoints negotiate support.",
+    "link": {
+      "title": "High Performance Browser Networking: TLS",
+      "url": "https://hpbn.co/transport-layer-security-tls/"
+    }
+  }
+]

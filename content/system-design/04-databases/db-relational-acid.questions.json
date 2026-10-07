@@ -1,0 +1,378 @@
+[
+  {
+    "id": "db-relational-acid-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bank transfer runs two `UPDATE`s inside one transaction: debit account A, credit account B. The database server loses power after the debit but before `COMMIT`. After restart, what does the database guarantee?",
+    "options": [
+      {
+        "text": "Account A is debited and B is not, because the debit had already executed",
+        "explanation": "Wrong. Executing a statement is not committing it. Atomicity prevents this uncommitted debit from becoming a visible committed result after recovery."
+      },
+      {
+        "text": "Neither change is visible: the debit is rolled back",
+        "explanation": "Correct. Neither change becomes a committed result. Physical recovery and transaction visibility are separate: PostgreSQL may replay changes from an uncommitted transaction, but its row versions remain invisible."
+      },
+      {
+        "text": "Both changes are applied, because the database replays the whole transaction from the log",
+        "explanation": "Wrong. WAL may redo physical changes from transactions that never committed; it does not invent the unexecuted credit or make the aborted debit visible. PostgreSQL uses transaction status and MVCC; InnoDB also undoes incomplete transactions."
+      },
+      {
+        "text": "It depends on the isolation level",
+        "explanation": "Wrong. Isolation levels govern what *concurrent* transactions can see of each other. Crash recovery of uncommitted work is atomicity and durability, and it doesn't vary with the isolation level."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Atomicity requires all transaction effects to commit together or none to become committed.\n2. The transfer never committed, so its debit must not become a visible committed balance.\n3. Recovery may replay physical log records regardless of whether their transaction committed. PostgreSQL treats uncommitted tuple versions as invisible; InnoDB uses undo to roll back incomplete transactions.\n4. The recovered committed balances therefore exclude this transfer.",
+    "link": {
+      "title": "PostgreSQL: Write-ahead logging",
+      "url": "https://www.postgresql.org/docs/current/wal-intro.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An `order_lines(order_id, product_id, product_name, qty)` table has primary key `(order_id, product_id)`. Marketing renames a product, and afterwards some old order lines show the old name and some the new. What is the underlying design problem?",
+    "options": [
+      {
+        "text": "The table violates 1NF because `product_name` is text",
+        "explanation": "Wrong. 1NF is about atomic values and no repeating groups. A single text column holding one name is perfectly atomic."
+      },
+      {
+        "text": "The primary key should be a surrogate `id` column",
+        "explanation": "Wrong. Adding a surrogate key doesn't remove the duplication: `product_name` would still be copied into every line and could still drift."
+      },
+      {
+        "text": "`product_name` depends on only part of the composite key (`product_id`), so the same fact is stored in many rows (a 2NF violation)",
+        "explanation": "Correct. 2NF requires non-key columns to depend on the *whole* key. The name depends only on `product_id`, so it's duplicated per order line, which creates the update anomaly described."
+      },
+      {
+        "text": "The table needs a foreign key on `order_id`",
+        "explanation": "Wrong. A foreign key on `order_id` would guarantee the order exists, but it does nothing about the duplicated product name."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Spot the symptom: an *update anomaly*. One logical fact (a product's name) has several copies that disagree.\n2. Ask what `product_name` depends on. Given a `product_id`, the name is determined; the `order_id` is irrelevant.\n3. The key is `(order_id, product_id)`, so the name depends on *part* of the key. That's the definition of a 2NF violation.\n4. Fix: move the name into `products(id, name)` and join when you need it. (If you need the name *as it was at purchase time*, that's a different fact, and storing it on the line is then correct.)",
+    "link": {
+      "title": "Wikipedia: Database normalization",
+      "url": "https://en.wikipedia.org/wiki/Database_normalization"
+    }
+  },
+  {
+    "id": "db-relational-acid-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API endpoint lists 50 orders with each customer's email. Assume 50 distinct customers, no cache or batching, and lazy loading that issues a separate query per customer. The ORM code loads the orders, then accesses `order.user.email` in a loop. Database round-trip latency is 2 ms. Roughly how much time goes on round trips, and what's the fix?",
+    "options": [
+      {
+        "text": "About 2 ms; ORMs batch these automatically",
+        "explanation": "Wrong under the explicit lazy-loading assumptions. Defaults and batching behavior vary by ORM; this example stipulates one query per association."
+      },
+      {
+        "text": "About 100 ms; nothing can be done short of caching",
+        "explanation": "Wrong on the fix. The latency estimate is close, but a join or an `IN` query removes the extra round trips without any cache."
+      },
+      {
+        "text": "About 102 ms (51 queries); fix it with a join or eager loading (`WHERE id IN (...)`)",
+        "explanation": "Correct. One query for the orders plus 50 for users is 51 round trips at 2 ms. A join, or loading all users in one `IN` query, makes it 1–2 round trips (about 2–4 ms)."
+      },
+      {
+        "text": "About 102 ms; fix it by adding an index on `users.email`",
+        "explanation": "Wrong. The lookups are by `users.id` (already the primary key). The cost is the number of round trips, not slow lookups, so an index on email doesn't help."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Count the queries: 1 query for 50 orders + 1 query per order for its user = 51.\n2. Multiply by round-trip time: 51 × 2 ms = 102 ms, before any query execution time.\n3. The lookups themselves are cheap primary-key reads; the cost is network latency.\n4. Fix by fetching users in bulk:\n```sql\nSELECT o.id, u.email\nFROM orders o\nJOIN users u ON u.id = o.user_id\nWHERE o.id = ANY($1);\n```\n5. Now it's one round trip: about 2 ms plus execution. That reduces the round-trip component by 51×; total endpoint speedup also depends on query execution and other work.",
+    "link": {
+      "title": "PostgreSQL: Joins Between Tables",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Assume ordinary enforced constraints and durable commit configuration. Which of these are guarantees the database itself provides, rather than things that depend on the application? Select all that apply.",
+    "options": [
+      {
+        "text": "A committed transaction survives a crash of the database process",
+        "explanation": "Correct. This is durability: the commit record is flushed to the write-ahead log before the commit is acknowledged."
+      },
+      {
+        "text": "A user's account balance never goes negative, even though no `CHECK` constraint exists",
+        "explanation": "Wrong. Without a declared constraint the database has no idea this rule exists. ACID's 'consistency' is only as strong as the invariants you encode or your application maintains."
+      },
+      {
+        "text": "An aborted transaction leaves no committed visible effects from its database row writes.",
+        "explanation": "Correct. Physical tuple/log records can remain until cleanup, and sequences or external side effects are not generally rolled back; atomicity covers transactional database changes."
+      },
+      {
+        "text": "A committed, non-NULL orders.user_id governed by a validated and enabled foreign key references an existing user.",
+        "explanation": "Correct. The constraint enforces this relationship at the required check point. Nullable references and deferred checks must be considered explicitly."
+      },
+      {
+        "text": "Two transactions running concurrently behave exactly as if they ran one after the other",
+        "explanation": "Wrong in general. That's serializability, and most databases default to weaker levels (Postgres and Oracle default to Read Committed; MySQL InnoDB to Repeatable Read). You only get this if you choose `SERIALIZABLE`."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Go through each option and ask: *does the database know about this rule?*\n\n1. Durability: the database's own WAL mechanism. Database-guaranteed.\n2. Non-negative balance with no constraint: the database doesn't know the rule. Application's job (or add `CHECK (balance >= 0)`).\n3. Atomicity on abort: built-in. Database-guaranteed.\n4. Declared foreign key: the rule *is* known to the database, so it enforces it.\n5. Serial-equivalent behaviour: only at `SERIALIZABLE`, which isn't the default in Postgres, MySQL, Oracle or SQL Server.\n\nSo the answers are 1, 3 and 4.",
+    "link": {
+      "title": "PostgreSQL: Constraints",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A social app's feed shows each post with its comment count. Counting with `SELECT count(*) FROM comments WHERE post_id = ?` for 20 posts per page has become the slowest part of the page. You add a `comment_count` column to `posts`. What's the most robust way to keep it correct?",
+    "options": [
+      {
+        "text": "A nightly batch job that recomputes all counts",
+        "explanation": "Wrong as the main mechanism. Counts would be wrong for up to a day, which users notice immediately when they post a comment. It's fine as a periodic repair job alongside a better mechanism."
+      },
+      {
+        "text": "Increment it in the same transaction that inserts the comment",
+        "explanation": "Correct. Doing `INSERT INTO comments` and `UPDATE posts SET comment_count = comment_count + 1` atomically means the two can never disagree: both commit or neither does."
+      },
+      {
+        "text": "Increment it from the client after the comment API call returns success",
+        "explanation": "Wrong. Clients can crash, retry or be malicious, so the counter would drift. Derived data should be maintained server-side, ideally atomically with the source write."
+      },
+      {
+        "text": "Read the count from a cache and never store it",
+        "explanation": "Wrong. The cache would still need populating from somewhere; this just moves the slow `count(*)` around and adds a consistency problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. You've denormalised: the count is now stored in two forms (rows in `comments` and the number in `posts`).\n2. The key question for any denormalisation: *how do the copies stay in sync?*\n3. The strongest answer is to update both in one ACID transaction:\n```sql\nBEGIN;\nINSERT INTO comments(post_id, body)\n  VALUES ($1, $2);\nUPDATE posts\n  SET comment_count = comment_count + 1\n  WHERE id = $1;\nCOMMIT;\n```\n4. Atomicity means a crash can't leave a comment without its increment.\n5. Trade-off: the post row becomes a contention point for very hot posts (every comment locks it briefly). At extreme scale you'd shard the counter or aggregate asynchronously.",
+    "link": {
+      "title": "Wikipedia: Denormalization",
+      "url": "https://en.wikipedia.org/wiki/Denormalization"
+    }
+  },
+  {
+    "id": "db-relational-acid-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The planner must join `orders` (50 million rows) to `users` (2 million rows) on `orders.user_id = users.id` for a report that reads every row of both tables. Assume the projected build-side rows and hash overhead fit within available hash-join memory. Neither input is sorted on the join key. Which join algorithm is it most likely to choose?",
+    "options": [
+      {
+        "text": "Nested loop, probing the `users` primary key index for each order",
+        "explanation": "Wrong for this case. That would be 50 million index probes, each a random B-tree traversal. Nested loops shine when the outer side is small (say, a few hundred rows), not 50 million."
+      },
+      {
+        "text": "Merge join, after sorting both tables",
+        "explanation": "Plausible but usually more expensive here. Sorting 50 million rows costs O(n log n) and probably spills to disk. Merge join wins when inputs are already ordered, for example read via an index."
+      },
+      {
+        "text": "Hash join, building a hash table on `users` and streaming `orders` through it",
+        "explanation": "Correct. Build a hash table on the smaller side (the projected build side fits memory by assumption; row count alone does not establish that), then scan the 50 million orders once, probing in O(1). Total work is roughly linear in the input size."
+      },
+      {
+        "text": "Cross join, then filter on the condition",
+        "explanation": "Wrong. A cross join would produce 10^14 combinations. Planners never choose this for an equality join."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Large unsorted equality-join inputs favor considering a hash join when its build side fits memory.\n2. Build a hash table over projected users columns, then scan orders and probe it.\n3. Nested-loop index probes may be cached, so tree height is not an actual disk-read count. Hash joins may spill when memory estimates are wrong.\n4. Actual row width, statistics, caching and parallelism determine the chosen plan; inspect EXPLAIN rather than treating row count as a guarantee.",
+    "link": {
+      "title": "PostgreSQL: Joins Between Tables",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An e-commerce schema stores `unit_price_p` on each `order_lines` row as well as on `products`. A reviewer flags this as a normalisation violation. Who's right?",
+    "options": [
+      {
+        "text": "The reviewer: the price should be joined from `products` to avoid duplication",
+        "explanation": "Wrong. If prices change, joining to the current price would rewrite history: old invoices would suddenly show new prices."
+      },
+      {
+        "text": "Neither: prices should live in a separate cache",
+        "explanation": "Wrong. A cache is not a system of record; invoices and refunds need the durable, historical price."
+      },
+      {
+        "text": "The reviewer, unless the column is updated by a trigger whenever the product price changes",
+        "explanation": "Wrong. Syncing the line price to the product price would destroy the historical value. That's exactly the thing you need to keep."
+      },
+      {
+        "text": "The schema: the price at the time of purchase is a different fact from the current price, so storing it on the line is correct modelling",
+        "explanation": "Correct. Normalisation is about storing each *fact* once. 'What the customer paid on 3 March' and 'what the product costs now' are separate facts that happen to share a unit."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ask what fact each column represents.\n   - `products.unit_price_p`: the price *today*. It changes.\n   - `order_lines.unit_price_p`: the price *agreed at purchase*. It must never change.\n2. These depend on different keys: one on `product_id`, the other on `(order_id, product_id)`.\n3. So there's no duplication of a single fact, and therefore no normalisation violation.\n4. Lesson: before denormalising or normalising, identify the facts. Time-varying data often needs to be captured as a snapshot.",
+    "link": {
+      "title": "Wikipedia: Database normalization",
+      "url": "https://en.wikipedia.org/wiki/Database_normalization"
+    }
+  },
+  {
+    "id": "db-relational-acid-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table `employees(id PRIMARY KEY, name, dept_id, dept_name, dept_floor)` is in 2NF. HR renames the Finance department and updates only some rows. Which normal form does the table break, and why?",
+    "options": [
+      {
+        "text": "1NF, because `dept_name` and `dept_floor` are repeating groups",
+        "explanation": "Wrong. Each column holds one atomic value, and there's no `dept1`, `dept2` pattern, so 1NF holds."
+      },
+      {
+        "text": "2NF, because `dept_name` depends on part of the key",
+        "explanation": "Wrong. The prompt already states 2NF. Partial dependencies concern composite candidate keys; a single-column primary key alone does not rule out a composite alternate key."
+      },
+      {
+        "text": "3NF, because `dept_name` and `dept_floor` depend on `dept_id`, a non-key column, rather than directly on the key",
+        "explanation": "Correct. This is a transitive dependency: `id → dept_id → dept_name`. Each department's facts are copied into every employee row, so a partial rename leaves contradictions. Move them to `departments(id, name, floor)`."
+      },
+      {
+        "text": "No normal form; it's an application bug that the UPDATE missed rows",
+        "explanation": "Partly true: the update did miss rows. But the design is the root cause. In a normalised schema the name is stored once, so there are no other rows to miss."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The prompt explicitly assumes 2NF; the single-column primary key alone would not prove this if a composite alternate candidate key existed.\n2. Look for non-key columns that determine other non-key columns:\n   - Given `dept_id`, you know `dept_name` and `dept_floor`.\n3. So `id → dept_id → dept_name`: a **transitive dependency**, which 3NF forbids.\n4. Symptom: Finance has 40 employees; its name is stored 40 times; updating 37 leaves 3 stale.\n5. Fix:\n```sql\nCREATE TABLE departments (\n  id    bigint PRIMARY KEY,\n  name  text NOT NULL,\n  floor int\n);\n-- employees keeps only dept_id\n```",
+    "link": {
+      "title": "Wikipedia: Third normal form",
+      "url": "https://en.wikipedia.org/wiki/Third_normal_form"
+    }
+  },
+  {
+    "id": "db-relational-acid-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume users.email is UNIQUE and NOT NULL. A report should list **every** user with their total paid spend, showing 0 for users who have never paid:\n```sql\nSELECT u.email,\n  coalesce(sum(o.total_p), 0)\nFROM users u\nLEFT JOIN orders o\n  ON o.user_id = u.id\nWHERE o.status = 'paid'\nGROUP BY u.email;\n```\nUsers with no paid orders are missing from the output. Why?",
+    "options": [
+      {
+        "text": "For users without matching orders, the LEFT JOIN produces NULL order columns, and `WHERE o.status = 'paid'` discards those rows; moving the condition into `ON` fixes it",
+        "explanation": "Correct. `WHERE` runs after the join. `NULL = 'paid'` is not true, so the padded rows are filtered out, turning the LEFT JOIN into an inner join. With `ON o.user_id = u.id AND o.status = 'paid'`, unmatched users keep their row with NULL order columns."
+      },
+      {
+        "text": "`coalesce` doesn't work inside an aggregate",
+        "explanation": "Wrong. `coalesce(sum(...), 0)` is a standard way to turn a NULL sum into 0. The rows never reach the aggregate, so there's nothing to coalesce."
+      },
+      {
+        "text": "`GROUP BY u.email` drops groups with NULL values",
+        "explanation": "Wrong. Grouping is on `u.email`, which is never NULL here. The rows were removed before grouping."
+      },
+      {
+        "text": "LEFT JOIN only keeps unmatched rows from the right-hand table",
+        "explanation": "Wrong. That's a RIGHT JOIN. LEFT JOIN keeps every row from the left table (`users`), padding missing right-hand columns with NULL."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Take a user, Sam, with no orders at all.\n2. After the LEFT JOIN: one row, `(sam@x, NULL, NULL...)`.\n3. `WHERE o.status = 'paid'`: `NULL = 'paid'` evaluates to NULL, which isn't true, so Sam's row is dropped.\n4. Users with only *refunded* orders vanish too: their joined rows have `status = 'refunded'`.\n5. Fix: filter inside the join.\n```sql\nLEFT JOIN orders o\n  ON o.user_id = u.id\n AND o.status = 'paid'\n```\n6. Now Sam's padded row survives; `sum(NULL)` is NULL and `coalesce` turns it into 0.",
+    "link": {
+      "title": "PostgreSQL: Table expressions (joins)",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, using ordinary UNIQUE, CHECK, NOT NULL and FOREIGN KEY constraints on the existing users, orders, subscriptions and invoices tables (without schema redesign, triggers or application code), which rules can be enforced? Select all that apply.",
+    "options": [
+      {
+        "text": "No two users share an email address",
+        "explanation": "Correct. `UNIQUE (email)` (or a unique index, possibly on `lower(email)`) is enforced on every insert and update, even under concurrency."
+      },
+      {
+        "text": "An order's total is never negative",
+        "explanation": "Correct. `CHECK (total_p >= 0)` is evaluated for every row written."
+      },
+      {
+        "text": "Every order belongs to a user that exists",
+        "explanation": "Correct. A NOT NULL user_id plus a foreign key rejects missing or nonexistent users. A nullable foreign key alone permits an order with no user."
+      },
+      {
+        "text": "A user may have at most three active subscriptions",
+        "explanation": "Wrong. That rule depends on counting *other* rows. `CHECK` constraints only see the current row, so this needs a trigger, application logic under suitable locking, or a redesign such as three numbered slots with a unique constraint."
+      },
+      {
+        "text": "A customer's credit limit must exceed the sum of their unpaid invoices",
+        "explanation": "Wrong for these PostgreSQL constraints on the stated schema. An aggregate across invoices requires a suitable redesign or transactional enforcement. Do not generalize this to every SQL-standard constraint facility or every DBMS."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask of each rule: *can it be checked by looking at one row, or by a key lookup the database already knows how to do?*\n\n| Rule | Mechanism |\n|---|---|\n| Unique email | `UNIQUE` |\n| Non-negative total | `CHECK` |\n| Order has a user | `NOT NULL` plus `FOREIGN KEY` |\n| Max 3 active subs | Trigger / app |\n| Credit vs invoices | Trigger / app |\n\n1. `UNIQUE`, `CHECK` and `FOREIGN KEY` are declarative and race-free.\n2. Rules that count or sum other rows aren't single-row checks. Implemented in the application, they are vulnerable to races between concurrent transactions (see the isolation lesson).\n\nSo the first three.",
+    "link": {
+      "title": "PostgreSQL: Constraints",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An invoicing system stores line prices in a `double precision` column in pounds. Finance finds an invoice whose lines are £0.10, £0.20 and £0.30, but a check `WHERE total = 0.60` doesn't match it. What's the cause and the fix?",
+    "options": [
+      {
+        "text": "The database rounds doubles to two decimal places on insert",
+        "explanation": "Wrong. `double precision` stores binary floating point with no decimal rounding at all; that's the problem, not the cause of a rounding step."
+      },
+      {
+        "text": "The total needs a `CHECK` constraint",
+        "explanation": "Wrong. A constraint can reject bad values but can't make floating-point arithmetic exact."
+      },
+      {
+        "text": "Use `real` instead, which is more precise",
+        "explanation": "Wrong. `real` is single precision (about 6 significant decimal digits), which is *less* precise than `double precision`."
+      },
+      {
+        "text": "Binary floating point can't represent 0.1, 0.2 or 0.3 exactly, so the sum is very slightly off 0.60; store integer pence or `numeric`",
+        "explanation": "Correct. In IEEE 754 doubles, 0.1 + 0.2 + 0.3 = 0.6000000000000001. Integer minor units (or exact `numeric`) make sums exact."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Decimal 0.1 in binary is a repeating fraction, like 1/3 in decimal. A double stores the nearest representable value.\n2. The tiny errors add up:\n```\n0.1 + 0.2 + 0.3\n= 0.6000000000000001\n```\n3. So an exact equality test against 0.60 fails, and summing millions of lines can drift by pennies.\n4. Fix: `total_p integer` storing 10, 20, 30; the sum is exactly 60.\n5. Or `numeric(12,2)`, which is exact decimal arithmetic (slower, but fine for money).\n6. Convert to pounds only for display.",
+    "link": {
+      "title": "PostgreSQL: Numeric types",
+      "url": "https://www.postgresql.org/docs/current/datatype-numeric.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A product's single Postgres primary is at 75% CPU. `pg_stat_statements` shows 90% of the load is reads, mostly product pages and dashboards; writes are about 800 per second. The data is 400 GB. A team proposes sharding across 8 nodes. What's the better first step?",
+    "options": [
+      {
+        "text": "Add read replicas and a cache for the hot read paths, and tune the slowest queries; keep writes on the primary",
+        "explanation": "Correct. The observed bottleneck is predominantly read work, so tune and offload eligible reads before introducing sharding. Validate actual write capacity; writes/s and dataset size alone do not establish it."
+      },
+      {
+        "text": "Shard now, before load grows further",
+        "explanation": "Premature. Sharding adds cross-shard queries, distributed transactions and rebalancing work. With read-dominated load and modest writes, it solves a problem you don't have yet."
+      },
+      {
+        "text": "Move to a wide-column store for horizontal scale",
+        "explanation": "Wrong. It would force a rewrite around per-query tables and give up joins and transactions, when the bottleneck is read traffic a relational setup can absorb."
+      },
+      {
+        "text": "Buy a bigger server and do nothing else",
+        "explanation": "A possible stopgap, but weaker. Vertical scaling helps, yet it leaves the inefficient queries and the single point of read load in place. Replicas, caching and tuning address the cause."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Characterise the bottleneck: CPU, 90% from reads.\n2. Check the write side: benchmark the actual 800-write/s transaction mix; the count alone does not prove available capacity.\n3. Check the data size: 400 GB fits on one NVMe server easily.\n4. So the problem is read volume. Cheapest fixes, in order:\n   - Find the top queries in `pg_stat_statements`; add indexes, remove N+1s.\n   - Cache product pages (they're read far more than they change).\n   - Send dashboards and other lag-tolerant reads to replicas.\n5. Note: replicas lag slightly, so read-your-own-writes paths stay on the primary.\n6. Shard only when writes or data outgrow one machine.",
+    "link": {
+      "title": "PostgreSQL: Hot standby",
+      "url": "https://www.postgresql.org/docs/current/hot-standby.html"
+    }
+  }
+]

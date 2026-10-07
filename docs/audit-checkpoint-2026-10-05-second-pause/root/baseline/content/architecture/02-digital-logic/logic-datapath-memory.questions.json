@@ -1,0 +1,378 @@
+[
+  {
+    "id": "logic-datapath-memory-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How many transistors are in a standard SRAM cell, and what are they for?",
+    "options": [
+      {
+        "text": "1, plus a capacitor that stores the bit as charge",
+        "explanation": "That is the DRAM cell (1T1C). SRAM stores the bit in a feedback loop, not on a capacitor."
+      },
+      {
+        "text": "4: one NAND gate",
+        "explanation": "A single NAND gate has no feedback, so it cannot remember anything. Storage needs two inverting stages in a loop."
+      },
+      {
+        "text": "6: two cross-coupled inverters (4) that hold the bit, plus two access transistors that connect it to the bit lines",
+        "explanation": "Correct. The inverter loop is the bistable element from the latch lesson; the word line turns on the two access transistors to read or write it."
+      },
+      {
+        "text": "About 20, because it is a D flip-flop",
+        "explanation": "A flip-flop (two latches plus clocking) is far bigger. Memory arrays use compact 6T cells precisely to avoid that cost."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Storage: two inverters in a ring, each 2 transistors (one pMOS, one nMOS) = 4. The ring has two stable states, Q = 0 or Q = 1.\n2. Access: one nMOS on each side, gated by the word line, connecting Q to BL and Q' to BL' = 2.\n3. Total: 4 + 2 = 6, the \"6T\" cell.\n\nBecause the loop actively drives itself, the cell keeps its value without refresh as long as it is powered.",
+    "link": {
+      "title": "Static random-access memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_random-access_memory"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why must DRAM be refreshed, while SRAM does not need refreshing?",
+    "options": [
+      {
+        "text": "DRAM stores each bit as charge on a capacitor, which leaks away; SRAM's inverter loop actively holds its value",
+        "explanation": "Correct. A DRAM cell is passive, so its charge decays over milliseconds and must be read and rewritten. SRAM's feedback loop restores itself continuously from the power supply."
+      },
+      {
+        "text": "DRAM is slower, so it needs extra cycles to catch up",
+        "explanation": "Refresh has nothing to do with speed; it exists because the stored charge decays."
+      },
+      {
+        "text": "DRAM loses its contents every time the CPU writes to a different row",
+        "explanation": "Writes to one row do not erase others. Refresh is needed even if the CPU never touches the memory at all."
+      },
+      {
+        "text": "SRAM is non-volatile, so it keeps data without power",
+        "explanation": "SRAM is volatile: it loses its data when power is removed. It just doesn't need refreshing while powered."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. DRAM cell: one transistor plus a capacitor. The bit is the presence or absence of charge.\n2. Real capacitors and transistors leak, so the charge decays. After long enough, a 1 is indistinguishable from a 0.\n3. Refresh reads each row into the sense amplifiers, which restore full voltage and write it back. DDR4 requires every row to be refreshed within 64 ms.\n4. SRAM cell: two cross-coupled inverters, each driving the other from the supply rails, so the stored value is continuously regenerated.\n\nBoth are volatile: cut the power and both forget.",
+    "link": {
+      "title": "Memory refresh — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_refresh"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Verilog, which form should you use to describe a register that updates on the rising clock edge?",
+    "options": [
+      {
+        "text": "`assign q = d;`",
+        "explanation": "`assign` describes a permanent combinational connection: q would follow d at all times, like a wire, with no memory."
+      },
+      {
+        "text": "`always @(*) q = d;`",
+        "explanation": "`always @(*)` describes combinational logic, re-evaluated whenever an input changes. It does not wait for a clock edge."
+      },
+      {
+        "text": "`always @(posedge clk) q = d;` with a blocking assignment",
+        "explanation": "This works for a single register, but blocking `=` in clocked blocks causes order-dependent bugs as soon as several registers read each other. The convention is `<=`."
+      },
+      {
+        "text": "`always @(posedge clk) q <= d;` with a non-blocking assignment",
+        "explanation": "Correct. `posedge clk` makes it edge-triggered, so q becomes a flip-flop, and `<=` models all flip-flops sampling together on the same edge."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A register must change only at the clock edge, so the sensitivity list is `@(posedge clk)`.\n2. Flip-flops all sample their inputs at the same instant. Non-blocking `<=` models that: all right-hand sides are read first, then all targets update.\n3. So: `always @(posedge clk) q <= d;`\n\nRule of thumb: `<=` in clocked blocks, `=` in `always @(*)` blocks, `assign` for simple combinational wires.",
+    "link": {
+      "title": "Verilog — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Verilog"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A register file has 32 registers of 64 bits, two read ports and one write port. How many select bits does each read port's mux need, and how many outputs does the write-port decoder have?",
+    "options": [
+      {
+        "text": "5 select bits; 32 decoder outputs",
+        "explanation": "Correct. 2^5 = 32 registers, so a 5-bit register number selects among them, and a 5-to-32 decoder produces one enable per register."
+      },
+      {
+        "text": "32 select bits; 5 decoder outputs",
+        "explanation": "This swaps the two. The register number is 5 bits; the decoder expands it to 32 one-hot lines."
+      },
+      {
+        "text": "6 select bits; 64 decoder outputs",
+        "explanation": "64 is the register width in bits, not the number of registers. The width sets how many bits each mux passes, not how many select lines it needs."
+      },
+      {
+        "text": "5 select bits; 64 decoder outputs",
+        "explanation": "The decoder needs one output per register (32), not one per bit. Each output enables all 64 flip-flops of its register."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Number of registers: 32 = 2^5, so register numbers (rs1, rs2, rd) are 5 bits. This is why RISC-V instructions have 5-bit register fields.\n2. Read port: a 32-to-1 mux, 64 bits wide, with 5 select bits.\n3. Write port: a 5-to-32 decoder turns rd into a one-hot pattern. Each output, ANDed with RegWrite, enables the load of one register.\n4. Two read ports means two such muxes, both reading the same flip-flops.",
+    "link": {
+      "title": "Register file — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Register_file"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Registers `a` and `b` start at a = 1, b = 2. After one rising clock edge, what do they hold?\n\n```verilog\nalways @(posedge clk) begin\n  a = b;\n  b = a;\nend\n```",
+    "options": [
+      {
+        "text": "a = 2, b = 1: they swap",
+        "explanation": "That is what the non-blocking version (`<=`) does. With blocking `=`, the second line sees the already-updated `a`."
+      },
+      {
+        "text": "a = 1, b = 1",
+        "explanation": "This would happen if the lines ran in reverse order (`b = a` first). They run top to bottom, so `a` is updated first."
+      },
+      {
+        "text": "a = 2, b = 2",
+        "explanation": "Correct. `a = b` sets a to 2 immediately; `b = a` then copies the new a, so b stays 2. Both end up holding the old b."
+      },
+      {
+        "text": "a = 1, b = 2: nothing changes until the next edge",
+        "explanation": "Assignments in a clocked block take effect at this edge. The only question is whether later lines see earlier updates."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Blocking `=` updates immediately, like a software variable:\n\n```\nstart:     a = 1, b = 2\na = b;  -> a = 2\nb = a;  -> b = 2  (reads new a)\n```\n\nNon-blocking `<=` evaluates all right-hand sides first, using the old values, then updates together:\n\n```\nRHS: b = 2, a = 1\nthen: a <= 2, b <= 1   (swap)\n```\n\nReal flip-flops behave like `<=`: each samples its input from before the edge. That is why clocked blocks use `<=`.",
+    "link": {
+      "title": "Verilog — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Verilog"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The single-cycle datapath is executing `sw x7, 8(x6)` (store x7 to address x6 + 8). Which control settings are correct?",
+    "options": [
+      {
+        "text": "RegWrite = 1, ALUSrc = imm, MemWrite = 1, MemToReg = mem",
+        "explanation": "A store writes memory, not a register. RegWrite = 1 would write garbage into the rd field's register."
+      },
+      {
+        "text": "RegWrite = 0, ALUSrc = reg, MemWrite = 1, MemToReg = x",
+        "explanation": "The address is x6 + 8, which needs the immediate as the ALU's second operand, so ALUSrc must select imm."
+      },
+      {
+        "text": "RegWrite = 0, ALUSrc = imm, MemWrite = 0, MemToReg = mem",
+        "explanation": "MemWrite = 0 means the data memory never stores x7, so the instruction does nothing."
+      },
+      {
+        "text": "RegWrite = 0, ALUSrc = imm, MemWrite = 1, MemToReg = x (don't care)",
+        "explanation": "Correct. The ALU adds x6 and the immediate 8 to form the address, memory is written with x7, and no register is written, so the write-back mux's choice is irrelevant."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk the instruction through the stages:\n\n1. Decode: read x6 (port A) and x7 (port B). Extract the immediate 8.\n2. Execute: address = x6 + 8, so the ALU's second operand is the immediate: **ALUSrc = imm**.\n3. Memory: write x7 (port B) to that address: **MemWrite = 1**.\n4. Write back: stores produce no register result: **RegWrite = 0**.\n5. With RegWrite = 0, the write-back value is discarded, so **MemToReg = x**, a don't-care the control decoder can use to simplify its logic.",
+    "link": {
+      "title": "Datapath — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Datapath"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about SRAM and DRAM are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Reading a DRAM cell disturbs its charge, so the sense amplifiers must write the row back",
+        "explanation": "True. Charge sharing with the bit line destroys the stored level; the sense amplifier restores it as part of every read."
+      },
+      {
+        "text": "SRAM is used for CPU caches mainly because it is denser than DRAM",
+        "explanation": "False. SRAM is much less dense (6 transistors per bit versus 1T1C). Caches use it because it is fast and built in the same CMOS process as the logic."
+      },
+      {
+        "text": "After a DRAM row has been opened, further reads from that same row are faster than reads from a different row",
+        "explanation": "True. The whole row sits in the sense amplifiers (the row buffer), so a hit in the open row skips the slow activation step."
+      },
+      {
+        "text": "Both SRAM and DRAM lose their contents when power is removed",
+        "explanation": "True. Both are volatile. Non-volatile storage, such as flash, traps charge in a way that survives power-off."
+      },
+      {
+        "text": "SRAM needs a refresh cycle about every 64 ms, like DRAM",
+        "explanation": "False. SRAM's cross-coupled inverters actively hold their value, so it never needs refresh. Only DRAM's leaking capacitors do."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Compare the two cells:\n\n```\n          SRAM          DRAM\ncell      6T loop       1T + cap\nrefresh   never         <= 64 ms\nread      non-destr.    destructive\ndensity   low           high\nvolatile  yes           yes\n```\n\n1. DRAM reads are destructive and rewritten (A true).\n2. Caches use SRAM for speed and process compatibility, despite its low density (B false).\n3. Open-row hits avoid re-activation (C true).\n4. Both are volatile (D true).\n5. Refresh is a DRAM-only cost (E false).",
+    "link": {
+      "title": "Dynamic random-access memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_random-access_memory"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A single-cycle CPU has these delays: instruction memory 200 ps, register read 100 ps, ALU 150 ps, data memory 200 ps, register-file setup 50 ps. Muxes are negligible. What is the minimum clock period?",
+    "options": [
+      {
+        "text": "500 ps, set by `add`",
+        "explanation": "An add skips the data memory (200 + 100 + 150 + 50 = 500 ps), but the clock must also fit the slowest instruction."
+      },
+      {
+        "text": "700 ps, set by `lw`",
+        "explanation": "Correct. A load uses every block: 200 + 100 + 150 + 200 + 50 = 700 ps. A single-cycle clock must fit it, so every instruction takes 700 ps."
+      },
+      {
+        "text": "200 ps, set by the slowest single block",
+        "explanation": "That would be the cycle time of a pipeline with balanced stages. In a single-cycle design, the delays of all blocks on the path add up."
+      },
+      {
+        "text": "600 ps, the average of `add` and `lw`",
+        "explanation": "A clock period cannot be an average: if any instruction needs 700 ps and gets 600, it produces a wrong result."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Add up the path each instruction uses:\n\n```\nadd: IM + RF + ALU      + setup\n   = 200+100+150     +50 = 500 ps\nlw:  IM + RF + ALU + DM + setup\n   = 200+100+150+200 +50 = 700 ps\n```\n\n1. The single clock must fit the slowest instruction: 700 ps (about 1.43 GHz).\n2. An add is finished after 500 ps but still waits the full 700 ps.\n3. Pipelining puts registers between stages so the period is set by the slowest *stage* (about 200 ps plus register overhead), with five instructions overlapping. That is the subject of the pipelining module.",
+    "link": {
+      "title": "Datapath — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Datapath"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A DDR4 device has 8,192 refresh commands to issue every 64 ms, each refreshing a group of rows. If the controller spaces them evenly, roughly how often must it issue one?",
+    "options": [
+      {
+        "text": "Every 64 ms",
+        "explanation": "That is the total window. Issuing one command per 64 ms would refresh only 1/8,192 of the rows in time."
+      },
+      {
+        "text": "Every 7.8 µs",
+        "explanation": "Correct. 64 ms / 8,192 = 7.8125 µs, which is DDR4's nominal refresh interval at normal temperature."
+      },
+      {
+        "text": "Every 7.8 ns",
+        "explanation": "Off by a factor of 1,000: 64 ms is 64,000 µs, not 64 µs."
+      },
+      {
+        "text": "Every 128 µs",
+        "explanation": "This divides by 500 rather than 8,192. Check the units: 64,000 µs / 8,192 ≈ 7.8 µs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Convert: 64 ms = 64,000 µs.\n2. Divide by the number of commands:\n\n```\n64,000 µs / 8,192 = 7.8125 µs\n```\n\n3. So the controller issues a refresh command about every 7.8 µs. While a refresh is in progress, the memory being refreshed cannot serve reads or writes.\n4. Above about 85 °C cells leak faster and the window halves to 32 ms, so commands come every 3.9 µs, costing more bandwidth.",
+    "link": {
+      "title": "Memory refresh — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_refresh"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A designer writes this to describe a simple mux-like block. What does synthesis build for `y`?\n\n```verilog\nalways @(*)\n  if (sel == 2'b00)      y = a;\n  else if (sel == 2'b01) y = b;\n  else if (sel == 2'b10) y = c;\n```",
+    "options": [
+      {
+        "text": "A 3-to-1 mux, with `y` = 0 when sel = 11",
+        "explanation": "Verilog does not default an unassigned output to 0. If no branch assigns `y`, it must keep its previous value."
+      },
+      {
+        "text": "A 4-to-1 mux with the fourth input left floating",
+        "explanation": "Synthesis does not leave inputs floating. To keep `y` unchanged for sel = 11 it needs storage."
+      },
+      {
+        "text": "A mux plus a transparent latch, because `y` must remember its old value when sel = 11",
+        "explanation": "Correct. With no assignment on that path, the code describes memory, and in a combinational block that means an inferred latch, with the timing problems latches bring."
+      },
+      {
+        "text": "A D flip-flop clocked by `sel`",
+        "explanation": "Nothing in the code refers to a clock edge, so no flip-flop is inferred. The storage is level-sensitive: a latch."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In `always @(*)`, the block describes what `y` is for every input combination.\n2. List the paths: sel = 00, 01, 10 assign `y`. sel = 11 does not.\n3. Verilog semantics: an unassigned variable keeps its old value. Hardware that keeps an old value is memory.\n4. Synthesis therefore infers a latch enabled when sel ≠ 11. Tools usually warn (\"inferred latch for y\"), and the warning is easy to miss.\n\nFix by covering every path:\n\n```verilog\nelse y = 1'b0;   // or\n// case ... default: y = 'bx;\n```",
+    "link": {
+      "title": "Logic synthesis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Logic_synthesis"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Look at the `two_ones` FSM module from the lesson (a clocked block for `state`, an `always @(*)` case statement for `next`, and `assign z = (state == S2)`). Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The two `always` blocks and the `assign` describe hardware that operates simultaneously, not code run in order",
+        "explanation": "True. Each describes a separate piece of hardware, all active at once. Their order in the file does not matter."
+      },
+      {
+        "text": "`next` becomes a register, because it is declared with `reg`",
+        "explanation": "False. `reg` is just a Verilog variable type. `next` is assigned in an `always @(*)` block on every path, so it synthesises to combinational logic. Only `state`, assigned on `posedge clk`, becomes flip-flops."
+      },
+      {
+        "text": "Without the `default` branch, a stray `state` of 11 would leave `next` unassigned, and synthesis would infer a latch",
+        "explanation": "True. With no default, the case does not cover 11, so `next` must hold its value on that path, which is a latch. The default also gives a recovery path from an illegal state."
+      },
+      {
+        "text": "`z` is a Moore output",
+        "explanation": "True. It depends only on `state`, not on `x`, so it changes only at clock edges."
+      },
+      {
+        "text": "The `case` statement is evaluated only at the rising edge of `clk`",
+        "explanation": "False. `always @(*)` re-evaluates whenever any signal it reads (`state` or `x`) changes. It is combinational logic that is always computing; only the `state` register waits for the edge."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Map the code to the FSM block diagram:\n\n```\nalways @(posedge clk) -> state reg\nalways @(*) case      -> next-state\nassign z              -> output\n```\n\n1. All three are concurrent hardware (A true).\n2. Whether something becomes a flip-flop depends on *how* it is assigned (on a clock edge), not on the keyword `reg` (B false).\n3. Every combinational output must be assigned on every path; `default` guarantees it (C true).\n4. `z = (state == S2)` uses only state: Moore (D true).\n5. The case block has no clock in its sensitivity list, so it responds to every change of `state` or `x` (E false).",
+    "link": {
+      "title": "Verilog — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Verilog"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A CPU has a 32 MiB L3 cache built from 6T SRAM. Ignoring tags, ECC and peripheral circuits, roughly how many transistors are in its data cells?",
+    "options": [
+      {
+        "text": "About 268 million",
+        "explanation": "That is the number of bits (2^28). Each bit needs six transistors."
+      },
+      {
+        "text": "About 201 million",
+        "explanation": "This multiplies 32 Mi by 6, treating bytes as bits. Each byte has 8 bits."
+      },
+      {
+        "text": "About 1.6 billion",
+        "explanation": "Correct. 32 MiB = 2^25 bytes = 2^28 bits ≈ 268 million bits, and × 6 transistors ≈ 1.61 billion."
+      },
+      {
+        "text": "About 12.9 billion",
+        "explanation": "This multiplies by 48 instead of 6, counting six transistors per bit and then multiplying by 8 bits a second time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Size in bytes: 32 MiB = 32 × 2^20 = 2^25 = 33,554,432 bytes.\n2. Bits: × 8 = 2^28 = 268,435,456 bits.\n3. Transistors: × 6 = 1,610,612,736 ≈ 1.6 billion.\n\nThe same capacity in 1T1C DRAM would need about 268 million transistors plus capacitors, which is why main memory is DRAM. SRAM cache still earns its area by being an order of magnitude or more faster and sitting on the CPU die.",
+    "link": {
+      "title": "Static random-access memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_random-access_memory"
+    }
+  }
+]

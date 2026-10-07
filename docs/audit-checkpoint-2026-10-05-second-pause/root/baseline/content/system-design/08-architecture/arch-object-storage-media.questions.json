@@ -1,0 +1,386 @@
+[
+  {
+    "id": "arch-object-storage-media-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A photo-sharing app needs to store user photos and answer queries like \"show user 42's photos, newest first\". Which design is most appropriate?",
+    "options": [
+      {
+        "text": "Store the image bytes as BLOB columns in the relational database alongside the metadata.",
+        "explanation": "Wrong. Large blobs bloat the database, slow backups and replication, and waste buffer cache that should hold hot rows. Databases aren't built to serve large files to millions of clients."
+      },
+      {
+        "text": "Store image bytes in object storage (e.g. S3) and keep a metadata row (owner, key, size, created_at) in the database.",
+        "explanation": "Correct. Object storage handles durable, cheap, scalable byte storage; the database handles the indexed queries. Each does what it's good at."
+      },
+      {
+        "text": "Save images on the app servers' local disks, organised into folders by user.",
+        "explanation": "Wrong. Local disks make the app tier stateful (other servers can't see the files), and you lose the files when an instance is replaced."
+      },
+      {
+        "text": "Store everything in object storage and answer queries with LIST on the key prefix.",
+        "explanation": "Wrong. LIST is paginated, ordered lexicographically by key and not built for rich queries. 'Newest first with filters' needs a database index."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Two different needs: storing big bytes and querying small metadata.\n2. Bytes: object storage gives eleven nines of durability, unlimited capacity, cheap tiers, and works well with a CDN.\n3. Metadata: a database index on `(owner_id, created_at DESC)` answers the query in milliseconds.\n4. Link them by storing the S3 key in the row.\n5. Serving: client fetches via CDN URL built from that key.",
+    "link": {
+      "title": "AWS: What is Amazon S3?",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does a presigned S3 URL let a client do?",
+    "options": [
+      {
+        "text": "Access any object in the bucket indefinitely without credentials.",
+        "explanation": "Wrong. A presigned URL is scoped to one operation on one key and expires after a set time. It isn't a general bucket credential."
+      },
+      {
+        "text": "Perform one specific operation (e.g. PUT to one key) for a limited time, using the signer's permissions, without having AWS credentials itself.",
+        "explanation": "Correct. The signature encodes the method, key and expiry. S3 verifies it and allows exactly that request until it expires."
+      },
+      {
+        "text": "Bypass encryption on the object.",
+        "explanation": "Wrong. Presigning controls authorisation, not encryption. Server-side encryption still applies."
+      },
+      {
+        "text": "Upload a file to the app server, which then forwards it to S3.",
+        "explanation": "Wrong. The whole point is that the client talks to S3 *directly*, so the bytes never pass through the app server."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The app authenticates the user and decides they may upload an avatar.\n2. It signs a URL with its own credentials for `PUT avatars/42/new.jpg`, expiring in 15 minutes.\n3. It returns the URL to the client.\n4. The client PUTs the bytes straight to S3; S3 checks the signature, method, key and expiry.\n5. Anyone holding the URL can use it until it expires, so keep expiry short and scope narrow.",
+    "link": {
+      "title": "AWS: Sharing objects with presigned URLs",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users upload 5 GB video files from home connections that sometimes drop. You use S3 multipart upload with 100 MB parts. The connection drops after 3.2 GB. What happens when the client reconnects?",
+    "options": [
+      {
+        "text": "The client lists which parts were completed, re-uploads only the missing or failed ones, then calls CompleteMultipartUpload.",
+        "explanation": "Correct. Each part is stored independently under the upload ID, so only the parts not yet completed (about 18 of the 50, plus any in flight) need sending."
+      },
+      {
+        "text": "The whole 5 GB upload must restart from zero.",
+        "explanation": "Wrong. That's the problem with single-request uploads. With multipart, completed parts are already stored."
+      },
+      {
+        "text": "S3 automatically finishes the upload by fetching the rest from the client.",
+        "explanation": "Wrong. S3 never pulls data from clients. The client must upload the remaining parts and complete the upload."
+      },
+      {
+        "text": "The partial 3.2 GB object becomes visible immediately as a truncated file.",
+        "explanation": "Wrong. Parts don't form a visible object until CompleteMultipartUpload succeeds, so there's no truncated object."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. 5 GB / 100 MB = 50 parts.\n2. 3.2 GB uploaded ≈ 32 parts complete (a part that was mid-upload is lost).\n3. On reconnect: call ListParts with the upload ID and find parts 33–50 missing.\n4. Upload those 18 parts, in parallel if bandwidth allows.\n5. Call CompleteMultipartUpload with the list of part numbers and ETags.\n6. Housekeeping: a lifecycle rule aborts multipart uploads left incomplete after, say, 7 days, so orphaned parts don't accumulate charges.",
+    "link": {
+      "title": "AWS: Uploading objects using multipart upload",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're designing the upload flow for user profile pictures using presigned PUT URLs. Which practices are important? Select all that apply.",
+    "options": [
+      {
+        "text": "Give the presigned URL a short expiry and scope it to a server-chosen key.",
+        "explanation": "Correct. Short expiry limits the damage if the URL leaks; a server-chosen key stops users overwriting each other's files or choosing paths."
+      },
+      {
+        "text": "Mark the photo as live as soon as the client says the upload finished.",
+        "explanation": "Wrong. The client could lie or fail mid-upload. Confirm with an S3 event or a HEAD request first."
+      },
+      {
+        "text": "Validate the object after upload (real image type, size limit, malware or content scan) before others can see it.",
+        "explanation": "Correct. The client controls the bytes, so treat them as untrusted. Validate before publishing."
+      },
+      {
+        "text": "Make the bucket publicly writable so the presigned URL isn't needed.",
+        "explanation": "Wrong. A publicly writable bucket lets anyone upload anything anywhere, the opposite of scoped access."
+      },
+      {
+        "text": "Serve the processed images through a CDN using versioned, immutable keys.",
+        "explanation": "Correct. Immutable keys can be cached for a long time without invalidation, and the CDN cuts latency and origin load."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Issue phase: authenticate, choose key `avatars/{user}/{uuid}.jpg`, presign for 5–15 min, optionally limit content type and size with a POST policy.\n2. Upload phase: client PUTs directly to S3.\n3. Confirm phase: S3 `ObjectCreated` triggers a worker; never trust the client's 'done'.\n4. Validate phase: decode as an image, check dimensions and size, scan, then generate resized variants.\n5. Publish phase: update DB row to `live`, serve via CDN at a versioned URL.",
+    "link": {
+      "title": "Azure Architecture Center: Valet Key pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/valet-key"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do video platforms transcode uploads into several renditions (240p up to 1080p or 4K) cut into short segments, rather than serving the original file?",
+    "options": [
+      {
+        "text": "To enable adaptive bitrate streaming: the player picks a quality per segment based on current bandwidth, so playback starts fast and avoids stalling.",
+        "explanation": "Correct. HLS and DASH serve a playlist of renditions split into segments a few seconds long. The player switches up or down per segment as network conditions change."
+      },
+      {
+        "text": "Because object storage can't store files larger than 100 MB.",
+        "explanation": "Wrong. A single S3 PUT can be up to 5 GB and a multipart object up to about 50 TB. Transcoding is about the viewer experience, not storage limits."
+      },
+      {
+        "text": "Because CDNs can't cache video files.",
+        "explanation": "Wrong. CDNs cache video segments very effectively. Small segments actually make caching more efficient."
+      },
+      {
+        "text": "To make the original video higher quality.",
+        "explanation": "Wrong. Transcoding can't add detail the original lacks. Each rendition is the same or lower quality, at a lower bitrate."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Viewers range from 1 Mbit/s mobile links to 50 Mbit/s fibre.\n2. A single 4K file at 20 Mbit/s would stall on mobile; a single 480p file wastes a big TV.\n3. A ladder (e.g. 240p @ 0.4, 480p @ 1.5, 720p @ 3, 1080p @ 6 Mbit/s) covers the range.\n4. Segmenting into roughly 4–6 s chunks lets the player change rung every few seconds.\n5. Startup: begin with a low rung for a fast first frame, then climb as the buffer fills.",
+    "link": {
+      "title": "Wikipedia: HTTP Live Streaming",
+      "url": "https://en.wikipedia.org/wiki/HTTP_Live_Streaming"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your transcoding pipeline takes 90 minutes to process a 2-hour 4K upload on one worker. Workers run on spot instances that are sometimes reclaimed mid-job, which restarts the whole 90-minute job. What redesign best cuts both latency and wasted work?",
+    "options": [
+      {
+        "text": "Move all transcoding to one very large on-demand instance.",
+        "explanation": "Wrong. It avoids spot interruptions, but one machine is still serial, so latency stays around an hour or more, and it's expensive and a single point of failure."
+      },
+      {
+        "text": "Upload the raw file directly to the CDN and let the player transcode.",
+        "explanation": "Wrong. Players don't transcode, and shipping raw 4K to every viewer defeats adaptive streaming."
+      },
+      {
+        "text": "Split the video into short chunks (e.g. 1 minute), encode chunks in parallel as independent, idempotent tasks with deterministic output keys, track progress in a workflow, then stitch and publish.",
+        "explanation": "Correct. 120 chunks across many workers turns 90 minutes into a few minutes, and losing a spot instance loses only one chunk, which is simply retried and overwrites its own output."
+      },
+      {
+        "text": "Keep one worker per video but checkpoint to the database every frame.",
+        "explanation": "Wrong. Per-frame checkpoints are a huge overhead and the job is still serial, so latency doesn't improve."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Serial cost: 90 min per video, all lost on interruption.\n2. Chunking: a 2-hour video in 1-minute chunks gives 120 tasks per rendition.\n3. With 60 workers: about 2 rounds × (90 min / 120 ≈ 0.75 min per chunk) ≈ 1.5 min, plus split/stitch overhead, so a few minutes total.\n4. Spot reclaim: lose one chunk (≈ 45 s of work) and retry it.\n5. Idempotency: output key `v/123/1080p/chunk_057.mp4`, so a retry overwrites rather than duplicates.\n6. Workflow: a state machine records which chunks are done, triggers stitching when all 120 complete, then packaging (HLS/DASH) and publish.\n7. Bonus: encode a 480p rung first so the video goes live sooner.",
+    "link": {
+      "title": "AWS: Best practices for S3 performance",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A log-archiving service writes millions of small objects per hour to one S3 bucket under keys like `logs/2026-10-01/<uuid>.gz` and starts seeing `503 Slow Down` errors during peaks. What's the most likely cause and fix?",
+    "options": [
+      {
+        "text": "S3 has a hard bucket-wide limit of 100 writes/s; create one bucket per hour.",
+        "explanation": "Wrong. There's no 100/s bucket limit. S3 scales request rates per prefix (at least 3,500 PUTs/s per prefix) and buckets aren't the unit of scaling."
+      },
+      {
+        "text": "All writes share one key prefix per day, which exceeds the per-prefix request rate during peaks before S3 has scaled out; spread writes across more prefixes (e.g. a hash prefix) and retry 503s with exponential backoff.",
+        "explanation": "Correct. S3 scales per prefix and partitions automatically over time. Spreading keys over many prefixes raises the ceiling, and backoff handles the throttling that happens while S3 scales out."
+      },
+      {
+        "text": "Objects are too small; S3 rejects objects under 1 MB.",
+        "explanation": "Wrong. S3 accepts objects from 0 bytes. Small objects mean more requests, which matters, but size itself isn't rejected."
+      },
+      {
+        "text": "The UUIDs collide, causing overwrite conflicts.",
+        "explanation": "Wrong. UUID collisions are astronomically unlikely and wouldn't produce 503 Slow Down errors, which signal request-rate throttling."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 503 Slow Down = request-rate throttling, not an authorisation or size error.\n2. S3 guidance: at least 3,500 PUT/COPY/POST/DELETE and 5,500 GET/HEAD requests/s *per prefix*.\n3. Millions of objects/hour at peak can exceed 3,500/s on one prefix (`logs/2026-10-01/`).\n4. Fix: write to `logs/2026-10-01/{hash[0:2]}/{uuid}.gz`. With 16–256 prefixes, the ceiling rises proportionally once S3 partitions them.\n5. Also: retry with backoff and jitter, and consider batching small logs into larger objects (fewer requests, lower per-request cost).",
+    "link": {
+      "title": "AWS: Best practices for S3 performance",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker writes `reports/9.pdf` to S3, gets `200 OK`, then immediately publishes a message. Another service receives the message and does `GET reports/9.pdf` within milliseconds. What does it see today?",
+    "options": [
+      {
+        "text": "Possibly a 404, because S3 is eventually consistent for new objects, so the consumer should sleep and retry.",
+        "explanation": "Wrong. That was true of S3 before December 2020. Since then, a GET issued after a successful PUT response returns the new object."
+      },
+      {
+        "text": "The complete new object, because S3 provides strong read-after-write consistency for object PUTs.",
+        "explanation": "Correct. Once the PUT has returned success, any subsequent GET, HEAD or LIST sees it, in all Regions, with no extra cost."
+      },
+      {
+        "text": "A partially written object if the GET races the replication between Availability Zones.",
+        "explanation": "Wrong. Updates to a single key are atomic: a reader gets the old data or the new data, never a partial object."
+      },
+      {
+        "text": "Only the object metadata; the bytes become readable after a few seconds.",
+        "explanation": "Wrong. There's no split like that. Object data and metadata (HEAD) are both strongly consistent after a successful PUT."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Order of events: PUT succeeds, *then* the message is sent, *then* the GET runs.\n2. S3's model since December 2020: any read initiated after a successful PUT response returns that write.\n3. So the consumer sees the full object. No sleep-and-retry hack is needed.\n4. What still isn't guaranteed: if two writers PUT the same key concurrently, the last one wins, and bucket *configuration* changes are eventually consistent.",
+    "link": {
+      "title": "AWS: What is Amazon S3?",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API runs on ECS with an IAM task role. It generates presigned GET links for invoice PDFs with `ExpiresIn=86400` (24 hours) and emails them. Customers report the links often fail after an hour or two with `ExpiredToken`. Why?",
+    "options": [
+      {
+        "text": "S3 caps every presigned URL at 1 hour regardless of what you request.",
+        "explanation": "Wrong. With long-term IAM user credentials and SigV4, a presigned URL can last up to 7 days."
+      },
+      {
+        "text": "Email clients rewrite the URL and break the signature.",
+        "explanation": "Wrong. That would give `SignatureDoesNotMatch`, not `ExpiredToken`, and wouldn't depend on time."
+      },
+      {
+        "text": "The URL was signed with the role's temporary credentials, and a presigned URL can't outlive the credentials that signed it.",
+        "explanation": "Correct. Task role credentials rotate every few hours. When the session token behind the signature expires, the URL dies, even though you asked for 24 hours."
+      },
+      {
+        "text": "The objects are encrypted with SSE-S3, which shortens presigned URL lifetimes.",
+        "explanation": "Wrong. Default server-side encryption doesn't affect presigned URL expiry."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A presigned URL embeds a signature made with the signer's credentials.\n2. Long-term IAM user keys: up to 7 days with SigV4.\n3. Temporary credentials (IAM role, ECS task role, EC2 instance profile, STS): the URL expires when those credentials do, whichever comes first.\n4. ECS role credentials typically rotate every 1 to 6 hours, so a '24-hour' link fails early.\n5. Fixes: issue short-lived links on demand (the email links to your app, which presigns a fresh 5-minute URL when clicked), or use a CDN signed URL whose lifetime you control.",
+    "link": {
+      "title": "AWS: Download and upload objects with presigned URLs",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're building a client that uploads backups of up to 2 TB with S3 multipart upload. A colleague proposes a fixed 100 MB part size. What's the problem, and what part size works?",
+    "options": [
+      {
+        "text": "No problem: S3 allows unlimited parts, so 100 MB is fine for any size.",
+        "explanation": "Wrong. Multipart upload allows at most 10,000 parts, so part size bounds the object size."
+      },
+      {
+        "text": "100 MB parts cap the file at about 1 TB (10,000 parts); use at least 200 MB parts, e.g. 256 MB, giving roughly 8,000 parts for 2 TB.",
+        "explanation": "Correct. 2 TB ÷ 10,000 = 200 MB minimum. Rounding up to 256 MB leaves headroom while keeping parts small enough to retry cheaply."
+      },
+      {
+        "text": "Parts must be exactly 5 GiB for files over 1 TB.",
+        "explanation": "Wrong. Parts can be anywhere from 5 MiB to 5 GiB; you only need parts big enough to fit the file within 10,000 of them."
+      },
+      {
+        "text": "100 MB is below the minimum part size; parts must be at least 1 GB.",
+        "explanation": "Wrong. The minimum part size is 5 MiB (and the last part can be smaller)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Limits: 10,000 parts; each 5 MiB to 5 GiB; the last part may be smaller.\n2. 100 MB × 10,000 = 1,000,000 MB ≈ 1 TB, so a 2 TB file doesn't fit.\n3. Minimum part size for 2 TB: 2,000,000 MB ÷ 10,000 = 200 MB.\n4. Choose 256 MB: 2 TB ÷ 256 MB ≈ 7,800 parts, under the cap.\n5. Trade-off: bigger parts mean fewer requests but more work lost per failed part; compute part size from file size rather than hard-coding it.\n\n```\nparts = ceil(size / part)\nassert parts <= 10_000\n```",
+    "link": {
+      "title": "AWS: Uploading objects using multipart upload",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You serve private course videos to paying subscribers from S3 through a CDN. Which choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Keep the bucket private and let only the CDN read from it, using signed CDN URLs or cookies for subscribers.",
+        "explanation": "Correct. The bucket stays locked down, and the CDN checks a signature you issue per subscriber, so content is cached at the edge but still access-controlled."
+      },
+      {
+        "text": "Make the bucket public but use long random keys so nobody can guess them.",
+        "explanation": "Wrong. Obscure keys aren't access control. Once a URL is shared or leaked, anyone can use it forever."
+      },
+      {
+        "text": "Publish each encoded rendition under a versioned, content-addressed key and cache it for a long time.",
+        "explanation": "Correct. Immutable keys mean you never need to invalidate the CDN; a re-encode gets a new key."
+      },
+      {
+        "text": "Overwrite `course/7/intro.mp4` in place when you re-encode, and rely on the CDN noticing.",
+        "explanation": "Wrong. The CDN keeps serving the cached old copy until its TTL expires or you pay for an invalidation."
+      },
+      {
+        "text": "Add a lifecycle rule that aborts incomplete multipart uploads after a few days.",
+        "explanation": "Correct. Abandoned uploads leave invisible parts that you still pay for; the rule cleans them up."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Access: private origin + CDN-only read + signed URLs/cookies for users.\n2. Caching: immutable keys like `c/7/v3/a1b2.m3u8` can be cached for a year.\n3. Updating: a new version is a new key; the playlist or DB row points to it.\n4. Hygiene: abort incomplete multipart uploads so orphaned parts don't accrue charges.\n5. Security by obscurity (public bucket, random names) fails the moment a link is shared.",
+    "link": {
+      "title": "AWS: Sharing objects with presigned URLs",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Two instances of a config service both read `settings.json` from S3, modify it and write it back. Occasionally one instance's change disappears. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "This is a lost update: both PUTs succeed and the last writer wins, silently discarding the other change.",
+        "explanation": "Correct. S3 has no object locks. Concurrent PUTs to one key are resolved by last-writer-wins."
+      },
+      {
+        "text": "Strong read-after-write consistency prevents this, so the bug must be in the CDN.",
+        "explanation": "Wrong. Strong consistency means reads see completed writes. It doesn't stop two read-modify-write cycles interleaving."
+      },
+      {
+        "text": "A conditional PUT with `If-Match` on the ETag you read makes the second writer fail with 412, so it can re-read and retry.",
+        "explanation": "Correct. That's optimistic concurrency control: the write only succeeds if the object hasn't changed since you read it."
+      },
+      {
+        "text": "S3 can update two keys atomically if you send them in one multipart upload.",
+        "explanation": "Wrong. Updates are per key; S3 has no multi-key transactions. Multipart builds one object."
+      },
+      {
+        "text": "If this needs frequent concurrent updates, a database with transactions may be a better home for the data.",
+        "explanation": "Correct. Object storage suits large, mostly-immutable blobs. Frequently mutated shared state belongs in a database."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Timeline: A reads v1, B reads v1, A writes v2a, B writes v2b. v2a is gone.\n2. Strong consistency doesn't help: every read was correct when it ran.\n3. Fix: read with its ETag, then PUT with `If-Match: <etag>`.\n4. If someone else wrote in between, S3 returns 412 Precondition Failed; re-read, re-apply, retry.\n5. `If-None-Match: *` is the create-only variant, useful for 'write once' keys.",
+    "link": {
+      "title": "AWS: What is Amazon S3?",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"
+    }
+  }
+]

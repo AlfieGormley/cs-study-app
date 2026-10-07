@@ -1,0 +1,378 @@
+[
+  {
+    "id": "sync-lock-free-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A stack is protected by a spinlock built from compare-and-swap. The thread holding the spinlock is preempted for 50 ms in the middle of a push. Which progress guarantee does this stack provide?",
+    "options": [
+      {
+        "text": "Wait-free",
+        "explanation": "Wait-free means every thread finishes in a bounded number of its own steps. Here every waiter spins for the full 50 ms making no progress at all, so it is nowhere near wait-free."
+      },
+      {
+        "text": "Lock-free, because it is built from CAS rather than a mutex",
+        "explanation": "This confuses the instruction with the guarantee. Lock-free means *some* thread always progresses; while the holder is suspended, no thread can complete an operation, whatever instruction the lock uses."
+      },
+      {
+        "text": "Blocking: a stalled holder stops every other thread",
+        "explanation": "Correct. Any algorithm in which one suspended thread can prevent all others from completing is blocking. A spinlock is a lock, even when it is written with CAS."
+      },
+      {
+        "text": "Obstruction-free",
+        "explanation": "Obstruction-free requires that a thread running alone can finish. A waiter running alone still cannot finish, because the suspended holder owns the lock."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask the defining question for each guarantee: *if some threads stop, can the others still finish?*\n\n1. Holder suspended mid-push.\n2. Every other thread spins on the lock word. None can enter, so none completes a push or pop.\n3. That rules out obstruction-free (a lone thread cannot finish), lock-free (no thread progresses) and wait-free.\n4. So it is **blocking**.\n\nThe lesson: \"lock-free\" is about what happens when threads are delayed, not about which instructions appear in the code. A Treiber stack is lock-free because nobody ever holds anything others must wait for.",
+    "link": {
+      "title": "Non-blocking algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    }
+  },
+  {
+    "id": "sync-lock-free-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`max_seen` starts at 5 and uses the lesson's CAS loop:\n\n```c\nlong cur = atomic_load(&max_seen);\nwhile (v > cur &&\n       !atomic_compare_exchange_weak(\n           &max_seen, &cur, v))\n    ;\n```\n\nT1 calls `record(9)` and T2 calls `record(7)`. Both load `cur = 5`. T2's CAS runs first and succeeds; then T1's CAS runs. What is the final value of `max_seen`?",
+    "options": [
+      {
+        "text": "7",
+        "explanation": "This assumes T1's failed CAS ends its call. In fact the failure refreshes `cur` to 7, T1 re-tests `9 > 7` and tries again."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. T1's first CAS fails and writes 7 into `cur`; `9 > 7`, so T1 retries the CAS from 7 to 9 and succeeds."
+      },
+      {
+        "text": "5",
+        "explanation": "Both CAS operations compare against a real value of `max_seen`, and T2's succeeded, so the value cannot still be 5."
+      },
+      {
+        "text": "Either 7 or 9, depending on timing",
+        "explanation": "Here the order is given, but in fact every interleaving ends at 9: whichever thread loses the race re-reads and retries if its value is still larger. That is the point of the retry loop."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace it:\n\n```\nmax_seen = 5\nT1: cur = 5      T2: cur = 5\nT2: CAS(5 -> 7)  ok,  max_seen = 7\nT1: CAS(5 -> 9)  fails, cur = 7\nT1: 9 > 7, CAS(7 -> 9) ok\nmax_seen = 9\n```\n\nThe key C11 detail is that a failed `compare_exchange` writes the value it actually found into `cur`, so the loop condition re-tests with fresh data. If T2 had been recording 12 instead, T1 would see `9 > 12` is false and stop without writing, which is also correct.",
+    "link": {
+      "title": "Non-blocking algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    }
+  },
+  {
+    "id": "sync-lock-free-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An RCU writer has built a new version of a configuration object and published it with `rcu_assign_pointer`. Why must it call `synchronize_rcu()` (or `call_rcu()`) before freeing the old version?",
+    "options": [
+      {
+        "text": "Because `rcu_assign_pointer` is asynchronous and the pointer has not actually changed yet",
+        "explanation": "`rcu_assign_pointer` is an ordinary store with release ordering; once it executes, new readers can find the new version. The delay is for readers, not for the pointer."
+      },
+      {
+        "text": "Because freeing memory is only allowed while holding the RCU read lock",
+        "explanation": "There is no such rule; in fact freeing inside a read-side critical section would defeat the purpose. The writer frees the old copy after readers are done with it."
+      },
+      {
+        "text": "Because readers that start after the publish might still find the old version",
+        "explanation": "Readers that start after the publish load the pointer after it was updated, so they see the new version. The writer does not need to wait for them."
+      },
+      {
+        "text": "Because readers that started before the publish may still hold a pointer to the old version and be reading it",
+        "explanation": "Correct. Those pre-existing readers took no lock the writer can see. The grace period lasts until all of them have left their read-side critical sections; only then is the old copy unreachable."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think about who can still see the old object.\n\n1. Before the publish, reader R loads `cur` and gets the old pointer.\n2. The writer publishes the new pointer. R is still using the old object.\n3. If the writer freed the old object now, R would read freed memory.\n4. New readers load `cur` after the publish and get the new version, so they are safe.\n\nSo the writer waits for a **grace period**: until every reader that started before the publish has called `rcu_read_unlock()`. `synchronize_rcu()` blocks until then; `call_rcu()` schedules the free for later instead.",
+    "link": {
+      "title": "What is RCU? — Linux kernel documentation",
+      "url": "https://www.kernel.org/doc/html/latest/RCU/whatisRCU.html"
+    }
+  },
+  {
+    "id": "sync-lock-free-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Treiber stack in C holds `A → B → C`. T1 begins `pop`, reads `old = A` and `next = B`, and is preempted before its CAS. T2 pops A, pops B, frees B, and then pushes A back. T1 resumes and runs `CAS(&top, A, B)`. What is `top` afterwards?",
+    "options": [
+      {
+        "text": "B, a node T2 has already freed; C is no longer reachable from `top`",
+        "explanation": "Correct. `top` equals A again, so the CAS succeeds and installs T1's stale `next`. The stack now starts at freed memory and C has been lost. This is the ABA problem."
+      },
+      {
+        "text": "A, because T1's CAS fails when it notices the stack has changed",
+        "explanation": "CAS only compares the current value with the expected one. `top` changed from A to B to C and back to A; it cannot tell, so it succeeds."
+      },
+      {
+        "text": "C, because T1's CAS fails, refreshes `old` and retries",
+        "explanation": "That would happen if the CAS failed, but `top` holds the same pointer value T1 expects. Nothing in the comparison reveals that the stack underneath has changed."
+      },
+      {
+        "text": "NULL, because T2 emptied the stack",
+        "explanation": "T2 pushed A back, so the stack was `A → C` when T1 resumed, not empty."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track `top` and the list step by step:\n\n```\nstart        top=A  A->B->C\nT1 reads     old=A, next=B\nT2 pop       top=B  B->C\nT2 pop       top=C  C\nT2 free(B)\nT2 push(A)   top=A  A->C\nT1 CAS(A,B)  A==A, so top=B\n```\n\n1. When T1 resumes, `top` is A, exactly what it expects.\n2. The CAS swaps in `next`, which was computed from the *old* state: B.\n3. B has been freed, and C (still on the real stack) is now unreachable.\n\nThe value went A, then other values, then A again. Comparing values cannot detect that.",
+    "link": {
+      "title": "ABA problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/ABA_problem"
+    }
+  },
+  {
+    "id": "sync-lock-free-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which changes protect a C Treiber stack against the ABA problem in `pop`? Select all that apply.",
+    "options": [
+      {
+        "text": "Declare `top` as `volatile`",
+        "explanation": "`volatile` only forces real memory accesses. It neither makes the CAS see history nor stops a node's memory being reused, so ABA is untouched."
+      },
+      {
+        "text": "Pair `top` with a version counter and update both with a 16-byte CAS (`cmpxchg16b`)",
+        "explanation": "Correct. Every successful update bumps the counter, so \"A at version 7\" no longer matches \"A at version 9\" and T1's stale CAS fails."
+      },
+      {
+        "text": "Use `atomic_compare_exchange_strong` instead of `_weak`",
+        "explanation": "The strong form only removes spurious failures. It still compares the pointer value and still succeeds when A has come back."
+      },
+      {
+        "text": "Hazard pointers: publish `old` in a hazard slot before reading `old->next`, and never free or reuse a node that appears in any slot",
+        "explanation": "Correct. A node that T1 is examining cannot be freed and reused, so it cannot reappear at `top` as a different incarnation while T1 holds it."
+      },
+      {
+        "text": "Epoch-based reclamation, so a popped node's memory is not reused while any thread that might have read it is still active",
+        "explanation": "Correct. Like hazard pointers, it stops addresses being recycled while a stale reference may exist, which removes the reuse that makes ABA possible."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "ABA needs two ingredients: (1) CAS compares only the current value, and (2) the same value (address) reappears while someone holds a stale copy.\n\n| Option | Breaks which ingredient? |\n|---|---|\n| volatile | neither |\n| tagged pointer | 1: value now includes a version |\n| strong CAS | neither |\n| hazard pointers | 2: no reuse while held |\n| epochs | 2: no reuse while held |\n\nIn practice reclamation schemes are preferred, because they also fix the use-after-free on `old->next`, which tags alone do not.",
+    "link": {
+      "title": "ABA problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/ABA_problem"
+    }
+  },
+  {
+    "id": "sync-lock-free-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service on a 32-core machine replaces a mutex around a hash-map lookup with a `pthread_rwlock_t`. Lookups take about 100 ns and make up 99.9% of operations. Throughput barely improves. What is the most likely reason?",
+    "options": [
+      {
+        "text": "`pthread_rwlock_rdlock` makes a system call every time, so readers are slow",
+        "explanation": "Like mutexes, glibc's rwlocks take a user-space fast path with atomic instructions when they can. The cost here is not syscalls."
+      },
+      {
+        "text": "Writers are starving the readers",
+        "explanation": "Writes are 0.1% of operations, and glibc's default actually prefers readers. Writer pressure is not the bottleneck."
+      },
+      {
+        "text": "glibc read-write locks only let one reader in at a time",
+        "explanation": "Readers do share the lock. The problem is what each reader has to do to get in."
+      },
+      {
+        "text": "Every `rdlock` and `unlock` atomically updates the shared reader count, so its cache line bounces between all 32 cores; for a 100 ns read that dominates",
+        "explanation": "Correct. Readers are \"shared\" logically, but each one still writes the same word. With such short read sections, the lock's own cache-line traffic serialises them much as a mutex would."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each read does two atomic read-modify-writes on the reader count: one in `rdlock`, one in `unlock`.\n2. An atomic RMW needs the cache line in exclusive state on that core. With 32 cores reading, the line keeps moving between them; each transfer can cost on the order of 100 ns.\n3. The useful work is only about 100 ns, so the lock overhead is comparable to or larger than the work, and it is serialised.\n4. Read-write locks help when read sections are long (microseconds or more). For very short, hot reads, use a scheme where readers write nothing shared: RCU, a seqlock, or per-core sharding.",
+    "link": {
+      "title": "Readers–writer lock — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock"
+    }
+  },
+  {
+    "id": "sync-lock-free-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A seqlock reader reads the sequence counter and gets 10, copies the protected data, then reads the counter again and gets 12. What should it do?",
+    "options": [
+      {
+        "text": "Accept the copy, because both counter values are even",
+        "explanation": "Even values only show that no write was in progress at the two instants checked. A whole write (10 → 11 → 12) happened in between, so the copy may be torn."
+      },
+      {
+        "text": "Discard the copy and retry, because a write happened while it was copying and the data may mix old and new fields",
+        "explanation": "Correct. The counter changed, so the reader cannot trust what it copied. It loops and tries again; readers never block the writer, they just redo their work."
+      },
+      {
+        "text": "Block until the writer releases its lock, then use the copy",
+        "explanation": "Seqlock readers do not wait on the writer's lock, and waiting would not make the stale copy valid. They simply retry the read."
+      },
+      {
+        "text": "Use the copy, since 12 is newer than 10",
+        "explanation": "The value of the counter does not validate data copied before it changed. The copy could contain half of the old record and half of the new one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The reader's rule is: *the copy is valid only if the counter was even and unchanged across the whole copy.*\n\n```\nread seq   -> 10  (even: no write now)\ncopy data  ...    writer: 10->11,\n                  updates, 11->12\nread seq   -> 12  (changed!)\n```\n\n1. 10 is even, so it was safe to start.\n2. 12 is not equal to 10, so a write completed during the copy.\n3. The copy might be torn (for example new seconds with old nanoseconds), so discard it and loop.\n\nThis is why seqlock readers must not follow pointers in the data: a torn copy could contain a pointer to freed memory.",
+    "link": {
+      "title": "Sequence counters and sequential locks — Linux kernel documentation",
+      "url": "https://www.kernel.org/doc/html/latest/locking/seqlock.html"
+    }
+  },
+  {
+    "id": "sync-lock-free-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The lesson's Python copy-on-write config is changed so the writer updates two fields **in place**:\n\n```python\ndef move(host, port):\n    with _write_lock:\n        _config[\"host\"] = host\n        _config[\"port\"] = port\n```\n\nReaders still do `c = get_config()` and then `connect(c[\"host\"], c[\"port\"])`. What can go wrong?",
+    "options": [
+      {
+        "text": "Nothing: each dict assignment is atomic under the GIL, so the update is safe",
+        "explanation": "Each single assignment is indeed atomic, but the *pair* is not. Atomic individual operations do not give readers a consistent snapshot of two fields."
+      },
+      {
+        "text": "Readers deadlock because they do not take `_write_lock`",
+        "explanation": "Readers never touch the lock, so they cannot wait on it. The writer holds it only to exclude other writers."
+      },
+      {
+        "text": "A reader can run between the two assignments and connect to the new host with the old port",
+        "explanation": "Correct. Readers share the same dict the writer is mutating, so a reader can observe the half-updated state. Building a new dict and swapping the reference publishes both fields at once."
+      },
+      {
+        "text": "Python raises `RuntimeError: dictionary changed size during iteration`",
+        "explanation": "That error only occurs when iterating a dict while its size changes. The reader indexes two keys, and the writer changes values, not the size."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Writer: `_config[\"host\"] = \"10.0.0.2\"`.\n2. A thread switch happens. A reader calls `get_config()` and gets the **same** dict object.\n3. It reads host = new, port = old, and connects to the wrong place.\n4. The writer then sets the new port, too late.\n\nThe original version never mutates a published object:\n\n```python\nnew = dict(_config)\nnew[\"host\"] = host\nnew[\"port\"] = port\n_config = new   # publish\n```\n\nA reader holds either the old dict or the new one, never a mixture. That is the RCU rule: copy, update the copy, then publish with one atomic reference swap.",
+    "link": {
+      "title": "CopyOnWriteArrayList — Java documentation",
+      "url": "https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CopyOnWriteArrayList.html"
+    }
+  },
+  {
+    "id": "sync-lock-free-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Timeline of an RCU-protected structure:\n\n```\nt=0  R1: rcu_read_lock()\nt=1  R2: rcu_read_lock()\nt=2  R1: rcu_read_unlock()\nt=3  W: rcu_assign_pointer(new)\n     W: synchronize_rcu()\nt=4  R3: rcu_read_lock()\nt=5  R2: rcu_read_unlock()\nt=6  R3: rcu_read_unlock()\n```\n\nWhich readers must `synchronize_rcu()` wait for before it may return?",
+    "options": [
+      {
+        "text": "Only R2",
+        "explanation": "Correct. R2 started before the publish and is still inside its read-side section at t=3, so it may hold the old pointer. R1 already finished, and R3 started after the publish. The writer can return at the earliest after t=5."
+      },
+      {
+        "text": "R1, R2 and R3",
+        "explanation": "R1 left its critical section at t=2, before the publish, so it cannot be holding the new or old pointer any more. R3 began after the publish and can only see the new version."
+      },
+      {
+        "text": "R2 and R3, because both are active when `synchronize_rcu()` is called",
+        "explanation": "R3 is not active at t=3; it starts at t=4. Even if it overlapped, a reader that started after the publish only finds the new version, so the grace period need not include it."
+      },
+      {
+        "text": "None, because readers hold no locks the writer can see",
+        "explanation": "Readers announce nothing visible to the writer, but RCU still tracks them indirectly (for example by waiting until every CPU has context-switched). Freeing without waiting would let R2 read freed memory."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Classify each reader against the publish at t=3:\n\n| Reader | Started | Ended | Wait? |\n|---|---|---|---|\n| R1 | t=0 | t=2 | no, done |\n| R2 | t=1 | t=5 | yes |\n| R3 | t=4 | t=6 | no, new |\n\n1. Only readers that began **before** the publish could have loaded the old pointer.\n2. Of those, only ones **still running** at the publish matter: R2.\n3. So the grace period must last at least until t=5. (Real grace periods are often longer, since RCU detects quiescence coarsely, but they must cover R2.)",
+    "link": {
+      "title": "What is RCU, fundamentally? — LWN",
+      "url": "https://lwn.net/Articles/262464/"
+    }
+  },
+  {
+    "id": "sync-lock-free-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about progress guarantees are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A Treiber stack is lock-free: if one thread is suspended between reading `top` and its CAS, others can still push and pop",
+        "explanation": "Correct. The suspended thread holds nothing. Others' CAS operations succeed; when it resumes, its CAS fails (or, with ABA protection, behaves correctly) and it retries."
+      },
+      {
+        "text": "A stack protected by a glibc futex-based mutex is lock-free, because the fast path never enters the kernel",
+        "explanation": "The fast path is about speed, not progress. If the mutex holder is suspended, every other thread waits, which is blocking."
+      },
+      {
+        "text": "In a CAS retry loop, every failed CAS means some other thread's update succeeded",
+        "explanation": "Correct (ignoring the spurious failures `_weak` permits). The value only changes because another thread wrote it, which is exactly why the loop is lock-free."
+      },
+      {
+        "text": "On x86, a counter updated with `atomic_fetch_add` is wait-free",
+        "explanation": "Correct. `lock xadd` completes in a bounded number of steps whatever other threads do; there is no retry loop in which a thread can keep losing."
+      },
+      {
+        "text": "A CAS-loop counter is wait-free, because CAS is a single atomic instruction",
+        "explanation": "Each CAS is bounded, but the loop is not: an unlucky thread can keep losing the race forever. That makes it lock-free, not wait-free."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Use the definitions:\n\n- **Lock-free**: some thread always progresses.\n- **Wait-free**: every thread finishes in bounded steps.\n\n1. Treiber stack: a stalled thread blocks no one. Lock-free. True.\n2. Futex mutex: a stalled holder blocks everyone. Blocking. False.\n3. CAS failure implies another write succeeded. True; this is the lock-free argument.\n4. `fetch_add` is one instruction with no retry. Wait-free. True.\n5. CAS loop: one thread can fail indefinitely. Only lock-free. False.",
+    "link": {
+      "title": "Non-blocking algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    }
+  },
+  {
+    "id": "sync-lock-free-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer adds a 64-bit version tag to `top` and uses a 16-byte CAS, so the Treiber stack is now safe from ABA. Popped nodes are released with `free()`. Under load the program still occasionally crashes inside `pop`. Why?",
+    "options": [
+      {
+        "text": "`cmpxchg16b` is not truly atomic on multicore x86",
+        "explanation": "With the `lock` prefix (which compilers emit for it), `cmpxchg16b` is atomic across cores. The tag scheme is sound for ABA."
+      },
+      {
+        "text": "The 64-bit tag wraps around and lets ABA through",
+        "explanation": "At a billion updates per second a 64-bit counter takes centuries to wrap. That is not a realistic cause."
+      },
+      {
+        "text": "The CAS ignores the tag on some cores",
+        "explanation": "A 16-byte CAS compares all 16 bytes; there is no core that compares only the pointer half."
+      },
+      {
+        "text": "Between loading `old` and reading `old->next`, another thread can pop and `free()` that node; the tag makes the later CAS fail, but the read of freed memory has already happened",
+        "explanation": "Correct. Tags fix ABA but not reclamation. If the allocator has returned the page to the OS, or reused it, reading `old->next` can segfault or return garbage. Hazard pointers, epochs or RCU are needed to delay the free."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Look at the order of operations in `pop`:\n\n```\n1  old  = top        (ptr, tag)\n2  next = old->next  <- reads node\n3  CAS(top, old, next)\n```\n\n1. T1 does step 1 and is preempted.\n2. T2 pops the same node and calls `free()`. The allocator may unmap the page or hand the memory to another caller.\n3. T1 does step 2: it dereferences freed memory. Crash, or garbage in `next`.\n4. Step 3 would fail thanks to the tag, but the damage happened at step 2.\n\nSo the stack needs **safe memory reclamation**: do not free a node until no thread can still be between steps 1 and 3 with a pointer to it.",
+    "link": {
+      "title": "Hazard pointer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hazard_pointer"
+    }
+  },
+  {
+    "id": "sync-lock-free-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 32-bit embedded kernel keeps a 64-bit timestamp. Every core reads it millions of times per second; a timer interrupt updates it 1,000 times per second. 64-bit loads are not atomic on this CPU. Which synchronisation suits it best?",
+    "options": [
+      {
+        "text": "A read-write lock, so readers can share it",
+        "explanation": "Correct for safety, but every one of millions of reads per second would update the shared reader count, making that cache line the hottest in the system."
+      },
+      {
+        "text": "A seqlock: the writer bumps a sequence counter around each update, and readers retry if it was odd or changed",
+        "explanation": "Correct. Readers write nothing shared, so they scale across all cores, and the rare torn read (high and low halves from different updates) is detected and retried. This is how Linux protects its timekeeping data."
+      },
+      {
+        "text": "RCU: allocate a new timestamp object for each update and swap a pointer",
+        "explanation": "It would work, but it means allocating and freeing an object 1,000 times a second and waiting out grace periods, just to protect 8 bytes of plain data. A seqlock does the job with no allocation."
+      },
+      {
+        "text": "No synchronisation: writes are rare, so readers almost always see a correct value",
+        "explanation": "On a 32-bit CPU the value is read in two halves. A reader that runs between the writer's two stores combines halves from different times, which can be wildly wrong when the low half carries into the high half."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Match the data to the tool:\n\n1. **Small, plain data** (8 bytes, no pointers): a torn copy is harmless if it is detected and thrown away.\n2. **Read constantly, written often but briefly**: readers must not write shared state.\n3. That is exactly a seqlock's niche.\n\nWhy torn reads matter here:\n\n```\nold = 0x00000001_FFFFFFFF\nnew = 0x00000002_00000000\nreader: high = 1 (old)\nwriter: stores both halves\nreader: low  = 0 (new)\nresult  0x00000001_00000000\n```\n\nThat is about 4.3 billion ticks too small. The seqlock reader sees the counter changed and retries.",
+    "link": {
+      "title": "Sequence counters and sequential locks — Linux kernel documentation",
+      "url": "https://www.kernel.org/doc/html/latest/locking/seqlock.html"
+    }
+  }
+]

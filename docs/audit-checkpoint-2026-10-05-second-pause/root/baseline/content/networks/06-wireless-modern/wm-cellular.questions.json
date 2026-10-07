@@ -1,0 +1,378 @@
+[
+  {
+    "id": "wm-cellular-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An LTE phone in the connected state has a photo to upload. What happens before it can transmit the data?",
+    "options": [
+      {
+        "text": "It listens for an idle channel, then waits a random backoff like Wi-Fi",
+        "explanation": "That is CSMA/CA. LTE has no contention for data: the base station schedules everything."
+      },
+      {
+        "text": "It sends a scheduling request, and the base station grants it specific uplink resource blocks",
+        "explanation": "Correct. The eNodeB is a central scheduler. The phone asks, receives a grant for particular resource blocks and time slots, and only then transmits."
+      },
+      {
+        "text": "It transmits immediately; collisions are resolved by retransmission",
+        "explanation": "Uncoordinated transmission would cause collisions between phones. LTE avoids that by scheduling uplink centrally."
+      },
+      {
+        "text": "It must first establish a new IP address with the core",
+        "explanation": "The phone already has an IP address from attaching. Sending data needs radio resources, not a new address."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Cellular radio is **scheduled**, not contended. The base station decides who uses which resource blocks in each 1 ms TTI.\n2. Downlink is simple: the base station has the data and schedules it.\n3. Uplink needs a step first: the phone sends a short **scheduling request** (or a buffer status report).\n4. The base station replies with an **uplink grant** naming the resources.\n5. The phone transmits on exactly those resources. No collisions, at the cost of a few ms of request–grant latency.",
+    "link": {
+      "title": "Mobile Networks — High Performance Browser Networking",
+      "url": "https://hpbn.co/mobile-networks/"
+    }
+  },
+  {
+    "id": "wm-cellular-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user on a train hands over between six cells during a video call, but the call's IP address never changes. Which component makes that possible?",
+    "options": [
+      {
+        "text": "The base station (eNodeB/gNodeB), which assigns the IP address",
+        "explanation": "Base stations change at every handover. If they owned the address, it would change too."
+      },
+      {
+        "text": "The packet gateway (P-GW in 4G, UPF in 5G), which anchors the address while GTP tunnels are re-pointed to each new base station",
+        "explanation": "Correct. To the Internet, the phone lives at the gateway. Handover only moves the tunnel's radio end."
+      },
+      {
+        "text": "DHCP leases that last longer than the journey",
+        "explanation": "Cellular networks do not use DHCP over the radio in this way; the core assigns the address at session setup and the gateway anchors it."
+      },
+      {
+        "text": "The phone's SIM card, which stores a fixed IP address",
+        "explanation": "The SIM stores identity and keys, not an IP address. The address comes from the core when the session is set up."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. At attach, the core sets up a bearer (4G) or PDU session (5G) and allocates an IP address at the gateway.\n2. User packets flow phone → base station → (GTP-U tunnel) → gateway → Internet.\n3. On handover, the core (MME/AMF with S-GW/SMF) switches the tunnel to the new base station.\n4. The gateway, and therefore the IP address, stays the same, so TCP connections survive.",
+    "link": {
+      "title": "System Architecture Evolution — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/System_Architecture_Evolution"
+    }
+  },
+  {
+    "id": "wm-cellular-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A news app is opened after the phone has been idle for a minute. The first API request takes about 150 ms longer than the next ones. What is the main cause on the cellular side?",
+    "options": [
+      {
+        "text": "The radio must be promoted from RRC idle to connected, which needs signalling round trips before data flows",
+        "explanation": "Correct. Promotion from idle involves random access, RRC setup and security set-up. Subsequent requests find the radio already connected."
+      },
+      {
+        "text": "The base station has to download the app's data from the Internet first",
+        "explanation": "Base stations forward packets; they do not cache or prefetch app data."
+      },
+      {
+        "text": "The phone has to re-attach to the network and get a new IP address",
+        "explanation": "An idle phone stays attached with the same IP. Only the radio connection is released."
+      },
+      {
+        "text": "LTE uses a slower modulation for the first packet",
+        "explanation": "Modulation is chosen by channel quality, not by whether a packet is first."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. After an inactivity timer, the network moves the phone to **RRC_IDLE** to save power.\n2. New traffic triggers **promotion**: random access, RRC connection setup and security, several radio round trips.\n3. LTE targets under 100 ms for this; real values of tens of ms or more are common, on top of the normal request time.\n4. Requests that follow quickly find the radio in **RRC_CONNECTED** and avoid it.\n5. Design consequence: avoid tight timeouts on the first request and prefetch while the radio is already up.",
+    "link": {
+      "title": "Radio Resource Control — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Radio_Resource_Control"
+    }
+  },
+  {
+    "id": "wm-cellular-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's model (radio stays connected for a 10 s tail after each request; requests extending an existing tail only add the extra time), how many seconds is the radio connected for requests at t = 0, 3, 20, 25 and 60 s?",
+    "options": [
+      {
+        "text": "50 s",
+        "explanation": "That counts a full 10 s tail for each of the five requests, ignoring that requests at 3 s and 25 s fall inside an existing tail."
+      },
+      {
+        "text": "38 s",
+        "explanation": "Correct. 10 (t=0) + 3 (t=3 extends to 13) + 10 (t=20) + 5 (t=25 extends 30 to 35) + 10 (t=60) = 38 s."
+      },
+      {
+        "text": "33 s",
+        "explanation": "This forgets that the request at 3 s extends the tail from 10 to 13 s, or under-counts another extension."
+      },
+      {
+        "text": "60 s",
+        "explanation": "That is the span from first to last request, as if the radio stayed on throughout. It returns to idle between 35 s and 60 s."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Walk through the timeline, tracking when the tail ends:\n\n```\nt=0   new: +10  on=10  until=10\nt=3   3<=10: +3 on=13  until=13\nt=20  20>13: +10 on=23 until=30\nt=25  25<=30: +5 on=28 until=35\nt=60  60>35: +10 on=38 until=70\n```\n\nTotal: **38 s**. Grouping requests means they share tails: the two clusters cost 13 s and 15 s, while the isolated request at 60 s costs a full 10 s.",
+    "link": {
+      "title": "Optimizing for Mobile Networks — High Performance Browser Networking",
+      "url": "https://hpbn.co/optimizing-for-mobile-networks/"
+    }
+  },
+  {
+    "id": "wm-cellular-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A fitness app sends a 200-byte heartbeat to its server every 20 s while running in the background. Users complain about battery drain on cellular. Assuming a ~10 s radio tail, which change helps most?",
+    "options": [
+      {
+        "text": "Compress the heartbeat to 50 bytes",
+        "explanation": "The bytes are irrelevant: each heartbeat buys a full promotion and a 10 s tail regardless of size."
+      },
+      {
+        "text": "Switch the heartbeat from TCP to UDP",
+        "explanation": "A UDP packet still wakes the radio and buys the same tail. Transport choice does not change the radio state machine."
+      },
+      {
+        "text": "Drop the heartbeat, batch uploads every few minutes, and use the platform push service for server-to-device messages",
+        "explanation": "Correct. With a 20 s period and 10 s tail, the radio is high-power about half the time. Batching and APNs/FCM remove almost all of that."
+      },
+      {
+        "text": "Send the heartbeat more often so the radio never goes idle, avoiding promotion costs",
+        "explanation": "That keeps the radio permanently in its most power-hungry state: the worst option for battery."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Every 20 s: promotion, a tiny send, then a 10 s tail.\n2. Radio connected ≈ 10 s out of every 20 s = **50%** of the time, for almost no data.\n3. Payload size and transport make no difference to the tail.\n4. Batching every 5 minutes: 10 s out of 300 s ≈ 3%.\n5. For server-to-device messages, the OS push service keeps one shared, carefully tuned connection for every app, so your app adds nothing.",
+    "link": {
+      "title": "Optimizing for Mobile Networks — High Performance Browser Networking",
+      "url": "https://hpbn.co/optimizing-for-mobile-networks/"
+    }
+  },
+  {
+    "id": "wm-cellular-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A large file download over a single TCP connection survives a 40-minute car journey across many cells, but fails as soon as the user walks into the house and the phone joins home Wi-Fi. Why?",
+    "options": [
+      {
+        "text": "Wi-Fi uses a different MTU, which TCP cannot adjust to",
+        "explanation": "TCP adapts to MTU via MSS and path MTU discovery; it would not kill the connection."
+      },
+      {
+        "text": "Joining Wi-Fi gives the phone a new IP address from a different network, so the TCP 4-tuple no longer matches",
+        "explanation": "Correct. Within cellular, the gateway anchors the IP across handovers. Wi-Fi is a different network with a different address, so existing TCP connections break."
+      },
+      {
+        "text": "Home routers block downloads that started on another network",
+        "explanation": "Routers do not know or care where a connection started; the connection simply has the wrong source address now."
+      },
+      {
+        "text": "The cellular network sends a TCP reset when the phone leaves",
+        "explanation": "The cellular side does not reset connections when you leave; the phone just stops using that path."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A TCP connection is identified by (source IP, source port, destination IP, destination port).\n2. **Cell to cell:** the P-GW/UPF anchors the address; GTP tunnels move; the 4-tuple stays the same.\n3. **Cellular to Wi-Fi:** the phone now has an address from the home ISP, via the home router's NAT. Packets from the new address do not belong to the old connection.\n4. The fix is at a higher layer: resumable downloads (HTTP range requests), QUIC connection migration, or Multipath TCP.",
+    "link": {
+      "title": "Mobile Networks — High Performance Browser Networking",
+      "url": "https://hpbn.co/mobile-networks/"
+    }
+  },
+  {
+    "id": "wm-cellular-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your API rate-limits to 100 requests per minute per client IP. Mobile users on one operator start receiving HTTP 429s, even light users. Which statements about carrier networks are relevant or true? Select all that apply.",
+    "options": [
+      {
+        "text": "With carrier-grade NAT, thousands of phones can share one public IPv4 address, so they share your per-IP limit",
+        "explanation": "Correct. Per-IP limits punish everyone behind the same CGNAT address. Limit per account or token instead."
+      },
+      {
+        "text": "Phones behind CGNAT generally cannot accept unsolicited inbound connections",
+        "explanation": "Correct. There is no port mapping until the phone sends first, which is why peer-to-peer apps need STUN/TURN relays."
+      },
+      {
+        "text": "CGNAT mappings for idle flows can expire, silently breaking long-lived idle TCP connections",
+        "explanation": "Correct. If no packets flow for long enough, the mapping is dropped and later packets are discarded."
+      },
+      {
+        "text": "IPv6-only mobile networks cannot reach IPv4-only servers at all",
+        "explanation": "They can, through NAT64/DNS64 or 464XLAT translation. Apps must use hostnames and system APIs for this to work."
+      },
+      {
+        "text": "CGNAT gives each packet from a phone a different public address",
+        "explanation": "Mappings are kept per flow (and often per subscriber) for the life of the mapping; changing per packet would break every TCP connection."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. CGNAT exists because operators have far more subscribers than public IPv4 addresses.\n2. Many phones → one public address, so per-IP rate limiting groups strangers together. Use API keys, user IDs or tokens.\n3. NAT also means no inbound connections without a mapping, and mappings time out when idle.\n4. IPv6-only networks still reach IPv4 servers via translation, so that option is false.\n5. Mappings are stable per flow; otherwise TCP would never work through NAT.",
+    "link": {
+      "title": "464XLAT — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/464XLAT"
+    }
+  },
+  {
+    "id": "wm-cellular-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "5G NR subcarrier spacing is 15 × 2^μ kHz, and slot length is 1 ms / 2^μ. What is the slot length at 60 kHz spacing, and why would an operator choose wider spacing?",
+    "options": [
+      {
+        "text": "0.5 ms; wider spacing gives better coverage",
+        "explanation": "0.5 ms is the slot at 30 kHz (μ = 1). And wider spacing shortens symbols, which suits high bands and low latency, not long-range coverage."
+      },
+      {
+        "text": "0.25 ms; shorter slots cut scheduling latency and tolerate the phase noise and Doppler of higher bands",
+        "explanation": "Correct. 60 = 15 × 2², so μ = 2 and the slot is 1/4 ms. Higher bands use wider spacing."
+      },
+      {
+        "text": "4 ms; wider spacing means longer slots",
+        "explanation": "The relationship is inverse: doubling spacing halves the slot length."
+      },
+      {
+        "text": "1 ms; slot length is fixed in 5G as in LTE",
+        "explanation": "Fixed 1 ms TTIs were LTE. NR's flexible numerology is precisely what lets slots shrink."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 60 kHz / 15 kHz = 4 = 2², so μ = 2.\n2. Slot length = 1 ms / 2² = 0.25 ms.\n\n```\nmu  spacing  slot\n0   15 kHz   1 ms\n1   30 kHz   0.5 ms\n2   60 kHz   0.25 ms\n3   120 kHz  0.125 ms\n```\n\n3. Shorter slots mean the scheduler can grant resources more often, lowering latency.\n4. Wider spacing also copes better with the frequency errors that grow at higher carrier frequencies, which is why mmWave uses 120 kHz.",
+    "link": {
+      "title": "5G NR — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/5G_NR"
+    }
+  },
+  {
+    "id": "wm-cellular-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An iOS app fetches config from `http://198.51.100.7/config.json` (an IPv4 literal). It works everywhere except on a test network that is IPv6-only with NAT64/DNS64 and no on-device translation. Requests to `https://api.example.com` work on the same network. Why?",
+    "options": [
+      {
+        "text": "The server does not support IPv6",
+        "explanation": "Neither server needs IPv6: NAT64 translates for IPv4-only servers. The hostname request succeeds via translation, which shows the server side is not the problem."
+      },
+      {
+        "text": "DNS64 synthesises an IPv6 address only when it resolves a name; an IPv4 literal bypasses DNS, so the phone has no IPv6 route to it",
+        "explanation": "Correct. The device only has an IPv6 address. Without a DNS lookup there is no synthesised NAT64 address, so the literal is unreachable."
+      },
+      {
+        "text": "Plain HTTP is blocked on IPv6-only networks",
+        "explanation": "HTTP versus HTTPS has nothing to do with IP versions here; the failure is reaching the address at all."
+      },
+      {
+        "text": "NAT64 only translates traffic on port 443",
+        "explanation": "NAT64 translates any TCP or UDP port; the issue is that no translated address was ever produced."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. On an IPv6-only network the phone has no IPv4 address and no IPv4 route.\n2. For `api.example.com`, the phone asks DNS64. If the name only has an A record, DNS64 **synthesises** an AAAA record inside the NAT64 prefix (e.g. `64:ff9b::/96`).\n3. The phone connects over IPv6 to that address; the NAT64 gateway translates to IPv4.\n4. With an IPv4 literal there is no lookup and no synthesis. The connection fails.\n5. Fix: use hostnames, and use system networking APIs that can synthesise addresses. This is what Apple's IPv6-only requirement checks for.",
+    "link": {
+      "title": "Supporting IPv6-only networks — Apple Developer",
+      "url": "https://developer.apple.com/support/ipv6/"
+    }
+  },
+  {
+    "id": "wm-cellular-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are designing a voice-call app that must keep a call running when the user walks out of Wi-Fi coverage onto 5G. Which approaches genuinely help? Select all that apply.",
+    "options": [
+      {
+        "text": "Use QUIC, whose connection IDs let a connection migrate to a new client address",
+        "explanation": "Correct. QUIC connections are not bound to the 4-tuple, so a client can continue from its new cellular address after validating the path."
+      },
+      {
+        "text": "Use Multipath TCP so subflows on Wi-Fi and cellular can carry the same connection",
+        "explanation": "Correct. This is what Apple does for Siri: when Wi-Fi fades, traffic continues on the cellular subflow."
+      },
+      {
+        "text": "Rely on the cellular core's GTP tunnels to keep the Wi-Fi IP address",
+        "explanation": "The mobile core anchors addresses only within the cellular network. Wi-Fi addresses come from a different provider entirely."
+      },
+      {
+        "text": "Enable TCP keepalives every 5 seconds",
+        "explanation": "Keepalives detect a dead connection; they cannot carry a connection across an address change, and they waste battery."
+      },
+      {
+        "text": "Monitor path changes with the OS API and re-establish the media session quickly when the path changes",
+        "explanation": "Correct. Even without migration-capable transports, reacting to `NWPathMonitor` or `ConnectivityManager` events lets you reconnect in a fraction of a second."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. The core problem: the client's IP address changes, so anything bound to the old 4-tuple breaks.\n2. Solutions must either not depend on the 4-tuple (QUIC connection IDs), use several paths at once (MPTCP), or reconnect fast (path monitoring and session resumption).\n3. Cellular anchoring only helps when moving between cells of the same mobile network.\n4. Keepalives make breakage visible sooner but cannot prevent it.",
+    "link": {
+      "title": "RFC 8684: Multipath TCP — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc8684"
+    }
+  },
+  {
+    "id": "wm-cellular-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On 4G, `ping` shows 45 ms when idle. While the phone uploads a large video over TCP (CUBIC), ping rises to around 700 ms, yet there is almost no packet loss. What is happening, and what helps?",
+    "options": [
+      {
+        "text": "The upload makes the phone switch to a farther cell; nothing can be done",
+        "explanation": "Uploading does not trigger handover to a distant cell, and propagation over a few extra km adds microseconds, not hundreds of ms."
+      },
+      {
+        "text": "Deep buffers on the radio path fill because loss-based TCP keeps sending until loss, which rarely happens; delay-based congestion control (e.g. BBR) or capping data in flight reduces the queue",
+        "explanation": "Correct. This is bufferbloat. Link-layer retransmission hides loss, so CUBIC keeps growing its window and the queue grows with it."
+      },
+      {
+        "text": "The core network deprioritises ICMP during uploads",
+        "explanation": "ICMP deprioritisation would usually show as loss or erratic results, not a steady rise exactly matching the upload."
+      },
+      {
+        "text": "TCP's slow start adds 650 ms of delay per round trip",
+        "explanation": "Slow start affects how fast the sender ramps up; it does not add a fixed delay to other packets."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Idle RTT: 45 ms, the base path.\n2. Base stations buffer heavily, and HARQ/RLC retransmissions recover radio errors before TCP notices.\n3. CUBIC reduces its rate only on loss, so it keeps adding to the queue.\n4. Queueing delay ≈ 700 − 45 ≈ 650 ms. For an uplink of 8 Mbit/s that is:\n\n```\n8e6 bit/s x 0.65 s = 5.2e6 bits\n= ~650 KB sitting in buffers\n```\n\n5. BBR estimates bottleneck bandwidth and minimum RTT and paces to them, keeping queues short. Limiting the send buffer (or using TCP_NOTSENT_LOWAT) also helps interactive traffic.",
+    "link": {
+      "title": "Bufferbloat — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bufferbloat"
+    }
+  },
+  {
+    "id": "wm-cellular-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An operator's 5G is deployed as non-standalone (NSA). A customer wants a dedicated network slice with a latency guarantee for factory robots. What is the main obstacle?",
+    "options": [
+      {
+        "text": "NSA cannot use mid-band spectrum",
+        "explanation": "NSA works on any 5G NR band; many NSA deployments use 3.5 GHz mid band."
+      },
+      {
+        "text": "Network slicing is a feature of the 5G core, and NSA still uses the 4G EPC with an LTE anchor for control",
+        "explanation": "Correct. NSA adds a 5G radio carrier to an LTE network. End-to-end slicing, along with features such as RRC_INACTIVE, needs a standalone 5G core."
+      },
+      {
+        "text": "NSA phones cannot reach the Internet without Wi-Fi",
+        "explanation": "NSA phones have full Internet access; the control plane simply runs over LTE."
+      },
+      {
+        "text": "Slicing requires mmWave",
+        "explanation": "Slicing is a core and orchestration feature independent of frequency band."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **NSA** (option 3): LTE eNodeB is the anchor for control signalling; a gNodeB adds 5G capacity; the core is the 4G EPC.\n2. **SA** (option 2): the gNodeB connects to the **5GC** with its AMF, SMF and UPF.\n3. Network slicing allocates separate logical resources across RAN, transport and core, managed through the 5GC's service-based functions.\n4. With the EPC, there is no slice-aware core to enforce it.\n5. So the operator needs a standalone 5G core (or a private 5G SA network) for this customer.",
+    "link": {
+      "title": "5G System Overview — 3GPP",
+      "url": "https://www.3gpp.org/technologies/5g-system-overview"
+    }
+  }
+]

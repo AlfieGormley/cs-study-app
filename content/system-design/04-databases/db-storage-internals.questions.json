@@ -1,0 +1,383 @@
+[
+  {
+    "id": "db-storage-internals-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Postgres acknowledges a `COMMIT` before the modified table pages have been written to their place on disk. Why is that safe?",
+    "options": [
+      {
+        "text": "It isn't; Postgres relies on the OS cache never losing data",
+        "explanation": "Wrong. Postgres explicitly `fsync`s the WAL at commit because the OS page cache *can* lose data on power failure."
+      },
+      {
+        "text": "Because the WAL records for the transaction, including its commit record, are flushed to disk first; after a crash, recovery replays them to rebuild the pages",
+        "explanation": "Correct. That's the write-ahead rule: log first, pages later. The WAL is enough to redo every committed change."
+      },
+      {
+        "text": "Because a replica always has a copy",
+        "explanation": "Wrong. Replication may be async or absent; single-node durability comes from the WAL, not replicas."
+      },
+      {
+        "text": "Because the buffer pool is battery-backed",
+        "explanation": "Wrong. Some RAID controllers have battery-backed caches, but the buffer pool is ordinary RAM, which is lost on power failure."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The transaction updates pages in the buffer pool (RAM) and appends WAL records describing the changes.\n2. At `COMMIT`, Postgres writes and `fsync`s the WAL up to the commit record. Only then does the client get success.\n3. The dirty pages are written later by the background writer or at a checkpoint.\n4. Crash: RAM is lost, so the dirty pages are lost.\n5. Recovery starts from the last checkpoint and replays WAL records, reconstructing every committed change.\n6. Cost: one sequential `fsync` per commit (or per group of commits) instead of many random page writes.",
+    "link": {
+      "title": "PostgreSQL: Write-Ahead Logging",
+      "url": "https://www.postgresql.org/docs/current/wal-intro.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A RocksDB instance uses leveled compaction with a size ratio of 10 and five levels below L0. What can you infer about its compaction write amplification without a workload measurement?",
+    "options": [
+      {
+        "text": "It is always 1× because every key is written only once.",
+        "explanation": "Wrong. Compaction rewrites retained records and may merge overlapping existing data."
+      },
+      {
+        "text": "It is exactly 5×, one rewrite per level.",
+        "explanation": "Wrong. Overlap, updates, compression and compaction choices affect the bytes rewritten."
+      },
+      {
+        "text": "It is exactly 2× regardless of key distribution.",
+        "explanation": "Wrong. No fixed factor follows from the level count and size ratio alone."
+      },
+      {
+        "text": "Repeated merges can amplify writes substantially, but the actual factor depends on overlap, workload and configuration and must be measured.",
+        "explanation": "Correct. Leveled compaction trades repeated rewriting for bounded overlap and space/read efficiency. A simple size ratio is not a universal measured write-amplification value."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A flush creates sorted files. Later compactions merge them with overlapping files in the next level.\n2. Surviving entries may be rewritten repeatedly, while overwritten/deleted entries may be discarded.\n3. Key distribution, update locality, compression and compaction selection determine actual bytes written.\n4. Measure physical bytes written divided by logical bytes ingested, explicitly stating whether WAL and initial flushes are included.\n5. A universal numerical range is absent because no matching workload benchmark is available.",
+    "link": {
+      "title": "RocksDB: Leveled compaction",
+      "url": "https://github.com/facebook/rocksdb/wiki/Leveled-Compaction"
+    }
+  },
+  {
+    "id": "db-storage-internals-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A bloom filter for an SSTable says a key is **present**. What can the engine conclude?",
+    "options": [
+      {
+        "text": "The key is definitely in the SSTable",
+        "explanation": "Wrong. Bloom filters have false positives: other keys may have set all the same bits. 'Present' means 'possibly present'."
+      },
+      {
+        "text": "The key is definitely not in the SSTable",
+        "explanation": "Wrong. That's what a 'not present' answer means. A 'present' answer can't rule the key out."
+      },
+      {
+        "text": "The key is possibly present; other index/metadata or data checks are needed to establish whether it exists.",
+        "explanation": "Correct. A positive filter result is not proof of membership. Follow-up checks may be satisfied from cache or rejected by other metadata without a physical data-block read."
+      },
+      {
+        "text": "The SSTable must be compacted",
+        "explanation": "Wrong. Bloom filter answers have nothing to do with whether compaction is needed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Adding a key sets k bits. Checking a key tests the same k bits.\n2. If any bit is 0, the key was never added: **definitely absent**.\n3. If all bits are 1, either the key was added, or other keys happened to set those bits: **possibly present**.\n4. At 10 bits/key with k = 7, about 1% of absent keys look present.\n5. A negative avoids further lookup in that candidate file; a positive requires further checks, not necessarily physical I/O.",
+    "link": {
+      "title": "Wikipedia: Bloom filter",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "db-storage-internals-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For an absent key, suppose six SSTable Bloom filters are tested, each with false-positive probability p. What is the expected number of false-positive candidate-file checks at p=0.01 versus p=0.1?",
+    "options": [
+      {
+        "text": "6 checks either way; Bloom filters cannot reject absent keys.",
+        "explanation": "Wrong. Negative filter results eliminate candidates."
+      },
+      {
+        "text": "0.06 versus 0.6 candidate-file checks per miss.",
+        "explanation": "Correct. Linearity of expectation gives 6p. These are potential follow-up checks, not guaranteed physical data reads; indexes and caches may avoid I/O."
+      },
+      {
+        "text": "0 at either setting because the filters are exact.",
+        "explanation": "Wrong. Bloom filters permit false positives."
+      },
+      {
+        "text": "1 versus 10 candidate-file checks per miss.",
+        "explanation": "Wrong. Multiply six candidate filters by the probability; a tenfold probability does not mean ten files."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each of six filters contributes false-positive probability p, so the expected count is 6p.\n2. At 1%, this is 0.06; at 10%, it is 0.6. Independence is not needed for this expectation.\n3. At 7,000 misses/s, that is 420 versus 4,200 potential follow-up file checks per second.\n4. Actual disk reads depend on additional indexes, metadata and caching.\n5. The ideal Bloom-filter formula gives about 9.6 versus 4.8 bits/key; implementation allocation may differ.",
+    "link": {
+      "title": "Wikipedia: Bloom filter",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "db-storage-internals-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An analyst runs `SELECT region, sum(revenue_p) FROM sales GROUP BY region` over 2 billion rows of a 60-column table. Why can this run substantially faster in a column store like ClickHouse or Redshift than in Postgres?",
+    "options": [
+      {
+        "text": "Column stores keep all data in RAM",
+        "explanation": "Wrong. Column stores routinely handle data far larger than memory; their advantage comes from reading less data and processing it efficiently."
+      },
+      {
+        "text": "Column stores skip `GROUP BY` processing",
+        "explanation": "Wrong. They still aggregate; they just do it on compact, vectorised column batches."
+      },
+      {
+        "text": "Column stores use B-tree indexes on every column",
+        "explanation": "Wrong. Column-oriented engines can reduce scanned bytes and process batches without requiring a B-tree on every column; some plans may also use specialized indexes or projections."
+      },
+      {
+        "text": "It reads only the 2 needed columns instead of all 60, the columns compress heavily (e.g. a low-cardinality region dictionary-encodes to a byte or less), and it processes values in vectorised batches",
+        "explanation": "Correct. Column pruning, compression and batched execution can reduce work. The ratio depends on column widths, encoding, execution plans and hardware, not simply 60 divided by 2."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Suppose a row scan reads 600 GB while a columnar layout needs only 10 GB for the two selected encoded columns. These are hypothetical sizes.\n2. That is 60 times fewer scanned bytes in this example, not a promised runtime speedup.\n3. Compression and vectorized processing can also help aggregation.\n4. A covering index, cached data, preaggregation or different query plan changes the comparison.\n5. A universal 10–100× speedup is absent because no matching reproducible benchmark is available.",
+    "link": {
+      "title": "Wikipedia: Column-oriented DBMS",
+      "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"
+    }
+  },
+  {
+    "id": "db-storage-internals-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Cassandra cluster uses size-tiered compaction on a write-heavy table. Disks are 85% full, and read latency is creeping up. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Size-tiered compaction can temporarily need free space roughly equal to the SSTables being merged, so a large compaction may fail at 85% full",
+        "explanation": "Correct. Compaction writes output before deleting inputs, so the required headroom depends on the actual compaction size, snapshots and concurrent activity; no universal fullness threshold follows."
+      },
+      {
+        "text": "Read latency rises because a key may be spread across many overlapping SSTables, raising read amplification",
+        "explanation": "Correct. In STCS, many similarly sized files can each contain versions of a key, so reads consult more files (bloom filters help only for absent keys)."
+      },
+      {
+        "text": "Switching to leveled compaction would reduce write amplification",
+        "explanation": "Wrong. Leveled compaction *increases* write amplification (data rewritten at each level) in exchange for lower read and space amplification."
+      },
+      {
+        "text": "Leveled compaction generally reduces space amplification, but does not impose a universal 10% overhead bound.",
+        "explanation": "Correct. Non-overlapping levels reduce retained overlap; L0, snapshots, obsolete versions and temporary compaction outputs still affect peak space."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. STCS: merge N similar-sized SSTables into one. Output is written before inputs are deleted, so peak space = inputs + output.\n2. If the largest tier is 30% of the disk, merging it needs up to another 30% free. At 85% full, there isn't room.\n3. Reads: a frequently updated key may have versions in many SSTables; each must be checked and merged.\n4. Leveled: each level is non-overlapping and 10× the previous, so a point key is in at most one file per non-L0 level; temporary outputs and retained versions still affect total space.\n5. Price: higher write amplification. For a write-heavy table, check that disks can sustain the extra compaction I/O before switching.",
+    "link": {
+      "title": "Mark Callaghan: Read, write and space amplification",
+      "url": "https://smalldatum.blogspot.com/2015/11/read-write-space-amplification-pick-2_23.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To speed up writes, a team sets Postgres `synchronous_commit = off`. The server loses power. What's the consequence?",
+    "options": [
+      {
+        "text": "The database may be corrupted and need restoring from backup",
+        "explanation": "Wrong. `synchronous_commit = off` doesn't risk corruption: WAL ordering is preserved, and recovery produces a consistent state. (Turning off `fsync` entirely is what risks corruption.)"
+      },
+      {
+        "text": "Nothing; all acknowledged commits are durable",
+        "explanation": "Wrong. Commits are acknowledged before their WAL is flushed, so the most recent ones can be lost."
+      },
+      {
+        "text": "Transactions committed in roughly the last few hundred milliseconds (up to about 3 × `wal_writer_delay`) may be lost, but the database recovers to a consistent state",
+        "explanation": "Correct. The WAL writer flushes asynchronously; on a crash, the most recent acknowledged commits that weren't yet flushed are lost, but there's no corruption and no partial transaction."
+      },
+      {
+        "text": "Uncommitted transactions are committed during recovery",
+        "explanation": "Wrong. Recovery never commits a transaction that didn't commit; it only replays flushed WAL."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Normal: commit waits for the WAL `fsync` → acknowledged commits are durable.\n2. With `synchronous_commit = off`: commit returns once the record is in the WAL buffer; the WAL writer flushes every `wal_writer_delay` (200 ms default). Postgres documents the maximum loss window as three times that: up to ~600 ms.\n3. Power loss: unflushed WAL is gone, so those transactions are lost even though clients were told they succeeded.\n4. WAL is still written in order and data pages are never written ahead of their WAL, so recovery yields a consistent database as of a slightly earlier point.\n5. Good for: high-volume, low-value writes (analytics events). Bad for: payments. It can be set per transaction: `SET LOCAL synchronous_commit = off`.",
+    "link": {
+      "title": "PostgreSQL: Asynchronous commit",
+      "url": "https://www.postgresql.org/docs/current/wal-async-commit.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After every checkpoint, a Postgres server's WAL volume spikes. An engineer proposes `full_page_writes = off` to cut it. The data sits on ext4 on an ordinary SSD with 4 KB atomic writes. What's the risk?",
+    "options": [
+      {
+        "text": "None: the WAL already contains every change, so full-page images are redundant",
+        "explanation": "Wrong. Normal WAL records describe *changes* to a page and assume the page on disk is intact. If the page itself is half old and half new, replaying a delta onto it can't repair it."
+      },
+      {
+        "text": "A crash midway through writing an 8 KB page can leave a torn page that recovery can't fix, silently corrupting data",
+        "explanation": "Correct. The first change to a page after a checkpoint logs the whole page, so recovery can overwrite a torn page with a known-good copy. Without that, a 4 KB-atomic device can leave half an 8 KB page updated, which deltas can't repair."
+      },
+      {
+        "text": "Commits are no longer durable until the next checkpoint",
+        "explanation": "Wrong. Commit durability still comes from flushing the WAL at commit. Full-page images protect against torn pages, not lost commits."
+      },
+      {
+        "text": "Replicas stop receiving changes, because they replay only full-page images",
+        "explanation": "Wrong. Replicas replay the same WAL records as crash recovery, deltas included. They'd keep working, but share the torn-page risk."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Postgres pages are 8 KB; this device guarantees only 4 KB atomic writes.\n2. Power fails mid-write: the first 4 KB is new, the second 4 KB is old. That's a **torn page**.\n3. Recovery replays WAL deltas such as \"insert tuple at offset 312\". Applying that to a torn page gives garbage.\n4. With `full_page_writes = on`, the first WAL record for each page after a checkpoint contains the whole page image. Recovery writes that image first, then replays later deltas.\n5. That's why WAL spikes right after each checkpoint: the first qualifying modification of a page can log a full-page image (compression and unused page space can reduce its size).\n6. Safer ways to cut the spike: space checkpoints further apart (larger `max_wal_size`, longer `checkpoint_timeout`) or enable `wal_compression`. Keep full_page_writes enabled unless the complete operating-system and storage configuration has a documented, verified guarantee against torn PostgreSQL-page writes and its recovery behavior has been tested. A filesystem name alone is not sufficient evidence.",
+    "link": {
+      "title": "PostgreSQL: WAL configuration",
+      "url": "https://www.postgresql.org/docs/current/wal-configuration.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a deliberately simplified calculation, assume each flushed 16 KiB InnoDB page contains exactly one 100-byte logical change, full doublewrite writes the page twice, and a measured LSM workload writes 20 host bytes per logical byte. Ignoring logs and storage-device internal amplification, what are the host write-amplification factors?",
+    "options": [
+      {
+        "text": "About 164× before doublewrite, 328× with it, versus the assumed measured LSM factor of 20×.",
+        "explanation": "Correct under the explicit assumptions: 16,384/100=163.84 and twice that is 327.68. The LSM number is supplied, not inferred from its data structure."
+      },
+      {
+        "text": "Both about 1×, because each engine writes only the changed bytes",
+        "explanation": "Wrong. Neither writes just the changed bytes: a B-tree writes whole pages, and an LSM rewrites data during compaction."
+      },
+      {
+        "text": "InnoDB about 10× and the LSM about 164×.",
+        "explanation": "Wrong. This reverses the supplied calculation and measured assumption."
+      },
+      {
+        "text": "Both necessarily have the same write amplification because both buffer writes.",
+        "explanation": "Wrong. Buffering alone does not determine amplification; this example explicitly supplies different behavior."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. One 100-byte change per 16,384-byte flush gives 163.84 host bytes written per logical byte.\n2. Writing each page twice gives 327.68×. Multiple changes coalesced on a page would lower this factor.\n3. At 2 MB/s of logical changes, the toy model produces 655.36 MB/s with full doublewrite and 40 MB/s for the assumed 20× LSM measurement.\n4. Real compression, buffering, flushing, compaction and device behavior change these values.\n5. Universal InnoDB-versus-LSM amplification ranges are absent because no matched workload measurement is available.",
+    "link": {
+      "title": "Mark Callaghan: Read, write and space amplification",
+      "url": "https://smalldatum.blogspot.com/2015/11/read-write-space-amplification-pick-2_23.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A Postgres server checkpoints every 5 minutes. You raise `max_wal_size` and `checkpoint_timeout` so checkpoints happen every 30 minutes instead. Assume durably flushed commits and sufficient buffer capacity. Which effects are possible or expected for a workload repeatedly updating hot pages? Select all that apply.",
+    "options": [
+      {
+        "text": "Less WAL written overall, because fewer full-page images are logged",
+        "explanation": "Correct. A full-page image is logged on the first change to each page after a checkpoint. Fewer checkpoints means fewer \"first changes\", so busy pages are imaged less often."
+      },
+      {
+        "text": "Potentially fewer checkpoint-driven data-page writes, as multiple changes can be coalesced.",
+        "explanation": "Correct as a potential benefit, not a promise of one flush per interval. Background writer activity, backend writes and eviction may flush a page earlier or repeatedly."
+      },
+      {
+        "text": "Crash recovery can take longer, because more WAL must be replayed from the last checkpoint",
+        "explanation": "Correct. Recovery starts at the last checkpoint. A longer interval can increase replay work; the ratio depends on the workload, checkpoint duration and WAL generation."
+      },
+      {
+        "text": "Committed transactions are at greater risk of being lost in a crash",
+        "explanation": "Wrong. Commit durability depends on the WAL flush at commit, not on checkpoints. Everything committed is in the WAL and will be replayed."
+      },
+      {
+        "text": "The WAL directory needs more disk space",
+        "explanation": "Correct. WAL can only be recycled once a checkpoint has passed it, so more WAL accumulates between checkpoints."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Think about what a checkpoint is for: it bounds how far back recovery must start, and allows older WAL to be recycled.\n\n1. Full-page images: one per page per checkpoint cycle. Longer cycles → fewer images → less WAL. True.\n2. Page writes: the checkpointer must flush every dirty page once per cycle. Checkpoint-driven flush opportunities decrease, but background/backend activity can still flush a hot page multiple times. True.\n3. Recovery replays from the last checkpoint, so up to 30 minutes of WAL rather than 5. True.\n4. Durability comes from the commit-time WAL flush. Unchanged. False.\n5. More WAL held between checkpoints → more disk. True.\n\nSo: lower steady-state I/O, at the cost of disk space and slower recovery.",
+    "link": {
+      "title": "PostgreSQL: WAL configuration",
+      "url": "https://www.postgresql.org/docs/current/wal-configuration.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A RocksDB-backed service has fast point lookups, but range scans such as \"all events for device 42 between 09:00 and 10:00\" are slow. Someone lowers the bloom filter false-positive rate from 1% to 0.1%. Range-scan latency doesn't change. Why not, and what would help?",
+    "options": [
+      {
+        "text": "Bloom filters answer only \"is this exact key here?\", so a range scan must still open an iterator on every level; a prefix bloom filter on the device id lets it skip files with no events for device 42",
+        "explanation": "Correct. A range has no single key to test, so ordinary filters can't exclude files. If every key in the range shares a prefix (the device id), a prefix bloom filter can rule out files that contain no keys with that prefix."
+      },
+      {
+        "text": "The new rate takes effect only after a restart",
+        "explanation": "Wrong. Even with new filters fully in place, ordinary bloom filters can't help a range scan; the change is irrelevant to this query."
+      },
+      {
+        "text": "0.1% is still too high; lower it to 0.001%",
+        "explanation": "Wrong. The false-positive rate is beside the point: range scans don't consult whole-key bloom filters at all."
+      },
+      {
+        "text": "Range scans need a secondary B-tree index alongside the LSM tree",
+        "explanation": "Wrong. LSM trees store keys in sorted order and support range scans natively. The cost is merging across levels, not a missing index."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Point lookup for key `k`: for each SSTable, ask the filter \"is `k` here?\". \"Definitely not\" skips the file.\n2. Range scan from `dev42#09:00` to `dev42#10:00`: there can be many possible keys in that range, so there's no single key to test. The engine opens an iterator on each level (and each L0 file) and merges them.\n3. So the filter rate is irrelevant to the scan.\n4. What helps:\n   - **Prefix bloom filters**: index the prefix `dev42`. Files with no `dev42` keys are skipped.\n   - Keep L0 small, so fewer overlapping files must be merged.\n   - Leveled compaction: each point is covered by at most one file per non-L0 level, but a range can span multiple files; concatenate those files in key order.\n5. Design the key so related data shares a prefix: `device_id#timestamp` makes a device's events contiguous on disk.",
+    "link": {
+      "title": "RocksDB: Prefix seek",
+      "url": "https://github.com/facebook/rocksdb/wiki/Prefix-Seek"
+    }
+  },
+  {
+    "id": "db-storage-internals-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A team is weighing a column store for a 100-column `sales` table. Which statements about column stores are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Fetching a complete row may require gathering values from many column chunks rather than one row-oriented record.",
+        "explanation": "Correct. A pure column layout separates attributes, but chunks may share files, be cached or use hybrid layouts; this does not imply 100 physical reads."
+      },
+      {
+        "text": "Single-row inserts and updates are usually buffered and written in batches",
+        "explanation": "Correct. Writing one row into 100 compressed column files is expensive, so column stores collect writes (often in a row-oriented buffer) and merge them in bulk, much like an LSM tree."
+      },
+      {
+        "text": "Sorting the data by `sale_date` makes zone maps on `sale_date` much more effective",
+        "explanation": "Correct. If the data is sorted, each block covers a narrow date range, so the min/max per block lets the engine skip almost every block outside a date filter. On unsorted data, most blocks span every date and nothing can be skipped."
+      },
+      {
+        "text": "They usually compress worse than row stores, because each file mixes many data types",
+        "explanation": "Wrong. It's the other way round. Each column file holds one type with similar values, which is ideal for run-length, dictionary and bit-packing encodings. Row pages mix types and compress worse."
+      },
+      {
+        "text": "They are ideal for a checkout service that updates individual orders thousands of times per second",
+        "explanation": "Wrong. That's an OLTP workload of small, random writes by key, which is exactly where column stores are weakest."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each statement, how data is laid out.\n\n1. Column layout: values are organized by column, so assembling a whole row may touch many chunks, not necessarily separate files or physical I/Os. True.\n2. Writes therefore touch every column; batching amortises that. True.\n3. Zone maps store min/max per block. Sorted by date, a block might be `2026-03-01..2026-03-02`, so a query for January skips it. Unsorted blocks often span wider ranges, reducing pruning effectiveness. True.\n4. One type and similar values per column compress *better* (the exact ratio depends on data and codecs). False.\n5. High-rate single-row updates are OLTP. False.\n\nRule of thumb: rows for \"fetch or change one thing by key\", columns for \"scan and aggregate a few attributes of many things\".",
+    "link": {
+      "title": "Wikipedia: Column-oriented DBMS",
+      "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"
+    }
+  }
+]

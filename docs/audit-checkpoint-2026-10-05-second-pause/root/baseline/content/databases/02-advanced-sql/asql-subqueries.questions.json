@@ -1,0 +1,378 @@
+[
+  {
+    "id": "asql-subqueries-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Product prices are Kettle 30, Toaster 25, Lamp 40, Rug 90, Mug 10 and Vase 35. How many rows does this return?\n\n```sql\nSELECT name FROM products\nWHERE price > (SELECT AVG(price)\n               FROM products);\n```",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "Only Rug is far above the rest, but the threshold is the mean (about 38.33), not a 'clearly expensive' cut-off. Lamp at 40 also clears it."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. The average is 230 / 6 = 38.33. Lamp (40) and Rug (90) are above it."
+      },
+      {
+        "text": "3",
+        "explanation": "Vase (35) is close to the average but below it. 35 > 38.33 is false."
+      },
+      {
+        "text": "0",
+        "explanation": "The subquery returns one number, so the comparison is a normal scalar comparison and some rows pass."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The subquery is uncorrelated, so it runs once.\n2. Sum the prices: 30 + 25 + 40 + 90 + 10 + 35 = 230.\n3. Average: 230 / 6 = 38.33.\n4. Compare each product with 38.33:\n\n| name | price | > 38.33? |\n|---|---|---|\n| Kettle | 30 | no |\n| Toaster | 25 | no |\n| Lamp | 40 | yes |\n| Rug | 90 | yes |\n| Mug | 10 | no |\n| Vase | 35 | no |\n\nTwo rows: Lamp and Rug.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The `customers` table has ids 1 to 5. What does this return?\n\n```sql\nSELECT name FROM customers\nWHERE id NOT IN (4, NULL);\n```",
+    "options": [
+      {
+        "text": "Ana, Ben, Cat and Eve",
+        "explanation": "This assumes the NULL is ignored. It isn't: every comparison with NULL is UNKNOWN, and that UNKNOWN is AND-ed into every row's result."
+      },
+      {
+        "text": "All five customers",
+        "explanation": "Dev (id 4) is clearly excluded, and in fact the NULL excludes everyone else too."
+      },
+      {
+        "text": "No rows",
+        "explanation": "Correct. `id NOT IN (4, NULL)` expands to `id <> 4 AND id <> NULL`. The second term is UNKNOWN for every row, so no row is TRUE."
+      },
+      {
+        "text": "An error, because NULL is not allowed in an IN list",
+        "explanation": "NULL is perfectly legal in an IN list. The query runs; it just returns nothing, which is what makes the bug so dangerous."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Expand `NOT IN` into the comparisons it stands for:\n\n```\nid NOT IN (4, NULL)\n= id <> 4 AND id <> NULL\n```\n\nTake Ana (id 1):\n\n1. `1 <> 4` is TRUE.\n2. `1 <> NULL` is UNKNOWN.\n3. `TRUE AND UNKNOWN` is UNKNOWN.\n\n`WHERE` keeps only rows that are TRUE, so Ana is dropped. Dev fails on the first term (FALSE). Every row ends up FALSE or UNKNOWN, so the result is empty. `NOT EXISTS` doesn't have this problem.",
+    "link": {
+      "title": "Don't Do This — PostgreSQL wiki",
+      "url": "https://wiki.postgresql.org/wiki/Don%27t_Do_This"
+    }
+  },
+  {
+    "id": "asql-subqueries-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Ana has three orders of 60 or more, Ben and Cat one each. How many rows does each query return?\n\n```sql\n-- A\nSELECT c.name FROM customers c\nWHERE c.id IN (\n  SELECT customer_id FROM orders\n  WHERE total >= 60);\n\n-- B\nSELECT c.name FROM customers c\nJOIN orders o\n  ON o.customer_id = c.id\nWHERE o.total >= 60;\n```",
+    "options": [
+      {
+        "text": "A: 3, B: 3",
+        "explanation": "B is a plain join, so it returns one row per matching order, not per customer. Ana appears three times."
+      },
+      {
+        "text": "A: 5, B: 5",
+        "explanation": "A is a semi-join: `IN` only asks whether at least one match exists, so each customer appears at most once."
+      },
+      {
+        "text": "A: 5, B: 3",
+        "explanation": "That is backwards. The join multiplies rows; `IN` doesn't."
+      },
+      {
+        "text": "A: 3, B: 5",
+        "explanation": "Correct. `IN` gives each qualifying customer once (Ana, Ben, Cat). The join returns one row per qualifying order: Ana three times, plus Ben and Cat."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Qualifying orders (total >= 60): 101 Ana 120, 103 Ana 60, 104 Cat 200, 106 Ben 90, 107 Ana 60. That is 5 orders.\n2. Query A tests each customer once: is their id in {1, 2, 3}? Ana, Ben and Cat pass. **3 rows.**\n3. Query B pairs each customer with each matching order: 5 pairs. **5 rows**, with Ana repeated.\n4. To make B match A you would need `SELECT DISTINCT c.name`, which costs a sort or hash. That is why `IN`/`EXISTS` is the natural way to say \"has at least one\".",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Kitchen products: Kettle 30, Toaster 25, Mug 10. Home products: Lamp 40, Rug 90, Vase 35. What does this return?\n\n```sql\nSELECT p.name FROM products p\nWHERE p.price > (\n  SELECT AVG(p2.price)\n  FROM products p2\n  WHERE p2.category = p.category);\n```",
+    "options": [
+      {
+        "text": "Lamp, Rug",
+        "explanation": "Those are the products above the *overall* average (38.33). The subquery is correlated on category, so each product is compared with its own category's average."
+      },
+      {
+        "text": "Rug",
+        "explanation": "Rug is the only product above its category average in Home, but Kitchen has its own lower average (21.67) that Kettle and Toaster beat."
+      },
+      {
+        "text": "Kettle, Rug",
+        "explanation": "Toaster at 25 is also above the Kitchen average of 21.67."
+      },
+      {
+        "text": "Kettle, Toaster, Rug",
+        "explanation": "Correct. Kitchen averages 21.67, so Kettle and Toaster beat it. Home averages 55, so only Rug does."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The subquery references `p.category`, so it is evaluated per outer row with that row's category.\n\n1. Kitchen average: (30 + 25 + 10) / 3 = 21.67.\n2. Home average: (40 + 90 + 35) / 3 = 55.\n3. Compare:\n\n| name | price | avg | keep |\n|---|---|---|---|\n| Kettle | 30 | 21.67 | yes |\n| Toaster | 25 | 21.67 | yes |\n| Mug | 10 | 21.67 | no |\n| Lamp | 40 | 55 | no |\n| Rug | 90 | 55 | yes |\n| Vase | 35 | 55 | no |",
+    "link": {
+      "title": "Correlated subquery — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Correlated_subquery"
+    }
+  },
+  {
+    "id": "asql-subqueries-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague wants \"orders above that customer's own average\" and writes:\n\n```sql\nSELECT id FROM orders\nWHERE total > (\n  SELECT AVG(total) FROM orders\n  WHERE customer_id = customer_id);\n```\n\nWhat does the subquery actually compute?",
+    "options": [
+      {
+        "text": "The average over all orders, because the condition is true for every inner row",
+        "explanation": "Correct. `customer_id = customer_id` compares the inner column with itself, which is TRUE whenever it's not NULL. The subquery becomes the global average, 81.25."
+      },
+      {
+        "text": "Each customer's own average, as intended",
+        "explanation": "Unqualified `customer_id` resolves to the nearest table in scope, which is the inner `orders`. Both sides are the inner column, so there is no correlation at all."
+      },
+      {
+        "text": "NULL, because a column cannot be compared with itself",
+        "explanation": "Comparing a column with itself is legal and TRUE for any non-NULL value."
+      },
+      {
+        "text": "An error about an ambiguous column",
+        "explanation": "SQL resolves unqualified names from the innermost scope outwards, so there is no ambiguity error. That is why this bug is silent."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Inside the subquery, the innermost `FROM` is `orders`. An unqualified `customer_id` binds there first.\n2. So the filter is `inner.customer_id = inner.customer_id`, true for every row.\n3. The subquery is now uncorrelated: the average of all 8 orders, 650 / 8 = 81.25.\n4. Fix: alias both tables.\n\n```sql\nSELECT o.id FROM orders o\nWHERE o.total > (\n  SELECT AVG(o2.total)\n  FROM orders o2\n  WHERE o2.customer_id\n      = o.customer_id);\n```\n\nOn this data both versions happen to return 101, 104 and 106, which is exactly how such bugs survive testing: check with data where the answers differ.",
+    "link": {
+      "title": "Correlated subquery — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Correlated_subquery"
+    }
+  },
+  {
+    "id": "asql-subqueries-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which queries correctly return customers who have never placed an order? (`orders.customer_id` is declared `NOT NULL`.)",
+    "options": [
+      {
+        "text": "`WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)`",
+        "explanation": "Correct. The canonical anti-join, and safe even if the column were nullable."
+      },
+      {
+        "text": "`LEFT JOIN orders o ON o.customer_id = c.id WHERE o.id IS NULL`",
+        "explanation": "Correct. Unmatched customers get NULLs for every `o` column, and `o.id` is never NULL on a real order, so only unmatched rows survive."
+      },
+      {
+        "text": "`WHERE c.id NOT IN (SELECT customer_id FROM orders)`",
+        "explanation": "Correct here, because the column is `NOT NULL`, so the list can't contain a NULL. If the column were nullable, one NULL would make this return nothing."
+      },
+      {
+        "text": "`JOIN orders o ON o.customer_id = c.id WHERE o.id IS NULL`",
+        "explanation": "An inner join drops customers without orders before `WHERE` runs, and every joined `o.id` is non-NULL. This always returns nothing."
+      },
+      {
+        "text": "`LEFT JOIN orders o ON o.customer_id = c.id WHERE o.total = 0`",
+        "explanation": "A customer without orders has `o.total` NULL, not 0, and `NULL = 0` is UNKNOWN. This finds zero-value orders, not missing ones."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each against Eve (no orders) and Ana (three orders).\n\n1. NOT EXISTS: Eve's subquery is empty, so NOT EXISTS is TRUE. Ana's isn't. Correct.\n2. LEFT JOIN, `o.id IS NULL`: Eve gets one row padded with NULLs, so it is kept. Ana's three rows have real ids and are dropped. Correct.\n3. NOT IN: the list is {1, 2, 3, 4} with no NULL possible, so Eve (5) passes. Correct, but fragile.\n4. Inner join: Eve has no row to filter. Wrong.\n5. `o.total = 0`: Eve's padded `total` is NULL. Wrong.\n\nPrefer option 1: it states the intent and has no NULL trap.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Ana has three orders. You run this in SQLite and get `120` for Ana; in PostgreSQL the same query fails. Why?\n\n```sql\nSELECT c.name,\n  (SELECT total FROM orders o\n   WHERE o.customer_id = c.id) AS t\nFROM customers c;\n```",
+    "options": [
+      {
+        "text": "Postgres doesn't allow subqueries in the SELECT list",
+        "explanation": "It does, as long as each returns at most one row and one column."
+      },
+      {
+        "text": "Postgres requires an alias on every subquery",
+        "explanation": "Aliases are needed for some subqueries in FROM before Postgres 16, never for scalar subqueries in SELECT."
+      },
+      {
+        "text": "The subquery returns several rows for Ana. Postgres raises `more than one row returned by a subquery used as an expression`; SQLite silently uses the first row",
+        "explanation": "Correct. A scalar subquery must return at most one row. SQLite doesn't enforce this, so its 120 is simply whichever row it read first."
+      },
+      {
+        "text": "Eve has no orders, so her subquery returns no rows, which Postgres treats as an error",
+        "explanation": "Zero rows is fine for a scalar subquery: the value is NULL. The problem is customers with more than one order."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A scalar subquery must produce zero or one row.\n2. For Ana (id 1) it returns 120, 60 and 60.\n3. Postgres checks at run time and raises an error.\n4. SQLite returns the first row it encounters (120 here, from the order of the scan). Nothing guarantees which row that is.\n5. Decide what you mean and say it: `MAX(total)`, `SUM(total)`, or the latest order with `ORDER BY ordered_on DESC LIMIT 1`.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this return on the shop data?\n\n```sql\nSELECT COUNT(*)\nFROM customers c\nWHERE EXISTS (\n  SELECT NULL FROM orders o\n  WHERE o.customer_id = c.id);\n```",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "Correct. Ana, Ben, Cat and Dev each have at least one order. Only Eve has none."
+      },
+      {
+        "text": "0, because the subquery selects NULL",
+        "explanation": "EXISTS only checks whether any row comes back. The values in that row, NULL included, are ignored."
+      },
+      {
+        "text": "8, one per order",
+        "explanation": "EXISTS is a semi-join: each customer counts once however many orders match."
+      },
+      {
+        "text": "5",
+        "explanation": "Eve has no orders, so her subquery returns no rows and EXISTS is FALSE."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. For each customer, run the inner query.\n2. EXISTS is TRUE if at least one row comes back, whatever the row contains.\n3. Ana (3 rows), Ben (2), Cat (2), Dev (1): TRUE. Eve (0): FALSE.\n4. `COUNT(*)` over the four survivors is **4**.\n\n`SELECT 1`, `SELECT *` and `SELECT NULL` behave identically inside EXISTS. `SELECT 1` is just the convention.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "There are no products in category 'Garden'. In PostgreSQL, how many rows does each query return?\n\n```sql\n-- A\nSELECT name FROM products\nWHERE price > ALL (\n  SELECT price FROM products\n  WHERE category = 'Garden');\n\n-- B\nSELECT name FROM products\nWHERE price > (\n  SELECT MAX(price) FROM products\n  WHERE category = 'Garden');\n```",
+    "options": [
+      {
+        "text": "A: 0, B: 0",
+        "explanation": "This assumes `> ALL` of nothing is false. Logically, a condition that must hold for every member of an empty set is vacuously true."
+      },
+      {
+        "text": "A: 6, B: 6",
+        "explanation": "B compares with `MAX` of no rows, which is NULL, and `price > NULL` is UNKNOWN for every row."
+      },
+      {
+        "text": "A: 6, B: 0",
+        "explanation": "Correct. `> ALL (empty)` is TRUE for every row, so all 6 products return. `MAX` over no rows is NULL, so B returns nothing."
+      },
+      {
+        "text": "A: an error, B: 0",
+        "explanation": "An empty subquery is valid for `ALL`; there is no error."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `x > ALL (S)` means \"x is greater than every element of S\". If S is empty, there is no element to fail, so it is TRUE. All 6 products pass.\n2. `MAX` over zero rows returns one row containing NULL.\n3. `price > NULL` is UNKNOWN for every product, so B returns 0 rows.\n4. Moral: the usual rewrite of `> ALL` into `> MAX` (needed in SQLite, which has no ALL) is only equivalent when the subquery is non-empty. Wrap it if needed: `> COALESCE((SELECT MAX(...)), -1)`, choosing a sentinel below any real value.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On Postgres, this query against a 50-million-row `events` table has been running for hours. `EXPLAIN` shows a plain `SubPlan`, not a hash or anti join. What is the best fix?\n\n```sql\nSELECT u.id FROM users u\nWHERE u.id NOT IN (\n  SELECT user_id FROM events);\n```",
+    "options": [
+      {
+        "text": "Add an index on `users(id)`",
+        "explanation": "`users.id` is already the primary key. The cost is in evaluating the subquery for each user, not in reading `users`."
+      },
+      {
+        "text": "Rewrite with `NOT EXISTS (SELECT 1 FROM events e WHERE e.user_id = u.id)`",
+        "explanation": "Correct. NOT EXISTS has no NULL trap, so the planner can use an anti-join (hash, merge, or index nested loop) that reads `events` once or probes an index."
+      },
+      {
+        "text": "Add `DISTINCT` inside the subquery",
+        "explanation": "Deduplicating doesn't change the semantics that block the anti-join; the planner still can't convert NOT IN because a NULL `user_id` would change the answer."
+      },
+      {
+        "text": "Raise `statement_timeout` so the query can finish",
+        "explanation": "That treats the symptom. The plan rescans a 50M-row result for each user, which is a quadratic amount of work."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `NOT IN` must return no rows if the subquery contains any NULL, and it must treat UNKNOWN correctly. A standard anti-join doesn't have those semantics, so Postgres won't use one.\n2. Instead it uses a SubPlan. If the subquery result is small enough to hash in `work_mem`, that's a fast hashed SubPlan. At 50 million rows the planner falls back to a plain SubPlan that rescans the subquery result for each outer row.\n3. `NOT EXISTS` with a correlated equality is exactly an anti-join, so the planner can pick a Hash Anti Join or use an index on `events(user_id)`.\n4. As a bonus, it is also correct if `user_id` is ever NULL.",
+    "link": {
+      "title": "Don't Do This — PostgreSQL wiki",
+      "url": "https://wiki.postgresql.org/wiki/Don%27t_Do_This"
+    }
+  },
+  {
+    "id": "asql-subqueries-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You want to replace this correlated subquery with a join for performance. Which rewrite gives identical results, including Eve's 0?\n\n```sql\nSELECT c.name,\n  (SELECT COUNT(*) FROM orders o\n   WHERE o.customer_id = c.id) AS n\nFROM customers c;\n```",
+    "options": [
+      {
+        "text": "`FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, selecting `COUNT(*)`",
+        "explanation": "The inner join drops Eve entirely, so she doesn't appear with 0. She doesn't appear at all."
+      },
+      {
+        "text": "`FROM customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, selecting `COUNT(*)`",
+        "explanation": "Close, but `COUNT(*)` counts Eve's NULL-padded row, so she shows 1 instead of 0."
+      },
+      {
+        "text": "`FROM customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, selecting `COUNT(o.id)`",
+        "explanation": "Correct. The LEFT JOIN keeps Eve with one NULL-padded row, and `COUNT(o.id)` ignores NULLs, so she gets 0."
+      },
+      {
+        "text": "`FROM customers c LEFT JOIN orders o ON o.customer_id = c.id WHERE o.id IS NOT NULL GROUP BY c.id`, selecting `COUNT(o.id)`",
+        "explanation": "The WHERE clause removes Eve's padded row, turning the LEFT JOIN back into an inner join."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace Eve (no orders) through each candidate:\n\n| Rewrite | Eve's row |\n|---|---|\n| JOIN + COUNT(*) | missing |\n| LEFT JOIN + COUNT(*) | 1 |\n| LEFT JOIN + COUNT(o.id) | 0 |\n| LEFT JOIN + WHERE | missing |\n\n1. A LEFT JOIN produces one row for Eve with every `o` column NULL.\n2. `COUNT(*)` counts rows, so that row counts as 1.\n3. `COUNT(o.id)` counts non-NULL values, giving 0.\n4. Ana still gets 3, Ben 2, Cat 2, Dev 1. The join form scans `orders` once instead of probing it per customer.",
+    "link": {
+      "title": "Correlated subquery — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Correlated_subquery"
+    }
+  },
+  {
+    "id": "asql-subqueries-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements describe how PostgreSQL typically plans these subquery forms?",
+    "options": [
+      {
+        "text": "`WHERE id IN (SELECT ...)` is usually turned into a semi-join or a join over de-duplicated subquery rows",
+        "explanation": "Correct. Postgres flattens IN subqueries into the join tree, e.g. a hash join over a HashAggregate of the subquery."
+      },
+      {
+        "text": "`WHERE NOT EXISTS (correlated ...)` can become a hash, merge or nested-loop anti join",
+        "explanation": "Correct. NOT EXISTS has clean anti-join semantics, so it is flattened like a join."
+      },
+      {
+        "text": "`WHERE id NOT IN (SELECT ...)` is converted into an anti join just like NOT EXISTS",
+        "explanation": "It isn't: the NULL semantics of NOT IN differ from an anti-join, so Postgres runs it as a (hashed or plain) SubPlan."
+      },
+      {
+        "text": "A correlated scalar subquery in the SELECT list generally runs as a SubPlan evaluated per outer row",
+        "explanation": "Correct. Postgres doesn't decorrelate scalar subqueries into joins, so cost grows with outer row count; an index on the correlated column keeps each probe cheap."
+      },
+      {
+        "text": "EXISTS subqueries always execute once per outer row, so they are slower than joins",
+        "explanation": "That is the conceptual meaning, not the plan. Postgres usually turns EXISTS into a semi-join that is as fast as the equivalent join."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Run `EXPLAIN` on each form against the shop schema (Postgres 17):\n\n```\nIN        -> Hash Join over\n             HashAggregate\nNOT EXISTS-> Hash Right Anti Join\nNOT IN    -> Filter: NOT (hashed\n             SubPlan 1)\nscalar    -> SubPlan 1 (Aggregate)\n```\n\n1. IN and EXISTS become semi-joins.\n2. NOT EXISTS becomes an anti join.\n3. NOT IN stays a SubPlan because one NULL in the subquery would change every answer.\n4. The correlated scalar subquery appears as `SubPlan 1` under the outer scan, so it runs per outer row.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  }
+]

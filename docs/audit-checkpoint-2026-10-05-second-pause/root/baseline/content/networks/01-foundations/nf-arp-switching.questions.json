@@ -1,0 +1,183 @@
+[
+  {
+    "id": "nf-arp-switching-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A laptop is `192.168.1.20/24` with default gateway `192.168.1.1`. It wants to send a packet to `8.8.8.8` and its ARP cache is empty. Which IP address does it put in its ARP request?",
+    "options": [
+      { "text": "`8.8.8.8`", "explanation": "8.8.8.8 is not on the laptop's subnet, so its MAC is irrelevant: the frame only has to reach the next hop. Nobody on the LAN would answer an ARP for it anyway." },
+      { "text": "`192.168.1.1`", "explanation": "Correct. The destination is off-subnet, so the frame goes to the default gateway. The laptop ARPs for the gateway's MAC; the IP header still says 8.8.8.8." },
+      { "text": "`192.168.1.255`", "explanation": "That is the subnet's broadcast IP. ARP requests go to the broadcast *MAC* `ff:ff:ff:ff:ff:ff`, but they ask about a specific IP." },
+      { "text": "None: it asks DNS for the MAC address", "explanation": "DNS maps names to IP addresses. Mapping IP to MAC on a LAN is ARP's job, and DNS knows nothing about MACs." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Apply the mask: 192.168.1.20/24 is in 192.168.1.0/24.\n2. Is 8.8.8.8 in 192.168.1.0/24? No.\n3. So the next hop is the gateway, 192.168.1.1, and the laptop needs **its** MAC.\n4. ARP request: \"Who has 192.168.1.1? Tell 192.168.1.20.\"\n\nThe resulting frame has the router's MAC as destination and 8.8.8.8 as the IP destination. The router will build a fresh frame for its next link.",
+    "link": { "title": "Address Resolution Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Address_Resolution_Protocol" }
+  },
+  {
+    "id": "nf-arp-switching-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How are an ARP request and its reply normally addressed at the Ethernet layer?",
+    "options": [
+      { "text": "Both are broadcast to `ff:ff:ff:ff:ff:ff`", "explanation": "Only the request needs to be broadcast, because the asker doesn't know the target's MAC. The replier does know the asker's MAC (it's in the request), so it replies directly." },
+      { "text": "The request is unicast to the router, which replies on the target's behalf", "explanation": "The asker doesn't know any MAC for the target yet, so it can't unicast. Routers don't answer ARP for other hosts unless proxy ARP is configured." },
+      { "text": "The request is broadcast; the reply is unicast to the requester", "explanation": "Correct. Every host on the LAN sees the request, but only the owner of the IP answers, directly to the sender's MAC." },
+      { "text": "Both are sent inside IP packets to the subnet broadcast address", "explanation": "ARP isn't carried in IP at all. It sits directly in an Ethernet frame with EtherType 0x0806; it has to work before IP delivery on the LAN is possible." }
+    ],
+    "answer": 2,
+    "workedExample": "1. The asker knows the target's IP but not its MAC, so it can't address a unicast frame. It broadcasts.\n2. The request contains the asker's MAC and IP in the sender fields.\n3. The target reads them and sends its reply straight to the asker's MAC.\n\nSo one broadcast is seen by every host, and one unicast by just the asker. Both are tiny 28-byte ARP messages, padded to 64-byte frames.",
+    "link": { "title": "RFC 826: An Ethernet Address Resolution Protocol", "url": "https://www.rfc-editor.org/rfc/rfc826" }
+  },
+  {
+    "id": "nf-arp-switching-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Someone plugs both ends of a patch cable into two ports on the same office switch, which isn't running spanning tree. Within seconds the whole office network is unusable. Why doesn't the looping traffic die out on its own?",
+    "options": [
+      { "text": "Ethernet frames have no TTL or hop count, so a looping broadcast is copied forever", "explanation": "Correct. Unlike IP packets, nothing in an Ethernet frame is decremented per hop, so copies circulate and multiply until the loop is broken." },
+      { "text": "The switch's MAC table is too small", "explanation": "The table does get confused (flapping), but even a huge table wouldn't stop broadcasts circulating. The root issue is that nothing limits a frame's lifetime." },
+      { "text": "The cable creates an electrical short that disables the switch", "explanation": "Plugging a cable into two ports is electrically fine. Each port sees a normal link. The problem is entirely logical: frames go round in a circle." },
+      { "text": "The frames' CRCs fail on every lap, causing retransmissions", "explanation": "The frames aren't corrupted; they are perfectly valid copies. Ethernet doesn't retransmit on CRC failure anyway." }
+    ],
+    "answer": 0,
+    "workedExample": "1. A host sends one broadcast. The switch floods it out of every port, including both ends of the looped cable.\n2. Each copy comes back in on the other end and is flooded again, out of every port.\n3. There's no TTL, so the copies never expire, and new broadcasts (ARP, DHCP) keep joining them.\n4. Within moments the links run at line rate with duplicates, and the MAC table flaps as host addresses seem to appear on the looped ports.\n\nThis is exactly what STP (and BPDU guard on desk ports) prevents.",
+    "link": { "title": "Broadcast storm — Wikipedia", "url": "https://en.wikipedia.org/wiki/Broadcast_storm" }
+  },
+  {
+    "id": "nf-arp-switching-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Four switches run STP. Which becomes the root bridge?\n\n```\nswitch  priority  MAC\nA       32768     00:00:0c:11:11:11\nB       32768     00:00:0c:00:00:01\nC       4096      f8:ff:ff:ff:ff:ff\nD       32768     00:00:0c:00:00:00\n```",
+    "options": [
+      { "text": "A", "explanation": "A has default priority and neither the lowest priority nor the lowest MAC." },
+      { "text": "B", "explanation": "B's MAC is low, but D's is lower still, and in any case priority is compared before the MAC." },
+      { "text": "C", "explanation": "Correct. The bridge ID is priority first, then MAC. C's priority of 4096 beats 32768, so its high MAC doesn't matter." },
+      { "text": "D", "explanation": "D has the lowest MAC and would win if all priorities were equal. But the priority is the most significant part of the bridge ID, and C's is lower." }
+    ],
+    "answer": 2,
+    "workedExample": "Compare bridge IDs as (priority, MAC), lowest wins:\n\n```\nA (32768, 00:00:0c:11:11:11)\nB (32768, 00:00:0c:00:00:01)\nC ( 4096, f8:ff:ff:ff:ff:ff)  <- lowest\nD (32768, 00:00:0c:00:00:00)\n```\n\n1. Lowest priority: C, with 4096.\n2. The MAC only breaks ties between equal priorities.\n\nThis is why you set a low priority on the switch you *want* as root. Leave them all at default and D would win purely because it has the lowest MAC.",
+    "link": { "title": "Spanning Tree Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spanning_Tree_Protocol" }
+  },
+  {
+    "id": "nf-arp-switching-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a café Wi-Fi network your laptop's ARP cache shows:\n\n```\n192.168.1.1  at 7e:31:9a:04:c2:10\n192.168.1.66 at 7e:31:9a:04:c2:10\n```\n\nThe gateway is 192.168.1.1. What is the most likely explanation?",
+    "options": [
+      { "text": "Normal behaviour: routers have several IP addresses", "explanation": "A router can have several IPs, but it wouldn't usually also appear as a random client address in the DHCP pool. Combined with an unsolicited change, this pattern is a classic red flag." },
+      { "text": "The ARP cache is corrupt and should be cleared", "explanation": "Clearing it would help only briefly. ARP caches are filled by what hosts on the LAN tell you; a poisoner will simply send the false reply again." },
+      { "text": "Host 192.168.1.66 is ARP-spoofing the gateway, so your traffic now goes to it first", "explanation": "Correct. The attacker has told your laptop that the gateway's IP is at its own MAC. Every frame you send to the internet now reaches it first, and it can forward, read or alter it." },
+      { "text": "Two devices have been assigned the same MAC address by the manufacturer", "explanation": "Real duplicate hardware MACs are extremely rare, and even then two devices wouldn't each claim the gateway's IP. Someone is answering ARP for an IP it doesn't own." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Two IPs map to one MAC. One of them is the gateway.\n2. The other, 192.168.1.66, is an ordinary client address.\n3. The simplest explanation is that the host at .66 sent forged ARP replies claiming 192.168.1.1, and your laptop believed them (ARP has no authentication).\n4. Your frames to the internet now go to that host, which forwards them on so you don't notice.\n\nWhat protects you here is encryption: TLS with proper certificate checks, or a VPN. Plain HTTP, DNS and other cleartext traffic is exposed.",
+    "link": { "title": "ARP spoofing — Wikipedia", "url": "https://en.wikipedia.org/wiki/ARP_spoofing" }
+  },
+  {
+    "id": "nf-arp-switching-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You run a corporate LAN and want to protect users from ARP spoofing by another device on the same network. Which measures genuinely help? Select all that apply.",
+    "options": [
+      { "text": "Dynamic ARP Inspection with DHCP snooping on the access switches", "explanation": "Correct. The switch learns each port's legitimate IP-to-MAC binding from DHCP and drops ARP messages that contradict it, so forged replies never reach victims." },
+      { "text": "Encrypting traffic end to end with TLS, SSH or a VPN", "explanation": "Correct. It doesn't stop the poisoning, but an attacker in the middle sees only ciphertext and can't tamper undetected." },
+      { "text": "Increasing the ARP cache timeout so entries last longer", "explanation": "Spoofing works by *updating* existing entries with unsolicited replies, so a longer timeout doesn't help. It may even keep a poisoned entry around longer." },
+      { "text": "Splitting the network into smaller VLANs", "explanation": "Correct. ARP only works within a layer 2 domain, so smaller VLANs shrink the set of devices that can attack each other." },
+      { "text": "Changing the Wi-Fi password every month", "explanation": "The attacker in this scenario is already on the network, as a legitimate member. The password controls who joins, not what members can say in ARP." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Ask of each measure: does it stop forged ARP being believed, or make it harmless?\n\n1. **DAI**: blocks the forged messages at the switch port. Yes.\n2. **Encryption**: the attacker gets traffic but can't read or modify it. Yes, it limits the damage.\n3. **Longer timeout**: attackers update entries rather than waiting for them to expire. No.\n4. **Smaller VLANs**: fewer devices share a broadcast domain. Yes, it reduces exposure.\n5. **Password rotation**: insiders still have the current password. No.",
+    "link": { "title": "ARP spoofing — Wikipedia", "url": "https://en.wikipedia.org/wiki/ARP_spoofing" }
+  },
+  {
+    "id": "nf-arp-switching-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two load balancers share a virtual IP using keepalived. When the primary fails, the standby takes the VIP. Clients on the same LAN recover immediately, but traffic from the internet, via the upstream router, keeps failing for hours. What's the most likely cause?",
+    "options": [
+      { "text": "DNS still points at the old load balancer's IP", "explanation": "The VIP itself hasn't changed; only which machine owns it. DNS maps names to IPs and is unaffected by which MAC answers for that IP." },
+      { "text": "The router's ARP cache still maps the VIP to the failed machine's MAC, because it ignored or never received the gratuitous ARP", "explanation": "Correct. Local clients updated from the standby's gratuitous ARP, but the router still has the old mapping. Router ARP entries can last hours (Cisco's default is 4), so it keeps sending to a dead MAC." },
+      { "text": "The router needs a new route to the VIP", "explanation": "The VIP is on the same subnet as before, so the router's route is unchanged. What's wrong is the link-layer delivery on the final hop." },
+      { "text": "TCP connections can't survive failover, so clients must reconnect", "explanation": "Existing connections would break, but new connections from the internet would still work if frames reached the standby. They're failing for hours, which points to stale state somewhere." }
+    ],
+    "answer": 1,
+    "workedExample": "1. The VIP's IP is the same; its **MAC** changed (to the standby's), unless the pair uses a shared virtual MAC.\n2. The standby announces the change with gratuitous ARP.\n3. LAN clients accept it and recover.\n4. The router either didn't receive it, or is configured not to update from unsolicited ARP, so its entry still points at the dead MAC.\n5. Its ARP timeout is long, so the stale entry persists for hours.\n\nFixes: make sure gratuitous ARPs are sent (often several times) and accepted, use a virtual MAC as VRRP does, or shorten the router's ARP timeout on that interface.",
+    "link": { "title": "RFC 5227: IPv4 Address Conflict Detection", "url": "https://www.rfc-editor.org/rfc/rfc5227" }
+  },
+  {
+    "id": "nf-arp-switching-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an office running classic 802.1D STP, users complain that when they plug a laptop into a desk port the link light comes on, but the network doesn't work for about 30 seconds, and sometimes DHCP gives up. What's the cause and fix?",
+    "options": [
+      { "text": "The port is passing through STP's listening and learning states; configure desk ports as edge ports (PortFast)", "explanation": "Correct. Classic STP waits 15 s listening plus 15 s learning before forwarding on any new link. An edge port, known to face a host, skips straight to forwarding." },
+      { "text": "The DHCP server is overloaded; add a second one", "explanation": "The delay happens before the laptop's frames are forwarded at all, so DHCP never sees the requests. A consistent 30 s on every plug-in is the STP forward delay signature." },
+      { "text": "Auto-negotiation is slow; hard-code the speed and duplex", "explanation": "Negotiation takes a few seconds at most and the link light shows it has finished. Hard-coding also risks a duplex mismatch." },
+      { "text": "The laptop's ARP cache is stale; it must time out first", "explanation": "A stale cache entry would affect one destination, not all networking, and a new link typically triggers fresh ARP anyway." }
+    ],
+    "answer": 0,
+    "workedExample": "1. When a port comes up, classic STP doesn't know whether a switch (and so a potential loop) is attached.\n2. It listens for BPDUs for one forward delay (15 s), then learns MACs for another (15 s), and only then forwards: **30 s**.\n3. The laptop's DHCP requests during that time are dropped, and some clients give up or fall back to a self-assigned address.\n4. Marking access ports as **edge** ports skips this. Adding **BPDU guard** shuts the port if a switch is ever plugged in, so you keep loop protection.\n\nRSTP also helps, but host ports should still be edge ports.",
+    "link": { "title": "Spanning Tree Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spanning_Tree_Protocol" }
+  },
+  {
+    "id": "nf-arp-switching-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Three switches run STP. S1 is root. Link costs:\n\n```\nS1 -- S2 : 100 Mbit/s, cost 19\nS1 -- S3 : 1 Gbit/s,   cost 4\nS2 -- S3 : 1 Gbit/s,   cost 4\n```\n\nWhich port ends up blocked?",
+    "options": [
+      { "text": "S3's port on the S2–S3 link", "explanation": "S3 reaches the root at cost 4, better than S2's best of 8, so S3's end of the S2–S3 link is designated and forwards." },
+      { "text": "S2's port on the S1–S2 link", "explanation": "Correct. S2's best path is via S3 (4 + 4 = 8 < 19), so its root port faces S3. On the S1–S2 link, S1 is designated (it is root), and S2's end is neither root nor designated: blocked." },
+      { "text": "S1's port on the S1–S2 link", "explanation": "Every port on the root bridge is designated and forwards. Blocking always happens at the non-root end of a redundant link." },
+      { "text": "None: there is no loop because the links have different speeds", "explanation": "Speed doesn't affect whether there's a loop: three switches in a triangle always form one. Costs only decide *which* link gets blocked." }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Root path costs**: S3 direct = 4. S2 direct = 19, or via S3 = 4 + 4 = 8. So S2's cost is 8.\n2. **Root ports**: S3 → port to S1. S2 → port to S3.\n3. **Designated ports per link**:\n   - S1–S3: S1 (root).\n   - S2–S3: S3 (cost 4 beats 8). S2's end is its root port, so it forwards.\n   - S1–S2: S1 (root). S2's end is not its root port and not designated.\n4. So **S2's port on the slow S1–S2 link blocks**.\n\n```\n     S1\n  X /  \\\n   /    \\\n S2 ---- S3\n```\n\nThat's the desired outcome: the tree avoids the 100 Mbit/s link and uses it only if a gigabit link fails.",
+    "link": { "title": "Spanning Tree Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spanning_Tree_Protocol" }
+  },
+  {
+    "id": "nf-arp-switching-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Every switch in a campus network is left at the default STP priority. An engineer plugs an old 100 Mbit/s lab switch into a spare port in a wiring closet. Users across the building report everything getting slow. What most likely happened, and what would have prevented it?",
+    "options": [
+      { "text": "The lab switch caused a broadcast storm; BPDU guard is the only fix", "explanation": "STP was running, so there was no loop and no storm. BPDU guard on that port would have helped, but the specific failure here is about root election." },
+      { "text": "The lab switch's MAC is lower than the core's, so it became root and much traffic now crosses its slow links; set a low priority on the core switch and use root guard", "explanation": "Correct. With equal priorities the lowest MAC wins, and older hardware often has low MACs. The whole tree re-forms around the lab switch. Pinning the root by priority, plus root guard on edge-facing ports, prevents it." },
+      { "text": "The lab switch's MAC table overflowed, so it flooded all traffic", "explanation": "Flooding on one small switch wouldn't slow down the whole building. A building-wide change suggests the topology itself changed." },
+      { "text": "The lab switch doesn't support VLANs, so all VLANs merged", "explanation": "A switch that doesn't understand tags would mishandle tagged frames on its own ports, not merge VLANs across the building." }
+    ],
+    "answer": 1,
+    "workedExample": "1. All switches have priority 32768, so the MAC decides the root.\n2. The old lab switch has a lower MAC than the core switch, so its BPDUs advertise a better root.\n3. Every switch recomputes: root ports now point towards the lab switch, and traffic between parts of the building is drawn through its 100 Mbit/s uplink.\n4. Prevention:\n   - Set the core's priority low (for example 4096) and a backup core next lowest.\n   - Enable **root guard** on ports where a root should never appear.\n   - Use BPDU guard on access ports.\n\nThis \"surprise root\" is one of the most common real STP incidents.",
+    "link": { "title": "Spanning Tree Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spanning_Tree_Protocol" }
+  },
+  {
+    "id": "nf-arp-switching-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements comparing classic STP (802.1D-1998) with RSTP (802.1w) are true? Select all that apply.",
+    "options": [
+      { "text": "Classic STP can take 30–50 seconds to restore connectivity after a failure", "explanation": "Correct. Up to 20 s of max age before noticing an indirect failure, then 15 s listening and 15 s learning." },
+      { "text": "RSTP uses a proposal/agreement handshake between neighbours instead of waiting for timers", "explanation": "Correct. On point-to-point links, switches negotiate directly, so a port can forward in well under a second." },
+      { "text": "RSTP lets all redundant links carry traffic at the same time", "explanation": "RSTP is still a spanning tree: redundant links are blocked (as alternate or backup ports). Using all links needs link aggregation, MLAG or layer 3 routing with ECMP." },
+      { "text": "Both elect a root bridge using the lowest bridge ID", "explanation": "Correct. RSTP keeps the same root election and cost model; what changed is how quickly ports transition." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "1. **Classic STP timing**: max age 20 s + forward delay 15 s × 2 = up to **50 s**; 30 s when the failure is a directly detected link-down.\n2. **RSTP**: pre-computed alternate ports and explicit handshakes give sub-second failover on point-to-point links.\n3. **Same tree logic**: lowest bridge ID is root; root and designated ports by path cost. Anything else is not forwarding.\n4. So the redundant capacity is still idle. That waste is the main reason data centres moved to layer 3 leaf-spine designs.",
+    "link": { "title": "Spanning Tree Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spanning_Tree_Protocol" }
+  },
+  {
+    "id": "nf-arp-switching-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server is mistakenly configured as `192.168.1.20` with mask `255.255.0.0` (/16), but the network is really `192.168.1.0/24`. It tries to reach `192.168.5.10`, which is on a different VLAN behind the router. The router has proxy ARP disabled. What happens?",
+    "options": [
+      { "text": "It works normally, because the router forwards all traffic between subnets", "explanation": "The router only forwards frames sent to its MAC. The server never sends it one, because it thinks the destination is local." },
+      { "text": "The server ARPs for 192.168.1.1 and sends via the gateway", "explanation": "That's what would happen with the correct /24 mask. With /16 the server believes 192.168.5.10 is on its own subnet and skips the gateway." },
+      { "text": "The server broadcasts an ARP for 192.168.5.10, nobody on its VLAN answers, and the connection fails", "explanation": "Correct. With /16, 192.168.5.10 looks local, so the server ARPs for it directly. The real host is on another VLAN, beyond the broadcast domain, so no reply comes." },
+      { "text": "The switch forwards the ARP to the other VLAN, and the target replies", "explanation": "Broadcasts never cross VLAN boundaries. That isolation is the point of VLANs, so the ARP stays in the server's VLAN." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Server's view: 192.168.1.20/16 → its subnet is 192.168.0.0 to 192.168.255.255.\n2. Is 192.168.5.10 in that? Yes, so the server treats it as local.\n3. It broadcasts \"Who has 192.168.5.10?\" in its own VLAN.\n4. The target is in another VLAN, so it never sees the request. No reply, so no frame can be sent and the connection times out.\n5. Meanwhile, hosts in 192.168.1.x still work, which is what makes wrong masks confusing to debug.\n\nWith proxy ARP enabled, the router would answer with its own MAC and things would \"work\" by accident, hiding the misconfiguration.",
+    "link": { "title": "Address Resolution Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Address_Resolution_Protocol" }
+  }
+]

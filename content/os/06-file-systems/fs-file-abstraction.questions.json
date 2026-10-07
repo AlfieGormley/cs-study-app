@@ -1,0 +1,350 @@
+[
+  {
+    "id": "fs-file-abstraction-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A freshly started Python script (with only stdin, stdout and stderr open) runs:\n\n```python\na = os.open(\"x.txt\", os.O_RDONLY)\nb = os.open(\"y.txt\", os.O_RDONLY)\nos.close(a)\nc = os.open(\"z.txt\", os.O_RDONLY)\nprint(a, b, c)\n```\n\nWhat is printed? Assume os is imported where needed, calls succeed, the regular file has no concurrent modifiers, and transfers complete fully except at EOF.",
+    "options": [
+      {
+        "text": "`0 1 2`",
+        "explanation": "Descriptors 0, 1 and 2 are already taken by stdin, stdout and stderr, so new files cannot get them unless one of those is closed."
+      },
+      {
+        "text": "`3 4 5`",
+        "explanation": "This assumes descriptors are handed out in ever-increasing order. In fact `open` returns the *lowest* unused number, and 3 became free again when `a` was closed."
+      },
+      {
+        "text": "`3 4 3`",
+        "explanation": "Correct. `a` gets 3 (lowest free), `b` gets 4, closing `a` frees 3, so `c` reuses 3."
+      },
+      {
+        "text": "`1 2 3`",
+        "explanation": "Numbering does not start at 1; 0 is a valid descriptor (stdin), and 1 and 2 are in use."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. At start, the fd table has 0, 1 and 2 in use.\n2. `open(\"x.txt\")` returns the lowest unused number: **3**.\n3. `open(\"y.txt\")`: lowest unused is **4**.\n4. `close(a)` frees 3.\n5. `open(\"z.txt\")`: lowest unused is **3** again.\n\n```\nstep        in use\nstart       0 1 2\nopen x      0 1 2 3\nopen y      0 1 2 3 4\nclose 3     0 1 2 4\nopen z      0 1 2 3 4\n```\n\nThe \"lowest free number\" rule is guaranteed by POSIX, and shells rely on it: closing fd 1 and then opening a file is the old way to redirect stdout.",
+    "link": {
+      "title": "open(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/open.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`notes.txt` contains exactly the 10 bytes `0123456789`. What does this print?\n\n```python\nfd = os.open(\"notes.txt\", os.O_RDONLY)\nos.read(fd, 4)\nos.read(fd, 4)\nprint(os.read(fd, 4))\nprint(os.read(fd, 4))\n``` Assume os is imported where needed, calls succeed, the regular file has no concurrent modifiers, and transfers complete fully except at EOF.",
+    "options": [
+      {
+        "text": "`b'89'` then `b''`",
+        "explanation": "Correct. The offset advances 0 → 4 → 8. The third read asks for 4 bytes but only 2 remain, so it returns `b'89'`. The fourth is at end of file and returns `b''`."
+      },
+      {
+        "text": "`b'0123'` then `b'4567'`",
+        "explanation": "This ignores the current offset. Each `read` continues from where the previous one stopped; it does not restart at the beginning."
+      },
+      {
+        "text": "`b'89'` then an EOFError",
+        "explanation": "Hitting end of file is not an error at the system call level. `read` simply returns 0 bytes, which Python shows as `b''`."
+      },
+      {
+        "text": "`b'89\\x00\\x00'` then `b''`",
+        "explanation": "`read` never pads a short result. It returns exactly the bytes available, so the result is 2 bytes long, not 4."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track the offset:\n\n```\ncall      offset   returns\nread 4    0 -> 4   b'0123'\nread 4    4 -> 8   b'4567'\nread 4    8 -> 10  b'89'   (short)\nread 4    10       b''     (EOF)\n```\n\nTwo lessons:\n\n1. A short read (fewer bytes than requested) is normal and not an error.\n2. A zero-byte result for a positive-length regular-file or byte-stream read indicates EOF under this model; a request for zero bytes does not test EOF. Loops that read a file should stop on `b''`, not when the result is shorter than requested (on a pipe, a short read doesn't mean the end).",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A disk is full. You find a 40 GB `debug.log` and delete it with `rm`, but `df` still shows the disk as full. The application that writes the log is still running. Inspection with lsof confirms it is still open with zero links. What explains the retained allocation?",
+    "options": [
+      {
+        "text": "`rm` only moves files to a trash folder until the next reboot",
+        "explanation": "Command-line `rm` on Linux has no trash; it calls `unlink` directly. The space is held for a different reason."
+      },
+      {
+        "text": "The file system needs `fsck` to reclaim the blocks",
+        "explanation": "Nothing is inconsistent. The file system is behaving exactly as designed."
+      },
+      {
+        "text": "`rm` removed the name, but the running process still holds an open descriptor to the file, so its data is not freed until that descriptor is closed",
+        "explanation": "Correct. The open reference retains the unlinked file. Use the application's documented log-reopen procedure or a controlled restart. Other mappings/references or snapshots may also retain storage."
+      },
+      {
+        "text": "`df` caches its results and needs a few minutes to refresh",
+        "explanation": "`df` asks the kernel for current figures every time. The blocks really are still allocated."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Unlink removes the last name in the stated example, but the app's open reference retains the file. lsof +L1 can identify zero-link open files. Prefer a documented log-reopen action or controlled restart. Truncating through /proc/pid/fd/n discards contents and does not reset the writer's offset; a non-append writer may create a sparse gap on its next write. Final storage reclamation also depends on mappings, other references and filesystem features.",
+    "link": {
+      "title": "unlink(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`data.txt` contains `abcdefgh`. What is printed?\n\n```python\nfd1 = os.open(\"data.txt\", os.O_RDONLY)\nfd2 = os.dup(fd1)\nfd3 = os.open(\"data.txt\", os.O_RDONLY)\nos.read(fd1, 3)\nos.read(fd2, 2)\nos.read(fd3, 4)\nprint(os.read(fd2, 10))\n``` Assume os is imported where needed, calls succeed, the regular file has no concurrent modifiers, and transfers complete fully except at EOF.",
+    "options": [
+      {
+        "text": "`b'cdefgh'`",
+        "explanation": "This assumes fd2 has its own offset that was at 2. `dup` shares the offset with fd1, so fd2's earlier read began at 3, not 0."
+      },
+      {
+        "text": "`b'fgh'`",
+        "explanation": "Correct. fd1 and fd2 share one offset: 0 → 3 → 5. fd3 has its own offset and doesn't affect them. The last read starts at 5 and returns the remaining 3 bytes."
+      },
+      {
+        "text": "`b'efgh'`",
+        "explanation": "This would be right only if fd3's read had moved the shared offset. fd3 came from a separate `open`, so it has an independent open file description."
+      },
+      {
+        "text": "`b''`",
+        "explanation": "The file isn't exhausted for fd2. Only 5 of its 8 bytes have been consumed through the shared offset."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Draw the open file descriptions:\n\n```\nfd1 --+\n      +--> desc A (offset)\nfd2 --+\nfd3 -----> desc B (offset)\n```\n\nNow trace:\n\n```\ncall          A    B   returns\nread fd1, 3   0>3  0   b'abc'\nread fd2, 2   3>5  0   b'de'\nread fd3, 4   5    0>4 b'abcd'\nread fd2, 10  5>8  4   b'fgh'\n```\n\n`dup` copies the *pointer*, so both descriptors move the same offset. A second `open` creates a new description with its own offset starting at 0.",
+    "link": {
+      "title": "dup(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/dup.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two unrelated processes, A and B, each call `open(\"/var/log/app.log\", O_RDONLY)`. A then calls `lseek(fd, 0, SEEK_END)`. What happens to B's offset?",
+    "options": [
+      {
+        "text": "It also moves to the end, because both refer to the same inode",
+        "explanation": "The inode is shared, but the offset isn't stored there. If it were, any reader anywhere would disturb every other reader."
+      },
+      {
+        "text": "It is unchanged, because each `open` creates its own open file description holding its own offset",
+        "explanation": "Correct. The offset lives in the open file description (`struct file`). A and B have one each, so A's seek has no effect on B."
+      },
+      {
+        "text": "B's next `read` fails with an error because the file is in use",
+        "explanation": "Unix lets many processes open and read the same file at once without locking; nothing fails."
+      },
+      {
+        "text": "It is unchanged, because the offset is stored in B's per-process fd table entry",
+        "explanation": "The outcome is right but the reason is wrong. The fd table entry is only a pointer (plus the close-on-exec flag). If the offset lived there, `dup` couldn't share it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Recall the three levels:\n\n```\nA fd table -> desc A (off) --+\n                             +-> inode\nB fd table -> desc B (off) --+\n```\n\n1. Each `open` call allocates a new open file description.\n2. The offset and the open flags live in the description.\n3. Both descriptions point at the same in-memory inode (size, permissions, data location).\n4. So A's `lseek` changes desc A's offset only.\n\nSharing can arise through dup/dup2, fork, SCM_RIGHTS descriptor passing, pidfd_getfd and shared descriptor tables. This is an illustrative list, not an exhaustive API list.",
+    "link": {
+      "title": "OSTEP: Files and Directories (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-intro.pdf"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can legitimately make a `read` or `write` call transfer **fewer** bytes than requested, without it being an error? Select all that apply.",
+    "options": [
+      {
+        "text": "Reading 4,096 bytes from a pipe when the writer has only written 100 so far",
+        "explanation": "Correct for the stated pipe scenario: a read can return the available 100 bytes. Socket options and message/stream semantics can change waiting behavior."
+      },
+      {
+        "text": "Reading 4,096 bytes from a regular file starting 10 bytes before its end",
+        "explanation": "Correct. The read stops at end of file and returns 10 bytes."
+      },
+      {
+        "text": "A signal arriving after some bytes of a slow read have been transferred",
+        "explanation": "Correct. If a signal interrupts a read on a slow device such as a terminal or socket after data has been moved, the call returns the partial count instead of failing with `EINTR`."
+      },
+      {
+        "text": "Writing 1 MB to a file on a disk with only 200 KB free",
+        "explanation": "Correct: a write can make partial progress and return a count. ENOSPC may instead occur immediately or be delayed until a later write/fsync, depending on allocation and buffering."
+      },
+      {
+        "text": "Merely setting FD_CLOEXEC on an existing descriptor",
+        "explanation": "FD_CLOEXEC controls descriptor inheritance across successful exec; setting it does not itself change file length or read/write transfer counts."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Short transfers come from the source or destination having less room or data than you asked for:\n\n| Case | Why short |\n|---|---|\n| Pipe/socket | Only partial data has arrived |\n| Near EOF | File ends |\n| Signal | Interrupted after progress |\n| Disk full | Only part fits |\n\nFD_CLOEXEC affects exec inheritance, not transfer size. By contrast, truncating a file can cause later reads to encounter EOF.\n\nThe practical rule: always loop until the full count has been transferred (or `read` returns 0 for EOF), for example:\n\n```python\nwhile view:\n    n = os.write(fd, view)\n    if n <= 0:\n        raise OSError(\"write stalled\")\n    view = view[n:]\n```\n\nThis loop assumes blocking stream/file output and propagates exceptions; nonblocking output needs readiness handling.",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`/home/alice` has mode `drwx------` (700) and is owned by alice. Inside it, `report.txt` has mode `-rw-r--r--` (644). User bob runs `cat /home/alice/report.txt`. What happens? Assume bob has no relevant capabilities or ACL grant and cat is an ordinary unprivileged executable.",
+    "options": [
+      {
+        "text": "bob can read it, because the file is world-readable (the final `r`)",
+        "explanation": "The file's own permissions are only checked after the kernel has resolved the path. Resolution fails first."
+      },
+      {
+        "text": "Permission denied, because bob lacks execute (search) permission on `/home/alice`, so the kernel cannot resolve the path through it",
+        "explanation": "Correct. Every directory on the path needs `x` for the caller. alice's directory grants nothing to others, so the lookup of `report.txt` is refused."
+      },
+      {
+        "text": "Permission denied, because bob lacks write permission on `/home/alice`",
+        "explanation": "Write permission on a directory controls creating, deleting and renaming entries in it. It isn't needed to read a file that already exists."
+      },
+      {
+        "text": "bob can read it, because `cat` runs with root privileges",
+        "explanation": "An ordinary cat runs with the caller's credentials. Privilege can come from mechanisms beyond setuid, including file capabilities, but none is present in this scenario."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Path resolution checks each component:\n\n```\n/            x for others? yes\n/home        x for others? yes\n/home/alice  x for others? NO -> EACCES\n```\n\n1. The kernel walks the path one directory at a time.\n2. To look up a name inside a directory, the caller needs **execute** (search) permission on it.\n3. `/home/alice` is 700: others have no bits, so the walk stops with `EACCES`.\n4. `report.txt`'s 644 never gets checked.\n\nFor directories: `r` lists names, `w` changes entries, `x` lets you pass through.",
+    "link": {
+      "title": "OSTEP: Files and Directories (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-intro.pdf"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your app opens `app.log` once at start-up and writes to it forever. Every night `logrotate` runs `mv app.log app.log.1` and creates a new, empty `app.log`. The next morning, `app.log` is empty and `app.log.1` is still growing. Why?",
+    "options": [
+      {
+        "text": "`mv` copies the data, and the app is writing to the copy",
+        "explanation": "Within one file system, `mv` is a `rename`: it changes a directory entry and copies no data."
+      },
+      {
+        "text": "The app's descriptor refers to the open file (and its inode), not to the name, so renaming the name doesn't redirect the writes",
+        "explanation": "Correct. Writes keep targeting the open file. Use its documented reopen mechanism; copytruncate is a fallback with a data-loss race and must match the writer's behavior."
+      },
+      {
+        "text": "The new `app.log` was created with the wrong permissions",
+        "explanation": "Permissions would cause errors when *opening*, but the app isn't reopening anything. It's still writing through its old descriptor."
+      },
+      {
+        "text": "The kernel buffers the writes and will flush them into `app.log` later",
+        "explanation": "Buffered data belongs to the inode it was written to. It will never be redirected to a different file."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. At start-up, `open(\"app.log\")` resolves the name to inode 1234 and returns an fd pointing at it.\n2. `mv app.log app.log.1` renames the directory entry. The file retains inode identity 1234; metadata such as timestamps may change, and it just has a new name.\n3. logrotate creates a *new* file `app.log` with inode 5678.\n4. The app's fd still points at 1234, so writes land in `app.log.1`.\n\nFixes:\n\n- Use the application's documented log-reopen command or configured signal; an arbitrary signal may terminate it.\n- `copytruncate`: copy then truncate the original in place. It's simpler, but lines written during the copy can be lost.",
+    "link": {
+      "title": "unlink(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A program writes `AAAA` to stdout and then `BB` to stderr, unbuffered. You run it as `prog > out.txt 2> out.txt`. What does `out.txt` contain afterwards? Assume os is imported where needed, calls succeed, the regular file has no concurrent modifiers, and transfers complete fully except at EOF.",
+    "options": [
+      {
+        "text": "`AAAABB`",
+        "explanation": "That's the result of `prog > out.txt 2>&1`, where stderr is a `dup` of stdout and shares its offset. Here the file is opened twice."
+      },
+      {
+        "text": "`BBAA`",
+        "explanation": "Correct. The shell opens `out.txt` twice, creating two open file descriptions, each with its own offset starting at 0. stdout writes `AAAA` at bytes 0–3; stderr then writes `BB` over bytes 0–1."
+      },
+      {
+        "text": "`BB`",
+        "explanation": "Each `open` with `O_TRUNC` happens before the program runs, so neither can truncate the other's later output. Writing `BB` at offset 0 overwrites only 2 bytes."
+      },
+      {
+        "text": "`AAAA`, with `BB` lost because two descriptors can't write to one file",
+        "explanation": "Any number of descriptors can write to the same file. The problem here is independent offsets, not a refusal."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `> out.txt`: the shell opens the file with `O_WRONLY|O_CREAT|O_TRUNC` as fd 1. That's description D1, offset 0.\n2. `2> out.txt`: a second, separate open as fd 2. That's description D2, offset 0.\n3. `write(1, \"AAAA\")` puts bytes at 0–3; D1's offset becomes 4.\n4. `write(2, \"BB\")` uses D2's offset, which is still 0, so it writes bytes 0–1.\n\n```\nafter AAAA:  A A A A\nafter BB:    B B A A\n```\n\nWith `2>&1`, the shell instead calls `dup2(1, 2)`, so both fds share D1 and the output is `AAAABB`. Opening both with `>>` (`O_APPEND`) would also avoid the overwrite, because every write goes to the current end.",
+    "link": {
+      "title": "dup(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/dup.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A parent process opens `out.txt` (fd 3, truncated, offset 0), then calls `fork()`. The child writes `child\\n` to fd 3 and exits. The parent waits for the child, then writes `parent\\n` to fd 3. What does `out.txt` contain? Assume os is imported where needed, calls succeed, the regular file has no concurrent modifiers, and transfers complete fully except at EOF.",
+    "options": [
+      {
+        "text": "`parent\\n` only, because the parent's offset was still 0 and it overwrote the child's line",
+        "explanation": "This would be true if `fork` gave the child its own open file description. It doesn't: it copies the fd table, so both point at the same description."
+      },
+      {
+        "text": "`child\\nparent\\n`",
+        "explanation": "Correct. After `fork`, parent and child share one open file description and therefore one offset. The child's write advances it to 6, so the parent writes from byte 6."
+      },
+      {
+        "text": "`parent\\nchild\\n`",
+        "explanation": "Order follows when each write happened, and the parent waited for the child, so the child's line comes first."
+      },
+      {
+        "text": "Only `child\\n`, because the child closing the fd on exit closes it for the parent too",
+        "explanation": "Exiting closes the *child's* descriptor. The open file description stays alive while the parent still refers to it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before `fork`: parent fd 3 → description D (offset 0).\n2. `fork` duplicates the fd table, not the description, so the child's fd 3 also points at D.\n3. The child writes 6 bytes (`child\\n`); D's offset is now 6.\n4. The child exits; its reference to D is dropped, but the parent's remains.\n5. The parent writes `parent\\n` at offset 6.\n\n```\n0      6        13\nchild\\n parent\\n\n```\n\nThis sharing is what lets a shell script's commands append to the same redirected output in order.",
+    "link": {
+      "title": "OSTEP: Files and Directories (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-intro.pdf"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these statements about \"everything is a file\" on Linux are true? Select all that apply.",
+    "options": [
+      {
+        "text": "procfs entries such as /proc/loadavg expose kernel-generated information rather than an ordinary on-disk file payload",
+        "explanation": "Correct. Reading this procfs entry calls kernel code. Other procfs entries include controls, directories and links such as /proc/pid/fd/n that can resolve to ordinary files."
+      },
+      {
+        "text": "A TCP socket supports `read` and `write`, but has to be set up with calls like `socket` and `connect`, which have no file equivalent",
+        "explanation": "Correct. Once connected, a socket is used through a descriptor like any file, but it is created and configured through its own API."
+      },
+      {
+        "text": "Network interfaces like `eth0` appear as device files under `/dev`, which is how you configure them",
+        "explanation": "Network interfaces are the classic exception: they have no device file in `/dev`. You configure them through netlink sockets or `ioctl`."
+      },
+      {
+        "text": "Device-specific operations, such as setting a terminal's line settings, need `ioctl` rather than `read`/`write`",
+        "explanation": "Correct. `ioctl` is the catch-all for operations that don't fit the byte-stream model, which shows the file abstraction's limits."
+      },
+      {
+        "text": "`read` on `/dev/null` returns 0 bytes immediately",
+        "explanation": "Correct. `/dev/null` discards writes and always reports end of file on reads."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "/proc/loadavg is generated by kernel code; not every entry reached through /proc is an ordinary generated text file. TCP sockets need appropriate socket setup before connected-stream I/O. eth0 is configured through networking APIs such as netlink, with attributes also exposed under sysfs. Device ioctls cover operations outside read/write; /dev/null reads report EOF. File descriptors unify many interfaces but do not represent every kernel resource or guarantee identical behavior.",
+    "link": {
+      "title": "Everything is a file — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Everything_is_a_file"
+    }
+  }
+]

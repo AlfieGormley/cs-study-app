@@ -1,0 +1,75 @@
+from pathlib import Path
+import json
+p=Path('content/networks/02-ip-routing/ip-interior-routing.md');s=p.read_text()
+def r(a,b):
+ global s
+ assert a in s,a[:70]
+ s=s.replace(a,b)
+r("Inside one organisation's network (an **autonomous system**) they're called **interior gateway protocols** (IGPs). Between organisations the Internet uses BGP, the subject of the next lesson.","**Interior gateway protocols** (IGPs) operate within a routing domain. An **autonomous system** is an administratively coordinated network or group of networks with a routing policy; one organisation can operate multiple ASes. BGP exchanges inter-AS routes and is also used internally.")
+r('each router tells *everyone* "here are my links and their costs". Every router builds the full map','routers flood link information within the relevant scope, such as an OSPF area. Each router builds that scope\'s map')
+r('The **Routing Information Protocol** is the simplest IGP still in use:','The **Routing Information Protocol** provides a compact distance-vector example:')
+r('| Updates | Full table every 30 s |','| Updates | Periodic eligible-route updates around 30 s, plus triggered updates |')
+r('And the infinity of 16 caps the network diameter at 15 hops,','The maximum usable advertised route metric is 15,')
+r('B has lost its route. But A\'s next periodic update','Assume plain distance vector without split horizon, poison reverse or an effective hold-down, and that A has not yet learned the failure. B has lost its route. But A\'s next periodic update')
+r('**Triggered updates**: send changes immediately instead of waiting for the 30-second timer, so bad news spreads fast.','**Triggered updates**: send changes without waiting for the next periodic update, with a small randomised rate-limiting delay to prevent storms.')
+r('**Hold-down**: after a route fails, ignore worse offers for it for a while, so stale rumours die out.','**Hold-down**: some implementations temporarily restrict acceptance of alternatives after failure. Exact rules vary; this is not a universal RIP requirement and can delay valid recovery.')
+r('That limitation is the main reason large networks moved to link state.','Other distance-vector protocols use additional loop-avoidance algorithms; this limitation of basic RIP is not a proof that all distance-vector designs behave identically.')
+r('Because all routers have the same map, they reach consistent answers.','After the relevant databases and computations converge, routers can agree on valid shortest-path forwarding. During updates, transient disagreement and forwarding microloops remain possible.')
+r('**Open Shortest Path First** (OSPFv2, RFC 2328; OSPFv3 for IPv6) is the most widely deployed link-state IGP in enterprises.','**Open Shortest Path First** includes OSPFv2 (RFC 2328) for IPv4 and OSPFv3, originally for IPv6. OSPFv3 address-family extensions also support IPv4 (RFC 5838).')
+r('Each router multicasts Hello packets on every OSPF interface (to 224.0.0.5, every 10 s by default on Ethernet).','On enabled non-passive broadcast OSPFv2 interfaces, routers send Hellos to 224.0.0.5. A common Cisco Ethernet configuration uses a 10-second Hello interval; other network types and configurations differ.')
+r('**Database sync.** Neighbours exchange summaries of what they know and request anything missing, until both have identical databases. They are then **fully adjacent**.','**Database sync.** Neighbours selected for adjacency exchange database descriptions and request missing LSAs. On a broadcast LAN, two DROther neighbours normally remain at Two-Way rather than forming a full adjacency; each instead synchronises with the DR and BDR.')
+r('Each router describes its links in a **link-state advertisement** (LSA) and floods it to all routers in the area. LSAs carry sequence numbers so stale copies are ignored, and they\'re refreshed every 30 minutes.','Router/network **link-state advertisements** (LSAs) describe area topology and are flooded within that area. LSA types have different scopes. Sequence numbers, checksums and age distinguish instances; standard self-originated LSAs refresh at LSRefreshTime = 1,800 seconds even without a topology change, subject to protocol extensions.')
+r('Each router holds the same **link-state database** (LSDB) and runs Dijkstra with itself as the root, producing a shortest-path tree and from it the routing table.','Each router computes paths from its area **link-state database** (LSDB), using Dijkstra with itself as root for the area topology. Inter-area and external routes require additional selection steps.')
+r('When a link fails, only the routers at its ends send new LSAs. Every router reruns SPF, and the network converges in well under a second with tuned timers, compared with RIP\'s minutes.','A detected failure causes affected originators to update LSAs. Depending on topology, DR role and changed reachability, more than the two link endpoints can originate updates. SPF scheduling, flooding and forwarding installation determine convergence. Tuned designs can recover quickly, but no sub-second bound applies universally.')
+r('By default:','Some implementations derive the interface cost from configured bandwidth:')
+r('The reference bandwidth defaults to **100 Mbit/s** on many implementations (Cisco among them), and cost can\'t go below 1.','Classic Cisco IOS documentation uses a **100 Mbit/s** default reference, with a minimum positive interface cost of 1. Other platforms have different defaults, and cost can be manually configured; OSPF itself does not mandate this bandwidth formula.')
+r('so OSPF happily routes over the slow one.','so those interfaces have equal cost; hop structure and other costs then determine the path.')
+r('Only the **first hop** goes into A\'s routing table.','A forwarding entry needs next-hop/interface information rather than the full path; implementations also retain metrics and other routing metadata.')
+r('import heapq','import heapq\nimport itertools')
+r('    dist, hop = {src: 0}, {src: None}\n    pq, done = [(0, src)], set()','    if src not in graph:\n        raise ValueError("unknown source")\n    for edges in graph.values():\n        for v, c in edges:\n            if (v not in graph\n                    or not isinstance(c, int)\n                    or c < 0):\n                raise ValueError("bad edge")\n    dist, hop = {src: 0}, {src: None}\n    order = itertools.count()\n    pq = [(0, next(order), src)]\n    done = set()')
+r('        d, u = heapq.heappop(pq)','        d, _, u = heapq.heappop(pq)')
+r('            if nd < dist.get(v, 1e9):','            if nd < dist.get(v, float("inf")):')
+r('                heapq.heappush(pq, (nd, v))','                heapq.heappush(\n                    pq, (nd, next(order), v))')
+r('With a binary heap this runs in O((V + E) log V), which is trivial even for thousands of routers.','This simple-graph model accepts nonnegative integer costs, chooses one first hop, and does not implement full OSPF or ECMP. The counter avoids comparing node objects on equal heap priorities. With lazy heap entries and a simple graph, the usual bound is O((V + E) log V), treating bounded integer arithmetic as constant cost. Runtime still depends on graph size and implementation; no measured performance is claimed.')
+r('**Area 0** is the backbone. Every other area must attach to it.','**Area 0** is the backbone. Inter-area routing uses backbone connectivity, which may include configured virtual links through suitable transit areas.')
+r('Other areas are summarised as prefixes and costs, without their internal links.','Other areas are represented by inter-area prefix/cost information rather than their internal topology. A summary LSA need not aggregate several prefixes unless aggregation is configured.')
+r('A link flap in area 3 triggers SPF only in area 3. Other areas just see a summary update.','An internal topology change in area 3 changes that area\'s topology LSAs. Other areas can receive changed inter-area reachability/cost information; how much route computation is rerun depends on the implementation and affected LSA types.')
+r('a new router with higher priority doesn\'t take over until the DR fails.','a newly arriving higher-priority router does not displace an existing DR. Priority 0 makes an interface ineligible; when a DR fails an existing BDR can take over, rather than simply electing the newest highest-priority arrival.')
+r('| Metric | Hops | Bandwidth cost |','| Metric | Hop-based cost | Configured interface cost |')
+r('| Convergence | Seconds to minutes | Sub-second possible |','| Convergence | Depends on updates, failures and timers | Depends on detection, flooding, computation and installation |')
+r('| Scale | 15 hops max | Hundreds of routers |','| Scale | Maximum usable metric 15 | Area design and implementation constrain scale |')
+r('| Config | Trivial | Areas, costs, timers |','| Config | Interfaces, routes, timers and policy | Areas, costs, timers and policy |')
+a=s.index('RIP survives on');b=s.index('\n## Pitfalls',a)
+s=s[:a]+'''Other protocols include link-state **IS-IS** and distance-vector **EIGRP** with DUAL loop-avoidance logic. BGP can also be used within a data-centre fabric; RFC 7938 describes one such design rather than a universal deployment rule.
+
+> [!note] Content omitted after review
+> Protocol market-share rankings, universal router-count limits and measured convergence-time comparisons are absent because no applicable deployment survey or benchmark was established. The worked SPF graph is a mathematical example, not a router benchmark.
+'''+s[b:]
+r('floods LSAs into an identical database and computes a shortest-path tree, converging far faster.','synchronises scoped LSDBs and computes routes; transient inconsistency can still occur during convergence.')
+r('OSPF cost defaults to reference bandwidth over link bandwidth; the 100 Mbit/s default makes all fast links equal.','OSPF costs are configurable. With the described 100 Mbit/s reference formula, interfaces at or above that bandwidth all reach the minimum cost.')
+s+='\n- [RFC 5838: OSPFv3 address families](https://www.rfc-editor.org/rfc/rfc5838.html)\n- [Cisco OSPF FAQ: costs and operational details](https://www.cisco.com/c/en/us/support/docs/ip/open-shortest-path-first-ospf/9237-9.html)\n'
+p.write_text(s)
+p=Path('content/networks/02-ip-routing/ip-interior-routing.questions.json');q=json.loads(p.read_text())
+q[0]['prompt']+=' Assume databases have converged.'
+q[1]['options'][3]['explanation']='Correct. Metric 16 marks the route unreachable for forwarding. It may remain temporarily for garbage collection and unreachable advertisements, rather than disappearing immediately.'
+q[2]['prompt']=q[2]['prompt'].replace("OSPF's default reference bandwidth of 100 Mbit/s","the specified Cisco-style OSPF reference of 100 Mbit/s and minimum cost 1, with no manual overrides")
+q[2]['options'][2]['explanation']='Three is the link count. Under the specified rule, the 10 Mbit/s interface costs 10 while the others cost 1 each.'
+q[3]['workedExample']=q[3]['workedExample'].replace('X will advertise D at 8 to its own neighbours in its next update.','X can advertise its selected distance according to the protocol\'s update and split-horizon policy.')
+q[5]['prompt']+=' Assume no hold-down or alternative route, and A\'s stale update arrives before it processes any failure information.'
+q[6]['options'][3]['explanation']='Correct. Triggered updates do not wait for the next periodic update; small randomised delays rate-limit repeated triggers.'
+q[6]['options'][4]['text']='Implementation-specific hold-down policies'
+q[6]['options'][4]['explanation']='Correct as a possible mitigation. Acceptance rules differ and can delay valid alternatives; RFC 2453 does not prescribe one universal hold-down algorithm.'
+q[7]['prompt']=q[7]['prompt'].replace('the default 100 Mbit/s reference bandwidth','a 100 Mbit/s reference bandwidth with minimum cost 1 and no manual overrides')
+q[7]['workedExample']=q[7]['workedExample'].replace('floored to 1','clamped up to the minimum of 1')
+q[8]['prompt']+=' Assume broadcast OSPF network type, compatible configuration and fully converged adjacencies.'
+q[9]['workedExample']='Consider a ring A–B–C with the only route to N originally through C. C loses N; A learns the failure but B still has stale reachability via C. B can advertise that stale route to A (a different interface from C). A can then advertise its newly selected route via B to C. C can select A, forming a three-router loop under suitable update ordering. Split horizon alone cannot detect the whole path. Additional controls and eventual unreachable information are required; link-state designs can also have transient forwarding loops during convergence.'
+q[10]['prompt']='Two OSPFv2 routers are intended to become fully adjacent on a broadcast Ethernet LAN (at least one is DR or BDR). Which differences can prevent that with ordinary checks enabled? Select all that apply.'
+q[10]['options'][2]['explanation']='Correct. A database-description packet advertising an MTU larger than the receiver accepts is rejected, commonly preventing database exchange. Configured MTU-ignore behaviour can change this.'
+q[10]['workedExample']='Hello/dead interval and area compatibility are checked in neighbour establishment. MTU is checked during database-description exchange unless overridden. Costs and priorities may differ without inherently blocking adjacency. INIT means bidirectional Hello visibility has not been established; it is not a unique diagnostic for a timer mismatch. On a broadcast LAN two DROther routers normally stay Two-Way, so the question specifies that a full adjacency should exist.'
+q[11]['prompt']='An internal link in OSPF area 3 changes, altering a router LSA for that area. In which area\'s topology database is that LSA flooded and used for the area shortest-path calculation?'
+q[11]['options'][0]['explanation']='Router LSAs are area-scoped; the changed area-3 topology is not directly flooded throughout the entire domain.'
+q[11]['options'][1]['text']='Area 3, including the area-3 database of its ABRs'
+q[11]['options'][1]['explanation']='Correct. Other areas may receive inter-area reachability/cost changes, but do not receive area 3\'s internal router LSA as their own topology.'
+q[11]['options'][2]['explanation']='The changed topology LSA is flooded throughout its area, not just to the link endpoints.'
+q[11]['workedExample']='The area-3 router LSA remains in area 3. Routers attached to area 3, including ABRs, use that area database to compute topology paths. Changed costs or reachability can affect inter-area advertisements and calculations elsewhere. Implementations may batch, throttle or incrementally calculate routes, so this does not require one full SPF execution for every individual flap or guarantee all impact remains inside the area. Configured aggregation can hide some changes, not every possible failure.'
+p.write_text(json.dumps(q,indent=2,ensure_ascii=False)+'\n')

@@ -1,0 +1,78 @@
+from pathlib import Path
+import json
+p=Path('content/networks/01-foundations/nf-physical-layer.md');s=p.read_text()
+s=s.replace('With M distinguishable symbol states, each symbol carries log₂ M bits:', 'For an uncoded fixed mapping with M = 2^k distinguishable states, each symbol labels k = log₂ M bits. Coding, pilots and framing reduce payload rate:')
+s=s.replace('A channel with bandwidth B hertz (the range of frequencies it passes) can carry at most **2B symbols per second** without them smearing into each other. On a noiseless channel the maximum bit rate is:', 'For ideal zero-intersymbol-interference signalling over a real low-pass channel with one-sided bandwidth B hertz, Nyquist gives **2B real symbols per second**. With M levels the corresponding uncoded rate is:')
+s=s.replace('A classic telephone line passes roughly 3.1 kHz. With 4 levels:', 'For a hypothetical noiseless baseband channel with B = 3.1 kHz and four levels:')
+s=s.replace('Real channels have noise, and Claude Shannon showed (1948) the maximum error-free rate is:', 'For the band-limited additive white Gaussian noise (AWGN) model with average signal/noise powers S and N, Shannon capacity is:')
+s=s.replace('where S/N is the signal-to-noise ratio as a plain ratio.', 'Below capacity, suitable coding can make error probability arbitrarily small in the asymptotic model; this is not a promise of zero errors with finite packets. Here S/N is a power ratio.')
+s=s.replace('> [!example] A Wi-Fi channel', '> [!example] A simplified single-channel capacity model')
+s=s.replace('> A 20 MHz channel', '> Assume one flat AWGN channel (not a complete Wi-Fi/MIMO model). A 20 MHz channel')
+s=s.replace('The receiver has no separate clock wire.', 'Assume the receiver has no separate clock and must recover timing from the data.')
+s=s.replace('    for b in bits:\n        if b == "1":', '    for b in bits:\n        if b not in "01":\n            raise ValueError("non-binary input")\n        if b == "1":')
+s=s.replace('Fine at 10 Mbit/s; too wasteful at higher speeds.', 'Other Ethernet PHYs use different tradeoffs.')
+s=s.replace('Faster links use **block codes** that map groups of data bits to slightly longer code words chosen to have enough transitions:', 'Some faster links use **block codes**, sometimes combined with scrambling and a separate line modulation. They provide different transition-density and DC-balance guarantees:')
+s=s.replace('| 64b/66b | 10GBASE-R and up | ~3% |', '| 64b/66b | 10GBASE-R | 3.125% |')
+s=s.replace('So 100 Mbit/s Fast Ethernet actually signals at 125 Mbaud, and 10 Gigabit Ethernet over fibre at 10.3125 Gbaud.', 'Specifically, 100BASE-TX maps its 4B/5B-coded stream to MLT-3 at 125 million symbol intervals/s. Serial binary 10GBASE-R uses 10.3125 Gbaud. Other Fast/Gigabit Ethernet PHYs need not use those rates.')
+s=s.replace('cancels it out.', 'rejects its common-mode component to the extent allowed by cable balance and receiver performance.')
+s=s.replace('- Twisted-pair Ethernet is specified to **100 m** per segment.', '- Common four-pair building-cabling Ethernet standards support **100 m** channels with the required cable category and installation quality. Other Ethernet PHYs and products have different reach limits.')
+s=s.replace('- **10GBASE-T** reaches 100 m on Cat6a (and around 55 m on Cat6), with heavy signal processing and noticeably higher power draw than fibre optics.', '- **10GBASE-T** can support 100 m on compliant Cat6a channels with suitable endpoints. Reach on other cable categories and power relative to optical alternatives require the specific cable and transceiver specifications; universal figures are omitted.')
+s=s.replace('Light entering at a shallow angle is kept in the core by **total internal reflection**.', 'The refractive-index structure guides optical modes; **total internal reflection** is a useful ray-model explanation, particularly for multimode fibre.')
+s=s.replace('has a core of about 9 µm, so only one path exists.', 'supports one spatial mode over its specified wavelength range; it is not literally one geometrical ray. Core diameter and mode-field diameter are distinct properties.')
+s=s.replace('Loss is tiny: about **0.2 dB per km** at 1550 nm in single-mode fibre. An 80 km span loses about 16 dB, and long-haul systems place optical amplifiers (EDFAs) every 80–100 km or so.', 'For a hypothetical fibre loss of **0.2 dB/km**, an 80 km span loses 16 dB before connectors/splices. Actual loss is product- and wavelength-dependent; amplifier spacing also depends on the optical power/noise budget, not a universal distance.')
+s=s.replace('Modern systems can carry tens of terabits per second per fibre pair.', 'Total capacity depends on channel count, modulation, coding, equipment and reach; no universal capacity figure is implied.')
+s=s.replace('Fibre is immune to electrical interference and does not leak signal, which is why data centres and backbones use it almost exclusively.', 'The optical signal is not subject to electromagnetic pickup like copper wiring, but fibre can still be tapped or physically damaged. Fibre is not a substitute for encryption. Both optical and copper links are used in data centres.')
+a=s.index('Light travels at c');b=s.index('## Wireless',a)
+s=s[:a]+'''For pulse propagation, use the fibre’s **effective group index**, not simply the bulk phase refractive index. Corning’s July 2025 SMF-28 Ultra data sheet lists a typical group index of 1.4682 at 1550 nm. Rounding to 1.47 gives:
+
+`v_group ≈ c / n_group ≈ 3 × 10⁸ / 1.47 ≈ 2.04 × 10⁸ m/s`
+
+That is approximately 0.68c, or 4.9 µs/km. Wavelength and fibre construction matter.
+
+On copper, the signal is an electromagnetic wave guided by the conductors and dielectric. Its speed is not the electron drift velocity. **Velocity factor** depends on cable construction: copper is not universally slower than glass. For example, Belden 2433 specifies a nominal 72% of c, above the roughly 68% used in the glass-fibre example. Compare complete link latency, including PHY electronics, when choosing a medium.
+
+> [!note] Lower propagation delay
+> Radio in air travels close to c. Hollow-core fibre can also reduce propagation delay because much of its optical field travels through an air-filled region. Microsoft has reported Azure deployment. Exact universal hollow-core velocity and trading-route latency figures are omitted because they require a specific fibre, wavelength, route and measurement source.
+
+'''+s[b:]
+s=s.replace('Everyone on the channel hears everyone else.', 'Devices share radio resources, but hidden nodes, distance and obstacles mean not every transmitter can hear every other.')
+s=s.replace('In free space, received power falls with the square of distance: about 6 dB lost per doubling. Walls and bodies absorb more, and higher frequencies suffer more, so 5 GHz and 6 GHz Wi-Fi have shorter range than 2.4 GHz.', 'For the far-field free-space model with fixed transmit power, frequency and antenna gains, received power scales as inverse distance squared: about 6 dB per doubling. Walls, antenna patterns, regulations and multipath alter actual coverage. Higher frequency is not by itself a universal range guarantee.')
+s=s.replace('1024-QAM close to the access point, much simpler schemes far away.', 'higher-order modulation when conditions permit, more robust modulation/coding when needed; distance alone does not determine the mode.')
+s=s.replace('Wireless links lose and corrupt frames far more often than cables do, so they rely on link-layer acknowledgements and forward error correction.', 'Wireless errors depend on interference, fading and link design. Many systems use error correction and link retries; not every wireless frame is acknowledged, and no universal wired/wireless loss ratio is given here.')
+s=s.replace('| Twisted pair | 100 m | ~0.65c |', '| Four-pair building Ethernet | often 100 m | cable-specific |')
+s=s.replace('Nyquist caps the symbol rate at 2B; Shannon caps the bit rate at B log₂(1 + S/N), whatever the modulation.', 'Nyquist’s 2B result assumes the stated real baseband/zero-ISI model; B log₂(1 + S/N) is capacity for the stated AWGN model.')
+s=s.replace('Signals in glass travel at c / n ≈ 0.68c because silica\'s refractive index is about 1.47. Copper is no faster. Radio in air is nearly c.', 'Pulse speed in the specified glass fibre is about c / n_group ≈ 0.68c. Copper velocity depends on construction; radio in air is nearly c.')
+s+='\n- [Corning SMF-28 Ultra data sheet (July 2025)](https://www.corning.com/content/dam/corning/media/worldwide/coc/documents/Fiber/product-information-sheets/PI-1424-AEN.pdf)\n- [Belden 2433 cable specifications](https://www.belden.com/products/cpr-euroclass/cpr-copper/2433)\n- [Cisco 10GBASE transceiver specifications](https://www.cisco.com/c/en/us/products/collateral/interfaces-modules/transceiver-modules/data_sheet_c78-455693.html)\n- [Texas Instruments DP83825I PHY data sheet](https://www.ti.com/lit/ds/symlink/dp83825i.pdf)\n- [Shannon: A Mathematical Theory of Communication](https://web.mit.edu/6.976/www/handout/shannon.pdf)\n'
+p.write_text(s);p=p.with_suffix('.questions.json');q=json.loads(p.read_text())
+q[1]['prompt']='Why do pulses in typical solid-glass telecommunications fibre propagate at about two-thirds of c?'
+q[1]['options'][0]['explanation']='A geometrical zig-zag explanation is not sufficient, especially for a single spatial mode. Pulse velocity depends on the effective group index.'
+q[1]['options'][1]['text']='Its effective group index is about 1.47, giving pulse speed approximately c / 1.47'
+q[1]['options'][1]['explanation']='Correct. The group index incorporates the relevant propagation/dispersion behaviour; c / 1.47 ≈ 0.68c.'
+q[1]['workedExample']='Using the rounded group index 1.47, pulse speed is 3 × 10⁸ / 1.47 ≈ 2.04 × 10⁸ m/s. A kilometre then takes about 4.9 µs. Use a fibre/wavelength-specific group index for precision; single mode does not mean a literal straight ray.'
+q[2]['prompt']=q[2]['prompt'].replace('with no line code.', 'without transition-density coding, scrambling or a separate clock.')
+q[2]['options'][0]['explanation']='Correct as a potential failure: a sufficiently long transition-free run can exceed the clock-recovery tolerance. Not every finite run necessarily causes an error.'
+q[2]['workedExample']='With no separate timing reference, receivers can use data transitions to align a local clock. A sufficiently long constant NRZ level provides no new timing information. Manchester guarantees a mid-bit transition. A 4B/5B data code constrains zero runs and is used with an appropriate line code; 4B/5B alone neither guarantees an NRZ transition on every bit nor guarantees DC balance.'
+q[3]['prompt']+=' Assume the band-limited AWGN model with SNR expressed as a power ratio.'
+q[3]['workedExample']=q[3]['workedExample'].replace('No modulation scheme can reliably exceed this on that channel.', 'This is the capacity of the specified AWGN model; sufficiently long coding can approach it with arbitrarily small error probability.')
+q[6]['options'][1]['text']='Common four-pair building-cabling Ethernet standards support 100 m channels with the required category and installation quality'
+q[6]['options'][1]['explanation']='Correct for those specified PHYs/channels, not every Ethernet variant or transceiver.'
+q[6]['options'][2]['text']='Every copper cable propagates signals faster than every optical fibre, guaranteeing lower end-to-end latency'
+q[6]['options'][2]['explanation']='False. Velocity depends on construction and optical wavelength; some copper cables are faster than ordinary glass and others slower. PHY processing also contributes to latency.'
+q[6]['options'][3]['explanation']='The signal is a guided electromagnetic wave; drift velocity is a different quantity depending on the current and conductor.'
+q[6]['workedExample']='Ideal common-mode cancellation is (V₁+n)−(V₂+n)=V₁−V₂; real rejection is finite. The specified common Ethernet channels support 100 m when all requirements are met. Propagation speed must be read from the cable/fibre specification, and complete latency includes electronics. Electron drift is not the signal speed.'
+q[7]['prompt']='For a direct standard 10 Gbit/s link over a 2 km cable route, compare Cat6a/10GBASE-T, OM4/10GBASE-SR and single-mode/10GBASE-LR, without intermediate repeaters. Which listed pairing has the specified reach, assuming a compliant optical loss budget?'
+q[7]['options'][1]['explanation']='10GBASE-SR over compliant OM4 supports 400 m, below this 2 km requirement.'
+q[7]['options'][2]['explanation']='Correct for the specified 10GBASE-LR equipment and compliant single-mode channel, rated up to 10 km. Connector/splice loss and compatibility still matter.'
+q[7]['workedExample']='For these specified pairings, Cat6a/10GBASE-T supports up to 100 m, OM4/10GBASE-SR up to 400 m, and single-mode/10GBASE-LR up to 10 km. Choose the last for the 2 km route after checking equipment compatibility and optical loss budget; fibre type alone does not specify reach.'
+q[8]['options'][3]['explanation']='The correct exponent is −24/10 = −2.4, giving a fraction 0.00398, or 0.398%. This distractor is three orders of magnitude too small.'
+q[8]['workedExample']=q[8]['workedExample'].replace('That sounds dire, but optical receivers are very sensitive and long-haul systems add amplifiers every 80–100 km. A copper cable would lose vastly more over a far shorter distance.', 'This accounts only for the stated distributed loss. Whether the link works requires receiver sensitivity, launch power, connector/splice losses, dispersion and any amplification; no universal amplifier spacing is implied.')
+q[9]['prompt']+=' Use 204,000 km/s in glass and 300,000 km/s in air as the specified approximations.'
+q[9]['workedExample']=q[9]['workedExample'].replace("The trade-off: microwave has far less bandwidth than fibre, and rain and fog cause outages, so these links carry only small, latency-critical messages.", 'The calculation excludes equipment and retransmission delay. Capacity and weather availability depend on frequency, route, antennas and engineering; the calculation alone establishes neither.')
+q[10]['prompt']+=' Use a single flat AWGN channel, with no additional spatial streams.'
+q[10]['workedExample']=q[10]['workedExample'].split('Wider channels win,')[0]+'Under the stated constant-SNR assumption, doubling bandwidth doubles capacity. If total signal power instead stays fixed and noise spectral density is constant, doubling bandwidth doubles noise power and reduces SNR by approximately 3 dB. Actual Wi-Fi throughput also includes coding, contention, pilots and protocol overhead.'
+q[11]['prompt']=q[11]['prompt'].replace('Which of these are genuine reasons?', 'Which are plausible contributing mechanisms, requiring measurements to confirm?')
+q[11]['options'][0]['explanation']='Plausible. Distance, obstacles and multipath can reduce received signal and SNR; the exact indoor loss is not determined by a free-space formula alone.'
+q[11]['options'][1]['explanation']='Plausible. Rate adaptation may choose a more robust modulation/coding scheme; it does not necessarily choose the densest constellation from SNR alone.'
+q[11]['workedExample']='Weaker signal, a lower selected PHY rate and extra retries are plausible mechanisms. The extra 25 m propagation is only about 83 ns and cannot explain the stated tenfold throughput drop. Measure signal/noise, PHY rate, retries, contention and backhaul before diagnosing or choosing a fix; a mesh node is not a guaranteed remedy.'
+p.write_text(json.dumps(q,ensure_ascii=False,indent=2)+'\n')
+print('Physical layer and 12 questions corrected')

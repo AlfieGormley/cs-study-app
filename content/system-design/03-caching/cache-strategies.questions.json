@@ -1,0 +1,374 @@
+[
+  {
+    "id": "cache-strategies-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the **cache-aside** pattern, who is responsible for loading data into the cache on a miss?",
+    "options": [
+      {
+        "text": "The cache, using a loader function configured for the database",
+        "explanation": "That describes read-through. In cache-aside the cache is a passive key-value store that knows nothing about the database."
+      },
+      {
+        "text": "The database, which pushes changes into the cache",
+        "explanation": "Pushing changes from the database (for example via change data capture) is an invalidation technique, not the definition of cache-aside."
+      },
+      {
+        "text": "The application: it checks the cache, reads the database on a miss, then writes the value to the cache",
+        "explanation": "Correct. The application sits \"aside\" both stores and orchestrates them. This is the default pattern with Redis and Memcached."
+      },
+      {
+        "text": "Nobody: cache-aside only caches values that were written",
+        "explanation": "Caching values on write is write-through. Cache-aside is lazy: it caches on read misses."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Request for `user:42` arrives at the app.\n2. App calls `GET user:42` on Redis and gets nothing (miss).\n3. App queries the database itself.\n4. App calls `SET user:42 <value> EX 300`.\n5. App returns the value.\n\nEvery step is in application code, so the app owns the cache logic. In read-through, steps 3–4 would happen inside the cache library instead.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-strategies-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service uses **write-back** caching for shopping-basket updates. A cache node crashes 3 seconds after acknowledging a customer's \"add to basket\". The next flush is due 5 seconds after that acknowledgement; the cache has neither persistence nor replication. What happens?",
+    "options": [
+      {
+        "text": "The item is lost: it was acknowledged but never flushed to the database",
+        "explanation": "Correct. The write lived only in the crashed node's memory. This is the core risk of write-back without a durable, replicated cache."
+      },
+      {
+        "text": "The item is safe, because write-back writes to the database first",
+        "explanation": "That is the opposite of write-back. Write-back acknowledges after writing to the cache only and writes the database later."
+      },
+      {
+        "text": "The item is delayed until the node restarts, then flushed",
+        "explanation": "An in-memory cache without persistence loses its contents on a crash. There is nothing left to flush after a restart."
+      },
+      {
+        "text": "The database rejects later writes until it is reconciled with the cache",
+        "explanation": "The database knows nothing about the pending writes, so there is nothing for it to reconcile against."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nt=0s  write to cache, ACK to user\nt=3s  cache node crashes\nt=5s  flush would have happened\n```\n\n1. At t=0 the only copy of the change is in cache RAM.\n2. The crash at t=3 destroys it.\n3. The database never received it, so the basket is missing the item.\n\nTo use write-back safely you need a failure-tested durability protocol in the cache; asynchronous replication alone can lose acknowledged writes, or a workload where losing up to one flush interval of writes is acceptable.",
+    "link": {
+      "title": "Cache (computing): writing policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    }
+  },
+  {
+    "id": "cache-strategies-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which strategy writes data **only to the database**, leaving the cache to be filled later by reads?",
+    "options": [
+      {
+        "text": "Write-through",
+        "explanation": "Write-through writes to both cache and database synchronously."
+      },
+      {
+        "text": "Write-back",
+        "explanation": "Write-back writes to the cache first and the database later; it is the opposite of bypassing the cache."
+      },
+      {
+        "text": "Read-through",
+        "explanation": "Read-through is a read strategy describing who loads data on a miss, not a write strategy."
+      },
+      {
+        "text": "Write-around",
+        "explanation": "Correct. Writes go around the cache straight to the database. It suits data that is written often but read rarely, at the cost of a miss on the first read after a write."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ask: on a write, where does data go?\n2. Write-through: cache + DB. Write-back: cache, then DB later. Write-around: DB only.\n3. Read-through does not describe writes at all.\n4. So the answer is write-around. A typical use is log or audit data, which is written constantly and rarely read straight away.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  },
+  {
+    "id": "cache-strategies-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are choosing a strategy for a **page-view counter** incremented 30,000 times per second on a popular article. Losing a few seconds of counts in a crash is acceptable. Assume each scheduled flush succeeds on time. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Write-back lets you coalesce thousands of increments into one database write per flush",
+        "explanation": "Correct. `INCR` in Redis, then flushing the total every second turns 30,000 DB writes into 1, removing the row-level lock contention."
+      },
+      {
+        "text": "Write-through would still send 30,000 writes per second to the database",
+        "explanation": "Correct. Write-through writes the database synchronously on every update, so it does nothing to reduce database write volume."
+      },
+      {
+        "text": "Cache-aside with delete-on-write is the best fit here",
+        "explanation": "Incorrect. Each increment would update the DB and delete the key, so the database still takes every write and the cache is constantly emptied."
+      },
+      {
+        "text": "The accepted loss window is roughly equal to the flush interval",
+        "explanation": "Correct. Anything incremented since the last flush lives only in the cache, so a crash loses up to one interval's worth (unless the cache is replicated or persisted)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Write volume: 30,000/s to a single row. In Postgres, each `UPDATE` takes a row lock, so they serialise and contend.\n2. Write-back: `INCR article:9:views` in Redis (an O(1) in-memory operation), and a job every 1 s reads the total and runs one `UPDATE`.\n3. DB writes: 30,000/s → 1/s.\n4. Risk: a crash loses up to 1 s ≈ 30,000 views, which the scenario says is fine.\n5. Write-through or cache-aside both leave the database doing all 30,000 writes, so neither solves the problem.\nInitialize counters from the durable total after cache loss and preserve flush ordering/idempotency. Blindly writing a reset counter or replaying an old total can corrupt even previously persisted counts. Delayed or failed flushes enlarge the loss window.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-strategies-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users complain that after editing their profile, the profile page still shows the old data for a few seconds. The app uses cache-aside, updating the DB then letting the 60 s TTL expire. Which change most directly fixes this?",
+    "options": [
+      {
+        "text": "Increase the TTL to 10 minutes",
+        "explanation": "A longer TTL makes the stale window longer, not shorter."
+      },
+      {
+        "text": "Delete (or overwrite) the cache key immediately after the database update commits",
+        "explanation": "Correct for the simple sequential path: invalidate after commit rather than waiting for expiry. Concurrent stale fills, reordered cache writes and failures still require leases/versioning or an authoritative read path when strict freshness matters."
+      },
+      {
+        "text": "Switch to write-around without invalidation",
+        "explanation": "Write-around without invalidation is what the app is effectively doing now: the DB is updated, but the stale cached copy remains until TTL."
+      },
+      {
+        "text": "Move the cache into each app server's process",
+        "explanation": "In-process caching adds more copies and makes staleness worse, since each server must be invalidated separately."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Current flow: `UPDATE users ...` and nothing else. The cache still holds the old profile until its TTL (up to 60 s) runs out.\n2. Fix: after the commit, `DEL user:42`.\n3. The next read misses, loads the new row and caches it.\n4. In the sequential successful path the stale window ends at deletion; there is no unconditional millisecond bound under races or failures.\n5. Keep the TTL anyway: if a delete is ever lost (network blip), expiry still repairs the cache eventually.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-strategies-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With write-through, the app writes to Redis, then to Postgres. Redis succeeds but the Postgres transaction fails on a constraint violation. What state are you in, and what is the usual fix?",
+    "options": [
+      {
+        "text": "The cache now holds a value that never existed in the database; write to the DB first and only then update or delete the cache",
+        "explanation": "Correct. Readers would see data that was rejected. Ordering the DB write first means a failed write leaves the cache untouched, and a cache failure after commit leaves only a stale entry, which deletion or a TTL repairs."
+      },
+      {
+        "text": "Consistent: Postgres rolled back, so Redis automatically rolls back too",
+        "explanation": "Redis and Postgres do not share a transaction. A Postgres rollback does nothing to a value already set in Redis."
+      },
+      {
+        "text": "Postgres will retry until it succeeds, so the states will converge",
+        "explanation": "A constraint violation is a permanent rejection, not a transient error. Retrying fails the same way."
+      },
+      {
+        "text": "This cannot happen with write-through, because write-through uses two-phase commit",
+        "explanation": "Write-through is a pattern, not a protocol. Common implementations do not use two-phase commit between the cache and database."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Sequence: `SET user:42 {...new...}` succeeds, then `UPDATE users ...` fails (for example a unique email clash).\n2. Postgres still holds the old row; Redis holds a version that was never committed.\n3. Readers hitting Redis see phantom data until a TTL or the next write.\n4. Fix the order: commit to the DB first (it is the source of truth and can reject writes), then update or delete the cache.\n5. If the cache step fails after a successful commit, you have a *stale* entry, not a *phantom* one, and a delete-retry or TTL repairs it.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  },
+  {
+    "id": "cache-strategies-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Under a sudden spike, Within one process, 500 requests for the same uncached key arrive within 10 ms. Which approach prevents 500 identical database queries with the least application code?",
+    "options": [
+      {
+        "text": "Plain cache-aside with a longer TTL",
+        "explanation": "A longer TTL does not help the first load: all 500 requests miss before anyone has populated the key, so all 500 query the database."
+      },
+      {
+        "text": "Write-around",
+        "explanation": "Write-around affects writes. This scenario is entirely about concurrent reads."
+      },
+      {
+        "text": "A read-through cache library that coalesces concurrent loads for the same key",
+        "explanation": "Correct. Libraries such as Caffeine's `LoadingCache` run the loader once per key and make the other callers wait for the same result, so 500 misses become 1 query."
+      },
+      {
+        "text": "Write-back with a 1 s flush interval",
+        "explanation": "Write-back changes when writes reach the database; it does nothing to stop concurrent read misses."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With naive cache-aside, each of the 500 requests runs `GET` (miss) → `SELECT` → `SET` independently, giving 500 queries.\n2. A coalescing read-through cache keeps a map of in-flight loads per key.\n3. Request 1 starts the load. Requests 2–500 find a pending load and wait for its result.\n4. Result: 1 query, 500 responses.\n5. You can build the same thing by hand in cache-aside (Go's `singleflight`, or a short Redis lock), as lesson 7 shows, but read-through libraries often give it to you for free.\n6. One caveat: in-process coalescing is per server. With 20 app servers, the 500 requests become at most 20 queries, which is usually fine.",
+    "link": {
+      "title": "singleflight package — Go",
+      "url": "https://pkg.go.dev/golang.org/x/sync/singleflight"
+    }
+  },
+  {
+    "id": "cache-strategies-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A pricing service caches each product for 60 s using refresh-ahead with a refresh point at 48 s. A request for a hot product arrives 50 s after it was loaded. What happens?",
+    "options": [
+      {
+        "text": "The request waits while the cache reloads the value from the database",
+        "explanation": "That is what happens after an entry has *expired*. Refresh-ahead exists precisely to avoid this wait for hot keys."
+      },
+      {
+        "text": "The request gets the current cached value straight away, and a background reload is started",
+        "explanation": "Correct. The entry is past its refresh point but not expired, so the reader is served immediately and the reload happens asynchronously."
+      },
+      {
+        "text": "The request is a miss, because refresh-ahead deletes entries at the refresh point",
+        "explanation": "Refresh-ahead does not delete anything early. The old value stays readable until the new one replaces it or the TTL expires."
+      },
+      {
+        "text": "Nothing special: refresh-ahead only reloads keys on a fixed timer, regardless of reads",
+        "explanation": "Refresh is triggered by a read after the refresh point. Keys nobody reads are simply allowed to expire, which avoids refreshing cold data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Timeline for the entry:\n\n```\n0s   loaded\n48s  eligible for refresh\n50s  read arrives\n60s  would expire\n```\n\n2. At 50 s the entry is still valid, so the reader gets it at cache speed.\n3. Because it is past 48 s, the read also kicks off a reload in the background.\n4. If the reload finishes before 60 s and the cache refreshes its expiry on replacement, readers can avoid a miss. Slow or failed refreshes can still allow expiry.\n5. Caffeine's refreshAfterWrite likewise returns the old value during refresh; configure expireAfterWrite separately when a hard expiry is required: the old value is returned while the refresh runs.",
+    "link": {
+      "title": "Refresh — Caffeine wiki",
+      "url": "https://github.com/ben-manes/caffeine/wiki/Refresh"
+    }
+  },
+  {
+    "id": "cache-strategies-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An orders service is considering **write-back** caching to cut write latency. Which of these are genuine consequences it must plan for? Select all that apply.",
+    "options": [
+      {
+        "text": "Acknowledged writes can be lost if a cache node fails before flushing",
+        "explanation": "Correct. Until the flush, the only copy is in cache memory. Replication and an append-only log narrow this risk; without them, it is the defining risk of write-back."
+      },
+      {
+        "text": "Reports and other services that query the database directly will see data that lags behind the cache",
+        "explanation": "Correct. With successful on-time flushes the delay is around one interval; failures or backlog can make it longer, so anything bypassing the cache reads old data."
+      },
+      {
+        "text": "Reads of recently written keys through the cache will miss",
+        "explanation": "Incorrect. With write-back the cache has the newest value, so reads through it hit. It is readers of the *database* that see stale data."
+      },
+      {
+        "text": "Flush failures and ordering need explicit handling, for example retrying a batch that the database partly rejected",
+        "explanation": "Correct. If a flushed write violates a constraint, the user was already told it succeeded. You need retry, dead-letter and conflict rules."
+      },
+      {
+        "text": "Write volume to the database rises, because every write is sent twice",
+        "explanation": "Incorrect. Write-back usually *reduces* database writes by coalescing repeated updates into one flush."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk through who holds the newest data:\n\n1. Write arrives → cache updated → **ack**. Newest data: cache only.\n2. Flush (later) → database updated. Newest data: both.\n\nBetween 1 and 2:\n- A cache crash loses it (A true).\n- Database readers see the old value (B true).\n- Cache readers see the new value (C false).\n\nAt step 2 the database might reject the write, after the user was told it succeeded (D true). And coalescing means fewer database writes, not more (E false).\n\nFor orders, these risks are usually unacceptable, which is why write-back suits counters and analytics instead.",
+    "link": {
+      "title": "Cache (computing): writing policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    }
+  },
+  {
+    "id": "cache-strategies-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two requests update the same product price at almost the same moment. Each one writes the database and then **overwrites** the cache with its own new value using `SET`. Writer A commits £10, then writer B commits £12, but A's `SET` reaches Redis after B's. What is the result?",
+    "options": [
+      {
+        "text": "Redis holds £12, matching the database, because the last database commit always wins in the cache",
+        "explanation": "The cache has no idea about commit order. Whichever `SET` arrives last wins in Redis, and here that is A's."
+      },
+      {
+        "text": "Redis holds £10 while the database holds £12, and it stays wrong until the TTL expires or the next write",
+        "explanation": "Correct. Overwriting on write lets slow network paths reorder updates. Deleting the key instead means both writers do the same idempotent thing, and the next read loads £12."
+      },
+      {
+        "text": "Redis rejects A's `SET` because it is older",
+        "explanation": "Plain `SET` has no versioning. It accepts whatever arrives last."
+      },
+      {
+        "text": "Both writes fail with a conflict error",
+        "explanation": "Neither the database nor Redis detects a conflict here. Both writes succeed, which is exactly why the cache ends up wrong."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Database order: A (£10) then B (£12). Database = **£12**.\n2. Cache order: B's `SET £12`, then A's delayed `SET £10`. Cache = **£10**.\n3. Readers now get £10 until the TTL expires.\n4. With delete-on-write:\n\n```\nA: commit £10, DEL price:9\nB: commit £12, DEL price:9\n```\n\nThe order of deletes no longer matters; the next read misses and loads £12.\n\nDelete-on-write closes this particular race. Lesson 4 covers the read/write race it does not close.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-strategies-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your product catalogue uses write-through caching with a 24-hour TTL. A nightly job re-imports 10 million product rows, of which only about 50,000 are viewed on a typical day. The morning after each import, the cache hit ratio collapses. What is the best change?",
+    "options": [
+      {
+        "text": "Make the import use write-around: write to the database and delete any cached copy, so only products that are actually read get cached",
+        "explanation": "Correct. Write-through on a bulk import caches 10 million mostly-unread rows, which evicts the hot 50,000. Bypassing population avoids filling the cache with cold imported rows. Invalidating changed hot rows still causes their next reads to miss."
+      },
+      {
+        "text": "Increase the TTL to 7 days so imported entries last longer",
+        "explanation": "The problem is that unread entries are flooding the cache and evicting hot ones. Keeping them longer makes it worse."
+      },
+      {
+        "text": "Switch the import to write-back so it finishes faster",
+        "explanation": "Write-back still puts all 10 million rows in the cache, and adds a risk of data loss to a bulk import."
+      },
+      {
+        "text": "Double the cache size so all 10 million rows fit",
+        "explanation": "This might work, but it buys a lot of memory to store data that is almost never read. Changing the write path is far cheaper."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Write-through puts every written row into the cache: 10 million entries.\n2. Only ~50,000 (0.5%) are read on a typical day.\n3. The cache has a fixed size, so the imported rows evict the hot entries (cache pollution).\n4. In the morning, readers miss on the hot products until they reload: the hit ratio collapses.\n5. Write-around for the import (write DB, `DEL` the key) keeps the cache holding only what readers asked for.\n\nRule of thumb: write-through suits writes that are likely to be read soon; bulk or write-heavy paths should go around the cache.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  },
+  {
+    "id": "cache-strategies-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An app uses cache-aside: on a read miss it queries the database and sets the key with a TTL. The application developers find the miss path repeated in 40 places and keep forgetting to add the TTL. Which change addresses this most directly?",
+    "options": [
+      {
+        "text": "Switch to write-back so the cache handles writes",
+        "explanation": "Write-back changes the write path. The duplication here is in the read-miss logic."
+      },
+      {
+        "text": "Remove the TTL everywhere for consistency",
+        "explanation": "Removing TTLs removes the safety net that repairs stale or orphaned entries. Consistency of code is not worth that."
+      },
+      {
+        "text": "Move to a read-through layer: one loader function per entity type, so the cache owns loading and applies the TTL in one place",
+        "explanation": "Correct. Read-through moves the miss-handling into the cache layer, so it is written once, the TTL is configured once, and concurrent misses can be coalesced."
+      },
+      {
+        "text": "Cache everything at application start-up so there are no misses",
+        "explanation": "Pre-loading everything wastes memory on unread data and still needs a miss path for new or evicted keys."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Cache-aside puts `GET → miss → SELECT → SET` in **application code**, wherever data is read.\n2. 40 copies means 40 chances to forget the TTL or serialise differently.\n3. Read-through has the same data flow but the code lives in the cache layer:\n\n```python\ncache = LoadingCache(\n    loader=load_user, ttl=300)\nuser = cache.get(user_id)\n```\n\n4. Now the TTL is set in one place, and a good library also coalesces concurrent misses.\n5. The trade-off is coupling: the cache layer now has to know how to load each entity.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  }
+]

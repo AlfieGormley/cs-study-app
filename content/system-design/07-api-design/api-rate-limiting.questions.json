@@ -1,0 +1,378 @@
+[
+  {
+    "id": "api-rate-limiting-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A client exceeds its per-user quota. Which response best follows HTTP conventions?",
+    "options": [
+      {
+        "text": "`503 Service Unavailable` with no headers",
+        "explanation": "503 means the *service* is unhealthy or overloaded for requests the service cannot currently handle. It triggers outage alerts and generic retry behaviour, and it hides the fact that this particular client is the problem."
+      },
+      {
+        "text": "`403 Forbidden`",
+        "explanation": "403 means the caller isn't allowed to do this at all. Clients won't retry, even though the request would succeed after the window resets."
+      },
+      {
+        "text": "`429 Too Many Requests` with a `Retry-After` header",
+        "explanation": "Correct. RFC 6585 defines 429 for exactly this case, and `Retry-After` tells the client how many seconds to wait, so well-behaved clients back off precisely instead of guessing."
+      },
+      {
+        "text": "`200 OK` with an empty body",
+        "explanation": "Pretending to succeed hides the problem: the client thinks its request worked, and your monitoring sees no errors."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Match the semantics:\n\n- Is the request malformed? No → not 400.\n- Is the caller never allowed? No → not 403.\n- Is the whole service down? No → not 503.\n- Has *this* caller sent too many requests *for now*? Yes → **429**.\n\nThen add guidance:\n\n```\nHTTP/1.1 429 Too Many Requests\nRetry-After: 30\nRateLimit: \"min\";r=0;t=30\n```",
+    "link": {
+      "title": "MDN: 429 Too Many Requests",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A token bucket has capacity 20 and refills at 5 tokens/second. It starts full. A client sends 30 requests at t = 0 s, then 10 more at t = 3 s. How many of the 40 requests are allowed?",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "This counts only the initial burst. By t = 3 s the bucket has refilled 15 tokens, enough for all 10 later requests."
+      },
+      {
+        "text": "25",
+        "explanation": "This assumes the bucket refills only 5 tokens by t = 3 s. Refill is 5 *per second*, so 3 seconds gives 15 tokens."
+      },
+      {
+        "text": "35",
+        "explanation": "This adds the full 15 refilled tokens to the 20, but only 10 requests arrive at t = 3, so only 10 of those tokens are used. Rejected requests from t = 0 aren't replayed later."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. At t = 0: 20 allowed, 10 rejected, bucket = 0. At t = 3: bucket = min(20, 0 + 3 × 5) = 15, so all 10 are allowed, leaving 5. Total allowed = 20 + 10 = 30."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Step through it:\n\n| Time | Tokens before | Requests | Allowed | Tokens after |\n|---|---|---|---|---|\n| 0 s | 20 | 30 | 20 | 0 |\n| 3 s | 0 + 3×5 = 15 | 10 | 10 | 5 |\n\nAllowed = 20 + 10 = **30**; rejected = 10.\n\nNote how capacity (20) sets the burst size and the refill rate (5/s) sets the long-run average.",
+    "link": {
+      "title": "Wikipedia: Token bucket",
+      "url": "https://en.wikipedia.org/wiki/Token_bucket"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A fixed-window limiter allows 100 requests per calendar minute. What's the maximum number of requests a client can get accepted in any 2-second span?",
+    "options": [
+      {
+        "text": "200",
+        "explanation": "Correct. The client sends 100 at 12:00:59 (the end of window 1) and 100 at 12:01:00 (the start of window 2). Each window's counter is within limit, so all 200 succeed within about 1–2 seconds."
+      },
+      {
+        "text": "100",
+        "explanation": "That's what you'd *want*, and what a sliding window would enforce. A fixed window resets its counter at the boundary, so it can't see the burst straddling two windows."
+      },
+      {
+        "text": "About 3",
+        "explanation": "This assumes the limit is spread evenly (100/60 ≈ 1.7 per second). Fixed windows don't smooth traffic at all; a client can use its whole quota in one instant."
+      },
+      {
+        "text": "150",
+        "explanation": "There's no partial carry-over in a fixed window. Each window independently allows the full 100."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nwindow 12:00  count=0 ... 100 @ :59\nwindow 12:01  count reset to 0\n              100 @ :00\n```\n\n1. 12:00:59.x: 100 requests → counter for 12:00 = 100 ≤ 100. All allowed.\n2. 12:01:00.x: new key, counter starts at 0. 100 requests → 100 ≤ 100. All allowed.\n3. Span covered ≈ 1–2 s. Accepted = **200**, i.e. 2× the intended rate.\n\nA sliding window counter at 12:01:00.6 would already estimate 100 × (1 − 0.01) + 0 = 99, so it would accept only about 1 request of the second burst.",
+    "link": {
+      "title": "Cloudflare blog: Counting things, a lot of different things",
+      "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A sliding window counter limiter allows 50 requests/minute. In the previous minute the client made 40 requests. In the current minute it has made 25, and 36 seconds have elapsed. What's the estimated count, and is the next request allowed?",
+    "options": [
+      {
+        "text": "65; rejected",
+        "explanation": "This adds the full previous count without weighting. Only the part of the previous window that still overlaps the last 60 seconds should count."
+      },
+      {
+        "text": "41; allowed",
+        "explanation": "Correct. The previous window overlaps by 1 − 36/60 = 0.4, so estimate = 40 × 0.4 + 25 = 16 + 25 = 41. That's under 50, so the request is allowed."
+      },
+      {
+        "text": "49; allowed",
+        "explanation": "This weights the previous window by 0.6 (the elapsed fraction) instead of 0.4 (the remaining overlap). The weight shrinks as the current window progresses."
+      },
+      {
+        "text": "25; allowed",
+        "explanation": "This ignores the previous window entirely, which is just a fixed window and suffers the boundary-burst problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Formula: `estimate = prev × (1 − t/W) + curr`\n\n1. t/W = 36 / 60 = 0.6.\n2. Overlap weight = 1 − 0.6 = **0.4**. (The sliding 60 s window covers the last 24 s of the previous minute, and 24/60 = 0.4.)\n3. Weighted previous = 40 × 0.4 = 16.\n4. Estimate = 16 + 25 = **41**.\n5. 41 < 50 → **allow**.\n\nRoughly 9 more requests could be accepted right now before the estimate reaches 50.",
+    "link": {
+      "title": "Cloudflare blog: Counting things, a lot of different things",
+      "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A token bucket with capacity at least 1 refills at 0.5 tokens/s and currently has 0.2 tokens. Assuming no competing consumption or policy changes, what minimum whole-second Retry-After delay lets it refill to at least one token?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "This would send the client back too early. After 1 s the bucket holds 0.2 + 0.5 = 0.7 tokens, still short of 1, so the retry would be rejected again."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. The client needs 1 − 0.2 = 0.8 more tokens. At 0.5 tokens/s that takes 0.8 / 0.5 = 1.6 s. Round **up** to 2 so the retry is guaranteed to find a whole token."
+      },
+      {
+        "text": "60",
+        "explanation": "That's a full minute, far more than needed. Over-long Retry-After values waste client capacity and make your API feel broken."
+      },
+      {
+        "text": "0",
+        "explanation": "Retrying immediately would just be rejected again and adds load. The whole point of Retry-After is to tell the client how long to wait."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Tokens needed: 1 − 0.2 = **0.8**.\n2. Time to accumulate: 0.8 ÷ 0.5 tokens/s = **1.6 s**.\n3. `Retry-After` is an integer number of seconds → **ceil(1.6) = 2**.\n4. Check: after 2 s the bucket holds 0.2 + 2 × 0.5 = 1.2 ≥ 1. ✔\n\nRounding down (1 s) gives 0.7 tokens: rejected again.",
+    "link": {
+      "title": "MDN: Retry-After",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your token bucket limiter runs on 12 API servers sharing Redis. The code does `HGET tokens`, computes the refill in application code, then `HSET tokens`. Under load, clients occasionally exceed their limit by 2–3×. Why, and what's the cleanest fix?",
+    "options": [
+      {
+        "text": "Redis is eventually consistent. Fix: switch to PostgreSQL",
+        "explanation": "A single Redis primary is linearisable for individual commands. The problem is that a read followed by a separate write isn't atomic, and Postgres would have the same race without explicit locking."
+      },
+      {
+        "text": "Clocks on the 12 servers differ. Fix: use NTP",
+        "explanation": "Clock disagreement can itself cause serious refill errors, so it must be controlled. Even with identical clocks, the separate read/modify/write sequence permits the illustrated concurrency race."
+      },
+      {
+        "text": "Read-modify-write race: several servers read the same token count before any writes back, so they all allow. Fix: run the whole refill-and-decrement as a Lua script, which Redis executes atomically",
+        "explanation": "Correct. Redis runs each Lua script to completion without interleaving other commands, so read, refill, decrement and write become one atomic step."
+      },
+      {
+        "text": "The bucket capacity is too high. Fix: halve it",
+        "explanation": "Capacity only changes how big a burst is allowed. It doesn't fix the race, which lets requests through regardless of the configured values."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Interleave three servers when the bucket holds 1 token:\n\n```\nS1: HGET -> 1\nS2: HGET -> 1\nS3: HGET -> 1\nS1: allow, HSET 0\nS2: allow, HSET 0\nS3: allow, HSET 0\n```\n\nOne token, three requests allowed. Under high concurrency for one client, this gives the 2–3× overshoot.\n\nFix with `EVALSHA` on a script that does HMGET → compute → HSET → return. Redis is single-threaded per shard and doesn't interleave commands inside a script, so S2 sees S1's write.",
+    "link": {
+      "title": "Redis: Rate limiting",
+      "url": "https://redis.io/glossary/rate-limiting/"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q7",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A public API handles 200,000 requests/s. Its documented policy favors availability with a bounded local fallback on limiter-store failure, and approximate quotas are acceptable. Which listed choices reduce avoidable storage/coordination cost while preserving useful client guidance? Select all that apply.",
+    "options": [
+      {
+        "text": "Fail open (with a local fallback limiter) if Redis becomes unreachable, for normal API traffic",
+        "explanation": "Correct. A rate limiter is a protection layer; letting a Redis blip turn into a total API outage is usually worse than briefly under-enforcing. A coarse per-server fallback still caps runaway clients."
+      },
+      {
+        "text": "Key anonymous traffic only by IP address, with a low limit, without considering NAT",
+        "explanation": "Wrong. Thousands of users behind a corporate NAT or mobile carrier gateway can share one IP. A low per-IP limit would block them all. Combine IP with other signals or use higher limits for anonymous traffic."
+      },
+      {
+        "text": "Include remaining-quota headers (`RateLimit`, or `X-RateLimit-Remaining`) on successful responses",
+        "explanation": "Correct. Clients can throttle themselves before hitting 429, which reduces wasted requests on both sides."
+      },
+      {
+        "text": "Enforce the limit at the gateway, before requests reach application servers",
+        "explanation": "Correct. Rejecting at the edge means over-limit requests cost almost nothing and don't consume app or database capacity."
+      },
+      {
+        "text": "Use a sliding window log for every client, storing every request timestamp",
+        "explanation": "A sliding log may be feasible with sufficient resources, but it retains up to 12 million accepted timestamps for a 60-second window at this rate. Since approximate quotas are acceptable here, constant-state algorithms avoid that storage and churn."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Under the stated availability policy, a local fallback can bound some load while accepting reduced quota precision.\n2. NAT makes low IP-only limits unfair.\n3. Remaining-quota headers help clients adapt; early enforcement avoids app/database work.\n4. A 60-second log at 200,000 accepted requests/s retains up to 12,000,000 timestamps. Actual memory depends on representation and key/member sizes; no universal bytes-per-entry estimate is given. Constant-state approximations fit the stated requirement.",
+    "link": {
+      "title": "Stripe blog: Scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A legacy mainframe behind your API can handle at most 50 requests/s and falls over with bursts. Clients send bursty traffic averaging 40 req/s. Which algorithm best protects the mainframe?",
+    "options": [
+      {
+        "text": "Token bucket with capacity 500",
+        "explanation": "A large-capacity token bucket deliberately *allows* bursts of up to 500 requests at once, which is exactly what the mainframe can't handle."
+      },
+      {
+        "text": "Leaky bucket (queue) draining at 50 req/s",
+        "explanation": "Correct. A leaky bucket queues incoming bursts and releases them at a constant rate, so the mainframe never sees more than 50 req/s. The trade-off is added latency while requests wait in the queue."
+      },
+      {
+        "text": "Fixed window of 3,000 per minute",
+        "explanation": "3,000/min averages 50/s, but a fixed window lets all 3,000 through in the first second of the minute, which would flatten the mainframe."
+      },
+      {
+        "text": "No limiter, because the average is below 50 req/s",
+        "explanation": "The average is fine; the *bursts* are the problem. Without shaping, a spike of 200 in one second will exceed capacity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Constraint is on **instantaneous** rate (≤ 50/s), not just average.\n2. Token bucket and fixed window both allow bursts by design.\n3. Leaky bucket converts a bursty input into a smooth output:\n\n```\nin:  0 200 0 0 0  (per second)\nout: 50 50 50 50  (constant)\n```\n\n4. Queue sizing: with a 200-request burst and 50/s drain, the last request waits 4 s. Size the queue (e.g. 250) so requests beyond that are rejected with 429 rather than waiting indefinitely.",
+    "link": {
+      "title": "Wikipedia: Leaky bucket",
+      "url": "https://en.wikipedia.org/wiki/Leaky_bucket"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A token bucket should sustain 60 requests/minute and permit an instantaneous burst of 20. Which parameters fit, and how many unit requests can be accepted from t=0 through t=60 seconds inclusive, starting full with demand always available?",
+    "options": [
+      {
+        "text": "Refill 60 tokens/s, capacity 20; up to 3,620",
+        "explanation": "60 per *second* is 3,600 per minute, sixty times the spec. The refill rate has to be the long-run average expressed per second: 60 / 60 = 1."
+      },
+      {
+        "text": "Refill 1 token/s, capacity 60; up to 120",
+        "explanation": "This swaps the roles. Capacity sets the burst size, so it should be 20, not 60. With capacity 60 a client could fire 60 at once."
+      },
+      {
+        "text": "Refill 1 token/s, capacity 20; up to 80",
+        "explanation": "Correct. Refill rate = average (60/min = 1/s); capacity = burst (20). From full: 20 immediately, plus 60 refilled over the minute, so 80, settling to 60/min after that."
+      },
+      {
+        "text": "Refill 1 token/s, capacity 20; exactly 60",
+        "explanation": "The parameters are right, but this forgets the initial full bucket. The 20 stored tokens are spent on top of the 60 that refill during the minute."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Refill rate** = long-run average: 60 per minute ÷ 60 s = **1 token/s**.\n2. **Capacity** = biggest burst: **20**.\n3. First minute from a full bucket:\n\n```\nt=0      20 tokens -> 20 requests\nt=0..60  +1/s      -> 60 requests\ntotal               = 80\n```\n\n4. Every minute after that the bucket is empty on average, so the client gets **60/min**.\n\nThat first-minute overshoot (80 vs 60) is the burst allowance doing its job. If that's unacceptable, use a smaller capacity.",
+    "link": {
+      "title": "Wikipedia: Token bucket",
+      "url": "https://en.wikipedia.org/wiki/Token_bucket"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For the sliding-window estimate prev × (1 − t/W) + curr, assume 0<t<W and all previous-window arrivals discussed remain inside the true rolling window. Which statements hold? Select all that apply.",
+    "options": [
+      {
+        "text": "It needs only two counters per client, the current and previous windows",
+        "explanation": "True. That's its main advantage over the sliding log, which stores every timestamp."
+      },
+      {
+        "text": "It assumes the previous window's requests were spread evenly across that window",
+        "explanation": "True. Uniform weighting assumes an even spread. Bursty or adversarial traffic can make the approximation substantially wrong."
+      },
+      {
+        "text": "If the previous window's requests all arrived in its last few seconds, it underestimates the true count over the past W seconds",
+        "explanation": "True under the stated timing assumption: all previous arrivals still count in reality, while the approximation discounts them. The excess can be substantial."
+      },
+      {
+        "text": "The weight on the previous window equals the fraction of the current window that has elapsed",
+        "explanation": "False, it's the opposite. The weight is the *remaining* overlap, 1 − t/W. It starts at 1 and falls to 0 as the current window progresses."
+      },
+      {
+        "text": "It's exact, like the sliding log, just using less memory",
+        "explanation": "False. It's an approximation. Cloudflare measured the error as tiny in practice (about 0.003% of requests mis-classified), but it isn't zero."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Test the even-spread assumption with numbers. W = 60 s, limit 100, t = 30 s into the current window.\n\n- Previous window: 80 requests, **all** in its last 10 s.\n- Estimate: 80 × (1 − 0.5) + curr = 40 + curr.\n- Truth: the sliding window (last 60 s) contains all 80 of them, so 80 + curr.\n\nThe estimate is 40 too low, so up to 40 extra requests could slip through. This is a counterexample, not the global worst case: later times with sufficiently late previous arrivals can undercount even more. Cloudflare’s reported low misclassification rate describes its historical measured workload, not an adversarial bound.",
+    "link": {
+      "title": "Cloudflare blog: Counting things, a lot of different things",
+      "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To avoid a Redis hop, each of your 20 gateways enforces `limit / N` locally: a 1,000/min client limit becomes 50/min per gateway. A partner's SDK holds two long-lived HTTP/2 connections, so all its traffic lands on just 2 gateways. What happens?",
+    "options": [
+      {
+        "text": "It's capped at about 100/min, a tenth of its paid limit, because only 2 of the 20 local limiters ever see its traffic",
+        "explanation": "Correct. Local `limit / N` only matches the global limit when traffic is spread evenly across all N servers. Concentrated traffic gets a fraction of its quota."
+      },
+      {
+        "text": "It gets its full 1,000/min, because the limits add up across gateways",
+        "explanation": "The limits add up only if traffic reaches all 20 gateways. Two gateways at 50 each is 100."
+      },
+      {
+        "text": "It gets 2,000/min, because each gateway lets through up to the full limit",
+        "explanation": "Each gateway enforces 50, not 1,000. Over-allowing is the risk of *per-server full limits*, not of `limit / N`."
+      },
+      {
+        "text": "It's blocked entirely, because the gateways disagree",
+        "explanation": "Local limiters don't coordinate, so they can't disagree. Each simply allows up to 50/min on its own."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Global intent: 1,000/min.\n2. Local share: 1,000 ÷ 20 = 50/min per gateway.\n3. Traffic reaches 2 gateways: 2 × 50 = **100/min**.\n4. The partner hits 429 at 10% of what it pays for.\n\nThis is the trade-off of approximate local limiting: no network hop, but accuracy depends on even load distribution. Mitigations:\n\n- Periodically sync counts between gateways, or rebalance shares based on observed traffic.\n- Use the shared Redis limiter for high-value clients.\n- Use L7 load balancing that spreads individual requests, not connections.",
+    "link": {
+      "title": "Stripe blog: Scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your Redis cluster that backs rate limiting becomes unreachable for five minutes. Two limiters use it: a general 1,000/min per-API-key limit on `/v1/*`, and a 5-attempts-per-15-minutes limit on `POST /login`. What's the most defensible behaviour?",
+    "options": [
+      {
+        "text": "Fail closed for both, so nothing is ever let through without being counted",
+        "explanation": "Rejecting all API traffic because the limiter's store is down turns a protection layer into a total outage, which is usually worse than briefly under-enforcing."
+      },
+      {
+        "text": "Fail open for both, because availability always wins",
+        "explanation": "For `/login`, the limit is a security control against credential stuffing. Five minutes of unlimited password guessing is a real risk."
+      },
+      {
+        "text": "Fail closed for the general API and open for login",
+        "explanation": "That's backwards: it takes down normal traffic and removes the one limit that defends against attackers."
+      },
+      {
+        "text": "Fail open for the general API (ideally with a coarse local fallback limiter), and fail closed, or fall back to a strict local limit, for login",
+        "explanation": "Correct. Match the failure mode to the purpose: the general limit protects capacity, so availability matters most; the login limit protects accounts, so safety matters most."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask what each limiter is *for*:\n\n| Limiter | Purpose | If store is down |\n|---|---|---|\n| `/v1/*` | Capacity, fairness | Open + local cap |\n| `/login` | Security | Closed or strict local |\n\n1. A coarse local fallback for the general API (e.g. a per-gateway token bucket) still stops a runaway client from flattening the fleet.\n2. For login, a strict per-gateway limit (say 5 attempts per IP per gateway) still slows attackers. Failing closed outright means nobody can log in for five minutes, which may also be acceptable for a short incident.",
+    "link": {
+      "title": "Stripe blog: Scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  }
+]

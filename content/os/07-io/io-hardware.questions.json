@@ -1,0 +1,343 @@
+[
+  {
+    "id": "io-hardware-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On a modern PCIe system, how does the CPU usually write to a device controller's command register?",
+    "options": [
+      {
+        "text": "With a special `out` instruction into a separate I/O port address space",
+        "explanation": "PCIe supports memory and I/O BAR types; memory BARs and MMIO are the common path assumed in this question. Port I/O is a separate access mechanism."
+      },
+      {
+        "text": "With an ordinary store instruction to a physical address that maps to the device (memory-mapped I/O)",
+        "explanation": "Correct. With MMIO, certain physical addresses are routed to the device rather than RAM, so a normal load or store reads or writes a device register."
+      },
+      {
+        "text": "By calling the `write()` system call on `/dev/mem`",
+        "explanation": "`write()` is how user programs ask the kernel for I/O; the driver inside the kernel still has to touch the hardware registers, which it does with MMIO loads and stores."
+      },
+      {
+        "text": "By putting the command in RAM and waiting for the device to poll it",
+        "explanation": "Descriptors can reside in DMA-visible RAM, but writing the MMIO register asked about still uses the mapped register-access path. Whether a device independently polls descriptors is device-specific."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The CPU has two ways to reach device registers: port I/O (`in`/`out`) and memory-mapped I/O.\n2. PCIe devices advertise **BARs**: ranges of physical address space backed by the device.\n3. The driver maps a BAR into kernel virtual memory (`ioremap`) and uses `readl`/`writel`, which compile to ordinary loads and stores (with the right ordering guarantees).\n4. So writing the command register is just a store to a special address.",
+    "link": {
+      "title": "I/O Devices — Operating Systems: Three Easy Pieces (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"
+    }
+  },
+  {
+    "id": "io-hardware-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A thermometer chip updates its reading once a second. A driver checks its status register in a tight loop until a new reading arrives. What is the main problem?",
+    "options": [
+      {
+        "text": "Readings will be lost because polling is too slow to notice them",
+        "explanation": "The question supplies no evidence of lost readings. Continuous polling is frequent relative to one update per second, but its latency is not a universal nanosecond constant."
+      },
+      {
+        "text": "Polling requires DMA, which the chip doesn't support",
+        "explanation": "Polling and DMA are independent. Polling is the CPU reading a status register; DMA is the device moving data to RAM."
+      },
+      {
+        "text": "The CPU burns nearly a full second of cycles per reading doing nothing useful",
+        "explanation": "Correct. For a slow device, busy-waiting wastes the CPU; an interrupt (or polling on a timer) lets the CPU run other work in between."
+      },
+      {
+        "text": "The device will raise too many interrupts and cause livelock",
+        "explanation": "This driver is busy polling rather than requesting a per-reading interrupt. Receive livelock involves interrupt pressure preventing useful processing, not simply waiting for one reading per second."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The device produces one reading per second.\n2. A dedicated busy waiter can consume nearly one CPU-second waiting for the next update. At 3 GHz this is about three billion clock cycles, not necessarily three billion loop iterations.\n3. Timer-based polling or interrupts can release the CPU between readings.\n4. Their real latency and overhead must be measured; polling can help selected latency-sensitive workloads but is not universally best.",
+    "link": {
+      "title": "I/O Devices — Operating Systems: Three Easy Pieces (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"
+    }
+  },
+  {
+    "id": "io-hardware-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the conventional kernel-mediated DMA model, what does DMA save the CPU from doing during a 1 MiB disk read?",
+    "options": [
+      {
+        "text": "Waiting for the disk, because DMA makes the disk faster",
+        "explanation": "DMA does not change the device's speed. Waiting is avoided by interrupts (sleeping the process); DMA removes the copying."
+      },
+      {
+        "text": "Executing the system call, because DMA lets user code talk to the disk directly",
+        "explanation": "The read still goes through the kernel and the driver; DMA is between the device and RAM, not between the user and the device."
+      },
+      {
+        "text": "Translating virtual addresses, because the device uses the process's page tables",
+        "explanation": "Conventional DMA uses device-visible mapped addresses, not an arbitrary process pointer. Shared Virtual Addressing is a separate supported-device feature; it does not make DMA eliminate CPU address translation."
+      },
+      {
+        "text": "Moving every byte between the device's data register and RAM itself",
+        "explanation": "Correct. At eight bytes per CPU-driven transfer, 1 MiB requires 131,072 transfers. DMA moves the payload between device and RAM; notification and setup costs are separate."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. 1 MiB = 1,048,576 bytes; dividing by eight gives 131,072 transfers.\n2. CPU-driven I/O must move those payload units itself.\n3. DMA lets hardware transfer the payload using appropriately mapped buffers and descriptors.\n4. The CPU still performs setup, synchronization and completion processing. Interrupts may be per operation, coalesced, or replaced by polling.\n5. This comparison excludes additional buffered-I/O copies between kernel and application memory.",
+    "link": {
+      "title": "Direct memory access — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Direct_memory_access"
+    }
+  },
+  {
+    "id": "io-hardware-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A NIC raises one interrupt per received packet. As the packet rate climbs past a million per second, throughput falls instead of levelling off. What is this called, and what is the standard Linux fix?",
+    "options": [
+      {
+        "text": "Thundering herd; fix it with `EPOLLEXCLUSIVE`",
+        "explanation": "Thundering herd is many waiters woken for one event. Here one CPU is overwhelmed by interrupt entry and exit, which is a different problem."
+      },
+      {
+        "text": "Receive livelock; fix it with NAPI, which disables the interrupt and polls the ring while packets keep arriving",
+        "explanation": "Correct for the conventional NAPI interrupt-to-poll path. Polling uses a budget; completion/unmasking rules and optional threaded or busy-poll modes depend on configuration."
+      },
+      {
+        "text": "Priority inversion; fix it by raising the priority of the receiving process",
+        "explanation": "Priority inversion is a low-priority task holding a lock a high-priority one needs. Raising process priority does nothing because interrupts pre-empt every process."
+      },
+      {
+        "text": "Cache thrashing; fix it by giving the NIC more memory",
+        "explanation": "Cache effects add to interrupt cost, but the defining problem is that the CPU spends all its time handling interrupts and never processes the packets. More NIC memory doesn't change that."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In a hypothetical model, one interrupt per packet at one microsecond each and one million packets per second consumes one CPU-second per second. These are assumptions, not device measurements.\n2. If high-priority interrupt work prevents packets reaching their consumers, receive livelock can result.\n3. Conventional NAPI masks the relevant device interrupt while budgeted polling processes the queue, then re-enables notifications after completing the poll cycle.\n4. Poll budgets and scheduling depend on driver/kernel configuration; 64 is not a universal per-device budget.\n5. Batching reduces per-packet interrupt work, though packet-processing work remains.",
+    "link": {
+      "title": "NAPI — Linux kernel docs",
+      "url": "https://docs.kernel.org/networking/napi.html"
+    }
+  },
+  {
+    "id": "io-hardware-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In a conventional Linux hard IRQ handler with valid device mappings, correct device acknowledgement protocol and a registered threaded handler, which actions can be appropriate? Select all that apply.",
+    "options": [
+      {
+        "text": "Read the device's status register to check whether it raised the interrupt",
+        "explanation": "Correct. A quick MMIO read is exactly what the top half is for, and on a shared line it is how the handler decides between `IRQ_NONE` and handling it."
+      },
+      {
+        "text": "Call `mutex_lock()` to protect the device's state",
+        "explanation": "Unsafe. `mutex_lock()` may sleep, and a hard IRQ handler has no process context to sleep in. Use a spinlock, or do the work in a threaded handler or workqueue."
+      },
+      {
+        "text": "Acknowledge the interrupt by writing the device's ack register",
+        "explanation": "Correct. Acknowledging is a fast register write and must happen promptly, or a level-triggered line will keep firing."
+      },
+      {
+        "text": "Return `IRQ_WAKE_THREAD` so the bottom half runs in a kernel thread",
+        "explanation": "Correct. This is how a threaded IRQ hands off slower work to its dedicated kernel thread."
+      },
+      {
+        "text": "Allocate memory with `GFP_KERNEL`",
+        "explanation": "Unsafe in hard IRQ context. GFP_KERNEL can sleep. Use an appropriate non-sleeping allocation mode such as GFP_ATOMIC when justified, handle failure, or defer/preallocate."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Reading a valid device status register does not require a sleepable context; actual MMIO latency varies.\n2. mutex_lock can sleep, so it is inappropriate here.\n3. Acknowledgement must follow the device protocol and avoid leaving an asserted interrupt unhandled.\n4. IRQ_WAKE_THREAD hands work to the registered threaded handler.\n5. GFP_KERNEL allocation may sleep; preallocation, deferral or appropriate non-sleeping allocation with failure handling is needed.",
+    "link": {
+      "title": "Interrupt Handling — Linux Device Drivers, 3rd ed., ch. 10 (PDF)",
+      "url": "https://static.lwn.net/images/pdf/LDD3/ch10.pdf"
+    }
+  },
+  {
+    "id": "io-hardware-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two devices share one interrupt line. Device B's handler is called, but device A raised the interrupt. What should B's handler return, and why?",
+    "options": [
+      {
+        "text": "`IRQ_HANDLED`, so the kernel knows the interrupt was dealt with",
+        "explanation": "Claiming an interrupt you didn't service is wrong. If nobody actually handles A, a level-triggered line stays asserted and the kernel can't detect the problem."
+      },
+      {
+        "text": "`IRQ_WAKE_THREAD`, so B's bottom half can look into it",
+        "explanation": "Waking B's thread wastes work: B has nothing to do. And it still claims an interrupt that wasn't B's."
+      },
+      {
+        "text": "`IRQ_NONE`, after checking its own status register and seeing nothing pending",
+        "explanation": "Correct. Each handler on a shared line checks its own device. Returning `IRQ_NONE` says 'not mine', and if every handler says that repeatedly the kernel can flag and disable a stuck line."
+      },
+      {
+        "text": "It should disable the interrupt line permanently",
+        "explanation": "That would also silence device A, which shares the line and genuinely needs it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With `IRQF_SHARED`, the kernel calls every handler registered on the line.\n2. Each handler reads its own device's status register.\n3. B sees no pending bit, so it returns `IRQ_NONE`.\n4. A's handler sees its bit, acks, and returns `IRQ_HANDLED`.\n5. The kernel counts unhandled interrupts; if a line fires many times with nobody claiming it, it reports 'nobody cared' and disables the line to save the system.",
+    "link": {
+      "title": "Linux generic IRQ handling — kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/core-api/genericirq.html"
+    }
+  },
+  {
+    "id": "io-hardware-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A driver's bottom half needs to write a log entry to a file and wait for a USB device to respond, which can take milliseconds. Which mechanism should it use?",
+    "options": [
+      {
+        "text": "A tasklet, because it runs soon after the interrupt",
+        "explanation": "Tasklets run in softirq context and cannot sleep, so they can't wait on a USB transfer or do file I/O."
+      },
+      {
+        "text": "A softirq, because they are the fastest bottom half",
+        "explanation": "Softirqs are also atomic context and can't sleep. They're also a fixed, small set reserved for core subsystems like networking."
+      },
+      {
+        "text": "Do it in the top half, so it happens immediately",
+        "explanation": "The top half must be fast and cannot sleep; blocking for milliseconds there would stall other interrupts on that CPU."
+      },
+      {
+        "text": "A threaded workqueue (not WQ_BH), or a threaded IRQ handler, with an appropriate sleepable context",
+        "explanation": "Correct. Threaded workqueue items and threaded IRQ handlers have process context. They may sleep when not holding locks or entering sections that forbid sleeping. BH workqueues are different: they run in softirq context."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The required work may block, so hard IRQ, tasklet and ordinary softirq contexts are unsuitable.\n2. A threaded workqueue or threaded IRQ can provide sleepable process context.\n3. WQ_BH workqueues run in softirq context and cannot sleep.\n4. Defer using suitable threaded workqueue APIs or a threaded interrupt handler, while obeying lock, lifetime and reclaim rules.",
+    "link": {
+      "title": "Workqueue — kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/core-api/workqueue.html"
+    }
+  },
+  {
+    "id": "io-hardware-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A driver programs a device to DMA into a buffer it allocated with `kmalloc`, passing the buffer's **kernel virtual address** directly to the device's address register. On many systems the data ends up in the wrong place. Why?",
+    "options": [
+      {
+        "text": "Devices see physical or IOMMU bus addresses, not CPU virtual addresses; the driver should map the buffer with the DMA API",
+        "explanation": "Correct. `dma_map_single()` returns the address the device should use (going through the IOMMU if there is one) and handles any cache maintenance needed."
+      },
+      {
+        "text": "`kmalloc` memory can't be used for DMA because it lives in swap",
+        "explanation": "Kernel `kmalloc` memory isn't swapped out. The problem is the type of address, not where the memory lives."
+      },
+      {
+        "text": "DMA only works for user-space buffers",
+        "explanation": "It's the reverse: kernel buffers are the usual DMA target, and user buffers need extra pinning work."
+      },
+      {
+        "text": "The device needs an interrupt before it can start DMA",
+        "explanation": "Devices raise interrupts to signal completion; they don't need one to start. The device simply wrote to the address it was given, which was the wrong kind of address."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In conventional DMA, CPU virtual and device-visible addresses are distinct address spaces.\n2. A driver must obtain a valid DMA address from the DMA API and check mapping errors.\n3. Passing a kernel virtual pointer directly can cause an IOMMU fault, device error or wrong-memory access, depending on configuration; it does not necessarily reach RAM at that number.\n4. Keep the buffer alive and obey streaming-map synchronization/unmapping rules. Coherent allocations still require appropriate ordering.",
+    "link": {
+      "title": "Direct memory access — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Direct_memory_access"
+    }
+  },
+  {
+    "id": "io-hardware-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A cloud provider assigns an NVMe device to a VM using conventional guest-physical DMA addressing, isolated IOMMU groups and correctly configured translation. Which statements about the IOMMU are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It restricts the device's DMA to memory that has been mapped for it, so a malicious guest can't program the drive to overwrite the host kernel",
+        "explanation": "DMA access is checked against configured mappings. This is an important protection, assuming suitable hardware isolation, no bypass and correct configuration; it is not a complete proof of VM security."
+      },
+      {
+        "text": "It translates the guest's notion of physical addresses into real host physical addresses for the device",
+        "explanation": "Correct. The guest driver programs guest-physical addresses; the IOMMU (VT-d / AMD-Vi) maps them to host-physical addresses."
+      },
+      {
+        "text": "It removes the need for interrupts, because the device can write results straight into guest memory",
+        "explanation": "Incorrect. Address translation does not determine the completion-notification method. Interrupt remapping can isolate interrupt delivery when configured, while some I/O paths poll instead."
+      },
+      {
+        "text": "It makes DMA unnecessary, because the CPU can copy data through the IOMMU",
+        "explanation": "Incorrect. The IOMMU translates and polices DMA; it doesn't replace it or copy data."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Device assignment must restrict DMA to authorized memory. Without a suitable isolation mechanism, a guest-controlled device may threaten host memory.\n2. In this conventional model, the IOMMU translates device DMA addresses corresponding to guest-physical addresses into mapped host memory.\n3. Unmapped access faults, subject to platform and configuration. VFIO isolation groups and device topology matter.\n4. Interrupt isolation/remapping is a separate part of safe assignment; polling is also possible.\n5. The device still performs DMA; the IOMMU enforces translation and access control.",
+    "link": {
+      "title": "Direct memory access — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Direct_memory_access"
+    }
+  },
+  {
+    "id": "io-hardware-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical supported NVMe polling workload, assume device work takes 10 µs and interrupt/wakeup adds 5 µs. Ignore polling detection overhead for the comparison. What approach can remove that modeled notification cost, and what resource does it consume?",
+    "options": [
+      {
+        "text": "Use DMA instead of interrupts; costs nothing",
+        "explanation": "DMA and interrupts are complementary: DMA moves the data, interrupts signal completion. NVMe already uses DMA; the question is how to learn the I/O finished."
+      },
+      {
+        "text": "Add more interrupt vectors with MSI-X; costs more memory",
+        "explanation": "More vectors spread load across CPUs but don't remove the per-I/O interrupt and wake-up overhead."
+      },
+      {
+        "text": "Poll the completion queue instead of sleeping (e.g. Linux polled I/O, io_uring `IOPOLL`); it saves the interrupt and wake-up but keeps a CPU busy while waiting",
+        "explanation": "Correct under the model. Completion polling can avoid the modeled interrupt/wakeup cost, while using CPU time. Real benefit depends on support, scheduling and workload."
+      },
+      {
+        "text": "Switch to port-mapped I/O, which is faster than MMIO",
+        "explanation": "The access mechanism is unrelated to the modeled notification cost. Port I/O is not inherently guaranteed faster or slower in every comparison, and the device defines its register interface."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Assumed interrupt path: 10 + 5 = 15 µs.\n2. With detection overhead ignored, the modeled polling path is 10 µs.\n3. Reduction: (15 − 10) / 15 = one third.\n4. Polling consumes CPU time and may affect other work; interrupts and scheduling can still preempt a polling task.\n5. Linux IOPOLL requires supported operations/devices/configuration. These numbers are a teaching model, not a benchmark or universal recommendation.",
+    "link": {
+      "title": "I/O Devices — Operating Systems: Three Easy Pieces (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"
+    }
+  },
+  {
+    "id": "io-hardware-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On a busy Linux server, `top` shows `ksoftirqd/3` using 100% of CPU 3. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "A user process is stuck in an infinite loop and the kernel is reporting it under `ksoftirqd`",
+        "explanation": "User CPU time is accounted to the user process. `ksoftirqd` is a kernel thread that only runs softirq work."
+      },
+      {
+        "text": "Softirq work (often network receive) on CPU 3 is arriving faster than it can be done inline after interrupts, so the kernel has deferred it to the per-CPU `ksoftirqd` thread",
+        "explanation": "It indicates substantial softirq work in that kernel thread. Networking is a common source, but CPU usage alone does not establish which subsystem or why it is expensive."
+      },
+      {
+        "text": "CPU 3's hardware interrupt controller has failed",
+        "explanation": "A failed controller would stop interrupts arriving, not create extra softirq work."
+      },
+      {
+        "text": "The disk on CPU 3 is full",
+        "explanation": "Devices aren't tied to a CPU that way, and a full disk causes write errors, not softirq load."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In the conventional non-RT path, some softirq processing can occur on interrupt return, with remaining work handled by ksoftirqd.\n2. High ksoftirqd/3 CPU indicates expensive softirq processing on CPU 3; it does not by itself identify a NIC or prove arrival rate exceeds capacity.\n3. Compare /proc/softirqs and /proc/interrupts counters and profile the workload.\n4. If network steering is the cause, evaluate RSS, IRQ affinity or RPS. Other causes need different changes; spreading work is not an automatic fix.",
+    "link": {
+      "title": "Linux generic IRQ handling — kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/core-api/genericirq.html"
+    }
+  }
+]

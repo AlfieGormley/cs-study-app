@@ -1,0 +1,370 @@
+[
+  {
+    "id": "mem-in-practice-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`top` shows a Java process with **VIRT 31 GiB** and **RES 1.2 GiB** on a 16 GiB machine. Which statement is right?",
+    "options": [
+      {
+        "text": "The process is using 31 GiB, so the machine must be swapping heavily",
+        "explanation": "VIRT (VSZ) is mapped address space, much of it reserved and never touched: heap reservations, thread stacks, mapped files, malloc arenas. It is not RAM in use."
+      },
+      {
+        "text": "About 1.2 GiB of its pages are resident in RAM; the 31 GiB is mostly reserved address space",
+        "explanation": "Correct. RES (RSS) counts resident pages. With demand paging, reserving address space costs nothing until it is touched."
+      },
+      {
+        "text": "The numbers are inconsistent: a process cannot map more than the machine's RAM",
+        "explanation": "Virtual address space on x86-64 is 128 TiB per process. Mapping far more than RAM is normal and allowed under overcommit."
+      },
+      {
+        "text": "1.2 GiB is exactly what would be freed if the process were killed",
+        "explanation": "RSS includes shared pages (libraries, shared memory) that other processes also map. USS is the number that would be freed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **VIRT / VSZ** = total size of the process's VMAs. The JVM reserves its maximum heap up front, glibc reserves 64 MiB per arena, each thread reserves a stack, and jar files are mapped. None of this needs RAM until touched.\n2. **RES / RSS** = pages actually resident: 1.2 GiB.\n3. RSS still over-counts slightly for *this process's* cost, because shared library pages are counted in every process that maps them.\n4. So: 1.2 GiB resident, 31 GiB of mostly empty reservations. No sign of swapping.",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Kubernetes pod's container keeps restarting. `kubectl describe pod` shows `Last State: Terminated, Reason: OOMKilled, Exit Code: 137`. What happened?",
+    "options": [
+      {
+        "text": "The application called `exit(137)` because it detected low memory",
+        "explanation": "137 is not an application-chosen code here. Exit codes above 128 conventionally mean 'killed by signal (code − 128)'."
+      },
+      {
+        "text": "The node ran out of disk space for the container image",
+        "explanation": "Disk pressure leads to eviction with a different reason, not OOMKilled."
+      },
+      {
+        "text": "The container exceeded its memory limit and the kernel's cgroup OOM killer sent it SIGKILL",
+        "explanation": "Correct. 137 = 128 + 9, and signal 9 is SIGKILL. The container's `limits.memory` is its cgroup's `memory.max`."
+      },
+      {
+        "text": "Kubernetes gracefully shut it down with SIGTERM",
+        "explanation": "SIGTERM is signal 15, giving exit code 143. An OOM kill uses SIGKILL, which cannot be caught, so there is no graceful shutdown."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Decode the exit code: 137 − 128 = **9** → SIGKILL.\n2. `OOMKilled` says why: the container's cgroup hit `memory.max` (set from `resources.limits.memory`), reclaim could not free enough, and the kernel OOM killer picked a process inside that cgroup.\n3. The host may have had plenty of free RAM; cgroup OOM is local to the group.\n4. Next steps: check `memory.events` (`oom_kill` count), look at the app's real peak usage, and raise the limit or reduce usage.",
+    "link": {
+      "title": "Resource management for pods and containers — Kubernetes",
+      "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
+    }
+  },
+  {
+    "id": "mem-in-practice-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A machine has 16 GiB of RAM, no swap, and the default `vm.overcommit_memory = 0`. A program calls `malloc(8UL << 30)` (8 GiB) ten times, checking each result, then starts writing to all of the memory. What happens?",
+    "options": [
+      {
+        "text": "The third `malloc` returns NULL, because 24 GiB exceeds RAM",
+        "explanation": "The default heuristic checks each request on its own, not the running total. Each 8 GiB request is plausible, so it succeeds."
+      },
+      {
+        "text": "All ten succeed, and writing 80 GiB works because the kernel compresses pages",
+        "explanation": "Without zram or zswap configured, there is no compression, and even then 80 GiB of distinct data will not fit in 16 GiB."
+      },
+      {
+        "text": "The first `malloc` fails because no single 8 GiB contiguous physical region exists",
+        "explanation": "`malloc` needs contiguous *virtual* space, which is plentiful. Physical frames are allocated one page at a time on first touch."
+      },
+      {
+        "text": "All ten succeed; as pages are touched RAM runs out, and the OOM killer kills a process, probably this one",
+        "explanation": "Correct. Overcommit lets the reservations succeed. The failure arrives later, at page-fault time, when there is nothing left to reclaim."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each `malloc(8 GiB)` becomes an `mmap`, creating a VMA. In mode 0 the kernel refuses only a request that is obviously impossible on its own (roughly larger than RAM + swap). 8 GiB < 16 GiB, so each passes.\n2. Total committed: 80 GiB, with nothing physically allocated yet.\n3. Writing faults pages in one by one. After roughly 16 GiB minus what the kernel and other processes use, reclaim finds nothing to free (no swap, anonymous pages can't be dropped).\n4. The OOM killer picks the process with the highest badness, almost certainly this one with its huge RSS, and sends SIGKILL.\n\nThe NULL checks never fire: under overcommit, failure is a kill, not a return value.",
+    "link": {
+      "title": "Overcommit accounting — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/mm/overcommit-accounting.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server runs with `vm.overcommit_memory = 2` and `vm.overcommit_ratio = 80`. It has **32 GiB** of RAM (no huge pages reserved) and **4 GiB** of swap. What is `CommitLimit`?",
+    "options": [
+      {
+        "text": "36 GiB",
+        "explanation": "This is RAM + swap, ignoring the ratio. Only 80% of RAM counts towards the limit."
+      },
+      {
+        "text": "29.6 GiB",
+        "explanation": "Correct. 4 + 32 × 0.80 = 4 + 25.6 = 29.6 GiB."
+      },
+      {
+        "text": "28.8 GiB",
+        "explanation": "This applies the 80% to swap as well: (32 + 4) × 0.8. Swap is counted in full."
+      },
+      {
+        "text": "25.6 GiB",
+        "explanation": "This leaves out swap, which is added in full."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Formula:\n\n```\nCommitLimit = swap\n  + RAM * overcommit_ratio / 100\n```\n\n2. Plug in: 4 + 32 × 80 / 100 = 4 + 25.6 = **29.6 GiB**.\n3. Any allocation that would push `Committed_AS` (in `/proc/meminfo`) above 29.6 GiB fails immediately with `ENOMEM`: `malloc` returns NULL, `fork` fails.\n4. With the default ratio of 50 it would be only 4 + 16 = 20 GiB, leaving 12 GiB of RAM that can never be committed, which is why strict mode needs tuning.",
+    "link": {
+      "title": "Overcommit accounting — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/mm/overcommit-accounting.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A pre-fork server has 8 worker processes. Each has **30 MiB** of private memory, and all 8 share **240 MiB** of copy-on-write pages inherited from the master (count only the workers). What are each worker's PSS and the sum of PSS across the workers?",
+    "options": [
+      {
+        "text": "PSS 270 MiB each; sum 2,160 MiB",
+        "explanation": "That is RSS, which counts the 240 MiB shared pages fully in every worker."
+      },
+      {
+        "text": "PSS 30 MiB each; sum 240 MiB",
+        "explanation": "That is USS: private pages only. It leaves out the workers' share of the shared pages."
+      },
+      {
+        "text": "PSS 60 MiB each; sum 480 MiB",
+        "explanation": "Correct. Each worker is charged 30 + 240 / 8 = 60 MiB, and 8 × 60 = 480 MiB = 8 × 30 private + 240 shared, the true total."
+      },
+      {
+        "text": "PSS 150 MiB each; sum 1,200 MiB",
+        "explanation": "This splits the shared pages between only two processes. PSS divides by the number of processes actually sharing each page: 8."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. PSS = private + shared / sharers.\n2. Per worker: 30 + 240 / 8 = 30 + 30 = **60 MiB**.\n3. Sum: 8 × 60 = **480 MiB**.\n4. Sanity check: real RAM = 8 × 30 (private) + 240 (shared once) = 480 MiB. PSS sums correctly; RSS (8 × 270 = 2,160 MiB) overstates usage by 4.5×.\n5. Note that as workers write to shared pages, COW turns shared into private and PSS rises. Read it from `/proc/<pid>/smaps_rollup` or with `smem`.",
+    "link": {
+      "title": "proc_pid_smaps(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc_pid_smaps.5.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the cgroup v2 memory controller are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Exceeding `memory.high` throttles the group and forces reclaim, but does not by itself trigger the OOM killer",
+        "explanation": "Correct. memory.high is the soft limit: tasks are slowed and pushed to reclaim. OOM kills happen at memory.max."
+      },
+      {
+        "text": "When reclaim fails at `memory.max`, the OOM killer runs only among the group's processes",
+        "explanation": "Correct. A cgroup OOM is local: it can kill a container while the host has plenty of free RAM."
+      },
+      {
+        "text": "Page cache created by the group's file reads is charged to the group's `memory.current`",
+        "explanation": "Correct. File pages are charged to the cgroup that faulted them in, which is why memory.current often sits near the limit."
+      },
+      {
+        "text": "`memory.min` caps how much memory the group can use",
+        "explanation": "Incorrect. memory.min is a protection: memory below it is not reclaimed from the group even under global pressure. It is a floor, not a ceiling."
+      },
+      {
+        "text": "`memory.events` records how many OOM kills the group has had",
+        "explanation": "Correct. Its `oom_kill` counter (alongside `high`, `max` and `oom`) is the first thing to check after an unexplained container death."
+      }
+    ],
+    "answer": [0, 1, 2, 4],
+    "workedExample": "Lay out the limits from bottom to top:\n\n```\nmemory.max   hard: reclaim, then\n             OOM inside group\nmemory.high  soft: throttle +\n             reclaim, no kill\nmemory.low   best-effort protect\nmemory.min   hard protection\n```\n\n- `memory.current` includes page cache, so compare `anon` and `file` in `memory.stat` before panicking.\n- `memory.events` counts every time each threshold was hit and every OOM kill.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A host with 16 GiB of total memory (RAM plus swap) runs out of memory. Process A has 6 GiB RSS and `oom_score_adj = 0`. Process B has 2 GiB RSS and `oom_score_adj = 500`. Ignoring swap and page tables, which does the OOM killer kill?",
+    "options": [
+      {
+        "text": "A, because it uses three times as much memory",
+        "explanation": "Size is only part of the score. B's adjustment adds the equivalent of 8 GiB (500/1000 of 16 GiB), outweighing A's larger RSS."
+      },
+      {
+        "text": "Neither: processes with a non-zero `oom_score_adj` are skipped",
+        "explanation": "Only −1000 exempts a process. Any other value just shifts its score."
+      },
+      {
+        "text": "Both, in order of RSS",
+        "explanation": "The OOM killer kills one victim and re-evaluates; it does not kill a list of processes at once (unless memory.oom.group is used for a cgroup)."
+      },
+      {
+        "text": "B, because its adjusted score is higher",
+        "explanation": "Correct. In thousandths of total memory: A ≈ 375, B ≈ 125 + 500 = 625."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Base score ≈ memory used as a fraction of total, in thousandths:\n\n```\nA: 6 / 16 * 1000 = 375\nB: 2 / 16 * 1000 = 125\n```\n\n2. Add `oom_score_adj` (each unit = 1/1000 of total memory):\n\n```\nA: 375 + 0   = 375\nB: 125 + 500 = 625\n```\n\n3. B has the highest badness, so B gets SIGKILL.\n\nThis is how you mark disposable work (batch jobs, caches) as preferred victims and protect critical daemons with negative values.",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A log-shipping container has a 1 GiB limit. Its `memory.current` sits at 1,020 MiB all day, but it has never been OOM-killed. `memory.stat` shows `anon 140 MiB` and `file 860 MiB`. What is going on?",
+    "options": [
+      {
+        "text": "It is about to be OOM-killed; raise the limit urgently",
+        "explanation": "Most of the usage is clean page cache, which the kernel reclaims before any OOM kill. Being near the limit is the normal steady state here."
+      },
+      {
+        "text": "The page cache from the log files it reads is charged to the cgroup and fills the spare room; it is reclaimed under pressure, so this is healthy",
+        "explanation": "Correct. Only about 140 MiB is anonymous memory that cannot be dropped. The file pages are a cache the kernel trims on demand."
+      },
+      {
+        "text": "The application has an 860 MiB memory leak",
+        "explanation": "A leak in the application would show up as anonymous memory (heap), not as file pages."
+      },
+      {
+        "text": "cgroup accounting is broken; page cache should never be charged to a container",
+        "explanation": "Charging page cache to the cgroup that caused it is deliberate, so one container's I/O cannot silently consume the host's memory."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Split `memory.current`: 140 MiB anon + 860 MiB file (+ some kernel memory).\n2. **anon** is heap and stack: without swap it must stay in RAM.\n3. **file** is page cache from reading logs. Clean cache can be dropped instantly when the group needs memory.\n4. When usage reaches `memory.max`, the kernel reclaims cache inside the group first. Only if anon alone approached 1 GiB would an OOM kill happen.\n5. So alert on anon (or on `memory.events` high/oom), not on raw `memory.current`.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Java service runs in a container with a **4 GiB** limit and is started with `-Xmx4g`. Under load it is OOMKilled, yet heap dumps show the heap never exceeded 3.5 GiB. Why?",
+    "options": [
+      {
+        "text": "The JVM ignores `-Xmx` inside containers",
+        "explanation": "The JVM honours `-Xmx`. The heap stayed under it, as the dumps show."
+      },
+      {
+        "text": "Java's garbage collector leaks memory outside the heap",
+        "explanation": "Native memory use is expected rather than leaked. The point is that it exists, and the limit must leave room for it."
+      },
+      {
+        "text": "The kernel counted the heap twice because of transparent huge pages",
+        "explanation": "THP can inflate RSS slightly through partially used huge pages, but it does not double-count memory, and the main problem is elsewhere."
+      },
+      {
+        "text": "The cgroup limit covers the whole process: heap plus metaspace, thread stacks, JIT code cache, GC structures and direct buffers. 3.5 GiB of heap plus that overhead exceeded 4 GiB",
+        "explanation": "Correct. With the heap allowed to grow to the full limit, there is no room for non-heap memory. A heap of about 70 to 75% of the limit is a common starting point."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `memory.max` = 4 GiB applies to everything the process allocates (and page cache it causes).\n2. JVM memory outside the heap, typical orders of magnitude:\n\n```\nmetaspace        100-300 MiB\nthread stacks    1 MiB x threads\ncode cache       up to ~240 MiB\nGC metadata      a few % of heap\ndirect buffers   app-dependent\n```\n\n3. 3.5 GiB of heap + 200 threads × 1 MiB + metaspace + code cache easily passes 4 GiB.\n4. Fix: remove `-Xmx4g` and use `-XX:MaxRAMPercentage=70` (or so), or raise the limit. Native Memory Tracking (`-XX:NativeMemoryTracking=summary`) shows the breakdown.",
+    "link": {
+      "title": "Resource management for pods and containers — Kubernetes",
+      "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
+    }
+  },
+  {
+    "id": "mem-in-practice-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Redis server with a 24 GiB dataset on a 64 GiB box runs with `vm.overcommit_memory = 2`, `overcommit_ratio = 50` and no swap. `BGSAVE` fails with `fork: Cannot allocate memory`, although `free` shows 35 GiB available. What is the cause and the usual fix?",
+    "options": [
+      {
+        "text": "The child would need a full copy of the dataset immediately; buy more RAM",
+        "explanation": "fork uses copy-on-write, so the child shares pages and copies only those the parent modifies. Physical memory is not the problem."
+      },
+      {
+        "text": "Strict accounting must charge the child for all of the parent's private writable memory in case it is all written; Committed_AS would exceed CommitLimit (32 GiB). Redis recommends `vm.overcommit_memory = 1`",
+        "explanation": "Correct. CommitLimit = 0 + 64 × 0.5 = 32 GiB. 24 GiB already committed plus another 24 GiB for the child's potential copies is 48 GiB, so fork fails even though RAM is free."
+      },
+      {
+        "text": "Transparent huge pages prevent fork",
+        "explanation": "THP makes COW more expensive after the fork, but it does not make fork fail with ENOMEM."
+      },
+      {
+        "text": "The OOM killer blocked the fork because Redis has the highest oom_score",
+        "explanation": "The OOM killer kills processes; it does not veto system calls. ENOMEM from fork is the commit check failing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. CommitLimit = swap + RAM × ratio / 100 = 0 + 64 × 0.5 = **32 GiB**.\n2. Redis has about 24 GiB of private writable memory committed.\n3. `fork` duplicates that commitment, since under strict rules the child might write every page and need its own copy: +24 GiB → 48 GiB > 32 GiB. **ENOMEM**.\n4. Physically, COW means the save probably needs only a few GiB extra, and 35 GiB is available, but strict mode accounts for the worst case.\n5. Redis's documented fix: `vm.overcommit_memory = 1`. (Raising the ratio would also work, at the cost of strictness.) Also disable THP to keep COW copies small.",
+    "link": {
+      "title": "Redis administration — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/admin/"
+    }
+  },
+  {
+    "id": "mem-in-practice-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A long-running C++ service's PSS grows by about 200 MiB a day. You want to find out why. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Steady growth could be allocator retention or fragmentation rather than a leak, so compare the allocator's own stats with RSS before hunting",
+        "explanation": "Correct. glibc and jemalloc can retain freed memory. If the allocator reports most of the growth as free-but-retained, the fix is allocator tuning, not code changes."
+      },
+      {
+        "text": "Building with `-fsanitize=address` adds LeakSanitizer, which reports unreachable allocations with their stack traces at exit",
+        "explanation": "Correct. On Linux, ASan enables LSan by default; the overhead is roughly 2×, often acceptable in a staging environment."
+      },
+      {
+        "text": "bcc's `memleak` can attach to the running process with eBPF and report outstanding allocations by stack, without a restart",
+        "explanation": "Correct. That makes it suitable for a production process you cannot rebuild or restart."
+      },
+      {
+        "text": "Valgrind memcheck is the best choice for the production instance because it needs no recompilation and adds little overhead",
+        "explanation": "Incorrect. Valgrind needs no recompile but makes programs run roughly 20 to 30 times slower, which is unacceptable in production."
+      },
+      {
+        "text": "LeakSanitizer will catch an ever-growing cache that is still referenced from a global map",
+        "explanation": "Incorrect. Reachable memory is not a leak to LSan. A growing but referenced container needs a heap profiler (jemalloc prof, heaptrack) that shows where live memory was allocated."
+      }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. **Rule out retention**: `malloc_stats()` or jemalloc's `mallctl` stats show allocated versus mapped memory. Retention shows a growing gap.\n2. **True leaks** (unreachable): ASan/LSan in staging, or `memleak` on the live process.\n3. **Logical leaks** (reachable but growing): use a heap profiler that attributes *live* bytes to allocation sites, then compare snapshots a few hours apart.\n4. **Avoid Valgrind in production**: it runs programs 20 to 30 times slower.\n\nMost long-running service 'leaks' turn out to be unbounded caches, maps or queues, which are reachable and invisible to leak checkers.",
+    "link": {
+      "title": "LeakSanitizer — Clang docs",
+      "url": "https://clang.llvm.org/docs/LeakSanitizer.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A pod has one container with a **2 GiB** memory limit and no swap. Its heap stays at about 800 MiB. It writes 1.5 GiB of temporary files. In case (a) they go to an `emptyDir` on the node's disk; in case (b) to an `emptyDir` with `medium: Memory` (tmpfs). What happens?",
+    "options": [
+      {
+        "text": "Both are fine: file data is page cache and is always reclaimable",
+        "explanation": "tmpfs files live only in memory. Their pages have no disk copy, so they cannot be dropped; they could only be swapped, and there is no swap."
+      },
+      {
+        "text": "Both are OOM-killed, since 800 MiB + 1.5 GiB > 2 GiB",
+        "explanation": "In case (a) the file pages are written back to disk and become clean cache, which the kernel reclaims inside the cgroup before resorting to an OOM kill."
+      },
+      {
+        "text": "(a) is fine because its file pages can be written back and reclaimed; (b) is OOM-killed because tmpfs pages are charged like anonymous memory and cannot be dropped",
+        "explanation": "Correct. 800 MiB anon + 1.5 GiB shmem = 2.3 GiB of unreclaimable memory, over the 2 GiB limit."
+      },
+      {
+        "text": "(b) is fine because tmpfs memory is charged to the node, not the container",
+        "explanation": "tmpfs pages are charged to the cgroup of the process that wrote them, so they count against the container's limit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Case (a)**: writes create dirty page-cache pages charged to the cgroup. The kernel writes them to disk; once clean they can be dropped. Under pressure at `memory.max`, reclaim frees them. Unreclaimable total ≈ 800 MiB: fine.\n2. **Case (b)**: tmpfs pages *are* the files. With no backing store and no swap, they are as unreclaimable as heap. They appear as `shmem` in `memory.stat`.\n3. Unreclaimable total: 800 MiB + 1,536 MiB ≈ **2.3 GiB** > 2 GiB.\n4. Reclaim fails → cgroup OOM killer → exit 137.\n\nRule: memory-backed volumes must be budgeted inside the container's memory limit.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
+    }
+  }
+]

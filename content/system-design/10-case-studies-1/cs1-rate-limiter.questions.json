@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs1-rate-limiter-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A fixed window limiter allows **100 requests per minute** using windows aligned to the clock (`:00` to `:59`). What is the largest number of requests a client can get accepted in any 2-second span?",
+    "options": [
+      {
+        "text": "100",
+        "explanation": "Wrong. That would be true for a sliding window. Fixed windows reset on the boundary, so a client can use two full allowances back to back."
+      },
+      {
+        "text": "About 3 (100 ÷ 60 × 2)",
+        "explanation": "Wrong. That's the average rate. A fixed window doesn't spread requests out; it only counts them per window, so a whole window's quota can arrive in a single second."
+      },
+      {
+        "text": "Unlimited",
+        "explanation": "Wrong. The fixed window does cap each window at 100. The flaw is bounded: at most 2x the limit around a boundary."
+      },
+      {
+        "text": "200",
+        "explanation": "Correct. 100 requests at 12:00:59 fill the first window; the counter resets at 12:01:00 and 100 more are allowed. That's 200 in about two seconds, double the intended rate."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace it:\n\n```\n12:00:59  100 reqs -> window A = 100\n          (all allowed)\n12:01:00  window B starts at 0\n12:01:00  100 reqs -> window B = 100\n          (all allowed)\n```\n\n200 requests in ~1–2 seconds against a limit meant to average 100/minute. Sliding window counters reject this exact boundary example by weighting the previous window: at 12:01:00, `100 × (1 − 0/60) + 0 = 100`, so the second burst is rejected.",
+    "link": {
+      "title": "Cloudflare: counting things, a lot of different things",
+      "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A sliding window counter limits a key to **100 requests/minute**. The previous minute had **84** requests. We are **30 seconds** into the current minute, which has **55** requests so far. Is the next request allowed?",
+    "options": [
+      {
+        "text": "Yes: estimate = 84 × (1 − 30/60) + 55 = 42 + 55 = 97, which is under 100.",
+        "explanation": "Correct. Half the previous window still overlaps the trailing 60 s, so it contributes 42. 97 + 1 = 98 ≤ 100, so allow."
+      },
+      {
+        "text": "No: estimate = 84 + 55 × (30/60) = 111.5, which exceeds 100.",
+        "explanation": "Wrong. This weights the wrong window. The current window's count is used in full; it's the *previous* window that is scaled by how much of it still overlaps the trailing 60 seconds (1 − 30/60 = 0.5)."
+      },
+      {
+        "text": "Yes, because only 55 requests have been made this minute.",
+        "explanation": "Wrong. That's fixed-window logic. The sliding window counter also counts the share of the previous window that still overlaps the last 60 seconds."
+      },
+      {
+        "text": "No: 84 + 55 = 139, which exceeds 100.",
+        "explanation": "Wrong. Adding both windows in full counts up to two minutes of traffic. The previous window must be weighted by its remaining overlap (here 50%)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Formula:\n\n```\nestimate = prev x (1 - elapsed/window)\n         + curr\n         = 84 x (1 - 30/60) + 55\n         = 84 x 0.5 + 55\n         = 42 + 55 = 97\n```\n\nThe new request would make 98, which is ≤ 100, so it is allowed and `curr` becomes 56.\n\nThe approximation assumes the 84 previous requests were evenly spread. If they all arrived in the last second of the previous minute, the true count in the trailing 60 s would be 139, so the estimate under-counts. Cloudflare reported about 0.003% incorrect decisions in its historical measured workload; this is not a bound for arbitrary or adversarial traffic.",
+    "link": {
+      "title": "Cloudflare: how we built rate limiting capable of scaling to millions of domains",
+      "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API serves a mobile app that, on launch, fires **15 requests in under a second**, then is quiet. You want an average of **1 request/second** per user. Which algorithm fits best?",
+    "options": [
+      {
+        "text": "Fixed window of 1 request per 1-second window.",
+        "explanation": "Wrong. It accepts at most one per fixed window (possibly two if the burst straddles a boundary), far short of the requested launch burst."
+      },
+      {
+        "text": "Leaky bucket draining 1 request/s.",
+        "explanation": "Wrong. A leaky bucket smooths output to exactly 1/s, so the 15 launch requests would queue for up to 15 seconds, making the app feel broken."
+      },
+      {
+        "text": "Token bucket with capacity 20 and refill rate 1 token/s.",
+        "explanation": "Correct. The bucket starts full, so the 15-request launch burst is served immediately, while the 1 token/s refill enforces the long-run average. This is exactly the burst-plus-average shape token buckets are designed for."
+      },
+      {
+        "text": "Sliding window log with a limit of 1 per second.",
+        "explanation": "Wrong. It is exact, but exact enforcement of 1/s rejects the burst just as the fixed window does, and it costs more memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate the two parameters a token bucket gives you:\n\n- **Capacity B** = the largest burst you're willing to serve at once. The launch burst is 15, so B = 20 leaves headroom.\n- **Refill rate r** = the sustained average, 1/s.\n\nTimeline: launch at t=0 takes 15 tokens (20 → 5). Over the next 15 s of quiet, the bucket refills to 20. A misbehaving client sending continuously gets at most 20 immediately, then 1/s thereafter. That's why Stripe and AWS API Gateway use token buckets for API limits.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each of 200 gateway nodes implements the limit as: `GET count` from Redis; if `count < limit` then `SET count = count + 1` and allow. Under load, clients exceed their limits. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Redis is losing writes; enable AOF persistence.",
+        "explanation": "Wrong. Persistence affects durability across restarts, not concurrent correctness. The writes aren't lost; they overwrite each other."
+      },
+      {
+        "text": "Read-modify-write race: two nodes read the same value and both allow. Use an atomic operation (`INCR` and compare the returned value, or a Lua script).",
+        "explanation": "Correct. Between GET and SET another node can read the same count. Redis executes `INCR` and Lua scripts atomically, so each request sees a unique, up-to-date count in one round trip."
+      },
+      {
+        "text": "The limit is too high; halve it to compensate.",
+        "explanation": "Wrong. Halving the limit hides the bug inconsistently: overshoot depends on concurrency, so quiet clients are now over-restricted while busy ones still overshoot."
+      },
+      {
+        "text": "Use a distributed lock (e.g. Redlock) around each check.",
+        "explanation": "Wrong as a first choice. A lock fixes the race but adds several round trips per request and becomes a bottleneck for hot keys. Atomic server-side operations solve it in one round trip."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Interleave two gateways, A and B, with limit 100 and count 99:\n\n```\nA: GET -> 99   (99 < 100, allow)\nB: GET -> 99   (99 < 100, allow)\nA: SET 100\nB: SET 100\n```\n\nTwo requests allowed, count says 100: the client got 101. Fix:\n\n```\nn = INCR rl:key:window  -- atomic\nif n == 1: EXPIRE rl:key:window 60\nif n > 100: reject\n```\n\n(Run the INCR and EXPIRE together in a Lua script; a plain MULTI cannot branch on the queued INCR result so a crash between them can't leave a key that never expires.)\n\nFor a token bucket, put refill + decrement in one Lua script so the whole step is atomic, and read time with `redis.call('TIME')` to avoid gateway clock skew.",
+    "link": {
+      "title": "Redis: INCR (including the rate limiter pattern)",
+      "url": "https://redis.io/docs/latest/commands/incr/"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your fleet handles **800,000 requests/s**. Each check is one Redis round trip, and a Redis shard comfortably handles **80,000 ops/s**. You want 50% headroom. How many primary shards do you need?",
+    "options": [
+      {
+        "text": "10",
+        "explanation": "Wrong. 800k / 80k = 10 runs every shard at 100% with no headroom; any skew or spike would push shards over capacity and blow your latency budget."
+      },
+      {
+        "text": "100",
+        "explanation": "Wrong. 100 shards would run at 8k ops/s each (10% utilisation). It works but costs 5x what's needed. Over-provisioning is a legitimate choice, but it isn't what 50% headroom implies."
+      },
+      {
+        "text": "5",
+        "explanation": "Wrong. 5 shards would each need 160k ops/s, twice their comfortable capacity."
+      },
+      {
+        "text": "20",
+        "explanation": "Correct. With 50% headroom, each shard should run at about 40k ops/s. 800k / 40k = 20 shards."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Target utilisation with 50% headroom: `80k × 0.5 = 40k ops/s` per shard.\n2. Shards: `800k / 40k = 20`.\n3. Add one replica each for failover: 40 Redis nodes in total.\n4. Illustrative memory arithmetic: assuming 100 B per rule/key, 10M × 2 × 100 B = 2 GB, or 100 MB per shard before other overhead. Measure actual memory before declaring throughput the limiting resource.\n\nIf you also use local rejection caching (gateways remember \"key over limit until T\"), abusive clients stop generating Redis calls, so the real load is usually lower.",
+    "link": {
+      "title": "Envoy: global rate limiting",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_features/global_rate_limiting"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "The Redis cluster backing your limiter has a partial outage: 30% of checks time out. Assume ordinary API quota overruns are acceptable during this outage, while authentication abuse must remain bounded. Which responses fit that policy? Select all that apply.",
+    "options": [
+      {
+        "text": "Fail open for ordinary API limits: allow the request after a short timeout (~5–10 ms) and emit a metric.",
+        "explanation": "Correct. The limiter exists to protect the API; rejecting 30% of legitimate traffic because the limiter is sick turns a partial limiter outage into an API outage."
+      },
+      {
+        "text": "Fail closed for login attempts and password resets.",
+        "explanation": "Correct. These limits defend against brute-force attacks. Briefly rejecting some logins is less harmful than letting attackers try unlimited passwords while the limiter is down."
+      },
+      {
+        "text": "Fall back to per-gateway in-memory buckets sized at roughly limit ÷ number of gateways.",
+        "explanation": "Correct. Local approximate limiting keeps some protection in place. It's inaccurate if load balancing is uneven, but far better than no limit at all."
+      },
+      {
+        "text": "Retry each timed-out Redis call up to 5 times before deciding.",
+        "explanation": "Incorrect. Retries multiply load on an already struggling cluster and add tens of milliseconds to every request. Use short timeouts and a fallback, not aggressive retries."
+      },
+      {
+        "text": "Return 429 to every request until Redis recovers.",
+        "explanation": "Incorrect. This blocks all customers, including well-behaved ones, making the limiter the cause of a total outage."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each limit: **what's worse, over-admitting or rejecting?**\n\n| Limit | Worse outcome | Policy |\n|---|---|---|\n| API quota | Rejecting paying users | Fail open |\n| Login attempts | Brute force | Fail closed |\n\nThen layer a degraded mode: local buckets give partial protection with no network dependency. Avoid retry storms: a 5 ms timeout with zero retries keeps p99 latency bounded while Redis recovers.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A customer has a global limit of **10,000 requests/minute**, and you serve them from **US and EU** regions. A cross-region round trip is ~90 ms. Which design best balances accuracy and latency?",
+    "options": [
+      {
+        "text": "Each region enforces locally against a share of the limit ; reserve shares so their sum stays within the quota and rebalance without double allocation.",
+        "explanation": "Correct. Local enforcement avoids the 90 ms remote round trip. Static shares can preserve the total allowance but strand capacity in an idle region. Async full-quota replicas require separately justified overshoot bounds."
+      },
+      {
+        "text": "Every check in either region goes to a single US Redis cluster.",
+        "explanation": "Wrong. EU requests would pay ~90 ms extra on every call, far over the 1–2 ms budget, and an Atlantic link problem would break EU rate limiting entirely."
+      },
+      {
+        "text": "Use a synchronously replicated multi-region database with strong consistency for counters.",
+        "explanation": "Wrong. Consensus across regions adds at least one cross-region round trip per write, so ~90+ ms per request. Strong consistency is overkill for a counter where a few percent overshoot is acceptable."
+      },
+      {
+        "text": "Give each region the full 10,000/min limit independently.",
+        "explanation": "Wrong. The customer could get up to 20,000/min, a 100% overshoot. That's a pricing and protection failure, not an acceptable approximation."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Quantify the overshoot of the async option:\n\n- Limit = 10,000/min ≈ 167/s.\n- Sync interval = 1 s.\n- Overshoot ≈ what the other region admits before the next sync. For a client sending at about its limit, that's one second of traffic, roughly 167–333 requests, or 2–3% of the limit.\n\nA client blasting both regions far above its limit can overshoot by more within that second, which is why the async scheme is usually paired with a per-region per-second cap.\n\nCompare that with adding 90 ms to every EU request. Acceptable overshoot is a policy choice; gossip alone gives no small bound during an extended partition. The static-split variant (e.g. US 6,000, EU 4,000) is simpler still but unfair when traffic shifts between regions.",
+    "link": {
+      "title": "Google Cloud: rate-limiting strategies and techniques",
+      "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your limiter runs on a 20-shard Redis Cluster. Counter keys look like `rl:{search}:user_123`. Dashboards show one shard at 100% CPU and the other 19 nearly idle, and most traffic is to `/search`. What's wrong?",
+    "options": [
+      {
+        "text": "Redis Cluster hashes the whole key, so `user_123` must be a hot user.",
+        "explanation": "Wrong. When a key contains `{...}`, Redis Cluster hashes only the part inside the braces. One hot user wouldn't explain *all* search traffic landing on one shard."
+      },
+      {
+        "text": "The hash tag `{search}` sends every client's `/search` counter to the same slot. Tag the client instead, e.g. `rl:search:{user_123}`.",
+        "explanation": "Correct. Only the tagged part picks the shard, so every key with `{search}` maps to one slot. Tagging the client spreads clients across shards and still co-locates one client's rules for multi-rule Lua scripts."
+      },
+      {
+        "text": "20 shards is too few; add more.",
+        "explanation": "Wrong. Adding shards can't help: all `{search}` keys map to the same hash slot, which lives on one shard however many you have."
+      },
+      {
+        "text": "Lua scripts are single-threaded, so one shard always does all the scripting.",
+        "explanation": "Wrong. Each shard runs its own scripts on its own keys. The imbalance comes from key placement, not from Lua."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Redis Cluster picks a slot with `CRC16(tag) mod 16384`, where `tag` is the text inside the first `{...}` if present.\n\n```\nrl:{search}:user_1   -> slot(search)\nrl:{search}:user_2   -> slot(search)\nrl:search:{user_1}   -> slot(user_1)\nrl:search:{user_2}   -> slot(user_2)\n```\n\nThe first scheme puts all search traffic on one shard. The second spreads by client while keeping `rl:search:{user_1}` and `rl:daily:{user_1}` together, so one script can check both atomically.",
+    "link": {
+      "title": "Envoy: global rate limiting",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_features/global_rate_limiting"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You must rate limit an **unauthenticated** signup endpoint against bots, served to both IPv4 and IPv6 clients. Which practices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Limit IPv6 clients by prefix (for example per /64) rather than per full address.",
+        "explanation": "Correct. A single customer is often given a whole /64, so an attacker can rotate through billions of addresses in it. Limiting by prefix treats that block as one client."
+      },
+      {
+        "text": "Set IPv4 limits loosely enough that many users behind one carrier-grade NAT address aren't blocked.",
+        "explanation": "Correct. Mobile carriers and offices put thousands of users behind one public IPv4 address. A tight per-IP limit there blocks real users."
+      },
+      {
+        "text": "Add a second, tighter limit keyed on something stronger, such as a device or session token, or require a CAPTCHA when per-IP limits trip.",
+        "explanation": "Correct. Layering limits gives protection without relying solely on IPs, which are shared and spoofable at scale through proxies."
+      },
+      {
+        "text": "Trust a client-supplied `X-Forwarded-For` header from the internet as the client's IP.",
+        "explanation": "Incorrect. Anyone can set that header. Only trust it when your own load balancer or CDN adds it, and read the address that your own infrastructure appended."
+      },
+      {
+        "text": "Fail open on this endpoint if the limiter is down, because availability always wins.",
+        "explanation": "Incorrect for this case. Signup abuse protection is security-sensitive, like login. Failing closed (or falling back to a strict local limit) is the safer choice here."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For anonymous endpoints the key is the hard part.\n\n| Address | Pitfall | Key on |\n|---|---|---|\n| IPv6 | Rotating addresses | /64 prefix |\n| IPv4 | Shared NAT | IP, loose limit |\n\nThen add defence in depth: a device or session token, or a CAPTCHA once a coarse limit trips. Read the client IP only from headers your own edge sets.",
+    "link": {
+      "title": "Google Cloud: rate-limiting strategies and techniques",
+      "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To save Redis calls, each of **200 gateways** leases **10 tokens** at a time from a client's central bucket. A small customer has **100 tokens available in the current window**, with no refill during this burst and no outstanding earlier leases. Their traffic is spread evenly across all gateways. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing: leasing is always accurate because tokens are only spent once.",
+        "explanation": "Wrong. Tokens are spent once, but where they sit matters. Leased tokens are stranded on whichever gateways took them."
+      },
+      {
+        "text": "The customer gets 2,000 requests/minute because each gateway gets its own 10.",
+        "explanation": "Wrong. Leases come out of the central bucket, so only 100 tokens are available in this stated window. The problem is the opposite: under-admission."
+      },
+      {
+        "text": "The first 10 gateways to ask take all 100 tokens; requests landing on the other 190 gateways are rejected even though most leased tokens sit unused.",
+        "explanation": "Correct. Leasing only works when the limit is large compared with lease size × gateway count. Here 10 × 200 = 2,000 tokens would be needed to give every gateway one lease; the customer has 100."
+      },
+      {
+        "text": "Redis load increases, because leasing adds a call per request.",
+        "explanation": "Wrong. Leasing reduces Redis calls; that's its purpose. The issue is accuracy for small limits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare lease capacity with the limit:\n\n```\nGateways x lease = 200 x 10 = 2,000\nCustomer limit    = 100/min\n```\n\nBefore any further refill/window reset, only 10 gateways can obtain a lease. With traffic spread evenly, 95% of requests hit a gateway with no tokens.\n\nFixes:\n- Lease only for keys whose limit is much larger than `gateways × lease` (e.g. limits above ~100k/min).\n- Scale the lease size with the limit (e.g. 1% of it).\n- Use direct Redis checks for small keys, which are low-traffic anyway.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A partner's batch job gets rate limited, and your server returns `Retry-After: 30` to each of its 5,000 worker threads. Exactly 30 seconds later, all 5,000 retry within the same 100 ms and are rejected again, over and over. What best fixes this?",
+    "options": [
+      {
+        "text": "Return `Retry-After: 0` so they retry immediately and spread out naturally.",
+        "explanation": "Wrong. Immediate retries just turn the batch into a tight loop that hammers the limiter continuously."
+      },
+      {
+        "text": "Switch from 429 to 503 so clients treat it as an outage.",
+        "explanation": "Wrong. 503 signals server unavailability rather than a client exceeding its quota, and many clients retry 503s more aggressively."
+      },
+      {
+        "text": "Add jitter: clients retry after `Retry-After` plus a random delay (and back off exponentially on repeated 429s), and the server can vary `Retry-After` slightly per request.",
+        "explanation": "Correct. The synchronised wake-up is a thundering herd. Randomising retry times spreads 5,000 retries across a window, so they drain at the allowed rate instead of colliding."
+      },
+      {
+        "text": "Raise the partner's limit to 5,000 per burst.",
+        "explanation": "Wrong as the fix. It might help this partner today, but the herd behaviour remains and returns at the next limit. Fix the retry pattern."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Without jitter:\n\n```\nt=0   5,000 rejected, Retry-After 30\nt=30  5,000 arrive in 100 ms\n      bucket allows ~B, rest rejected\nt=60  repeat\n```\n\nWith `delay = 30 + random(0, 30)` the retries arrive at about 167/s over 30 seconds, as an expected average; actual admission still depends on the bucket rate, burst capacity and random variation. Exponential backoff on repeated 429s spreads them further. This is the same thundering-herd fix used for reconnect storms in chat systems.",
+    "link": {
+      "title": "RFC 6585: HTTP 429 Too Many Requests",
+      "url": "https://www.rfc-editor.org/rfc/rfc6585"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Every customer is within their 100 requests/minute limit, yet the API falls over. A heavy report endpoint takes ~20 s per call, and a sales event has tripled overall traffic. Which mechanisms directly bound concurrent work or shed aggregate overload? Select all that apply.",
+    "options": [
+      {
+        "text": "A per-customer **concurrency limiter** (for example, at most 5 in-flight report requests).",
+        "explanation": "Correct. Request-rate limits don't cap how much work is in progress. At 100/min with 20 s each, one customer can hold ~33 requests in flight; a concurrency cap bounds that directly."
+      },
+      {
+        "text": "A fleet-wide **load shedder** that drops low-priority traffic when total utilisation is too high.",
+        "explanation": "Correct. Per-key limits can't protect you when every client is individually well-behaved but the total exceeds capacity. Stripe runs fleet-level load shedders for exactly this."
+      },
+      {
+        "text": "Lower every customer's per-minute limit by half.",
+        "explanation": "Incorrect. It punishes all customers permanently for a temporary capacity problem, and still doesn't bound slow, concurrent work."
+      },
+      {
+        "text": "Move the rate limiter from the gateway into each backend service.",
+        "explanation": "Incorrect. Moving the limiter doesn't change what it measures. The gap is concurrency and overall capacity, not limiter placement."
+      },
+      {
+        "text": "Prioritise critical traffic (e.g. payments) over less critical (e.g. reports) when shedding.",
+        "explanation": "Correct. Shedding by priority keeps the most important requests flowing while the system is overloaded."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Little's law links stable averages: mean in-flight work = accepted arrival rate × mean duration. It is not a hard instantaneous concurrency cap.\n\n```\n100/min = 1.67/s\n1.67/s x 20 s ≈ 33 in flight\n```\n\nThat's per customer, all within the rate limit. So you need:\n\n1. **Concurrency limits** per customer for slow endpoints.\n2. **Fleet-wide load shedding** for aggregate overload.\n3. **Priorities** so shedding drops the least important work first.\n\nStripe's write-up describes exactly this layering: request-rate limiter, concurrency limiter, and two kinds of load shedder.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  }
+]

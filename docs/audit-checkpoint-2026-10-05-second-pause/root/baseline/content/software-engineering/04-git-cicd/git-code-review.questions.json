@@ -1,0 +1,349 @@
+[
+  {
+    "id": "git-code-review-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A pull request clearly improves the module it touches, has good tests, but uses a variable name you would have chosen differently. Under Google's code review standard, what should you do?",
+    "options": [
+      {
+        "text": "Approve, optionally leaving a comment prefixed `Nit:` with your suggestion",
+        "explanation": "Correct. The change definitely improves code health, so approve it. Labelling the naming point as a nit tells the author it is their call."
+      },
+      {
+        "text": "Request changes until the name is fixed; approval means the code is perfect",
+        "explanation": "Google's standard says explicitly that there is no perfect code, only better code. Holding approval for a preference slows delivery without improving code health."
+      },
+      {
+        "text": "Approve silently; mentioning minor issues is unprofessional",
+        "explanation": "Minor suggestions are fine and often useful for learning. What matters is labelling their severity so they don't block."
+      },
+      {
+        "text": "Rewrite the code yourself and push to their branch",
+        "explanation": "Pushing to someone else's branch without asking removes their learning opportunity and can clash with work they have in progress."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Ask the senior question: does this change definitely improve the overall code health? Yes: better module, good tests.\n2. Is anything making the system worse? No: the name is a preference, not a defect.\n3. So approve.\n4. If the suggestion has value, leave `Nit: maybe `retry_budget` reads better than `rb`?` The author can take it or leave it.",
+    "link": {
+      "title": "The Standard of Code Review — Google",
+      "url": "https://google.github.io/eng-practices/review/reviewer/standard.html"
+    }
+  },
+  {
+    "id": "git-code-review-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Google's engineering practices give a rough guide to change size. Which matches it?",
+    "options": [
+      {
+        "text": "About 10 lines is reasonable; anything over 100 is too large",
+        "explanation": "Too strict. The guidance treats around 100 lines as usually reasonable."
+      },
+      {
+        "text": "Changes must be under 400 lines or the tooling rejects them",
+        "explanation": "There is no hard limit; the guidance is explicitly a judgement call left to the reviewer."
+      },
+      {
+        "text": "Size doesn't matter as long as the description is good",
+        "explanation": "A good description helps, but reviewers' attention still degrades on very large diffs, and large changes are harder to roll back."
+      },
+      {
+        "text": "About 100 lines is usually reasonable; 1,000 lines is usually too large; files touched matter too",
+        "explanation": "Correct. The guide also notes a 200-line change in one file may be fine, while the same 200 lines spread across 50 files usually is not."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "From Google's \"Small CLs\" page:\n\n- \"100 lines is usually a reasonable size for a CL, and 1000 lines is usually too large, but it's up to the judgment of your reviewer.\"\n- The number of files also affects size.\n\nWhy small wins: faster reviews, more thorough reviews, fewer bugs slip through, easier merges and simpler rollbacks.",
+    "link": {
+      "title": "Small CLs — Google",
+      "url": "https://google.github.io/eng-practices/review/developer/small-cls.html"
+    }
+  },
+  {
+    "id": "git-code-review-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A reviewer flags this helper. What do the two `print` calls output?\n\n```python\ndef tags(t, acc=[]):\n    acc.append(t)\n    return acc\n\nprint(tags(\"a\"))\nprint(tags(\"b\"))\n```",
+    "options": [
+      {
+        "text": "`['a']` then `['b']`",
+        "explanation": "This assumes a fresh list per call. Python evaluates default values once, when the function is defined, so both calls share the same list."
+      },
+      {
+        "text": "`['a', 'b']` twice",
+        "explanation": "The first `print` runs before the second call, so at that moment the list holds only `'a'`."
+      },
+      {
+        "text": "`['a']` then `['a', 'b']`",
+        "explanation": "Correct. The default list is created once and mutated on each call, so state leaks between calls. Use `acc=None` and create a list inside."
+      },
+      {
+        "text": "A `TypeError`, because lists can't be default arguments",
+        "explanation": "Python allows any object as a default. That permissiveness is exactly why this bug is common and worth catching in review (or with a linter rule such as Ruff's B006)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `def` runs once and evaluates `[]`, storing one list object as the default.\n2. `tags(\"a\")` appends to that list: `['a']`. Printed.\n3. `tags(\"b\")` uses the same list: `['a', 'b']`. Printed.\n4. Fix:\n\n```python\ndef tags(t, acc=None):\n    acc = [] if acc is None else acc\n    acc.append(t)\n    return acc\n```\n\nThis is a good example of something a linter should catch so a human reviewer doesn't have to.",
+    "link": {
+      "title": "What to look for in a code review — Google",
+      "url": "https://google.github.io/eng-practices/review/reviewer/looking-for.html"
+    }
+  },
+  {
+    "id": "git-code-review-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You open a 300-line PR that adds a caching layer. You notice: (a) inconsistent quote style, (b) a misleading function name, (c) the cache is placed in the HTTP handler although every other service puts caching in the repository layer. What should your first and main comment be about?",
+    "options": [
+      {
+        "text": "(a) quote style, since it's quickest to fix",
+        "explanation": "Style should be enforced by a formatter, not a human. And if the design moves, the styled code may be thrown away anyway."
+      },
+      {
+        "text": "(c) where the cache lives, since it's a design question that could change the whole PR",
+        "explanation": "Correct. Review top-down: design, then functionality and complexity, then tests, then naming and style. Raising the design issue first avoids wasted polishing."
+      },
+      {
+        "text": "(b) the function name",
+        "explanation": "Naming matters, but if the code moves to another layer its names may change anyway. Design comes first."
+      },
+      {
+        "text": "None; approve, because the PR is under 400 lines",
+        "explanation": "Size is a guide to reviewability, not a reason to approve. A reasonable-size PR can still have a design problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Design: is this the right place for this code? Here it breaks the codebase's established pattern. If it moves, everything else changes.\n2. Comment: \"Our other services cache in the repository layer, which keeps handlers thin and lets the batch jobs share the cache. Could this move to `OrderRepository`? Happy to chat.\"\n3. Hold the naming comment, or mark it as minor, until the design is settled.\n4. Raise a ticket to add the formatter to CI so (a) never reaches a human again.",
+    "link": {
+      "title": "What to look for in a code review — Google",
+      "url": "https://google.github.io/eng-practices/review/reviewer/looking-for.html"
+    }
+  },
+  {
+    "id": "git-code-review-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A repository's `.github/CODEOWNERS` is:\n\n```\n*            @acme/platform\n/billing/    @acme/payments\n*.tf         @acme/infra\n```\n\nCode-owner review is required. A PR changes only `billing/main.tf`. Whose review is required?",
+    "options": [
+      {
+        "text": "`@acme/platform`, because `*` matches everything",
+        "explanation": "`*` does match, but later matching patterns override earlier ones. Only the last match counts."
+      },
+      {
+        "text": "`@acme/payments`, because the file is in `/billing/`",
+        "explanation": "`/billing/` matches, but `*.tf` appears later in the file and also matches, so it takes precedence."
+      },
+      {
+        "text": "All three teams",
+        "explanation": "CODEOWNERS does not combine matches. Each file gets the owners from its last matching line."
+      },
+      {
+        "text": "`@acme/infra`, because `*.tf` is the last matching pattern",
+        "explanation": "Correct. On GitHub, the last matching pattern in CODEOWNERS takes precedence for each file."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Evaluate patterns top to bottom and keep the last one that matches `billing/main.tf`:\n\n| Pattern | Matches? |\n|---|---|\n| `*` | Yes |\n| `/billing/` | Yes |\n| `*.tf` | Yes (last) |\n\nOwner: `@acme/infra`. If payments must also review Terraform under billing, add a later line `/billing/*.tf @acme/payments @acme/infra`. Ordering CODEOWNERS from general to specific is the usual convention.",
+    "link": {
+      "title": "About code owners — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners"
+    }
+  },
+  {
+    "id": "git-code-review-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An author opens a 1,800-line PR: it renames `Customer` to `Account` across 60 files **and** changes how discounts are calculated. Reviewers have left it untouched for three days. What is the best advice?",
+    "options": [
+      {
+        "text": "Split it: a mechanical rename PR (easy to verify, often scriptable) and a separate, small PR for the discount behaviour change",
+        "explanation": "Correct. Separating refactoring from behaviour change lets the rename be approved quickly and focuses real attention on the risky logic."
+      },
+      {
+        "text": "Add more reviewers so the work is shared",
+        "explanation": "More people skimming a huge mixed diff doesn't make anyone read the discount logic carefully, and it multiplies the cost."
+      },
+      {
+        "text": "Merge it without review to unblock, and review after",
+        "explanation": "The discount change is behaviour that affects money. Post-merge review (\"Show\") suits low-risk changes, not this one."
+      },
+      {
+        "text": "Squash it into one commit so the diff is smaller",
+        "explanation": "Squashing changes the commit count, not the diff. The reviewer still sees 1,800 changed lines."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Identify the two kinds of change: a mechanical rename (huge but low-risk) and logic (small but high-risk).\n2. In one PR, the logic is hidden among 1,700 rename lines, so reviewers either skim (risky) or procrastinate (slow).\n3. Split:\n   - PR 1: rename only. Reviewer checks the diff is purely mechanical; CI proves it compiles and tests pass.\n   - PR 2 (stacked on PR 1): discount change, perhaps 80 lines plus tests.\n4. Both get reviewed within hours instead of days.",
+    "link": {
+      "title": "Small CLs — Google",
+      "url": "https://google.github.io/eng-practices/review/developer/small-cls.html"
+    }
+  },
+  {
+    "id": "git-code-review-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are well-written review comments? Select all that apply.",
+    "options": [
+      {
+        "text": "\"Two workers can call `reserve()` at once, so both could read stock = 1 and both succeed. Could this use `SELECT ... FOR UPDATE` or a conditional update?\"",
+        "explanation": "Correct. It explains the problem and why it matters, and suggests options without dictating."
+      },
+      {
+        "text": "\"Why would you do it this way?\"",
+        "explanation": "Vague and reads as an accusation. Say what concerns you: \"I'm worried this re-reads the file per row; is that intended?\""
+      },
+      {
+        "text": "\"Nit: `cfg` → `config` would match the rest of this module.\"",
+        "explanation": "Correct. Specific, with a reason, and labelled as minor so it doesn't block."
+      },
+      {
+        "text": "\"This is wrong.\"",
+        "explanation": "It gives the author nothing to act on: what is wrong, and why? It also comments on correctness without showing the reasoning."
+      },
+      {
+        "text": "\"FYI: we have a `retry()` helper in `utils/net.py` that may simplify this in future, not needed for this PR.\"",
+        "explanation": "Correct. Informative, clearly non-blocking, and points to a concrete resource."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each comment against three tests:\n\n| Comment | About code? | Says why? | Severity clear? |\n|---|---|---|---|\n| Race in `reserve()` | Yes | Yes | Implied blocking |\n| \"Why would you...\" | No | No | No |\n| Nit: `cfg` | Yes | Yes | Yes |\n| \"This is wrong.\" | Vague | No | No |\n| FYI `retry()` | Yes | Yes | Yes |\n\nGood comments focus on the code, explain the reasoning and make it obvious whether the author must act.",
+    "link": {
+      "title": "How to write code review comments — Google",
+      "url": "https://google.github.io/eng-practices/review/reviewer/comments.html"
+    }
+  },
+  {
+    "id": "git-code-review-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team is moving to trunk-based development, but median time from PR opened to first review is 2 days. After a month, PRs are getting *bigger*. Why is this predictable?",
+    "options": [
+      {
+        "text": "Trunk-based development requires large PRs",
+        "explanation": "It is the opposite: TBD depends on small, frequent changes."
+      },
+      {
+        "text": "Developers are trying to inflate their commit statistics",
+        "explanation": "Bigger PRs mean fewer, not more, merges. The behaviour is a rational response to wait time, not metric gaming."
+      },
+      {
+        "text": "Slow review makes each round-trip expensive, so authors batch more work per PR, which makes reviews slower still: a vicious cycle",
+        "explanation": "Correct. DORA also lists a heavyweight review process as a common obstacle to trunk-based development. Fix review latency (for example, aim to respond within one business day) and PR size tends to follow."
+      },
+      {
+        "text": "Git performs worse with small PRs",
+        "explanation": "Git is indifferent to PR size; this is a human and process effect."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose each PR waits 2 days for review regardless of size.\n2. A developer with 5 days of work can open 5 small PRs (5 waits, possibly serialised) or 1 big one (1 wait).\n3. They choose the big one.\n4. Big PRs take longer to review and attract more rounds of comments, so wait time rises further.\n5. Break the cycle: target a response within one business day, review before starting new work, keep PRs small, and track time-to-first-review as a team metric.",
+    "link": {
+      "title": "Speed of Code Reviews — Google",
+      "url": "https://google.github.io/eng-practices/review/reviewer/speed.html"
+    }
+  },
+  {
+    "id": "git-code-review-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your repo requires one approval to merge to `main`. A contractor gets a harmless PR approved, then pushes one more commit that adds a call to an external URL, and merges. Which branch protection setting would most directly have prevented this?",
+    "options": [
+      {
+        "text": "Require linear history",
+        "explanation": "Linear history controls merge style (no merge commits), not whether new code has been reviewed."
+      },
+      {
+        "text": "Dismiss stale pull request approvals when new commits are pushed",
+        "explanation": "Correct. The approval applied to the earlier code. Dismissing it on new pushes forces re-review of whatever actually merges."
+      },
+      {
+        "text": "Require signed commits",
+        "explanation": "Signing proves who made the commit, which here is not in doubt. It does not require anyone to review the content."
+      },
+      {
+        "text": "Require status checks to pass",
+        "explanation": "Useful, but CI would likely pass: the extra call is valid code. Only a human (or a targeted security check) would notice intent."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Approval is a statement about a specific diff.\n2. Without stale-approval dismissal, any later push keeps the old approval.\n3. Enable \"dismiss stale approvals\" (GitHub) or the equivalent \"remove approvals when commits are added\" (GitLab).\n4. Defence in depth: require code-owner review for sensitive paths, restrict who can merge, and add egress controls or secret scanning in CI.",
+    "link": {
+      "title": "About protected branches — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches"
+    }
+  },
+  {
+    "id": "git-code-review-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You want reviewers' attention focused where humans add most value. Which checks should be **automated** rather than left to reviewers? Select all that apply.",
+    "options": [
+      {
+        "text": "Formatting and import order",
+        "explanation": "Correct. Formatters (Black, Ruff, Prettier, gofmt) make style deterministic, ending debates entirely."
+      },
+      {
+        "text": "Whether the change fits the system's architecture and the product intent",
+        "explanation": "Not automatable in any meaningful way; this is where human review is most valuable."
+      },
+      {
+        "text": "Known-vulnerable dependency versions",
+        "explanation": "Correct. Dependency scanners compare lockfiles against advisory databases far more reliably than a person could."
+      },
+      {
+        "text": "Common bug patterns such as mutable default arguments and unused variables",
+        "explanation": "Correct. Linters catch these deterministically on every change."
+      },
+      {
+        "text": "Whether tests pass on all supported versions",
+        "explanation": "Correct. A CI matrix runs the tests; a reviewer should never have to run them by hand."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3,
+      4
+    ],
+    "workedExample": "Sort each check by whether a rule can decide it:\n\n| Check | Rule-based? |\n|---|---|\n| Formatting | Yes: formatter |\n| Architecture fit | No: judgement |\n| Vulnerable deps | Yes: scanner |\n| Bug patterns | Yes: linter |\n| Tests on versions | Yes: CI matrix |\n\nEverything rule-based belongs in CI and pre-commit hooks. Reviewers then spend their time on design, correctness of logic, test quality and clarity.",
+    "link": {
+      "title": "Google Engineering Practices: Code Review",
+      "url": "https://google.github.io/eng-practices/review/"
+    }
+  },
+  {
+    "id": "git-code-review-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team adopts **Ship / Show / Ask**. Which change is the best candidate for **Show** (merge, then open a PR for feedback)?",
+    "options": [
+      {
+        "text": "A well-tested refactor using a pattern you think the team would like to know about",
+        "explanation": "Correct. You are confident it is safe (CI green, tests good), but there is value in others seeing and discussing it, so merge and then show."
+      },
+      {
+        "text": "A first attempt at a new database schema for payments, where you are unsure of the approach",
+        "explanation": "Uncertain, high-risk work is exactly what Ask is for: open the PR and wait for input before merging."
+      },
+      {
+        "text": "Fixing a typo in a README",
+        "explanation": "This is trivial enough to Ship: merge directly with no PR at all."
+      },
+      {
+        "text": "Disabling authentication temporarily to debug an issue",
+        "explanation": "This should not be merged at all. It certainly isn't something to merge first and discuss later."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Classify by risk and by how much you need input:\n\n| Change | Risk | Need input? | Mode |\n|---|---|---|---|\n| README typo | None | No | Ship |\n| New payments schema | High | Yes | Ask |\n| Tested refactor | Low | Want to share | Show |\n\nShip/Show/Ask works only with strong CI and a trusted team; regulated environments may require review of every change.",
+    "link": {
+      "title": "Ship / Show / Ask — Rouan Wilsenach",
+      "url": "https://martinfowler.com/articles/ship-show-ask.html"
+    }
+  }
+]

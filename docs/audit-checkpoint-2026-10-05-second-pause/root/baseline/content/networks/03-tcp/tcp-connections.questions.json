@@ -1,0 +1,169 @@
+[
+  {
+    "id": "tcp-connections-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A client sends `SYN seq=1000`. The server replies `SYN+ACK seq=5000 ack=1001`. What are the sequence and acknowledgement numbers in the client's final ACK of the handshake?",
+    "options": [
+      { "text": "seq=1000, ack=5000", "explanation": "This forgets that a SYN consumes one sequence number. The client's SYN used 1000, so its next byte is 1001; the server's SYN used 5000, so the client expects 5001 next." },
+      { "text": "seq=1001, ack=5000", "explanation": "The sequence number is right, but ack=5000 would claim the server's SYN hasn't been received yet. The ACK names the next byte expected, which is 5001." },
+      { "text": "seq=1001, ack=5001", "explanation": "Correct. The client's SYN consumed 1000, so it continues at 1001. The server's SYN consumed 5000, so the client acknowledges with 5001, meaning 'send me byte 5001 next'." },
+      { "text": "seq=5001, ack=1001", "explanation": "This swaps the two sequence spaces. Each direction has its own numbering: the client sends in its own space (starting at 1000) and acknowledges the server's (starting at 5000)." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each direction has its own sequence space. The client's ISN is 1000; the server's is 5000.\n2. **A SYN consumes one sequence number**, even with no data. So the client's SYN occupies number 1000, and the client's next number is **1001**. That matches the server's `ack=1001`.\n3. The server's SYN occupies 5000. The client has received it, so the next server byte it wants is **5001**.\n4. The final segment is therefore:\n\n```\nACK seq=1001 ack=5001\n```\n\nIf the client puts data in this segment (say a TLS ClientHello), the first data byte is numbered 1001.",
+    "link": { "title": "RFC 9293: Transmission Control Protocol", "url": "https://www.rfc-editor.org/rfc/rfc9293" }
+  },
+  {
+    "id": "tcp-connections-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `curl http://10.0.0.8:8080`. In one case it fails immediately with \"Connection refused\"; in another it hangs for over a minute and then reports a timeout. What is the most likely difference?",
+    "options": [
+      { "text": "Refused: the host replied with RST because nothing listens on 8080. Timeout: a firewall silently dropped the SYN.", "explanation": "Correct. A host with no listener on the port answers a SYN with RST, giving ECONNREFUSED at once. A dropped SYN gets no reply at all, so the client keeps retransmitting until it gives up." },
+      { "text": "Refused: a firewall dropped the SYN. Timeout: nothing listens on port 8080.", "explanation": "This is the wrong way round. Dropping produces silence, and silence can only end in a timeout; an immediate refusal needs an active reply (RST)." },
+      { "text": "Refused: the server's SYN queue is full. Timeout: the server sent RST.", "explanation": "A full SYN queue makes Linux drop the SYN (or use SYN cookies), not refuse it. And an RST arrives quickly, so it can't cause a long timeout." },
+      { "text": "Both mean the server is down; the difference is only in how curl reports it", "explanation": "The two errors come from different network behaviour. A host that is up but has no listener sends RST; a host that is unreachable or firewalled sends nothing." }
+    ],
+    "answer": 0,
+    "workedExample": "1. The client sends a SYN to port 8080.\n2. **Case A**: the host is up, but no socket is in LISTEN on 8080. The kernel replies with **RST**. The client's `connect()` fails straight away with `ECONNREFUSED`.\n3. **Case B**: a firewall on the path (or on the host) drops the SYN. Nothing comes back. The client retransmits the SYN with exponential backoff (on Linux, 1 s, 2 s, 4 s... with 6 retries by default, about 127 s in total) and then reports a timeout.\n4. Diagnostic rule: **fast failure means something answered; slow failure means something swallowed the packet.**",
+    "link": { "title": "RFC 9293: Transmission Control Protocol", "url": "https://www.rfc-editor.org/rfc/rfc9293" }
+  },
+  {
+    "id": "tcp-connections-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A web server finishes sending a response and calls `close()` first. The browser then closes its end. Which side ends up in TIME_WAIT?",
+    "options": [
+      { "text": "The browser, because it sent the last FIN", "explanation": "The browser is the passive closer here. It goes CLOSE_WAIT, then LAST_ACK, then CLOSED when its FIN is acknowledged." },
+      { "text": "Both sides, for 2×MSL each", "explanation": "Both sides enter TIME_WAIT only in a simultaneous close, where both FINs cross. Here the server clearly closed first." },
+      { "text": "Neither; TIME_WAIT only happens after an RST", "explanation": "RST skips TIME_WAIT entirely. TIME_WAIT is part of a normal, graceful FIN close." },
+      { "text": "The server, because it sent the first FIN", "explanation": "Correct. The active closer (whoever sends the first FIN) goes FIN_WAIT_1, FIN_WAIT_2, then TIME_WAIT after acknowledging the peer's FIN." }
+    ],
+    "answer": 3,
+    "workedExample": "1. The server calls `close()` and sends FIN. It is the **active closer**: ESTABLISHED to FIN_WAIT_1.\n2. The browser ACKs (server moves to FIN_WAIT_2) and enters CLOSE_WAIT.\n3. The browser closes and sends its FIN (LAST_ACK).\n4. The server ACKs that FIN and enters **TIME_WAIT** for 2×MSL (60 s on Linux).\n5. The browser receives the ACK and goes straight to CLOSED.\n\nRule: TIME_WAIT lands on whoever sent the **first** FIN.",
+    "link": { "title": "Coping with the TCP TIME-WAIT state on busy Linux servers", "url": "https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux" }
+  },
+  {
+    "id": "tcp-connections-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Why does the active closer wait in TIME_WAIT for 2×MSL instead of going straight to CLOSED? Select all that apply.",
+    "options": [
+      { "text": "If its final ACK is lost, the peer will retransmit its FIN, and someone must be there to ACK it again", "explanation": "Correct. Without TIME_WAIT, the retransmitted FIN would hit a closed socket and draw an RST, and the peer would report an error for a clean close." },
+      { "text": "To let delayed segments from this connection expire before a new connection reuses the same 5-tuple", "explanation": "Correct. A stray old segment with the same 5-tuple could otherwise fall inside the new connection's window and be accepted as data." },
+      { "text": "To give the application time to read any data still in the receive buffer", "explanation": "The application has already called close(); TIME_WAIT holds no data for it. Unread data at close actually causes Linux to send RST." },
+      { "text": "To wait for the congestion window to drain before the port is reused", "explanation": "The congestion window is per-connection sending state and plays no part in closing. TIME_WAIT is about stray segments and the lost final ACK." },
+      { "text": "Because the passive closer is still sending data and needs it acknowledged", "explanation": "By the time the active closer is in TIME_WAIT, the passive closer has sent its FIN, so it has no more data to send." }
+    ],
+    "answer": [0, 1],
+    "workedExample": "Work through what could go wrong after the final ACK:\n\n1. **The ACK is lost.** The peer, in LAST_ACK, times out and resends its FIN. The ACK took up to one MSL to vanish, and the resent FIN takes up to another MSL to arrive: **2×MSL** covers it.\n2. **A delayed duplicate is still in flight.** If a new connection with the same 5-tuple started at once, that old segment could arrive and be taken as new data. After 2×MSL, every segment of the old connection, in both directions, has expired.\n\nNeither reason involves application data or congestion state; the socket is already closed from the application's point of view.",
+    "link": { "title": "RFC 9293: Transmission Control Protocol", "url": "https://www.rfc-editor.org/rfc/rfc9293" }
+  },
+  {
+    "id": "tcp-connections-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Python service gets slower over a day until it runs out of file descriptors. `ss -tan` shows about 9,000 sockets in CLOSE_WAIT and 200 in TIME_WAIT. What is the most likely cause?",
+    "options": [
+      { "text": "TIME_WAIT is lasting too long; lower the TIME_WAIT timeout", "explanation": "200 TIME_WAIT sockets is tiny and normal, and they don't hold file descriptors. Linux doesn't even let you tune TIME_WAIT's length." },
+      { "text": "The service doesn't close sockets after the peer closes, for example on an error path", "explanation": "Correct. CLOSE_WAIT means the peer has sent FIN and the kernel is waiting for this application to call close(). Only the application can move it on, so a pile-up is a connection leak." },
+      { "text": "A SYN flood is filling the SYN queue", "explanation": "A SYN flood shows up as many SYN_RECV entries, not CLOSE_WAIT. Those connections never reach ESTABLISHED." },
+      { "text": "The network is dropping the final ACKs of the handshake", "explanation": "That would leave connections half-open in SYN_RECV on the server. CLOSE_WAIT is reached only from ESTABLISHED, after a FIN arrives." }
+    ],
+    "answer": 1,
+    "workedExample": "1. CLOSE_WAIT is entered when an ESTABLISHED socket **receives a FIN**. The kernel ACKs it automatically.\n2. Leaving CLOSE_WAIT requires the **application** to call `close()`, which sends our FIN and moves to LAST_ACK.\n3. So 9,000 CLOSE_WAIT sockets means 9,000 times the peer hung up and our code never closed its end. Each one still holds a file descriptor, hence the eventual `EMFILE`.\n4. Typical bug:\n\n```python\nconn = pool.get()\ndata = conn.recv(4096)\nif not data:\n    return   # leaked: no close()\n```\n\nFix with `try/finally` or a `with` block. TIME_WAIT (200 here) is harmless.",
+    "link": { "title": "RFC 9293: Transmission Control Protocol", "url": "https://www.rfc-editor.org/rfc/rfc9293" }
+  },
+  {
+    "id": "tcp-connections-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After the handshake, a client's next sequence number is 1001. It sends 300 bytes of data in one segment and then sends FIN. What is the FIN's sequence number, and what ACK number does the server send to acknowledge the FIN?",
+    "options": [
+      { "text": "FIN seq=1300, ACK 1301", "explanation": "Off by one. 300 bytes starting at 1001 occupy 1001 to 1300 inclusive, so the next number, used by the FIN, is 1301." },
+      { "text": "FIN seq=1301, ACK 1301", "explanation": "The FIN's sequence number is right, but a FIN consumes a sequence number of its own, so acknowledging it means asking for 1302." },
+      { "text": "FIN seq=1301, ACK 1302", "explanation": "Correct. The data takes 1001 to 1300, the FIN takes 1301, and the server's ACK names the next number it expects: 1302." },
+      { "text": "FIN seq=1001, ACK 1002", "explanation": "This treats the FIN as if no data had been sent. The 300 data bytes advance the sequence number by 300 first." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Data: 300 bytes starting at 1001.\n\n```\nfirst byte = 1001\nlast byte  = 1001 + 300 - 1 = 1300\n```\n\n2. The server ACKs the data with `ack=1301`.\n3. The FIN uses the next number: **seq=1301**.\n4. Like a SYN, a FIN **consumes one sequence number**, so the server acknowledges it with **ack=1302**.\n\nThis is why a peer can tell 'I have all your data' (ack=1301) apart from 'I have all your data **and** your FIN' (ack=1302).",
+    "link": { "title": "RFC 9293: Transmission Control Protocol", "url": "https://www.rfc-editor.org/rfc/rfc9293" }
+  },
+  {
+    "id": "tcp-connections-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server is hit by a SYN flood from spoofed addresses. Its SYN queue is full and real users can't connect. With `tcp_syncookies = 1`, how does the server now cope?",
+    "options": [
+      { "text": "It doubles the SYN queue each time it fills, until memory runs out", "explanation": "That just moves the problem: an attacker can send SYNs far faster than memory grows. Cookies avoid storing anything at all." },
+      { "text": "It drops all SYNs from IP addresses it hasn't seen before", "explanation": "That would block every new legitimate user too. The attacker's addresses are random, so there is nothing useful to filter on by address." },
+      { "text": "It requires the client to solve a proof-of-work puzzle in the SYN", "explanation": "TCP has no such mechanism, and unmodified clients must keep working. SYN cookies need no client changes at all." },
+      { "text": "It stores nothing for new SYNs, encodes the needed state in its ISN, and rebuilds the connection when a valid ACK returns the cookie", "explanation": "Correct. Spoofed SYNs cost the server only a SYN+ACK. A real client echoes the cookie (ack − 1), the server checks the keyed hash and time counter, and only then creates the connection." }
+    ],
+    "answer": 3,
+    "workedExample": "1. The flood's SYNs come from spoofed addresses, so their final ACKs never arrive. Each one would sit in the SYN queue for about a minute while SYN+ACKs are retried.\n2. With cookies, when the queue overflows the server **keeps no record**. It picks its ISN as a cookie: a time counter, an MSS index and a keyed hash of the 4-tuple.\n3. A real client sends the final ACK with `ack = cookie + 1`.\n4. The server computes `ack − 1`, recomputes the hash with its secret, checks the counter is recent, and builds the socket.\n5. A spoofer never sees the SYN+ACK, so it can't produce a valid ACK. Memory use no longer grows with the attack.",
+    "link": { "title": "SYN cookies — Wikipedia", "url": "https://en.wikipedia.org/wiki/SYN_cookies" }
+  },
+  {
+    "id": "tcp-connections-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Linux proxy opens 600 new connections per second to a single backend, `10.0.0.5:8080`, from one source IP, sends one request on each, and closes first. Ephemeral ports are the default 32768–60999 and TIME_WAIT lasts 60 s. What happens?",
+    "options": [
+      { "text": "Nothing; TIME_WAIT sockets don't use ports", "explanation": "A TIME_WAIT entry still reserves its 5-tuple. With the destination fixed, that means it reserves the source port too." },
+      { "text": "It runs out of ephemeral ports: about 36,000 tuples sit in TIME_WAIT, but only 28,232 ports exist", "explanation": "Correct. 600 × 60 = 36,000 connections are in TIME_WAIT at any moment, more than the 28,232 available source ports for that one destination, so connect() starts failing with EADDRNOTAVAIL." },
+      { "text": "It runs out of file descriptors at 1,024 connections", "explanation": "TIME_WAIT sockets have already been closed by the application and don't hold file descriptors. The limit hit here is ports." },
+      { "text": "The backend runs out of ports, because all connections arrive on 8080", "explanation": "The backend uses one port for all of them; its connections differ by client port. And here the proxy closes first, so TIME_WAIT is on the proxy." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Four of the five tuple fields are fixed (TCP, proxy IP, 10.0.0.5, 8080). Only the source port varies.\n2. Available ports:\n\n```\n60999 - 32768 + 1 = 28,232\n```\n\n3. The proxy closes first, so each connection spends 60 s in TIME_WAIT afterwards:\n\n```\n600/s x 60 s = 36,000 tuples held\n```\n\n4. 36,000 > 28,232, so after roughly 47 seconds new `connect()` calls fail.\n5. Fixes: reuse connections (keep-alive / pooling, which removes the churn), add source or backend IPs, or rely on `tcp_tw_reuse` for outgoing connections.",
+    "link": { "title": "Coping with the TCP TIME-WAIT state on busy Linux servers", "url": "https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux" }
+  },
+  {
+    "id": "tcp-connections-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "What are genuine costs of accepting a connection via a SYN cookie rather than through the normal SYN queue? Select all that apply.",
+    "options": [
+      { "text": "The client's MSS must be rounded down to one of a small set of values", "explanation": "Correct. Only a few bits of the cookie hold the MSS (3 bits, so 8 values, in Bernstein's design), so the server uses the nearest table value at or below what the client offered." },
+      { "text": "Options such as window scaling and SACK can be lost, unless they are encoded elsewhere (Linux uses the timestamp option)", "explanation": "Correct. There is no room for them in a 32-bit ISN. Without timestamps, the connection proceeds without those options, which can cut throughput." },
+      { "text": "The server can't retransmit its SYN+ACK, because it kept no record of the SYN", "explanation": "Correct. If the SYN+ACK is lost, nothing on the server will resend it; the client has to retry its SYN." },
+      { "text": "Clients need a SYN-cookie-aware TCP stack to connect", "explanation": "SYN cookies are invisible to the client: it simply sees an ordinary ISN and echoes it plus one. That is why they were deployable." },
+      { "text": "On Linux, every connection uses cookies once they are enabled, even when the server is idle", "explanation": "With the default tcp_syncookies = 1, Linux sends cookies only when the SYN queue overflows. Normal traffic keeps full options." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "Ask what information a 32-bit ISN can carry and what the server gives up by storing nothing.\n\n1. Bernstein's layout: 5 bits of time counter, 3 bits of MSS index, 24 bits of hash. Three bits means **8 possible MSS values**.\n2. There is no space left for window-scale or SACK-permitted. Linux squeezes them into the **timestamp** option if the client sent one; otherwise they are lost.\n3. No state means **no retransmission timer** for the SYN+ACK.\n4. The client changes nothing, and Linux only falls back to cookies under **queue overflow**.\n\nSo options A, B and C are real costs.",
+    "link": { "title": "RFC 4987: TCP SYN Flooding Attacks and Common Mitigations", "url": "https://www.rfc-editor.org/rfc/rfc4987" }
+  },
+  {
+    "id": "tcp-connections-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two peers call `close()` at the same instant, so their FINs cross in the network. Which sequence of states does each side pass through?",
+    "options": [
+      { "text": "FIN_WAIT_1 → FIN_WAIT_2 → TIME_WAIT → CLOSED", "explanation": "FIN_WAIT_2 requires receiving an ACK of your FIN before the peer's FIN. Here the peer's FIN arrives first, while still in FIN_WAIT_1." },
+      { "text": "CLOSE_WAIT → LAST_ACK → CLOSED", "explanation": "That is the passive closer's path, which starts by receiving a FIN while ESTABLISHED. Both sides here sent a FIN first." },
+      { "text": "FIN_WAIT_1 → CLOSING → TIME_WAIT → CLOSED", "explanation": "Correct. Each side is in FIN_WAIT_1 when the other's FIN arrives, ACKs it and moves to CLOSING; when its own FIN is ACKed it enters TIME_WAIT. Both sides wait 2×MSL." },
+      { "text": "FIN_WAIT_1 → CLOSED, skipping TIME_WAIT because neither side was the active closer", "explanation": "In a simultaneous close both are active closers, so both must guard against stray segments; both end in TIME_WAIT." }
+    ],
+    "answer": 2,
+    "workedExample": "Follow side A (B is symmetric):\n\n1. A calls `close()`, sends FIN: **FIN_WAIT_1**.\n2. Before A's FIN is acknowledged, B's FIN arrives. A ACKs it. The state table says FIN_WAIT_1 + recv FIN goes to **CLOSING**.\n3. B's ACK of A's FIN arrives: CLOSING + recv ACK goes to **TIME_WAIT**.\n4. After 2×MSL: **CLOSED**.\n\n```\nFIN_WAIT_1 -FIN-> CLOSING\nCLOSING    -ACK-> TIME_WAIT\nTIME_WAIT  -2MSL-> CLOSED\n```\n\nBoth sides end up in TIME_WAIT.",
+    "link": { "title": "RFC 9293: Transmission Control Protocol", "url": "https://www.rfc-editor.org/rfc/rfc9293" }
+  },
+  {
+    "id": "tcp-connections-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An off-path attacker knows the 4-tuple of a long-lived BGP session and floods it with forged RSTs, guessing sequence numbers. One forged RST lands inside the receive window but not on the exact next expected sequence number. What does a stack that implements RFC 5961 do?",
+    "options": [
+      { "text": "Tears the connection down, because any in-window RST is valid", "explanation": "That was the older RFC 793 behaviour, and it is exactly what made blind reset attacks practical: the attacker only had to land somewhere in a large window." },
+      { "text": "Sends a challenge ACK; only an RST with the exact expected sequence number resets the connection", "explanation": "Correct. The genuine peer, if it really meant to reset, will see the challenge ACK and send an RST with the exact number. The off-path attacker never sees the challenge ACK." },
+      { "text": "Silently ignores every RST on an established connection", "explanation": "RST must still work, or crashed and rebooted peers could never clear stale connections. RFC 5961 narrows acceptance; it doesn't remove it." },
+      { "text": "Replies with its own RST to the attacker's source address", "explanation": "The source address is forged, and replying with RST would not protect the connection. The defence is to demand proof, via a challenge ACK." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Under the original rules, any RST whose sequence number falls **within the receive window** was accepted. With a 64 KB window, an attacker needs about 2^32 / 2^16 = 65,536 guesses to hit one, which is feasible.\n2. RFC 5961 tightens this:\n   - Exact match with the next expected sequence number: reset.\n   - In window but not exact: send a **challenge ACK** and keep the connection.\n   - Out of window: drop.\n3. The attacker now has to guess one exact 32-bit value, about 4 billion possibilities, and gets no feedback because the challenge ACK goes to the real peer.",
+    "link": { "title": "RFC 5961: Improving TCP's Robustness to Blind In-Window Attacks", "url": "https://www.rfc-editor.org/rfc/rfc5961" }
+  }
+]

@@ -1,0 +1,348 @@
+[
+  {
+    "id": "hash-resizing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Java `HashMap` has 16 buckets and the default load factor of 0.75. Which `put` of a new key triggers the first resize? Assume well-distributed hashes, so collisions do not trigger an earlier resize.",
+    "options": [
+      {
+        "text": "The 12th",
+        "explanation": "12 is the threshold (16 × 0.75), but Java resizes when the size goes *above* the threshold, so the 12th entry still fits."
+      },
+      {
+        "text": "The 13th",
+        "explanation": "Correct. Threshold = 16 × 0.75 = 12. After the 13th insert, size 13 > 12, so the table doubles to 32 buckets."
+      },
+      {
+        "text": "The 16th",
+        "explanation": "This assumes the table fills completely. A chaining table could, but Java resizes at 75% load to keep chains short."
+      },
+      {
+        "text": "The 17th",
+        "explanation": "This assumes resizing only when there are more entries than buckets (α > 1), which is not Java's rule."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Threshold = capacity × load factor = 16 × 0.75 = 12.\n2. Java's `putVal` ends with `if (++size > threshold) resize();`.\n3. Inserts 1 to 12: size ≤ 12, no resize.\n4. Insert 13: size becomes 13 > 12, so the table doubles to 32 buckets (new threshold 24).",
+    "link": {
+      "title": "HashMap — Java SE 21 API docs",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/HashMap.html"
+    }
+  },
+  {
+    "id": "hash-resizing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "When a hash table grows from 8 to 16 buckets, why can't it just copy the old array into the first half of the new one?",
+    "options": [
+      {
+        "text": "A key's bucket depends on table size, so some keys may need a different bucket",
+        "explanation": "Correct. A key with hash 13 sits at 13 mod 8 = 5, but lookups in the new table will look at 13 mod 16 = 13. Each key must be re-placed according to the new size."
+      },
+      {
+        "text": "Copying arrays is slower than re-inserting",
+        "explanation": "A block copy does not put moved entries in the buckets the new lookup rule expects; speed depends on implementation."
+      },
+      {
+        "text": "Keys must be sorted during the resize",
+        "explanation": "Sorting is not required to redistribute entries. Some bucket implementations can have an internal ordering."
+      },
+      {
+        "text": "The hash function changes when the table grows",
+        "explanation": "The hash value is the same; it is the reduction to an index (`mod m` or `& (m − 1)`) that changes with m."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Index = hash mod m.\n2. Example: hash 13. Old table: 13 mod 8 = 5. New table: 13 mod 16 = 13.\n3. If you simply copied, the key would stay at index 5, but `get` would compute 13 and miss it.\n4. So every key is rehashed (re-placed) into the new array: O(n) copying/visiting work, with expected linear placement under suitable collision assumptions. Storing each entry's full hash avoids recomputing it, but not the re-placement.",
+    "link": {
+      "title": "Hash table: dynamic resizing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hash_table#Dynamic_resizing"
+    }
+  },
+  {
+    "id": "hash-resizing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For a doubling hash table, what does amortised O(1) resizing overhead guarantee, considering only entry-copying work?",
+    "options": [
+      {
+        "text": "Every insert takes constant time",
+        "explanation": "That is a worst-case O(1) guarantee. An insert that triggers a resize takes O(n)."
+      },
+      {
+        "text": "Inserts take O(1) on average over random inputs",
+        "explanation": "That describes average-case analysis over inputs. Amortised analysis is about the total cost of any *sequence* of operations, not a probability over inputs."
+      },
+      {
+        "text": "Any sequence of n inserts from an empty table incurs O(n) total copying, although individual resizes can be expensive",
+        "explanation": "Correct. The rare O(n) resizes are paid for by the many cheap inserts around them, so the average per operation over the sequence is constant."
+      },
+      {
+        "text": "Inserts are O(1) once the table has stopped growing",
+        "explanation": "Amortised O(1) covers the growing phase too; that is its whole point."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Start with one slot and double when full.\n2. For arbitrary n, copied capacities sum to less than 2n.\n3. Adding n placements gives less than 3n units.\n4. This amortises resizing only; hash collisions and key operations still affect overall insertion cost. Incremental work or pre-sizing reduces resize pauses but does not alone guarantee real-time deadlines.",
+    "link": {
+      "title": "Amortized analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Amortized_analysis"
+    }
+  },
+  {
+    "id": "hash-resizing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table starts with capacity 1 and doubles whenever it is full. Roughly how many key copies (moves during resizes) happen while inserting 1,000,000 keys?",
+    "options": [
+      {
+        "text": "About 1 million",
+        "explanation": "Correct. Resizes happen at sizes 1, 2, 4, …, 524,288. Their sum is 2²⁰ − 1 = 1,048,575 copies, about one per insert."
+      },
+      {
+        "text": "About 20",
+        "explanation": "20 is the number of resizes (log₂ of a million), not the number of keys copied. Each resize copies every key present."
+      },
+      {
+        "text": "About 20 million",
+        "explanation": "This assumes every resize copies all n keys: n log n. Early resizes copy very few keys, so the sum is a geometric series."
+      },
+      {
+        "text": "About 500 billion",
+        "explanation": "That is n²/2, the cost of resizing by one slot each time. Doubling avoids this."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A resize happens when size equals capacity, copying `size` keys.\n2. Capacities: 1, 2, 4, …, 2¹⁹ = 524,288 (the next, 2²⁰ = 1,048,576, is enough for 10⁶ keys).\n3. Copies:\n\n```\n1 + 2 + 4 + ... + 2^19\n  = 2^20 - 1\n  = 1,048,575\n```\n\n4. Plus 1,000,000 placements, about 2 million units of work for a million inserts: amortised ~2 per insert.",
+    "link": {
+      "title": "Dynamic array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_array"
+    }
+  },
+  {
+    "id": "hash-resizing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table starts at 1,000 slots and grows by adding 1,000 slots whenever it is full. How many key copies happen while inserting 1,000,000 keys, and what is the amortised cost per insert?",
+    "options": [
+      {
+        "text": "About 1 million copies; O(1) amortised",
+        "explanation": "That is the doubling result. Growing by a fixed amount gives a sum of an arithmetic series, which is quadratic."
+      },
+      {
+        "text": "About 499.5 million copies; O(n) amortised",
+        "explanation": "Correct. Resizes at 1,000, 2,000, …, 999,000 copy 1000 × (1 + 2 + … + 999) = 499,500,000 keys: about 500 copies per insert, growing linearly with n."
+      },
+      {
+        "text": "About 1,000 copies; O(1) amortised",
+        "explanation": "1,000 is roughly the number of resizes, not copies. Each resize copies every key present."
+      },
+      {
+        "text": "About 1 trillion copies; O(n²) amortised",
+        "explanation": "The total is O(n²), but that is spread over n inserts, so the *amortised* cost is O(n), and the total is about 5 × 10⁸, not 10¹²."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Resize when size = capacity: at 1,000, 2,000, …, 999,000 (999 resizes).\n2. Each copies `size` keys:\n\n```\n1000 * (1 + 2 + ... + 999)\n  = 1000 * 999*1000/2\n  = 499,500,000\n```\n\n3. Per insert: 499.5 × 10⁶ / 10⁶ ≈ 500 copies.\n4. Double n and the per-insert cost doubles: O(n) amortised, O(n²) total. Growing by a constant *factor* is what makes resizing cheap.",
+    "link": {
+      "title": "Amortized analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Amortized_analysis"
+    }
+  },
+  {
+    "id": "hash-resizing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You create `new HashMap<>()` (16 buckets, load factor 0.75) and insert 1,000 distinct keys. How many times does the table double? Assume no collision-triggered early resizes; initial bucket allocation is lazy.",
+    "options": [
+      {
+        "text": "0",
+        "explanation": "The map starts at 16 buckets, which holds only 12 entries before resizing."
+      },
+      {
+        "text": "1",
+        "explanation": "This assumes Java jumps straight to a big enough table. It only ever doubles."
+      },
+      {
+        "text": "6",
+        "explanation": "Close, but count again: thresholds 12, 24, 48, 96, 192, 384 and 768 are all below 1,000, giving 7 doublings."
+      },
+      {
+        "text": "7",
+        "explanation": "Correct. Doublings at the 13th, 25th, 49th, 97th, 193rd, 385th and 769th inserts take the table from 16 to 2,048 buckets."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each doubling happens when size exceeds capacity × 0.75.\n\n```\ncap   thresh  doubles at\n16    12      13th\n32    24      25th\n64    48      49th\n128   96      97th\n256   192     193rd\n512   384     385th\n1024  768     769th\n2048  1536    (not reached)\n```\n\n2. Seven doublings, each rehashing every entry present: 13 + 25 + 49 + 97 + 193 + 385 + 769 = 1,531 moves in total, for 1,000 inserts.",
+    "link": {
+      "title": "HashMap — Java SE 21 API docs",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/HashMap.html"
+    }
+  },
+  {
+    "id": "hash-resizing-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these Java maps can hold 1,000 entries without ever doubling? Select all that apply.",
+    "options": [
+      {
+        "text": "`new HashMap<>(1000)`",
+        "explanation": "The capacity rounds up to 1,024, but the threshold is 1,024 × 0.75 = 768, so the 769th insert doubles it. A common surprise."
+      },
+      {
+        "text": "`new HashMap<>(1334)`",
+        "explanation": "Correct. 1,334 rounds up to 2,048 buckets, threshold 1,536, comfortably above 1,000."
+      },
+      {
+        "text": "`HashMap.newHashMap(1000)`",
+        "explanation": "Correct. Added in Java 19, it computes the capacity needed for 1,000 entries at the default load factor (⌈1000 / 0.75⌉ = 1,334)."
+      },
+      {
+        "text": "`new HashMap<>(1024)`",
+        "explanation": "Same problem as 1,000: 1,024 buckets with a threshold of 768."
+      },
+      {
+        "text": "`new HashMap<>(1000, 1.0f)`",
+        "explanation": "Correct. Capacity 1,024 with load factor 1.0 gives a threshold of 1,024, so 1,000 entries fit. Chains are slightly longer on average."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "1. The constructor argument is a *capacity*, rounded up to a power of two. The resize threshold is capacity × load factor.\n2. To hold n entries: capacity × lf ≥ n.\n\n| Call | cap | thresh | ok? |\n|---|---|---|---|\n| (1000) | 1024 | 768 | no |\n| (1334) | 2048 | 1536 | yes |\n| newHashMap(1000) | 2048 | 1536 | yes |\n| (1024) | 1024 | 768 | no |\n| (1000, 1.0f) | 1024 | 1024 | yes |\n\n3. Rule of thumb: pass n / 0.75, or use `newHashMap(n)`.",
+    "link": {
+      "title": "HashMap — Java SE 21 API docs",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/HashMap.html"
+    }
+  },
+  {
+    "id": "hash-resizing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Java `HashMap` doubles from 16 to 32 buckets. An entry whose (spread) hash is 53 sits in bucket 5 of the old table. Which bucket does it move to?",
+    "options": [
+      {
+        "text": "Bucket 5",
+        "explanation": "It stays at 5 only if the bit worth 16 in its hash is 0. For 53 that bit is set."
+      },
+      {
+        "text": "Bucket 10",
+        "explanation": "Doubling does not double the index. The new index is the hash's low 5 bits."
+      },
+      {
+        "text": "Bucket 21",
+        "explanation": "Correct. 53 & 31 = 21, which is the old index 5 plus the old capacity 16, because bit 4 of 53 is set."
+      },
+      {
+        "text": "Bucket 53",
+        "explanation": "The index must be below the table size (32). It is the hash masked with 31, not the raw hash."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Old index: 53 & 15. 53 = 0b110101; low 4 bits 0101 = 5.\n2. New index: 53 & 31; low 5 bits 10101 = 21.\n3. The only new bit is bit 4 (value 16): `53 & 16 = 16`, so the entry moves to 5 + 16 = 21.\n4. Every entry in old bucket i goes to i or i + 16. Java 8 splits each chain into a \"lo\" list and a \"hi\" list in one pass, without recomputing any hashes.",
+    "link": {
+      "title": "HashMap — Java SE 21 API docs",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/HashMap.html"
+    }
+  },
+  {
+    "id": "hash-resizing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In OpenJDK 21, a HashMap has 32 buckets and a chain of eight entries. An ordinary put adds a ninth distinct key to that chain. What happens?",
+    "options": [
+      {
+        "text": "The chain is converted into a red–black tree",
+        "explanation": "Only if the table has at least 64 buckets (`MIN_TREEIFY_CAPACITY`). At 32, Java assumes the table is simply too small."
+      },
+      {
+        "text": "The table doubles to 64 buckets instead of treeifying",
+        "explanation": "Correct. `treeifyBin` checks the table size first; below 64 it calls `resize()`, which may also split the long chain across two buckets."
+      },
+      {
+        "text": "Nothing: chains are only treeified when they reach 64 entries",
+        "explanation": "64 is the minimum *table* capacity for treeifying. The chain threshold is 8."
+      },
+      {
+        "text": "The map throws an exception to signal a bad hash function",
+        "explanation": "Java never rejects keys for colliding; it degrades gracefully."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The ordinary putVal path invokes treeifyBin when appending to a chain that already has eight nodes.\n2. `treeifyBin` first checks: is `table.length < MIN_TREEIFY_CAPACITY` (64)? Here 32 < 64.\n3. So it resizes to 64 buckets. Entries in the long chain split between bucket i and i + 32 according to one more hash bit.\n4. If the chain is still 8+ long once the table has 64 or more buckets (e.g. all keys share the same full hash), the next insert into it converts it to a tree, giving O(log n) lookups for comparable keys.",
+    "link": {
+      "title": "JEP 180: Handle Frequent HashMap Collisions with Balanced Trees",
+      "url": "https://openjdk.org/jeps/180"
+    }
+  },
+  {
+    "id": "hash-resizing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A table doubles when α reaches 1 and halves when α drops below ½. A workload sits at exactly the boundary, alternating insert and delete. What goes wrong, and what is the standard fix?",
+    "options": [
+      {
+        "text": "Nothing: amortised analysis guarantees O(1) per operation",
+        "explanation": "The amortised argument needs many cheap operations between resizes. Here a resize can follow every operation, so there is nothing to amortise against."
+      },
+      {
+        "text": "The table runs out of memory",
+        "explanation": "Memory use oscillates between two sizes; it does not grow without bound."
+      },
+      {
+        "text": "Lookups return wrong results during the resize",
+        "explanation": "A correct resize rehashes everything; results stay correct. The problem is purely cost."
+      },
+      {
+        "text": "Each insert doubles and each delete halves, so every operation costs O(n); shrink only when α falls to ¼",
+        "explanation": "After growth the load is one half; one delete triggers a shrink, leaving the smaller table nearly full, and reinsertion grows it again. A quarter-load shrink threshold creates a useful gap."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Just after a double, m = 16 holds 8 keys: α = ½.\n2. Delete one key: 7/16 < ½, so halve to m = 8 (rehash 7 keys). Insert one: 8/8 = 1, so double to 16 again (rehash 8 keys).\n3. Alternate insert and delete around the boundary and you pay O(n) on almost every operation: thrashing.\n4. Fix: hysteresis. After a double, α = ½; after a halve (at ¼), α = ½. Either way you are at least m/4 operations from the next resize, which pays for it.\n5. Many production tables (including CPython's dict) never shrink on delete at all.",
+    "link": {
+      "title": "Dynamic array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_array"
+    }
+  },
+  {
+    "id": "hash-resizing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the ordinary combined-table layout with general keys in CPython 3.14 are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Iteration follows insertion order because entries are stored in a dense array in the order they were added",
+        "explanation": "Correct. The sparse index array only holds positions into the dense entries array, and iteration walks the entries."
+      },
+      {
+        "text": "Each slot in the index array uses 1, 2, 4 or 8 bytes depending on the table size",
+        "explanation": "Correct. A table of up to 128 slots can use 1-byte indices, which is a large part of the memory saving."
+      },
+      {
+        "text": "A table of size 8 can hold all 8 keys before resizing",
+        "explanation": "Usable space is ⅔ of the size: 5 keys in a table of 8. The 6th insert resizes."
+      },
+      {
+        "text": "Collisions are resolved with linear probing, one slot at a time",
+        "explanation": "CPython uses a perturbed sequence, `i = (5*i + perturb + 1) & mask` with `perturb >>= 5` each step, so high hash bits influence the probe order."
+      },
+      {
+        "text": "Deleting a key leaves a dummy marker so lookups can continue along the probe sequence",
+        "explanation": "Correct. This is a tombstone: lookups must continue past it, so it cannot simply be cleared."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. **Order**: the compact design (3.6, guaranteed from 3.7) splits the table into a sparse `indices` array and a dense `entries` array. True.\n2. **Index width**: int8 for small tables, growing to int16, int32 or int64. True.\n3. **Usable fraction**: `USABLE_FRACTION(n) = (n << 1) / 3`, so 16/3 = 5 for n = 8. False.\n4. **Probing**: perturbation, not linear. False.\n5. **Deletion**: the index slot becomes `DKIX_DUMMY`; rebuilding compacts entries, while GIL-enabled builds can also reuse dummy index slots during insertion. True.",
+    "link": {
+      "title": "CPython dictobject.c source",
+      "url": "https://github.com/python/cpython/blob/main/Objects/dictobject.c"
+    }
+  }
+]

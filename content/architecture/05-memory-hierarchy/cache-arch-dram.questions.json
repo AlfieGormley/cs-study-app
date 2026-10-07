@@ -1,0 +1,378 @@
+[
+  {
+    "id": "cache-arch-dram-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why must DRAM be **refreshed**, when the SRAM used for caches does not need it?",
+    "options": [
+      {
+        "text": "Conventional DRAM stores information as capacitor charge that leaks, so retention needs periodic restoration",
+        "explanation": "Correct. Conventional 1T1C DRAM cells need refresh; static SRAM cells retain their state through feedback while sufficiently powered. Exact retention intervals and SRAM cell designs vary."
+      },
+      {
+        "text": "Refresh clears out stale data so the cache stays coherent with DRAM",
+        "explanation": "Refresh is purely electrical: it restores the same value. Coherence between caches and memory is handled by the cache protocol, not by DRAM refresh."
+      },
+      {
+        "text": "DRAM loses its contents when the CPU is idle, so refresh keeps it warm",
+        "explanation": "Leakage happens all the time, busy or idle, and refresh continues regardless of CPU activity."
+      },
+      {
+        "text": "Refresh is only needed after a write, to commit the new value",
+        "explanation": "Every row needs refreshing within the retention window whether or not it has been written. (Reads do restore the row they open, but untouched rows still need refresh.)"
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A conventional DRAM cell uses a transistor and capacitor. Charge state encodes data, but charged does not universally mean logical 1. Leakage eventually makes sensing unreliable, so rows are periodically sensed and restored under device-specific timing rules. A conventional SRAM latch uses feedback while powered and does not require DRAM-style refresh. No universal DDR4 retention window is assumed.",
+    "link": {
+      "title": "Dynamic random-access memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_random-access_memory"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the **peak** bandwidth of one DDR4-3200 channel (64-bit bus)?",
+    "options": [
+      {
+        "text": "3.2 GB/s",
+        "explanation": "This counts one byte per transfer. The bus is 64 bits = 8 bytes wide."
+      },
+      {
+        "text": "12.8 GB/s",
+        "explanation": "This uses the 1,600 MHz clock instead of the 3,200 MT/s data rate. DDR transfers twice per clock."
+      },
+      {
+        "text": "51.2 GB/s",
+        "explanation": "51.2 GB/s is a *dual*-channel DDR4-3200 system. One channel is half that."
+      },
+      {
+        "text": "25.6 GB/s",
+        "explanation": "Correct. 3,200 million transfers/s × 8 bytes = 25,600 MB/s = 25.6 GB/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Peak bandwidth = transfers per second × bytes per transfer.\n\n```\nDDR4-3200 = 3,200 MT/s\nbus width = 64 bits = 8 bytes\n3,200 M x 8 B = 25,600 MB/s\n              = 25.6 GB/s\n```\n\nThe \"3200\" is already the data rate (double data rate on a 1,600 MHz clock), so don't double it again. Two channels give 51.2 GB/s.",
+    "link": {
+      "title": "DDR4 SDRAM — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/DDR4_SDRAM"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On a two-node Linux NUMA system with default local policy, a thread on node 0 obtains a fresh anonymous buffer whose data pages are not yet backed. A pinned node-1 thread first writes every page. Assume node 1 is allowed and has enough memory, no policy override, and no migration. Where are the data pages initially allocated?",
+    "options": [
+      {
+        "text": "On socket 0's node, because that thread called `malloc`",
+        "explanation": "The prompt explicitly stipulates newly faulted data pages; the allocating API caller does not determine their location. Real malloc can reuse already backed memory."
+      },
+      {
+        "text": "On node 1, where the first write faults occur",
+        "explanation": "Correct under the stipulated local-allocation and available-memory assumptions."
+      },
+      {
+        "text": "Spread evenly over both nodes",
+        "explanation": "That is the *interleave* policy (`numactl --interleave=all`), which you must ask for; it isn't the default."
+      },
+      {
+        "text": "On whichever node has the most free memory at `malloc` time",
+        "explanation": "The stipulated local policy and available memory select node 1. Allowed-node restrictions and allocation fallback can matter in other cases."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The first writes fault in the stipulated fresh anonymous data pages. With a pinned node-1 worker, local policy, allowed local memory and no fallback/migration, initial placement is node 1. Cache hits by another node do not incur remote DRAM latency; only accesses that reach remote memory do. Reused malloc storage, prior touches or later migration invalidate the simple first-touch inference. Check placement with numa_maps or numastat.",
+    "link": {
+      "title": "NUMA memory policy — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which memory kit has the lower **CAS latency in nanoseconds**: DDR4-3200 CL16 or DDR4-3600 CL18?",
+    "options": [
+      {
+        "text": "DDR4-3200 CL16, because 16 cycles is fewer than 18",
+        "explanation": "Cycles are not nanoseconds. DDR4-3600's clock is faster, so each of its cycles is shorter."
+      },
+      {
+        "text": "DDR4-3600 CL18, because a higher data rate is always lower latency",
+        "explanation": "Higher MT/s shortens each cycle, but CL18 also uses more cycles. You have to do the division."
+      },
+      {
+        "text": "They are the same: 10 ns each",
+        "explanation": "Correct. 16 × 2,000 / 3,200 = 10 ns and 18 × 2,000 / 3,600 = 10 ns."
+      },
+      {
+        "text": "It can't be calculated without the tRCD and tRP values",
+        "explanation": "CAS latency alone converts directly; tRCD and tRP only matter for row-empty and row-conflict accesses."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Clock frequency = data rate / 2 (double data rate).\n   - DDR4-3200: 1,600 MHz → 0.625 ns per cycle\n   - DDR4-3600: 1,800 MHz → 0.556 ns per cycle\n2. Multiply by CL, or use ns = CL × 2,000 / MT/s:\n\n```\n3200 CL16: 16 x 2000 / 3200\n         = 10.0 ns\n3600 CL18: 18 x 2000 / 3600\n         = 10.0 ns\n```\n\n3. Same CAS interval, not necessarily the same whole-load latency; the 3600 configuration has 12.5% more theoretical data bandwidth (28.8 vs 25.6 GB/s per channel).",
+    "link": {
+      "title": "Memory timings — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_timings"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A DDR4-3200 module is rated 22-22-22 (CL-tRCD-tRP). A read targets a bank that has a **different row open**. Assume precharge is already legal, the command bus is free, and all other timing constraints are satisfied. What is the simplified minimum PRE→ACT→READ-to-first-data interval?",
+    "options": [
+      {
+        "text": "13.75 ns",
+        "explanation": "That is a *row hit* (CL only). Here the wrong row is open, so it must be closed and the right one opened first."
+      },
+      {
+        "text": "27.5 ns",
+        "explanation": "That is a *row-empty* access (tRCD + CL), when the bank has no row open. A conflict also needs a precharge."
+      },
+      {
+        "text": "66 ns",
+        "explanation": "66 is the total in *cycles*. At 3,200 MT/s a cycle is 0.625 ns, not 1 ns."
+      },
+      {
+        "text": "41.25 ns",
+        "explanation": "Correct. Row conflict = tRP + tRCD + CL = 66 cycles; 66 × 2,000 / 3,200 = 41.25 ns."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Row conflict: **PRE** (close the old row, tRP) → **ACT** (open the new row, tRCD) → **READ** (CL).\n2. Cycles: 22 + 22 + 22 = 66.\n3. Cycle time: clock = 3,200 / 2 = 1,600 MHz → 0.625 ns.\n\n```\n66 x 0.625 = 41.25 ns\n```\n\nCompare: row hit 13.75 ns, row empty 27.5 ns. Controllers reorder requests to favour row hits for exactly this reason.",
+    "link": {
+      "title": "Memory timings — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_timings"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a hypothetical steady-state model, a core tracks at most 12 demand transfers, each 64 bytes, with average request residency 80 ns. Using Little's law, what is the most bandwidth that core's demand misses can sustain?",
+    "options": [
+      {
+        "text": "0.8 GB/s",
+        "explanation": "That's one miss in flight (64 B / 80 ns), the pointer-chasing case. With 12 independent misses, they overlap."
+      },
+      {
+        "text": "9.6 GB/s",
+        "explanation": "Correct. 12 × 64 B = 768 B in flight; 768 B / 80 ns = 9.6 B/ns = 9.6 GB/s."
+      },
+      {
+        "text": "25.6 GB/s",
+        "explanation": "That's the channel's peak, which assumes enough requests in flight to keep it busy. 12 misses at 80 ns can't do that."
+      },
+      {
+        "text": "61.4 GB/s",
+        "explanation": "This multiplies the bytes in flight by the latency (768 × 80 = 61,440) instead of dividing. Bandwidth = bytes in flight / latency."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Little's law: throughput = items in flight / time per item.\n\n```\nin flight = 12 x 64 B = 768 B\nlatency   = 80 ns\n768 / 80  = 9.6 B/ns = 9.6 GB/s\n```\n\nTo saturate a 51.2 GB/s dual-channel system you'd need 51.2 × 80 / 64 = 64 lines in flight. The hypothetical 12-request demand path alone is insufficient. Additional concurrent traffic could come from other cores or implementation-specific prefetch resources; this is not a universal statement about every core.",
+    "link": {
+      "title": "Little's law — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a two-socket server, local DRAM latency is 90 ns and remote is 150 ns. A badly placed workload makes 30% of its DRAM accesses remote. What is its average DRAM latency?",
+    "options": [
+      {
+        "text": "120 ns",
+        "explanation": "120 ns is the simple average of 90 and 150, which assumes half the accesses are remote."
+      },
+      {
+        "text": "108 ns",
+        "explanation": "Correct. 0.7 × 90 + 0.3 × 150 = 63 + 45 = 108 ns."
+      },
+      {
+        "text": "132 ns",
+        "explanation": "This swaps the weights: 0.3 × 90 + 0.7 × 150 = 27 + 105 = 132 ns. Only 30% of accesses are remote, so 70% get the 90 ns local latency."
+      },
+      {
+        "text": "117 ns",
+        "explanation": "This adds 30% of the *local* latency (90 + 0.3 × 90 = 117). The extra cost of a remote access is the 60 ns difference, so the average is 90 + 0.3 × 60 = 108."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Weighted average over local and remote:\n\n```\n0.7 x 90  = 63\n0.3 x 150 = 45\ntotal     = 108 ns\n```\n\nEquivalently: 90 + 0.3 × (150 − 90) = 90 + 18 = 108 ns, 20% worse than all-local. Bandwidth can suffer more than latency, because remote traffic shares the inter-socket link.",
+    "link": {
+      "title": "Memory part 4: NUMA support, Ulrich Drepper (LWN)",
+      "url": "https://lwn.net/Articles/254445/"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Consider a conventional stream/stride hardware prefetcher that supports forward, backward and constant-stride streams, but does not inspect loaded data values. Which patterns provide the regular address sequences it is designed to detect? Select all that apply.",
+    "options": [
+      {
+        "text": "Summing a large array of doubles from start to end",
+        "explanation": "Correct. Forward sequential addresses form a regular stream."
+      },
+      {
+        "text": "Reading every 4th element of an array (constant stride)",
+        "explanation": "Correct. Every fourth element is a constant-stride sequence, within the assumed engine's capability."
+      },
+      {
+        "text": "Walking a linked list whose nodes are scattered in the heap",
+        "explanation": "Scattered node addresses have no regular stream/stride relation for this engine. This does not imply that all specialised hardware lacks indirect-prefetch capabilities."
+      },
+      {
+        "text": "Probing a large hash table at hashed (pseudo-random) slots",
+        "explanation": "Hashed addresses are random by design; there's no stride for the prefetcher to learn."
+      },
+      {
+        "text": "Walking an array backwards, from the last element to the first",
+        "explanation": "Correct. Streamers detect descending as well as ascending streams."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Forward, backward and constant-stride sequences match the specified engine. Scattered pointer chains and pseudo-random probes do not provide that stream/stride pattern. Other hardware can have different capabilities: Intel documents data-dependent prefetching for supported indirect patterns. Page-boundary and lookahead rules also vary by engine.",
+    "link": {
+      "title": "Cache prefetching — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_prefetching"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For an ideal prefetch model, assume an accepted request takes 120 ns and each iteration takes exactly 8 ns including issue overhead, with enough request capacity and no eviction. What minimum integer lead distance satisfies D×8 ns ≥ 120 ns?",
+    "options": [
+      {
+        "text": "15",
+        "explanation": "Correct. D = ceil(120 / 8) = 15 iterations: the line is requested 15 × 8 = 120 ns before it's needed."
+      },
+      {
+        "text": "1",
+        "explanation": "Prefetching one iteration ahead starts the fetch only 8 ns early; the load would still wait about 112 ns."
+      },
+      {
+        "text": "8",
+        "explanation": "8 is the iteration time in ns, not the distance. 8 iterations × 8 ns = 64 ns covers only about half the latency."
+      },
+      {
+        "text": "120",
+        "explanation": "120 iterations ahead is far more than needed: 960 ns early. The line might be evicted before use, and it needs many prefetches in flight at once."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "D = ceil(120/8) = 15. This is an ideal timing estimate, not a guaranteed setting for real hardware. The index array and table indices must be valid; in a size_t loop with i<n and positive D, guard future indexing with n-i>D to avoid overflow in i+D. Prefetch address evaluation must be safe even when the hint may be ignored. Data-dependent hardware prefetching exists, so software is not universally the only way to anticipate indirect accesses.",
+    "link": {
+      "title": "Cache prefetching — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_prefetching"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Measurements confirm that a fresh 32 GiB array was first faulted by a pinned main thread on node 0 and remains entirely there. Workers pinned across two nodes use disjoint slices. Local policy, sufficient local memory and no migration apply. Which change to the NEXT fresh allocation's initialisation most directly improves placement near each worker?",
+    "options": [
+      {
+        "text": "Allocate the array with huge pages",
+        "explanation": "Huge pages reduce TLB misses, but every page would still be on one node. The NUMA placement problem remains."
+      },
+      {
+        "text": "Before any other touch, have each pinned worker initialise the fresh pages in its own later slice",
+        "explanation": "Correct under the stated local policy. Re-zeroing the already backed existing allocation would not itself relocate its pages."
+      },
+      {
+        "text": "Add more DRAM to socket 0",
+        "explanation": "Capacity is sufficient by assumption. Adding more capacity alone does not place each worker's pages locally."
+      },
+      {
+        "text": "Use more worker threads so the remote latency is averaged out",
+        "explanation": "More threads on socket 1 mean more remote accesses, all funnelled through socket 0's memory controllers and the inter-socket link."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Allocate fresh untouched storage, pin workers, and use the same partition for initialisation and later processing. Their first write faults can then allocate pages on their respective local nodes under the stated policy. Page boundaries and worker partitions must be considered. Merely repeating a parallel zeroing loop on old backed pages does not move them. Verify resulting placement and performance rather than assuming a fixed remote-latency ratio or thread-count scaling limit.",
+    "link": {
+      "title": "NUMA memory policy — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For conventional DDR5 DIMMs with two 32-data-bit sub-channels (excluding ECC bits) and the stated DDR5-4800 configuration, which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "The conventional DDR5 DIMM data interface comprises two independent 32-bit sub-channels",
+        "explanation": "Correct for the module organisation specified; optional ECC adds bits beyond the payload width."
+      },
+      {
+        "text": "DDR5 uses bursts of 16 so that one burst on a 32-bit sub-channel still delivers a 64-byte cache line",
+        "explanation": "Correct. BL16 × 4 bytes = 64 bytes, matching the line size."
+      },
+      {
+        "text": "DDR5-4800 CL40 necessarily has lower CAS latency than DDR4-3200 CL22",
+        "explanation": "False: these examples give about 16.7 ns versus 13.75 ns. This comparison does not establish a universal ordering of all DDR4 and DDR5 configurations."
+      },
+      {
+        "text": "A DDR5-4800 DIMM has a peak bandwidth of 38.4 GB/s",
+        "explanation": "Correct. 4,800 MT/s × 8 bytes (two 4-byte sub-channels) = 38.4 GB/s."
+      },
+      {
+        "text": "DDR5 no longer needs refresh because of on-die ECC",
+        "explanation": "On-die ECC does not remove charge leakage or the need for refresh. Refresh intervals and modes are part-specific; on-die ECC also does not replace end-to-end memory-system ECC."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Two 32-bit payload sub-channels supply eight bytes per combined transfer. BL16×4 B gives 64 B per sub-channel burst. At 4,800 MT/s the combined theoretical payload bandwidth is 38.4 GB/s. The specified CL40 example converts to 16.7 ns, versus 13.75 ns for the specified DDR4 CL22 example. Refresh remains necessary. These facts do not guarantee a particular application speedup.",
+    "link": {
+      "title": "DDR5 SDRAM — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/DDR5_SDRAM"
+    }
+  },
+  {
+    "id": "cache-arch-dram-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In an illustrative all-bank refresh model, a rank is blocked for 350 ns every 7,812.5 ns. In a second operating mode the interval halves to 3,906.25 ns, with unchanged blocking duration. What unavailable-time fractions result?",
+    "options": [
+      {
+        "text": "About 0.45% in both modes",
+        "explanation": "350/7,812.5 is 0.0448, or 4.48%, and halving the interval doubles this fraction."
+      },
+      {
+        "text": "About 4.5% initially, then zero",
+        "explanation": "The second mode still refreshes and does so twice as often in the stipulated model."
+      },
+      {
+        "text": "About 22%; refresh dominates the rank",
+        "explanation": "This inverts the ratio: 7,812.5 / 350 ≈ 22. The rank is blocked for 350 ns out of every 7,812.5 ns, which is about 4.5%."
+      },
+      {
+        "text": "About 4.5% initially, rising to about 9%",
+        "explanation": "Correct: 350/7,812.5 = 4.48%, and 350/3,906.25 = 8.96%."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Unavailable fraction = blocking duration / interval. The two ratios are 0.0448 and 0.0896, approximately 4.5% and 9%. A universal density/temperature timing table is absent because these exact parameters have not been verified as a general product rule. DDR5 same-bank refresh targets one selected bank in each bank group, not only one bank in the whole device.",
+    "link": {
+      "title": "Memory part 1: RAM, Ulrich Drepper (LWN)",
+      "url": "https://lwn.net/Articles/250967/"
+    }
+  }
+]

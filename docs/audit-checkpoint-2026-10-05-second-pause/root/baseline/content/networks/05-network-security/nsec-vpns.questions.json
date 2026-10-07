@@ -1,0 +1,348 @@
+[
+  {
+    "id": "nsec-vpns-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the difference between a plain tunnel such as GRE and a VPN?",
+    "options": [
+      {
+        "text": "A tunnel works at layer 2, a VPN at layer 3",
+        "explanation": "GRE carries layer 3 packets and VXLAN carries layer 2 frames; layer is not the distinction."
+      },
+      {
+        "text": "A VPN is a tunnel that also authenticates the endpoints and encrypts and integrity-protects the traffic",
+        "explanation": "Correct. GRE provides reachability only: anyone on the path can read it, and forged packets are accepted."
+      },
+      {
+        "text": "A VPN is always faster because it compresses traffic",
+        "explanation": "VPNs add overhead and do not compress by default."
+      },
+      {
+        "text": "A tunnel needs the internet; a VPN works only inside a LAN",
+        "explanation": "Both run over any IP network."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Encapsulation alone = put packet A inside packet B. That is a tunnel.\n2. Add cryptography:\n   - authenticate peers (certs, keys),\n   - encrypt (confidentiality),\n   - MAC each packet (integrity, anti-replay).\n3. That combination is a VPN. GRE inside IPsec is a common pairing: GRE for the tunnel interface, IPsec for the security.",
+    "link": {
+      "title": "RFC 4301: Security Architecture for IP",
+      "url": "https://www.rfc-editor.org/rfc/rfc4301"
+    }
+  },
+  {
+    "id": "nsec-vpns-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using 20 bytes for IPv4, 8 for UDP and 8 for the VXLAN header, and 14 for the inner Ethernet header, what is the largest inner IP packet a VXLAN overlay can carry over a 1,500-byte underlay without fragmentation?",
+    "options": [
+      {
+        "text": "1,472",
+        "explanation": "That subtracts only IPv4 and UDP (28 bytes), forgetting the VXLAN and inner Ethernet headers."
+      },
+      {
+        "text": "1,464",
+        "explanation": "That subtracts IPv4, UDP and VXLAN but forgets the inner Ethernet header that VXLAN carries."
+      },
+      {
+        "text": "1,450",
+        "explanation": "Correct. 1,500 − (20 + 8 + 8 + 14) = 1,450."
+      },
+      {
+        "text": "1,500",
+        "explanation": "The underlay link limits the outer packet to 1,500 bytes, so the inner one must be smaller."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The underlay's 1,500 bytes must hold:\n\n```\nouter IPv4      20\nUDP              8\nVXLAN            8\ninner Ethernet  14\ninner IP packet  ?\n```\n\n```\n1500 - 20 - 8 - 8 - 14 = 1450\n```\n\nThe outer Ethernet header (another 14) is on the wire but not counted against the IP MTU. Alternatively, raise the underlay MTU to at least 1,550 (or use jumbo frames) and keep 1,500 inside.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  },
+  {
+    "id": "nsec-vpns-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In IPsec, what does IKEv2 do, as opposed to ESP?",
+    "options": [
+      {
+        "text": "IKEv2 encrypts the data packets; ESP authenticates the peers",
+        "explanation": "These are the wrong way round."
+      },
+      {
+        "text": "IKEv2 is the older version and ESP replaced it",
+        "explanation": "They are two halves of the same system, not successive versions."
+      },
+      {
+        "text": "IKEv2 handles NAT; ESP handles routing",
+        "explanation": "NAT detection is one IKE feature, but neither is a routing protocol."
+      },
+      {
+        "text": "IKEv2 authenticates the peers and negotiates keys and Security Associations; ESP uses those keys to protect each data packet",
+        "explanation": "Correct. IKEv2 (UDP 500/4500) is the control plane; ESP (IP protocol 50) is the data plane."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Before protecting traffic, the gateways need to agree who they are and which keys to use: **IKEv2** does this, producing a pair of SAs.\n2. Each SA has an SPI, keys and algorithms.\n3. **ESP** then encrypts and MACs every packet, putting the SPI and a sequence number in its header so the receiver finds the right SA.\n4. IKE re-runs periodically to rekey.",
+    "link": {
+      "title": "RFC 4301: Security Architecture for IP",
+      "url": "https://www.rfc-editor.org/rfc/rfc4301"
+    }
+  },
+  {
+    "id": "nsec-vpns-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A WireGuard tunnel is up. SSH sessions and small web pages work, but `git clone` and large downloads hang. A firewall on the path drops all ICMP. What is the most likely cause and the best fix?",
+    "options": [
+      {
+        "text": "WireGuard's encryption is too slow for bulk transfers; switch to IPsec",
+        "explanation": "Crypto speed would make transfers slower, not hang. And IPsec has the same MTU issue."
+      },
+      {
+        "text": "A PMTU black hole: large packets exceed the tunnel MTU and the ICMP \"packet too big\" messages are dropped; set the tunnel MTU correctly and clamp TCP MSS (and allow that ICMP type)",
+        "explanation": "Correct. Small packets fit, so handshakes and short exchanges work; full-size segments are silently dropped."
+      },
+      {
+        "text": "The AllowedIPs list is missing the Git server",
+        "explanation": "Then nothing to the Git server would work, including the initial connection."
+      },
+      {
+        "text": "The NAT mapping expired; set PersistentKeepalive",
+        "explanation": "An expired mapping would break the whole tunnel, not just big packets."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Pattern: small works, large hangs. That points to size.\n2. Hosts send 1,500-byte packets; the tunnel path can carry only, say, 1,420 inside.\n3. With DF set, a router drops the packet and sends ICMP \"packet too big\".\n4. The firewall drops that ICMP, so the sender never learns, and retransmits the same oversized packet forever.\n5. Fix:\n   - interface MTU 1,420 (WireGuard default),\n   - MSS clamp: 1,420 − 40 = 1,380,\n   - allow ICMPv4 3/4 and ICMPv6 type 2.",
+    "link": {
+      "title": "RFC 4459: MTU and Fragmentation Issues with Tunneling",
+      "url": "https://www.rfc-editor.org/rfc/rfc4459"
+    }
+  },
+  {
+    "id": "nsec-vpns-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A receiver uses a replay window of size 4 (accept a sequence number only if it is greater than `top − 4` and has not been seen). It accepts packets 1, 2, 5, 3 in that order. What happens to the next three packets: 5, 1 and 9?",
+    "options": [
+      {
+        "text": "5 rejected (duplicate), 1 rejected (too old), 9 accepted",
+        "explanation": "Correct. After 5, `top` is 5 and the window is 2..5. 5 was seen; 1 ≤ 5 − 4 = 1 is too old; 9 is new and becomes the new top."
+      },
+      {
+        "text": "5 accepted, 1 rejected, 9 accepted",
+        "explanation": "5 is a duplicate: it was accepted earlier and is still inside the window."
+      },
+      {
+        "text": "5 rejected, 1 accepted (never seen in the window), 9 accepted",
+        "explanation": "1 was seen, and anyway 1 ≤ top − size, so it falls off the left of the window and is rejected as too old."
+      },
+      {
+        "text": "All three rejected, because they arrive out of order",
+        "explanation": "Windows exist precisely to tolerate reordering; 9 is new and is accepted."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track `top` and the window (top − 3 .. top):\n\n```\nseq accept? top window\n1   yes     1   -2..1\n2   yes     2   -1..2\n5   yes     5    2..5\n3   yes     5    2..5 (3 unseen)\n5   no      5    duplicate\n1   no      5    1 <= 5-4, too old\n9   yes     9    6..9\n```\n\nA packet below the window is rejected even if it was never received, because the receiver no longer remembers whether it was. That is why the window must be large enough for real reordering.",
+    "link": {
+      "title": "RFC 4303: IP Encapsulating Security Payload",
+      "url": "https://www.rfc-editor.org/rfc/rfc4303"
+    }
+  },
+  {
+    "id": "nsec-vpns-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A branch office's IPsec tunnel to AWS completes IKE negotiation but no traffic flows. The branch sits behind its ISP's NAT. Which is most likely missing from the branch firewall rules?",
+    "options": [
+      {
+        "text": "TCP 443 outbound",
+        "explanation": "IPsec does not use TCP 443 (some SSL VPNs do, but this is IPsec)."
+      },
+      {
+        "text": "IP protocol 47 (GRE)",
+        "explanation": "GRE is a separate tunnel protocol; this tunnel uses ESP."
+      },
+      {
+        "text": "UDP 4500 outbound and its replies, used by NAT-T to carry ESP once a NAT is detected",
+        "explanation": "Correct. IKE starts on UDP 500, detects the NAT and moves to 4500, and ESP is then wrapped in UDP 4500. If 4500 is blocked, IKE may partly work but data does not."
+      },
+      {
+        "text": "ICMP echo",
+        "explanation": "Ping is useful for testing but IPsec does not depend on it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. IKE begins on UDP 500 and both sides send NAT-detection payloads.\n2. A NAT is found (the branch's private address is rewritten).\n3. Both sides switch to **UDP 4500** for the rest of IKE and for ESP-in-UDP (RFC 3948).\n4. Raw ESP (protocol 50) cannot pass most NATs, because it has no ports to multiplex on.\n5. Checklist: UDP 500, UDP 4500 and, without NAT, protocol 50.",
+    "link": {
+      "title": "RFC 3948: UDP Encapsulation of IPsec ESP Packets",
+      "url": "https://www.rfc-editor.org/rfc/rfc3948"
+    }
+  },
+  {
+    "id": "nsec-vpns-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about WireGuard are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Peers negotiate the cipher suite during the handshake",
+        "explanation": "Incorrect. WireGuard has a fixed set of algorithms; changing them means a new protocol version, which removes downgrade attacks."
+      },
+      {
+        "text": "A peer's AllowedIPs are used both to choose which peer to send a packet to and to check the inner source of packets received from it",
+        "explanation": "Correct. This is cryptokey routing."
+      },
+      {
+        "text": "It does not respond to unauthenticated packets, so it is hard to detect by scanning",
+        "explanation": "Correct. With no valid handshake, there is no reply."
+      },
+      {
+        "text": "It runs over UDP",
+        "explanation": "Correct. Typically on port 51820, which also lets it pass NATs."
+      },
+      {
+        "text": "It can run over TCP for networks that block UDP",
+        "explanation": "Incorrect. WireGuard is UDP only; TCP tunnelling needs an external wrapper."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "| Claim | Verdict |\n|---|---|\n| Cipher negotiation | No, fixed set |\n| AllowedIPs routes and filters | Yes |\n| Silent to junk | Yes |\n| UDP | Yes |\n| TCP mode | No |\n\nCryptokey routing example: peer B has `AllowedIPs = 10.8.0.3/32`. A packet decrypted from B with inner source 10.8.0.9 is dropped, because B is not allowed to speak for that address.",
+    "link": {
+      "title": "WireGuard whitepaper",
+      "url": "https://www.wireguard.com/papers/wireguard.pdf"
+    }
+  },
+  {
+    "id": "nsec-vpns-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A laptop's WireGuard config has `AllowedIPs = 10.20.0.0/16`. The user browses public websites from a hotel. Which statement is correct?",
+    "options": [
+      {
+        "text": "All traffic goes through the VPN because WireGuard is enabled",
+        "explanation": "Only destinations inside AllowedIPs are routed into the tunnel."
+      },
+      {
+        "text": "Public web traffic is blocked",
+        "explanation": "Traffic outside AllowedIPs is simply routed normally, not blocked."
+      },
+      {
+        "text": "Traffic to 10.20.0.0/16 is encrypted to the office; public websites go directly over the hotel network, protected only by their own TLS",
+        "explanation": "Correct. This is a split tunnel. Full tunnelling needs `0.0.0.0/0, ::/0`."
+      },
+      {
+        "text": "Traffic to 10.20.0.0/16 goes directly; everything else goes through the VPN",
+        "explanation": "This is backwards: AllowedIPs lists what goes *into* the tunnel."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. On the sending side, AllowedIPs works like a routing table entry: destination in 10.20.0.0/16 → encrypt to this peer.\n2. A packet to a public site (say 151.101.1.69) matches no peer, so it uses the normal default route via the hotel.\n3. Security implications:\n   - office traffic: VPN-protected,\n   - web traffic: only TLS, and DNS may go to the hotel's resolver.\n4. Many organisations choose full tunnels for managed laptops so traffic passes corporate filtering; others prefer split tunnels for performance. It is a policy choice.",
+    "link": {
+      "title": "WireGuard: protocol and cryptography",
+      "url": "https://www.wireguard.com/protocol/"
+    }
+  },
+  {
+    "id": "nsec-vpns-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Using AES-GCM in ESP tunnel mode over IPv4 (20-byte outer IP, 8-byte ESP header, 8-byte IV, 2 bytes of pad length and next header, 16-byte ICV, padding to a 4-byte boundary), with NAT-T adding 8 bytes of UDP, what is the largest inner packet that fits a 1,500-byte link?",
+    "options": [
+      {
+        "text": "1,480",
+        "explanation": "This subtracts only the outer IP header and ignores ESP, the IV, the trailer, the ICV and NAT-T."
+      },
+      {
+        "text": "1,446",
+        "explanation": "This forgets the 8-byte NAT-T UDP header, which is present whenever a NAT is on the path."
+      },
+      {
+        "text": "1,438",
+        "explanation": "Correct. Overhead is 20 + 8 + 8 + 8 + 2 + 16 = 62 bytes, leaving 1,438, and 1,438 + 2 is already a multiple of 4, so no padding is needed."
+      },
+      {
+        "text": "1,454",
+        "explanation": "This forgets the 16-byte ICV (integrity tag). Every AES-GCM ESP packet carries one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Add the fixed overhead:\n\n```\nouter IPv4        20\nUDP (NAT-T)        8\nESP SPI + seq      8\nIV                 8\npad len + next hdr 2\nICV (GCM tag)     16\ntotal             62\n```\n\n2. Space left: 1,500 − 62 = 1,438 for inner packet + padding.\n3. Alignment: inner + padding + 2 must be a multiple of 4.\n\n```\n1438 + 0 + 2 = 1440 = 4 x 360\n```\n\nSo padding is 0 and the inner packet can be 1,438 bytes. A 1,437-byte packet would also fit (with 1 byte of padding). Without NAT-T the figure rises to 1,446.",
+    "link": {
+      "title": "RFC 4303: IP Encapsulating Security Payload",
+      "url": "https://www.rfc-editor.org/rfc/rfc4303"
+    }
+  },
+  {
+    "id": "nsec-vpns-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A cloud provider's hypervisors build tenant networks with VXLAN over a shared underlay. Which risks or requirements follow from VXLAN's design? Select all that apply.",
+    "options": [
+      {
+        "text": "A host that can send UDP 4789 to a VTEP could inject frames into another tenant's segment by setting its VNI",
+        "explanation": "Correct. VXLAN has no authentication; the VNI is just a number in the header."
+      },
+      {
+        "text": "VXLAN encrypts frames, so the underlay can be shared with untrusted users",
+        "explanation": "Incorrect. VXLAN provides no confidentiality; RFC 7348 says so."
+      },
+      {
+        "text": "The underlay MTU must be raised (for example to jumbo frames), or tenants' MTU lowered to 1,450",
+        "explanation": "Correct. The 50 bytes of encapsulation must fit somewhere."
+      },
+      {
+        "text": "VXLAN over the public internet should be wrapped in IPsec or WireGuard",
+        "explanation": "Correct. Across untrusted links it needs an encrypted, authenticated tunnel."
+      },
+      {
+        "text": "The 24-bit VNI limits a provider to 4,094 tenant networks",
+        "explanation": "Incorrect. 4,094 is the 12-bit VLAN limit; 24 bits give about 16.7 million."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. VXLAN header = flags + **24-bit VNI** + reserved. No MAC, no key.\n\n```\n2^24 = 16,777,216 segments\n2^12 - 2 = 4,094 VLANs\n```\n\n2. Injection: craft UDP/4789 with the victim's VNI and any inner frame. The VTEP decapsulates and delivers it.\n3. Mitigations: isolate and filter the underlay, accept VXLAN only from known VTEPs, encrypt across untrusted links.\n4. MTU: 50 bytes per frame, hence jumbo underlays.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  },
+  {
+    "id": "nsec-vpns-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company's remote-access VPN gives connected laptops full access to the internal network. Attackers buy a stolen VPN password and log in. What design change most reduces the damage this kind of incident can do?",
+    "options": [
+      {
+        "text": "Change the VPN from IPsec to WireGuard",
+        "explanation": "The protocol is not the weakness; valid credentials work with either."
+      },
+      {
+        "text": "Increase the VPN's encryption key length",
+        "explanation": "Encryption is not being broken; the attacker is an authenticated user."
+      },
+      {
+        "text": "Move the VPN gateway to a different public IP",
+        "explanation": "The attacker has the credentials, not just the address."
+      },
+      {
+        "text": "Require MFA and device certificates, put VPN users in their own segment, and give most users per-application access instead of network access",
+        "explanation": "Correct. This attacks both the entry (stolen password alone no longer works) and the blast radius (even a valid session reaches only what it needs)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The VPN worked perfectly: it authenticated a valid credential and encrypted the attacker's traffic.\n2. The failure is architectural: \"connected\" meant \"trusted\" (castle and moat).\n3. Reduce the chance of entry: MFA, device certificates, so a password alone fails.\n4. Reduce the blast radius: segment VPN users; allow only needed services.\n5. Long term: per-application access through an identity-aware proxy (zero trust, lesson 2), keeping network VPNs for site-to-site and admins.",
+    "link": {
+      "title": "RFC 4301: Security Architecture for IP",
+      "url": "https://www.rfc-editor.org/rfc/rfc4301"
+    }
+  }
+]

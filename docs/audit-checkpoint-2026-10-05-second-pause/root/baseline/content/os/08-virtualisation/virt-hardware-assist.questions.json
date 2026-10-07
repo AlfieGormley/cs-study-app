@@ -1,0 +1,340 @@
+[
+  {
+    "id": "virt-hardware-assist-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "With Intel VT-x enabled, in which mode and ring does a guest's kernel run?",
+    "options": [
+      {
+        "text": "VMX root mode, ring 0",
+        "explanation": "Root mode ring 0 is where the hypervisor runs. Putting the guest there would give it control of the host."
+      },
+      {
+        "text": "VMX non-root mode, ring 3",
+        "explanation": "Squeezing the guest kernel into ring 3 is the old trap-and-emulate approach that VT-x was designed to avoid."
+      },
+      {
+        "text": "VMX non-root mode, ring 0",
+        "explanation": "Correct. Non-root mode has its own full set of rings, so the guest kernel really is in ring 0 and instructions like `POPF` behave normally."
+      },
+      {
+        "text": "System management mode",
+        "explanation": "SMM is a firmware mode unrelated to running guests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. VT-x adds a second dimension: root (hypervisor) vs non-root (guest).\n2. Each dimension has rings 0–3.\n3. The guest kernel goes in non-root ring 0, guest applications in non-root ring 3.\n4. Because privilege inside the guest is now genuine, sensitive instructions behave as on bare metal; the hypervisor regains control only through configured **VM exits**.",
+    "link": {
+      "title": "x86 virtualization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_virtualization"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the main job of the VMCS (VMCB on AMD)?",
+    "options": [
+      {
+        "text": "It stores the guest's disk image",
+        "explanation": "Disk images live in files or block devices managed by the host; the VMCS is a small CPU-defined structure per vCPU."
+      },
+      {
+        "text": "It holds a vCPU's saved guest and host state and the controls deciding which events cause VM exits",
+        "explanation": "Correct. The CPU loads guest state from it on entry and saves it on exit, and its execution controls let the hypervisor choose what traps."
+      },
+      {
+        "text": "It maps guest physical to host physical addresses",
+        "explanation": "That is the job of EPT/NPT tables, which the VMCS merely points at."
+      },
+      {
+        "text": "It schedules vCPUs onto physical cores",
+        "explanation": "Scheduling is done by the hypervisor's (or host kernel's) scheduler; each vCPU thread is just scheduled like any other."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Think of the VMCS as the contract for one vCPU:\n\n- **Guest state area**: registers to load on VM entry and save on exit.\n- **Host state area**: where the hypervisor resumes on exit.\n- **Execution controls**: exit on `HLT`? on CR3 writes? on these I/O ports or MSRs?\n- **Exit information**: the reason for the last exit.\n\nThe hypervisor fills it in, executes `VMLAUNCH`/`VMRESUME`, and the CPU follows it.",
+    "link": {
+      "title": "x86 virtualization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_virtualization"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a guest using a virtio-net driver usually send packets far faster than one using an emulated Intel e1000 card?",
+    "options": [
+      {
+        "text": "virtio uses a faster physical cable",
+        "explanation": "Both are virtual devices; the physical network is the same."
+      },
+      {
+        "text": "virtio skips the host kernel and writes directly to the wire",
+        "explanation": "Plain virtio still goes through a host back end (QEMU or vhost-net). Bypassing the host is what SR-IOV does."
+      },
+      {
+        "text": "virtio compresses packets",
+        "explanation": "virtio does not compress traffic."
+      },
+      {
+        "text": "virtio batches buffers in shared-memory rings and needs about one notification per batch, while e1000 emulation exits on each register access",
+        "explanation": "Correct. Emulating real hardware means trapping every MMIO register write; virtio was designed for VMs so it minimises exits."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. An emulated e1000 driver programs device registers: each MMIO write is a VM exit and usually a trip to QEMU in userspace.\n2. A single transmit can take several such exits.\n3. virtio puts descriptors into a virtqueue in guest memory and 'kicks' the host once; the host processes many buffers and writes results to the used ring.\n4. Fewer exits per packet means much higher throughput and lower CPU cost.",
+    "link": {
+      "title": "Virtio — libvirt wiki",
+      "url": "https://wiki.libvirt.org/Virtio.html"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A host and guest both use 5-level page tables (as on recent Intel CPUs with LA57), with nested paging. What is the worst-case number of memory references for a single TLB miss?",
+    "options": [
+      {
+        "text": "10",
+        "explanation": "That simply adds the levels. Each guest level's pointer must itself be translated through the nested tables, so it multiplies."
+      },
+      {
+        "text": "25",
+        "explanation": "Close, but the formula is (n + 1)(m + 1) − 1, not n × m."
+      },
+      {
+        "text": "35",
+        "explanation": "Correct. (5 + 1)(5 + 1) − 1 = 35."
+      },
+      {
+        "text": "36",
+        "explanation": "The −1 accounts for the final host physical address, which is the result, not another lookup."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Use the 2D walk formula: (n + 1)(m + 1) − 1.\n\n1. The guest has n = 5 levels; the nested tables have m = 5.\n2. There are n + 1 = 6 guest-physical addresses to translate: the guest CR3 (top table), the 4 lower table addresses found along the walk, and the final data address. Each takes a nested walk of m = 5 references: 6 × 5 = 30.\n3. Plus reading the 5 guest page-table entries themselves: 5.\n4. 30 + 5 = **35**, which equals 6 × 6 − 1.\n\nCompare 4-level/4-level: 24. Native 5-level: just 5. This is why TLB reach and huge pages matter more in VMs.",
+    "link": {
+      "title": "Second Level Address Translation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Second_Level_Address_Translation"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A legacy host has VT-x but no EPT. A guest running a build system that forks thousands of short-lived processes is very slow, while a long-running number-crunching guest on the same host is fine. Why?",
+    "options": [
+      {
+        "text": "The build guest is I/O bound and the disk is slow",
+        "explanation": "Disk speed would affect both builds on any host; the specific clue is fork-heavy versus compute-heavy on a host without nested paging."
+      },
+      {
+        "text": "Without EPT the hypervisor uses shadow page tables, so every guest page-table edit (which fork does constantly) causes an exit",
+        "explanation": "Correct. The guest's page tables are write-protected; each fork, exec and mmap triggers exits to keep the shadow tables in sync. Compute loops barely touch page tables."
+      },
+      {
+        "text": "VT-x cannot run guests with more than one process",
+        "explanation": "VT-x has no such limit; the guest kernel schedules its processes normally."
+      },
+      {
+        "text": "Fork is not supported in non-root mode",
+        "explanation": "Fork is just guest kernel code; it works, but slowly here."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. No EPT means the MMU can only do one translation, so the hypervisor maintains **shadow tables** (GVA→HPA).\n2. To keep them current it write-protects guest page tables.\n3. `fork` copies page tables and marks pages copy-on-write; `exec` tears them down and builds new ones. Each write faults, exits and is emulated.\n4. The number-cruncher sets up its memory once and then runs arithmetic, which never exits.\n5. Fix: a host with EPT/NPT, where the guest edits its own tables with no exits.",
+    "link": {
+      "title": "The x86 KVM shadow MMU — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/virt/kvm/x86/mmu.html"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An 8 GB VM is pre-copy migrated over a link moving 1 GB/s, while the guest dirties 250 MB/s. Assuming every dirtied page is distinct, how much data is copied in round 3?",
+    "options": [
+      {
+        "text": "2 GB",
+        "explanation": "That is the amount dirtied during round 1, which is what round 2 copies."
+      },
+      {
+        "text": "500 MB",
+        "explanation": "Correct. Round 1 copies 8 GB in 8 s (2 GB dirtied); round 2 copies 2 GB in 2 s (500 MB dirtied); round 3 copies those 500 MB."
+      },
+      {
+        "text": "125 MB",
+        "explanation": "That is what is dirtied *during* round 3, which round 4 would copy."
+      },
+      {
+        "text": "8 GB",
+        "explanation": "Only round 1 copies all of memory; later rounds copy just pages dirtied since the previous round."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each round copies what was dirtied during the previous round. Ratio r = 250 MB/s ÷ 1,000 MB/s = 0.25.\n\n```\nround  copy     time   dirtied\n1      8 GB     8 s    2 GB\n2      2 GB     2 s    500 MB\n3      500 MB   0.5 s  125 MB\n4      125 MB   125 ms 31 MB\n```\n\nRound 3 copies **500 MB**. With r = 0.25 each round is a quarter of the last, so a few rounds bring the final pause into the tens of milliseconds.",
+    "link": {
+      "title": "Live Migration of Virtual Machines (PDF)",
+      "url": "https://www.usenix.org/legacy/event/nsdi05/tech/full_papers/clark/clark.pdf"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about SR-IOV are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "One physical NIC exposes a physical function plus many virtual functions, each assignable to a different VM",
+        "explanation": "Correct. VFs are lightweight PCI functions with their own queues."
+      },
+      {
+        "text": "Guest network traffic on a VF avoids hypervisor exits on the data path",
+        "explanation": "Correct. The guest's VF driver talks to the hardware directly, so packets do not pass through the hypervisor."
+      },
+      {
+        "text": "It makes live migration easier, since the NIC holds the state",
+        "explanation": "The opposite: state in the hardware cannot be copied by the hypervisor, so SR-IOV complicates live migration."
+      },
+      {
+        "text": "It needs an IOMMU so that a VF's DMA is confined to its own VM's memory",
+        "explanation": "Correct. Without IOMMU translation, a device given to a guest could DMA anywhere in host memory."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each:\n\n1. PF + VFs is the definition of SR-IOV. True.\n2. The data path goes guest driver → VF hardware, no hypervisor in between. True.\n3. Migration: VF state (queues, filters, in-flight packets) lives in the NIC; the usual workaround is failing over to virtio during the move. False.\n4. The IOMMU (VT-d / AMD-Vi) remaps and restricts DMA. True.",
+    "link": {
+      "title": "Single-root input/output virtualization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-root_input/output_virtualization"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You try to live-migrate a busy in-memory database VM. It dirties memory at 1.5 GB/s; the migration link moves 1.25 GB/s. What happens with plain pre-copy?",
+    "options": [
+      {
+        "text": "It finishes after more rounds than usual",
+        "explanation": "Each round only shrinks if dirty rate < bandwidth. Here the ratio is 1.2, so rounds grow."
+      },
+      {
+        "text": "It never converges: the dirty set does not shrink, so the hypervisor must throttle the guest (auto-converge), switch to post-copy, or accept a long pause",
+        "explanation": "Correct. With ratio 1.5/1.25 = 1.2, each round is longer than the last."
+      },
+      {
+        "text": "It completes in one round because the database is in memory",
+        "explanation": "Being in memory is exactly the problem: all that memory is changing fast."
+      },
+      {
+        "text": "The destination host copies pages back to the source",
+        "explanation": "Pages only flow source to destination in pre-copy."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Convergence ratio r = dirty rate ÷ bandwidth = 1.5 ÷ 1.25 = 1.2.\n2. Each round copies the pages dirtied during the previous one. If r ≥ 1, round k+1 is at least as big as round k.\n3. Options:\n   - **Auto-converge**: slow the vCPUs until the dirty rate drops below 1.25 GB/s.\n   - **Post-copy**: switch over now and pull remaining pages on demand.\n   - Stop-and-copy everything, with seconds of downtime.\n4. In practice, migrate such VMs during quiet periods or over faster links.",
+    "link": {
+      "title": "Migration framework — QEMU docs",
+      "url": "https://www.qemu.org/docs/master/devel/migration/main.html"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A VM is mid-way through a post-copy live migration: it is already running on the destination and fetching remaining pages from the source on demand. The source host loses power. What is the outcome?",
+    "options": [
+      {
+        "text": "Nothing; the destination already has everything it needs",
+        "explanation": "In post-copy the destination does *not* yet have all the memory; that is the whole idea."
+      },
+      {
+        "text": "The migration falls back to pre-copy automatically",
+        "explanation": "Pre-copy needs the source to be running; it has lost power."
+      },
+      {
+        "text": "The VM is lost or crashes, because part of its memory only existed on the source",
+        "explanation": "Correct. Post-copy splits the VM's state across two hosts; losing either one loses the VM. This is the main reason pre-copy is the default."
+      },
+      {
+        "text": "The VM continues but with zeroed pages for anything not copied",
+        "explanation": "Silently zero-filling would corrupt the guest; hypervisors do not do this."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Post-copy order: pause, move CPU and device state, resume on destination, then fetch pages when the guest faults on them (plus background pushing).\n2. Until every page has arrived, some memory exists only on the source.\n3. If the source dies, those pages are gone. The guest will touch one eventually and cannot continue.\n4. Pre-copy, by contrast, keeps the VM fully on the source until the final short pause, so a failure just aborts the migration.",
+    "link": {
+      "title": "Migration framework — QEMU docs",
+      "url": "https://www.qemu.org/docs/master/devel/migration/main.html"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A KVM guest's network-heavy workload is spending too much time in exits. Which changes are likely to reduce exit overhead? Select all that apply.",
+    "options": [
+      {
+        "text": "Switch the guest NIC from emulated e1000 to virtio-net",
+        "explanation": "Correct. Batched virtqueues replace per-register MMIO exits."
+      },
+      {
+        "text": "Enable vhost-net so virtio kicks are handled in the host kernel instead of QEMU",
+        "explanation": "Correct. The exit still happens, but it no longer bounces out to userspace, which is far cheaper."
+      },
+      {
+        "text": "Give the guest an SR-IOV virtual function",
+        "explanation": "Correct. The data path bypasses the hypervisor entirely."
+      },
+      {
+        "text": "Disable the IOMMU on the host",
+        "explanation": "The IOMMU does not cause exits on the virtio path, and disabling it makes device passthrough unsafe or impossible."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Rank the paths from slowest to fastest:\n\n1. **e1000 emulation**: several MMIO exits per packet, each returning to QEMU in userspace.\n2. **virtio in QEMU**: about one kick per batch, still handled in userspace.\n3. **virtio + vhost-net**: kick handled by a host kernel thread.\n4. **SR-IOV VF**: guest talks to hardware; no hypervisor on the data path.\n\nDisabling the IOMMU removes a safety mechanism and does not touch any of these exits.",
+    "link": {
+      "title": "Virtio — libvirt wiki",
+      "url": "https://wiki.libvirt.org/Virtio.html"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why is an IOMMU essential when passing a physical PCI device through to a guest with VFIO?",
+    "options": [
+      {
+        "text": "It speeds up the device's interrupts",
+        "explanation": "Interrupt remapping is a related IOMMU feature, but the essential reason is DMA isolation."
+      },
+      {
+        "text": "Devices perform DMA using addresses the guest programs; without IOMMU translation and restriction, a guest could make the device read or write any host memory",
+        "explanation": "Correct. The guest thinks in guest-physical addresses; the IOMMU maps them to the right host pages and blocks everything else."
+      },
+      {
+        "text": "It lets several VMs share the same device at once",
+        "explanation": "Sharing one device between VMs is SR-IOV's job; the IOMMU protects each assignment."
+      },
+      {
+        "text": "It emulates the device's registers",
+        "explanation": "Passthrough means the registers are real hardware; nothing is emulated."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A DMA-capable device writes to memory by physical address, bypassing the CPU's MMU and the EPT.\n2. The guest driver gives the device guest-physical addresses, which are meaningless (or dangerous) as host addresses.\n3. The IOMMU sits between device and memory, translating device addresses through per-device tables the hypervisor controls.\n4. Any access outside the guest's memory faults instead of corrupting the host.\n5. Without it, passthrough would let a guest escape simply by pointing a DMA at hypervisor memory.",
+    "link": {
+      "title": "Single-root input/output virtualization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-root_input/output_virtualization"
+    }
+  }
+]

@@ -1,0 +1,378 @@
+[
+  {
+    "id": "pki-tls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a TLS 1.3 connection, which primitive actually encrypts the HTTP request bytes?",
+    "options": [
+      {
+        "text": "The server's RSA or ECDSA certificate key",
+        "explanation": "The certificate key only signs the handshake (CertificateVerify). It never encrypts application data."
+      },
+      {
+        "text": "X25519",
+        "explanation": "X25519 is a key agreement function. It produces a shared secret; it does not encrypt data."
+      },
+      {
+        "text": "An AEAD cipher such as AES-128-GCM or ChaCha20-Poly1305, with keys derived by HKDF",
+        "explanation": "Correct. Every TLS 1.3 cipher suite is an AEAD, keyed from the traffic secrets in the key schedule."
+      },
+      {
+        "text": "HMAC-SHA256",
+        "explanation": "HMAC appears in HKDF and the Finished message, but it provides integrity, not encryption."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Map each primitive to its job:\n\n| Primitive | Job |\n|---|---|\n| X25519 | agree a secret |\n| Cert + signature | authenticate server |\n| HKDF / HMAC | derive keys, Finished |\n| AEAD | encrypt records |\n\nThe request is application data, so it travels in AEAD-protected records.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "pki-tls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A server has used the same RSA certificate key for three years. An attacker recorded all of its traffic and has now stolen that key. Which sessions can the attacker decrypt?",
+    "options": [
+      {
+        "text": "Only TLS 1.2 sessions that used RSA key transport; ECDHE sessions (including all TLS 1.3 ones) stay secret",
+        "explanation": "Correct. With RSA key transport the premaster secret was encrypted to the long-term key. Ephemeral DH secrets were discarded, giving forward secrecy."
+      },
+      {
+        "text": "All of them, TLS 1.2 and 1.3 alike",
+        "explanation": "TLS 1.3 never uses the certificate key for key exchange, so stealing it does not reveal past session keys."
+      },
+      {
+        "text": "None, because TLS always uses forward secrecy",
+        "explanation": "TLS 1.2 allowed RSA key transport, which has no forward secrecy. Many servers used it for years."
+      },
+      {
+        "text": "Only TLS 1.3 sessions, because they are newer",
+        "explanation": "This has it backwards: TLS 1.3 removed the mode that is vulnerable here."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. RSA key transport (TLS 1.2): client picks the premaster secret, encrypts it under the server's RSA public key, sends it. The ciphertext is in the recording.\n2. With the private key, the attacker decrypts each premaster secret, derives the session keys and decrypts the traffic.\n3. ECDHE: the session secret came from ephemeral keys that were deleted. The certificate key only signed. Nothing in the recording plus the certificate key yields the secret.\n4. TLS 1.3 always uses ephemeral (EC)DH, so all its sessions are safe.",
+    "link": {
+      "title": "Forward secrecy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Forward_secrecy"
+    }
+  },
+  {
+    "id": "pki-tls-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a TLS 1.3 server have to sign anything at all, when ECDH already gives both sides a shared secret?",
+    "options": [
+      {
+        "text": "To make the shared secret longer",
+        "explanation": "The signature does not contribute key material; the secret's size is set by the DH group."
+      },
+      {
+        "text": "It doesn't; the signature is only for compliance",
+        "explanation": "Removing it makes man-in-the-middle attacks trivial, so it is essential."
+      },
+      {
+        "text": "To encrypt the certificate",
+        "explanation": "The certificate is encrypted with handshake keys from ECDH; signing does not encrypt."
+      },
+      {
+        "text": "Because without authentication, an attacker can run separate ECDH exchanges with client and server and relay between them",
+        "explanation": "Correct. Unauthenticated ECDH agrees a key with whoever answers. The signature over the transcript proves the certificate owner took part in *this* exchange."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Without authentication: client ↔ attacker (key K1), attacker ↔ server (key K2).\n2. Both legitimate sides complete a handshake and see nothing wrong; the attacker decrypts with K1 and re-encrypts with K2.\n3. With CertificateVerify, the server signs a hash covering both key shares.\n4. The attacker's share is different, and they cannot sign it with the server's private key, so the client rejects the connection.",
+    "link": {
+      "title": "Man-in-the-middle attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Man-in-the-middle_attack"
+    }
+  },
+  {
+    "id": "pki-tls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A TLS 1.3 connection uses the IV `5d313eb2671276ee13000b30`. Record nonces are `iv XOR seq`, with the 64-bit sequence number right-aligned. What is the nonce for record number 2?",
+    "options": [
+      {
+        "text": "`5d313eb2671276ee13000b30`",
+        "explanation": "That is the nonce for record 0. Reusing it for record 2 would be a catastrophic AEAD nonce reuse."
+      },
+      {
+        "text": "`5d313eb2671276ee13000b32`",
+        "explanation": "Correct. Only the last byte changes: `0x30 XOR 0x02 = 0x32`."
+      },
+      {
+        "text": "`5d313eb2671276ee13000b2e`",
+        "explanation": "This subtracts 2. The operation is XOR, not arithmetic: `0x30 XOR 0x02` is `0x32`."
+      },
+      {
+        "text": "A random 12-byte value sent in the record header",
+        "explanation": "TLS 1.3 never sends the nonce. Both sides compute it from the IV and their sequence counter."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Sequence number 2 as 12 bytes, right-aligned: `00 00 00 00 00 00 00 00 00 00 00 02`.\n2. XOR with the IV byte by byte. Every byte except the last is XORed with zero and unchanged.\n3. Last byte: `0x30 = 0011 0000`, `0x02 = 0000 0010`, XOR = `0011 0010 = 0x32`.\n\n```\niv    ...13 00 0b 30\nseq   ...00 00 00 02\nnonce ...13 00 0b 32\n```",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "pki-tls-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker on the path deletes a TLS 1.3 record containing part of an HTTP response, then forwards the rest unchanged. What happens at the client?",
+    "options": [
+      {
+        "text": "The client decrypts the remaining records and the response is silently truncated",
+        "explanation": "Records are not independent. The next record is decrypted using the expected sequence number, which no longer matches."
+      },
+      {
+        "text": "TCP retransmits the record automatically",
+        "explanation": "The attacker forwarded TCP segments consistently; at the TLS layer a record is simply missing."
+      },
+      {
+        "text": "The next record fails AEAD authentication, because the client uses the wrong sequence number in the nonce, and the connection is torn down",
+        "explanation": "Correct. The implicit sequence number makes deletion, reordering and replay detectable without extra bytes on the wire."
+      },
+      {
+        "text": "Nothing, because the record header is not authenticated",
+        "explanation": "The header is authenticated as AEAD associated data; and the missing record breaks the nonce sequence anyway."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Server sends records with seq 5, 6, 7. The attacker removes 6.\n2. The client receives what it believes is record 6 and computes `nonce = iv XOR 6`.\n3. The record was actually sealed with `iv XOR 7`.\n4. Wrong nonce means the AEAD tag check fails, and TLS sends a `bad_record_mac` alert and closes.\n5. Truncation at the *end* is handled separately: TLS requires a `close_notify` alert, so a cut-off connection is distinguishable from a clean close.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "pki-tls-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The TLS 1.3 CertificateVerify signature covers 64 space bytes, the string `\"TLS 1.3, server CertificateVerify\"`, a zero byte and the transcript hash. What is the purpose of the spaces and context string?",
+    "options": [
+      {
+        "text": "Padding to make RSA signatures the right length",
+        "explanation": "RSA-PSS does its own padding. The prefix is about meaning, not length."
+      },
+      {
+        "text": "A timestamp to prevent replay",
+        "explanation": "Replay is prevented by the fresh random values and key shares in the transcript, not by the prefix."
+      },
+      {
+        "text": "Encryption of the transcript before signing",
+        "explanation": "Nothing is encrypted; the signed bytes are fixed text plus a hash."
+      },
+      {
+        "text": "Domain separation: a signature made for this purpose can never be valid as a signature in another protocol or role using the same key",
+        "explanation": "Correct. Without a unique prefix, an attacker might get a server to sign bytes in one context (TLS 1.2, client role) that are valid in another."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A server's certificate key may be used in TLS 1.2, TLS 1.3, as a client, or by other software.\n2. If two contexts sign overlapping byte formats, a signature obtained in one could be replayed in the other (a cross-protocol attack).\n3. TLS 1.3's prefix begins with 64 bytes of `0x20` and names the role and version. TLS 1.2 signatures start with 32-byte random values, so they can't collide with this format.\n4. A client CertificateVerify uses `\"TLS 1.3, client CertificateVerify\"`, so server and client signatures cannot be swapped either.",
+    "link": {
+      "title": "The Illustrated TLS 1.3 Connection",
+      "url": "https://tls13.xargs.org/"
+    }
+  },
+  {
+    "id": "pki-tls-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An attacker modifies the ClientHello in flight to remove the client's strongest cipher suites. Which TLS 1.3 mechanisms ensure the handshake fails? Select all that apply.",
+    "options": [
+      {
+        "text": "The server's CertificateVerify signs the transcript hash, which includes the ClientHello the server received; the client's own transcript differs",
+        "explanation": "Correct. The client hashes the ClientHello it sent; the signature covers the modified one, so verification fails."
+      },
+      {
+        "text": "Handshake and application keys are derived with the transcript hash as context, so the two sides derive different keys",
+        "explanation": "Correct. HKDF-Expand-Label mixes in the transcript, so tampering makes the keys disagree."
+      },
+      {
+        "text": "The Finished HMAC over the transcript does not match",
+        "explanation": "Correct. Each side's Finished is computed over its own view of the transcript, so the mismatch is caught here too."
+      },
+      {
+        "text": "TCP checksums detect the change",
+        "explanation": "An active attacker recomputes TCP checksums. They protect against accidental corruption, not tampering."
+      },
+      {
+        "text": "The ClientHello is encrypted, so it cannot be modified",
+        "explanation": "The ClientHello is sent in clear (ECH aside), because no keys exist yet. Protection comes afterwards, via the transcript."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. The client keeps a running hash of every handshake message as *it* sent or received them.\n2. The server does the same with what *it* received, including the altered ClientHello.\n3. Those hashes now differ, and three things depend on them:\n  - CertificateVerify signature: fails at the client.\n  - HKDF key derivation: different keys, so decryption fails.\n  - Finished HMAC: mismatch.\n4. TCP checksums and lack of encryption are irrelevant: the defence is the transcript binding.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "pki-tls-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In 2017 the ROBOT researchers found many large sites still vulnerable to an attack first published in 1998. Which TLS 1.2 feature made it possible, and how did TLS 1.3 deal with it?",
+    "options": [
+      {
+        "text": "CBC padding; TLS 1.3 made the padding constant-time",
+        "explanation": "CBC padding oracles are a different family (Lucky 13, POODLE). TLS 1.3 removed CBC rather than fixing it."
+      },
+      {
+        "text": "RSA key transport with PKCS#1 v1.5 encryption, which gave a padding oracle; TLS 1.3 removed RSA key transport",
+        "explanation": "Correct. Bleichenbacher's 1998 attack queries the server's RSA decryption with crafted ciphertexts. TLS 1.3 only uses RSA for signatures, so the oracle no longer exists."
+      },
+      {
+        "text": "Session tickets; TLS 1.3 removed them",
+        "explanation": "TLS 1.3 kept resumption, using PSKs. ROBOT concerned RSA decryption."
+      },
+      {
+        "text": "SHA-1 in the handshake; TLS 1.3 moved to SHA-256",
+        "explanation": "ROBOT has nothing to do with hash functions."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In RSA key transport the server decrypts a client-chosen ciphertext with PKCS#1 v1.5.\n2. If the server behaves even slightly differently (error, timing) depending on whether the padding was valid, it is a **padding oracle**.\n3. Bleichenbacher (1998) showed you can decrypt or sign arbitrary values with enough oracle queries.\n4. Patches tried to make every error look the same, and ROBOT showed many still failed.\n5. TLS 1.3 removed the mode entirely: the server never decrypts anything with its RSA key.",
+    "link": {
+      "title": "The ROBOT Attack",
+      "url": "https://robotattack.org/"
+    }
+  },
+  {
+    "id": "pki-tls-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A CDN runs thousands of TLS servers sharing one session-ticket encryption key, rotated monthly. Clients resume with `psk_ke` mode (no fresh DH). An attacker records traffic for a month and then steals the ticket key. What can they decrypt?",
+    "options": [
+      {
+        "text": "Nothing, because TLS 1.3 always has forward secrecy",
+        "explanation": "Full handshakes do, but `psk_ke` resumption derives keys only from the PSK, which the ticket key unlocks."
+      },
+      {
+        "text": "Only full handshakes",
+        "explanation": "Full handshakes used ephemeral ECDH and are unaffected. It is the resumed ones that are exposed."
+      },
+      {
+        "text": "They can impersonate the CDN's certificate",
+        "explanation": "The ticket key is not the certificate key. They could forge tickets to that CDN, but not sign as its certificate."
+      },
+      {
+        "text": "Every session resumed in `psk_ke` mode with tickets under that key, across the whole fleet",
+        "explanation": "Correct. Decrypting a ticket yields its PSK, and with no DH input the session keys follow from the PSK and the public transcript."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A ticket is the PSK encrypted under the server's ticket key, sent to the client and back in the clear.\n2. With `psk_ke`, the key schedule input is the PSK alone: Early Secret from PSK, Handshake Secret with no (EC)DHE.\n3. Steal the ticket key → decrypt each recorded ticket → recover each PSK → derive each session's keys from the transcript.\n4. Shared across thousands of servers and kept for a month, that one key covers a vast amount of traffic.\n5. Mitigations: prefer `psk_dhe_ke`, rotate ticket keys every few hours, keep them only in memory.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "pki-tls-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "TLS 1.3 guidance limits AES-GCM to about 2^24.5 full-size (16 KB) records per key. A video service streams about 50 MB/s over a single long-lived TLS connection. Roughly how often must it rekey, and how?",
+    "options": [
+      {
+        "text": "Every 2^24.5 bytes (about 24 MB), by opening a new TCP connection",
+        "explanation": "The limit is in records, not bytes. 2^24.5 records of 16 KB each is around 390 GB."
+      },
+      {
+        "text": "Never; the 64-bit sequence number cannot wrap",
+        "explanation": "Sequence wrap is not the constraint. The AEAD's confidentiality and integrity bounds degrade long before 2^64."
+      },
+      {
+        "text": "About every 2 hours, by sending KeyUpdate, which ratchets the traffic secret with HKDF",
+        "explanation": "Correct. 2^24.5 × 16 KB ≈ 390 GB, and 390 GB ÷ 50 MB/s ≈ 7,800 s ≈ 2.2 hours. KeyUpdate rekeys in-band."
+      },
+      {
+        "text": "Every 2 hours, by doing a full new handshake with a new certificate",
+        "explanation": "A new handshake would work but is unnecessary; KeyUpdate exists for exactly this."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Records per key: 2^24.5 ≈ 23.7 million.\n2. Bytes per key: 23.7M × 16,384 B ≈ 3.9 × 10^11 B ≈ 390 GB.\n3. Time at 50 MB/s:\n\n```\n390e9 / 50e6 = 7,800 s\n            ≈ 2.2 hours\n```\n\n4. A KeyUpdate message tells the peer to advance:\n`secret_n+1 = HKDF-Expand-Label(secret_n, \"traffic upd\", \"\", len)`.\nNew key and IV, sequence number reset. Most libraries do this automatically.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "pki-tls-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A browser offers the hybrid `X25519MLKEM768` key share. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Both shared secrets feed the key schedule, so an attacker must break both X25519 and ML-KEM to recover the keys",
+        "explanation": "Correct. The two secrets are concatenated and used as the (EC)DHE input, so security holds if either one survives."
+      },
+      {
+        "text": "It protects recorded traffic against a future quantum computer breaking the key exchange",
+        "explanation": "Correct. This defends against harvest-now-decrypt-later, the main reason to deploy PQ key exchange first."
+      },
+      {
+        "text": "It also makes the server's certificate signature quantum-resistant",
+        "explanation": "Authentication still uses classical signatures. That is acceptable for now: a signature must only be unforgeable during the handshake, not years later."
+      },
+      {
+        "text": "The ClientHello grows by about a kilobyte because the ML-KEM public key is large",
+        "explanation": "Correct. An ML-KEM-768 encapsulation key is 1,184 bytes, versus 32 for X25519, so the share is 1,216 bytes."
+      },
+      {
+        "text": "It replaces the need for AEAD on records",
+        "explanation": "The KEM only establishes keys. Records are still protected with AES-GCM or ChaCha20-Poly1305."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Hybrid design: `ss = ML-KEM ss || X25519 ss`, fed into HKDF-Extract. Breaking one input leaves the other's entropy, so the keys stay secret. True.\n2. The threat is recording now and decrypting later with a quantum computer. PQ key exchange fixes that. True.\n3. Signatures: a forged signature is only useful *during* a live handshake, so classical signatures remain fine until a quantum computer exists. False.\n4. Size: 1,184 + 32 = 1,216 bytes of key share. True.\n5. AEAD is still needed. False.",
+    "link": {
+      "title": "Protecting Chrome traffic with hybrid Kyber KEM — Chromium Blog",
+      "url": "https://blog.chromium.org/2023/08/protecting-chrome-traffic-with-hybrid.html"
+    }
+  },
+  {
+    "id": "pki-tls-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In 2015 the Logjam attack let a man-in-the-middle downgrade some TLS 1.2 connections to 512-bit \"export\" Diffie–Hellman, even though the server signed its DH parameters. Which TLS 1.3 design choice prevents this class of attack?",
+    "options": [
+      {
+        "text": "TLS 1.3 uses larger RSA keys for signatures",
+        "explanation": "Signature key size was not the problem; the signed data simply did not include the negotiation."
+      },
+      {
+        "text": "The server's signature covers the whole transcript, including the negotiated parameters and the client's offer, not just the randoms and DH values",
+        "explanation": "Correct. In TLS 1.2 the ServerKeyExchange signature did not cover the cipher-suite choice, so 512-bit parameters signed for an export suite were also accepted by a client expecting normal DHE."
+      },
+      {
+        "text": "TLS 1.3 encrypts the ClientHello",
+        "explanation": "Plain TLS 1.3 sends the ClientHello in clear. The protection comes from binding it into the transcript."
+      },
+      {
+        "text": "TLS 1.3 forbids Diffie–Hellman",
+        "explanation": "TLS 1.3 *requires* (EC)DH for full handshakes. It removed weak groups and fixed what is signed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Logjam: the attacker rewrites the client's offer to ask for `DHE_EXPORT`.\n2. A vulnerable server responds with 512-bit DH parameters and signs (randoms + parameters).\n3. The signature does not say \"these are export parameters\", so the client, which believes it is doing normal DHE, accepts them.\n4. The attacker breaks the 512-bit discrete log (after a week of precomputation per prime, in roughly a minute or two) and completes the handshake.\n5. TLS 1.3: CertificateVerify signs the hash of the *entire* transcript, including the real ClientHello, and only strong groups exist. Any rewrite breaks the signature.",
+    "link": {
+      "title": "Logjam (computer security) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Logjam_(computer_security)"
+    }
+  }
+]

@@ -1,0 +1,374 @@
+[
+  {
+    "id": "git-ci-pipelines-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team has a polished Jenkins pipeline that runs on every push. Developers work on feature branches for three to four weeks before merging to `main`. Are they practising continuous integration?",
+    "options": [
+      {
+        "text": "No; CI means integrating into the mainline at least daily, with each integration verified automatically",
+        "explanation": "Correct. They have automated builds, but not continuous *integration*. Their integration happens in big, infrequent merges."
+      },
+      {
+        "text": "Yes, as long as the builds are green",
+        "explanation": "Green builds on isolated branches say nothing about whether the branches work together. The integration itself is delayed by weeks."
+      },
+      {
+        "text": "Yes; they have a CI server running automated builds",
+        "explanation": "This confuses the tool with the practice. Continuous integration means integrating into the mainline frequently, and four-week branches are the opposite."
+      },
+      {
+        "text": "No, because Jenkins is not a CI tool",
+        "explanation": "Jenkins is one of the oldest and most widely used CI servers. The problem is the branching practice, not the tool."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Check the two halves of Fowler's definition:\n\n1. Does everyone integrate into the mainline frequently (at least daily)? No: every 3-4 weeks.\n2. Is each integration verified by an automated build and tests? The branches are, but the real integration (the merge) happens rarely.\n\nSo they get automated testing benefits, but not CI's main benefit: discovering conflicts and semantic clashes within hours.",
+    "link": {
+      "title": "Continuous Integration — Martin Fowler",
+      "url": "https://martinfowler.com/articles/continuousIntegration.html"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your pipeline runs: end-to-end tests (18 min), then unit tests (3 min), then lint (40 s). Lint failures are the most common cause of red builds. What is the most effective reordering?",
+    "options": [
+      {
+        "text": "Remove lint from CI and rely on developers to run it",
+        "explanation": "Lint failing often shows developers aren't running it reliably. CI is the backstop; pre-commit hooks can help too."
+      },
+      {
+        "text": "Keep the order; end-to-end tests are most important so they should run first",
+        "explanation": "Importance doesn't decide order; feedback time does. Running the slowest step first delays every common failure."
+      },
+      {
+        "text": "Unit tests, then end-to-end, then lint",
+        "explanation": "Lint, the most common failure and the cheapest check, would still be reported last, after about 21 minutes."
+      },
+      {
+        "text": "Lint, then unit tests, then end-to-end tests",
+        "explanation": "Correct. Fail fast: the cheapest and most frequently failing checks go first, so lint failures are reported within a minute rather than after 21 minutes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Time to discover a lint failure:\n\n| Order | Lint result after |\n|---|---|\n| E2E, unit, lint | 18 + 3 + 0.7 = 21.7 min |\n| Lint, unit, E2E | 0.7 min |\n\nAnd unit failures move from about 21 to about 3.7 minutes. Better still, run lint and unit tests in parallel jobs, and gate E2E on both.",
+    "link": {
+      "title": "Continuous Integration — Martin Fowler",
+      "url": "https://martinfowler.com/articles/continuousIntegration.html"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team's suite has 40 unit tests and 600 browser-driven end-to-end tests. It takes 70 minutes and fails intermittently. What does the test pyramid suggest?",
+    "options": [
+      {
+        "text": "Add more end-to-end tests to cover the intermittent failures",
+        "explanation": "That makes the suite slower and flakier. The suite is already inverted (an \"ice-cream cone\")."
+      },
+      {
+        "text": "Delete all end-to-end tests",
+        "explanation": "A thin layer of end-to-end tests is valuable for checking that the system works as a whole. The pyramid shrinks this layer; it doesn't remove it."
+      },
+      {
+        "text": "Push most checks down to many fast unit tests and some integration tests, keeping a small set of end-to-end tests for critical journeys",
+        "explanation": "Correct. Lower-level tests are faster, more deterministic and point precisely at the failing code."
+      },
+      {
+        "text": "Run the end-to-end tests only once a month",
+        "explanation": "Running them rarely makes their failures harder to trace to a cause. The fix is to have fewer of them and to test most behaviour at lower levels."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Current shape: 40 unit, 600 E2E: an inverted pyramid.\n2. Cost per test: unit ~ milliseconds, E2E ~ seconds plus browser, network and data setup, which is where flakiness comes from.\n3. Illustrative target budget, not measured results: 3,000 unit (about 1 min), 300 integration (about 3 min), 40 E2E critical paths (about 6 min).\n4. Those assumed durations sum to 10 minutes; benchmark the actual suite and fix sources of nondeterminism rather than assuming a test count guarantees runtime or reliability.",
+    "link": {
+      "title": "The Practical Test Pyramid — Ham Vocke",
+      "url": "https://martinfowler.com/articles/practical-test-pyramid.html"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A test suite has 3,600 tests averaging 0.5 s each and runs on one machine. You shard it evenly across 10 runners, and each runner spends 60 s on setup before testing. Roughly what is the new wall-clock time for the test stage? Assume equal total test duration per shard, runners starting together, and no queueing or shared-resource contention.",
+    "options": [
+      {
+        "text": "About 3 minutes",
+        "explanation": "That's 180 s of tests per shard but forgets each runner's 60 s of setup."
+      },
+      {
+        "text": "About 4 minutes",
+        "explanation": "Correct. 3,600 × 0.5 = 1,800 s total; 1,800 / 10 = 180 s per shard; plus 60 s setup = 240 s = 4 minutes."
+      },
+      {
+        "text": "About 30 minutes",
+        "explanation": "That is the original single-machine time (1,800 s). Sharding runs the shards in parallel."
+      },
+      {
+        "text": "About 10 minutes",
+        "explanation": "This would be total setup across all runners (10 × 60 s), which happens in parallel and isn't additive in wall-clock time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Total test time: 3,600 × 0.5 s = 1,800 s (30 min).\n2. Per shard: 1,800 / 10 = 180 s.\n3. Add per-runner setup: 180 + 60 = 240 s = 4 min wall-clock.\n4. Compute cost: 10 × 240 s = 2,400 s = 40 runner-minutes, versus about 31 before.\n\nSo sharding cuts feedback time by nearly 8× (31 min to 4 min) for about 30% more compute. Uneven shards (one slow test file) can dominate, so balance shards by measured duration, not count.",
+    "link": {
+      "title": "Continuous Integration — Martin Fowler",
+      "url": "https://martinfowler.com/articles/continuousIntegration.html"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "PR A renames `get_user()` to `fetch_user()` everywhere. PR B, opened the same morning, adds a new call to `get_user()`. Both PRs pass CI against `main` and are merged within minutes of each other. `main` is now red. Assuming the combined tests detect the incompatibility, which mechanism checks the integrated candidate before merging?",
+    "options": [
+      {
+        "text": "Running CI twice on each PR",
+        "explanation": "Both runs would test each PR against the same old `main`. The problem is the combination, which neither PR's CI ever saw."
+      },
+      {
+        "text": "Squash merging",
+        "explanation": "Squashing changes commit shape, not what gets tested. The combined code would still be untested."
+      },
+      {
+        "text": "Code owners for the user module",
+        "explanation": "A reviewer might notice, but it relies on humans spotting a cross-PR interaction. It isn't a systematic guarantee."
+      },
+      {
+        "text": "A merge queue that tests each PR on top of the latest `main` plus the PRs ahead of it before merging",
+        "explanation": "Correct. B would be tested on `main + A + B`, fail, and be removed from the queue without breaking `main`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nmain = M\nA tested on M      -> green\nB tested on M      -> green\nmerge A: M+A\nmerge B: M+A+B     -> never tested, red\n```\n\nWith a merge queue:\n\n```\nqueue: A, B\ntest M+A           -> green, merge A\ntest M+A+B         -> red, eject B\n```\n\n\"Require branches to be up to date\" also prevents it, but it forces every PR to update by merge or rebase and rerun CI after every merge, which doesn't scale.",
+    "link": {
+      "title": "Managing a merge queue — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A pipeline runs 200 tests. Each independently has a 0.5% chance of a flaky failure per run. Roughly what fraction of runs on **correct** code will be red?",
+    "options": [
+      {
+        "text": "About 63%",
+        "explanation": "Correct. P(all pass) = 0.995^200 ≈ 0.367, so P(at least one flake) ≈ 0.633."
+      },
+      {
+        "text": "About 10%",
+        "explanation": "Too low. Even a rough linear estimate gives 200 × 0.5% = 100%, which overshoots, but the true value is far above 10%."
+      },
+      {
+        "text": "About 0.5%",
+        "explanation": "That's the per-test rate. A run is red if *any* of the 200 tests flakes, so the chances compound."
+      },
+      {
+        "text": "100%",
+        "explanation": "Adding 200 × 0.5% gives 100%, but probabilities of independent events don't add like this; you multiply the chances of passing."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. P(one test passes) = 1 - 0.005 = 0.995.\n2. P(all 200 pass) = 0.995^200.\n3. ln(0.995) ≈ -0.005013, × 200 = -1.0025, so 0.995^200 ≈ e^-1.0 ≈ 0.367.\n4. P(red) ≈ 1 - 0.367 = 0.633.\n\nNearly two-thirds of runs on good code fail, so engineers stop trusting red. Cutting per-test flakiness to 0.1% gives 0.999^200 ≈ 0.82, still 18% red. This hypothetical independent-probability model illustrates compounding risk; it is not a causal derivation of Google's observed transition statistics. Flaky failures can also expose real defects.",
+    "link": {
+      "title": "Flaky Tests at Google and How We Mitigate Them",
+      "url": "https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You add dependency caching to a CI job. Which choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Key the cache on a hash of the lockfile, e.g. `hashFiles('**/package-lock.json')`",
+        "explanation": "Correct. When dependencies change, the lockfile changes, the key changes, and a fresh cache is built."
+      },
+      {
+        "text": "Use a constant key such as `deps` so the cache is always hit",
+        "explanation": "Incorrect. The cache never invalidates, so jobs keep restoring stale dependencies, or the cache is never updated because the key already exists."
+      },
+      {
+        "text": "Provide a `restore-keys` prefix fallback so a near-match is restored when the exact key misses",
+        "explanation": "Correct for reusable download caches when the installer still resolves and verifies required packages. Speedup depends on cache contents and workload."
+      },
+      {
+        "text": "Cache the directory containing your deployment credentials to save a login step",
+        "explanation": "Incorrect. GitHub warns that anyone who can open a PR can access cache contents. Never put secrets in cached paths."
+      },
+      {
+        "text": "Include the OS and runtime version in the key",
+        "explanation": "Correct. Compiled packages for Linux and Python 3.12 can be wrong for macOS or Python 3.13."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "A sound cache key, with values filled in:\n\n```\nkey: deps-Linux-py3.13-<lockhash>\nrestore-keys: deps-Linux-py3.13-\n```\n\nIn the workflow, `Linux` comes from `${{ runner.os }}` and `<lockhash>` from `${{ hashFiles('**/uv.lock') }}`.\n\n1. Exact hit on a package download cache: restore it and still run the locked install/sync step. Downloaded packages are not an installed environment.\n2. Miss: the prefix restores the newest similar cache, the installer fetches only what changed, and a new cache is saved under the new key.\n3. Never cache secrets: caches are readable from PR workflows.",
+    "link": {
+      "title": "Dependency caching reference — GitHub Docs",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your pipeline builds a Docker image for staging, runs tests there, then **rebuilds** from the same commit for production. A production incident is traced to a different version of a transitive dependency than staging had. What principle was violated?",
+    "options": [
+      {
+        "text": "Fail fast",
+        "explanation": "Fail fast concerns ordering checks by speed. The issue here is that production ran a different artefact from the one tested."
+      },
+      {
+        "text": "The test pyramid",
+        "explanation": "The pyramid is about the mix of test types. Even perfect tests are irrelevant if production runs something else."
+      },
+      {
+        "text": "Build once, deploy many: build one immutable artefact per commit and promote that exact artefact through every environment",
+        "explanation": "Correct. Rebuilding re-resolves dependencies and base images, so the production image can differ from the tested one."
+      },
+      {
+        "text": "Least privilege",
+        "explanation": "That principle concerns permissions, not what is deployed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Build 1 (staging), Monday: resolves `libfoo` 2.3.1, tests pass.\n2. Build 2 (production), Thursday: `libfoo` 2.3.2 was published Wednesday and an unpinned range picked it up.\n3. Same commit, different image.\n4. Fix: build `app:sha-abc123` once, push it to a registry, and deploy that digest to staging and then production. Also pin dependencies with a lockfile and pin base images by digest.",
+    "link": {
+      "title": "Continuous Integration — Martin Fowler",
+      "url": "https://martinfowler.com/articles/continuousIntegration.html"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A maintainer wants fork PRs to run integration tests that need a private registry token. They write a workflow `on: pull_request_target` that checks out `github.event.pull_request.head.sha` and runs `make test`. What is the problem? Assume repository policy and checkout protections permit the checkout, and the secret is exposed to the test process.",
+    "options": [
+      {
+        "text": "None; `pull_request_target` is designed for exactly this",
+        "explanation": "It is designed for trusted automation (labelling, commenting) that runs the base branch's code. Running the PR's code with its secrets is the documented insecure pattern."
+      },
+      {
+        "text": "The tests execute fork-controlled code in a context holding a private token; an attacker can attempt to exfiltrate it",
+        "explanation": "Correct. The attacker edits the Makefile or a test to send the token to their server. GitHub's docs give this exact workflow as an insecure example."
+      },
+      {
+        "text": "The workflow will fail because fork PRs never receive secrets",
+        "explanation": "Fork pull_request workflows normally withhold secrets, but this question explicitly gives the privileged test process a private token. Permissions and event policies must be checked."
+      },
+      {
+        "text": "The checkout will use a stale commit",
+        "explanation": "`head.sha` is the PR's latest commit. Staleness isn't the issue; trust is."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Untrusted PR code includes tests, build scripts, dependencies and configuration, not just the workflow YAML.\n2. If it executes with a private registry token, it can attempt to read or send that token.\n3. A label or approval does not sandbox code or freeze a mutable PR head. Use unprivileged isolated testing where possible.\n4. A privileged follow-up must treat artifacts and metadata from the untrusted run as untrusted input; it must not execute them or interpolate them unsafely into commands.\n5. If a privileged run is unavoidable, review the exact revision, bind approval to that revision and grant only the required scoped credentials. Current event and checkout safeguards can block the illustrated configuration; never disable them as a routine fix.",
+    "link": {
+      "title": "Securely using pull_request_target — GitHub Docs",
+      "url": "https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In March 2025, workflows using `tj-actions/changed-files@v45` began printing CI secrets into their logs, though nobody had changed those workflows. Which practice would have protected them?",
+    "options": [
+      {
+        "text": "Pinning the action to a reviewed, unaffected full-length commit SHA instead of a mutable tag",
+        "explanation": "Correct. The attackers retroactively moved version tags to a malicious commit. A full SHA is immutable: it names exact content, so a workflow pinned to a known-good SHA kept running that code."
+      },
+      {
+        "text": "Pinning to `@main` instead of `@v45`",
+        "explanation": "A branch is even more mutable than a tag; it would pick up any malicious commit pushed to it."
+      },
+      {
+        "text": "Using a 7-character short SHA",
+        "explanation": "GitHub requires the full-length SHA for pinning; short SHAs are not accepted for `uses:` and would also be easier to collide."
+      },
+      {
+        "text": "Setting `timeout-minutes`",
+        "explanation": "The malicious step finished quickly. Timeouts limit runaway jobs, not compromised code."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `uses: owner/action@v45` resolves the tag `v45` at run time to whatever commit it currently points at.\n2. The attacker gained access and repointed many tags to a malicious commit.\n3. Workflows resolving an affected tag during the compromise could run the malicious code.\n4. `uses: owner/action@<40-hex-SHA>` names one immutable commit; moving tags doesn't affect it, and swapping content would require a SHA-1 collision.\n5. A pin does not freeze unpinned dependencies downloaded by the action. Keep SHA pins current with a tool such as Dependabot, which proposes updates as reviewable PRs.",
+    "link": {
+      "title": "tj-actions/changed-files compromise — GitHub Advisory",
+      "url": "https://github.com/advisories/GHSA-mrrh-fwg8-r2c3"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your CI pipeline takes 30 minutes. To keep `main` green you enable \"require branches to be up to date before merging\", so each PR must be re-tested on the latest `main` before it can merge. The team opens about 40 PRs per 8-hour working day. What happens? Use a simplified model: independent PRs start from the same old base, every merge invalidates other results, each retest takes 30 minutes, no batching and no failures.",
+    "options": [
+      {
+        "text": "Nothing changes; up-to-date checks are free",
+        "explanation": "Each merge invalidates every other PR's result, forcing another 30-minute run. The cost is real."
+      },
+      {
+        "text": "Git refuses the merges because the branches are out of date",
+        "explanation": "Git would merge fine. The platform rule blocks merging until the branch is updated and re-tested."
+      },
+      {
+        "text": "Throughput doubles because PRs are smaller",
+        "explanation": "The setting doesn't change PR size; it adds a re-test after every merge."
+      },
+      {
+        "text": "In this model throughput is at most about 16 merges per working day; a speculative merge queue can improve it if enough runners are available",
+        "explanation": "Correct. 8 hours × 60 / 30 = 16 merges per day, against 40 arriving. A merge queue speculatively tests `main+A`, `main+A+B` and so on in parallel."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. With the rule on, after any merge every other PR is out of date and must update and rerun CI (30 min) before it can merge.\n2. So effectively one merge per CI duration: 60 / 30 = 2 per hour.\n3. Per day: 8 × 2 = 16. Demand: 40. Backlog grows by about 24 PRs per day, and people race to rebase.\n4. A merge queue with, say, 5 parallel speculative builds can test `M+A`, `M+A+B`, ... `M+A+B+C+D+E` at once: up to 5 merges per 30 minutes, an illustrative upper bound of 80 per day if runners are available, queue overhead is negligible and failures are rare; this is not a product throughput guarantee.\n5. Cutting the pipeline to 10 minutes helps every option.",
+    "link": {
+      "title": "Managing a merge queue — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Review this GitHub Actions snippet for a deploy job:\n\n```yaml\non:\n  push:\n    branches: [main]\nconcurrency:\n  group: deploy-prod\n  cancel-in-progress: true\npermissions: write-all\n```\n\nWhich concerns are valid? Select all that apply.",
+    "options": [
+      {
+        "text": "`permissions: write-all` gives every job far more token scope than a deploy usually needs",
+        "explanation": "Correct. Grant only what the job needs, e.g. `contents: read` plus `id-token: write` for OIDC to a cloud provider."
+      },
+      {
+        "text": "`cancel-in-progress: true` can cancel a deployment midway when a newer commit lands, potentially leaving production half-deployed",
+        "explanation": "Correct. Avoid cancelling a live deployment midway. cancel-in-progress:false preserves the active run but the default single pending slot still replaces older pending runs; configure queueing deliberately."
+      },
+      {
+        "text": "The concurrency group serializes matching workflow runs within this repository",
+        "explanation": "Correct for runs using that group in this repository. It is not a distributed deployment lock: another repository or a remote task left running after cancellation may still deploy."
+      },
+      {
+        "text": "Triggering on `push` to `main` means fork PRs can run this deploy with secrets",
+        "explanation": "Incorrect. `push` to `main` happens only when someone with write access merges or pushes; fork PR authors cannot trigger it directly."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Go line by line:\n\n1. `on: push: main`: runs after merges. Only trusted actors trigger it. Fine.\n2. `concurrency: deploy-prod`: matching workflow runs are serialized within the repository; external deployment activity needs its own coordination.\n3. `cancel-in-progress: true`: commit 2 lands while commit 1 is mid-migration, so run 1 is cancelled. Risky for deploys; avoid cancelling active deployments and select the pending-run policy. As checked 2026-10-04, queue: max supports a bounded pending queue and cannot be combined with cancel-in-progress: true.\n4. `write-all`: if any step (or third-party action) is compromised, it can push code, create releases and modify packages. Use explicit, minimal permissions.",
+    "link": {
+      "title": "Secure use reference — GitHub Actions",
+      "url": "https://docs.github.com/en/actions/reference/security/secure-use"
+    }
+  }
+]

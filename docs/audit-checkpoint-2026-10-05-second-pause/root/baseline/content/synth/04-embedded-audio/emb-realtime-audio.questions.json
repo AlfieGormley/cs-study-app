@@ -1,0 +1,340 @@
+[
+  {
+    "id": "emb-realtime-audio-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An audio callback processes 64 samples per call at a 48 kHz sample rate. How much time does it have to finish each call?",
+    "options": [
+      {
+        "text": "0.75 ms",
+        "explanation": "That is 48,000 / 64,000. Divide block size by sample rate, not the other way round scaled."
+      },
+      {
+        "text": "1.333 ms",
+        "explanation": "Correct. 64 / 48,000 = 0.001333 s."
+      },
+      {
+        "text": "64 ms",
+        "explanation": "That treats each sample as 1 ms. At 48 kHz a sample lasts about 20.8 µs."
+      },
+      {
+        "text": "20.8 µs",
+        "explanation": "That is one sample period. The callback handles 64 of them at once."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nbudget = N / fs\n       = 64 / 48000\n       = 0.001333 s\n       = 1.333 ms\n```\n\nThe next block is due every 1.333 ms, so all work for this block must fit inside that.",
+    "link": {
+      "title": "Getting started: audio — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is acceptable inside an audio callback?",
+    "options": [
+      {
+        "text": "Printing the current note to the USB serial console",
+        "explanation": "Logging formats text and does I/O that can block when the buffer fills. Set a flag and print from the main loop."
+      },
+      {
+        "text": "Allocating a new voice object when a note starts",
+        "explanation": "Allocation has unbounded time and can fail. Preallocate a fixed pool of voices at start-up."
+      },
+      {
+        "text": "Waiting on a mutex until the main loop finishes updating parameters",
+        "explanation": "The callback may wait indefinitely; on a single core the main loop cannot even run while the callback holds the CPU."
+      },
+      {
+        "text": "Reading a preallocated parameter value and computing samples with a fixed amount of work",
+        "explanation": "Correct. Bounded, non-blocking work on preallocated memory is exactly what the callback should do."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Apply the test to each: is its run time bounded and does it avoid waiting?\n\n| Action | Bounded? | Waits? |\n|---|---|---|\n| Print | No | Maybe |\n| Allocate | No | Maybe |\n| Mutex | No | Yes |\n| Read + compute | Yes | No |\n\nOnly the last passes.",
+    "link": {
+      "title": "Real-time audio programming 101 — Ross Bencina",
+      "url": "http://www.rossbencina.com/code/real-time-audio-programming-101-time-waits-for-nothing"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What runs during the gaps between audio callbacks on a bare-metal MCU synth?",
+    "options": [
+      {
+        "text": "Nothing; the CPU sleeps until the next callback",
+        "explanation": "It may idle if there is nothing to do, but the main loop runs whenever no interrupt is active."
+      },
+      {
+        "text": "The main (foreground) loop and any other lower-priority work, such as reading knobs, parsing MIDI and updating displays",
+        "explanation": "Correct. The callback preempts the main loop; when it returns, the main loop resumes."
+      },
+      {
+        "text": "The operating system's scheduler",
+        "explanation": "Bare-metal firmware has no OS scheduler; there is just the main loop and interrupts."
+      },
+      {
+        "text": "Another copy of the audio callback, in parallel",
+        "explanation": "On a single-core MCU, one callback runs at a time, once per block."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nmain  ===   =====   ====\ncb       ##      ##     ##\n```\n\nThe DMA interrupt triggers the callback (##). Everything else (===) is the main loop: controls, MIDI, display, logging.",
+    "link": {
+      "title": "Getting started: audio — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Daisy Seed runs at 480 MHz with 48-sample blocks at 48 kHz. Your callback's measured maximum is 300,000 cycles. What is the worst-case CPU load?",
+    "options": [
+      {
+        "text": "62.5%",
+        "explanation": "Correct. Budget = 480 MHz × 1 ms = 480,000 cycles; 300,000 / 480,000 = 0.625."
+      },
+      {
+        "text": "30%",
+        "explanation": "That divides by a million cycles, as if the budget were about 2 ms."
+      },
+      {
+        "text": "160%",
+        "explanation": "That inverts the ratio (480,000 / 300,000)."
+      },
+      {
+        "text": "3,000%",
+        "explanation": "That compares against the per-sample budget of 10,000 cycles, but the measurement covers a whole block."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nblock  = 48 / 48000 = 1 ms\nbudget = 480e6 * 0.001\n       = 480000 cycles\nload   = 300000 / 480000\n       = 62.5 %\n```\n\nThat leaves about 37.5% headroom at the measured worst case, before any library overhead outside your measurement.",
+    "link": {
+      "title": "Getting started: audio — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A friend says: \"My block is 48 samples at 48 kHz, so my synth's latency is 1 ms.\" What is wrong with this statement?",
+    "options": [
+      {
+        "text": "Nothing; latency equals block duration",
+        "explanation": "Block duration is the processing budget. Other delays add to the path from key press to sound."
+      },
+      {
+        "text": "Latency is always exactly double the block size",
+        "explanation": "Double buffering contributes about one block, but MIDI transmission, waiting for the block boundary and converter delays also add, so there is no fixed multiple."
+      },
+      {
+        "text": "1 ms is the processing budget; end-to-end latency adds MIDI transmission, waiting for the next block, output buffering and converter filter delay, then the interface and DAW",
+        "explanation": "Correct. The lesson's estimate for the synth's own part is about 3.4 ms worst case, before the audio interface."
+      },
+      {
+        "text": "Latency depends only on the CPU speed",
+        "explanation": "A faster CPU does not shorten buffering or MIDI transmission time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Add the parts for a MIDI-triggered note:\n\n```\nMIDI note-on      0.96 ms\nwait for block    0-1.00 ms\nqueue (1 block)   1.00 ms\nDAC filter        0.42 ms\nworst case     ~  3.38 ms\n```\n\nThen the interface's input conversion and buffers, and Ableton's monitoring buffer if used. Measure the total with a loopback recording.",
+    "link": {
+      "title": "PCM3060 datasheet — Texas Instruments",
+      "url": "https://www.ti.com/lit/ds/symlink/pcm3060.pdf"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Why is calling `malloc` (or any general-purpose allocator) in the audio callback a problem? Select all that apply.",
+    "options": [
+      {
+        "text": "Its run time is not bounded: it may search free lists or call into the system",
+        "explanation": "Correct. You cannot guarantee it finishes within the block budget."
+      },
+      {
+        "text": "It can fail when memory is exhausted or fragmented, leaving the callback without the object it needed",
+        "explanation": "Correct. On a small MCU with a long-running instrument, fragmentation is a real risk."
+      },
+      {
+        "text": "It may take a lock shared with other code, so the callback could wait",
+        "explanation": "Correct. Many allocators are protected by locks, which brings in all the problems of waiting."
+      },
+      {
+        "text": "The compiler refuses to compile malloc inside a function called from an interrupt",
+        "explanation": "Compilers do not check this; it compiles fine and fails at runtime, which is why it is a discipline."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The callback needs a worst-case time. An allocator offers:\n\n1. Variable time.\n2. Possible failure.\n3. Possible locking.\n\nThe fix is to preallocate at start-up: a fixed array of voices, fixed-size delay buffers, and a lock-free queue for events.",
+    "link": {
+      "title": "Real-time audio programming 101 — Ross Bencina",
+      "url": "http://www.rossbencina.com/code/real-time-audio-programming-101-time-waits-for-nothing"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You toggle a GPIO high at the start of the callback and low at the end. On a scope the pulses repeat every 2.9 ms and are 0.8 ms wide, but about once a second one pulse is 3.1 ms wide. What does this tell you?",
+    "options": [
+      {
+        "text": "Average load is about 28% so everything is fine",
+        "explanation": "The average hides the problem: one block overruns its 2.9 ms budget, which causes a click about once a second."
+      },
+      {
+        "text": "The scope is faulty because pulses should all be equal",
+        "explanation": "Callback time depends on what the code does; variable widths are normal, and outliers are what you are looking for."
+      },
+      {
+        "text": "The block size is 128 at 44.1 kHz and the code is too slow on average",
+        "explanation": "The period does match 128 at 44.1 kHz, but the average (0.8 ms) is fine. The issue is the occasional outlier."
+      },
+      {
+        "text": "Something occasionally takes far longer than usual and overruns the deadline; find the rare path (for example a voice steal, a buffer clear or a hidden I/O call)",
+        "explanation": "Correct. 3.1 ms exceeds the 2.9 ms period, so that block is late. Worst case matters, not average."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nperiod = 2.9 ms (128/44100)\ntypical width = 0.8 ms -> 28%\noutlier width = 3.1 ms -> 107%\n```\n\nAnything above 100% is a missed deadline. Look for work that happens rarely: clearing a large delay line, a search through all voices, or a log statement that only fires on certain events.",
+    "link": {
+      "title": "Audio library processor usage — PJRC",
+      "url": "https://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Electro-Smith's \"Avoiding callback noise\" guide describes a tone in the audio output caused by current transients when a long callback exits. With 48-sample blocks at 48 kHz, at what frequency would you expect that tone?",
+    "options": [
+      {
+        "text": "48 kHz",
+        "explanation": "That is the sample rate. The transient happens once per callback, not once per sample."
+      },
+      {
+        "text": "1 kHz",
+        "explanation": "Correct. The callback runs 48,000 / 48 = 1,000 times a second, so the disturbance repeats at 1 kHz."
+      },
+      {
+        "text": "24 kHz",
+        "explanation": "That is what you would get with a 2-sample block, which is the guide's suggested fix."
+      },
+      {
+        "text": "50 Hz",
+        "explanation": "That is mains hum in the UK, a different problem with a different cause."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\ncallback rate = fs / N\n              = 48000 / 48\n              = 1000 Hz\n```\n\nWith N = 2 the rate becomes 24 kHz, above hearing, which is why the guide suggests it as the easiest workaround (layout and power filtering are the proper fixes).",
+    "link": {
+      "title": "Avoiding callback noise — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/eliminating-callback-noise/"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the Teensy Audio Library source, the I2S DMA interrupt calls `update_all()`, which only sets a software interrupt pending; the software interrupt (priority 208, where 255 is lowest) runs all audio objects. Why structure it this way?",
+    "options": [
+      {
+        "text": "To keep the high-priority DMA interrupt very short, while the long DSP work runs at a lower priority that other urgent interrupts can preempt",
+        "explanation": "Correct. Data-moving and other time-critical interrupts stay responsive; the heavy update runs at low priority but still preempts the main loop."
+      },
+      {
+        "text": "Because DMA interrupts cannot call functions",
+        "explanation": "ISRs can call functions; this is a design choice about priorities, not a limitation."
+      },
+      {
+        "text": "So the audio update runs in the main loop",
+        "explanation": "A software interrupt is still an interrupt: it preempts the main loop, which is essential for meeting deadlines."
+      },
+      {
+        "text": "To make the audio update run twice per block",
+        "explanation": "It runs once per block; the indirection changes priority, not frequency."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Two goals conflict: DMA servicing must be prompt, and DSP takes a long time.\n\n1. The DMA ISR does minimal work, then pends the software IRQ.\n2. When it exits, the software IRQ runs (it outranks the main loop).\n3. Higher-priority interrupts (for example serial MIDI data) can still preempt the DSP.\n\nThe update still has to finish within the block period.",
+    "link": {
+      "title": "Teensy 4 AudioStream.cpp — PJRC",
+      "url": "https://github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.cpp"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You report \"max CPU load 55%\" in your project log. Which caveats belong next to that figure? Select all that apply.",
+    "options": [
+      {
+        "text": "The test conditions (voices sounding, effects enabled, knobs moving), since load depends on what the synth is doing",
+        "explanation": "Correct. A maximum measured with one idle voice says little about a full chord with effects."
+      },
+      {
+        "text": "Whether the measurement includes library overhead outside your callback (format conversion, interrupt entry)",
+        "explanation": "Correct. A GPIO toggle around your code misses that work, so the true load is higher."
+      },
+      {
+        "text": "The build (optimisation level, memory placement), because code location and caching change timing",
+        "explanation": "Correct. Moving code from SRAM to QSPI, or a debug build, can change timing significantly."
+      },
+      {
+        "text": "That 55% load guarantees no dropouts at any future firmware version",
+        "explanation": "The figure only describes the build and conditions measured. Re-measure after significant changes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "A useful log entry:\n\n```\nmax load 55% (CpuLoadMeter)\n8 voices, delay on, 2 knobs\nmoving, -O2, code in SRAM,\n48 @ 48 kHz, 2026-10-04\n```\n\nThis makes the number reproducible and shows its limits.",
+    "link": {
+      "title": "Getting started: audio — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You are tempted to drop the block size from 48 to 8 samples at 48 kHz to cut latency. Your callback's fixed per-call overhead is 15,000 cycles, and the per-sample DSP costs 6,000 cycles. The CPU runs at 480 MHz. Is the smaller block feasible?",
+    "options": [
+      {
+        "text": "Yes; load stays at 60% because per-sample cost is unchanged",
+        "explanation": "That ignores the fixed per-call overhead, which is now paid six times as often."
+      },
+      {
+        "text": "No; any block under 32 samples is impossible on a Cortex-M7",
+        "explanation": "There is no such universal rule; feasibility depends on the overhead and per-sample costs."
+      },
+      {
+        "text": "Yes; load drops because each callback does less work",
+        "explanation": "Each call does less work, but there are six times as many calls per second."
+      },
+      {
+        "text": "Barely: load rises from about 63% to about 79%, because the fixed overhead is paid six times as often",
+        "explanation": "Correct. The per-sample work is constant, but the per-call overhead now dominates more of each shorter budget."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nN=48: budget 480000 cycles\n work = 15000 + 48*6000\n      = 303000 -> 63%\nN=8:  budget 80000 cycles\n work = 15000 + 8*6000\n      = 63000 -> 79%\n```\n\nIt still fits, but headroom shrinks from 37% to 21%. This is the trade-off Teensy's source comments describe: lower latency at the cost of more overhead.",
+    "link": {
+      "title": "Teensy 4 AudioStream.h (block size comments) — PJRC",
+      "url": "https://github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h"
+    }
+  }
+]

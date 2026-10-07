@@ -1,0 +1,386 @@
+[
+  {
+    "id": "nn-regularisation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After 40 epochs, training loss is 0.05 and still falling. Validation loss bottomed at 0.42 at epoch 15 and is now 0.71. What is happening, and what's the simplest response?",
+    "options": [
+      {
+        "text": "Underfitting; train a larger model",
+        "explanation": "Underfitting shows as *high* training loss. 0.05 and falling means the model fits the training data very well."
+      },
+      {
+        "text": "Overfitting; keep the epoch-15 checkpoint (early stopping) and consider more regularisation",
+        "explanation": "Correct. Validation loss rising while training loss falls is the textbook sign of memorising training-specific noise. Early stopping recovers the best model for free."
+      },
+      {
+        "text": "The learning rate is too high",
+        "explanation": "A too-high learning rate makes *training* loss unstable or diverge. Here training loss is smoothly decreasing."
+      },
+      {
+        "text": "The validation set is broken; validation loss should always track training loss",
+        "explanation": "A widening gap is normal once a model starts to overfit. It doesn't imply a broken validation set."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Training loss low and falling: the model can fit the training set.\n2. Validation loss fell until epoch 15 and has risen since: after that point, extra fitting hurts new data.\n3. That's overfitting, with a generalisation gap of 0.71 − 0.05.\n4. Responses, cheapest first: restore the epoch-15 checkpoint; add augmentation, weight decay or dropout; get more data.",
+    "link": {
+      "title": "CS231n: Setting up the data and the loss",
+      "url": "https://cs231n.github.io/neural-networks-2/"
+    }
+  },
+  {
+    "id": "nn-regularisation-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In PyTorch training mode, `nn.Dropout(p=0.2)` receives a unit with value 5.0 and doesn't drop it. What does it output for that unit?",
+    "options": [
+      {
+        "text": "5.0",
+        "explanation": "That's what happens in eval mode. In training, inverted dropout scales the surviving units up."
+      },
+      {
+        "text": "4.0",
+        "explanation": "This multiplies by 0.8, the old non-inverted scheme applied at *test* time. PyTorch scales up survivors in training instead."
+      },
+      {
+        "text": "25.0",
+        "explanation": "This divides by 0.2 (the drop probability). The scale is 1/(1 − p) = 1/0.8."
+      },
+      {
+        "text": "6.25",
+        "explanation": "Correct. Survivors are multiplied by 1/(1 − p) = 1/0.8 = 1.25, so 5.0 becomes 6.25."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. PyTorch's p is the probability of **dropping**: 20%.\n2. Kept units are scaled by 1/(1 − p) = 1/0.8 = 1.25.\n3. 5.0 × 1.25 = **6.25**.\n4. Expected value: 0.8 × 6.25 + 0.2 × 0 = 5.0, the same as at inference, which is the point of inverted dropout.",
+    "link": {
+      "title": "Dropout — PyTorch docs",
+      "url": "https://pytorch.org/docs/stable/generated/torch.nn.Dropout.html"
+    }
+  },
+  {
+    "id": "nn-regularisation-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "A PyTorch model contains `Dropout` and `BatchNorm2d` layers. Select everything that changes when you call `model.eval()`.",
+    "options": [
+      {
+        "text": "Dropout stops dropping units and passes inputs through unchanged",
+        "explanation": "True. In eval mode dropout is the identity; inverted dropout already did the scaling in training."
+      },
+      {
+        "text": "Batch norm uses its stored running mean and variance instead of the current batch's statistics",
+        "explanation": "True. That makes outputs deterministic and independent of the other examples in the batch."
+      },
+      {
+        "text": "Gradients stop being computed",
+        "explanation": "False. That's `torch.no_grad()` (or `torch.inference_mode()`), a separate switch. You usually want both during evaluation."
+      },
+      {
+        "text": "Batch norm stops updating its running statistics",
+        "explanation": "True. Running averages are only updated in training mode."
+      },
+      {
+        "text": "The learnable γ and β of batch norm are reset to 1 and 0",
+        "explanation": "False. γ and β are learned parameters and are used as-is in eval mode."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "`model.eval()` just sets `training = False` on every module. Modules that behave differently check that flag:\n\n- Dropout: drop and scale in training; identity in eval.\n- BatchNorm: batch statistics plus running-stat updates in training; running statistics, no updates, in eval.\n\nGradient tracking is controlled separately by `torch.no_grad()`. Learned parameters are never reset by a mode switch.",
+    "link": {
+      "title": "BatchNorm2d — PyTorch docs",
+      "url": "https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html"
+    }
+  },
+  {
+    "id": "nn-regularisation-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A batch-norm feature (training mode, ε ≈ 0) receives the batch x = (2, 4, 6, 8). Its learned γ = 2 and β = 1. What is the output for x = 8?",
+    "options": [
+      {
+        "text": "3.683",
+        "explanation": "Correct. Mean 5, variance 5, so x̂ = 3/√5 = 1.342 and y = 2 × 1.342 + 1 = 3.683."
+      },
+      {
+        "text": "1.342",
+        "explanation": "That's x̂, the normalised value. You still need to apply y = γx̂ + β = 2 × 1.342 + 1."
+      },
+      {
+        "text": "2.2",
+        "explanation": "This divides by the variance (5) instead of the standard deviation √5, giving x̂ = 0.6 and y = 2 × 0.6 + 1 = 2.2."
+      },
+      {
+        "text": "17.0",
+        "explanation": "This applies γ and β to the raw input: 2 × 8 + 1. Batch norm normalises first."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Mean: (2 + 4 + 6 + 8)/4 = 5.\n2. Variance (divide by n in training): (9 + 1 + 1 + 9)/4 = 5. Std = √5 ≈ 2.236.\n3. x̂ = (8 − 5)/2.236 = 1.342.\n4. y = γx̂ + β = 2 × 1.342 + 1 = **3.683**.\n5. PyTorch gives (−1.683, 0.106, 1.894, 3.683) for the whole batch.",
+    "link": {
+      "title": "Batch Normalization (Ioffe and Szegedy)",
+      "url": "https://arxiv.org/abs/1502.03167"
+    }
+  },
+  {
+    "id": "nn-regularisation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A convolutional layer outputs 128 channels and is followed by `nn.BatchNorm2d(128)`. How many *learnable* parameters does the batch-norm layer add, and what else does it store?",
+    "options": [
+      {
+        "text": "128 learnable; nothing else",
+        "explanation": "There are two learnable vectors, γ and β, each of size 128."
+      },
+      {
+        "text": "512 learnable",
+        "explanation": "Running statistics aren't learnable: they're updated by averaging, not by gradients."
+      },
+      {
+        "text": "It depends on the image height and width",
+        "explanation": "Batch norm in CNNs keeps one γ and β per *channel*, shared across all spatial positions, so H and W don't matter."
+      },
+      {
+        "text": "256 learnable, plus 256 running statistics (mean and variance) as non-learnable buffers",
+        "explanation": "Correct. γ and β give 2 × 128 = 256 parameters. Running mean and variance add 256 buffers (plus a single counter) saved in the checkpoint but not trained by gradient descent."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. BatchNorm2d normalises per channel, over batch × height × width.\n2. Learnable: γ (128) + β (128) = **256**.\n3. Buffers: running_mean (128) + running_var (128) = 256, plus `num_batches_tracked`.\n4. Compare the conv itself: a 3×3 conv from 128 to 128 channels has 3·3·128·128 = 147,456 weights, so batch norm is cheap. (Convs followed by batch norm usually drop their own bias, since β does the same job.)",
+    "link": {
+      "title": "BatchNorm2d — PyTorch docs",
+      "url": "https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html"
+    }
+  },
+  {
+    "id": "nn-regularisation-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A model with dropout 0.5 and weight decay 5e-4 reaches 61% training accuracy and 60% validation accuracy, and both have plateaued. Your target is 80%. What should you try first?",
+    "options": [
+      {
+        "text": "Increase dropout to 0.7 to close the gap further",
+        "explanation": "There's almost no gap to close. Training accuracy itself is too low: more regularisation makes underfitting worse."
+      },
+      {
+        "text": "Collect a larger validation set",
+        "explanation": "A bigger validation set makes the estimate more precise but doesn't make the model any better."
+      },
+      {
+        "text": "Reduce regularisation and/or increase model capacity (or train longer with a better learning rate)",
+        "explanation": "Correct. Training and validation accuracy are close and both low: the model is underfitting, so loosen the constraints or give it more capacity."
+      },
+      {
+        "text": "Apply heavier data augmentation",
+        "explanation": "Augmentation is a regulariser. It helps when training accuracy far exceeds validation; here it would make the training task harder still."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Generalisation gap: 61 − 60 = 1 point. Tiny.\n2. Training accuracy is 61%, far below the 80% target: the model can't fit even the data it sees.\n3. That's **underfitting** (high bias). Regularisation pushes the wrong way.\n4. Try: lower dropout, lower weight decay, a bigger or deeper model, more epochs, or a better-tuned learning rate. Add regularisation back only once a gap appears.",
+    "link": {
+      "title": "Deep Learning, chapter 7 (Goodfellow et al.)",
+      "url": "https://www.deeplearningbook.org/"
+    }
+  },
+  {
+    "id": "nn-regularisation-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select all true statements about dropout.",
+    "options": [
+      {
+        "text": "With inverted dropout, the expected value of each unit's output in training equals its value at inference",
+        "explanation": "True. Kept with probability 1 − p and scaled by 1/(1 − p), the expectation is exactly the input."
+      },
+      {
+        "text": "Dropout can be seen as training an ensemble of sub-networks that share weights",
+        "explanation": "True. Each mask selects a different sub-network; inference approximates averaging them."
+      },
+      {
+        "text": "Dropout should stay active at inference so predictions benefit from the ensemble",
+        "explanation": "False. Standard inference turns dropout off. (Keeping it on deliberately, \"MC dropout\", is a separate technique for estimating uncertainty and needs many forward passes.)"
+      },
+      {
+        "text": "In the original 2014 paper, p denotes the probability of *keeping* a unit, whereas PyTorch's p is the drop probability",
+        "explanation": "True. A common source of confusion when porting code or reading papers."
+      },
+      {
+        "text": "Dropout reduces the number of parameters in the saved model",
+        "explanation": "False. All weights are kept; dropout only masks activations during training."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. E[output] = (1 − p) × x/(1 − p) + p × 0 = x. **True.**\n2. With n droppable units there are 2ⁿ masks, all sharing weights. **True.**\n3. Inference normally disables dropout. **False.**\n4. Srivastava et al. use p for retention (p = 0.5 hidden, 0.8 input); `nn.Dropout(p)` uses drop probability. **True.**\n5. The saved model is the same size. **False.**",
+    "link": {
+      "title": "Dropout (Srivastava et al., JMLR 2014)",
+      "url": "https://jmlr.org/papers/v15/srivastava14a.html"
+    }
+  },
+  {
+    "id": "nn-regularisation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You train a segmentation model with high-resolution images, fitting only 2 images per GPU across 8 GPUs. Training with ordinary `BatchNorm2d` is unstable and validation accuracy is poor. What's the best fix?",
+    "options": [
+      {
+        "text": "Remove all normalisation layers",
+        "explanation": "Normalisation usually still helps. The problem is specifically that batch statistics from 2 examples are too noisy."
+      },
+      {
+        "text": "Raise batch-norm momentum to 1.0 so the running stats track each batch exactly",
+        "explanation": "Momentum only affects the running averages used at inference. Training would still normalise with noisy 2-image statistics, and the running stats would become just as noisy."
+      },
+      {
+        "text": "Add dropout after each batch-norm layer",
+        "explanation": "Dropout adds noise rather than removing it, and doesn't address unreliable batch statistics."
+      },
+      {
+        "text": "Use Group Norm (statistics per example over channel groups) or synchronised batch norm across the 8 GPUs",
+        "explanation": "Correct. Group Norm doesn't depend on batch size at all; SyncBN computes statistics over all 16 images instead of 2."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Batch norm estimates mean and variance per channel from the batch on each GPU: here only 2 images.\n2. Those estimates are very noisy, so each training step normalises differently, and the running stats used at inference don't match.\n3. Fixes:\n   - **SyncBN**: aggregate statistics over all GPUs (2 × 8 = 16 images).\n   - **Group Norm**: normalise each example over groups of channels, independent of batch size. Widely used in detection and segmentation.",
+    "link": {
+      "title": "Batch normalization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Batch_normalization"
+    }
+  },
+  {
+    "id": "nn-regularisation-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A fresh `nn.BatchNorm1d(1)` (running mean 0, running variance 1, momentum 0.1, γ = 1, β = 0) sees one training batch x = (1, 2, 3, 6). You then switch to `eval()` and feed x = 3. What comes out?",
+    "options": [
+      {
+        "text": "0, the same as in training",
+        "explanation": "In training, 3 was normalised with the *batch* mean 3. In eval mode, batch norm uses the running statistics, which after one update are still close to their initial values."
+      },
+      {
+        "text": "About 2.31",
+        "explanation": "Correct. Running mean = 0.9 × 0 + 0.1 × 3 = 0.3. Running variance = 0.9 × 1 + 0.1 × (14/3) ≈ 1.367. Output = (3 − 0.3)/√1.367 ≈ 2.31."
+      },
+      {
+        "text": "3, because eval mode turns batch norm off",
+        "explanation": "Eval mode doesn't disable batch norm; it switches to running statistics."
+      },
+      {
+        "text": "About 2.41",
+        "explanation": "This updates the running variance with the *biased* batch variance 3.5 (0.9 + 0.35 = 1.25, and 2.7/√1.25 ≈ 2.41). PyTorch uses the unbiased estimate 14/3 for the running variance."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Batch mean = 3. Squared deviations: 4, 1, 0, 9, sum 14.\n2. Training normalises with the biased variance 14/4 = 3.5, so 3 → 0.\n3. Running updates (momentum 0.1) use the unbiased variance 14/3 ≈ 4.667:\n\n```\nmean = 0.9×0 + 0.1×3     = 0.3\nvar  = 0.9×1 + 0.1×4.667 = 1.367\n```\n\n4. Eval: (3 − 0.3)/√1.367 = 2.7/1.169 ≈ **2.31**.\n5. Moral: train/eval behaviour only agrees once the running stats have converged over many batches.",
+    "link": {
+      "title": "BatchNorm2d — PyTorch docs",
+      "url": "https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html"
+    }
+  },
+  {
+    "id": "nn-regularisation-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An old codebase implements dropout with p = 0.5 by zeroing units in training but does *not* scale anything, in training or at inference. What goes wrong at test time, and what's the standard fix?",
+    "options": [
+      {
+        "text": "Nothing; dropout is just turned off at inference",
+        "explanation": "With no scaling, the next layer was trained on inputs whose expected size was halved. Turning dropout off at test time doubles them."
+      },
+      {
+        "text": "Test-time activations are on average twice as large as during training; fix by multiplying by (1 − p) at inference or, better, use inverted dropout",
+        "explanation": "Correct. In training each unit contributes x with probability 0.5, an expected 0.5x. At inference it contributes x. Either scale down at test time (original method) or scale up survivors by 1/(1 − p) in training (inverted)."
+      },
+      {
+        "text": "Test-time activations are half as large; multiply by 2 at inference",
+        "explanation": "The direction is backwards. Inference has *more* active units than training, so activations are larger, not smaller."
+      },
+      {
+        "text": "The model becomes non-deterministic at inference",
+        "explanation": "Dropout is off at inference, so outputs are deterministic. The problem is a systematic scale mismatch."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Training: E[unit] = (1 − p)·x = 0.5x.\n2. Inference (no dropout, no scaling): unit = x, twice the training expectation.\n3. Every downstream layer sees inputs ~2× larger than it learned on; with several dropout layers, errors compound.\n4. Fixes: the original paper scales weights by the retention probability at test time; modern frameworks use **inverted dropout**, scaling survivors by 1/(1 − p) in training so inference is untouched.",
+    "link": {
+      "title": "Dropout (Srivastava et al., JMLR 2014)",
+      "url": "https://jmlr.org/papers/v15/srivastava14a.html"
+    }
+  },
+  {
+    "id": "nn-regularisation-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're choosing between batch norm and layer norm for an autoregressive transformer that generates one token at a time at inference. Select all statements that are true.",
+    "options": [
+      {
+        "text": "Layer norm computes statistics over each example's own features, so it behaves the same with a batch of one",
+        "explanation": "True. It never looks across the batch, so batch size and composition don't matter."
+      },
+      {
+        "text": "Batch norm's training and inference behaviour differ, because inference uses running statistics",
+        "explanation": "True. That train/eval discrepancy is a source of subtle bugs, and running stats are awkward for variable-length sequences."
+      },
+      {
+        "text": "Layer norm keeps running mean and variance buffers for inference",
+        "explanation": "False. LayerNorm has only γ and β (e.g. 2 × 768 = 1,536 parameters for width 768) and no running statistics."
+      },
+      {
+        "text": "RMSNorm, used in models such as Llama, is a simplification of layer norm that skips subtracting the mean",
+        "explanation": "True. It rescales by the root mean square of the features only."
+      },
+      {
+        "text": "Batch norm is the standard choice in transformers because it allows higher learning rates",
+        "explanation": "False. Transformers use layer norm or RMSNorm; batch statistics are a poor fit for variable-length sequences and token-by-token generation."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Layer norm: per-example statistics, identical in training and inference. **True.**\n2. Batch norm: batch statistics in training, running statistics in eval. **True.**\n3. Layer norm has no buffers. **False.**\n4. RMSNorm: x / RMS(x) × γ, no mean subtraction. **True.**\n5. Transformers use layer norm or RMSNorm, not batch norm. **False.**",
+    "link": {
+      "title": "Layer Normalization (Ba, Kiros, Hinton)",
+      "url": "https://arxiv.org/abs/1607.06450"
+    }
+  },
+  {
+    "id": "nn-regularisation-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With plain SGD (η = 0.1) and weight decay λ = 0.01, a weight w = 2.0 receives zero gradient from the data loss this step. What is w after the step?",
+    "options": [
+      {
+        "text": "2.0; with no data gradient, nothing changes",
+        "explanation": "Weight decay acts every step regardless of the data gradient. That's how it pulls unused weights towards zero."
+      },
+      {
+        "text": "1.98",
+        "explanation": "This applies a 1% shrink (λ alone) without the learning rate. The shrink factor is 1 − ηλ = 1 − 0.001."
+      },
+      {
+        "text": "1.998",
+        "explanation": "Correct. The decay gradient is λw = 0.02; the step is η × 0.02 = 0.002, so w = 2.0 − 0.002 = 1.998, i.e. multiplied by (1 − ηλ)."
+      },
+      {
+        "text": "1.8",
+        "explanation": "This multiplies by (1 − η), as if λ were 1. Typical λ values are much smaller."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Weight decay adds λw to each weight's gradient: 0.01 × 2.0 = 0.02.\n2. Data gradient = 0, so total gradient = 0.02.\n3. SGD: w ← 2.0 − 0.1 × 0.02 = **1.998**.\n4. Equivalently w ← (1 − ηλ)w = 0.999 × 2.0.\n5. Over 1,000 steps with no data gradient, w shrinks to about 2 × 0.999¹⁰⁰⁰ ≈ 0.74. Weights the data doesn't need fade away.",
+    "link": {
+      "title": "Decoupled Weight Decay Regularization (AdamW)",
+      "url": "https://arxiv.org/abs/1711.05101"
+    }
+  }
+]

@@ -1,0 +1,184 @@
+[
+  {
+    "id": "nf-ethernet-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A host sends an ARP request, whose payload is 28 bytes, in an untagged Ethernet frame. How big is the frame from destination MAC to FCS?",
+    "options": [
+      { "text": "46 bytes: 14 bytes of header, 28 of payload and 4 of FCS", "explanation": "That adds the fields up correctly but forgets the 46-byte minimum payload. The 28-byte payload is padded up to 46." },
+      { "text": "64 bytes, because the payload is padded to 46 bytes", "explanation": "Correct. 6 + 6 + 2 + 46 + 4 = 64, the minimum Ethernet frame. 18 bytes of padding are added after the ARP message." },
+      { "text": "72 bytes, including the preamble and SFD", "explanation": "The preamble and SFD are 8 bytes on the wire, but they are not counted as part of the frame. The question asks for destination to FCS." },
+      { "text": "1518 bytes, because Ethernet frames are a fixed size", "explanation": "Ethernet frames are variable-length, from 64 to 1518 bytes. Only the upper limit is 1518." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Header: destination (6) + source (6) + EtherType (2) = 14 bytes.\n2. Payload: 28 bytes of ARP, but the minimum is 46, so 18 bytes of padding are added.\n3. FCS: 4 bytes.\n4. Total: 14 + 46 + 4 = **64 bytes**.\n\nThe 46-byte minimum exists so that every frame is at least 64 bytes, which classic CSMA/CD needed to detect collisions reliably. The receiver strips the padding; ARP knows its own length, and IP has a length field in its header.",
+    "link": { "title": "Ethernet frame — Wikipedia", "url": "https://en.wikipedia.org/wiki/Ethernet_frame" }
+  },
+  {
+    "id": "nf-ethernet-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these destination MAC addresses is a **multicast** (group) address?",
+    "options": [
+      { "text": "`3c:22:fb:11:22:33`", "explanation": "0x3c is 0011 1100. The least significant bit (I/G) is 0, so this is unicast." },
+      { "text": "`da:a1:19:40:0b:7e`", "explanation": "0xda is 1101 1010. The U/L bit is 1, so it is locally administered (probably a randomised address), but the I/G bit is 0: unicast." },
+      { "text": "`00:1b:21:aa:bb:cc`", "explanation": "0x00 has every bit clear, so this is a universally administered unicast address." },
+      { "text": "`01:00:5e:00:00:fb`", "explanation": "Correct. 0x01 is 0000 0001, so the I/G bit is 1: a group address. `01:00:5e` is the prefix used for IPv4 multicast; this one is mDNS (224.0.0.251)." }
+    ],
+    "answer": 3,
+    "workedExample": "Look only at the first byte, and at its lowest bit.\n\n```\n3c = 0011 1100 -> I/G 0 unicast\nda = 1101 1010 -> I/G 0 unicast\n00 = 0000 0000 -> I/G 0 unicast\n01 = 0000 0001 -> I/G 1 multicast\n```\n\nA quick rule: if the **second hex digit is odd**, the address is multicast. Broadcast (`ff:ff:...`) is the special case of a group address with every bit set.",
+    "link": { "title": "MAC address — Wikipedia", "url": "https://en.wikipedia.org/wiki/MAC_address" }
+  },
+  {
+    "id": "nf-ethernet-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A switch has just been powered on, so its MAC table is empty. A frame arrives on port 3 addressed to a MAC it has never seen. What does the switch do?",
+    "options": [
+      { "text": "Drops the frame, because the destination is unknown", "explanation": "That's what a router does with an unroutable packet. A switch floods unknown destinations so that the frame still arrives; the reply then teaches it where the host is." },
+      { "text": "Sends an ARP request to find out which port the destination is on", "explanation": "ARP maps IP addresses to MACs and is done by hosts, not switches. A layer 2 switch doesn't look up destinations; it learns passively from source addresses." },
+      { "text": "Records the source MAC against port 3, then floods the frame out of every port except port 3", "explanation": "Correct. Learning happens on every frame from its source address, and an unknown destination is flooded everywhere except back where it came from." },
+      { "text": "Floods the frame out of every port including port 3", "explanation": "A switch never sends a frame back out of the port it arrived on: the sender's segment has already seen it." }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Learn**: the source MAC is now known to be reachable via port 3.\n2. **Look up** the destination: not in the table.\n3. **Flood**: copy the frame to every other port.\n\nWhen the destination replies, its source MAC is learned on its port, and from then on frames to it go out of that one port only. This is why a switch needs no configuration to work.",
+    "link": { "title": "Network switch — Wikipedia", "url": "https://en.wikipedia.org/wiki/Network_switch" }
+  },
+  {
+    "id": "nf-ethernet-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 4-port switch starts with an empty MAC table. Host A is on port 1, B on port 2 and C on port 3. These frames are sent in order:\n\n```\n1. A -> B\n2. B -> A\n3. C -> ff:ff:ff:ff:ff:ff\n4. A -> C\n```\n\nOut of which port(s) does frame 4 leave?",
+    "options": [
+      { "text": "Ports 2, 3 and 4 (flooded)", "explanation": "C has never been a destination, but it has been a *source*: frame 3 taught the switch that C is on port 3. Switches learn from source addresses." },
+      { "text": "Port 3 only", "explanation": "Correct. After frame 3, the table holds A→1, B→2 and C→3, so frame 4 is forwarded to port 3 alone." },
+      { "text": "Ports 2 and 3", "explanation": "There is no reason to send it to B's port. If the switch didn't know C it would flood to 2, 3 and 4; since it does, it sends only to 3." },
+      { "text": "None: it is dropped because C sent a broadcast", "explanation": "A broadcast doesn't stop a host from receiving unicast. The broadcast was flooded, and its source address was learned like any other." }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the table after each frame:\n\n```\n# frame      table          out\n1 A->B     A:1            2,3,4\n2 B->A     A:1 B:2        1\n3 C->bcast A:1 B:2 C:3    1,2,4\n4 A->C     (same)         3\n```\n\nFrame 3 is a broadcast, so it floods regardless, but its source still teaches the switch that C is on port 3. Frame 4 therefore goes to **port 3 only**.",
+    "link": { "title": "Network switch — Wikipedia", "url": "https://en.wikipedia.org/wiki/Network_switch" }
+  },
+  {
+    "id": "nf-ethernet-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A vendor claims its firewall handles \"10 Gbit/s line rate\". In the worst case, with minimum-size frames, how many frames per second must it process on one 10 Gbit/s port?",
+    "options": [
+      { "text": "About 14.9 million", "explanation": "Correct. Each minimum frame uses 64 + 8 (preamble and SFD) + 12 (gap) = 84 bytes = 672 bits of wire time. 10¹⁰ / 672 ≈ 14.88 million." },
+      { "text": "About 19.5 million", "explanation": "This uses 64 bytes (512 bits) per frame and ignores the preamble, SFD and inter-frame gap, which also occupy the wire." },
+      { "text": "About 813,000", "explanation": "This is the rate for full-size frames (1538 byte-times). The worst case for a packet processor is small frames, where the per-packet work is highest relative to the bytes." },
+      { "text": "About 1.49 million", "explanation": "That is the figure for 1 Gbit/s. At 10 Gbit/s the rate is ten times higher." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Minimum frame: 64 bytes.\n2. Wire overhead per frame: 7 preamble + 1 SFD + 12 gap = 20 bytes.\n3. Total: 84 bytes × 8 = 672 bits.\n4. Frames per second: 10 × 10⁹ / 672 ≈ **14.88 million**.\n\nThat's about 67 ns per packet. A firewall that does a few hundred nanoseconds of work per packet might reach line rate with large frames (about 813,000 per second) and still fall over on a flood of small ones. This is why \"Gbit/s\" claims should come with a packet size.",
+    "link": { "title": "Ethernet frame — Wikipedia", "url": "https://en.wikipedia.org/wiki/Ethernet_frame" }
+  },
+  {
+    "id": "nf-ethernet-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A server's NIC is hard-set to 1 Gbit/s full duplex, but the switch port is left on auto-negotiation and falls back to half duplex. Which symptoms would you expect? Select all that apply.",
+    "options": [
+      { "text": "The switch port logs late collisions", "explanation": "Correct. The half-duplex switch sees the server transmitting while it is itself sending, which it interprets as a collision, often after the first 64 bytes: a late collision." },
+      { "text": "The server's NIC counts CRC errors and runt frames", "explanation": "Correct. When the half-duplex side detects a 'collision' it aborts its frame mid-transmission. The full-duplex side receives a truncated frame that fails the FCS check." },
+      { "text": "Pings succeed but large transfers are very slow", "explanation": "Correct. Pings rarely overlap in both directions, so they almost never trigger collisions. A bulk transfer has data one way and ACKs the other, so collisions happen constantly under load." },
+      { "text": "The link fails to come up at all", "explanation": "The link comes up fine; both ends agree on speed. That's what makes a duplex mismatch so confusing: everything looks connected and basic tests pass." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. The full-duplex end transmits whenever it likes, assuming no one can collide with it.\n2. The half-duplex end follows CSMA/CD: if it hears the other end while sending, it stops, jams and backs off.\n3. The full-duplex end receives those aborted fragments and counts them as FCS errors and runts.\n4. Light traffic (ping) rarely sends both ways at once, so it works. Heavy two-way traffic (TCP data plus ACKs) collides all the time and throughput collapses.\n\nThe fix is to configure both ends the same way: both auto (the normal choice) or both fixed.",
+    "link": { "title": "Duplex (telecommunications) — Wikipedia", "url": "https://en.wikipedia.org/wiki/Duplex_(telecommunications)" }
+  },
+  {
+    "id": "nf-ethernet-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your office Wi-Fi only admits devices on a MAC allow-list. A user's new phone keeps getting refused, and the controller shows it connecting from `da:a1:19:40:0b:7e`, which isn't the address printed in the phone's settings. What is the most likely explanation?",
+    "options": [
+      { "text": "The phone is faulty and corrupting its MAC address", "explanation": "Random corruption would also break the FCS and wouldn't produce a consistent, valid-looking address. The value has a telltale bit set deliberately." },
+      { "text": "Someone is spoofing the phone's address", "explanation": "Possible in principle, but the address is not the phone's real one, so it isn't spoofing that phone. The bit pattern points to a far more common, benign cause." },
+      { "text": "The phone is using a randomised, locally administered MAC for this network", "explanation": "Correct. 0xda = 1101 1010: the U/L bit is 1. Phones generate a random per-network address for privacy, which won't match an allow-list built from the hardware address." },
+      { "text": "The address is a multicast address used during Wi-Fi association", "explanation": "Check the I/G bit: 0xda ends in 0, so this is unicast. Multicast addresses have an odd second hex digit." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Write out the first byte: `da` = 1101 1010.\n2. Bit 0 (I/G) = 0: unicast.\n3. Bit 1 (U/L) = 1: **locally administered**, not assigned by a manufacturer.\n4. The second hex digit being 2, 6, A or E is the shortcut for \"locally administered unicast\".\n\nModern iOS and Android randomise the MAC per network by default. The fixes are to turn off the private address for that network on the phone, or (better) to stop treating MAC addresses as an access control, since anyone can set any MAC.",
+    "link": { "title": "MAC address — Wikipedia", "url": "https://en.wikipedia.org/wiki/MAC_address" }
+  },
+  {
+    "id": "nf-ethernet-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about IEEE 802.1Q VLAN tagging are true? Select all that apply.",
+    "options": [
+      { "text": "The tag adds 4 bytes, raising the maximum frame size from 1518 to 1522 bytes", "explanation": "Correct. TPID (2 bytes) plus PCP, DEI and VID (2 bytes) are inserted after the source MAC." },
+      { "text": "The VLAN ID is 16 bits, allowing 65,536 VLANs", "explanation": "The VID is 12 bits. The other 4 bits of the tag control field are PCP (3) and DEI (1)." },
+      { "text": "Hosts on access ports normally send and receive untagged frames", "explanation": "Correct. The switch adds the tag on entry to a trunk and removes it on exit to an access port, so an ordinary host never sees VLAN tags." },
+      { "text": "Two hosts in different VLANs on the same switch can reach each other if their IP addresses are in the same subnet", "explanation": "VLANs separate layer 2 completely: no frames, not even broadcasts or ARP, cross between them. Matching IP subnets don't help; traffic must be routed between VLANs." },
+      { "text": "There are 4094 usable VLAN IDs", "explanation": "Correct. 12 bits give 4096 values, and 0 and 4095 are reserved." }
+    ],
+    "answer": [0, 2, 4],
+    "workedExample": "The tag layout:\n\n```\nTPID 0x8100 | PCP 3 | DEI 1 | VID 12\n  16 bits   |  -------16 bits------ \n```\n\n- 4 bytes in total: 1518 + 4 = 1522.\n- VID: 2¹² = 4096, minus the reserved 0 and 4095 = 4094.\n- Access ports carry one VLAN untagged; trunks carry many, tagged.\n- Between VLANs you need a router or layer 3 switch, which is precisely what makes VLANs useful for isolation.",
+    "link": { "title": "IEEE 802.1Q — Wikipedia", "url": "https://en.wikipedia.org/wiki/IEEE_802.1Q" }
+  },
+  {
+    "id": "nf-ethernet-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After you move a service behind a new site-to-site VPN, users report that the login page loads and small API calls work, but downloading reports hangs forever. `ping` to the server works. What is the most likely cause?",
+    "options": [
+      { "text": "The server's CPU is overloaded by report generation", "explanation": "Overload makes things slow, not reliably stuck at the same point, and it wouldn't correlate with the VPN change. The pattern 'small works, large hangs' points at packet size." },
+      { "text": "An MTU problem: the tunnel's overhead means full-size 1500-byte packets no longer fit and are being dropped", "explanation": "Correct. Encapsulation shrinks the usable MTU. Handshakes, pings and short responses are small and pass; the first full-size data packets are dropped, so the transfer stalls." },
+      { "text": "The VPN is blocking TCP, so only ICMP gets through", "explanation": "The login page and API calls work, so TCP is clearly getting through. Something is affecting only some TCP packets." },
+      { "text": "A duplex mismatch on the VPN appliance", "explanation": "A duplex mismatch causes collisions and slowness under load, not a clean split where large packets never arrive. It also wouldn't explain why the change coincided with the VPN." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Look at what works: ping (default 56 bytes of data), TCP handshakes (around 60 bytes), short HTTP responses. All small.\n2. Look at what fails: large responses, where the server sends 1500-byte packets.\n3. The VPN adds headers (IPsec or WireGuard typically adds tens of bytes), so a 1500-byte inner packet becomes larger than the 1500-byte link MTU.\n4. If those packets are dropped and the \"too big\" signal never reaches the sender, it keeps retransmitting the same oversized packet and the download hangs.\n\nTest with `ping -s 1472 -M do` (Linux), which sends 1500-byte packets with fragmentation forbidden. Typical fixes are lowering the tunnel MTU or clamping the TCP MSS.",
+    "link": { "title": "Maximum transmission unit — Wikipedia", "url": "https://en.wikipedia.org/wiki/Maximum_transmission_unit" }
+  },
+  {
+    "id": "nf-ethernet-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Suppose you tried to run gigabit Ethernet in half duplex with CSMA/CD and the normal 64-byte minimum frame, and no carrier extension. Signals travel at about 2 × 10⁸ m/s. Ignoring repeater and electronics delays, roughly how far apart could the two most distant hosts be?",
+    "options": [
+      { "text": "About 2.5 km, the same as 10 Mbit/s Ethernet", "explanation": "The distance limit scales with the slot time. At 100 times the bit rate, 512 bits take 1/100 of the time, so the network must be about 100 times smaller." },
+      { "text": "About 102 m", "explanation": "That's the round-trip distance the signal can cover in 0.512 µs. The hosts must be half that apart, because the signal goes there and back." },
+      { "text": "About 51 m", "explanation": "Correct. The 512-bit slot takes 0.512 µs at 1 Gbit/s, in which a signal covers 102 m. A round trip of 102 m means at most about 51 m end to end." },
+      { "text": "About 5 m", "explanation": "This is off by a factor of ten, perhaps from using 10 Gbit/s timings. At 1 Gbit/s a bit lasts 1 ns." }
+    ],
+    "answer": 2,
+    "workedExample": "The rule: the sender must still be transmitting when news of a collision at the far end gets back.\n\n1. Slot time = 512 bits / 10⁹ bit/s = 0.512 µs.\n2. Distance covered in that time: 2 × 10⁸ × 0.512 × 10⁻⁶ = 102.4 m.\n3. That is a **round trip**, so the far end can be at most 102.4 / 2 ≈ **51 m** away.\n\nReal equipment delays would shrink this further. Gigabit's designers added carrier extension (padding frames to 512 bytes on the wire) to restore a usable 200 m or so, but full duplex made the problem moot.",
+    "link": { "title": "Carrier-sense multiple access with collision detection — Wikipedia", "url": "https://en.wikipedia.org/wiki/Carrier-sense_multiple_access_with_collision_detection" }
+  },
+  {
+    "id": "nf-ethernet-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On a 10 Mbit/s shared Ethernet, a frame has just suffered its **third** collision. Using binary exponential backoff, what is the longest the sender might now wait before trying again?",
+    "options": [
+      { "text": "153.6 µs", "explanation": "This is 3 slots, treating the collision count as the maximum K. K is drawn from 0 to 2ⁿ − 1, not 0 to n." },
+      { "text": "358.4 µs", "explanation": "Correct. After the 3rd collision K is chosen from 0 to 2³ − 1 = 7. The maximum wait is 7 × 512 bit-times = 7 × 51.2 µs = 358.4 µs." },
+      { "text": "409.6 µs", "explanation": "This uses K = 8, i.e. 2³. The range is 0 to 2ⁿ − 1, so the largest value is 7." },
+      { "text": "52.4 ms", "explanation": "That is the cap after ten or more collisions (K up to 1023, about 52.4 ms). The range only reaches that after the 10th collision." }
+    ],
+    "answer": 1,
+    "workedExample": "1. After the nth collision, K is random in [0, 2^min(n,10) − 1].\n2. n = 3: K ∈ [0, 7].\n3. One slot = 512 bit-times. At 10 Mbit/s a bit lasts 0.1 µs, so a slot is 51.2 µs.\n4. Longest wait: 7 × 51.2 = **358.4 µs**.\n\nThe doubling makes the expected wait grow quickly with congestion: with many hosts colliding, the range soon becomes wide enough that one of them is likely to pick a unique, lowest value and win.",
+    "link": { "title": "Exponential backoff — Wikipedia", "url": "https://en.wikipedia.org/wiki/Exponential_backoff" }
+  },
+  {
+    "id": "nf-ethernet-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An attacker on one access port runs a tool that sends hundreds of thousands of frames per second, each from a different random source MAC. Which of these are true? Select all that apply.",
+    "options": [
+      { "text": "Once the MAC table is full, the switch can no longer learn real hosts and floods their traffic as unknown unicast", "explanation": "Correct. With no room for new entries (and real entries aging out), frames to legitimate hosts are flooded to every port in the VLAN." },
+      { "text": "The attacker can then capture unicast traffic between other hosts in the same VLAN", "explanation": "Correct. Flooded frames reach the attacker's port, turning the switch into a hub for the purposes of eavesdropping." },
+      { "text": "Port security, limiting each access port to a few MAC addresses, stops the attack", "explanation": "Correct. The switch shuts the port or drops frames from extra source MACs, so the table never fills." },
+      { "text": "The attacker can also read traffic in other VLANs on the same switch", "explanation": "Flooding stays within the VLAN. The MAC table is typically per-VLAN in effect, and frames are never flooded to ports in other VLANs." },
+      { "text": "The attack also lets the attacker read the contents of TLS connections", "explanation": "Capturing frames gives the attacker ciphertext only. TLS protects confidentiality regardless of who sees the packets." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. Each fake source MAC creates a table entry. A table of, say, 32,000 entries fills in a fraction of a second.\n2. Real hosts' entries age out (or can't be added), so frames to them become unknown unicast.\n3. Unknown unicast is flooded to every port in that VLAN, including the attacker's.\n4. The attacker now sees traffic meant for others, but only in its VLAN, and encrypted traffic stays encrypted.\n\nPort security caps the number of MACs per port, which is why it's standard on access switches.",
+    "link": { "title": "MAC flooding — Wikipedia", "url": "https://en.wikipedia.org/wiki/MAC_flooding" }
+  }
+]

@@ -1,0 +1,348 @@
+[
+  {
+    "id": "pipe-branch-prediction-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "25% of a program's instructions are branches, the predictor is 90% accurate, and each misprediction costs 12 cycles. How much CPI do mispredictions add?",
+    "options": [
+      {
+        "text": "0.3",
+        "explanation": "Correct. 0.25 × 0.10 × 12 = 0.3 cycles per instruction."
+      },
+      {
+        "text": "3.0",
+        "explanation": "This is branch fraction × penalty (0.25 × 12), as if every branch mispredicted. Only the 10% of branches that are mispredicted pay the penalty."
+      },
+      {
+        "text": "2.7",
+        "explanation": "This uses the 90% *hit* rate instead of the 10% miss rate (0.25 × 0.9 × 12). Correct predictions cost nothing."
+      },
+      {
+        "text": "1.2",
+        "explanation": "This is miss rate × penalty (0.1 × 12), the extra cycles per *branch*, not per instruction."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Extra CPI = branch fraction × miss rate × penalty.\n\n```\n0.25 x (1 - 0.90) x 12\n= 0.25 x 0.10 x 12\n= 0.3\n```\n\nIf the base CPI were 1, the program would run at 1.3: about 23% of its time wasted on wrong-path work.",
+    "link": {
+      "title": "Branch predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_predictor"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A static *backward taken, forward not taken* (BTFN) predictor sees a conditional branch at the bottom of a `for` loop that jumps back to the loop's start. What does it predict, and why?",
+    "options": [
+      {
+        "text": "Not taken, because static predictors always predict not taken",
+        "explanation": "That is the simpler 'always not taken' rule. BTFN looks at the branch direction."
+      },
+      {
+        "text": "Taken, because backward branches are usually loops that repeat",
+        "explanation": "Correct. A backward target almost always means a loop, and loops usually iterate more than once, so predicting taken is right on every iteration except the exit."
+      },
+      {
+        "text": "It depends on the branch's previous outcome",
+        "explanation": "Using previous outcomes is dynamic prediction. BTFN is static: it uses only the direction of the jump."
+      },
+      {
+        "text": "Taken, because forward branches are usually taken",
+        "explanation": "BTFN assumes forward branches are *not* taken (typically `if` blocks that are skipped or error paths)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The branch target is at a lower address than the branch: it jumps **backwards**.\n2. BTFN rule: backwards → predict taken; forwards → predict not taken.\n3. For a loop running 100 times, this is right 99 times out of 100.\n4. No history needed, which is why early CPUs and compilers' code layout used this rule.",
+    "link": {
+      "title": "Branch predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_predictor"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does the fetch stage need a branch target buffer (BTB) in addition to a direction predictor?",
+    "options": [
+      {
+        "text": "To store the branch's previous outcomes",
+        "explanation": "That is the job of the branch history table or direction predictor."
+      },
+      {
+        "text": "To resolve the branch condition earlier",
+        "explanation": "The BTB doesn't evaluate conditions. It remembers where branches went."
+      },
+      {
+        "text": "To store the return addresses of function calls",
+        "explanation": "Return addresses are better predicted by the return address stack, since one function returns to many callers."
+      },
+      {
+        "text": "Because in IF the instruction hasn't been decoded, so the target address isn't known yet; the BTB supplies it from a PC-indexed cache",
+        "explanation": "Correct. To redirect fetch in the next cycle, the CPU needs both 'taken?' and 'to where?' before decoding. The BTB answers 'where'."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. In cycle 1 the CPU fetches from address PC. It wants to fetch the *next* instruction in cycle 2.\n2. If this is a taken branch, the next PC is its target, which is encoded in the instruction bits (or in a register).\n3. Those bits won't be decoded until ID, a cycle or more too late.\n4. The BTB, looked up with PC in parallel with the I-cache, says 'last time, a branch here went to address T'. Fetch uses T immediately.",
+    "link": {
+      "title": "Branch target predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_target_predictor"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 2-bit saturating counter (0–3, predict taken when ≥ 2) starts at 2 (weakly taken). The branch's outcomes are T, N, N, T, T. How many mispredictions occur?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "Only the first N is obvious. The second N and the following T are also mispredicted because the counter lags behind."
+      },
+      {
+        "text": "2",
+        "explanation": "After the second N the counter is at 1 (weakly not taken), so the following T is mispredicted too."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. Predictions T, T, T, N, T against outcomes T, N, N, T, T give misses on outcomes 2, 3 and 4."
+      },
+      {
+        "text": "5",
+        "explanation": "The first and last outcomes are predicted correctly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace state, prediction, outcome:\n\n```\nstate pred  out  result  next\n  2    T     T   hit       3\n  3    T     N   miss      2\n  2    T     N   miss      1\n  1    N     T   miss      2\n  2    T     T   hit       3\n```\n\nTotal: **3 misses**. Note the hysteresis: it took two Ns to flip the prediction to N, and then one T to flip it back from weak N.",
+    "link": {
+      "title": "Branch predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_predictor"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An inner loop runs exactly 4 iterations each time it is entered (branch pattern T, T, T, N), and it is entered thousands of times. In steady state, what accuracy do a 1-bit and a 2-bit predictor achieve on this branch?",
+    "options": [
+      {
+        "text": "1-bit 75%, 2-bit 75%",
+        "explanation": "The 1-bit predictor misses twice per loop (the exit and the first iteration after it), so it gets only 50%."
+      },
+      {
+        "text": "1-bit 50%, 2-bit 75%",
+        "explanation": "Correct. The 1-bit predictor misses the N and then the next T: 2 of 4. The 2-bit counter only drops to weakly taken on the N, so it misses only the N: 1 of 4."
+      },
+      {
+        "text": "1-bit 50%, 2-bit 100%",
+        "explanation": "No per-branch counter can predict the exit with no history; the 2-bit counter still misses once per loop."
+      },
+      {
+        "text": "1-bit 25%, 2-bit 50%",
+        "explanation": "Both predictors get the middle iterations right; the misses are only around the exit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1-bit (remembers last outcome):\n\n```\nout:  T T T N | T T T N\npred: N T T T | N T T T\nmiss: x     x   x     x\n```\n\nAfter warm-up: miss on N (predicted T) and on the next T (predicted N): 2 / 4 → **50%**.\n\n2-bit: the counter sits at 3 after the Ts; N drops it to 2, still predicting T. So only the N misses: 1 / 4 → **75%**.\n\nShort loops are the worst case. To predict the exit you need history (a local or global history predictor).",
+    "link": {
+      "title": "Branch predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_predictor"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`for x in data: if x >= 128: total += x` (in C) runs 5× faster when `data` is sorted first, even though both versions execute the same instructions. Why?",
+    "options": [
+      {
+        "text": "Sorted data fits better in the cache",
+        "explanation": "Both versions read the same array sequentially, so cache behaviour is essentially identical."
+      },
+      {
+        "text": "The compiler removes the branch for sorted data",
+        "explanation": "The compiler doesn't know at compile time whether the data will be sorted; it emits the same code."
+      },
+      {
+        "text": "Sorted data makes the branch predictable (all N then all T), so the predictor stops mispredicting; random data mispredicts about half the time",
+        "explanation": "Correct. Same instruction count, much lower CPI: each misprediction costs 15 or more cycles of wrong-path work."
+      },
+      {
+        "text": "Sorting reduces the number of additions",
+        "explanation": "The same elements are ≥ 128 in both versions, so the same additions happen."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Iron law: IC is the same, clock is the same, so CPI must differ.\n2. Random bytes: `x >= 128` is a coin flip. Even TAGE can't beat ~50% on truly random data.\n3. Sorted: the branch is N for the first half and T for the second; it mispredicts about once at the switch.\n4. Cost: if n = 10⁶, ~500,000 mispredictions × ~15 cycles ≈ 7.5 × 10⁶ wasted cycles, against a loop body of just a few cycles per element.\n5. Fixes for unsorted data: branchless code (`cmov`) or letting the compiler vectorise.",
+    "link": {
+      "title": "Branch prediction, by Dan Luu",
+      "url": "https://danluu.com/branch-prediction/"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements are true?",
+    "options": [
+      {
+        "text": "The return address stack predicts the target of `ret` instructions",
+        "explanation": "True. Each `call` pushes its return address and each `ret` pops one, matching the nesting of calls."
+      },
+      {
+        "text": "The BTB is looked up during fetch, before the instruction is decoded",
+        "explanation": "True. That is the whole point: fetch needs the next PC immediately."
+      },
+      {
+        "text": "A lone 2-bit counter predicts the pattern T, N, T, N, ... well",
+        "explanation": "False. It can't represent alternation; depending on its starting state it gets 50% or even 0% right. A history-based predictor such as gshare learns it."
+      },
+      {
+        "text": "Global history lets a predictor exploit correlation between different branches",
+        "explanation": "True. Recording the last n outcomes of all branches lets, for example, `if (x == 0 && y == 0)` be predicted from the earlier tests of x and y."
+      },
+      {
+        "text": "Aliasing means a single branch jumps to two different targets",
+        "explanation": "False. Aliasing is when two *different* branches map to the same table entry and interfere. Multiple targets is what indirect predictors handle."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each one against what each structure does:\n\n1. RAS: stack of return addresses. **True.**\n2. BTB: PC-indexed target cache used in IF. **True.**\n3. 2-bit counter on alternation: from state 1 it bounces 1→2→1 and misses every time; from state 3 it bounces 3→2→3 and misses every N. **False.**\n4. GHR + gshare/TAGE: correlation. **True.**\n5. Aliasing = two branches sharing one entry. **False.**",
+    "link": {
+      "title": "Branch predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_predictor"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A gshare predictor has a 16-entry table. The branch's low 4 PC bits are `1011` and the 4-bit global history register is `0110`. Which table entry does it use?",
+    "options": [
+      {
+        "text": "11 (`1011`)",
+        "explanation": "That is the PC alone, as a simple bimodal predictor would use. gshare XORs in the history."
+      },
+      {
+        "text": "6 (`0110`)",
+        "explanation": "That is the history alone. gshare combines both."
+      },
+      {
+        "text": "15 (`1111`)",
+        "explanation": "That is OR, not XOR: bits that are 1 in both inputs (bit 1) must become 0."
+      },
+      {
+        "text": "13 (`1101`)",
+        "explanation": "Correct. 1011 XOR 0110 = 1101 = 13."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "XOR bit by bit:\n\n```\nPC    1 0 1 1\nGHR   0 1 1 0\nXOR   1 1 0 1  = 8 + 4 + 1 = 13\n```\n\nThe same branch with a different recent history (say `0111`) would use entry 1011 XOR 0111 = 1100 = 12, a different counter. That is how gshare learns history-dependent behaviour while spreading entries across the table.",
+    "link": {
+      "title": "Branch predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_predictor"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 4-wide core has a base CPI of 0.3 with perfect prediction. 20% of instructions are branches and the misprediction penalty is 16 cycles. A new predictor improves accuracy from 94% to 97%. What speedup does that give?",
+    "options": [
+      {
+        "text": "About 1.03×, the same as the accuracy gain",
+        "explanation": "Accuracy rose by 3 percentage points, but the *miss rate* halved (6% → 3%), and misses dominate."
+      },
+      {
+        "text": "2×, because the miss rate halved",
+        "explanation": "Only the misprediction part of CPI halves; the base 0.3 does not change."
+      },
+      {
+        "text": "About 1.24×",
+        "explanation": "Correct. CPI goes from 0.3 + 0.2 × 0.06 × 16 = 0.492 to 0.3 + 0.2 × 0.03 × 16 = 0.396. 0.492 / 0.396 ≈ 1.24."
+      },
+      {
+        "text": "About 1.5×",
+        "explanation": "Overestimates: the 0.096 saved is about a fifth of the original CPI of 0.492, not a third."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nold: 0.3 + 0.2 x 0.06 x 16 = 0.492\nnew: 0.3 + 0.2 x 0.03 x 16 = 0.396\nspeedup = 0.492 / 0.396 = 1.24\n```\n\n1. Think in miss rate, not accuracy: 6% → 3% halves the branch penalty term.\n2. The wider the core (smaller base CPI), the bigger the share of CPI that mispredictions take, and the more a better predictor is worth.\n3. This is why predictors keep getting larger in high-end cores.",
+    "link": {
+      "title": "The microarchitecture of Intel, AMD and VIA CPUs (Agner Fog)",
+      "url": "https://www.agner.org/optimize/microarchitecture.pdf"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hot loop, `if (err != 0) count++;` is true about 1 time in 10,000. A colleague rewrites it branch-free as `count += (err != 0);`. What is the likely effect?",
+    "options": [
+      {
+        "text": "A big speedup, because branches are always slow",
+        "explanation": "Predicted branches are nearly free: the CPU speculates past them. This one is predicted correctly 99.99% of the time."
+      },
+      {
+        "text": "Little or no gain, and possibly a small loss: the branch was almost never mispredicted, and the branch-free version adds a data dependency through `count` on every iteration",
+        "explanation": "Correct. Branchless code pays off for unpredictable branches. Here the branch costs almost nothing, so the rewrite saves nothing and makes each iteration's `count` depend on the comparison."
+      },
+      {
+        "text": "It will crash, because booleans can't be added to integers in C",
+        "explanation": "In C a comparison yields an `int` 0 or 1, so the addition is perfectly legal."
+      },
+      {
+        "text": "It reduces the misprediction rate from 50% to 0%",
+        "explanation": "The original rate isn't 50%: a branch that's almost always false is easily predicted."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Mispredictions here: roughly 1 per 10,000 iterations (the rare `err` case, plus maybe the one after).\n2. Cost per iteration: ~16 / 10,000 ≈ 0.002 cycles. Nothing to save.\n3. The branchless form computes the comparison and adds it every time; `count` becomes a serial dependency chain.\n4. Rule of thumb: go branchless when a condition is close to random. Check with `perf stat -e branch-misses` before and after.",
+    "link": {
+      "title": "Branch prediction, by Dan Luu",
+      "url": "https://danluu.com/branch-prediction/"
+    }
+  },
+  {
+    "id": "pipe-branch-prediction-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A single 2-bit saturating counter is dedicated to one branch, with no history. In steady state, which outcome patterns does it predict with at least 90% accuracy?",
+    "options": [
+      {
+        "text": "Always taken",
+        "explanation": "Yes: the counter saturates at 3 and predicts T every time, 100%."
+      },
+      {
+        "text": "Taken 9 times, then not taken once, repeating",
+        "explanation": "Yes: only the N mispredicts (the counter drops from 3 to 2 and still predicts T), so 90%."
+      },
+      {
+        "text": "Strictly alternating T, N, T, N",
+        "explanation": "No: from strongly taken it misses every N (50%); from a weak state it misses every outcome (0%)."
+      },
+      {
+        "text": "Uniformly random, 50% taken",
+        "explanation": "No: with no pattern to learn, no predictor does better than about 50%."
+      },
+      {
+        "text": "Taken 99 times, then not taken once, repeating",
+        "explanation": "Yes: one miss per 100, 99%."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Work out misses per period for each pattern:\n\n| Pattern | Misses | Accuracy |\n|---|---|---|\n| all T | 0 | 100% |\n| 9T, N | 1 / 10 | 90% |\n| T, N | 1 or 2 / 2 | 50% or 0% |\n| random | ~1 / 2 | ~50% |\n| 99T, N | 1 / 100 | 99% |\n\nThe 2-bit counter is good for biased branches and loop exits; it cannot learn periodic patterns, which need history.",
+    "link": {
+      "title": "Branch predictor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_predictor"
+    }
+  }
+]

@@ -1,0 +1,374 @@
+[
+  {
+    "id": "rel-designing-for-failure-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A backend node's disk starts failing. The process stays up and passes its TCP health check, but each request now takes 8 seconds instead of 20 ms. Which failure mode is this?",
+    "options": [
+      {
+        "text": "Crash (fail-stop) failure",
+        "explanation": "A crash means the process stops responding entirely, which may yield a refused connection or merely a timeout; detection is not necessarily immediate. Here the node is still serving, just slowly, so it is not fail-stop."
+      },
+      {
+        "text": "Byzantine failure",
+        "explanation": "Byzantine means returning wrong or arbitrary answers. The responses here are correct, just late, a general Byzantine model can include arbitrary timing, but a timing failure is the most specific description here."
+      },
+      {
+        "text": "Timing (latency) failure, often called a gray failure",
+        "explanation": "Correct. The node is alive and returns correct results, but outside acceptable time bounds. Because it still passes a shallow health check, it keeps receiving traffic and ties up callers' resources, which is what makes gray failure so damaging."
+      },
+      {
+        "text": "Omission failure",
+        "explanation": "Omission means some messages are dropped and never answered. Here every request eventually gets a correct reply; the problem is lateness, not loss."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Classify by asking these questions in order:\n\n1. **Does it respond at all?** Yes, it eventually replies, so it is not a crash.\n2. **Does every request get a reply?** Yes, so it is not omission.\n3. **Is the reply correct?** Yes, so it is not Byzantine.\n4. **Is it on time?** No: 8 s against a normal 20 ms.\n\nThat leaves a **timing failure**. Note the health check passes because it only tests that the port is open. A health check that performs a real read from disk with a short deadline would catch this and remove the node from rotation.",
+    "link": {
+      "title": "Addressing cascading failures (Google SRE book)",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Your service runs 6 app servers across 3 availability zones behind a managed load balancer, with a Multi-AZ database. Which of these could still be **single points of failure**? Select all that apply.",
+    "options": [
+      {
+        "text": "The TLS certificate used by the load balancer",
+        "explanation": "Correct. One certificate serves every request; if it expires or is revoked, clients enforcing that validity/revocation condition fail the TLS handshake regardless of how many servers you run."
+      },
+      {
+        "text": "A feature-flag config file pushed to all servers simultaneously",
+        "explanation": "Correct. Shared configuration applied everywhere at once is a classic hidden SPOF: one bad value breaks all six servers in all three zones at the same moment."
+      },
+      {
+        "text": "Any single one of the six app servers",
+        "explanation": "Incorrect. The load balancer routes around a failed app server, and five remain. As long as the survivors have headroom, the design can tolerate losing one after detection/rerouting, although in-flight requests may fail."
+      },
+      {
+        "text": "The single engineer who knows the database restore procedure",
+        "explanation": "Correct. People and process are SPOFs too. If the only person who can perform a restore is unavailable during an incident, recovery stalls no matter how redundant the hardware is."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk the request path and ask \"what if this vanished?\" for each element, including the non-obvious ones:\n\n| Element | Copies | SPOF? |\n|---|---|---|\n| App server | 6 | No |\n| DB | Multi-AZ | No |\n| TLS cert | 1 | Yes |\n| Config push | 1 (shared) | Yes |\n| Restore knowledge | 1 person | Yes |\n\nRedundant boxes don't help if something *shared* by all of them fails. The fixes are certificate expiry monitoring and auto-renewal, staged config rollout, and runbooks plus restore drills that several people practise.",
+    "link": {
+      "title": "Single point of failure (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Single_point_of_failure"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run 4 identical nodes behind a load balancer, each at 70% CPU at peak. The service must provision capacity to survive losing one node; assume identical linear capacity and perfectly balanced work. What happens if a node fails at peak, and what is the theoretical pre-failure utilisation ceiling before survivors reach 100%?",
+    "options": [
+      {
+        "text": "Survivors run at about 93%; theoretical ceiling is 75%",
+        "explanation": "Correct. Total work is 4 × 70% = 280% of a node. Spread over 3 survivors that is 93.3% each, dangerously close to saturation. Safe maximum is (N − k)/N = 3/4 = 75%."
+      },
+      {
+        "text": "Survivors run at about 93%; theoretical ceiling is 66%",
+        "explanation": "The 93% is right, but 66% is the threshold for 3 nodes surviving one loss ((3−1)/3). With 4 nodes the threshold is (4−1)/4 = 75%."
+      },
+      {
+        "text": "Survivors run at 70%; the load balancer spreads load so nothing changes",
+        "explanation": "The load balancer redistributes load, but it can't make it disappear. The failed node's 70% has to land on the other three, raising each of them."
+      },
+      {
+        "text": "Survivors run at 105%; theoretical ceiling is 50%",
+        "explanation": "105% would be 280% / ~2.67, which is not a real node count. 50% is the threshold for surviving two failures out of four, which is stricter than the requirement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Total work at peak: `4 × 70% = 280%` of one node's capacity.\n2. After losing one node: `280% / 3 = 93.3%` per survivor. At this level, queueing delay explodes (latency grows sharply as utilisation approaches 100%), which leaves little headroom; actual latency and cascading risk depend on the workload and controls.\n3. Safe ceiling for surviving `k` failures out of `N`: `(N − k) / N`.\n4. `(4 − 1) / 4 = 0.75`, so keep peak below **75%**, and in practice a little lower to leave room for queueing.\n\nCheck: at 75%, total = 300%, over 3 survivors = 100%. That is the absolute limit, which is why real teams leave a further margin.",
+    "link": {
+      "title": "Static stability using Availability Zones (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A multi-tenant API has 8 workers. One tenant occasionally sends a \"poison\" request that crashes any worker that processes it. You assign each tenant a random **2 of the 8** workers (shuffle sharding). What fraction of other tenants share *both* workers with the poisonous tenant?",
+    "options": [
+      {
+        "text": "1 in 4 (25%)",
+        "explanation": "1 in 4 is what you'd get with simple sharding into 4 fixed pairs. Shuffle sharding chooses from all possible pairs, which is far more than 4."
+      },
+      {
+        "text": "1 in 8 (12.5%)",
+        "explanation": "This confuses the number of workers with the number of possible shards. The shard is a *pair*, and there are many more pairs than workers."
+      },
+      {
+        "text": "1 in 28 (about 3.6%)",
+        "explanation": "Correct. There are C(8,2) = 28 distinct pairs. Only tenants assigned the exact same pair lose both their workers; others retain at least one unaffected worker; continued service also requires spare capacity and retry/rerouting."
+      },
+      {
+        "text": "All of them, since every tenant uses the same pool",
+        "explanation": "That describes a single shared pool with no isolation. The point of shuffle sharding is that tenants use different subsets, so most are unaffected."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Count the possible shards: choose 2 workers out of 8, `C(8,2) = 8 × 7 / 2 = 28`.\n2. The poisonous tenant kills both its workers, say W2 and W5.\n3. A different tenant is fully down only if it was also assigned {W2, W5}: probability `1/28 ≈ 3.6%`.\n4. Tenants sharing one worker (e.g. {W2, W7}) lose half their capacity but stay available, assuming clients retry on the other worker.\n\nCompare with regular sharding into 4 fixed pairs: a poison request takes out a quarter of all tenants. Route 53 scales this up to 2,048 servers with 4 per domain, giving around 730 billion combinations.",
+    "link": {
+      "title": "Workload isolation using shuffle-sharding (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two database replicas each have 99.9% availability. A colleague claims \"with both, we're down only 0.0001% of the time.\" During last month's outage both failed together after a schema migration was applied to both. What's wrong with the claim?",
+    "options": [
+      {
+        "text": "Nothing; the outage was just very bad luck",
+        "explanation": "The outage wasn't luck: both replicas received the same migration. Treating a shared-cause failure as a coincidence hides the real design flaw."
+      },
+      {
+        "text": "The maths is wrong: the combined figure should be 99.8%",
+        "explanation": "99.8% is the result for two components in *series* (both must be up). For parallel redundancy with independence the 0.0001% figure would be correct arithmetic; the error is the assumption, not the multiplication."
+      },
+      {
+        "text": "It assumes the replicas fail independently, but they share causes such as the same migration, software and config",
+        "explanation": "Correct. Multiplying downtime probabilities is only valid for independent failures. Correlated causes like a shared migration or release make simultaneous failure far more likely than the product suggests."
+      },
+      {
+        "text": "Replicas never improve availability; only backups do",
+        "explanation": "Replicas do improve availability against independent faults like a host or zone dying. Backups protect against data loss and corruption, which is a different concern."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Independent parallel maths: `P(both down) = 0.001 × 0.001 = 0.000001` = 0.0001%.\n2. That multiplication is only valid if one replica failing tells you nothing about the other.\n3. Here both received the **same schema migration**: a common cause. Given that the first failed, the second was almost certain to fail too.\n4. Real combined availability is bounded by the reliability of the shared change process, not by hardware.\n\nFixes: apply migrations in a backwards-compatible way (expand/contract), stage changes across independent test deployments or cells; physical database replicas usually replay primary DDL and cannot independently canary a replicated migration, and treat config and schema changes as deployments with canaries.",
+    "link": {
+      "title": "AWS Well-Architected Reliability Pillar",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your service runs in 3 AZs. Today, if one AZ fails, an autoscaling group launches replacement instances in the remaining two. During a real AZ outage the cloud provider's EC2 API is heavily throttled and your launches fail, causing an outage. Which change best applies **static stability**?",
+    "options": [
+      {
+        "text": "Add retries with backoff to the autoscaling launch calls",
+        "explanation": "Retrying still depends on the impaired control plane. During a broad event, retries compete with every other customer's launches and may never succeed in time."
+      },
+      {
+        "text": "Pre-provision enough capacity in each AZ that any two AZs can carry full peak load without launching anything",
+        "explanation": "Correct. Static stability means the data plane keeps working through a failure without needing control-plane actions. Provisioning roughly 150% of peak capacity (each AZ sized for half of peak) means losing an AZ requires no new instances."
+      },
+      {
+        "text": "Move all instances into a single, larger AZ to avoid cross-AZ complexity",
+        "explanation": "This makes the AZ itself a single point of failure, so an AZ outage becomes a total outage. It's the opposite of fault isolation."
+      },
+      {
+        "text": "Switch health checks to a faster interval so failures are detected sooner",
+        "explanation": "Faster detection doesn't help if the remediation (launching instances) cannot happen. The failure was in recovery, not detection."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify the dependency: recovery needed the **control plane** (the EC2 launch API).\n2. Control planes are more complex than data planes and are often impaired during exactly the events you're trying to survive.\n3. Static stability removes the dependency: provision so that the *current* fleet survives the failure as-is.\n4. Capacity maths for 3 AZs surviving loss of 1: each AZ must hold `1/2` of peak (since 2 AZs carry 100%). Total provisioned = `3 × 50% = 150%` of peak.\n5. The cost is ~50% extra capacity; the benefit is that an AZ loss requires no new provisioning; health detection, rerouting and other prearranged data-plane recovery may still occur.\n\nThis is the approach AWS describes for services like EC2 itself: pre-provision, don't react.",
+    "link": {
+      "title": "Static stability using Availability Zones (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A payments service occasionally receives corrupted messages from a buggy upstream: amounts are negative or currency codes are invalid. Full Byzantine fault tolerance (3f+1 replicas with voting) is proposed. What's the most proportionate design?",
+    "options": [
+      {
+        "text": "Adopt BFT consensus: four replicas to tolerate one faulty replica",
+        "explanation": "BFT protects against replicas *within your cluster* lying. Here the bad data comes from upstream, so all your replicas would agree on the same corrupted message; BFT doesn't address it and is very costly."
+      },
+      {
+        "text": "Ignore it; downstream reconciliation will eventually catch it",
+        "explanation": "Reconciliation is a good backstop, but letting invalid payments through first means money may move before the error is noticed. Detect at the boundary, then reconcile."
+      },
+      {
+        "text": "Retry each message three times and keep the most common result",
+        "explanation": "Retrying a deterministic bug produces the same corrupt message each time. Voting over identical wrong answers gives the wrong answer."
+      },
+      {
+        "text": "Validate invariants and checksums at the service boundary, reject invalid messages to a dead-letter queue, and reconcile end to end",
+        "explanation": "Correct. Accidental Byzantine faults in business systems are handled cheaply by turning them into detectable, rejected failures at the edge (fail fast), quarantining bad input for inspection, and verifying totals end to end."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Locate the fault: the *source* of the wrong answers is a buggy upstream, not your replicas.\n2. Classical PBFT under its assumptions handles f faulty replicas with at least 3f+1; this is not a universal bound for every Byzantine model. If all inputs are already wrong, every replica faithfully processes the same wrong value; BFT doesn't help.\n3. Cheaper, targeted defences:\n   - **Validate** at the boundary: `amount satisfies the operation's documented sign/range rules`, currency in ISO 4217 list, checksum matches.\n   - **Reject** to a dead-letter queue so bad messages are visible and don't block the stream.\n   - **Reconcile** end to end (e.g. daily ledger totals vs bank statements).\n4. This converts a silent wrong-answer failure into a loud, contained omission failure, which the rest of the system already knows how to handle.",
+    "link": {
+      "title": "Byzantine fault (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Byzantine_fault"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A storage service runs **5,000 disks** with an annual failure rate of about 4%. Roughly how often does a disk fail, and what does that imply for the design?",
+    "options": [
+      {
+        "text": "About once a year, so manual replacement is fine",
+        "explanation": "This treats 4% as the chance of *any* disk failing. It's per disk: 5,000 × 4% = 200 failures a year."
+      },
+      {
+        "text": "Never, if the disks are enterprise-grade",
+        "explanation": "Better disks lower the rate, but at fleet scale failures are a statistical certainty. Designs must assume them."
+      },
+      {
+        "text": "About 200 a day, so the fleet is unusable",
+        "explanation": "200 is the annual figure. Per day it's about 0.55."
+      },
+      {
+        "text": "About 4 a week, so detection, re-replication and replacement must be planned and routine, with automated detection and repair",
+        "explanation": "Correct. 5,000 × 0.04 = 200 a year, about 3.8 a week. At that rate a disk failure is a normal weekly event, so the system must heal itself without paging for each expected isolated fault; failed repair or reduced redundancy may still require alerts."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Expected failures per year: `5,000 × 0.04 = 200`.\n2. Per week: `200 / 52 ≈ 3.8`.\n3. Per day: `200 / 365 ≈ 0.55`, so roughly one every other day.\n\nAt this rate:\n- Replication (or erasure coding) must keep data safe while a disk is down.\n- Re-replication must start automatically and finish within the repair-risk budget for the affected redundancy group; a second failure elsewhere in the fleet is not automatically catastrophic.\n- Replacement is a routine maintenance task, not an incident.\n\nThis is the mindset shift at scale: failure is background noise to be designed for, not an exception.",
+    "link": {
+      "title": "AWS Well-Architected Reliability Pillar",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these designs are **statically stable**, in that they keep working through a failure without relying on new provisioning or an impaired control plane? Select all that apply.",
+    "options": [
+      {
+        "text": "Failover works by creating new DNS records pointing at the standby during the incident",
+        "explanation": "Incorrect. Creating or editing records is a control-plane action. Pre-configured health-checked records that switch automatically are the statically stable version."
+      },
+      {
+        "text": "Database standbys and a tested data-plane failover mechanism are already present and do not need the impaired control plane",
+        "explanation": "Correct. The capacity and data are already in place. Promotion is a small, pre-tested step rather than provisioning under pressure."
+      },
+      {
+        "text": "Each of 3 AZs is pre-provisioned so that any two can carry full peak load",
+        "explanation": "Correct. Losing an AZ needs no launches or scaling; the remaining capacity is already running."
+      },
+      {
+        "text": "On an AZ failure, an automation launches replacement instances in the surviving AZs",
+        "explanation": "Incorrect. This depends on the control plane (launch APIs) working during the event, which is when it's most likely to be impaired or throttled."
+      },
+      {
+        "text": "Hosts can serve through the planned outage using cached configuration and credentials that remain valid for that duration",
+        "explanation": "Correct. The data plane keeps running on what it already has; losing the config service only stops *changes*, not service."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "For each design ask: *during the failure, does something need to be created, launched or reconfigured through a control plane?*\n\n| Design | New action needed? |\n|---|---|\n| Pre-provisioned AZs | No ✓ |\n| Launch replacements | Yes ✗ |\n| Cached config | No ✓ |\n| Create DNS records | Yes ✗ |\n| Running standby | Minimal ✓ |\n\nControl planes are more complex than data planes and are often the first thing to degrade in a large event, so the more of the recovery path that already exists, the more reliable it is.",
+    "link": {
+      "title": "Static stability using Availability Zones (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A SaaS API is split into **20 cells**, each serving 5% of customers, behind a thin cell router. A bad config push and a poison-pill request both hit the same single cell. What is the blast radius, and what becomes the most important component to keep simple?",
+    "options": [
+      {
+        "text": "About 5% of customers; the cell router, because every request passes through it",
+        "explanation": "Correct. One cell of 20 is 5% of customers. The router is shared by all cells, so it's the one place a bug hits everyone. Keep it thin, mostly static and changed rarely."
+      },
+      {
+        "text": "100% of customers; cells only help with capacity",
+        "explanation": "Cells are full, independent copies. A failure confined to one cell affects only the customers mapped to it."
+      },
+      {
+        "text": "About 5% of customers; the database in each cell, because it holds the data",
+        "explanation": "Each cell's database only affects that cell. The shared component is the router."
+      },
+      {
+        "text": "About 50% of customers, since requests are retried in other cells",
+        "explanation": "Cells don't normally retry customers' requests in other cells; doing so could spread a poison pill to every cell."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Blast radius with N cells: `1 / N = 1 / 20 = 5%`.\n2. Compare with a single shared fleet: a shared rollout or propagated poison request can affect the whole fleet.\n3. What's still shared? The **cell router** (and its mapping data). It's the cell architecture's remaining global component.\n4. Design it to be:\n   - minimal logic (look up customer → cell),\n   - statically stable (cached mapping),\n   - deployed more carefully than anything else.\n\nCombined with staged deploys (one cell first), a bad change usually stops at a few percent of customers.",
+    "link": {
+      "title": "Workload isolation using shuffle-sharding (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A leader sends heartbeats every second; followers declare it dead after 3 missed heartbeats and elect a new leader. The old leader then has a **5-second GC pause**, wakes up, and carries on writing to shared storage as if it were still leader. What has gone wrong, and what's the standard defence?",
+    "options": [
+      {
+        "text": "Nothing; 3 missed heartbeats proves the leader crashed",
+        "explanation": "Missed heartbeats prove only that none arrived in time. A paused process is indistinguishable from a crashed one, and here it wasn't crashed."
+      },
+      {
+        "text": "The heartbeat interval is too long; send heartbeats every 10 ms",
+        "explanation": "Faster heartbeats make detection quicker but don't stop a paused process from waking up and acting on stale beliefs. They can also cause more false positives."
+      },
+      {
+        "text": "The failure detector gave a false positive, giving two leaders; use leases plus fencing tokens so storage enforces the current ownership epoch and rejects stale writes",
+        "explanation": "Correct. Every failure detector is a timeout and can be wrong. A monotonically increasing fencing token (epoch) checked by storage makes stale-leader writes fail, whatever the old leader believes."
+      },
+      {
+        "text": "GC pauses are Byzantine failures, so BFT consensus is needed",
+        "explanation": "The old leader isn't lying; it's acting on out-of-date information after a timing failure. Fencing solves this without BFT's cost."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Timeline:\n\n```\nt=0   leader pauses (GC)\nt=3   followers: 3 missed beats\nt=3+  new leader elected, epoch 8\nt=5   old leader (epoch 7) resumes\n      and writes\n```\n\n2. Two nodes now believe they lead: **split brain**, caused by a timing failure that looked like a crash.\n3. Defences:\n   - **Lease**: the leader may act only while its lease is valid; it must check before each action (clock assumptions apply).\n   - **Fencing token**: every write carries the epoch; the new owner first establishes epoch8 at storage before relying on exclusive effects. Thereafter storage atomically rejects epoch7. Merely issuing epoch8 in a separate coordinator is insufficient until storage observes/enforces it.\n\nThe lesson: design for detectors being wrong, not just slow.",
+    "link": {
+      "title": "Addressing cascading failures (Google SRE book)",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service has two independent, active-active load balancers (each 99.9% available) in front of an app tier, and every request also needs a single database primary that is **99.95%** available. Assume database failures are also independent of the LB tier and failover/routing works. Ignoring other components, what is the service's availability, and where should effort go?",
+    "options": [
+      {
+        "text": "About 99.9999%, so it's extremely reliable",
+        "explanation": "That's only the load balancer pair: 1 − 0.001². The database is in series with it and caps the result."
+      },
+      {
+        "text": "Exactly 99.9%, the availability of a single load balancer",
+        "explanation": "Redundancy lifts the LB tier well above 99.9%, and the database then sets the overall figure."
+      },
+      {
+        "text": "About 99.85%, adding the two components' downtimes",
+        "explanation": "99.85% would be 99.9% LB in series with 99.95% DB, ignoring that the LBs are redundant."
+      },
+      {
+        "text": "About 99.95%; the database is the bottleneck, so make it redundant (e.g. a Multi-AZ standby) before adding more load balancers",
+        "explanation": "Correct. Parallel LBs give 1 − 0.001² ≈ 99.9999%. In series with the 99.95% database: 0.999999 × 0.9995 ≈ 99.95%. The weakest serial component dominates."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Parallel pair (independent): `A = 1 − (1 − 0.999)² = 1 − 0.000001 = 99.9999%`.\n2. Series with the database: `0.999999 × 0.9995 ≈ 0.99950`.\n3. Downtime per 30 days ≈ `0.0005 × 43,200 ≈ 22 min`, almost all from the database.\n4. Effort goes where the downtime is: a standby with automatic failover, tested regularly.\n\nCaveat from the lesson: the 99.9999% only holds if the two LBs fail independently. A shared config push or certificate makes them fail together, and the pair is then no better than one.",
+    "link": {
+      "title": "AWS Well-Architected Reliability Pillar",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"
+    }
+  }
+]

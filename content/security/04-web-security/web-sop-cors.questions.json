@@ -1,0 +1,348 @@
+[
+  {
+    "id": "web-sop-cors-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these URLs is **same-origin** with `https://shop.example/home`?",
+    "options": [
+      {
+        "text": "`http://shop.example/home`",
+        "explanation": "The scheme differs (`http` vs `https`). Origin includes the scheme, so this is cross-origin even though host and path match."
+      },
+      {
+        "text": "`https://shop.example/admin?x=1`",
+        "explanation": "Correct. Scheme, host and (default) port 443 all match. Path and query string are not part of the origin."
+      },
+      {
+        "text": "`https://www.shop.example/home`",
+        "explanation": "`www.shop.example` is a different host. Subdomains are separate origins, although they are the same *site*."
+      },
+      {
+        "text": "`https://shop.example:8443/home`",
+        "explanation": "An explicit port 8443 differs from the implicit 443, so the origin differs. Port is part of the triple."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Write each URL as (scheme, host, port) and compare with (https, shop.example, 443):\n\n| URL | Triple | Match? |\n|---|---|---|\n| A | http, shop.example, 80 | No |\n| B | https, shop.example, 443 | Yes |\n| C | https, www.shop.example, 443 | No |\n| D | https, shop.example, 8443 | No |\n\nOnly B matches on all three. The path `/admin` and query `?x=1` are ignored.",
+    "link": {
+      "title": "Same-origin policy — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy"
+    }
+  },
+  {
+    "id": "web-sop-cors-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A page on `https://evil.example` runs `fetch(\"https://bank.example/transfer\", {method: \"POST\", body: \"to=x\"})`. The bank sends no CORS headers. Assume no CSP or other sending restriction and a reachable server. What does CORS itself do?",
+    "options": [
+      {
+        "text": "The browser refuses to send the request at all",
+        "explanation": "This is the common misconception. A `POST` with a form-style body is a simple request, so it is sent without any preflight. The SOP blocks reading the response, not sending it."
+      },
+      {
+        "text": "The simple request can be sent, but the script cannot read the response without CORS permission",
+        "explanation": "Correct. This simple request needs no preflight. The server may accept or reject it; absent CORS permission the response is not exposed. Default fetch credentials mode omits cross-origin cookies."
+      },
+      {
+        "text": "The request is sent, and the script can read the response because it was a POST",
+        "explanation": "The method does not grant read access. Only a matching `Access-Control-Allow-Origin` header does."
+      },
+      {
+        "text": "The server rejects it automatically because the Origin header is foreign",
+        "explanation": "Servers do nothing with `Origin` unless their code checks it. The SOP is enforced by the browser, not the server."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The string body gives a safelisted text/plain content type, and this POST has no unsafe author-set headers. Under the stated assumptions the browser sends it without preflight, but default cross-origin fetch does not include bank cookies. The server decides whether any action is authorised. Without allow-origin permission the CORS fetch rejects; it does not expose response contents. CSRF still matters for requests that carry eligible ambient credentials or otherwise cause an unauthorised action.",
+    "link": {
+      "title": "Cross-Origin Resource Sharing (CORS) — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS"
+    }
+  },
+  {
+    "id": "web-sop-cors-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does CORS fundamentally do?",
+    "options": [
+      {
+        "text": "It lets a server tell browsers which other origins may read its responses, relaxing the same-origin policy",
+        "explanation": "Correct. CORS is an opt-in relaxation: the server grants read access to named origins via response headers."
+      },
+      {
+        "text": "It protects an API from requests made by scripts on other sites",
+        "explanation": "CORS is not a server-side firewall. Simple requests are still delivered, and non-browser clients ignore CORS entirely."
+      },
+      {
+        "text": "It encrypts cross-origin traffic between browser and server",
+        "explanation": "Encryption is TLS's job. CORS is just a set of HTTP headers that control browser read access."
+      },
+      {
+        "text": "It stops a page from embedding cross-origin images and scripts",
+        "explanation": "Classic no-cors embedding may work, but CORS-enabled images, module scripts and other resource modes can require CORS approval. Embedding also depends on CSP, CORP/COEP and framing policy."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "CORS grants browser response-sharing permission and controls preflight approval for non-safelisted requests. Simple requests can still be sent without permission to read the response, while failed required preflights can prevent the actual request. Non-browser clients are not bound by browser CORS enforcement. The server must authenticate and authorise independently.",
+    "link": {
+      "title": "Cross-Origin Resource Sharing (CORS) — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS"
+    }
+  },
+  {
+    "id": "web-sop-cors-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A SPA makes CORS fetches to another origin, with no cached preflight permission. Assume safelisted header values where named, no extra author-set headers, no streaming body or upload-listener trigger, and no other sending restriction. Which need an OPTIONS preflight? Select all that apply.",
+    "options": [
+      {
+        "text": "GET /items with only Accept: application/json",
+        "explanation": "GET with safelisted headers is a simple request; no preflight."
+      },
+      {
+        "text": "`POST /items` with `Content-Type: application/json`",
+        "explanation": "Correct. `application/json` is not one of the three safelisted content types, so it needs a preflight."
+      },
+      {
+        "text": "`DELETE /items/3`",
+        "explanation": "Correct under the supplied empty-cache conditions. DELETE is not a CORS-safelisted method."
+      },
+      {
+        "text": "`GET /me` with an `Authorization: Bearer ...` header",
+        "explanation": "Correct. `Authorization` is not a CORS-safelisted header, so even a GET is preflighted."
+      },
+      {
+        "text": "`POST /upload` with `multipart/form-data`",
+        "explanation": "`multipart/form-data` is safelisted (an HTML form can send it), so this is a simple request."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Under these assumptions, GET with a safelisted Accept value and POST with a safelisted multipart content type avoid preflight. JSON content type, DELETE and the Authorization header require permission and therefore OPTIONS with an empty preflight cache. Header lengths/bytes and API-specific flags matter too; a header name alone is not the complete safelist test.",
+    "link": {
+      "title": "Cross-Origin Resource Sharing (CORS) — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS"
+    }
+  },
+  {
+    "id": "web-sop-cors-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API responds to a credentialed `fetch` (with `credentials: \"include\"`) from `https://app.example` like this:\n\n```\nAccess-Control-Allow-Origin: *\nAccess-Control-Allow-Credentials: true\n```\n\nWhat does the browser do?",
+    "options": [
+      {
+        "text": "Lets the script read the response, since `*` matches every origin",
+        "explanation": "The wildcard is specifically forbidden for credentialed requests. Treating `*` as \"matches everything\" here is the misconception."
+      },
+      {
+        "text": "Lets the script read the response but strips the cookies",
+        "explanation": "Credentials mode include does not guarantee any eligible cookie exists or is sent. The wildcard fails the CORS credentials-mode check regardless; stripping cookies from an already received response is not the rule."
+      },
+      {
+        "text": "Blocks the response: with credentials, the origin must be named exactly",
+        "explanation": "Correct. Browsers reject `Access-Control-Allow-Origin: *` on credentialed requests, so the fetch fails with a CORS error."
+      },
+      {
+        "text": "Sends a second preflight asking for the exact origin",
+        "explanation": "There's no automatic retry. The request simply fails, and the developer must fix the server's headers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "With credentials mode include, the CORS check cannot use wildcard allow-origin, even when no cookie is eligible. An allowed named origin plus Access-Control-Allow-Credentials: true is required to expose the response. Eligible cookies remain subject to SameSite and browser policy. For dynamically selected origins preserve Vary: Origin, and separately prevent shared caching of private user data.",
+    "link": {
+      "title": "Fetch Standard: CORS protocol — WHATWG",
+      "url": "https://fetch.spec.whatwg.org/#http-cors-protocol"
+    }
+  },
+  {
+    "id": "web-sop-cors-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API reflects origins for which the Python suffix check below succeeds, and sends Access-Control-Allow-Credentials: true. Assume the attacker controls the candidate origin and eligible victim credentials are sent. Which untrusted domain passes?\n\n```python\ndef allowed(origin):\n    return origin.endswith(\n        \"example.com\")\n```",
+    "options": [
+      {
+        "text": "`https://example.com.evil.net`",
+        "explanation": "This ends in `evil.net`, not `example.com`, so `endswith` returns False. (A `startswith` or `in` check would fall for it.)"
+      },
+      {
+        "text": "`https://evilexample.com`",
+        "explanation": "Correct. The suffix comparison accepts that string although its hostname is not example.com or its subdomain. The question assumes attacker control; actual domain registration availability is irrelevant."
+      },
+      {
+        "text": "None: `endswith` is a safe suffix check",
+        "explanation": "A suffix check without a leading dot accepts any domain whose name merely ends in those letters."
+      },
+      {
+        "text": "`null`",
+        "explanation": "The string `\"null\"` does not end in `example.com`, so this check rejects it, though an allowlist that included `null` would be a separate bug."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Evaluate `endswith(\"example.com\")` on each:\n\n```\nhttps://evilexample.com     True\nhttps://example.com.evil.net False\nnull                        False\n```\n\nThe fix is an exact set lookup:\n\n```python\nALLOWED = {\"https://example.com\",\n           \"https://app.example.com\"}\nok = origin in ALLOWED\n```\n\nEven `endswith(\".example.com\")` would trust every subdomain, including forgotten ones with XSS bugs.",
+    "link": {
+      "title": "Exploiting CORS misconfigurations — PortSwigger",
+      "url": "https://portswigger.net/research/exploiting-cors-misconfigurations-for-bitcoins-and-bounties"
+    }
+  },
+  {
+    "id": "web-sop-cors-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API correctly reflects allowlisted origins in `Access-Control-Allow-Origin` but omits `Vary: Origin`. A CDN caches responses. What can go wrong?",
+    "options": [
+      {
+        "text": "Nothing, because CORS headers are evaluated by the browser, not the CDN",
+        "explanation": "The browser evaluates them, but the CDN decides which stored copy (with which header) to hand back. That is the problem."
+      },
+      {
+        "text": "The cache may reuse origin A's allow-origin header for origin B, causing B's CORS check to fail",
+        "explanation": "Correct if the shared cache does not otherwise vary on Origin. Its key may include other dimensions; omission does not imply URL-only caching."
+      },
+      {
+        "text": "Preflights stop working because OPTIONS cannot be cached",
+        "explanation": "Preflight caching is done by the browser via `Access-Control-Max-Age`; `Vary` is about shared caches storing the main response."
+      },
+      {
+        "text": "The browser will refuse every response because `Vary` is mandatory in CORS",
+        "explanation": "Browsers don't require `Vary`. It is a correctness requirement for caches, not a browser check."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A cache stores a response authorising app.example and reuses it for admin.example because Origin is not distinguished. Admin’s browser rejects the mismatched header. Vary: Origin enables correct variation in conforming caches when the response depends on Origin; preserve other Vary values too. It does not fix unsafe shared caching of user-specific content: use appropriate Cache-Control and authentication-aware cache policy. Correctly allowlisting origins plus missing Vary does not by itself authorise an untrusted origin.",
+    "link": {
+      "title": "Cross-Origin Resource Sharing (CORS) — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS"
+    }
+  },
+  {
+    "id": "web-sop-cors-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An internal API allowlists `Origin: null` \"so that local HTML files used by the support team work\". Why is this dangerous?",
+    "options": [
+      {
+        "text": "It isn't: only `file:` pages can send `Origin: null`",
+        "explanation": "Sandboxed iframes and some redirect chains also produce `null`, and any website can create a sandboxed iframe."
+      },
+      {
+        "text": "An attacker's page can embed a sandboxed iframe whose requests carry `Origin: null`, so the allowlist effectively trusts any website",
+        "explanation": "Correct as a trust-boundary flaw: distinct opaque origins serialize as null. Exposure of authenticated data additionally requires eligible credentials, suitable CORS credentials permission and a sensitive response."
+      },
+      {
+        "text": "`null` disables the preflight, so the attacker can send DELETE requests",
+        "explanation": "The origin value doesn't change which requests are preflighted; that depends on method and headers."
+      },
+      {
+        "text": "Browsers convert `null` to `*`, which breaks credentials",
+        "explanation": "Browsers do not rewrite the value. The danger is that the allowlist matches when it shouldn't, not a conversion."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A sandboxed iframe with allow-scripts but without allow-same-origin can execute with an opaque origin serialized as null. This gives an attacker a matching origin value if the API allowlists null. Reading private data additionally depends on credential eligibility, request mode and endpoint behaviour. Do not use null as the identity of a trusted support tool; serve it from a controlled named origin.",
+    "link": {
+      "title": "Exploiting CORS misconfigurations — PortSwigger",
+      "url": "https://portswigger.net/research/exploiting-cors-misconfigurations-for-bitcoins-and-bounties"
+    }
+  },
+  {
+    "id": "web-sop-cors-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about cross-origin behaviour are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A cross-origin `<script src>` runs with the including page's origin, so it can read that page's DOM",
+        "explanation": "Correct. Script inclusion is code execution in your origin. That is why third-party scripts are a major trust decision."
+      },
+      {
+        "text": "Script can read the DOM of a cross-origin iframe if both pages are served over HTTPS",
+        "explanation": "HTTPS doesn't grant access. Different host means different origin, so DOM access is blocked; the pages must use `postMessage`."
+      },
+      {
+        "text": "A receiver of `postMessage` should check `event.origin` before acting on the data",
+        "explanation": "Correct. Also verify the expected source window when applicable and validate the payload structure. An untrusted window with a reference can send messages; checking origin alone does not make arbitrary data safe."
+      },
+      {
+        "text": "`https://a.example.com` and `https://b.example.com` are same-site but cross-origin",
+        "explanation": "Correct. Hosts differ (cross-origin) but scheme and registrable domain `example.com` match (same-site)."
+      },
+      {
+        "text": "Setting `Access-Control-Allow-Origin` restrictively prevents CSRF",
+        "explanation": "CORS headers only control whether responses can be read. Simple requests still arrive and take effect, so CSRF needs separate defences."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Go through each claim using the read/write/embed split:\n\n1. `<script src>` is embedding plus execution in *your* origin: true.\n2. iframe DOM is a cross-origin *read*: blocked regardless of HTTPS.\n3. `postMessage` deliberately crosses origins, so the receiver must authenticate the sender: true.\n4. Origin compares full host; site compares eTLD+1: same-site, cross-origin, true.\n5. CSRF is a *write*; CORS governs *reads*: false.",
+    "link": {
+      "title": "Same-origin policy — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy"
+    }
+  },
+  {
+    "id": "web-sop-cors-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team allows `https://*.example.com` (any subdomain) with credentials on their account API. A pen-tester reports a reflected XSS on the forgotten `https://old-promo.example.com`. Assume a logged-in victim triggers the XSS, eligible API cookies are sent, and the API responds with sensitive data. What becomes possible?",
+    "options": [
+      {
+        "text": "Limited to the promo site, since XSS is confined to its own origin",
+        "explanation": "The XSS is in the promo origin, but the API has granted that origin credentialed read access, so the impact spreads to the API."
+      },
+      {
+        "text": "An attacker can run script on the promo origin, call the account API with the victim's cookies and read the responses",
+        "explanation": "Correct under the supplied conditions. Trusting the compromised origin grants access to the API responses that its credentials and authorisation permit, not automatically every resource."
+      },
+      {
+        "text": "None, because SameSite cookies stop subdomains sending cookies",
+        "explanation": "The stated HTTPS sibling origins are same-site in an ordinary first-party context. SameSite alone therefore does not isolate them; cookie domain/path/expiry and other browser policy still matter."
+      },
+      {
+        "text": "The attacker can only send requests, not read them, because of the SOP",
+        "explanation": "The CORS headers explicitly lift the SOP for that origin, so reads are allowed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The injected script runs on the allowed promo origin, requests the account API with credentials mode include, and receives the sensitive response under the supplied cookie and server assumptions. CORS permits reading it. Narrow exact-origin allowlists and removal of unused subdomains reduce this trust surface; fixing XSS and server authorisation remain necessary.",
+    "link": {
+      "title": "Exploiting CORS misconfigurations — PortSwigger",
+      "url": "https://portswigger.net/research/exploiting-cors-misconfigurations-for-bitcoins-and-bounties"
+    }
+  },
+  {
+    "id": "web-sop-cors-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a Chromium build whose preflight-cache maximum is 7,200 seconds. A successful preflight advertises Access-Control-Max-Age: 86400. What upper expiry bound follows, allowing earlier eviction?",
+    "options": [
+      {
+        "text": "24 hours, exactly as requested",
+        "explanation": "The supplied implementation cap is lower than the advertised value, so86400seconds is not the upper expiry bound."
+      },
+      {
+        "text": "Up to 2 hours, because Chromium caps the preflight cache",
+        "explanation": "Correct. min(86400,7200)=7200 seconds, or two hours. Entries can be evicted sooner."
+      },
+      {
+        "text": "5 seconds, because large values are ignored",
+        "explanation": "5 seconds is the default when the header is *absent*. A large value is clamped to the cap, not discarded."
+      },
+      {
+        "text": "Forever, until the user clears the cache",
+        "explanation": "Preflight results are always time-limited; there's no permanent caching."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The supplied cap gives min(86400,7200)=7200seconds. Fetch permits an implementation cap and earlier removal; absent or invalid max-age defaults to5seconds in the standard. The checked Chromium source uses two hours, but future versions and other browsers require their own checks. A cached permission avoids an extra preflight only when its key and method/header conditions match.",
+    "link": {
+      "title": "Access-Control-Max-Age — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age"
+    }
+  }
+]

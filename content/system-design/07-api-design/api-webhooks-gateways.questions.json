@@ -1,0 +1,378 @@
+[
+  {
+    "id": "api-webhooks-gateways-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your `/webhooks/payments` endpoint marks orders as paid when it receives a `payment.succeeded` event. It doesn't verify signatures. What's the main risk?",
+    "options": [
+      {
+        "text": "Events might arrive slowly",
+        "explanation": "Latency is a reliability concern, not the main risk here. The bigger problem is that the endpoint trusts anything it receives."
+      },
+      {
+        "text": "The provider will stop sending events",
+        "explanation": "Providers don't know or care whether you verify signatures; deliveries continue either way."
+      },
+      {
+        "text": "Duplicate events will double-mark orders",
+        "explanation": "Duplicates are a real concern, but they're solved by deduplicating on event id, not by signatures. And marking an order paid twice is usually harmless."
+      },
+      {
+        "text": "Anyone who discovers the URL can POST a forged event and get orders marked as paid without paying",
+        "explanation": "Correct. Without the provider's required authentication mechanism, this public endpoint cannot distinguish the forged request. HMAC is one common mechanism; other authenticated delivery schemes exist."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think like an attacker:\n\n1. Place an order, don't pay.\n2. Guess or find the webhook URL (it's often `/webhooks/stripe` or appears in client-side code or docs).\n3. `curl -X POST` a JSON body shaped like a real `payment.succeeded` event with your order id.\n4. Unverified endpoint marks your order paid → free goods.\n\nWith verification, step 3 fails: the attacker can't compute `HMAC_SHA256(secret, t + \".\" + body)` without the secret.",
+    "link": {
+      "title": "Stripe docs: Verify webhook signatures",
+      "url": "https://docs.stripe.com/webhooks/signature"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your signature verification fails on every genuine webhook, even though the secret is correct. The code is:\n\n```\nbody = json.loads(request.data)\npayload = json.dumps(body)\nexpected = hmac(secret,\n  f\"{ts}.{payload}\")\n```\n\nWhat's the most likely bug?",
+    "options": [
+      {
+        "text": "HMAC-SHA256 can't sign JSON",
+        "explanation": "HMAC signs arbitrary bytes. JSON is fine, as long as you sign exactly the bytes that were sent."
+      },
+      {
+        "text": "The body is parsed and re-serialised, so whitespace, key order or escaping differ from the raw bytes the provider signed",
+        "explanation": "Correct. Even one changed space produces a completely different HMAC. Always verify against the raw request body before any parsing."
+      },
+      {
+        "text": "The timestamp should come after the body",
+        "explanation": "The order is set by the provider's spec. Stripe uses `timestamp.body`, which this code follows. The problem is the body bytes themselves."
+      },
+      {
+        "text": "The secret must be base64-decoded first",
+        "explanation": "Some providers (Standard Webhooks) do use base64 secrets, but the question says the secret is correct. The re-serialisation bug would break verification regardless."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare bytes:\n\n```\nsent:   {\"id\": \"evt_1\",  \"amt\":5}\nre-ser: {\"id\": \"evt_1\", \"amt\": 5}\n```\n\nRe-serialisation changes the signed byte sequence, so the expected HMAC will no longer match (apart from cryptographically negligible collisions). The snippet below is pseudocode: use the provider SDK to parse timestamp/signature encodings and verify freshness.\n\nFix:\n\n```\nraw = request.get_data()  # bytes\nexpected = hmac(secret,\n  ts + b\".\" + raw)\nif not compare_digest(expected, sig):\n    return 400\nbody = json.loads(raw)\n```\n\nNote the constant-time comparison too.",
+    "link": {
+      "title": "GitHub docs: Validating webhook deliveries",
+      "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker captures a genuine, correctly signed `refund.created` webhook from a misconfigured log and resends it to your endpoint 2 hours later. Your code verifies the HMAC over `timestamp.body` and allows a 5-minute tolerance. What happens?",
+    "options": [
+      {
+        "text": "It's rejected, because the signed timestamp is 2 hours old, beyond the 5-minute tolerance, and the attacker can't change the timestamp without invalidating the signature",
+        "explanation": "Correct. Because the timestamp is part of the signed string, the attacker must either send the old timestamp (rejected as stale) or a new one (signature mismatch)."
+      },
+      {
+        "text": "It's accepted, because the signature is valid",
+        "explanation": "The signature is valid only for that exact timestamp. The tolerance check is what makes a valid-but-old signature useless."
+      },
+      {
+        "text": "It's accepted, but only if the attacker updates the timestamp header",
+        "explanation": "Updating the timestamp changes the signed string, so the recomputed HMAC no longer matches the captured signature."
+      },
+      {
+        "text": "It depends on whether the event id was already processed; timestamps don't help",
+        "explanation": "Deduplication by event id is a second, complementary defence, but the timestamp check alone already rejects this replay."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Attacker's two options:\n\n| Send | HMAC check | Age check |\n|---|---|---|\n| Old `t` | ✔ match | ✘ 2 h > 5 min |\n| New `t` | ✘ mismatch | (n/a) |\n\nEither way, rejected.\n\nWithin the 5-minute window a replay could still pass the timestamp check, which is why you also dedupe on the event id: belt and braces.",
+    "link": {
+      "title": "Stripe docs: Verify webhook signatures",
+      "url": "https://docs.stripe.com/webhooks/signature"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're consuming Stripe-style payment webhooks with bounded retries and possible duplicates. Which practices should you adopt? Select all that apply.",
+    "options": [
+      {
+        "text": "Verify the signature, persist the event to a queue, return 200 immediately, then process asynchronously",
+        "explanation": "Correct. Fast acknowledgement avoids provider timeouts (and the duplicate retries they cause), and your downstream outages don't turn into webhook failures."
+      },
+      {
+        "text": "Deduplicate on the authenticated event id, in the same transaction as the local database side effect",
+        "explanation": "Correct. Retries can produce duplicates even though bounded retries cannot guarantee delivery. Doing the dedupe insert and the business update atomically prevents a crash between them leaving things inconsistent."
+      },
+      {
+        "text": "Assume events arrive in the order they were created",
+        "explanation": "Wrong. Providers such as Stripe explicitly don't guarantee order. Retries and parallel delivery mean `updated` can arrive before `created`."
+      },
+      {
+        "text": "Periodically reconcile against the provider's events or objects API",
+        "explanation": "Correct. If your endpoint was down beyond the retry window (Stripe retries for up to 3 days), reconciliation catches missed events. Webhooks are a notification, not your only source of truth."
+      },
+      {
+        "text": "Return 500 for event types you don't handle so the provider stops sending them",
+        "explanation": "Wrong. A 5xx tells the provider delivery *failed*, so it retries for days and may eventually disable your endpoint. Return 2xx for events you ignore, and unsubscribe from them in the provider's settings."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each against the delivery model (at-least-once, unordered, retried on non-2xx):\n\n1. Ack fast + async: avoids timeouts. ✔\n2. Dedupe atomically: handles at-least-once. ✔\n3. Assume order: contradicts 'unordered'. ✘\n4. Reconcile: covers deliveries lost beyond the retry window. ✔\n5. 500 for unhandled: causes days of retries. ✘",
+    "link": {
+      "title": "Stripe docs: Receive Stripe events in your webhook endpoint",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You receive `subscription.updated` (plan = Pro, version 7) and then, due to a retry, an older `subscription.updated` (plan = Basic, version 5). Your handler simply writes the event's plan to the database. What ends up stored, and what's the most robust fix?",
+    "options": [
+      {
+        "text": "Pro; webhooks are always delivered in order",
+        "explanation": "They aren't. Retries of earlier failed deliveries commonly arrive after newer events."
+      },
+      {
+        "text": "Pro; databases reject older writes automatically",
+        "explanation": "A plain `UPDATE` has no notion of event age. It overwrites whatever is there unless you add a condition."
+      },
+      {
+        "text": "Basic. Fix: on any subscription event, re-fetch the subscription's current state from the provider's API (or only apply events with a higher version than stored)",
+        "explanation": "Correct. The stale event overwrote newer data. Treating events as hints helps, but concurrent refresh responses can still finish out of order; serialize refreshes per object or guard the stored version. An atomic version check (`WHERE version < 5` fails, so skip) is the cheaper alternative."
+      },
+      {
+        "text": "Basic. Fix: process webhooks with a single thread",
+        "explanation": "A single thread processes events in *arrival* order, but arrival order is already wrong here. Serialising doesn't fix out-of-order delivery."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Timeline:\n\n```\narrive 1: v7 plan=Pro   -> store Pro\narrive 2: v5 plan=Basic -> store Basic\n```\n\nCustomer paid for Pro but now has Basic. Fixes:\n\n**Version guard**\n\n```\nUPDATE subs SET plan=$p, ver=$v\nWHERE id=$id AND ver < $v\n```\n\nstored version 7 < incoming version 5 is false → 0 rows → ignored.\n\n**Re-fetch** (thin-event style)\n\nOn any event for `sub_123`, call `GET /subscriptions/sub_123` and store the result. Serialize these refreshes per object or use a trustworthy version check when storing fetched state; otherwise an older fetch can overwrite a newer one.",
+    "link": {
+      "title": "Stripe docs: Receive Stripe events in your webhook endpoint",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run a webhook delivery platform. One large customer's endpoint starts responding in 25 s (timeouts at 30 s). Soon, webhooks for **all** customers are delayed by minutes. What's the most likely design flaw?",
+    "options": [
+      {
+        "text": "The HMAC signatures are too slow to compute",
+        "explanation": "The scenario points to workers held by slow network responses. Measure cryptographic costs on the actual hardware; no HMAC benchmark is supplied here."
+      },
+      {
+        "text": "All customers share one pool of delivery workers, so slow deliveries to one endpoint tie up workers and starve everyone else",
+        "explanation": "Correct. If the large customer generates many events and each takes 25 s, workers sit blocked on that endpoint. Fix with per-endpoint concurrency limits, separate queues per customer (or per shard), shorter timeouts, and circuit breakers that back off failing endpoints."
+      },
+      {
+        "text": "Exponential backoff is too aggressive",
+        "explanation": "Backoff slows retries to the failing endpoint. It reduces pressure rather than causing delays for other customers."
+      },
+      {
+        "text": "Events are signed with the wrong secret",
+        "explanation": "A wrong secret would cause the customer's verification to fail (and return 4xx), not make deliveries to other customers slow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Quantify the starvation:\n\n- 200 delivery workers shared by all customers.\n- Big customer emits 10 events/s, each now holding a worker for 25 s.\n- Workers needed for that customer alone = 10 × 25 = **250** > 200.\n\nEvery worker is soon stuck waiting on one slow endpoint, and everyone else's events queue up behind it.\n\nFixes:\n1. Cap concurrency per endpoint (e.g. 10 in flight).\n2. Shard queues by customer so one backlog can't block others.\n3. Lower timeouts (5–10 s) and open a circuit breaker after repeated failures.",
+    "link": {
+      "title": "Standard Webhooks specification",
+      "url": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your mobile home screen needs data from 5 services, and on 4G each round trip costs ~150 ms. The web app needs a very different shape from the same services. The mobile team waits weeks for core teams to change endpoints. Which pattern best addresses this?",
+    "options": [
+      {
+        "text": "Put the aggregation logic for every client in the shared API gateway",
+        "explanation": "This turns the gateway into a monolith owned by a platform team. Every client change now queues behind that team, which is the same bottleneck in a new place."
+      },
+      {
+        "text": "Have the mobile app call all 5 services directly in parallel",
+        "explanation": "Parallel calls help latency, but the app still downloads 5 over-fetched payloads, and still depends on core teams for any shape change."
+      },
+      {
+        "text": "A backend-for-frontend per client type (mobile BFF, web BFF), owned by each frontend team, that aggregates and shapes responses",
+        "explanation": "Correct. The mobile BFF makes the 5 calls over the fast data-centre network and returns one trimmed payload; the mobile team owns it, so they can change it without waiting for core teams."
+      },
+      {
+        "text": "Add a version number to each core service's API",
+        "explanation": "Versioning manages breaking changes, but doesn't reduce round trips or let the mobile team shape responses themselves."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Illustrative latency model (assumed payload sizes and internal latency; excludes processing and transfer time):\n\n- **Direct, sequential**: 5 × 150 ms = 750 ms.\n- **Direct, parallel**: ~150 ms, but 5 payloads (say 5 × 40 KB = 200 KB) over 4G.\n- **BFF**: 1 × 150 ms on 4G + 5 parallel calls in the data centre at ~5 ms each, returning one 15 KB payload.\n\nOwnership matters as much as latency: the BFF lives with the mobile team, so a new screen means changing their own service, not filing tickets with five other teams.",
+    "link": {
+      "title": "Sam Newman: Backends for frontends",
+      "url": "https://samnewman.io/patterns/architectural/bff/"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You consume GitHub webhooks and verify `X-Hub-Signature-256` correctly. GitHub's HMAC covers only the body; there's no signed timestamp. An attacker captures one genuine `push` delivery and replays it a day later. What's your main defence?",
+    "options": [
+      {
+        "text": "Reject deliveries older than 5 minutes using the `Date` header",
+        "explanation": "The `Date` header isn't part of the signature, so the attacker can set it to anything. An unsigned timestamp proves nothing."
+      },
+      {
+        "text": "None is needed: a valid signature proves the delivery is fresh",
+        "explanation": "A signature proves the body came from GitHub at *some* point. A replayed copy has the same valid signature, which is exactly why replays are dangerous."
+      },
+      {
+        "text": "Rotate the webhook secret every day",
+        "explanation": "Rotation limits how long one captured delivery stays valid, but it's operationally painful and still leaves a window. It isn't the primary defence."
+      },
+      {
+        "text": "Use authenticated payload identity or a retained digest of verified raw bytes for replay detection, and make business effects idempotent; the unsigned delivery header alone is insufficient",
+        "explanation": "Correct. A captured body remains authentically signed. Retained authenticated identity can detect repeats; reconcile current provider state for stale events. The attacker can replace X-GitHub-Delivery without invalidating the body HMAC."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Replay protection needs something the attacker can't change: either a **signed** timestamp or a record of what you've already seen.\n2. GitHub signs only the body, so any timestamp in a header is unprotected.\n3. That leaves **deduplication**: retain authenticated event identity or the verified body digest where suitable; the unsigned delivery id only helps ordinary redelivery deduplication.\n4. An attacker could change the unsigned delivery id, so also make processing idempotent on the *content*, e.g. define a business key including the repository, ref and commit for the intended effect, so an unrelated repository or legitimate new operation is not accidentally suppressed.\n\nCompare with Stripe and Standard Webhooks, which put the timestamp inside the signed string, so stale replays are rejected outright.",
+    "link": {
+      "title": "GitHub docs: Validating webhook deliveries",
+      "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're building webhook delivery for your own SaaS platform. Which design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Write the event to an outbox table in the same transaction as the state change that caused it, and deliver from there",
+        "explanation": "Correct. If the transaction commits, the event is guaranteed to exist; if it rolls back, no phantom event is sent."
+      },
+      {
+        "text": "Send the webhook synchronously inside the API request that caused the event",
+        "explanation": "Unsound. A slow or down customer endpoint then slows or fails *your* API request, and a crash between commit and send loses the event."
+      },
+      {
+        "text": "Give each customer endpoint its own queue or concurrency limit, so one slow endpoint can't starve the rest",
+        "explanation": "Correct. Isolation stops one customer's 25-second timeouts from tying up the shared worker pool."
+      },
+      {
+        "text": "Retry failed deliveries every second, indefinitely",
+        "explanation": "Unsound. That hammers an endpoint that's already struggling and never gives up. Use exponential backoff over hours to days, then disable and notify."
+      },
+      {
+        "text": "Sign `id.timestamp.body` with a per-endpoint secret, and offer a `GET /events` API for reconciliation",
+        "explanation": "Correct. Signing the id and timestamp lets consumers reject forgeries and stale replays; the events API lets them recover anything they missed."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each choice against the provider's three jobs: **durably record** events, **isolate customer workloads**, and **let consumers verify and recover**.\n\n| Choice | Lose? | Isolate? | Verify? |\n|---|---|---|---|\n| Outbox | Safe | - | - |\n| Sync send | Loses | Couples | - |\n| Per-endpoint queues | - | Yes | - |\n| Retry every 1 s | - | Hurts | - |\n| Sign + events API | - | - | Yes |\n\nThe outbox is the same transactional pattern as in the idempotency lesson, applied to outgoing events.",
+    "link": {
+      "title": "Standard Webhooks specification",
+      "url": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The platform team proposes adding a rule to the API gateway: \"if a customer has more than 5 past orders, add a 10% loyalty discount to `POST /checkout` requests\". It would ship faster than changing the checkout service. What's the strongest objection?",
+    "options": [
+      {
+        "text": "It's business logic. Putting domain rules in the gateway couples every team to it, makes it the bottleneck for changes, and hides pricing rules from the service that owns checkout",
+        "explanation": "Correct. Gateways should handle cross-cutting policy (auth, rate limits, routing, TLS). Once they apply domain rules, they become the shared monolith you split up to escape."
+      },
+      {
+        "text": "Gateways can't modify request bodies",
+        "explanation": "Many gateways can transform requests. The issue isn't capability; it's that this logic doesn't belong there."
+      },
+      {
+        "text": "It would break TLS termination",
+        "explanation": "TLS is terminated before the gateway sees the request either way. The discount rule has nothing to do with TLS."
+      },
+      {
+        "text": "Gateways can only route by URL path",
+        "explanation": "Modern gateways route on headers, methods, weights and more. Again, capability isn't the problem."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask of any proposed gateway feature: *is this true for every API, or is it a rule about this domain?*\n\n| Feature | Cross-cutting? | Where |\n|---|---|---|\n| Validate JWT | Yes | Gateway |\n| 1,000 req/min per key | Yes | Gateway |\n| Route `/orders/*` | Yes | Gateway |\n| Loyalty discount | No | Checkout service |\n\nThe discount also needs order history, which means the gateway calling a database or service on the hot path of a single endpoint. That adds latency to the one component every request already passes through.",
+    "link": {
+      "title": "Microsoft Azure Architecture Center: API gateways",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/microservices/design/gateway"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A provider retries failed webhooks after 1 min, 5 min, 30 min, 2 h and 8 h (each delay measured from the previous attempt). Your endpoint goes down just before an event is first sent, and stays down for 6 hours. When is the event finally delivered, measured from the first attempt?",
+    "options": [
+      {
+        "text": "About 6 hours, as soon as the endpoint recovers",
+        "explanation": "Providers don't know when you recover; they only try at scheduled times. The next attempt after the outage ends is what matters."
+      },
+      {
+        "text": "About 2 h 36 min",
+        "explanation": "That's when the fourth retry happens, but your endpoint is still down then (the outage lasts 6 h)."
+      },
+      {
+        "text": "About 10 h 36 min, 4 hours 36 minutes after your endpoint came back",
+        "explanation": "Correct. Cumulative attempt times are 0, 1 min, 6 min, 36 min, 2 h 36 min and 10 h 36 min. The first one after the 6-hour outage is the last."
+      },
+      {
+        "text": "Never: after five failed retries the event is dropped",
+        "explanation": "Five retries means six attempts in total, and the sixth (at 10 h 36 min) comes after the outage ends."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Add up the delays to get the time of each attempt:\n\n```\nattempt  delay   at\n1        -       0:00   down\n2        1 min   0:01   down\n3        5 min   0:06   down\n4        30 min  0:36   down\n5        2 h     2:36   down\n6        8 h     10:36  up\n```\n\nThe endpoint recovers at 6:00 but waits until **10:36** for the event: 4 hours 36 minutes of avoidable staleness.\n\nThis is why consumers shouldn't rely on retries alone. After an outage, **reconcile** through the provider's events API (or trigger redelivery) instead of waiting for the backoff schedule.",
+    "link": {
+      "title": "Stripe docs: Receive Stripe events in your webhook endpoint",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to rotate a webhook signing secret. The provider and your 30 consumer servers can't switch at the same instant. How do you avoid rejecting genuine webhooks during the changeover?",
+    "options": [
+      {
+        "text": "Turn off signature verification for the rotation window",
+        "explanation": "That opens exactly the window an attacker would want, and there's no need for it."
+      },
+      {
+        "text": "Have the provider sign each delivery with both old and new secrets during an overlap period, and have consumers accept a delivery if any signature matches a secret they hold",
+        "explanation": "Correct. Stripe and Standard Webhooks both allow several signatures in one header for this reason. Consumers can roll forward one at a time, then the old secret is retired."
+      },
+      {
+        "text": "Return 500 for failed signatures, so the provider retries until the new secret is everywhere",
+        "explanation": "That relies on retry timing to paper over the gap, delays every event, and may exhaust the retry schedule. Overlapping secrets avoid the failures in the first place."
+      },
+      {
+        "text": "Encrypt the old secret with the new one",
+        "explanation": "That has no effect on verification. The consumer still needs to check a signature made with a secret it holds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A safe rotation has an overlap where both secrets are valid:\n\n```\nT0  provider: sign with old\nT1  provider: sign with old+new\n    header: v1=<old>,v1=<new>\nT2  consumers roll out new\n    (accept either)\nT3  provider: sign with new\nT4  consumers drop old\n```\n\nAt every moment, each delivery carries at least one signature that every consumer can verify. No window without verification, and no rejected events.",
+    "link": {
+      "title": "Stripe docs: Verify webhook signatures",
+      "url": "https://docs.stripe.com/webhooks/signature"
+    }
+  }
+]

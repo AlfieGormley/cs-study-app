@@ -1,0 +1,351 @@
+[
+  {
+    "id": "conc-threads-shared-memory-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A shared variable `x` starts at 0. Two threads each run `x += 1` exactly once, with no lock, in a simplified sequentially consistent model with separate atomic load and store steps, with both threads joined before observation. Which final values of `x` are possible?",
+    "options": [
+      {
+        "text": "Only 2",
+        "explanation": "This assumes `+=` is indivisible. It is a read-modify-write, so the two threads' steps can interleave."
+      },
+      {
+        "text": "1 or 2",
+        "explanation": "Correct. If the steps do not overlap you get 2; if both threads read 0 before either writes, both write 1 and one update is lost."
+      },
+      {
+        "text": "0, 1 or 2",
+        "explanation": "0 would need both writes to vanish. Each thread does write its result (at least 1), so the variable cannot end at 0."
+      },
+      {
+        "text": "Any value, because the behaviour is random",
+        "explanation": "The interleavings are unpredictable, but the set of outcomes is small and can be enumerated: each thread writes either 1 or 2."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Write out the three steps per thread: `read`, `add`, `write`.\n\n1. No overlap: T1 reads 0, writes 1; T2 reads 1, writes 2. Result **2**.\n2. Overlap:\n\n```\nT1 read 0\nT2 read 0\nT1 write 1\nT2 write 1   result 1\n```\n\n3. Every thread writes `(value it read) + 1`, and every value read is 0 or 1, so the only possible writes are 1 and 2. The final value is 1 or 2.",
+    "link": {
+      "title": "Chapter 17: Threads and Locks — Java Language Specification",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Two ordinary threads run inside one process. Assume ordinary non-thread-local globals and no escaped references to local variable storage. Which resources belong to the shared process rather than being automatically duplicated per thread? Select all that apply.",
+    "options": [
+      {
+        "text": "Objects allocated on the heap",
+        "explanation": "Correct. Any heap object reachable from both threads can be read and written by both; this is the source of both the speed and the bugs."
+      },
+      {
+        "text": "Global (module-level or static) variables",
+        "explanation": "Correct. Globals live in the process's memory, not in any one thread."
+      },
+      {
+        "text": "Local variables of a function each thread is running",
+        "explanation": "Each thread has its own stack, so each call has distinct local storage; a language may still permit sharing its address. (The objects they *point to* may still be shared.)"
+      },
+      {
+        "text": "The call stack",
+        "explanation": "Each thread has its own stack; that is what lets them be at different points in different functions."
+      },
+      {
+        "text": "Open files and sockets",
+        "explanation": "Correct. File descriptors belong to the process, so a socket opened by one thread can be used by another."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Sort each item by where it lives:\n\n| Item | Lives in | Shared? |\n|---|---|---|\n| Heap object | Process heap | Yes |\n| Global | Process data | Yes |\n| Local variable | Thread's stack | No |\n| Call stack | Per thread | No |\n| Open socket | Process table | Yes |\n\nA subtle case: distinct local storage need not enforce isolation if its address escapes; but if it holds a reference to a heap list, the *list* is shared if another thread has a reference too.",
+    "link": {
+      "title": "Thread (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Thread_(computing)"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On standard CPython 3.12 (with the GIL), you split a pure-Python, CPU-heavy calculation across 4 threads on a 4-core laptop. Roughly how does it compare to running it on one thread?",
+    "options": [
+      {
+        "text": "About 4 times faster",
+        "explanation": "That would need the threads to execute Python bytecode in parallel. The GIL allows only one at a time."
+      },
+      {
+        "text": "It deadlocks, because the GIL is held by one thread",
+        "explanation": "The interpreter hands the GIL between threads regularly, so all four make progress; they just take turns."
+      },
+      {
+        "text": "About 2 times faster, because the GIL is released half the time",
+        "explanation": "The GIL is released during blocking I/O and some native calls, not for half of pure-Python computation."
+      },
+      {
+        "text": "About the same speed, possibly a little slower",
+        "explanation": "Correct. Only one thread runs bytecode at once, so the work is effectively serialised, plus some overhead from switching."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The GIL lets only one thread execute Python bytecode at a time.\n2. A pure-Python calculation is all bytecode, never waiting on I/O.\n3. So four threads take turns on one core's worth of interpreter: total time is about the same as one thread, plus switching overhead.\n4. To use four cores: `multiprocessing` / `ProcessPoolExecutor`, a native library that releases the GIL, or the free-threaded build (3.13t+).",
+    "link": {
+      "title": "Python support for free threading — Python docs",
+      "url": "https://docs.python.org/3/howto/free-threading-python.html"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This Java worker is stopped by another thread setting `stop = true`. In testing on a server JVM the loop sometimes never exits. Why, and what is the minimal fix?\n\n```java\nclass Worker {\n  boolean stop = false;\n  void run() {\n    while (!stop) { }\n  }\n}\n```",
+    "options": [
+      {
+        "text": "The writing thread has not been scheduled yet; add `Thread.sleep` in the loop",
+        "explanation": "The write has happened. Sleeping might make the bug disappear by accident, but it does not create a happens-before edge, so the code is still incorrect."
+      },
+      {
+        "text": "Booleans are not atomic in Java; use an `int` instead",
+        "explanation": "Reads and writes of `boolean` and `int` are both atomic. The issue is visibility and compiler optimisation, not atomicity."
+      },
+      {
+        "text": "Nothing orders the write before the read, so the JIT may hoist the read out of the loop; declare `stop` as `volatile`",
+        "explanation": "Correct. With no happens-before relationship the compiler may read `stop` once. Volatile reads observe writes according to synchronization order and cannot be hoisted as an unchanging plain field."
+      },
+      {
+        "text": "The loop needs a `synchronized` method to be atomic",
+        "explanation": "Locking each read and each write with the same lock would also fix it; holding that lock around the entire spin loop would block the writer, but the problem is visibility, not atomicity of the loop, and `volatile` is the minimal fix."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The loop body never writes `stop`, and `stop` is a plain field.\n2. With no synchronisation, the Java memory model does not require the reading thread to ever see the other thread's write.\n3. So the JIT may legally rewrite the loop as:\n\n```java\nif (!stop) {\n  while (true) { }\n}\n```\n\n4. `volatile boolean stop` makes the write happen-before any read that observes it, and forbids that hoisting. `AtomicBoolean` works too.",
+    "link": {
+      "title": "Chapter 17: Threads and Locks — Java Language Specification",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In Java, assuming no additional synchronization beyond what is stated, which of these are **data races**? Select all that apply.",
+    "options": [
+      {
+        "text": "Two threads read the same plain `int` field at the same time",
+        "explanation": "Both accesses are reads. A data race needs at least one write."
+      },
+      {
+        "text": "One thread writes a plain field while another reads it, with no lock or volatile",
+        "explanation": "Correct. Conflicting accesses (one is a write) with no happens-before ordering between them."
+      },
+      {
+        "text": "Two threads call `incrementAndGet()` on the same `AtomicInteger`",
+        "explanation": "Atomic operations are synchronising actions; they are ordered, so they never form a data race."
+      },
+      {
+        "text": "Two threads write the same plain field, each holding a *different* lock",
+        "explanation": "Correct. Locks only order accesses made under the *same* lock. Two different locks give no ordering between these writes."
+      },
+      {
+        "text": "Two threads each do `if (!map.containsKey(k)) map.put(k, v)` on a `ConcurrentHashMap`",
+        "explanation": "This is a race *condition* (both may put), but individual ConcurrentHashMap operations are thread-safe, so it is not a data race."
+      }
+    ],
+    "answer": [
+      1,
+      3
+    ],
+    "workedExample": "Check each case against the definition: same location, at least one write, not ordered by happens-before.\n\n| Case | Write? | Ordered? | Data race |\n|---|---|---|---|\n| Two reads | No | n/a | No |\n| Plain write + read | Yes | No | **Yes** |\n| Atomic increments | Yes | Yes | No |\n| Different locks | Yes | No | **Yes** |\n| Check-then-act on CHM | Yes | Yes | No |\n\nThe last row is still a bug, just a higher-level one: the check and the put are two separately safe steps with a gap between them.",
+    "link": {
+      "title": "Chapter 17: Threads and Locks — Java Language Specification",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In C++, a colleague shares a plain `bool done` between threads without atomics: \"The race is benign; at worst the reader sees a stale value for a moment.\" Is that right?",
+    "options": [
+      {
+        "text": "No: a data race is undefined behaviour in C++, so the compiler may, for example, read `done` once and loop forever; use `std::atomic<bool>`",
+        "explanation": "Correct. The optimiser assumes race-free code, so \"stale for a moment\" can become \"stale forever\" or worse."
+      },
+      {
+        "text": "Yes: on x86 a `bool` write is a single instruction, so it is effectively atomic",
+        "explanation": "Hardware behaviour is not the contract. The C++ standard governs what the compiler may do, and the compiler may optimise assuming no race."
+      },
+      {
+        "text": "Yes, as long as only one thread writes",
+        "explanation": "One writer and one reader without synchronisation is still a data race, which is undefined behaviour."
+      },
+      {
+        "text": "No: the program will crash with a data-race exception",
+        "explanation": "C++ has no runtime race detection by default. Undefined behaviour usually shows up as silent misbehaviour, not a clean error. (ThreadSanitizer can detect it in testing.)"
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. C++ defines a data race as conflicting, unordered accesses to a non-atomic object. Here: one writes, one reads, no ordering.\n2. The standard says a program with a data race has **undefined behaviour**: no guarantees at all.\n3. Practically, the compiler sees that the reading loop never writes `done` and may keep it in a register, so the loop never ends.\n4. `std::atomic<bool>` (even with relaxed ordering for a simple flag, or the default sequentially consistent ordering) makes the accesses well defined.",
+    "link": {
+      "title": "Memory model — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/language/memory_model"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two Python functions update the same global `total` from many threads:\n\n```python\nlock_a = threading.Lock()\nlock_b = threading.Lock()\n\ndef add_sale(x):\n    global total\n    with lock_a:\n        total += x\n\ndef add_refund(x):\n    global total\n    with lock_b:\n        total -= x\n```\n\nIs `total` safe from lost updates?",
+    "options": [
+      {
+        "text": "Yes, every write to `total` is inside a `with` block",
+        "explanation": "Being inside *a* lock is not enough. Mutual exclusion only applies between code holding the *same* lock."
+      },
+      {
+        "text": "Yes, because the GIL makes `+=` atomic",
+        "explanation": "The GIL is not a compound-update contract; even individual bytecodes may invoke callbacks or release it."
+      },
+      {
+        "text": "No: locks never work in Python because of the GIL",
+        "explanation": "Locks work fine in Python; the GIL does not interfere with `threading.Lock`. The bug here is using two different locks."
+      },
+      {
+        "text": "No: a sale and a refund can run at the same time because they hold different locks; both must use one lock",
+        "explanation": "Correct. `lock_a` and `lock_b` do not exclude each other, so `add_sale` and `add_refund` can interleave their read-modify-write steps."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A lock protects data only if **every** access to that data takes the **same** lock.\n2. Two sales are mutually exclusive (both take `lock_a`); two refunds are too.\n3. But a sale and a refund hold different locks, so they can interleave:\n\n```\nsale   read 100\nrefund read 100\nsale   write 150\nrefund write 80   (sale lost)\n```\n\n4. Fix: one `total_lock` used by both functions. The rule \"`total` is guarded by `total_lock`\" is the kind of invisible contract that languages like Rust make visible in the type.",
+    "link": {
+      "title": "threading — Python docs",
+      "url": "https://docs.python.org/3/library/threading.html"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A cache uses a dictionary that is internally thread-safe. Many threads run:\n\n```python\nif key not in cache:\n    cache[key] = expensive(key)\nreturn cache[key]\n```\n\nWhat can go wrong under load?",
+    "options": [
+      {
+        "text": "Several threads can all see the key missing and each call `expensive(key)`, wasting work (a check-then-act race)",
+        "explanation": "Correct. The race is in the logic, not in the dict. Fix with a lock around the check and store, or a per-key future so one thread computes and others wait."
+      },
+      {
+        "text": "Nothing; a thread-safe dict makes the code thread-safe",
+        "explanation": "Each call is safe on its own, but the check and the store are two separate operations with a gap between them."
+      },
+      {
+        "text": "The dict can be corrupted internally",
+        "explanation": "The question says the dict is internally thread-safe, so its own structure stays consistent."
+      },
+      {
+        "text": "A deadlock, because two threads hold the dict's internal lock",
+        "explanation": "The dict's internal lock is released after each operation, so there is no hold-and-wait cycle here."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Thread A checks: key missing.\n2. Before A stores, thread B checks: still missing.\n3. Both call `expensive(key)`. With 100 threads hitting a cold key, you may run it 100 times (a cache stampede).\n4. The data is not corrupted; the last write wins, and all values are probably identical. The cost is duplicated work, or worse if `expensive` has side effects like charging a card.\n5. Fix: make check-and-store one critical section, or use an API that does it atomically (ConcurrentHashMap.computeIfAbsent, subject to its mapping-function contract).",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Java, thread T1 runs first two lines and thread T2 runs the third. `data` is a plain `int` (initially 0) and `ready` is a `volatile boolean` (initially false).\n\n```java\n// T1\ndata = 42;\nready = true;\n// T2\nif (ready) System.out.println(data);\n```\n\nWhat can T2 do?",
+    "options": [
+      {
+        "text": "Print 42, or print nothing",
+        "explanation": "Correct. If T2 sees `ready == true`, the volatile write happens-before that read, and `data = 42` comes before the volatile write in T1, so T2 must see 42."
+      },
+      {
+        "text": "Print 0 or 42, or nothing",
+        "explanation": "This would be true if `ready` were a plain field. Volatile gives release/acquire ordering, which carries `data` along with it."
+      },
+      {
+        "text": "Only print 42",
+        "explanation": "T2 may run before T1 sets `ready`, in which case it prints nothing."
+      },
+      {
+        "text": "Throw an exception because `data` is accessed without a lock",
+        "explanation": "Java has no such check. And this access is in fact correctly ordered by the volatile."
+      },
+      {
+        "text": "Print a torn value because `int` writes are not atomic",
+        "explanation": "Java guarantees `int` reads and writes are atomic. Tearing is only permitted for non-volatile `long` and `double`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Build the happens-before chain:\n\n1. Program order in T1: `data = 42` happens-before `ready = true`.\n2. Volatile rule: the write `ready = true` happens-before any read of `ready` that sees `true`.\n3. Program order in T2: reading `ready` happens-before reading `data`.\n4. Happens-before is transitive, so `data = 42` happens-before T2's read of `data`, which must see 42.\n\nIf T2 reads `ready` too early it sees `false` and prints nothing. Remove `volatile` and step 2 disappears: T2 could see `ready == true` but `data == 0`.",
+    "link": {
+      "title": "Chapter 17: Threads and Locks — Java Language Specification",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which statement correctly describes sequential consistency for Java, Go and C++?",
+    "options": [
+      {
+        "text": "All programs in all three languages are sequentially consistent",
+        "explanation": "Races and permitted weak-memory operations defeat this blanket claim."
+      },
+      {
+        "text": "Java and Go provide DRF-SC; C++ race-free mutex/seq_cst-only programs support SC, but weaker atomics can permit non-SC outcomes",
+        "explanation": "Correct. In C++, relaxed atomic accesses avoid data races without imposing a single global SC order."
+      },
+      {
+        "text": "Volatile makes every compound increment atomic",
+        "explanation": "A Java volatile increment still contains separate read and write actions."
+      },
+      {
+        "text": "Using relaxed atomics in C++ necessarily creates a data race",
+        "explanation": "Atomic accesses do not create a data race merely because their ordering is relaxed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Java and Go let race-free programs be understood through sequentially consistent interleavings. C++ explicitly permits weaker atomic orders: two threads can each store to one relaxed atomic and load the other, with both loads observing the initial values. That outcome has no SC interleaving yet no data race. Use the documented memory-order contract, not race freedom alone.",
+    "link": {
+      "title": "The Go Memory Model",
+      "url": "https://go.dev/ref/mem"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Java monitoring thread reads a non-volatile `long totalBytes` that a worker thread keeps updating. On one JVM, the monitor occasionally reports a value that was **never written** by the worker. What explains this?",
+    "options": [
+      {
+        "text": "A JVM bug: Java guarantees every read returns some value that was written",
+        "explanation": "That guarantee (no values out of thin air) holds for most types, but the JLS explicitly permits non-volatile `long` and `double` writes to be split."
+      },
+      {
+        "text": "The monitor's CPU cache holds an old value",
+        "explanation": "A stale cache would show an *old* value that was really written, not a value that never existed."
+      },
+      {
+        "text": "Integer overflow in the worker",
+        "explanation": "Overflow would produce a value the worker actually wrote. The symptom is a value the worker never wrote."
+      },
+      {
+        "text": "The JLS allows a non-volatile 64-bit write to be performed as two 32-bit halves, so the reader can see the high half of one value and the low half of another",
+        "explanation": "Correct. This is a torn long value (JLS 17.7), distinct from the adjacent-field interference prohibited as word tearing in JLS 17.6. Declaring the field `volatile`, or using `AtomicLong`, makes reads and writes atomic."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A 64-bit value can be written as two 32-bit stores on some platforms (historically 32-bit JVMs).\n2. Suppose the worker goes from `0x0000_0000_FFFF_FFFF` to `0x0000_0001_0000_0000`.\n3. The reader might see the new high half (`0x0000_0001`) and the old low half (`0xFFFF_FFFF`), giving `0x0000_0001_FFFF_FFFF`, a value nobody wrote.\n4. The JLS permits this for non-volatile `long` and `double` only.\n5. Fix: `volatile long` or `AtomicLong`. Most 64-bit JVMs do not tear in practice, but correct code must not rely on that.",
+    "link": {
+      "title": "Chapter 17: Threads and Locks — Java Language Specification",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+    }
+  }
+]

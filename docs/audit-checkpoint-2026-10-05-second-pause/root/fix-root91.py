@@ -1,0 +1,64 @@
+from pathlib import Path
+p=Path('content/networks/06-wireless-modern/wm-wifi.md');s=p.read_text()
+def r(a,b):
+ global s
+ assert a in s,a[:60]
+ s=s.replace(a,b)
+r('Ethernet gives each device its own cable to a switch. Wi-Fi gives every device in range one shared radio channel. Only one transmitter can usefully talk on a channel at a time, everyone hears everything, and the medium is noisy, lossy and changes as people walk around.','Switched Ethernet commonly gives each device a dedicated wired link. Wi-Fi stations share radio resources, but not every station can hear every other. Modern multi-user techniques allow coordinated simultaneous transmissions, and spatial reuse can allow concurrent transmissions in different coverage areas. Radio conditions change with interference, motion and obstacles.')
+r('why "Wi-Fi 6, 3000 Mbit/s" on the box becomes 400 Mbit/s on a speed test.','why a product’s aggregate advertised PHY rates do not predict one client’s application throughput.')
+r('| (legacy) | 802.11b/a/g | 2.4 / 5 GHz | 11 and 54 Mbit/s, OFDM |','| Legacy | 802.11b/a/g | b/g: 2.4; a: 5 GHz | b up to 11 Mbit/s; a/g up to 54, with OFDM for a/g |')
+r('| Wi-Fi 6 | 802.11ax (2019+) |','| Wi-Fi 6 | 802.11ax; certification began 2019 |')
+r('| clean new spectrum |','| additional spectrum, subject to local rules |')
+r('| Wi-Fi 7 | 802.11be (2024) |','| Wi-Fi 7 | 802.11be; certification began 2024 |')
+r('Phones usually have 2; routers 4 or more.','The usable count depends on both endpoints and the radio channel; antenna count alone does not establish it.')
+r('so it only works close to the access point.','so achievable modulation depends on signal quality, interference and hardware, not a fixed distance boundary.')
+r('This helps busy networks of small packets far more than it raises the peak rate.','This can reduce per-client access overhead, depending on scheduling, compatible clients and workload.')
+r('wide, uncrowded spectrum with no legacy devices. Around 1,200 MHz is available in the US and about 500 MHz in the UK and EU.','additional spectrum for capable devices, subject to national power, indoor/outdoor and coexistence rules. It is not interference-free. Country allocations change: for example, Ofcom published a July 2026 upper-6-GHz sharing decision, so an undated “UK has only 500 MHz” statement is inadequate.')
+r('one device uses links on two or three bands at once, for throughput or for resilience when one band is busy.','coordinates multiple links; concurrent transmission/reception depends on the MLO mode and hardware. It does not require every device to transmit on three bands simultaneously.')
+r('A radio\'s own transmission is billions of times stronger at its antenna than a distant station\'s signal, so it cannot hear a collision while it is sending.','Ordinary Wi-Fi radios do not implement Ethernet-style collision detection while sending; their own transmit signal makes simultaneous sensing of weak incoming signals difficult.')
+r('learns about failures only through missing acknowledgements.','uses missing expected acknowledgments as an indication of failure; not every frame is individually acknowledged.')
+r('This is **CSMA/CA**, implemented by the Distributed Coordination Function (DCF):','The following is a simplified **DCF** contention example for acknowledged unicast using 5 GHz OFDM timings. Modern QoS traffic commonly uses EDCA with access-category parameters; broadcast/multicast and scheduled multi-user exchanges differ:')
+r('The short gap means the ACK always wins the channel.','The shorter gap gives priority over compliant contenders that sense this exchange; interference and hidden terminals can still corrupt the ACK.')
+r('double CW (15, 31, 63 ... up to 1023)','grow CW as `min(2 × (CW + 1) − 1, CWmax)` (here 15, 31, 63 ... up to 1023)')
+r('every frame carries a Duration field saying how long the exchange will take. Stations that hear it set their **NAV** (network allocation vector) timer and stay quiet without having to listen.','eligible frames carry Duration/ID information that can reserve remaining exchange time. Stations update their **NAV** (network allocation vector) according to protocol rules. Some fields are zero or have other meanings; physical carrier sensing still applies.')
+r('they collide every time.','they can collide when their transmissions overlap at the receiver.')
+r('Their frames collide **at the AP**, but neither sender heard anything, so both just see missing ACKs, back off and repeat. Throughput collapses and neither knows why.','Their frames can interfere **at the AP**, causing missing ACKs and retries. Capture effects or different timings can allow some frames to succeed; throughput need not collapse in every such topology.')
+r('The fix is **RTS/CTS**:','**RTS/CTS** can mitigate this when the relevant contenders receive the protection frames:')
+r('A collision can now only hit the tiny RTS, not a long data frame.','This reduces the chance of wasting a long data transmission on a hidden-terminal collision. Missed CTS frames, other interferers and overlapping reservations still permit data/ACK loss.')
+r('RTS/CTS is normally used only for frames above an **RTS threshold**, and by default many drivers leave it effectively off.','implementations can select protection using an **RTS threshold** and other policies; defaults are device-specific.')
+r('and the only non-overlapping set in most of the world is **1, 6 and 11**.','and **1, 6 and 11** is a conventional conservative 20 MHz plan where those channels are permitted. Available channels, PHY spectral masks and interference determine other viable plans; this is not the only possible set worldwide.')
+r('Both networks hear each other\'s preambles and take turns politely via CSMA/CA. You share airtime, but frames do not get destroyed.','When networks can sense each other, contention helps them share airtime. Collisions, hidden terminals and decoding failures can still occur.')
+r('Their signal overlaps yours but cannot be decoded, so your devices do not defer to it; it just raises the noise floor and corrupts frames. This is usually **worse** than sharing a channel.','Overlapping energy may interfere without successful frame decoding. Energy detection can still cause deferral, depending on thresholds. The result depends on power, frequency separation, placement and equipment; it is not a universal ranking of channel plans.')
+r('On 2.4 GHz, use only 1, 6 or 11, and use 20 MHz width. A 40 MHz channel on 2.4 GHz takes most of the band and tramples everyone nearby.','In a dense deployment using channels 1–11, 20 MHz with a coordinated 1/6/11 plan is a useful starting point. Check the regulatory domain and survey neighbouring use; wider channels reduce the number of separate channels available.')
+r('**6 GHz** has the most room of all, and only Wi-Fi 6E/7 devices use it, so there are no slow legacy clients wasting airtime.','**6 GHz** excludes older 2.4/5-GHz-only Wi-Fi clients, but compatible clients can still use low rates or consume substantial airtime. Other authorised services and neighbouring networks may share spectrum.')
+r('Higher frequencies lose more signal through walls and over distance, so 2.4 GHz reaches further but is crowded, while 5 and 6 GHz are faster but shorter range.','At fixed antenna gains and distance, free-space path loss grows with frequency. Actual coverage also depends on permitted power, antenna patterns, wall materials, bandwidth and receiver sensitivity; a frequency label alone does not establish range or throughput.')
+r('No single device can use both bands at once (before Wi-Fi 7 MLO).','A conventional single-link client connection does not obtain this sum. Multiple-radio devices and other aggregation arrangements existed before Wi-Fi 7; MLO standardises coordinated multi-link operation.')
+r('Most phones are 2×2. If the AP uses 80 MHz (common, since 160 MHz is often unavailable), the per-stream rates for Wi-Fi 6 are roughly:','For an example client with two spatial streams using an 80 MHz HE channel and 0.8 µs guard interval, full-channel single-stream PHY rates are approximately:')
+r('**Rate adaptation** keeps stepping down as the signal weakens.','**Rate adaptation** selects rates using link feedback; the illustrated room count does not predict a particular MCS.')
+r('Very roughly, that is around 200 µs regardless of how much data follows.','For the calculation below, assume 200 µs per channel access and omit per-MPDU delimiters, padding and variable protocol costs. This is a supplied teaching value, not a universal measured overhead.')
+r('  data      64 x 17       ~= 1067 us','  data      64 x 16.667   ~= 1067 us')
+r('This is why **frame aggregation** (A-MPDU, with one Block Ack for the batch) was the most important feature of 802.11n. Without it, faster PHY rates barely help. In practice, a good link delivers roughly 50–70% of the PHY rate as TCP throughput.','**Frame aggregation** amortises access costs; Block Ack can acknowledge multiple MPDUs. It is an important efficiency mechanism, but no single TCP/PHY efficiency percentage holds for every link.')
+r('Wi-Fi is half duplex: uploads and downloads (including TCP ACKs) share the same airtime. Every other device on the channel, including your neighbour\'s network on the same channel, takes its turn too.','An ordinary single radio link cannot simultaneously transmit and receive on that link. Uploads and downloads consume radio resources; scheduling, OFDMA/MU-MIMO, spatial reuse and multiple links make modern sharing more complex than a single global turn-taking sequence.')
+r('CSMA/CA gives each station a roughly equal chance to send a *frame*, not equal *airtime*. A slow client therefore drags everyone down.','In a simplified saturated, equal-priority DCF model with comparable frame sizes, stations obtain similar access opportunities rather than equal airtime. Slow transmissions can then reduce faster stations’ throughput. QoS, aggregation, AP scheduling and airtime policies change this model.')
+r('Modern APs implement **airtime fairness** to limit this, and Wi-Fi 6E\'s 6 GHz band avoids legacy clients entirely.','Some APs implement **airtime fairness** policies to mitigate this; capabilities and effectiveness vary. Moving compatible clients to another band can separate contention, but does not guarantee high rates there.')
+r('a Wi-Fi link can show 5 ms ping idle and 200 ms during a download.','an illustrative loaded link might show 5 ms idle RTT and 200 ms during a download; this is not a universal measurement or unique diagnosis.')
+a=s.index('## Practical consequences');b=s.index('## Further reading',a)
+s=s[:a]+'''## Practical consequences
+- Survey placement, interference, client capabilities and backhaul before changing settings. Wired backhaul avoids consuming wireless backhaul airtime; a dedicated radio still has coexistence and capacity constraints.
+- Compare permitted bands for the actual devices and coverage needs. Extra APs need channel and power planning; more is not automatically better.
+- Wired connections can remove active traffic from radio contention. An idle device’s removal need not produce a measurable improvement.
+- Compare local wired and wireless tests, RSSI/SNR, negotiated rates, retries, airtime use and loaded latency to locate the bottleneck.
+
+## Key takeaways
+- Wi-Fi uses shared radio resources; modern multi-user and spatial-reuse mechanisms qualify simple one-transmitter models.
+- Contention and acknowledgments reduce or reveal failures; they do not eliminate collisions.
+- RTS/CTS can mitigate hidden terminals when protection is received and obeyed.
+- A 1/6/11 plan is a common 2.4 GHz starting point, not a worldwide exclusivity rule.
+- PHY rate, aggregate product labels and application throughput are different quantities. Rate, aggregation, scheduling, retries and backhaul all matter.
+
+> [!note] Evidence limits
+> Universal handset stream counts, fixed TCP efficiency ratios, driver defaults and guaranteed channel-plan outcomes are omitted because they need device-specific evidence. Regional spectrum rules are time-sensitive; consult the regulator before deployment. No RF, coverage, interference or throughput measurements were performed for this lesson.
+
+''' +s[b:]
+s+='\n- [Cisco: Wi-Fi throughput validation and PHY-rate tables](https://www.cisco.com/c/en/us/support/docs/wireless-mobility/wireless-lan-wlan/212892-802-11ac-wireless-throughput-testing-and.html)\n- [Wi-Fi Alliance: Wi-Fi CERTIFIED 7 launch, January 2024](https://rss.globenewswire.com/news-release/2024/01/08/2805409/0/en/wi-fi-alliance-introduces-wi-fi-certified-7.html)\n- [Ofcom: 6 GHz spectrum sharing decisions](https://www.ofcom.org.uk/spectrum/innovative-use-of-spectrum/consultation-expanding-access-to-the-6-ghz-band-for-commercial-mobile-and-wi-fi-services)\n'
+p.write_text(s)

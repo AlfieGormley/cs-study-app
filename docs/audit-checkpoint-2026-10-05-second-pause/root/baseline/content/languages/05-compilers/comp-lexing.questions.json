@@ -1,0 +1,370 @@
+[
+  {
+    "id": "comp-lexing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using the Calc lexer from this lesson, what list of token kinds does `lex(\"let x=10 in x\")` return?",
+    "options": [
+      {
+        "text": "`['LET', 'NAME', '=', 'NUM', 'IN', 'NAME']`",
+        "explanation": "Close, but the lexer always appends an `EOF` token so the parser never has to check for running off the end of the list."
+      },
+      {
+        "text": "`['NAME', 'NAME', '=', 'NUM', 'NAME', 'NAME', 'EOF']`",
+        "explanation": "This forgets the keyword check. `let` and `in` match the NAME pattern first, but the lexer then looks them up in `KEYWORDS` and changes their kind to `LET` and `IN`."
+      },
+      {
+        "text": "`['LET', 'NAME', '=', 'NUM', 'IN', 'NAME', 'EOF']`",
+        "explanation": "Correct. Whitespace is discarded, `x=10` splits into three tokens even with no spaces, keywords are reclassified, and `EOF` is appended."
+      },
+      {
+        "text": "`['LET', 'NAME', '=', 'NUM', 'NUM', 'IN', 'NAME', 'EOF']`",
+        "explanation": "`10` is one lexeme: `\\d+` is greedy and matches both digits, so it produces a single NUM token, not one per digit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk through the source left to right:\n\n```\nlet   NAME pattern, then keyword -> LET\n' '   WS, discarded\nx     NAME\n=     OP, kind is its own text '='\n10    \\d+ eats both digits -> NUM\n' '   discarded\nin    keyword -> IN\n' '   discarded\nx     NAME\nend   append EOF\n```\n\nThat gives seven kinds: `LET NAME = NUM IN NAME EOF`.",
+    "link": {
+      "title": "Scanning — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/scanning.html"
+    }
+  },
+  {
+    "id": "comp-lexing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Calc program contains the name `letter`. Why does a correct lexer produce one NAME token rather than the keyword `let` followed by NAME `ter`?",
+    "options": [
+      {
+        "text": "Because of the maximal munch rule: the lexer takes the longest lexeme that forms a valid token",
+        "explanation": "Correct. The longest valid match at this position is all six characters, `letter`, which is a NAME. Only an exact match of `let` becomes a keyword."
+      },
+      {
+        "text": "Because keywords must be followed by a space",
+        "explanation": "Calc has no such rule, and nor do most languages: `let(` would be fine. What matters is that a longer match exists, not what follows."
+      },
+      {
+        "text": "Because the parser rejects `let ter` and asks the lexer to try again",
+        "explanation": "Lexers in this lesson never get feedback from the parser. The decision is made entirely by longest match."
+      },
+      {
+        "text": "Because `letter` is in the keyword table",
+        "explanation": "Only `let` and `in` are keywords. `letter` is classified as NAME precisely because it is not in the table."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. At position 0 several rules could match: the keyword `let` (3 characters) and NAME `[A-Za-z_]\\w*` (6 characters, `letter`).\n2. Maximal munch says take the longest: 6 characters.\n3. Then look `letter` up in `KEYWORDS`. It is not there, so its kind stays NAME.\n4. Ties in length (exactly `let`) are broken by rule order, which is how `let` alone becomes a keyword.",
+    "link": {
+      "title": "Maximal munch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Maximal_munch"
+    }
+  },
+  {
+    "id": "comp-lexing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these jobs can a lexer built from regular expressions *not* do on its own?",
+    "options": [
+      {
+        "text": "Recognise integer literals like `042`",
+        "explanation": "`\\d+` is a regular expression, so any finite automaton can recognise it."
+      },
+      {
+        "text": "Discard whitespace and comments",
+        "explanation": "Whitespace is `\\s+` and line comments are `#[^\\n]*`; both are regular and are routinely skipped by lexers."
+      },
+      {
+        "text": "Check that every `(` has a matching `)`",
+        "explanation": "Correct. Balanced brackets can nest arbitrarily deep, so recognising them needs unbounded memory (a stack). A finite automaton has only a fixed number of states, so this is the parser's job."
+      },
+      {
+        "text": "Tell keywords from names",
+        "explanation": "Keywords are a finite set of fixed strings, which is regular; in practice a table lookup after matching a NAME does it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A lexer is, underneath, a finite automaton: it has a fixed number of states and no stack.\n2. To check `((((...))))` you must count how many brackets are open. For depth *n* you need at least *n* distinct states.\n3. Since depth is unbounded, no finite automaton can do it: the language of balanced brackets is not regular.\n4. So the lexer just emits `(` and `)` tokens and the parser, which has a call stack, matches them.",
+    "link": {
+      "title": "Scanning — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/scanning.html"
+    }
+  },
+  {
+    "id": "comp-lexing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague extends a Python regex lexer with `==` for equality. Their operator group is `=|==`. What does `a == b` lex as?",
+    "options": [
+      {
+        "text": "NAME, `==`, NAME",
+        "explanation": "That is what a longest-match lexer like flex would produce, but Python's `re` alternation does not pick the longest alternative."
+      },
+      {
+        "text": "NAME, `=`, `=`, NAME",
+        "explanation": "Correct. Python's alternation is leftmost-first: at the first `=`, the alternative `=` succeeds, so it wins without trying `==`. The next match starts at the second `=`, which again matches `=`."
+      },
+      {
+        "text": "A `SyntaxError`, because `==` matches nothing",
+        "explanation": "Each `=` matches the first alternative, so every character is consumed and no error is raised. The bug is silent, which is what makes it nasty."
+      },
+      {
+        "text": "NAME, `==`, `=`, NAME",
+        "explanation": "There are only two `=` characters; a token sequence cannot contain three."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Python's `re` tries alternatives in order and stops at the first that succeeds:\n\n```\npos 2: try '=' -> 1 char matched. Stop.\npos 3: try '=' -> 1 char matched. Stop.\n```\n\nIt never compares lengths. The fix is to list longer operators first:\n\n```\nOP = r\"==|<=|>=|[-+*/^()=<>]\"\n```\n\nNow at position 2, `==` is tried first and matches both characters. Lexer generators like flex do this automatically because they choose the longest match across all rules.",
+    "link": {
+      "title": "re — Regular expression operations — Python docs",
+      "url": "https://docs.python.org/3/library/re.html"
+    }
+  },
+  {
+    "id": "comp-lexing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Someone writes the NAME and keyword patterns as one regex: `let|in|[A-Za-z_]\\w*`, matched with Python's `re`. What does the input `letter` produce?",
+    "options": [
+      {
+        "text": "One NAME token, `letter`",
+        "explanation": "That would need longest-match semantics. Python tries `let` first and it succeeds, so `[A-Za-z_]\\w*` is never tried at this position."
+      },
+      {
+        "text": "A `SyntaxError`",
+        "explanation": "Every character is matched by something: `let` first, then `ter` by the NAME alternative. No error is raised."
+      },
+      {
+        "text": "Keyword `let`, then NAME `ter`",
+        "explanation": "Correct. Leftmost-first alternation takes `let` at position 0, leaving `ter`, which then matches the NAME branch. This is why the lesson matches NAME first and checks a keyword table afterwards."
+      },
+      {
+        "text": "NAME `lett`, then NAME `er`",
+        "explanation": "No rule stops after four characters: either the `let` alternative matches three, or NAME would match all six. A split at `lett` cannot happen."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. At position 0, try `let`: the first three characters are `let`, so it matches. Python stops here.\n2. The token is `let` (a keyword). Position moves to 3.\n3. At position 3 the text is `ter`. `let` fails, `in` fails, `[A-Za-z_]\\w*` matches `ter`.\n4. Result: `LET`, `NAME('ter')` — wrong.\n\nTwo robust fixes: match the general NAME pattern and then look the text up in a keyword set (what Calc does), or anchor keywords with a word boundary: `(let|in)\\b`.",
+    "link": {
+      "title": "Maximal munch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Maximal_munch"
+    }
+  },
+  {
+    "id": "comp-lexing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In C, `a+++b` is valid. Using maximal munch, how does the lexer split it?",
+    "options": [
+      {
+        "text": "`a`, `+`, `++`, `b`",
+        "explanation": "This would require the lexer to look ahead and choose a shorter token first. Maximal munch always grabs the longest token available at the current position."
+      },
+      {
+        "text": "`a`, `++`, `+`, `b`",
+        "explanation": "Correct. At position 1 the longest operator is `++` (C has no `+++`), so it takes that; the remaining `+` becomes a single plus. The parser then sees `a++ + b`."
+      },
+      {
+        "text": "`a`, `+`, `+`, `+`, `b`",
+        "explanation": "This ignores maximal munch entirely; the lexer would never emit a single `+` when `++` is available."
+      },
+      {
+        "text": "It is a lexical error because `+++` is not an operator",
+        "explanation": "The lexer never needs `+++` to exist; it splits greedily into tokens that do exist."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Position 0: `a` is an identifier.\n2. Position 1: the candidate operators are `+`, `++` and `+=`. The text is `++`, so the longest valid token is `++`.\n3. Position 3: only `+` remains before `b`, so emit `+`.\n4. Position 4: `b`.\n\nTokens: `a ++ + b`, which parses as `(a++) + b`. The same rule makes `x---y` into `x -- - y`. Note `a+++++b` lexes as `a ++ ++ + b`, which is a *parse* error in C even though `a++ + ++b` would have been valid: the lexer does not consider what the parser needs.",
+    "link": {
+      "title": "Maximal munch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Maximal_munch"
+    }
+  },
+  {
+    "id": "comp-lexing-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about a lexer implemented as a DFA (for example, one generated by flex) are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It processes each input character with a constant amount of work, so lexing is O(n)",
+        "explanation": "Correct. Each character is one table lookup (state, char) -> next state. Backing up to the last accepting state for maximal munch is bounded for normal token patterns."
+      },
+      {
+        "text": "It can support back-references such as `(a+)b\\1`",
+        "explanation": "Back-references are not regular: they require remembering an unbounded string. That is why backtracking engines support them and DFA engines like RE2 deliberately do not."
+      },
+      {
+        "text": "Its number of states can, in the worst case, be exponential in the size of the regex",
+        "explanation": "Correct. The subset construction can create one DFA state per subset of NFA states. `(a|b)*a(a|b){n-1}` needs 2ⁿ states."
+      },
+      {
+        "text": "Each DFA state may correspond to a set of NFA states",
+        "explanation": "Correct. That is exactly what the subset (powerset) construction does: DFA state = set of NFA states the NFA could be in."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each claim against how the automaton is built:\n\n1. **Linear time.** A DFA has one transition per (state, character), so one step per character. True.\n2. **Back-references.** `\\1` must match whatever group 1 matched, which may be arbitrarily long. A finite automaton cannot store that. False.\n3. **State explosion.** Subset construction makes DFA states from subsets of NFA states; there are 2^k subsets of k NFA states. Real token patterns rarely hit this, but the worst case is exponential. True.\n4. **States are sets.** That is the definition of the construction. True.",
+    "link": {
+      "title": "Powerset construction — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Powerset_construction"
+    }
+  },
+  {
+    "id": "comp-lexing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Use the lesson's DFA for keyword `in` and NAME `[a-z]+` (states S, A, B, C). On the input `ink`, which state does the DFA end in, and what token is produced?",
+    "options": [
+      {
+        "text": "State B; the keyword IN",
+        "explanation": "B is where you are after `in`. The `k` takes you from B to C, and maximal munch keeps going while the DFA can continue."
+      },
+      {
+        "text": "State A; NAME `i`, then the lexer restarts at `nk`",
+        "explanation": "The DFA is not stuck after `i`; it can keep consuming letters, so it does not stop there."
+      },
+      {
+        "text": "State C; NAME `ink`",
+        "explanation": "Correct. S -i-> A -n-> B -k-> C. C = {N1} accepts only NAME, and the input ends, so the token is NAME `ink`."
+      },
+      {
+        "text": "No state; `ink` is rejected",
+        "explanation": "Every letter from B leads to C, which accepts NAME. Nothing is rejected."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace the table:\n\n```\nstart  S  {K0, N0}\n'i'    A  {K1, N1}   accepts NAME\n'n'    B  {K2, N1}   accepts IN, NAME\n'k'    C  {N1}       accepts NAME\nend of input\n```\n\nThe last accepting state seen is C, at length 3, so the token is NAME `ink`. Had the input been `in`, we would stop at B, where both IN and NAME accept, and rule order makes it the keyword IN.",
+    "link": {
+      "title": "Powerset construction — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Powerset_construction"
+    }
+  },
+  {
+    "id": "comp-lexing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A web service validates usernames with Python's `re.fullmatch(r\"(\\w+\\s?)*\", s)`. An attacker submits 40 letters followed by `!`, and a worker thread pins a CPU core for hours. What is the best explanation and fix?",
+    "options": [
+      {
+        "text": "The regex compiles slowly; cache the compiled pattern",
+        "explanation": "Python already caches compiled patterns, and compiling happens once. The time is spent *matching* this particular input."
+      },
+      {
+        "text": "Catastrophic backtracking: `(\\w+\\s?)*` can split the letters into groups in exponentially many ways, and the `!` forces every split to be tried. Use a linear-time engine (RE2, Rust `regex`) or rewrite the pattern without nested quantifiers",
+        "explanation": "Correct. Because `\\s?` is optional, `(\\w+)*` is effectively the nested quantifier `(a+)+`. When the final `!` makes the match fail, the backtracking engine tries every partition of 40 letters, roughly 2⁴⁰ of them. Automaton-based engines guarantee O(n)."
+      },
+      {
+        "text": "`\\w` is slow on Unicode; add `re.ASCII`",
+        "explanation": "`re.ASCII` changes which characters count as word characters but not the number of ways to split them, so the blow-up remains."
+      },
+      {
+        "text": "40 characters is too long for any regex; limit input to 20 characters",
+        "explanation": "A length limit only shrinks the exponent. It is a mitigation, not a fix, and the same pattern on 30 characters is still about a billion steps."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Inside the loop, `\\w+` can take 1, 2, ... letters, and `\\s?` can match nothing, so consecutive letters can be divided into groups in many ways: `ab` can be `(ab)` or `(a)(b)`.\n2. A string of n letters has 2ⁿ⁻¹ ways to split into groups.\n3. The `!` at the end matches neither `\\w` nor `\\s`, so `fullmatch` fails. A backtracking engine must try every split before it can report failure.\n4. 2³⁹ ≈ 5.5 × 10¹¹ attempts. Measured on CPython 3.14, each extra letter doubles the time: 22 letters take about 0.16 s, so 40 letters take hours.\n\nFixes: rewrite as `\\w+(\\s\\w+)*` (one way to match each string), or use RE2/Rust `regex`, which simulate the automaton and run in linear time. This is ReDoS.",
+    "link": {
+      "title": "Regular Expression Matching Can Be Simple And Fast — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp1.html"
+    }
+  },
+  {
+    "id": "comp-lexing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How many states does the smallest DFA for `(a|b)*a(a|b){2}` (\"the third character from the end is `a`\") need?",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That is roughly the size of the NFA, which can *guess* where the final `a` is. A DFA cannot guess, so it needs more."
+      },
+      {
+        "text": "4",
+        "explanation": "Four states would let the DFA remember at most two bits of history, but it must remember the last three characters."
+      },
+      {
+        "text": "6",
+        "explanation": "There is no construction that gives 6; the count comes from a power of two."
+      },
+      {
+        "text": "8",
+        "explanation": "Correct. The DFA must remember the last three characters, since any of them might turn out to be the third from the end. Three binary choices give 2³ = 8 distinguishable states."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Generalise: \"the *n*th character from the end is `a`\" is `(a|b)*a(a|b){n-1}`. Here n = 3.\n2. After reading any prefix, the DFA must know the last 3 characters, because the future input decides which of them ends up 3rd from the end.\n3. Any two different 3-character histories can be told apart by some suffix, so none can be merged.\n4. Number of histories: 2 × 2 × 2 = 8.\n\nThe NFA has about n + 1 = 4 states. This is the classic example of exponential blow-up in subset construction.",
+    "link": {
+      "title": "Powerset construction — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Powerset_construction"
+    }
+  },
+  {
+    "id": "comp-lexing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these real lexing problems need something beyond a pure regular-expression DFA? Select all that apply.",
+    "options": [
+      {
+        "text": "Python emitting `INDENT` and `DEDENT` tokens",
+        "explanation": "Correct. CPython's tokenizer keeps a stack of indentation widths and compares each line's indentation against it. A stack is more than a finite automaton can hold."
+      },
+      {
+        "text": "Recognising hex literals like `0x1F`",
+        "explanation": "`0[xX][0-9a-fA-F]+` is an ordinary regular expression; a DFA handles it directly."
+      },
+      {
+        "text": "Deciding whether `/` in JavaScript starts a regex literal or means division",
+        "explanation": "Correct. The answer depends on the previous significant token (after `)` or a name it is division; after `(` or `=` it is a regex), so the lexer needs grammatical context."
+      },
+      {
+        "text": "C distinguishing a typedef name from a variable name in `T * x;`",
+        "explanation": "Correct. This is the \"lexer hack\": the lexer consults the symbol table, which the parser and semantic analysis fill in. No regex can know which names were declared with `typedef`."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask, for each, whether the decision depends only on the characters in the current token:\n\n1. **INDENT/DEDENT.** Depends on the indentation of *earlier* lines, kept in a stack. Not regular.\n2. **Hex literals.** Depends only on the characters. Regular.\n3. **JS `/`.** Same characters, different token depending on the previous token. Needs context from the grammar.\n4. **C typedefs.** `T` is spelled like any name; whether it is a type depends on declarations seen earlier. Needs the symbol table.\n\nThese are why production lexers are usually hand-written: it is easy to add a little state to hand code.",
+    "link": {
+      "title": "Scanning — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/scanning.html"
+    }
+  },
+  {
+    "id": "comp-lexing-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Calc's NUM pattern is `\\d+` on a `str`. A user types `٣4` (an Arabic-Indic digit three, then an ASCII 4). What happens?",
+    "options": [
+      {
+        "text": "The lexer raises `SyntaxError: bad char '٣'`",
+        "explanation": "That would happen with `[0-9]+` or `re.ASCII`, but on a `str` pattern `\\d` matches any Unicode decimal digit."
+      },
+      {
+        "text": "It lexes as NUM `٣4`, and `int()` turns it into 34",
+        "explanation": "Correct. `\\d` matches Unicode category Nd digits, so `٣4` is one NUM token, and Python's `int()` also accepts Unicode digits, giving 34. Whether that is acceptable is a language design decision you should make deliberately."
+      },
+      {
+        "text": "It lexes as NAME `٣4`",
+        "explanation": "NAME must start with `[A-Za-z_]`, an explicit ASCII class, so `٣` cannot start a NAME."
+      },
+      {
+        "text": "It lexes as NUM `4`, silently skipping `٣`",
+        "explanation": "The lexer never skips characters: anything not matched raises an error. And here `٣` *is* matched by `\\d`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In Python 3, `re` patterns on `str` are Unicode-aware by default. `\\d` means \"any character in Unicode category Nd\", which includes `٣` (U+0663).\n2. So `\\d+` matches both characters: one NUM token with text `٣4`.\n3. The parser calls `int('٣4')`. `int` also accepts Unicode decimal digits, so the value is 34.\n4. If your language intends ASCII digits only, write `[0-9]+` or compile with `re.ASCII`. The lesson's `lex_dfa` only accepts the ASCII digits in `DIGS`, so it rejects `٣`: that is why the two lexers are only promised to agree on ASCII input.",
+    "link": {
+      "title": "re — Regular expression operations — Python docs",
+      "url": "https://docs.python.org/3/library/re.html"
+    }
+  }
+]

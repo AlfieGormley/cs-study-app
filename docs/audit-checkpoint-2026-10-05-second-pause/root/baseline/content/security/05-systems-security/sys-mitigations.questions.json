@@ -1,0 +1,374 @@
+[
+  {
+    "id": "sys-mitigations-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An attacker overflows a stack buffer with bytes that are valid machine instructions and points the return address at them. The process has DEP/NX enabled. What happens when the function returns?",
+    "options": [
+      {
+        "text": "The injected instructions run with the process's privileges",
+        "explanation": "This is what happened before NX. With NX the stack is not executable, so the CPU refuses to fetch instructions from it."
+      },
+      {
+        "text": "The CPU raises a fault because the stack page is marked non-executable, and the process crashes",
+        "explanation": "Correct. W^X means writable pages such as the stack cannot be executed. The injected bytes are data, and the attempt to run them faults."
+      },
+      {
+        "text": "ASLR moves the bytes elsewhere so they run safely",
+        "explanation": "ASLR randomises where regions are loaded; it does not relocate or sanitise data at run time."
+      },
+      {
+        "text": "The canary check prevents the return entirely",
+        "explanation": "A canary would catch this if one is present, but the question is about what NX does; NX acts when execution jumps into the stack."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. NX/DEP gives each page either write or execute permission (W^X).\n2. The stack is writable data, so it is non-executable.\n3. On `ret`, the CPU jumps to the overwritten address inside the stack and tries to fetch an instruction.\n4. The page's NX bit triggers a fault; the OS kills the process.\n\nThis is why attackers moved to code reuse, which only jumps to code that is already executable.",
+    "link": {
+      "title": "Executable-space protection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Executable-space_protection"
+    }
+  },
+  {
+    "id": "sys-mitigations-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Where does the compiler place a stack canary, and when is it checked?",
+    "options": [
+      {
+        "text": "At the very bottom of the stack, checked when the program exits",
+        "explanation": "A per-process check at exit would be far too late: the hijacked return would already have happened."
+      },
+      {
+        "text": "Between the local buffers and the saved return address, checked just before the function returns",
+        "explanation": "Correct. A linear overflow from a buffer must cross the canary to reach the return address, and the epilogue verifies it before `ret`."
+      },
+      {
+        "text": "Inside every heap allocation, checked on `free`",
+        "explanation": "That describes some heap hardening, not stack canaries. Canaries protect stack frames."
+      },
+      {
+        "text": "In the CPU's shadow stack, checked on every instruction",
+        "explanation": "Shadow stacks are a separate hardware mechanism and hold copies of return addresses, not canaries."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Picture the frame from high to low addresses: return address, saved frame pointer, **canary**, buffers. An overflow writes upward from a buffer, so it hits the canary before it can reach the return address. The function's epilogue compares the canary with the per-process secret and calls `__stack_chk_fail` if they differ, so the corrupted return address is never used.",
+    "link": {
+      "title": "Buffer overflow protection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Buffer_overflow_protection"
+    }
+  },
+  {
+    "id": "sys-mitigations-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is ASLR's main contribution to stopping exploitation?",
+    "options": [
+      {
+        "text": "It encrypts memory so stolen bytes are useless",
+        "explanation": "ASLR does not encrypt anything; memory contents are unchanged, only their location varies."
+      },
+      {
+        "text": "It makes the addresses of code and data unpredictable, so an attacker who overwrites a pointer doesn't know what value to write",
+        "explanation": "Correct. Code reuse and pointer overwrites need real addresses; with random base addresses, a guess usually crashes the program."
+      },
+      {
+        "text": "It prevents buffer overflows from happening",
+        "explanation": "ASLR does nothing to stop the overflow itself; it makes using it harder."
+      },
+      {
+        "text": "It stops the CPU executing data pages",
+        "explanation": "That is NX/DEP, a different mitigation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Exploits need to aim. To redirect execution you must write an *address* (of a library function, a code snippet, a buffer). ASLR picks random base addresses for the stack, heap, libraries and PIE executables at each run. Without knowing them, the attacker's written address points to unmapped or wrong memory, and the process crashes instead of being taken over.",
+    "link": {
+      "title": "Address space layout randomization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
+    }
+  },
+  {
+    "id": "sys-mitigations-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A function compiled with `-fstack-protector-strong` contains:\n\n```c\nstruct user {\n    char name[16];\n    int  is_admin;\n} u;\nu.is_admin = 0;\nstrcpy(u.name, input);\nif (u.is_admin) grant();\n```\n\nAn input of 20 bytes with non-zero bytes at positions 16 to 19 is passed. What happens?",
+    "options": [
+      {
+        "text": "The canary detects the overflow and the program aborts before `grant()`",
+        "explanation": "The canary sits above the whole struct and is only checked at return. This overflow stays inside the struct and is used before the function returns."
+      },
+      {
+        "text": "The compiler reorders `name` after `is_admin`, so the overflow is harmless",
+        "explanation": "Compilers can reorder separate local variables, but C fixes the order of fields inside a struct, so `is_admin` must follow `name`."
+      },
+      {
+        "text": "`is_admin` is overwritten, `grant()` runs, and the canary (if reached at all) is only checked later",
+        "explanation": "Correct. The overflow corrupts adjacent non-control data inside the struct. Canaries only guard the return address, and only at function exit."
+      },
+      {
+        "text": "DEP stops the write because the stack is non-executable",
+        "explanation": "NX controls execution, not writes. The stack is writable by design."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Struct layout: `name` at offsets 0 to 15, `is_admin` at 16 to 19.\n2. Copying 20 characters plus the NUL writes offsets 0 to 20 of the struct: 4 bytes into `is_admin`, plus 1 byte past the struct.\n3. `is_admin` is now non-zero; the `if` runs `grant()` immediately.\n4. The canary check happens at the epilogue; whether or not it later fires, the damage is done.\n\nLesson: canaries protect control data at return time, not adjacent program data. The fix is a bounded copy.",
+    "link": {
+      "title": "Buffer overflow protection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Buffer_overflow_protection"
+    }
+  },
+  {
+    "id": "sys-mitigations-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 32-bit network daemon has 8 bits of ASLR entropy for its library base and its workers are re-forked from the same parent after each crash, so the base stays the same. Each wrong guess crashes a worker. On average, about how many attempts does an attacker need to guess the base?",
+    "options": [
+      {
+        "text": "About 8",
+        "explanation": "8 is the number of *bits*, not the number of possibilities. Each bit doubles the search space."
+      },
+      {
+        "text": "About 128",
+        "explanation": "Correct. 8 bits give 2^8 = 256 possible bases. Trying each candidate once, the right one turns up on average halfway through: about 128 attempts, which takes minutes."
+      },
+      {
+        "text": "About 268 million",
+        "explanation": "That is 2^28, the 64-bit Linux figure, not the 32-bit one."
+      },
+      {
+        "text": "It cannot be brute-forced because the base changes after each crash",
+        "explanation": "Here the base does not change (forked workers inherit it). Even with rerandomisation, each guess is a 1-in-256 chance, so about 256 tries: still trivially small."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 8 bits of entropy = 2^8 = 256 possible bases.\n2. If the base stays fixed across restarts (forked workers often share it), trying each value once finds it in 128 attempts on average.\n3. If it rerandomises on each restart, each try succeeds with probability 1/256, so the expected number is 256.\n4. Either way it is hundreds of attempts, minutes of work.\n\nCompare 64-bit Linux: 2^28 = 268,435,456 possibilities, where brute force would be noisy and slow. This is one reason 32-bit ASLR is considered weak.",
+    "link": {
+      "title": "Address space layout randomization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
+    }
+  },
+  {
+    "id": "sys-mitigations-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program has NX, ASLR and canaries. An out-of-bounds read bug lets the attacker read one pointer into `libc`. Why do security teams treat this read bug as much more severe than it looks?",
+    "options": [
+      {
+        "text": "Because the leaked pointer contains the canary",
+        "explanation": "A libc pointer is not the canary, though a different leak could reveal that."
+      },
+      {
+        "text": "Because knowing one libc address reveals the whole library's layout, defeating ASLR for libc",
+        "explanation": "Correct. ASLR shifts each library as a unit. Subtract the pointer's known offset to get the base, and every function in libc is then at a known address."
+      },
+      {
+        "text": "Because out-of-bounds reads disable NX",
+        "explanation": "A read does not change page permissions."
+      },
+      {
+        "text": "Because the read can be used to write memory",
+        "explanation": "A read is a read. The danger is that it supplies the information a separate write bug needs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. ASLR picks one random base per library; internal offsets never change.\n2. The attacker knows from the libc build that, say, the leaked function pointer sits at offset `0x2a1b0`.\n3. `base = leaked - 0x2a1b0`.\n4. Every other address in libc is `base + known offset`.\n\nSo a 'mere' information leak plus a separate corruption bug often makes a full exploit. That is why leaks are fixed urgently.",
+    "link": {
+      "title": "Address space layout randomization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
+    }
+  },
+  {
+    "id": "sys-mitigations-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team adds `-D_FORTIFY_SOURCE=3` to their debug build, which uses `-O0`. An obvious `memcpy` overflow into a fixed-size local array is not caught. Why?",
+    "options": [
+      {
+        "text": "FORTIFY only checks heap buffers",
+        "explanation": "It checks destinations whose size the compiler can determine, including local arrays."
+      },
+      {
+        "text": "FORTIFY needs optimisation (`-O1` or higher) to compute object sizes and swap in checked functions",
+        "explanation": "Correct. Without optimisation, the fortified wrappers are not used. Enable it in optimised builds, where it is meant to run."
+      },
+      {
+        "text": "Level 3 is not a valid level",
+        "explanation": "Level 3 exists in GCC 12 and later with glibc 2.34, and it extends checking to many run-time-sized objects."
+      },
+      {
+        "text": "FORTIFY only checks `strcpy`, not `memcpy`",
+        "explanation": "It covers a family of functions including `memcpy`, `memmove`, `strcpy`, `sprintf` and more."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "`_FORTIFY_SOURCE` works through header magic: when the compiler can calculate the destination size (with `__builtin_object_size` or, at level 3, `__builtin_dynamic_object_size`), the call becomes `__memcpy_chk(dst, src, n, dst_size)`, which aborts if `n > dst_size`. That size analysis relies on the optimiser. At `-O0`, glibc does not enable the fortified wrappers (and recent versions warn). Run fortified checks in `-O2` builds, and use ASan in debug builds.",
+    "link": {
+      "title": "Compiler Options Hardening Guide — OpenSSF",
+      "url": "https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
+    }
+  },
+  {
+    "id": "sys-mitigations-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about **full RELRO** (`-Wl,-z,relro,-z,now`) are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "All dynamic symbols are resolved at start-up rather than lazily on first call",
+        "explanation": "Correct. `-z now` disables lazy binding, so the GOT is fully filled in before `main` runs."
+      },
+      {
+        "text": "After start-up, the GOT is made read-only",
+        "explanation": "Correct. Once relocations are done the loader `mprotect`s the region, so an arbitrary write cannot redirect a library call through it."
+      },
+      {
+        "text": "It makes start-up slightly slower for programs with many imports",
+        "explanation": "Correct. Resolving every symbol eagerly costs some time at load, the main trade-off."
+      },
+      {
+        "text": "It prevents buffer overflows on the stack",
+        "explanation": "RELRO protects one specific table of pointers; it does nothing about stack overflows."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Calls into shared libraries go through the GOT, a table of function pointers.\n2. With lazy binding, entries are filled on first use, so the GOT must stay writable: an attractive target for an arbitrary write.\n3. Full RELRO resolves all entries up front (`-z now`), then marks the region read-only (`-z relro`).\n4. Cost: slower start-up for big programs. Benefit: one fewer writable function-pointer table.",
+    "link": {
+      "title": "Compiler Options Hardening Guide — OpenSSF",
+      "url": "https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
+    }
+  },
+  {
+    "id": "sys-mitigations-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker has bypassed ASLR with a leak and uses a stack overflow (with the canary also leaked) to chain together snippets of existing libc code, each ending in `ret`. Which mitigation is designed to stop exactly this?",
+    "options": [
+      {
+        "text": "DEP/NX",
+        "explanation": "The snippets are in libc's executable code, so NX allows them. Code reuse exists precisely to get around NX."
+      },
+      {
+        "text": "A hardware shadow stack (for example Intel CET)",
+        "explanation": "Correct. Each `ret` compares the return address on the normal stack with the protected copy on the shadow stack. The overwritten addresses don't match, so the first hijacked return faults."
+      },
+      {
+        "text": "Full RELRO",
+        "explanation": "RELRO protects the GOT, not return addresses on the stack."
+      },
+      {
+        "text": "Using `-fstack-protector-strong` instead of `-fstack-protector`",
+        "explanation": "The canary is already leaked and restored by the attacker; a stronger instrumentation policy does not help."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The technique described is return-oriented programming: abusing `ret` instructions so that overwritten return addresses chain existing code snippets.\n2. Its weak point is that it relies on *returns going somewhere other than where they were called from*.\n3. A shadow stack stores a copy of each return address in memory that ordinary writes cannot modify. On `ret`, the CPU checks both copies match.\n4. The first faked return fails the check. Forward-edge CFI (IBT, CFG) complements this for indirect calls and jumps.",
+    "link": {
+      "title": "Return-oriented programming — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Return-oriented_programming"
+    }
+  },
+  {
+    "id": "sys-mitigations-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With Arm MTE, each 16-byte granule has a 4-bit tag. An exploit relies on a use-after-free where the freed chunk has been retagged randomly. Roughly what fraction of attempts go undetected by MTE?",
+    "options": [
+      {
+        "text": "None; MTE always detects use-after-free",
+        "explanation": "Tags are only 4 bits, so a reallocated chunk can by chance get the same tag as the stale pointer."
+      },
+      {
+        "text": "About 1 in 4 (25%)",
+        "explanation": "This confuses the number of tag bits with the number of tag values; 4 bits give 16 values."
+      },
+      {
+        "text": "About 1 in 16 (6.25%)",
+        "explanation": "Correct. A random 4-bit tag matches the stale pointer's tag with probability 1/16, so roughly 94% of attempts fault, which makes an exploit very unreliable and noisy."
+      },
+      {
+        "text": "About 1 in 65,536",
+        "explanation": "That would need 16-bit tags. MTE stores 4 bits in the pointer's top byte."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. 4 bits -> 2^4 = 16 possible tags.\n2. On reallocation the chunk gets a new random tag; the stale pointer keeps the old one.\n3. Chance they match by accident = 1/16 = 6.25%.\n4. So about 15 in 16 attempts crash with a tag-check fault, which can be reported.\n\nAllocators can do better than random (for example guaranteeing adjacent chunks differ), and repeated crashes are themselves a detection signal.",
+    "link": {
+      "title": "Memory Tagging Extension — Android",
+      "url": "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+    }
+  },
+  {
+    "id": "sys-mitigations-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which are **forward-edge** control-flow protections (guarding indirect calls and jumps) rather than backward-edge (returns)? Select all that apply.",
+    "options": [
+      {
+        "text": "Microsoft Control Flow Guard (CFG)",
+        "explanation": "Correct. CFG checks indirect call targets against a bitmap of valid function starts."
+      },
+      {
+        "text": "Intel IBT (ENDBR64 landing pads)",
+        "explanation": "Correct. Indirect branches must land on an `ENDBR64` instruction; returns are handled by the shadow stack half of CET."
+      },
+      {
+        "text": "Clang `-fsanitize=cfi`",
+        "explanation": "Correct. It checks indirect calls and virtual calls against their expected type."
+      },
+      {
+        "text": "Intel CET shadow stack",
+        "explanation": "This is the backward-edge half: it checks return addresses."
+      },
+      {
+        "text": "Stack canaries",
+        "explanation": "Canaries detect stack corruption at return time; they are a backward-edge integrity check, not a forward-edge CFI scheme."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Sort by which transfer is checked:\n\n| Mechanism | Edge |\n|---|---|\n| CFG | forward |\n| IBT / BTI | forward |\n| Clang CFI | forward |\n| Shadow stack | backward |\n| Canary | backward-ish |\n\nForward edges are calls through pointers; backward edges are returns. A complete scheme needs both.",
+    "link": {
+      "title": "Control-flow integrity — Clang documentation",
+      "url": "https://clang.llvm.org/docs/ControlFlowIntegrity.html"
+    }
+  },
+  {
+    "id": "sys-mitigations-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does glibc's stack canary on x86-64 always have a zero lowest byte?",
+    "options": [
+      {
+        "text": "To make it easier to compute",
+        "explanation": "Generating the value is trivial either way; the zero byte has a security purpose."
+      },
+      {
+        "text": "Because string functions stop at NUL, so an overflow or leak via a C string can't copy past, or print out, the whole canary",
+        "explanation": "Correct. A `strcpy` overflow cannot write a NUL in the middle of its data and keep going, and a `%s` leak stops at the zero, hiding the rest of the canary."
+      },
+      {
+        "text": "Because the CPU requires aligned values on the stack",
+        "explanation": "Alignment concerns the address, not the value stored there."
+      },
+      {
+        "text": "To mark the end of the stack frame for debuggers",
+        "explanation": "Debuggers use frame pointers or unwind tables, not the canary."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Many overflows come from string functions, which stop at the first `\\0`.\n2. On little-endian x86-64, the canary's lowest byte is at its lowest address, the first byte an upward overflow reaches.\n3. To restore the canary the attacker must write a `\\0` there, but a string copy ends at that NUL and cannot also reach the return address beyond it.\n4. Similarly, a string-based read stops at the zero byte, so it cannot reveal the canary.\n\nThis is called a terminator canary. It does not help against `memcpy`-style overflows with explicit lengths.",
+    "link": {
+      "title": "Buffer overflow protection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Buffer_overflow_protection"
+    }
+  }
+]

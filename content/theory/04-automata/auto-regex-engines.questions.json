@@ -1,0 +1,374 @@
+[
+  {
+    "id": "auto-regex-engines-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Python, which call is likely to take the longest?\n\n```python\nimport re\np = re.compile(r\"(a+)+$\")\nA = p.match(\"a\" * 12)\nB = p.match(\"a\" * 12 + \"!\")\nC = p.match(\"!\")\nD = p.match(\"\")\n```",
+    "options": [
+      {
+        "text": "A",
+        "explanation": "With 12 a characters and nothing else, the first greedy attempt succeeds."
+      },
+      {
+        "text": "B",
+        "explanation": "Correct. The failing suffix forces repeated attempts; the 12 a characters have 2¹¹ possible nonempty-block decompositions. No fixed wall-clock time is claimed."
+      },
+      {
+        "text": "C",
+        "explanation": "The first character is not an a, so `a+` fails immediately and there is nothing to backtrack into."
+      },
+      {
+        "text": "D",
+        "explanation": "An empty string fails `a+` at once; no choices exist to explore."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A succeeds on its first greedy attempt. B fails after exploring ambiguous splits;12 characters have 2¹¹ decompositions into positive-length blocks. C and D fail immediately. The smaller runnable example illustrates the behavior without requiring an expensive 30-character failing match. Successful matches in other patterns can also require extensive backtracking.",
+    "link": {
+      "title": "Regular Expression Matching Can Be Simple And Fast — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp1.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which engine guarantees matching time linear in the length of the input? Consider a single search with a fixed pattern and the standard APIs listed.",
+    "options": [
+      {
+        "text": "Python's `re`",
+        "explanation": "Python's `re` is a backtracking engine. `(a+)+$` is exponential in it."
+      },
+      {
+        "text": "Java's `java.util.regex`",
+        "explanation": "Java's built-in engine backtracks and has the same exponential worst case."
+      },
+      {
+        "text": "Go's `regexp`",
+        "explanation": "Correct. Go's documentation states it is \"guaranteed to run in time linear in the size of the input\", because it simulates the automaton rather than searching paths."
+      },
+      {
+        "text": "PCRE",
+        "explanation": "PCRE's main matcher is backtracking (it supports backreferences and recursion), so it has no linear guarantee."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Go regexp documents a bound linear in input length. Python re, Java’s standard matcher and PCRE’s default matcher do not offer that general guarantee. Production libraries can mix methods; PCRE2 also offers a separate DFA-style matcher, and recent Ruby versions memoize many patterns.",
+    "link": {
+      "title": "Regular Expression Matching Can Be Simple And Fast — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp1.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does RE2 reject the pattern `(\\w+) \\1`?",
+    "options": [
+      {
+        "text": "It is a syntax error in every engine",
+        "explanation": "Perl, PCRE, Python and Java all accept it. It is a deliberate omission in RE2."
+      },
+      {
+        "text": "This particular backreference pattern describes a non-regular language outside RE2’s supported syntax",
+        "explanation": "Correct. Arbitrarily long word-copy matching here exceeds finite-automaton expressiveness. Not every pattern containing a backreference is non-regular."
+      },
+      {
+        "text": "RE2 does not support capture groups",
+        "explanation": "RE2 supports captures through its Pike VM. It refuses only references back to them."
+      },
+      {
+        "text": "The pattern is vulnerable to ReDoS",
+        "explanation": "RE2 accepts many regular patterns that would cause excessive backtracking elsewhere. It excludes backreference syntax; its matching guarantee does not remove all resource-exhaustion risks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A finite automaton can only remember a bounded amount.\n2. `(\\w+) \\1` must remember an arbitrarily long word to compare it later, like ww from lesson 4, which is not regular.\n3. Ordinary finite automata cannot recognize this language, and RE2 excludes this syntax. Lookaround is excluded too.\n\nFun fact: `^(..+)\\1+$` on a string of a's matches exactly when the length is composite. This pattern recognizes composite unary lengths, not primes; rejecting it does not by itself classify 0 and 1 as prime. A finite automaton cannot recognize the unbounded composite-length language.",
+    "link": {
+      "title": "Regular Expression Matching in the Wild — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp3.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A backtracking engine requires a full-string match of `(a+)+` against `aaaa` followed by a `b`. Every way of splitting the four a's among iterations of the outer `+` is tried before failing. How many splits are there?",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "This counts the number of a's. The splits are the ways of cutting the run into non-empty consecutive pieces."
+      },
+      {
+        "text": "16",
+        "explanation": "2⁴ would treat each a as an independent choice. There are only 3 gaps between 4 a's where a cut can go."
+      },
+      {
+        "text": "8",
+        "explanation": "Correct. Three gaps, each cut or not: 2³ = 8 compositions of 4."
+      },
+      {
+        "text": "24",
+        "explanation": "4! counts orderings, but the pieces must be consecutive and in order, so permutations do not arise."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A split chooses, for each of the n − 1 gaps between a's, whether a new inner iteration starts there.\n2. n = 4: 2³ = 8.\n\n```\n(aaaa)\n(a)(aaa)   (aaa)(a)\n(aa)(aa)\n(a)(a)(aa) (a)(aa)(a)\n(aa)(a)(a)\n(a)(a)(a)(a)\n```\n\n3. Every one reaches the b and fails, so all 8 are explored, plus the partial attempts in between.\n4. In general 2ⁿ⁻¹: the source of the doubling per character.",
+    "link": {
+      "title": "Regular Expression Matching Can Be Simple And Fast — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp1.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Suppose a benchmark of re.search(r\"\\s+$\", s) takes 0.23 seconds for 10,000 spaces followed by x. Assuming quadratic scaling with negligible fixed overhead, roughly how long for 40,000 spaces followed by x? This is hypothetical data, not a measured runtime claim.",
+    "options": [
+      {
+        "text": "About 0.9 s",
+        "explanation": "That assumes linear growth (×4 input, ×4 time). This pattern is quadratic."
+      },
+      {
+        "text": "About 3.7 s",
+        "explanation": "Correct. The work is about n²/2 steps; quadrupling n multiplies it by 16: 0.23 × 16 ≈ 3.7 s."
+      },
+      {
+        "text": "About 0.23 s; it does not depend on length",
+        "explanation": "Each extra space is another starting position, and each start scans to the end. Length matters a lot."
+      },
+      {
+        "text": "Many hours, because it is exponential",
+        "explanation": "A single quantifier can try linearly many prefix lengths at one start. A naive search over all starts yields quadratic rather than exponential work."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A naive search starts at each space and revisits remaining spaces, producing a triangular work sum. Under the explicitly assumed quadratic timing model, multiplying input length by 4 multiplies time by 16: 0.23×16=3.68 seconds, or about 3.7 seconds. Actual measurements depend on engine, optimization and hardware.",
+    "link": {
+      "title": "Regular expression matching — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp1.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In an anchored, path-enumerating backtracker without memoization or pattern simplification, which patterns have exponentially many ambiguous paths on a run of a characters followed by !? Select all that apply.",
+    "options": [
+      {
+        "text": "`(a+)+$`",
+        "explanation": "Exponential: nested quantifiers give 2ⁿ⁻¹ ways to split the a's."
+      },
+      {
+        "text": "`(a|a)*$`",
+        "explanation": "Exponential: each a can be matched by either branch, giving 2ⁿ paths."
+      },
+      {
+        "text": "`a+$`",
+        "explanation": "Not exponential. At a fixed start, a single quantifier scans and may backtrack through linearly many prefix lengths."
+      },
+      {
+        "text": "`(\\w+\\s?)*$`",
+        "explanation": "Exponential. Since `\\s?` can match nothing, this behaves like `(\\w+)*` on a run of letters: nested quantifiers."
+      },
+      {
+        "text": "`(\\w+\\s)*\\w*$`",
+        "explanation": "Not exponential. Each iteration of the group must end at a space, so a run of letters can be split only one way."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "The nested quantifiers in (a+)+ and (\\w+\\s?)* allow2ⁿ⁻¹ complete decompositions of the a run. Duplicate alternatives in (a|a)* allow2ⁿ branch sequences. The single-run a+ and mandatory-separator rewrite do not have that exponential ambiguity. These are conceptual path counts, not measured timings; optimizations may collapse duplicate alternatives.",
+    "link": {
+      "title": "Regular expression Denial of Service — OWASP",
+      "url": "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An automaton-based engine like RE2 builds a lazy DFA, caching states as it meets them. What happens when an adversarial input makes it discover huge numbers of distinct DFA states?",
+    "options": [
+      {
+        "text": "It crashes with an out-of-memory error",
+        "explanation": "A bounded cache prevents unlimited DFA-cache growth. It does not guarantee that the entire application can never exhaust memory."
+      },
+      {
+        "text": "It falls back to unrestricted, unmemoized backtracking",
+        "explanation": "That would lose the guarantee. Bounded memoized backtracking is a different technique that RE2 can use for suitable searches."
+      },
+      {
+        "text": "It clears the cache and, if that keeps happening, falls back to slower NFA simulation, staying linear time",
+        "explanation": "Correct. Throughput drops, but the O(m · n) bound holds."
+      },
+      {
+        "text": "It precomputes the full DFA first to avoid this",
+        "explanation": "Full determinisation can need 2ᵐ states, which is exactly the blow-up the lazy approach exists to avoid."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each lazy-DFA state is a set of NFA states, computed on demand in O(m).\n2. Cached transitions are cheap when reused; distinct-set count depends on the pattern and input.\n3. An adversarial input can keep producing new sets. The cache hits its memory limit.\n4. RE2 then flushes the cache and carries on; if it is flushing too often to be useful, it falls back to NFA simulation.\n5. Worst case per character is still O(m), so the whole match stays linear.",
+    "link": {
+      "title": "Regular Expression Matching in the Wild — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp3.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer \"hardens\" a validator by rewriting `(\\w+\\s?)*` as `\\w+(\\s\\w+)*`. Tests pass on normal input. What has changed besides speed? Compare full-match acceptance, not capture contents.",
+    "options": [
+      {
+        "text": "Nothing: the two are equivalent",
+        "explanation": "They are not. The original accepts the empty string and strings with a trailing space, e.g. `a b `; the rewrite rejects both."
+      },
+      {
+        "text": "The rewrite now rejects the empty string and a trailing space, which the original accepted",
+        "explanation": "Correct. (\\w+\\s)*\\w* preserves full-match acceptance, including empty and trailing-whitespace cases; captured groups can differ."
+      },
+      {
+        "text": "The rewrite accepts double spaces, which the original rejected",
+        "explanation": "Neither accepts two spaces in a row: each `\\s` must sit between word characters (or at the very end, in the original)."
+      },
+      {
+        "text": "The rewrite is now vulnerable to ReDoS",
+        "explanation": "The mandatory separator removes this nested ambiguity, but the rewrite accepts a different language. Do not infer a universal safety guarantee for every search mode."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare on edge cases (full match):\n\n| Input | original | rewrite | `(\\w+\\s)*\\w*` |\n|---|---|---|---|\n| (empty) | yes | no | yes |\n| `a b` | yes | yes | yes |\n| `a b ` | yes | no | yes |\n\nRemoving ambiguity is the right idea, but a rewrite must keep the language. Brute-force over all strings of a and space up to length 9 supports the full-match equivalence on that finite set. The general argument groups each non-final word with its following whitespace; capture results are not claimed equivalent.",
+    "link": {
+      "title": "Regular expression Denial of Service — OWASP",
+      "url": "https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Python 3.11+ supports atomic groups. What do these print?\n\n```python\nimport re\nprint(bool(re.fullmatch(r\"a*a\", \"aaa\")))\nprint(bool(re.fullmatch(r\"(?>a*)a\",\n                        \"aaa\")))\n```",
+    "options": [
+      {
+        "text": "`True` then `True`",
+        "explanation": "The atomic group grabs all three a's and will not give one back, so the final `a` has nothing to match."
+      },
+      {
+        "text": "`False` then `True`",
+        "explanation": "`a*a` matches `aaa` normally: `a*` backtracks one character so the last `a` can match."
+      },
+      {
+        "text": "`True` then `False`",
+        "explanation": "Correct. Ordinary `a*` gives back an a; atomic `(?>a*)` cannot, so the second pattern can never match."
+      },
+      {
+        "text": "`False` then `False`",
+        "explanation": "The ordinary pattern is fine: backtracking lets `a*` take two a's and `a` take the third."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `a*a` on `aaa`: `a*` greedily takes 3, `a` fails, backtrack: `a*` takes 2, `a` matches the third. True.\n2. `(?>a*)a`: the atomic group takes 3 a's and, once it exits, its choice is final. `a` has nothing left and the engine may not revisit the group. False.\n3. This is how atomic groups remove this particular repeated-splitting problem: `(?>a+)+$` cannot try 2ⁿ splits. But they change what matches, so use them only where giving back characters could never help, such as `(?>a+)b`.\n\nPossessive `a*+a` is the same as `(?>a*)a`.",
+    "link": {
+      "title": "re — Python documentation",
+      "url": "https://docs.python.org/3/library/re.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A hypothetical benchmark gives 1 ms, 7 ms and 47 ms when input length doubles from 200 to 400 to 800. Which proposed scaling model is most consistent with those three measurements? These illustrative data are not a verified Cloudflare or Python benchmark.",
+    "options": [
+      {
+        "text": "Linear: about 2× per doubling",
+        "explanation": "Each doubling multiplied the time by about 7, far more than 2."
+      },
+      {
+        "text": "Quadratic: about 4× per doubling",
+        "explanation": "Each doubling cost about 7×, which is more than quadratic."
+      },
+      {
+        "text": "Exponential in n",
+        "explanation": "Three timings cannot rule out every exponential model, but among these coarse candidate descriptions, roughly cubic growth best fits the observed doubling ratios."
+      },
+      {
+        "text": "Roughly cubic: about 8× per doubling",
+        "explanation": "Correct among the proposed models: ratios 7 and 47/7≈6.7 are closer to 8 than to 2 or 4. More evidence is needed to establish asymptotic complexity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The observed ratios are 7 and about 6.7. Cubic scaling predicts 2³ = 8 per input doubling, so it is the closest proposed model, not a proof. Separately, a naive unanchored search for .*.*=.*; on x= followed by a long x suffix can take cubic work: at starts after the only equals sign, two leading stars try a quadratic number of allocations before failing to find =; summing over starts gives cubic work. Exact engine optimizations can alter observed behavior.",
+    "link": {
+      "title": "Details of the Cloudflare outage on July 2, 2019",
+      "url": "https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For which of these should you prefer an automaton-based engine (RE2, Go, Rust `regex`) over a backtracking one? Select all that apply.",
+    "options": [
+      {
+        "text": "A log search service where customers type their own patterns",
+        "explanation": "Yes. Untrusted patterns are the classic case: one customer's `(a+)+$` must not stall the cluster. Also bound compiled pattern size and total work."
+      },
+      {
+        "text": "A web firewall applying thousands of rules to every HTTP request",
+        "explanation": "Yes. Huge volume, attacker-controlled input and a hot path: Cloudflare's 2019 outage was exactly this."
+      },
+      {
+        "text": "An existing full-match operation requiring (\\w+)=\\1 on explicitly bounded, vetted local input, without rewriting the operation",
+        "explanation": "The listed engines reject backreferences. Use a suitably constrained supporting engine, or redesign as capture plus an ordinary equality check. Source files are not automatically trusted, especially from external contributions."
+      },
+      {
+        "text": "Scanning multi-gigabyte files for `ERROR.*timeout`",
+        "explanation": "Yes. Linear time, literal prefilters and a lazy DFA make automaton engines (and grep) fast on huge inputs."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "For untrusted or large workloads, documented scaling guarantees are useful alongside input, pattern and compilation budgets. RE2, Go regexp and Rust regex reject the listed backreference. A supporting engine or capture-and-compare redesign is needed. Lookaround is not exclusive to backtracking: PCRE2’s separate DFA-style matcher supports it.",
+    "link": {
+      "title": "regex crate documentation — docs.rs",
+      "url": "https://docs.rs/regex/latest/regex/"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For `(a|aa)*$` on n a's followed by `!`, the number of paths a backtracker explores grows like the number of ways to write n as an ordered sum of 1s and 2s. Roughly how much does the work grow per extra a? Assume full-string matching by a path-enumerating implementation without memoization or simplifying optimizations.",
+    "options": [
+      {
+        "text": "×2",
+        "explanation": "Doubling per character is the rate for `(a|a)*` or `(a+)+`. Here the number of ways follows the Fibonacci sequence."
+      },
+      {
+        "text": "About ×1.6",
+        "explanation": "Correct. The count is a Fibonacci number, and consecutive Fibonacci numbers have ratio approaching φ ≈ 1.618."
+      },
+      {
+        "text": "×1, it is linear",
+        "explanation": "The count is still exponential, just with a smaller base. For n = 30 there are 1,346,269 ways."
+      },
+      {
+        "text": "×n",
+        "explanation": "Multiplying by successive factors n gives factorial growth. Here the ratio instead approaches the constant φ; merely depending on n does not imply super-exponential growth."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Let W(n) be the number of ways to write n with parts 1 and 2. The first part is 1 (then W(n − 1) ways) or 2 (then W(n − 2)).\n2. W(n) = W(n − 1) + W(n − 2), with W(0) = W(1) = 1: the Fibonacci numbers.\n3. W(n + 1) / W(n) → φ = (1 + √5)/2 ≈ 1.618.\n4. W(30)=1,346,269. These are decomposition counts, not measured timings.\n\nThis overlap produces exponential path counts in the assumed matcher; it is not a theorem that every overlap defeats every optimized engine.",
+    "link": {
+      "title": "Regular Expression Matching Can Be Simple And Fast — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp1.html"
+    }
+  }
+]

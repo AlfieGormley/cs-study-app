@@ -1,0 +1,349 @@
+[
+  {
+    "id": "pki-certificates-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What problem does a certificate solve that a digital signature alone does not?",
+    "options": [
+      {
+        "text": "It encrypts the public key so attackers cannot read it",
+        "explanation": "Public keys are meant to be public. Certificates are sent in full and encrypting the key would serve no purpose."
+      },
+      {
+        "text": "It makes signatures faster to verify",
+        "explanation": "Certificates add verification work: the client checks the CA's signatures as well."
+      },
+      {
+        "text": "It binds a public key to an identity (a name), vouched for by a CA the client already trusts",
+        "explanation": "Correct. A signature proves a message came from some key's holder; the certificate tells you whose key it is."
+      },
+      {
+        "text": "It replaces the private key so the server does not need one",
+        "explanation": "The server still needs its private key to prove it owns the certificate's public key, for example by signing the TLS handshake."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A signature check answers: was this made with the private key matching public key P?\n2. It does not answer: is P really bank.com's key? An attacker can generate their own pair and claim the name.\n3. A certificate is a trusted third party's signature over (name, P).\n4. If you trust that CA's key, you can trust the binding, and then the signature check means something.",
+    "link": {
+      "title": "Public key infrastructure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Public_key_infrastructure"
+    }
+  },
+  {
+    "id": "pki-certificates-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do CAs issue website certificates from intermediate CAs rather than directly from their root?",
+    "options": [
+      {
+        "text": "The root key is embedded in billions of devices and hard to replace, so it is kept offline and used rarely; a compromised intermediate can simply be revoked",
+        "explanation": "Correct. Keeping the root offline limits its exposure. Day-to-day issuance happens with an intermediate key whose loss is recoverable."
+      },
+      {
+        "text": "Intermediates make the chain shorter for clients",
+        "explanation": "An intermediate adds a certificate to the chain. The benefit is security, not size."
+      },
+      {
+        "text": "Root keys cannot produce signatures that browsers accept on leaves",
+        "explanation": "Roots can sign leaves technically; RFC 5280 does not forbid it. It is a key-protection policy, not a format limit."
+      },
+      {
+        "text": "Intermediates are required for RSA but not for ECDSA",
+        "explanation": "The hierarchy is independent of the signature algorithm."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the cost of losing each key:\n\n| Key lost | Recovery |\n|---|---|\n| Intermediate | Root revokes it, signs a new one |\n| Root | Update every trust store worldwide |\n\nSo the root signs only rarely (new intermediates, CRLs), from an HSM, often in an offline ceremony. The online, high-volume key is the one that is cheap to replace.",
+    "link": {
+      "title": "Public key infrastructure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Public_key_infrastructure"
+    }
+  },
+  {
+    "id": "pki-certificates-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A certificate has subject `CN=www.shop.com` and a Subject Alternative Name list containing only `shop.com`. A browser connects to `https://www.shop.com`. What happens?",
+    "options": [
+      {
+        "text": "It succeeds, because the Common Name matches",
+        "explanation": "Browsers ignore the Common Name for hostname matching and use only the SAN extension."
+      },
+      {
+        "text": "It succeeds, but shows a warning icon",
+        "explanation": "A hostname mismatch is a hard failure in browsers, not a cosmetic warning."
+      },
+      {
+        "text": "It succeeds, because `shop.com` covers all its subdomains",
+        "explanation": "A DNS name in SAN matches exactly. Covering subdomains needs a wildcard entry, and even `*.shop.com` matches one level only."
+      },
+      {
+        "text": "It fails with a name mismatch, because only SAN is checked and `shop.com` does not cover `www.shop.com`",
+        "explanation": "Correct. `shop.com` is an exact name, not a wildcard, and `*.shop.com` would be needed to cover `www`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Modern clients (browsers since around 2017) match the hostname only against SAN `dNSName` entries.\n2. The SAN list is `[shop.com]`.\n3. `www.shop.com` ≠ `shop.com`, and there is no wildcard.\n4. So validation fails. The fix is to request both names in the CSR: `shop.com` and `www.shop.com`.",
+    "link": {
+      "title": "RFC 5280: Internet X.509 PKI Certificate and CRL Profile",
+      "url": "https://www.rfc-editor.org/rfc/rfc5280"
+    }
+  },
+  {
+    "id": "pki-certificates-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want a Let's Encrypt certificate for `*.apps.example.com`. Your web servers are behind a load balancer and you can edit DNS through an API. Which ACME challenge must you use?",
+    "options": [
+      {
+        "text": "HTTP-01, serving the token from one of the web servers",
+        "explanation": "HTTP-01 proves control of one host name. Let's Encrypt does not allow it for wildcard certificates."
+      },
+      {
+        "text": "DNS-01, publishing a TXT record at `_acme-challenge.apps.example.com`",
+        "explanation": "Correct. A wildcard covers names that may not exist yet, so the CA requires proof of control over the DNS zone itself."
+      },
+      {
+        "text": "TLS-ALPN-01 on port 443",
+        "explanation": "Like HTTP-01, TLS-ALPN-01 proves control of a single host and cannot be used for wildcards."
+      },
+      {
+        "text": "No challenge; wildcards are issued on the basis of the account key",
+        "explanation": "Every name must be validated. The account key identifies you but proves nothing about domain control."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A wildcard asserts control over every name one level below `apps.example.com`.\n2. Serving a file on one web server only proves you control that host.\n3. Controlling the zone's DNS proves you could point any of those names anywhere, so it is the right proof.\n4. ACME DNS-01: the client puts a value derived from the token and account key in a TXT record at `_acme-challenge.apps.example.com`; the CA looks it up and issues.\n5. The DNS API key now becomes a high-value secret: anyone with it can obtain certificates for your zone.",
+    "link": {
+      "title": "Challenge types — Let's Encrypt",
+      "url": "https://letsencrypt.org/docs/challenge-types/"
+    }
+  },
+  {
+    "id": "pki-certificates-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An employee obtains an ordinary leaf certificate for `blog.example.org` (with `CA:FALSE`) and uses its private key to sign a certificate for `bank.com`. A client receives the chain `bank.com ← blog.example.org ← intermediate ← root`. Every signature verifies. What should stop this?",
+    "options": [
+      {
+        "text": "Nothing; if every signature verifies, the chain is valid",
+        "explanation": "Signatures are only one check. This is exactly the bug Moxie Marlinspike found in Internet Explorer in 2002."
+      },
+      {
+        "text": "Certificate Transparency logs refuse the forged certificate",
+        "explanation": "CT would make issuance visible if submitted, but the forger simply would not log it. Browsers might reject the missing SCTs, but the fundamental check is Basic Constraints."
+      },
+      {
+        "text": "The client checks Basic Constraints: `blog.example.org` is not a CA, so it cannot issue certificates",
+        "explanation": "Correct. Every issuer in a path must have `CA:TRUE` (and `keyCertSign`). The leaf fails that check, so the path is rejected."
+      },
+      {
+        "text": "The hostname check fails because `bank.com` doesn't match `blog.example.org`",
+        "explanation": "The client checks the hostname against the *leaf*, which here says `bank.com`. That check passes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk the validation checklist for the chain:\n\n1. Signatures: all verify. Pass.\n2. Dates: assume valid. Pass.\n3. Every issuer must be a CA. The issuer of `bank.com` is `blog.example.org`, which has `CA:FALSE`. **Fail.**\n4. Hostname vs leaf SAN: `bank.com`. Would pass.\n\nStep 3 is what makes leaf keys unable to mint certificates. Clients that skipped it (IE in 2002, several later TLS libraries) accepted forged chains.",
+    "link": {
+      "title": "RFC 5280: Internet X.509 PKI Certificate and CRL Profile",
+      "url": "https://www.rfc-editor.org/rfc/rfc5280"
+    }
+  },
+  {
+    "id": "pki-certificates-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Python service calling an API starts failing with \"unable to get local issuer certificate\" after the API provider renews its certificate. Chrome loads the API's URL without complaint. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The new certificate uses an algorithm Python does not support",
+        "explanation": "That error means the client could not build a path to a trusted root. Algorithm problems give different errors."
+      },
+      {
+        "text": "The certificate has been revoked",
+        "explanation": "Python's `ssl` module does not check revocation by default, and revocation produces a different error."
+      },
+      {
+        "text": "Python's clock is wrong",
+        "explanation": "A clock problem shows up as an expired or not-yet-valid certificate, not a missing issuer."
+      },
+      {
+        "text": "The provider is serving only the leaf certificate, without the intermediate, and Chrome is filling the gap from its cache or the AIA URL",
+        "explanation": "Correct. Path building fails in clients that do not fetch missing intermediates. The fix is on the server: serve the full chain."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The error says Python found the leaf, but could not find a certificate for its issuer, and the issuer is not in the trust store.\n2. That is a missing intermediate.\n3. Chrome copes because it caches intermediates it has seen, and can download them from the Authority Information Access URL.\n4. `curl`, Python, Java and many mobile stacks do not.\n5. Check with `openssl s_client -connect host:443 -showcerts`: only one certificate comes back. Ask the provider to install `fullchain.pem`.",
+    "link": {
+      "title": "RFC 5280: Internet X.509 PKI Certificate and CRL Profile",
+      "url": "https://www.rfc-editor.org/rfc/rfc5280"
+    }
+  },
+  {
+    "id": "pki-certificates-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about certificate revocation are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Most clients soft-fail: if they cannot reach the OCSP responder they accept the certificate",
+        "explanation": "Correct. Hard-failing would make every responder outage a site outage, so clients accept, which is precisely what an attacker blocking the responder wants."
+      },
+      {
+        "text": "Plain OCSP lets the CA see which sites a user visits",
+        "explanation": "Correct. The client asks the CA about each certificate it sees. Stapling removes this."
+      },
+      {
+        "text": "OCSP stapling means the server attaches a recent signed OCSP response to the handshake",
+        "explanation": "Correct. The response is signed by the CA, so the server cannot forge a 'good' status, and the client makes no extra request."
+      },
+      {
+        "text": "Once revoked, a certificate's signature stops verifying",
+        "explanation": "Revocation does not change any bytes. The signature still verifies; the client must separately learn about the revocation."
+      },
+      {
+        "text": "Short certificate lifetimes reduce how long an unrevoked stolen key can be misused",
+        "explanation": "Correct. With a 47-day certificate, a stolen key is useful for at most 47 days even if revocation never reaches the client."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Check each:\n\n1. Soft-fail is the norm. True.\n2. OCSP queries reveal browsing to the CA. True.\n3. Stapling: server-fetched, CA-signed response in the handshake. True.\n4. Revocation is a separate statement (\"serial X is revoked\"); the certificate itself is unchanged. False.\n5. Expiry is the only revocation that always works, so shorter lifetimes cap the damage. True.\n\nThis is why browsers push revocation data (CRLSets, CRLite) and the CA/Browser Forum is cutting lifetimes to 47 days by 2029.",
+    "link": {
+      "title": "Certificate revocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Certificate_revocation"
+    }
+  },
+  {
+    "id": "pki-certificates-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On 30 September 2021, some older clients started rejecting Let's Encrypt certificates even though the leaf certificates were valid. What happened?",
+    "options": [
+      {
+        "text": "Let's Encrypt's ISRG Root X1 was revoked",
+        "explanation": "ISRG Root X1 was not revoked; it was and remains trusted."
+      },
+      {
+        "text": "The DST Root CA X3 root that cross-signed Let's Encrypt expired, and clients that could not build the alternative path to ISRG Root X1 failed",
+        "explanation": "Correct. Clients with ISRG Root X1 and correct path building switched to it. Some, including OpenSSL 1.0.2, chose the expired path and errored."
+      },
+      {
+        "text": "Browsers distrusted Let's Encrypt for mis-issuance",
+        "explanation": "There was no distrust. The problem was a planned root expiry."
+      },
+      {
+        "text": "Leaf certificates were cut to 47 days that day",
+        "explanation": "The 47-day limit is scheduled for 2029 and does not cause path failures."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. When Let's Encrypt launched, its own root (ISRG Root X1) was not yet in trust stores, so its intermediate was cross-signed by IdenTrust's DST Root CA X3.\n2. That gave two paths:\n\n```\nleaf <- R3 <- ISRG X1 (self-signed)\nleaf <- R3 <- ISRG X1 <- DST X3\n```\n\n3. DST Root CA X3 expired on 30 September 2021.\n4. Clients that trust ISRG Root X1 and try alternative paths kept working.\n5. Devices without ISRG Root X1 (old Android, old macOS) had no valid path, and OpenSSL 1.0.2 picked the expired one even when another existed.",
+    "link": {
+      "title": "DST Root CA X3 expiration (September 2021) — Let's Encrypt",
+      "url": "https://letsencrypt.org/docs/dst-root-ca-x3-expiration-september-2021/"
+    }
+  },
+  {
+    "id": "pki-certificates-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A rogue employee at a trusted public CA issues a certificate for your domain and uses it in a targeted attack. Which mechanism gives you the best chance of noticing, and why?",
+    "options": [
+      {
+        "text": "OCSP, because the CA's responder will report the certificate",
+        "explanation": "OCSP reports what the CA says is revoked. A CA (or insider) misissuing a certificate has no reason to revoke it."
+      },
+      {
+        "text": "Your own server's logs",
+        "explanation": "In a targeted man-in-the-middle the victim never reaches your server with that certificate, so your logs show nothing."
+      },
+      {
+        "text": "CAA records, which stop other CAs issuing",
+        "explanation": "CAA is checked by honest CAs at issuance. A rogue insider can ignore it, and CAA gives you no notification."
+      },
+      {
+        "text": "Certificate Transparency: browsers require SCTs from public logs, so the certificate must be logged, and a monitor on your domain will see it",
+        "explanation": "Correct. CT does not stop mis-issuance, but makes it publicly visible. If the attacker does not log it, Chrome and Safari reject it for lacking SCTs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The threat is a trusted CA issuing a certificate you did not request.\n2. Prevention fails: CAA relies on the CA obeying it, and the CA's own revocation tools are under the attacker's control.\n3. Detection is left. CT requires every publicly trusted certificate to be submitted to append-only Merkle-tree logs; the SCTs go in the certificate.\n4. A browser that sees no valid SCTs rejects the certificate, so the attacker must log it (making it visible) or accept failure.\n5. A CT monitor (crt.sh, your CA's alerts, or your own watcher) flags the unknown certificate.",
+    "link": {
+      "title": "How Certificate Transparency works",
+      "url": "https://certificate.transparency.dev/howctworks/"
+    }
+  },
+  {
+    "id": "pki-certificates-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You run a private CA for internal mTLS between services. Which practices reduce the blast radius if an issuing intermediate's key is stolen? Select all that apply.",
+    "options": [
+      {
+        "text": "Put a Name Constraints extension on the intermediate limiting it to `.internal.example.com`",
+        "explanation": "Correct. Clients enforcing name constraints reject anything the stolen key signs outside that namespace, such as a public bank domain."
+      },
+      {
+        "text": "Issue workload certificates that expire within about a day and rotate them automatically",
+        "explanation": "Correct. Short lifetimes cap how long a stolen *leaf* key is useful, and make rotating to a new intermediate routine."
+      },
+      {
+        "text": "Keep the root key offline so it can sign a new intermediate and revoke the old one",
+        "explanation": "Correct. An intact root lets you replace the compromised intermediate without redistributing trust to every client."
+      },
+      {
+        "text": "Use 4096-bit RSA for the intermediate",
+        "explanation": "Key size does not help once the key itself is stolen; the attacker has the private key regardless of length."
+      },
+      {
+        "text": "Add the private CA's root to employees' browsers for convenience",
+        "explanation": "This *widens* the blast radius: now a stolen intermediate (without name constraints) can intercept employees' public web traffic."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each control, \"what can the thief do afterwards?\"\n\n1. Name constraints: the thief can only mint names under `.internal.example.com`. Contained.\n2. Short leaf lifetimes: rotation is automated, so moving all services to a new intermediate takes about a day.\n3. Offline root: you can still sign a replacement intermediate and publish revocation. Recoverable.\n4. Bigger keys: irrelevant to theft.\n5. Installing the root in browsers: expands what a stolen key can impersonate. Worse.",
+    "link": {
+      "title": "RFC 5280: Internet X.509 PKI Certificate and CRL Profile",
+      "url": "https://www.rfc-editor.org/rfc/rfc5280"
+    }
+  },
+  {
+    "id": "pki-certificates-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker briefly hijacks the BGP route to your web server's IP range and answers an HTTP-01 challenge for your domain from their own machine. Which defence most directly makes this attack fail at a well-run CA?",
+    "options": [
+      {
+        "text": "Multi-perspective validation: the CA checks the challenge from several networks, and a localised hijack does not fool all of them",
+        "explanation": "Correct. A route hijack usually affects only part of the internet. If the CA's vantage points disagree, issuance fails."
+      },
+      {
+        "text": "OCSP stapling",
+        "explanation": "Stapling concerns revocation status in the handshake; it plays no part in validating a new certificate request."
+      },
+      {
+        "text": "HSTS",
+        "explanation": "HSTS tells browsers to use HTTPS. It does nothing to stop a CA being fooled during validation."
+      },
+      {
+        "text": "Certificate pinning in browsers",
+        "explanation": "Browsers removed public key pinning (HPKP). It would also only reject the certificate after issuance, not prevent it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. HTTP-01 proves \"whoever answers port 80 for this name, from the CA's point of view\".\n2. A BGP hijack can make the attacker's server that answer for some networks.\n3. With a single vantage point, the CA sees the attacker and issues.\n4. With several vantage points on different networks (required by the Baseline Requirements since 2025), most still reach your real server, see no token, and the CA refuses.\n5. Add CAA records and CT monitoring so you can detect any certificate that does get through.",
+    "link": {
+      "title": "DNS Certification Authority Authorization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/DNS_Certification_Authority_Authorization"
+    }
+  }
+]

@@ -1,0 +1,310 @@
+[
+  {
+    "id": "mls-feature-stores-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is **training/serving skew**?",
+    "options": [
+      {
+        "text": "The model's accuracy on the training set being higher than on the test set",
+        "explanation": "Incorrect. That gap is the generalisation gap (overfitting), a property of the model and data split, not of two different feature pipelines."
+      },
+      {
+        "text": "The delay between training a model and deploying it",
+        "explanation": "Incorrect. Deployment lag can cause staleness, but skew is specifically about the two feature paths disagreeing."
+      },
+      {
+        "text": "Class imbalance in the training labels",
+        "explanation": "Incorrect. Imbalance is a property of the label distribution, unrelated to how features are produced online versus offline."
+      },
+      {
+        "text": "A difference between the feature values or distributions the model saw in training and those it receives when serving",
+        "explanation": "Correct. Skew means the serving inputs are produced differently from the training inputs, so the learned weights no longer fit what arrives."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Picture two pipelines that should be identical:\n\n```\nhistory -> f_train(x) -> train\nrequest -> f_serve(x) -> predict\n```\n\nSkew is any case where `f_train` and `f_serve` (or their input data) differ. The model was fitted to `f_train`'s outputs, so `f_serve`'s outputs are slightly foreign to it. The lesson's three causes are different code, different data/freshness, and time-travel leakage in the training join.",
+    "link": {
+      "title": "Rules of Machine Learning — Google",
+      "url": "https://developers.google.com/machine-learning/guides/rules-of-ml"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a feature store, what is the job of the **online store**?",
+    "options": [
+      {
+        "text": "Keep the full timestamped history of every feature for building training sets",
+        "explanation": "Incorrect. That is the offline store. Keeping full history in a millisecond key-value store would be very expensive and unnecessary for serving."
+      },
+      {
+        "text": "Serve the latest value of each feature per entity with low latency during live predictions",
+        "explanation": "Correct. The online store (often Redis, DynamoDB or similar) holds only current values keyed by entity, optimised for fast reads at request time."
+      },
+      {
+        "text": "Train models on streaming data",
+        "explanation": "Incorrect. Feature stores supply features; training happens elsewhere."
+      },
+      {
+        "text": "Store the model weights for deployment",
+        "explanation": "Incorrect. Model artefacts belong in a model registry, not a feature store."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Split by who reads and how:\n\n| Store | Reader | Needs |\n|---|---|---|\n| Offline | Training jobs | All history, big scans |\n| Online | Live API | Latest value, ms reads |\n\nMaterialisation copies fresh values from the offline (or stream) side into the online store so serving sees the same definitions training used.",
+    "link": {
+      "title": "Feast documentation",
+      "url": "https://docs.feast.dev/"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Training computes `days_since_last_order` in UTC; the serving API computes it in the server's local time zone. Which kind of skew is this?",
+    "options": [
+      {
+        "text": "Concept drift: the relationship between features and label changed",
+        "explanation": "Incorrect. Nothing about the world changed; the pipelines simply compute the feature differently."
+      },
+      {
+        "text": "Time-travel leakage",
+        "explanation": "Incorrect. Leakage is about using future information when building training rows; this is a mismatch in computation logic."
+      },
+      {
+        "text": "Code skew: two implementations of the same feature disagree",
+        "explanation": "Correct. The logic differs between the two paths, so the same raw data produces different feature values. One shared definition would prevent it."
+      },
+      {
+        "text": "Label shift",
+        "explanation": "Incorrect. Label shift is a change in the label distribution P(y), not in how a feature is computed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Same input data, same nominal feature.\n2. Different code paths: one uses UTC midnight, the other local midnight.\n3. Around day boundaries, values differ by one day for some users.\n4. That is code skew. The fix is one feature definition executed in both paths (a feature store, a shared library, or logging served features).",
+    "link": {
+      "title": "Data Validation for ML — Google Research",
+      "url": "https://research.google/pubs/data-validation-for-machine-learning/"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace a point-in-time join (`direction=\"backward\"`, tolerance 7 days).\n\nLabels:\n```\nuser ts\nu7   2026-05-10\n```\nFeature rows for u7:\n```\nts          spend_7d\n2026-05-01  40\n2026-05-08  55\n2026-05-12  90\n```\nWhat value of `spend_7d` is attached to the label?",
+    "options": [
+      {
+        "text": "40",
+        "explanation": "Incorrect. 1 May is at or before 10 May, but it is not the **latest** such row; 8 May is more recent."
+      },
+      {
+        "text": "90",
+        "explanation": "Incorrect. 12 May is after the label time. Using it is exactly the time-travel leakage point-in-time joins exist to prevent."
+      },
+      {
+        "text": "Missing (NaN)",
+        "explanation": "Incorrect. A valid row within the 7-day tolerance exists (8 May), so the value is not missing."
+      },
+      {
+        "text": "55",
+        "explanation": "Correct. Rows at or before 10 May are 1 May and 8 May; the latest is 8 May (2 days old, within tolerance), so 55."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Keep only feature rows with `ts <= 2026-05-10`: 1 May (40) and 8 May (55).\n2. Take the latest: 8 May, value 55.\n3. Check age: 10 May − 8 May = 2 days ≤ 7 days, so it is accepted.\n4. 12 May (90) is in the future relative to the label and is ignored.\n\nIf the tolerance were 1 day, 8 May would be too old and the result would be NaN.",
+    "link": {
+      "title": "Point-in-time joins — Feast docs",
+      "url": "https://docs.feast.dev/getting-started/concepts/point-in-time-joins"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A churn model built by joining each label to the **current** value of `orders_30d` reaches AUC 0.97 offline but about 0.70 live. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "The training join leaked future information: current `orders_30d` already reflects whether the user churned",
+        "explanation": "Correct. For users who churned, today's 30-day order count is near zero because they churned. At prediction time that information did not exist, so the offline score is fake."
+      },
+      {
+        "text": "The live traffic is noisier, so some drop is normal",
+        "explanation": "Incorrect. A drop from 0.97 to 0.70 is far too large to be noise; something systematic is wrong."
+      },
+      {
+        "text": "The model is underfitting live data",
+        "explanation": "Incorrect. Underfitting would also show weak offline performance."
+      },
+      {
+        "text": "AUC is not a valid metric for churn",
+        "explanation": "Incorrect. AUC is a reasonable ranking metric here; the problem is the training data, not the metric."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Label row: \"user X, prediction time 1 March, churned by 31 March\".\n2. Naive join: attach `orders_30d` as of **today** (say 1 May). For a churned user that is 0, precisely because they churned.\n3. The model learns `orders_30d == 0 ⇒ churn`, which is nearly perfect on this data.\n4. Live, at 1 March, the user still had recent orders, so the shortcut does not exist.\n\nFix: a point-in-time join using the feature value as of 1 March.",
+    "link": {
+      "title": "Leakage (machine learning) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Leakage_(machine_learning)"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are causes of training/serving skew? Select all that apply.",
+    "options": [
+      {
+        "text": "Missing values are filled with `0` in the online path but left as `NaN` (handled natively by the model) in training",
+        "explanation": "Correct. Inconsistent defaults change the feature's distribution; the model may treat 0 and missing very differently."
+      },
+      {
+        "text": "The online store is refreshed every 6 hours, but training uses exact values from the warehouse",
+        "explanation": "Correct. This is data skew from freshness: online values can be hours stale while training values are exact."
+      },
+      {
+        "text": "A streaming feature's historical backfill handles late events differently from the live stream job",
+        "explanation": "Correct. Window boundaries and late or out-of-order events often make backfilled values differ from what was served live."
+      },
+      {
+        "text": "The model uses more trees than the previous version",
+        "explanation": "Incorrect. Model capacity is a modelling choice; it does not make serving inputs differ from training inputs."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For each option ask: \"does the model receive different inputs online than it saw offline?\"\n\n1. Default 0 vs NaN: yes, different values.\n2. 6-hour-stale vs exact: yes, different values for any fast-moving feature.\n3. Backfill vs live stream: yes, the history used for training is not what was served.\n4. More trees: no, the inputs are the same; only the model changed.",
+    "link": {
+      "title": "TensorFlow Data Validation guide",
+      "url": "https://www.tensorflow.org/tfx/guide/tfdv"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In Feast, which call should a training job use to build a leakage-free training set from labelled events?",
+    "options": [
+      {
+        "text": "`get_online_features(entity_rows=...)`",
+        "explanation": "Incorrect. This returns the **latest** values from the online store, which for historical labels would leak the future."
+      },
+      {
+        "text": "`get_historical_features(entity_df=..., features=[...])`",
+        "explanation": "Correct. It performs a point-in-time join of features onto the entity dataframe using its `event_timestamp` column."
+      },
+      {
+        "text": "`materialize(...)`",
+        "explanation": "Incorrect. Materialisation copies values into the online store for serving; it does not build training data."
+      },
+      {
+        "text": "Reading the online store's Redis keys directly",
+        "explanation": "Incorrect. The online store only has current values, so this is the same leakage as using `get_online_features`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Match the call to the path:\n\n```\ntraining -> get_historical_features\n  (entity_df with event_timestamp,\n   point-in-time join, offline)\nserving  -> get_online_features\n  (latest values, online store)\nrefresh  -> materialize\n  (offline -> online)\n```\n\nTraining on historical labels needs as-of values, so `get_historical_features`.",
+    "link": {
+      "title": "Feature retrieval — Feast docs",
+      "url": "https://docs.feast.dev/getting-started/concepts/feature-retrieval"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Fraud features include `txn_count_10min`. Online it is computed by a stream job; training data is backfilled from a warehouse table keyed by **event time**. Events often arrive 3 to 5 minutes late. What skew results?",
+    "options": [
+      {
+        "text": "None, because both use the same event timestamps",
+        "explanation": "Incorrect. The backfill sees late events that were not yet available to the stream at decision time, so values differ."
+      },
+      {
+        "text": "The live value is always higher, because the stream double-counts",
+        "explanation": "Incorrect. Nothing in the scenario suggests duplication; the issue is late arrival making live counts lower, not higher."
+      },
+      {
+        "text": "The backfilled training value tends to be higher than what the live model saw, because it includes late events that had not arrived at decision time",
+        "explanation": "Correct. Event-time backfills count everything that eventually arrived; the live stream only counted what had arrived by then. Training sees fuller counts than serving."
+      },
+      {
+        "text": "The model will see identical distributions but in a different order",
+        "explanation": "Incorrect. Ordering is not the issue; the values themselves differ."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A card makes 6 transactions between 09:50 and 10:00. Two arrive late, at 10:03 and 10:04.\n2. At 10:00 the live stream has seen 4, so the model scored with `txn_count_10min = 4`.\n3. Next week, the backfill counts by event time over complete data: 6.\n4. Training learns thresholds on the 6-style values, serving supplies 4-style values. Fraud scores are systematically too low live.\n\nFixes: compute training features from what was **available** at decision time (processing-time awareness or logged features), or log and train on served values.",
+    "link": {
+      "title": "Point-in-time joins — Feast docs",
+      "url": "https://docs.feast.dev/getting-started/concepts/point-in-time-joins"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team considers switching from point-in-time backfills to **logging served features and training on the logs**. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It removes code skew, because training data is exactly what the serving path produced",
+        "explanation": "Correct. There is only one implementation in play: the one that served. Training inherits its exact values, quirks and all."
+      },
+      {
+        "text": "It removes time-travel leakage, because each logged value was by definition available at prediction time",
+        "explanation": "Correct. You cannot log a value that did not yet exist."
+      },
+      {
+        "text": "A newly invented feature can be trained on immediately with years of history",
+        "explanation": "Incorrect. Logged history only starts when you begin logging the new feature, so you must wait for data to accumulate (or backfill to experiment)."
+      },
+      {
+        "text": "It increases storage and requires joining logs with labels that may arrive later",
+        "explanation": "Correct. Every request's feature vector is stored, then joined to delayed labels using a request id."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "List what logging guarantees and what it costs:\n\n- Guarantees: training inputs == serving inputs (no code or data skew), no future values (no leakage).\n- Costs: storage for every feature vector, a label-join pipeline keyed by request id, and **no history for new features**.\n\nThat last cost is why many teams use backfills for exploration and switch to logs once a feature proves useful.",
+    "link": {
+      "title": "Rules of Machine Learning — Google",
+      "url": "https://developers.google.com/machine-learning/guides/rules-of-ml"
+    }
+  },
+  {
+    "id": "mls-feature-stores-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A startup has **one** model, retrained weekly and scored in a nightly batch job, with all features coming from the warehouse. An engineer proposes adopting a full feature store with an online store. What is the best assessment?",
+    "options": [
+      {
+        "text": "Probably overkill for now; one shared feature definition used for both training and batch scoring removes the skew risk, and a feature store pays off later with more models, teams or real-time features",
+        "explanation": "Correct. Batch training and batch scoring can run the same SQL or code. The value of a feature store grows with reuse, real-time serving and point-in-time complexity."
+      },
+      {
+        "text": "Essential: every ML system needs an online store",
+        "explanation": "Incorrect. A nightly batch job reads features in bulk from the warehouse; it has no millisecond lookup requirement."
+      },
+      {
+        "text": "Harmful: feature stores always add skew",
+        "explanation": "Incorrect. Done well, they reduce skew; the issue here is cost versus benefit, not harm."
+      },
+      {
+        "text": "Needed because nightly batch jobs cannot do point-in-time joins",
+        "explanation": "Incorrect. Warehouses can do as-of joins in SQL; a feature store is a convenience, not a requirement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. What problem does an online store solve? Low-latency latest-value lookups during live requests. This system has none.\n2. What about skew? Training and scoring both run in the warehouse; using the same feature code for both removes code skew.\n3. Point-in-time correctness for training can be done with an as-of join in SQL.\n4. So the cost (new infrastructure, materialisation jobs, ops) outweighs the benefit today. Revisit when a real-time model or several teams sharing features appear.",
+    "link": {
+      "title": "Feast documentation",
+      "url": "https://docs.feast.dev/"
+    }
+  }
+]

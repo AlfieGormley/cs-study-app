@@ -1,0 +1,378 @@
+[
+  {
+    "id": "fs-page-cache-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An on-call alert says a database host is \"out of memory\". You run `free -h`:\n\n```\n      total  used  free  cache  avail\nMem:   31Gi  6.2G  1.1G   24Gi   24Gi\n```\n\nWhat is the right reading?",
+    "options": [
+      {
+        "text": "The host is nearly out of memory: only 1.1 GiB is free",
+        "explanation": "This mistakes \"free\" for \"usable\". Cached file pages are counted as used but can be dropped instantly when a program needs memory."
+      },
+      {
+        "text": "The host is fine: about 24 GiB is available, because clean page cache can be reclaimed on demand",
+        "explanation": "Correct. \"available\" estimates free memory plus reclaimable cache, which is the number that tells you how much a new allocation could get."
+      },
+      {
+        "text": "Something is leaking 24 GiB, because the cache should be empty on an idle machine",
+        "explanation": "The kernel deliberately fills unused RAM with file data. Empty RAM does nothing useful; a full cache is normal, not a leak."
+      },
+      {
+        "text": "The host needs swap, because the cache can only be freed by writing it to swap",
+        "explanation": "Clean cached pages already have an up-to-date copy on disk, so they are simply discarded. Only anonymous memory (heap, stacks) goes to swap."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `used` (6.2 GiB) is memory programs actually hold.\n2. `cache` (24 GiB) is file data the kernel is keeping in otherwise idle RAM.\n3. Most of that cache is **clean**: its contents match the file on disk.\n4. A clean page can be dropped in microseconds without any I/O.\n5. So `available` ≈ free + reclaimable cache ≈ 1.1 + ~23 ≈ 24 GiB.\n\nThe alert is probably based on `free`, which is the wrong metric. Alert on `available` (or `MemAvailable` in `/proc/meminfo`) instead.",
+    "link": {
+      "title": "Page cache — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_cache"
+    }
+  },
+  {
+    "id": "fs-page-cache-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Python program does this and the machine loses power **five seconds** after `write` returns. No other code touches the file, and default `vm.dirty_*` settings are in effect.\n\n```python\nfd = os.open(\"log\", os.O_WRONLY |\n             os.O_APPEND)\nos.write(fd, b\"order 42\\n\")\n```\n\nWhat most likely happened to the line?",
+    "options": [
+      {
+        "text": "It is safe on disk, because `write` returned successfully",
+        "explanation": "This is the most common durability misconception. A successful buffered `write` only means the bytes were copied into the page cache."
+      },
+      {
+        "text": "It is safe, because the flusher thread wakes every 5 seconds and writes all dirty pages",
+        "explanation": "The flusher wakes every 5 s (`dirty_writeback_centisecs`), but it only writes pages older than the expiry time, about 30 s, unless memory pressure forces more."
+      },
+      {
+        "text": "It is half-written: the first 4 bytes reached disk",
+        "explanation": "Write-back works in whole pages, and nothing pushed this page out yet. There's no partial write from a single tiny `write` here."
+      },
+      {
+        "text": "It was most likely lost: it was still a dirty page in RAM, and default write-back waits around 30 seconds",
+        "explanation": "Correct. With `dirty_expire_centisecs` at 3000, a page normally isn't written back until it has been dirty for about 30 s. Only `fsync` (or `O_SYNC`/`O_DSYNC`) would have forced it out."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Follow the write:\n\n1. `write` copies 9 bytes into the cached page for the end of `log`.\n2. The page is marked **dirty**, and `write` returns.\n3. At t = 5 s the flusher wakes, but it only writes pages dirty for more than `dirty_expire_centisecs` = 3000 cs = 30 s.\n4. Our page is 5 s old, so it stays in RAM.\n5. Power fails, RAM is wiped, the line is gone.\n\nTo make it durable you would call `os.fsync(fd)` after the write, and wait for it to return.",
+    "link": {
+      "title": "Documentation for /proc/sys/vm — kernel.org",
+      "url": "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `grep -r TODO src/` on a 2 GB source tree. The first run takes 40 s; running it again straight away takes 1.5 s. What explains the difference?",
+    "options": [
+      {
+        "text": "grep builds an index on the first run and reuses it",
+        "explanation": "grep keeps no state between runs. Each invocation reads the files from scratch."
+      },
+      {
+        "text": "The SSD's own cache warmed up, so it now answers faster",
+        "explanation": "A drive's DRAM cache is small (often a few GiB at most and mostly used for mapping tables), and even a hit still costs a full I/O round trip. A 25× speed-up across 2 GB points to RAM in the host."
+      },
+      {
+        "text": "The first run pulled the files into the page cache, so the second run's reads were memory copies with no device I/O",
+        "explanation": "Correct. Every `read` of a cached page is served from RAM, which is orders of magnitude faster than the device."
+      },
+      {
+        "text": "The CPU's L3 cache now holds the files",
+        "explanation": "L3 caches are tens of megabytes, far too small to hold 2 GB."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Run 1: each `read` misses the page cache, so the kernel reads blocks from the device (plus read-ahead). Time is dominated by I/O.\n2. The pages stay cached afterwards, because the RAM is otherwise idle.\n3. Run 2: each `read` finds the page by (inode, offset) and just copies it. Time is dominated by grep's CPU work.\n\nWhen you benchmark, say whether it was **cold** or **warm** cache. To test cold on a test box: `sync; echo 3 > /proc/sys/vm/drop_caches`.",
+    "link": {
+      "title": "Page cache — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_cache"
+    }
+  },
+  {
+    "id": "fs-page-cache-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server has about **64 GiB** of available memory and default `dirty_ratio` = 20. A job copies a 100 GiB archive to a USB disk that sustains **30 MB/s**. Once the copy has filled the dirty limit, roughly how long would `sync` or `umount` have to wait for that backlog of dirty pages alone to drain?",
+    "options": [
+      {
+        "text": "About 7–8 minutes",
+        "explanation": "Correct. 20% of 64 GiB is about 12.8 GiB ≈ 13.7 GB, and 13.7 GB ÷ 30 MB/s ≈ 460 s ≈ 7.6 minutes."
+      },
+      {
+        "text": "About 2 seconds",
+        "explanation": "This divides 64 GiB by something like 30 GB/s: an error of a thousand in the units."
+      },
+      {
+        "text": "About 35 minutes",
+        "explanation": "This uses all 64 GiB as dirty data. Writers are throttled at `dirty_ratio`, so only around 20% of it can be dirty."
+      },
+      {
+        "text": "About 30 seconds, because dirty pages expire after 30 s",
+        "explanation": "Expiry decides when pages *start* being written back. It can't make a 30 MB/s disk drain gigabytes any faster."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Dirty limit: 20% × 64 GiB = 12.8 GiB.\n2. Convert to bytes: 12.8 × 1.074 ≈ 13.7 GB.\n3. Drain time at 30 MB/s:\n\n```\n13.7e9 / 30e6 ≈ 458 s ≈ 7.6 min\n```\n\n4. Meanwhile `cp` looked fast at first (it was writing to RAM), then slowed to 30 MB/s once it hit the limit and was throttled.\n\nThis is why servers set `dirty_bytes` / `dirty_background_bytes` to fixed, smaller values: less data at risk, and shorter stalls.",
+    "link": {
+      "title": "Documentation for /proc/sys/vm — kernel.org",
+      "url": "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly backup tool reads a 2 TB data directory once, sequentially, and streams it to object storage. During the backup, the web application on the same host gets much slower, even though CPU and disk bandwidth have headroom. What is the most likely cause and fix?",
+    "options": [
+      {
+        "text": "Read-ahead is too small; raise `read_ahead_kb` for the backup",
+        "explanation": "A bigger read-ahead would pull even more single-use data into the cache, making the eviction problem slightly worse, not better."
+      },
+      {
+        "text": "The backup holds a lock on the files, blocking the application",
+        "explanation": "Ordinary reads don't take locks that block other readers or writers on Linux."
+      },
+      {
+        "text": "The backup's reads are filling the page cache and evicting the application's hot pages; the backup should use `posix_fadvise(..., POSIX_FADV_DONTNEED)` on what it has read",
+        "explanation": "Correct. Data read once pushes out data used constantly. Dropping the pages behind it (or using `O_DIRECT`) keeps the backup from polluting the cache."
+      },
+      {
+        "text": "The backup's dirty pages are throttling the application's writes",
+        "explanation": "The backup only *reads* the data directory, so it creates no dirty pages there."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The symptom: slow app, idle CPU, disk not saturated.\n2. The app's working set used to live in the page cache. Now its reads miss.\n3. Why? The backup reads 2 TB through the cache. Each new page needs a free page, and reclaim takes older pages, including the app's.\n4. Those 2 TB will never be read again, so caching them is pure waste.\n\nFix:\n\n```\nread chunk at off, len\nposix_fadvise(fd, off, len,\n    POSIX_FADV_DONTNEED)\n```\n\nNewer kernels' MGLRU and the inactive list soften this, but explicit hints are the reliable fix.",
+    "link": {
+      "title": "posix_fadvise(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/posix_fadvise.2.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about opening a file with `O_DIRECT` on Linux are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Buffer address, offset and length usually have to be aligned to the device's logical block size",
+        "explanation": "True. Misaligned direct I/O typically fails with `EINVAL`. The exact requirement depends on the file system and device."
+      },
+      {
+        "text": "It lets a database with its own buffer pool avoid caching the same page twice",
+        "explanation": "True. That's the main reason InnoDB is commonly run with `innodb_flush_method=O_DIRECT`: it avoids double buffering."
+      },
+      {
+        "text": "Once a direct `write` returns, the data is guaranteed to survive a power cut",
+        "explanation": "False. The data may sit in the device's volatile write cache, and metadata such as file size isn't necessarily flushed. You still need `fsync` or `O_DSYNC`."
+      },
+      {
+        "text": "Many small direct reads are usually slower than the same reads through the page cache",
+        "explanation": "True. Direct I/O gets no read-ahead and no caching, so each small read is a device round trip. Applications must batch I/O themselves."
+      },
+      {
+        "text": "It makes the kernel compress the data before sending it to disk",
+        "explanation": "False. `O_DIRECT` controls caching only; it doesn't transform data."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each claim against what `O_DIRECT` actually changes: the **path** of the data (user buffer ↔ device, no page cache).\n\n1. Alignment: the device does DMA straight into your buffer, so it must be block-aligned. True.\n2. Double buffering: the DB already caches pages; skipping the kernel copy saves RAM. True.\n3. Durability: skipping the page cache ≠ flushing the device cache or metadata. False.\n4. Small I/O: no read-ahead, no merging → more round trips. True.\n5. Compression: unrelated. False.",
+    "link": {
+      "title": "open(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/open.2.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A static file server sends a 1 GiB file with this loop:\n\n```python\nwhile chunk := os.read(fd, 65536):\n    sock.sendall(chunk)\n```\n\nAssume every `sendall` is one `send` syscall. Roughly how many system calls does it make, and how many bytes does the **CPU** copy?",
+    "options": [
+      {
+        "text": "About 16,000 syscalls and 1 GiB copied",
+        "explanation": "16,384 is the number of chunks, but each chunk needs a `read` *and* a `send`, and each of those makes a CPU copy."
+      },
+      {
+        "text": "2 syscalls and 0 bytes copied",
+        "explanation": "That describes roughly what a single large `sendfile` call can achieve with scatter-gather DMA, not this loop."
+      },
+      {
+        "text": "About 32,000 syscalls and 4 GiB copied",
+        "explanation": "There are four copies in total, but two of them (disk → cache, socket buffer → NIC) are DMA by the devices, not by the CPU."
+      },
+      {
+        "text": "About 32,000 syscalls and 2 GiB copied",
+        "explanation": "Correct. 1 GiB ÷ 64 KiB = 16,384 chunks; each costs a `read` and a `send` (≈ 32,769 including the final empty `read`), and each byte is copied by the CPU twice: cache → user, user → socket."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Chunks: 2^30 / 2^16 = 2^14 = 16,384.\n2. Syscalls: 16,384 reads + 16,384 sends + 1 final read returning `b\"\"` ≈ 32,769.\n3. Copies per byte:\n\n```\ndisk -> cache      DMA\ncache -> user      CPU\nuser -> socket buf CPU\nsocket buf -> NIC  DMA\n```\n\n4. CPU copies: 2 × 1 GiB = 2 GiB.\n\nWith `os.sendfile` the data never visits user space: far fewer syscalls, and with scatter-gather NICs no CPU copy at all.",
+    "link": {
+      "title": "sendfile(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/sendfile.2.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Process A has a 1 GiB log file mapped with `mmap` and is scanning it. Process B truncates the file to 0 bytes. What happens when A next touches a page beyond the new end of file?",
+    "options": [
+      {
+        "text": "A reads zeros, as with a sparse file",
+        "explanation": "Reading a hole *within* the file size returns zeros. Pages wholly beyond the end of file no longer correspond to any file data at all."
+      },
+      {
+        "text": "A receives `SIGBUS`, which kills it unless it has a handler",
+        "explanation": "Correct. Accessing a mapped page that lies past the end of the file raises `SIGBUS`. This is one reason `mmap` is awkward for robust software."
+      },
+      {
+        "text": "A still sees the old data, because the mapping is a private snapshot",
+        "explanation": "A shared or private file mapping is backed by the page cache, not a snapshot. Truncation removes those pages."
+      },
+      {
+        "text": "The `truncate` call fails with `EBUSY` while the file is mapped",
+        "explanation": "Linux allows truncating a mapped file. It doesn't block B; it's A that suffers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With `read`, problems come back as return values: a short read, or `0` at end of file.\n2. With `mmap`, there is no call to return a value. Access is a plain memory load.\n3. After truncation, A's virtual pages point at file offsets that no longer exist.\n4. The page fault handler can't supply a page, so the kernel sends `SIGBUS`.\n\nThe same happens on an I/O error under a mapping. Handling it means signal handlers and `siglongjmp`, which few programs do correctly.",
+    "link": {
+      "title": "mmap(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/mmap.2.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 64 GiB MySQL server runs InnoDB with a 48 GiB buffer pool and `innodb_flush_method=fsync` (buffered I/O). Under load, the kernel starts swapping out parts of the buffer pool, and latency spikes. What is the best explanation and fix?",
+    "options": [
+      {
+        "text": "Every page InnoDB reads is also cached by the kernel, so the same data competes for RAM twice; switch to `O_DIRECT` so InnoDB's pool is the only cache",
+        "explanation": "Correct. With buffered I/O the page cache fills with copies of pages already in the buffer pool (double buffering), squeezing memory until anonymous pages are swapped. `O_DIRECT` removes the duplicate."
+      },
+      {
+        "text": "The buffer pool is too small; raise it to 60 GiB",
+        "explanation": "This makes memory pressure worse. The OS, connections and the page cache already need more than the remaining 16 GiB."
+      },
+      {
+        "text": "Turn off read-ahead on the device",
+        "explanation": "Read-ahead affects how much is pulled into the page cache, but the root cause is caching every page twice; this would only trim it slightly."
+      },
+      {
+        "text": "Lower `dirty_ratio` to 5",
+        "explanation": "That reduces dirty data and write stalls, but the pressure here comes from clean duplicate pages, not dirty ones."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. InnoDB caches 16 KiB pages in its 48 GiB buffer pool (anonymous memory).\n2. With buffered I/O, each page read also lands in the kernel's page cache.\n3. The kernel sees a hot page cache and a large anonymous region, and under pressure may swap part of the pool out.\n4. Now a buffer pool hit can become a swap-in: a disk read on the hot path.\n\nFix: `innodb_flush_method=O_DIRECT`. Then:\n\n```\nbuffer pool  48 GiB (the only cache)\nkernel cache small (logs, binaries)\n```\n\nPostgreSQL makes the opposite choice: buffered I/O, with `shared_buffers` around 25% of RAM, so the page cache does much of the caching.",
+    "link": {
+      "title": "open(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/open.2.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team is building a new storage engine and proposes to `mmap` the whole data file and let the kernel handle caching. Which are genuine problems with this design? Select all that apply.",
+    "options": [
+      {
+        "text": "The kernel may write a modified page to disk at any time, before the matching write-ahead log record is durable",
+        "explanation": "Genuine. The engine can't stop write-back of a dirty mapped page, so it can't enforce \"log first, then data\" without extra tricks such as keeping a separate copy."
+      },
+      {
+        "text": "I/O errors surface as `SIGBUS` on a memory access rather than as an error code",
+        "explanation": "Genuine. There is no return value to check, so error handling turns into signal handling."
+      },
+      {
+        "text": "Evicting and unmapping pages on a many-core machine needs TLB shootdowns, which limit scalability",
+        "explanation": "Genuine. The CIDR 2022 paper measured this as a major bottleneck on fast NVMe drives."
+      },
+      {
+        "text": "A mapped file cannot be read by more than one process at once",
+        "explanation": "Not a problem. Shared mappings of the same file share the same page cache pages; that's exactly how shared libraries work."
+      },
+      {
+        "text": "Reading a mapped page that is already in memory always needs a system call",
+        "explanation": "Not a problem, and backwards: once a page is mapped, access is a plain memory load with no syscall. That's mmap's appeal."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each option, \"does the engine lose control or correctness?\"\n\n1. Write-back timing: the kernel owns it. WAL ordering is at risk. Problem.\n2. Errors: `SIGBUS`, not `EIO`. Problem.\n3. TLB shootdowns: when a page is evicted, every CPU that might have the mapping cached must flush it, via inter-processor interrupts. Problem at scale.\n4. Sharing: works fine. Not a problem.\n5. Syscalls on hits: none needed. Not a problem.\n\nThese are the reasons the CIDR 2022 paper recommends against mmap for a DBMS.",
+    "link": {
+      "title": "Are You Sure You Want to Use MMAP in Your DBMS? — CIDR 2022",
+      "url": "https://db.cs.cmu.edu/mmap-cidr2022/"
+    }
+  },
+  {
+    "id": "fs-page-cache-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A video CDN node serves large files over HTTPS with nginx and `sendfile on;`. Profiling shows the CPU busy copying and encrypting data in user space, as if `sendfile` weren't helping. Why, and what restores the benefit?",
+    "options": [
+      {
+        "text": "`sendfile` only works on UDP sockets; switch to QUIC",
+        "explanation": "`sendfile` works with TCP sockets; that's its main use. QUIC encrypts in user space too, so it wouldn't help."
+      },
+      {
+        "text": "The page cache is disabled for large files",
+        "explanation": "There is no size limit that turns off the page cache for normal files."
+      },
+      {
+        "text": "TLS encryption happens in user space, so the bytes must pass through the process anyway; kernel TLS (kTLS) lets the kernel encrypt during `sendfile`",
+        "explanation": "Correct. `sendfile` sends file bytes unchanged. With user-space TLS, nginx must read, encrypt and write, so the zero-copy path is lost. kTLS moves the record encryption into the kernel (or the NIC)."
+      },
+      {
+        "text": "`sendfile` needs `O_DIRECT` on the source file",
+        "explanation": "`sendfile` reads from the page cache; it doesn't need or benefit from `O_DIRECT`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Zero-copy works because the kernel sends the page cache bytes **as they are**.\n2. HTTPS needs each TLS record encrypted. With OpenSSL in user space, the plaintext must be read into the process, encrypted, and written to the socket.\n3. That is the full read/write path again, plus encryption.\n4. With kTLS, after the handshake the session keys are handed to the kernel. `sendfile` can then encrypt in the kernel (or offload to the NIC).\n\nPlain-HTTP static serving gets zero-copy for free; HTTPS needs kTLS to keep it.",
+    "link": {
+      "title": "Zero-copy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Zero-copy"
+    }
+  },
+  {
+    "id": "fs-page-cache-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A write-heavy log ingestion server has **256 GiB** of RAM. Every so often, write latency jumps from milliseconds to several seconds, then recovers. `/proc/meminfo` shows `Dirty` climbing to tens of gigabytes before each spike. Which change best addresses it?",
+    "options": [
+      {
+        "text": "Raise `dirty_ratio` to 60 so writers are never throttled",
+        "explanation": "This lets even more dirty data build up, making the eventual flush and stall longer."
+      },
+      {
+        "text": "Lower `dirty_writeback_centisecs` to 1 so the flusher wakes every 10 ms",
+        "explanation": "Waking the flusher more often doesn't change how much it may let accumulate, and adds overhead. The thresholds are the problem."
+      },
+      {
+        "text": "Mount the file system with `noatime`",
+        "explanation": "`noatime` removes metadata writes on reads. Helpful in general, but irrelevant to tens of gigabytes of dirty data piling up."
+      },
+      {
+        "text": "Set `dirty_background_bytes` and `dirty_bytes` to fixed, modest values (for example a few hundred MiB and a few GiB) so write-back starts early and runs steadily",
+        "explanation": "Correct. Percentages of 256 GiB allow 25–50 GiB of dirty data. Byte limits sized to the device's real throughput keep write-back continuous and the throttling short."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Default thresholds are percentages: background at 10%, throttle at 20% of available memory.\n2. On 256 GiB that's ~25 GiB before background write-back even starts, and ~50 GiB before writers block.\n3. When write-back finally kicks in, the device has a huge backlog, and when writers hit the limit they stall for as long as it takes to catch up.\n4. Fixed byte limits scale with the **disk's speed**, not RAM size. Say the disk writes 1 GB/s: a 2 GiB `dirty_bytes` cap bounds the backlog to about 2 s of work.\n\nNote: setting `dirty_bytes` makes the kernel ignore `dirty_ratio`; the two are alternatives.",
+    "link": {
+      "title": "Documentation for /proc/sys/vm — kernel.org",
+      "url": "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+    }
+  }
+]

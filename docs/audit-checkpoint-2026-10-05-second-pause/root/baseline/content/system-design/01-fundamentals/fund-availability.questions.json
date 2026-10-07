@@ -1,0 +1,387 @@
+[
+  {
+    "id": "fund-availability-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your SLO is **99.9%** availability over a 30-day month. Roughly how much downtime does that allow?",
+    "options": [
+      {
+        "text": "About 4.3 minutes",
+        "explanation": "Incorrect. That's the budget for 99.99% (four nines). Each extra nine is a 10× reduction, so 99.9% allows ten times more."
+      },
+      {
+        "text": "About 43 minutes",
+        "explanation": "Correct. 0.1% of 30 days = 0.001 × 43,200 min = 43.2 minutes."
+      },
+      {
+        "text": "About 7.2 hours",
+        "explanation": "Incorrect. That's the budget for 99% (two nines): 1% of 720 hours. You've dropped a nine."
+      },
+      {
+        "text": "About 8.8 hours",
+        "explanation": "Incorrect. 8.77 hours is the allowance for 99.9% over a whole **year**, not a month."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nmins in 30 days = 30 x 24 x 60\n                = 43,200\nunavailability  = 1 - 0.999 = 0.001\ndowntime = 0.001 x 43,200\n         = 43.2 min\n```\n\nQuick mental shortcut: 99.9% ≈ 43 min/month, and each additional nine divides by 10 (99.99% ≈ 4.3 min, 99.999% ≈ 26 s).",
+    "link": {
+      "title": "Availability table (Google SRE book)",
+      "url": "https://sre.google/sre-book/availability-table/"
+    }
+  },
+  {
+    "id": "fund-availability-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A request passes through a load balancer (99.99%), an app server (99.9%) and a database (99.9%), all required, failing independently. What's the end-to-end availability?",
+    "options": [
+      {
+        "text": "About 99.79%",
+        "explanation": "Correct. 0.9999 × 0.999 × 0.999 ≈ 0.9979. Unavailabilities roughly add: 0.01% + 0.1% + 0.1% = 0.21%."
+      },
+      {
+        "text": "99.9%, the weakest component",
+        "explanation": "Incorrect. This is the upper bound, not the answer. Each additional component in series has its own failures, which add up, so the total is lower than the weakest link."
+      },
+      {
+        "text": "99.99%, the best component",
+        "explanation": "Incorrect. In series, the system needs every component up. It can't be more available than its weakest component, let alone its best."
+      },
+      {
+        "text": "About 99.9999%",
+        "explanation": "Incorrect. That's the kind of number you'd get for components in *parallel* (redundancy). These are in series: all must work."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Series formula: multiply.\n\n```\nA = 0.9999 x 0.999 x 0.999\n  = 0.9989001 x 0.999\n  = 0.99790\n  ≈ 99.79%\n```\n\nShortcut for high availabilities: add the unavailabilities.\n\n```\n0.0001 + 0.001 + 0.001\n  = 0.0021 -> 99.79%\n```\n\nThat's about 1.5 hours a month of downtime, roughly double the ~44 minutes either 99.9% component allows on its own.",
+    "link": {
+      "title": "High availability (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/High_availability"
+    }
+  },
+  {
+    "id": "fund-availability-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run three independent app servers behind a load balancer; each is 98% available, and one is enough to serve the traffic. Ignoring the load balancer, what's the availability of the app tier?",
+    "options": [
+      {
+        "text": "94.1%",
+        "explanation": "Incorrect. 0.98³ = 0.941 is the *series* formula, as if all three had to be up. With redundancy only one needs to be up."
+      },
+      {
+        "text": "98%",
+        "explanation": "Incorrect. This ignores redundancy entirely. Extra replicas that can each serve traffic raise availability above a single server's."
+      },
+      {
+        "text": "99.96%",
+        "explanation": "Incorrect. That's 1 − 0.02², the result for **two** servers. With three, you cube the failure probability."
+      },
+      {
+        "text": "99.9992%",
+        "explanation": "Correct. The tier fails only if all three are down: 0.02³ = 0.000008, so A = 1 − 0.000008 = 99.9992%."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Parallel formula: the system fails only when **all** fail.\n\n```\nP(one down)   = 1 - 0.98 = 0.02\nP(all 3 down) = 0.02^3   = 0.000008\nA             = 1 - 0.000008 = 0.999992\n```\n\nSo 99.9992%, from servers that are individually only 98%.\n\nCaveat: this assumes failures are independent. If all three share a rack, an AZ, or a bad deploy, the real figure is much lower. That's why replicas are spread across availability zones and deploys are staged.",
+    "link": {
+      "title": "Availability and Beyond (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/availability-and-beyond-improving-resilience/availability-and-beyond-improving-resilience.html"
+    }
+  },
+  {
+    "id": "fund-availability-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A database fails on average every 30 days and takes 2 hours to recover manually. The team automates failover, cutting recovery to 6 minutes. Approximately how does availability change?",
+    "options": [
+      {
+        "text": "No change, because failures still happen just as often",
+        "explanation": "Incorrect. Availability depends on both MTBF and MTTR. Failure frequency is unchanged, but each failure costs far less time."
+      },
+      {
+        "text": "From ~99.72% to ~99.75%",
+        "explanation": "Incorrect. This underestimates the impact. Downtime is proportional to MTTR when MTBF is fixed, so cutting MTTR 20× cuts downtime ~20×."
+      },
+      {
+        "text": "From ~99.72% to ~99.986%",
+        "explanation": "Correct. A = MTBF/(MTBF+MTTR). Before: 720/(720+2) ≈ 99.72%. After: 720/(720+0.1) ≈ 99.986%. A 20× reduction in MTTR gives roughly a 20× reduction in downtime."
+      },
+      {
+        "text": "From ~93% to ~99%",
+        "explanation": "Incorrect. 2 hours out of 720 is under 0.3% downtime, so the starting point is already well above 99%."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nMTBF = 30 days = 720 h\n\nBefore: MTTR = 2 h\nA = 720 / 722 = 0.99723 -> 99.72%\n\nAfter: MTTR = 6 min = 0.1 h\nA = 720 / 720.1 = 0.999861 -> 99.986%\n```\n\nDowntime per month falls from 2 h to 6 min. Making failures 20× rarer would give the same result, but that's usually far harder than automating recovery. This is why MTTR (detection, failover, rollback) is often the best lever.",
+    "link": {
+      "title": "Mean time between failures (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Mean_time_between_failures"
+    }
+  },
+  {
+    "id": "fund-availability-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are likely to make real-world availability **lower** than the parallel-redundancy formula predicts? Select all that apply.",
+    "options": [
+      {
+        "text": "All replicas run in the same rack on the same top-of-rack switch",
+        "explanation": "Correct. A switch or power failure takes out all replicas together: a correlated failure the formula (which assumes independence) doesn't model."
+      },
+      {
+        "text": "A config change is pushed to all replicas simultaneously",
+        "explanation": "Correct. A bad config is a common-mode failure that breaks every replica at once, so redundancy provides no protection. Staged rollouts mitigate this."
+      },
+      {
+        "text": "Failover takes 3 minutes to detect a failure and promote a standby",
+        "explanation": "Correct. The formula assumes switching is instant. Three minutes of failover per incident is real downtime."
+      },
+      {
+        "text": "Replicas are spread across three availability zones",
+        "explanation": "Incorrect. This *reduces* correlation by putting replicas in separate failure domains, bringing reality closer to the formula's prediction."
+      },
+      {
+        "text": "All replicas share an identical software bug triggered by a specific date",
+        "explanation": "Correct. Identical software fails identically. Leap-second and date-rollover bugs have taken down whole fleets at once."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "The parallel formula `1 − ∏(1 − Ai)` assumes:\n\n1. Failures are **independent**.\n2. Failover is **instant and always works**.\n\nCheck each option against those assumptions:\n\n| Option | Violates |\n|---|---|\n| Same rack | Independence |\n| Global config push | Independence |\n| 3-min failover | Instant failover |\n| 3 AZs | Neither (it helps) |\n| Shared date bug | Independence |\n\nExample: two 99% replicas → formula says 99.99%. If 0.5% of the time a shared cause takes both down, real A ≈ 1 − (0.0001 + 0.005) ≈ 99.49%, barely better than one server.",
+    "link": {
+      "title": "Embracing Risk (Google SRE book)",
+      "url": "https://sre.google/sre-book/embracing-risk/"
+    }
+  },
+  {
+    "id": "fund-availability-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your checkout service must hit 99.95%. It calls 6 downstream services synchronously, each 99.9% available, plus its own code at 99.95%. What's the best approach?",
+    "options": [
+      {
+        "text": "Take non-essential dependencies off the critical path (async or graceful degradation) and add redundancy to the essential ones",
+        "explanation": "Correct. Reducing the number of things that must *all* work raises the series ceiling. E.g. recommendations and loyalty points can fail gracefully; inventory and payment remain required and get redundancy or retries to a second provider."
+      },
+      {
+        "text": "Ask every dependency to raise its availability to 99.95%",
+        "explanation": "Incorrect on its own. Even at 99.95% each, 0.9995⁷ ≈ 99.65%. Worse, the service's own code is already at 99.95%, so with dependencies in series there is no budget left for them at all: the target can't be met by improving dependencies alone."
+      },
+      {
+        "text": "It's fine: the weakest dependency is 99.9%, close to the target",
+        "explanation": "Incorrect. Series availabilities multiply. 0.999⁶ × 0.9995 ≈ 99.35%, i.e. about 4.7 hours of downtime a month, nowhere near 99.95% (22 minutes)."
+      },
+      {
+        "text": "Add retries to every call; this makes each dependency 100% available",
+        "explanation": "Incorrect. Retries help with transient errors but not with a dependency that's down for minutes, and aggressive retries can amplify an outage (retry storms)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Current state:**\n```\nA = 0.999^6 x 0.9995\n  = 0.99401 x 0.9995\n  ≈ 0.99352  (99.35%)\n```\n\n**Option: make 4 of 6 dependencies non-blocking.** Now only 2 are in series:\n```\nA = 0.999^2 x 0.9995\n  ≈ 0.99750  (99.75%)\n```\n\n**Then add redundancy to the 2 critical ones** (e.g. two independent payment providers at 99.9% each):\n```\nparallel = 1 - 0.001^2 = 0.999999\nA = 0.999999^2 x 0.9995\n  ≈ 0.99950 (99.9498%)\n```\n\nThat's essentially on target, and the service's own code is now the limiting factor. To get real margin, the checkout service itself must also run redundantly (several instances across zones) so its own 99.95% rises.",
+    "link": {
+      "title": "Availability and Beyond (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/availability-and-beyond-improving-resilience/availability-and-beyond-improving-resilience.html"
+    }
+  },
+  {
+    "id": "fund-availability-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An object store advertises 99.999999999% durability and a 99.9% availability SLA. A product manager asks: \"So we'll basically never be unable to read a file?\" What's the accurate answer?",
+    "options": [
+      {
+        "text": "Yes; eleven nines means effectively always readable",
+        "explanation": "Incorrect. Durability is about data not being *lost*; it says nothing about whether you can reach the data at a given moment."
+      },
+      {
+        "text": "Yes, as long as you enable versioning",
+        "explanation": "Incorrect. Versioning protects against accidental overwrites and deletes, not against the service being unreachable."
+      },
+      {
+        "text": "No; eleven nines durability means about 1 in 10¹¹ reads will fail",
+        "explanation": "Incorrect. Durability is measured per object per year (probability of loss), not per read. Failed reads are an availability matter."
+      },
+      {
+        "text": "No; durability means the data won't be lost, but availability allows ~43 minutes a month when reads may fail",
+        "explanation": "Correct. The object can be safely stored on many disks yet temporarily unreachable due to network, control-plane or regional problems. The 99.9% SLA is the relevant number for 'can I read it right now?'"
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Separate the two properties:\n\n| Property | Question it answers |\n|---|---|\n| Durability | Will my data still exist? |\n| Availability | Can I access it right now? |\n\n**Durability 99.999999999%:** storing 10 million objects, you'd expect to lose one object every ~10,000 years.\n\n**Availability 99.9%:** up to 0.001 × 43,200 ≈ 43 min/month of failed or slow requests is within SLA.\n\nIf the product requires reads to be highly available, design for it: cache hot objects, replicate to a second region, or serve via a CDN.",
+    "link": {
+      "title": "High availability (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/High_availability"
+    }
+  },
+  {
+    "id": "fund-availability-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API serves a steady 1,000 req/s and has a **request-based** SLO of 99.9% over 30 days. An incident causes 20% of requests to fail for 2 hours. How much of the month's error budget has it used?",
+    "options": [
+      {
+        "text": "About 278%: 2 hours is far more than the 43-minute budget",
+        "explanation": "Incorrect. That's the time-based view, which treats any degraded minute as fully down. The SLO is request-based, and only 20% of requests failed."
+      },
+      {
+        "text": "About 56%",
+        "explanation": "Correct. Budget = 0.1% of 2.592 billion requests ≈ 2.59 million. Failed = 20% × 7.2 million = 1.44 million, which is about 56% of the budget."
+      },
+      {
+        "text": "About 20%",
+        "explanation": "Incorrect. 20% is the failure rate during the incident, not the share of the monthly budget consumed."
+      },
+      {
+        "text": "About 5.6%",
+        "explanation": "Incorrect. This is off by a factor of 10: check the budget is 0.1% (0.001) of monthly requests, not 1%."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nmonthly reqs = 1,000 x 86,400 x 30\n             = 2.592 billion\nbudget = 0.001 x 2.592e9\n       = 2.592 million\nincident reqs = 1,000 x 7,200\n              = 7.2 million\nfailed = 0.2 x 7.2e6 = 1.44 million\nused   = 1.44 / 2.592 ≈ 56%\n```\n\nThe team can still ship this month, but cautiously: another incident like this exhausts the budget. Request-based SLOs give partial outages partial weight, which is why Google SRE prefers them.",
+    "link": {
+      "title": "Error budget policy (Google SRE workbook)",
+      "url": "https://sre.google/workbook/error-budget-policy/"
+    }
+  },
+  {
+    "id": "fund-availability-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You have three app servers, each 99% available and failing independently. At peak, **any two** together can carry the load, but one alone cannot. What is the tier's availability at peak?",
+    "options": [
+      {
+        "text": "About 99.9999%, because only one server needs to be up",
+        "explanation": "Incorrect. That's the parallel formula, which assumes one survivor can carry everything. Here one server alone is overloaded at peak."
+      },
+      {
+        "text": "About 97.0%, because all three must be up",
+        "explanation": "Incorrect. 0.99³ ≈ 97.03% is the probability all three are up, but the tier survives losing one."
+      },
+      {
+        "text": "About 99.97%",
+        "explanation": "Correct. The tier is up when at least two are up: P(all three) + P(exactly two) = 0.970299 + 0.029403 = 0.999702."
+      },
+      {
+        "text": "About 99.99%, the same as two servers in parallel",
+        "explanation": "Incorrect. Two-in-parallel assumes either one can carry the load alone. This is a 2-of-3 system, a different calculation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count the states where at least 2 of 3 are up.\n\n```\nall 3 up:  0.99^3 = 0.970299\nexactly 2: 3 x 0.99^2 x 0.01\n         = 0.029403\nA = 0.970299 + 0.029403\n  = 0.999702 (≈ 99.97%)\n```\n\nThe factor 3 is the number of ways to choose which server is down. Lesson: redundancy only counts if the survivors have the capacity. This is why capacity planning is N+1: size the fleet so it still copes with one server or one zone gone.",
+    "link": {
+      "title": "N+1 redundancy (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/N%2B1_redundancy"
+    }
+  },
+  {
+    "id": "fund-availability-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about SLIs, SLOs, SLAs and error budgets are **true**? Select all that apply.",
+    "options": [
+      {
+        "text": "An SLA is normally set looser than the internal SLO for the same service",
+        "explanation": "Correct. The gap means you breach your own objective, and react, before you owe customers credits."
+      },
+      {
+        "text": "When the error budget is exhausted, a common policy is to pause risky releases and focus on reliability",
+        "explanation": "Correct. This is the core of an error-budget policy: the budget turns the speed-versus-stability argument into an agreed rule."
+      },
+      {
+        "text": "A 100% availability SLO is the ideal target for any user-facing service",
+        "explanation": "Incorrect. 100% is unachievable, users can't tell the difference beyond their own network's reliability, and it leaves no budget for change. Google SRE explicitly argues against it."
+      },
+      {
+        "text": "The SLI is the contractual penalty paid when targets are missed",
+        "explanation": "Incorrect. The SLI is the measurement itself (e.g. share of requests succeeding under 300 ms). Penalties belong to the SLA."
+      },
+      {
+        "text": "With request-based availability, an outage at peak hour consumes more budget than the same-length outage overnight",
+        "explanation": "Correct. More requests fail at peak, so more of the budget is spent, which matches the real user impact."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Keep the three terms straight:\n\n| Term | What it is |\n|---|---|\n| SLI | The measurement |\n| SLO | Internal target for the SLI |\n| SLA | Contract with penalties |\n\nError budget = 1 − SLO. Spend it on releases and experiments; when it's gone, slow down. 100% leaves a budget of zero, so every change becomes forbidden, which is why sensible SLOs are always below 100%.",
+    "link": {
+      "title": "Embracing Risk (Google SRE book)",
+      "url": "https://sre.google/sre-book/embracing-risk/"
+    }
+  },
+  {
+    "id": "fund-availability-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service runs active-passive across two regions, each 99.9% available. The primary region has about **4 incidents a year**, and each failover to the standby (detect, decide, promote, update DNS) takes **15 minutes** of downtime. Roughly what yearly availability should you expect?",
+    "options": [
+      {
+        "text": "99.9999%, from 1 − 0.001²",
+        "explanation": "Incorrect. The parallel formula assumes instant failover. Here each switch costs 15 minutes, which dwarfs the time both regions are down together."
+      },
+      {
+        "text": "Just under 99.99%, about an hour of downtime a year",
+        "explanation": "Correct. 4 × 15 min = 60 min a year from failovers alone. 1 − 60 / 525,960 ≈ 99.989%. The failover time, not the regions' availability, sets the result."
+      },
+      {
+        "text": "99.9%, the same as one region",
+        "explanation": "Incorrect. 99.9% allows about 8.8 hours a year. Failing over in 15 minutes recovers most of that, so the pair does much better than one region."
+      },
+      {
+        "text": "99.8%, because two regions in series multiply",
+        "explanation": "Incorrect. Active-passive regions are redundant, not in series: a request needs only one of them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nfailover downtime = 4 x 15 = 60 min/yr\nminutes per year  = 525,960\nA = 1 - 60 / 525,960\n  ≈ 0.99989 (99.989%)\n```\n\nThe time both regions are down at once is negligible next to this. To improve, cut **MTTR** of the failover itself: automated detection, pre-warmed standby capacity, low DNS TTLs, or active-active so there is nothing to promote.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "fund-availability-q12",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which investments mainly reduce **MTTR** (mean time to recovery)? Select all that apply.",
+    "options": [
+      {
+        "text": "Alerting on user-facing symptoms such as error rate and latency",
+        "explanation": "Correct. You can't start fixing what you haven't noticed. Symptom alerts shrink time to detect."
+      },
+      {
+        "text": "One-click or automatic rollback of deploys",
+        "explanation": "Correct. Most incidents follow a change; reverting quickly shrinks time to fix."
+      },
+      {
+        "text": "Distributed tracing and good dashboards",
+        "explanation": "Correct. They shrink time to diagnose by showing which component is failing and why."
+      },
+      {
+        "text": "Buying hardware with a longer rated lifetime",
+        "explanation": "Incorrect. This raises MTBF (failures happen less often). It does nothing to speed up recovery when a failure does happen."
+      },
+      {
+        "text": "Adding a code-review step before every change",
+        "explanation": "Incorrect. Review aims to prevent failures, so it targets MTBF. It doesn't make recovery faster."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Split MTTR into its parts and map each option:\n\n| Option | Shrinks |\n|---|---|\n| Symptom alerts | Detect |\n| Fast rollback | Fix |\n| Tracing, dashboards | Diagnose |\n| Longer-lived hardware | (MTBF) |\n| Code review | (MTBF) |\n\nBoth levers matter, but for a fixed MTBF, downtime is proportional to MTTR: halve recovery time and you halve downtime.",
+    "link": {
+      "title": "Mean time to repair (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Mean_time_to_repair"
+    }
+  }
+]

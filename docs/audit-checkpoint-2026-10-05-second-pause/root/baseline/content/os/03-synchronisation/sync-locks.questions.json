@@ -1,0 +1,183 @@
+[
+  {
+    "id": "sync-locks-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A spinlock is implemented as:\n\n```c\nwhile (test_and_set(&flag))\n    ;\n```\n\n`test_and_set` atomically sets `flag` to 1 and returns the old value. When does the loop exit?",
+    "options": [
+      { "text": "When `test_and_set` returns 0, meaning the flag was clear and this thread just set it", "explanation": "Correct. Old value 0 means the lock was free, and the same atomic instruction has already marked it taken by us." },
+      { "text": "When `test_and_set` returns 1, meaning this thread now holds the lock", "explanation": "This reverses the meaning. The return value is the *old* value; 1 means someone else already held it, so we keep spinning." },
+      { "text": "When another thread calls `test_and_set` on our behalf", "explanation": "Nothing hands the lock over. Each waiter keeps trying until its own exchange finds the flag clear." },
+      { "text": "Never; the flag is always 1 after `test_and_set`", "explanation": "The flag is 1 after every call, but the loop tests the *returned old* value, which is 0 for exactly one caller after each unlock." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Lock free: `flag == 0`.\n2. Thread A: `test_and_set` writes 1, returns 0. Condition false: A exits the loop holding the lock.\n3. Thread B: `test_and_set` writes 1 (already 1), returns 1. B keeps spinning.\n4. A unlocks: `flag = 0`.\n5. B's next attempt returns 0 and B is in.\n\nBecause the read and write are one atomic step, two threads can never both get 0 from the same free lock.",
+    "link": { "title": "Test-and-set — Wikipedia", "url": "https://en.wikipedia.org/wiki/Test-and-set" }
+  },
+  {
+    "id": "sync-locks-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A kernel developer protects a shared list on an 8-core machine by disabling interrupts on the current CPU before touching it and re-enabling them after. What goes wrong?",
+    "options": [
+      { "text": "Nothing; with interrupts off, no other code can run", "explanation": "That is only true of the current core. The other seven cores are unaffected by this CPU's interrupt flag and can touch the list simultaneously." },
+      { "text": "The list becomes read-only while interrupts are off", "explanation": "Disabling interrupts does not change memory permissions; it only stops this CPU being interrupted." },
+      { "text": "Other cores keep running and can access the list at the same time, so mutual exclusion fails", "explanation": "Correct. Disabling interrupts prevents preemption on one CPU, which was enough on a uniprocessor. On SMP you need an atomic-instruction lock (a spinlock), often combined with disabling interrupts locally." },
+      { "text": "The machine immediately crashes because interrupts cannot be disabled in kernel mode", "explanation": "Kernels disable interrupts routinely (it is a privileged instruction, so kernel mode is exactly where it is allowed)." }
+    ],
+    "answer": 2,
+    "workedExample": "1. On one CPU, the only way another thread runs mid-section is via an interrupt (timer → scheduler). Turning interrupts off closes that door.\n2. On 8 cores, threads on cores 1 to 7 are running in true parallel. They never needed an interrupt to reach the list.\n3. So you need a lock other cores respect: a spinlock using `xchg` or `cmpxchg`.\n4. Linux's `spin_lock_irqsave` does both: takes the spinlock (other cores) and disables local interrupts (so an interrupt handler on *this* core that wants the same lock cannot deadlock against us).",
+    "link": { "title": "OSTEP: Locks (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks.pdf" }
+  },
+  {
+    "id": "sync-locks-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A thread locks and then unlocks a glibc `pthread_mutex_t` that no other thread is using. How many system calls does that take?",
+    "options": [
+      { "text": "Two: one futex call to lock and one to unlock", "explanation": "That would make every lock operation cost a kernel round trip. The futex design exists precisely to avoid this when there is no contention." },
+      { "text": "One: the unlock must always wake the kernel", "explanation": "Unlock only calls `FUTEX_WAKE` if the lock word shows there might be waiters. Uncontended, there are none." },
+      { "text": "Zero: both are single atomic instructions in user space", "explanation": "Correct. Lock is one CAS from 0 to 1; unlock is one atomic decrement that sees no waiters. The kernel is never entered." },
+      { "text": "It depends on how many cores the machine has", "explanation": "Core count does not change the fast path. What matters is whether another thread is contending for the lock." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Lock fast path: `CAS(word, 0, 1)` succeeds. Done, in user space.\n2. Unlock: atomic decrement from 1 to 0. Old value 1 means \"no waiters\", so skip `FUTEX_WAKE`.\n3. Total: two atomic instructions, zero syscalls.\n4. Only if the CAS fails (lock held) does a thread set the word to 2 and call `FUTEX_WAIT`, and only an unlock that sees 2 calls `FUTEX_WAKE`.",
+    "link": { "title": "futex(2) — Linux manual page", "url": "https://man7.org/linux/man-pages/man2/futex.2.html" }
+  },
+  {
+    "id": "sync-locks-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer writes a CAS lock but forgets to reset `expected` inside the loop:\n\n```c\nint expected = 0;\nwhile (!atomic_compare_exchange_weak(\n           &l, &expected, 1))\n    ;  // no reset\n```\n\nThe lock is held by thread A (`l == 1`) when thread B calls this. What happens?",
+    "options": [
+      { "text": "B spins correctly until A unlocks", "explanation": "It would, if `expected` stayed 0. But C11 CAS overwrites `expected` with the value it found on failure, changing what the next attempt compares against." },
+      { "text": "B's first CAS fails and sets `expected` to 1; the next CAS compares 1 == 1, succeeds, and B enters while A is still inside", "explanation": "Correct. After the first failure B is effectively asking \"if the lock is held, mark it held\", which always succeeds. Mutual exclusion is broken." },
+      { "text": "B deadlocks because `expected` can never equal `l` again", "explanation": "The opposite: `expected` now equals the held value, so the comparison succeeds immediately." },
+      { "text": "The compiler rejects the code because `expected` must be const", "explanation": "`expected` must be a modifiable pointer target precisely because CAS writes the observed value back into it." }
+    ],
+    "answer": 1,
+    "workedExample": "1. `l == 1` (A holds it). B: `expected = 0`.\n2. CAS(&l, &expected, 1): `l != 0`, fails, and writes the current value 1 into `expected`.\n3. Loop: CAS(&l, &expected, 1) now checks `l == 1`. True! It writes 1 and returns true.\n4. B exits the loop and enters the critical section alongside A.\n\nAlways reset `expected = 0` before retrying, or use `atomic_flag_test_and_set` for a simple lock.",
+    "link": { "title": "Compare-and-swap — Wikipedia", "url": "https://en.wikipedia.org/wiki/Compare-and-swap" }
+  },
+  {
+    "id": "sync-locks-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Four threads share a pure spinlock on a **single-core** machine with a 10 ms time slice. Thread A takes the lock and is preempted mid-section. What happens next?",
+    "options": [
+      { "text": "The other threads spin uselessly, each burning its entire slice, until A is scheduled again and releases the lock", "explanation": "Correct. On one core, the holder cannot run while a waiter spins, so spinning can never succeed. Up to 30 ms of CPU is wasted before A runs again." },
+      { "text": "The waiting threads sleep until A releases the lock", "explanation": "That is what a sleeping (futex-based) mutex would do. A pure spinlock never yields; it loops until the flag clears." },
+      { "text": "A's critical section continues on another core", "explanation": "There is no other core. A cannot make progress until the scheduler picks it again." },
+      { "text": "The spinlock detects the preemption and passes the lock to the next thread", "explanation": "Spinlocks have no knowledge of scheduling. Handing over a lock mid-section would break mutual exclusion anyway." }
+    ],
+    "answer": 0,
+    "workedExample": "1. A holds the lock and is preempted.\n2. B runs: spins for its full 10 ms. The flag cannot clear because A is not running.\n3. C runs: same, 10 ms. D: same, 10 ms.\n4. A runs again, finishes, unlocks.\n\nAbout 30 ms of CPU produced nothing. That is why kernels disable preemption while holding spinlocks, and why user-space locks sleep (or spin briefly, then sleep) instead.",
+    "link": { "title": "Spinlock — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spinlock" }
+  },
+  {
+    "id": "sync-locks-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A ticket lock currently has `next = 7` and `serving = 4`. Thread T calls `ticket_lock()`. Assuming no other thread arrives, how many `ticket_unlock()` calls must happen before T enters?",
+    "options": [
+      { "text": "1", "explanation": "One unlock brings `serving` to 5, but T's ticket is 7. Two other threads (tickets 5 and 6) are queued ahead of it." },
+      { "text": "4", "explanation": "That counts from 4 to 8, one too many. T needs `serving == 7`." },
+      { "text": "2", "explanation": "This overlooks the current holder (ticket 4). Tickets 4, 5 and 6 must all be served and released first." },
+      { "text": "3", "explanation": "Correct. T draws ticket 7 (`next` becomes 8). The holder of ticket 4 and the waiters with 5 and 6 each unlock in turn: 4→5, 5→6, 6→7. Then T enters." }
+    ],
+    "answer": 3,
+    "workedExample": "1. `fetch_add(&next, 1)` returns 7 to T; `next` becomes 8.\n2. `serving == 4` means ticket 4 is inside. Tickets 5 and 6 are waiting.\n3. Unlock 1: serving 5 (ticket 5 enters).\n4. Unlock 2: serving 6.\n5. Unlock 3: serving 7. T's spin condition `serving != 7` becomes false.\n\nThree unlocks, in strict FIFO order. That ordering is the fairness a plain test-and-set spinlock lacks.",
+    "link": { "title": "OSTEP: Locks (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks.pdf" }
+  },
+  {
+    "id": "sync-locks-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "10% of your service's request handling runs under one global mutex; the rest is perfectly parallel. Ignoring other overheads, what is the best possible speed-up on 16 cores compared with 1?",
+    "options": [
+      { "text": "16×", "explanation": "That assumes everything parallelises. The 10% under the lock runs one thread at a time no matter how many cores you add." },
+      { "text": "About 6.4×", "explanation": "Correct. Amdahl's law: 1 / (0.1 + 0.9/16) = 1 / 0.15625 = 6.4." },
+      { "text": "10×", "explanation": "10× is the limit with *infinite* cores (1 / 0.1). With 16 cores the parallel part still takes 0.9/16 of the original time." },
+      { "text": "About 1.6×", "explanation": "This underestimates badly; it would mean the lock serialised far more than 10% of the work." }
+    ],
+    "answer": 1,
+    "workedExample": "Amdahl's law: speed-up = 1 / (s + p/N), where s is the serial fraction.\n\n```\ns = 0.10, p = 0.90, N = 16\np / N = 0.05625\ns + p/N = 0.15625\n1 / 0.15625 = 6.4\n```\n\nAs N → ∞, the bound is 1/0.1 = 10×. Halving the time spent under the lock (s = 0.05) would raise the 16-core figure to about 9.1×, which is why shrinking critical sections matters so much.",
+    "link": { "title": "OSTEP: Lock-based concurrent data structures (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks-usage.pdf" }
+  },
+  {
+    "id": "sync-locks-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In which situations is a pure **spinlock** a reasonable choice? Select all that apply.",
+    "options": [
+      { "text": "Inside an OS kernel, protecting a few instructions on a multicore machine, with preemption disabled while held", "explanation": "Correct. The holder cannot be descheduled and will release in nanoseconds, so spinning is cheaper than a sleep/wake round trip." },
+      { "text": "A user-space lock held while reading a file from disk", "explanation": "Disk I/O takes microseconds to milliseconds and may block the holder. Waiters would burn CPU for the whole time; use a sleeping mutex and keep I/O out of critical sections." },
+      { "text": "An interrupt handler on a multicore machine that shares data with normal kernel code", "explanation": "Correct. Interrupt handlers cannot sleep, so a sleeping mutex is not an option. A spinlock with interrupts disabled locally (`spin_lock_irqsave`) is the standard tool." },
+      { "text": "A single-core embedded system where threads are preemptively scheduled", "explanation": "On one core the waiter is spinning while the holder cannot run, so spinning can never succeed. Use a sleeping lock or disable interrupts." }
+    ],
+    "answer": [0, 2],
+    "workedExample": "Ask two questions for each case:\n\n1. Will the holder release *very* soon, while still running on another core?\n2. Is sleeping impossible or more expensive than spinning?\n\n| Case | Short + running? | Can sleep? | Spin? |\n|---|---|---|---|\n| Kernel, preempt off | yes | costly | yes |\n| File I/O | no | yes | no |\n| IRQ handler | yes | no | yes |\n| Single core | holder can't run | yes | no |",
+    "link": { "title": "Spinlock — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spinlock" }
+  },
+  {
+    "id": "sync-locks-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Drepper's futex mutex uses states 0 (unlocked), 1 (locked, no waiters) and 2 (locked, possible waiters). Why not just use 0 and 1?",
+    "options": [
+      { "text": "With only 0 and 1, `unlock` cannot tell whether anyone is sleeping, so it must either call `FUTEX_WAKE` every time (a syscall even when uncontended) or risk leaving a sleeper asleep forever", "explanation": "Correct. State 2 records \"someone may be waiting\". Unlock from state 1 can skip the syscall; unlock from 2 must wake. That keeps the uncontended path syscall-free without lost wakeups." },
+      { "text": "State 2 counts exactly how many threads are waiting", "explanation": "It is a flag, not a count. Many waiters still show as 2; the kernel tracks the actual queue." },
+      { "text": "Because `FUTEX_WAIT` rejects the value 1", "explanation": "`FUTEX_WAIT` accepts any expected value; it simply sleeps if `*addr` equals it. The extra state is a user-space design choice." },
+      { "text": "To make the lock re-entrant", "explanation": "Re-entrancy needs an owner ID and a recursion count. The 0/1/2 states say nothing about who holds the lock." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Suppose only 0/1. A holds the lock (1). B fails to acquire and calls `FUTEX_WAIT(addr, 1)` and sleeps.\n2. A unlocks: sets 0. Does it call `FUTEX_WAKE`? It has no way to know B exists.\n3. If it never wakes: B sleeps forever. If it always wakes: every unlock is a syscall, defeating the futex's purpose.\n4. With state 2: B first sets the word to 2, then sleeps. A's `fetch_sub` returns 2 (not 1), so A knows to store 0 and wake one waiter.\n5. Uncontended: lock 0→1, unlock 1→0, no syscall.\n\nThe cost is an occasional unnecessary wake, when 2 is set but the waiter already left; that is harmless.",
+    "link": { "title": "Futexes Are Tricky — Ulrich Drepper (PDF)", "url": "https://www.akkadia.org/drepper/futex.pdf" }
+  },
+  {
+    "id": "sync-locks-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`FUTEX_WAIT(addr, val)` only sleeps if `*addr == val`, checked atomically inside the kernel. Why not let user space check the value and then call a plain \"sleep on addr\" syscall?",
+    "options": [
+      { "text": "Because user space cannot read memory that a futex points to", "explanation": "The futex word is ordinary user memory; user space reads and writes it all the time with atomic instructions." },
+      { "text": "To save one memory read", "explanation": "The cost is irrelevant; the problem is correctness. A separate check leaves a window in which the state changes." },
+      { "text": "Because the kernel needs the value to choose which CPU to wake on", "explanation": "The value is a guard, not a scheduling hint. The kernel finds waiters by address." },
+      { "text": "Between the user-space check and the sleep, the holder could unlock and call `FUTEX_WAKE`, finding nobody asleep yet; the waiter then sleeps forever (a lost wakeup)", "explanation": "Correct. The kernel checks the value and enqueues the thread under the same internal lock that `FUTEX_WAKE` takes, so a wake cannot slip into the gap." }
+    ],
+    "answer": 3,
+    "workedExample": "Imagine the naive version:\n\n```\nB: reads word == 2  (held)\nA: unlock: word = 0\nA: FUTEX_WAKE -> nobody waiting\nB: sleep(addr)      zzz forever\n```\n\nWith `FUTEX_WAIT(addr, 2)`: if A's unlock happened first, the kernel sees `*addr == 0 != 2` and returns immediately (`EAGAIN`), so B retries. If B is enqueued first, A's wake finds it. There is no gap. The same idea appears in condition variables, where `wait` atomically releases the mutex and sleeps.",
+    "link": { "title": "futex(2) — Linux manual page", "url": "https://man7.org/linux/man-pages/man2/futex.2.html" }
+  },
+  {
+    "id": "sync-locks-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A profile shows that 32 worker threads spend most of their time waiting on one mutex that guards an in-memory hash map of user sessions. Which changes are likely to reduce contention? Select all that apply.",
+    "options": [
+      { "text": "Lock striping: split the map into, say, 64 shards by key hash, each with its own lock", "explanation": "Correct. Requests for different keys usually hit different shards, so threads rarely wait on each other. This is what early Java `ConcurrentHashMap` did." },
+      { "text": "Replace the mutex with a `threading.RLock`-style re-entrant mutex", "explanation": "Re-entrancy only lets the *same* thread re-acquire. It does nothing for 32 different threads competing for one lock." },
+      { "text": "Move the session-store write to the database outside the critical section, holding the lock only for the in-memory update", "explanation": "Correct. Doing I/O under a hot lock stretches the critical section from nanoseconds to milliseconds. Shorter hold times mean less waiting." },
+      { "text": "Wrap the whole request handler in the lock to avoid taking it several times", "explanation": "This makes the serial fraction bigger. Fewer lock operations do not help if the lock is now held for the entire request." },
+      { "text": "Pad the lock to its own cache line if it shares one with frequently written data", "explanation": "Correct. False sharing makes unrelated writes invalidate the lock's cache line, slowing every acquire. Padding removes that interference (a smaller win than sharding, but real)." }
+    ],
+    "answer": [0, 2, 4],
+    "workedExample": "Contention ≈ (how often threads want the lock) × (how long it is held).\n\n1. **Sharding** divides the arrival rate per lock by about the shard count.\n2. **Moving I/O out** cuts hold time, often by orders of magnitude.\n3. **Padding** reduces the cost of each acquire by removing cache-line ping-pong from unrelated writes.\n4. A re-entrant lock changes semantics, not contention.\n5. Holding the lock for the whole request raises hold time and turns the service into a single-threaded one.",
+    "link": { "title": "OSTEP: Lock-based concurrent data structures (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks-usage.pdf" }
+  },
+  {
+    "id": "sync-locks-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this Python program do?\n\n```python\nimport threading\nlock = threading.Lock()\n\ndef f():\n    with lock:\n        g()\n\ndef g():\n    with lock:\n        print(\"hi\")\n\nf()\n```",
+    "options": [
+      { "text": "Prints `hi`", "explanation": "It would with `threading.RLock`, which lets the owning thread re-acquire. A plain `Lock` has no notion of an owner." },
+      { "text": "Raises `RuntimeError: lock already held`", "explanation": "`Lock.acquire()` does not check who holds it; it simply blocks until the lock is released." },
+      { "text": "Hangs forever: `g` blocks waiting for a lock its own thread already holds", "explanation": "Correct. `threading.Lock` is not re-entrant. The thread waits for itself to release it, which can never happen. Use `RLock` if a function holding the lock must call others that take it." },
+      { "text": "Prints `hi` twice", "explanation": "`print` is only called once, and in fact is never reached." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `f` acquires `lock` (now held).\n2. `f` calls `g`, which calls `lock.acquire()`.\n3. `Lock` is non-recursive: it is held, so acquire blocks.\n4. The only thread that could release it is the one that is blocked.\n\nResult: the program hangs. `RLock` records an owner and a count, so the same thread can acquire it again (count 2) and must release it twice.",
+    "link": { "title": "threading — Python documentation", "url": "https://docs.python.org/3/library/threading.html" }
+  }
+]

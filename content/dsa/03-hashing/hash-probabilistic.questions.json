@@ -1,0 +1,377 @@
+[
+  {
+    "id": "hash-probabilistic-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A sign-up form uses a standard append-only Bloom filter containing every username in a consistent snapshot. For ada_l it returns not present. What follows about that snapshot?",
+    "options": [
+      {
+        "text": "`ada_l` is probably free, but you must check the database to be sure",
+        "explanation": "That caution applies to the opposite answer. A Bloom filter never gives false negatives, so \"not present\" is certain."
+      },
+      {
+        "text": "ada_l is absent from the snapshot represented by the filter",
+        "explanation": "An added item cannot have a zero queried bit if the filter/hash configuration remains intact. This does not authorize a concurrent registration without an atomic uniqueness check."
+      },
+      {
+        "text": "`ada_l` is definitely taken",
+        "explanation": "\"Not present\" can never mean present. Even the filter's \"maybe\" answer does not mean definitely taken."
+      },
+      {
+        "text": "Nothing: Bloom filters can be wrong in both directions",
+        "explanation": "They can only be wrong in one direction: false positives. \"Not present\" answers are always right."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Adding a name sets every queried bit. Finding any zero proves it was not added to this intact filter. A negative can avoid a preliminary snapshot read, but registration still needs authoritative atomic uniqueness enforcement. An incomplete or stale filter is not a proof about current database state, and false positives mean some genuinely free names still require a read.",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can't you delete an item from a standard Bloom filter by setting its k bits back to 0?",
+    "options": [
+      {
+        "text": "Those bits may also belong to other items, so clearing them can make those items look absent: false negatives",
+        "explanation": "Correct. Bits are shared. If `cat` and `dog` both set bit 7, deleting `cat` by clearing bit 7 makes `dog` fail its query."
+      },
+      {
+        "text": "Setting bits to 0 is slower than setting them to 1",
+        "explanation": "Speed is not the issue; it is a single write either way. The problem is correctness."
+      },
+      {
+        "text": "The hash functions cannot be run in reverse",
+        "explanation": "You do not need to reverse them: you can recompute an item's k positions directly. The trouble is that other items share those positions."
+      },
+      {
+        "text": "It would increase the false-positive rate",
+        "explanation": "Clearing bits makes the filter *emptier*, which lowers false positives. The danger is false negatives."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "cat and dog share bit 7. Clearing it on cat deletion makes dog falsely appear absent. Counting filters can use four-bit counters (roughly four times bit-array payload), but other widths differ. Delete only known inserted members and avoid counter overflow; deleting a merely possible member can harm other entries. Cuckoo filters likewise require correct deletion usage.",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Count-Min Sketch with 4 rows returns counters 120, 95, 103 and 97 for item x. What does it report, and why that one? Assume nonnegative updates, no counter overflow, and independently sampled suitable universal row hashes for the probabilistic bound.",
+    "options": [
+      {
+        "text": "103.75, the average, to smooth out noise",
+        "explanation": "Averaging includes the most polluted counters. Since every counter can only be too high, the smallest is the best estimate."
+      },
+      {
+        "text": "120, the maximum, to avoid undercounting",
+        "explanation": "Counters never undercount (with non-negative updates), so taking the maximum just picks the worst overestimate."
+      },
+      {
+        "text": "95, the minimum, because collisions can only add to a counter, so the smallest is the least inflated",
+        "explanation": "Correct. Each counter is the true count plus other items that collided there. The minimum is closest to the truth and is still an upper bound."
+      },
+      {
+        "text": "100, the median, because it is robust to outliers",
+        "explanation": "The median is used by a variant (Count Sketch, with ± updates). For Count-Min, all errors are one-sided, so the minimum is best."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each counter = true count of x + counts of other items hashed to the same cell.\n2. Other items only *add*, so every counter ≥ the true count.\n3. The minimum, 95, has the least pollution and is still ≥ the true count.\n4. So the true count is at most 95. The sketch's guarantee says it is at least 95 − εN with probability 1 − δ.",
+    "link": {
+      "title": "Count–min sketch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Bloom filter has m = 2,000 bits and k = 5 hash functions, and holds n = 200 items. Using p ≈ (1 − e^(−kn/m))^k, what is the approximate false-positive rate? (e^(−0.5) ≈ 0.607) Use the independent uniform-hash approximation for distinct inserted items.",
+    "options": [
+      {
+        "text": "About 39%",
+        "explanation": "That is the probability a single bit is set (1 − 0.607). A false positive needs all 5 of the query's bits to be set, so raise it to the 5th power."
+      },
+      {
+        "text": "About 10%",
+        "explanation": "This is n/m, the items-per-bit ratio. The formula needs kn/m in the exponent, then the k-th power."
+      },
+      {
+        "text": "About 0.01%",
+        "explanation": "This over-shrinks the result, perhaps by squaring too many times. 0.393⁵ ≈ 0.0094."
+      },
+      {
+        "text": "About 0.94%",
+        "explanation": "Correct. kn/m = 1000/2000 = 0.5; 1 − 0.607 = 0.393; 0.393⁵ ≈ 0.0094."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. kn/m = 5 × 200 / 2000 = 0.5.\n2. Probability a given bit is still 0: e^(−0.5) ≈ 0.607.\n3. Probability it is 1: 0.393.\n4. All 5 bits of a new item set:\n\n```\n0.393^2 = 0.1546\n0.393^4 = 0.0239\n0.393^5 = 0.0094\n```\n\n5. p ≈ 0.94%. Here m/n = 10 bits per item; the optimal k would be 10 × 0.693 ≈ 7, giving about 0.82%.",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need a Bloom filter for 50 million keys with a 1% false-positive rate, using the optimal number of hashes. About how much memory does it need?",
+    "options": [
+      {
+        "text": "About 6 MB",
+        "explanation": "This uses roughly 1 bit per key. At 1% you need about 9.6 bits per key."
+      },
+      {
+        "text": "About 60 MB",
+        "explanation": "Correct. 9.6 bits × 50 × 10⁶ = 480 million bits = 60 MB, with k = 7."
+      },
+      {
+        "text": "About 480 MB",
+        "explanation": "480 million is the number of *bits*; divide by 8 to get bytes."
+      },
+      {
+        "text": "It depends on how long the keys are",
+        "explanation": "Bloom filter size depends only on n and p, not on the size of the items, which is the point of the structure."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Bits per item at optimal k: −ln(p) / (ln 2)² = 4.605 / 0.4805 ≈ 9.6.\n2. Total bits: 9.6 × 50,000,000 = 480,000,000.\n3. Bytes: 480,000,000 / 8 = 60,000,000 ≈ 60 MB.\n4. Hashes: k = 9.6 × 0.693 ≈ 6.6, so 7.\n5. For comparison, 50 million distinct uncompressed 40-byte keys alone occupy 2 GB, before table and object overhead.",
+    "link": {
+      "title": "Bloom filter — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/data-types/probabilistic/bloom-filter/"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Bloom filters are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A query never wrongly reports an added item as absent",
+        "explanation": "Correct. No false negatives: added items' bits are never cleared."
+      },
+      {
+        "text": "The false-positive rate depends on m, n and k, but not on how large each item is",
+        "explanation": "Under the ideal uniform-hash model, payload length does not enter the false-positive approximation. Hash quality and actual workload also matter."
+      },
+      {
+        "text": "You can list the items stored in the filter",
+        "explanation": "The filter stores only bits, not items. Many different item sets produce the same bit pattern."
+      },
+      {
+        "text": "You can double m later and copy the bits across without the original items",
+        "explanation": "Doubling changes some positions and the old bits do not identify which contributing keys should move. Simply copying is not a correctly rebuilt larger filter."
+      },
+      {
+        "text": "Two filters with the same m, k and hash functions can be unioned with a bitwise OR",
+        "explanation": "Correct. The OR has exactly the bits that would be set by adding both item sets to one filter."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. **No false negatives**: true by construction.\n2. **Item size**: p ≈ (1 − e^(−kn/m))^k has no term for item size. True.\n3. **Listing**: impossible; the filter is lossy. False.\n4. **Resizing**: positions are `h(x) mod m`, so changing m changes them; the items are gone. False. (Scalable Bloom filters add new layers instead.)\n5. **Union**: OR-ing bit arrays equals inserting both sets into one filter, as long as m, k and the hashes match. True. (Intersection by AND is only approximate.)",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a simplified LSM lookup model, all 10 SSTable key ranges are candidates, all filters are already in memory, and each false positive causes exactly one uncached file read. For an absent key each filter has 1% false-positive probability. What is the expected number of those reads?",
+    "options": [
+      {
+        "text": "10",
+        "explanation": "That would be 10 candidate-file reads in the stated no-filter model, not a universal real-engine I/O count."
+      },
+      {
+        "text": "1",
+        "explanation": "This would be true if the rate were 10% per file. At 1%, the expected number is ten times smaller."
+      },
+      {
+        "text": "0.1",
+        "explanation": "Linearity of expectation gives 10 * 0.01 = 0.1; independence is not required for this expectation."
+      },
+      {
+        "text": "0",
+        "explanation": "False positives can cause reads even though the key is absent."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The model sums 10 indicator variables, each with mean 0.01, giving 0.1 expected file reads. If their events are also independent, the chance of at least one is 1 - 0.99**10, about 9.56%. Real engines additionally use range/index metadata and caches, so physical I/O is not determined by filter count alone.",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want a Count-Min Sketch whose estimates are within 1% of the total stream count (ε = 0.01) with 99.9% probability (δ = 0.001). Using w = ⌈e/ε⌉ and d = ⌈ln(1/δ)⌉, how many counters does it need? This is a fixed point query with independent suitable universal row hashes, nonnegative updates and no overflow.",
+    "options": [
+      {
+        "text": "About 100 (w = 100, d = 1)",
+        "explanation": "This uses w = 1/ε and one row. The bound needs w = e/ε ≈ 272, and the confidence needs several rows."
+      },
+      {
+        "text": "About 272,000 (w = 272, d = 1,000)",
+        "explanation": "d is the *logarithm* of 1/δ, not 1/δ itself. Each extra row cuts the failure probability by a factor of about e."
+      },
+      {
+        "text": "It depends on the number of distinct items",
+        "explanation": "The sketch's size depends only on ε and δ, not on how many distinct items appear. That is what makes it useful for huge streams."
+      },
+      {
+        "text": "About 1,904 (w = 272, d = 7)",
+        "explanation": "Correct. w = ⌈2.718 / 0.01⌉ = 272; d = ⌈ln 1000⌉ = ⌈6.91⌉ = 7; 272 × 7 = 1,904 counters."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Width: w = ⌈e / ε⌉ = ⌈2.718 / 0.01⌉ = ⌈271.8⌉ = 272.\n2. Depth: d = ⌈ln(1/δ)⌉ = ⌈ln 1000⌉ = ⌈6.91⌉ = 7.\n3. Counters: 272 × 7 = 1,904. At 4 bytes each, 1,904*4 = 7,616 bytes, under 8 KB; choose wider counters if updates may overflow.\n4. Per-fixed-query guarantee over the hash choices: estimate ≤ true + 0.01 N with probability ≥ 99.9%. For a stream of 10 million events, that is within 100,000.",
+    "link": {
+      "title": "Count–min sketch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Count-Min Sketch with ε = 0.001 processes a stream of N = 10 million page views. Page A was viewed 2 million times; page B was viewed 50 times. Which statement best describes the estimates? Assume the usual nonnegative-update, nonoverflowing, independent-row model. Which describes the per-query error bound that holds with probability at least 1 - delta?",
+    "options": [
+      {
+        "text": "Both estimates are accurate to within 0.1% of their true values",
+        "explanation": "The error bound is εN, relative to the whole stream, not to each item's count."
+      },
+      {
+        "text": "On the bound event, A has at most 0.5% relative overestimate, while B can be overestimated by 10,000",
+        "explanation": "epsilon*N=10,000; compare this with 2,000,000 and 50. This is a probabilistic per-query bound, not an absolute maximum."
+      },
+      {
+        "text": "B's estimate may be too low, because rare items get overwritten",
+        "explanation": "Counters are only incremented; nothing is overwritten. Estimates are never below the true count (with non-negative updates)."
+      },
+      {
+        "text": "The bound is 10 million regardless of epsilon",
+        "explanation": "The stated high-probability bound is epsilon*N=10,000; larger errors remain possible on its failure event."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For either fixed query, additive error is at most 10,000 with probability at least 1 - delta over the sketch hash choices. This is 0.5% of A's count and 200 times B's count. For both bounds together a union bound gives at least 1 - 2*delta. The sketch cannot enumerate candidates; heavy-hitter tracking needs additional candidate management.",
+    "link": {
+      "title": "Count-min sketch — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/data-types/probabilistic/count-min-sketch/"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Redis's HyperLogLog uses 16,384 registers of 6 bits (12 KiB of register payload) for a standard error of 0.81%. Since error ≈ 1.04/√m, in a hypothetical configurable sketch, how many registers, and how much register memory at 6 bits each, would you need to halve the error to about 0.4%?",
+    "options": [
+      {
+        "text": "65,536 registers, 48 KiB",
+        "explanation": "Correct. Error ∝ 1/√m, so halving the error needs 4m = 65,536 registers; 65,536 × 6 bits = 393,216 bits = 48 KiB."
+      },
+      {
+        "text": "32,768 registers, 24 KiB",
+        "explanation": "Doubling m only divides the error by √2, to about 0.57%. Halving it needs 4× the registers."
+      },
+      {
+        "text": "16,384 registers with 12-bit counters, 24 KiB",
+        "explanation": "Register width only needs to hold the maximum leading-zero count (6 bits covers up to 63). Wider registers do not reduce error."
+      },
+      {
+        "text": "262,144 registers, 192 KiB",
+        "explanation": "That is 16×, which would quarter the error, more than asked."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Error ∝ 1/√m. To halve it, √m must double, so m must quadruple.\n2. 16,384 × 4 = 65,536 = 2¹⁶ registers.\n3. Check: 1.04 / √65,536 = 1.04 / 256 ≈ 0.41%.\n4. Memory: 65,536 × 6 bits = 393,216 bits = 49,152 bytes = 48 KiB.\n\nThe diminishing returns are typical of sampling-based estimates: each halving of the error costs 4× the memory.\nRedis does not expose this as a configurable register-count setting; this is a scaling calculation excluding metadata.",
+    "link": {
+      "title": "HyperLogLog — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/data-types/probabilistic/hyperloglogs/"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You track daily unique visitors with one HyperLogLog per day. Which statements are true? Select all that apply. Assume all sketches use the same hash/seed and register configuration.",
+    "options": [
+      {
+        "text": "A 30-day unique count can be computed by merging the 30 sketches with register-wise max",
+        "explanation": "Correct. The merged sketch is identical to one that saw all 30 days' items, so repeat visitors are not double-counted."
+      },
+      {
+        "text": "A visitor who comes back 1,000 times in a day changes the estimate more than one who visits once",
+        "explanation": "Their hash is the same every time, so it can only set a register once; repeats cannot raise any register further."
+      },
+      {
+        "text": "You can check whether a particular user visited on a given day",
+        "explanation": "HyperLogLog keeps only per-register maxima, not items. Use a Bloom filter or a set for membership."
+      },
+      {
+        "text": "The number of visitors on both Monday and Tuesday can be computed exactly via |A| + |B| − |A ∪ B|",
+        "explanation": "Each term carries roughly 1% error. Subtracting large, similar estimates can leave an error larger than a small overlap itself, so the result is approximate and often unreliable."
+      },
+      {
+        "text": "Each daily sketch uses the same memory whether there were 1,000 or 100 million visitors (in the dense representation)",
+        "explanation": "Dense register count fixes register payload (12 KiB for Redis); metadata adds overhead and sparse encodings differ."
+      }
+    ],
+    "answer": [
+      0,
+      4
+    ],
+    "workedExample": "Check each against how HLL works (registers holding the maximum leading-zero rank of hashes routed to them):\n\n1. **Union**: max per register is exactly the sketch of the combined stream. True.\n2. **Repeats**: the same item always produces the same hash, register and rank. False.\n3. **Membership**: no items are stored. False.\n4. **Intersection**: |A ∩ B| = |A| + |B| − |A ∪ B|. With |A| ≈ |B| ≈ 1,000,000 with about 0.81% relative standard error (not a hard bound), errors on the order of 8,000 per term can swamp an overlap of, say, 5,000. Not exact. False.\n5. **Fixed memory**: true in the dense form (Redis also uses a smaller sparse form for small counts).",
+    "link": {
+      "title": "HyperLogLog — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/HyperLogLog"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Bloom filter was sized for 1 million items at 1% (9.6 bits per item, k = 7), but the service actually inserts 2 million distinct items. Roughly what false-positive rate do you now get?",
+    "options": [
+      {
+        "text": "About 2%: the error doubles with the item count",
+        "explanation": "The relationship is not linear. Doubling n doubles the exponent kn/m, and the result is then raised to the 7th power."
+      },
+      {
+        "text": "About 1%: the rate is fixed when the filter is built",
+        "explanation": "The rate depends on how many bits are set, which grows with every insert."
+      },
+      {
+        "text": "About 50%: half the bits are set",
+        "explanation": "Roughly half the bits were set at the design load. At double the load, about 77% are set, and a false positive needs all 7 of an item's bits set, giving 0.77⁷ ≈ 16%."
+      },
+      {
+        "text": "About 16%",
+        "explanation": "Correct. kn/m = 7 × 2 / 9.6 ≈ 1.46; e^(−1.46) ≈ 0.23; (1 − 0.23)⁷ ≈ 0.77⁷ ≈ 0.16."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. m = 9.585 × 10⁶ bits, k = 7, n = 2 × 10⁶.\n2. kn/m = 14 × 10⁶ / 9.585 × 10⁶ ≈ 1.46.\n3. Fraction of bits still 0: e^(−1.46) ≈ 0.232. Fraction set: 0.768.\n4. p ≈ 0.768⁷:\n\n```\n0.768^2 = 0.590\n0.768^4 = 0.348\n0.768^7 = 0.348 * 0.590 * 0.768\n        ≈ 0.158\n```\n\n5. About 16%, versus 1% at the design load. Size for the peak, or use a scalable Bloom filter that adds layers.",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  }
+]

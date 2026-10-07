@@ -1,0 +1,349 @@
+[
+  {
+    "id": "proc-process-abstraction-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You open three terminals and run `python3` in each. How many programs and how many processes are there?",
+    "options": [
+      {
+        "text": "One program, three processes",
+        "explanation": "Correct. There's one executable file on disk, `/usr/bin/python3`, and three running instances, each with its own PID, address space and registers."
+      },
+      {
+        "text": "Three programs, three processes",
+        "explanation": "This conflates the program (the file) with the process (a running instance). All three run the same file."
+      },
+      {
+        "text": "One program, one process shared by the terminals",
+        "explanation": "Each terminal launches its own process. They don't share memory or state; typing in one doesn't affect the others."
+      },
+      {
+        "text": "Three programs, one process",
+        "explanation": "This has the relationship backwards. A process runs one program image at a time; it's processes that multiply."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A **program** is passive: bytes in a file.\n2. A **process** is active: that program loaded into an address space with registers, a stack and open files.\n3. Each terminal's shell `fork`s and `exec`s `python3`, creating a new process.\n4. So: 1 program, 3 processes, 3 PIDs.\n\nTheir code (text) pages are even shared in physical memory, but each has a separate heap and stack.",
+    "link": {
+      "title": "The Abstraction: The Process — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-intro.pdf"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In which region of a Linux process does each live?\n\n```c\nint a = 5;\nstatic int b;\nvoid f(void) {\n  int c = 1;\n  int *d = malloc(4);\n}\n```\n\n(`*d` means the 4 bytes `d` points to.)",
+    "options": [
+      {
+        "text": "a: data, b: data, c: stack, *d: heap",
+        "explanation": "`b` has no initialiser, so it's zero-initialised and goes in BSS, which takes no space in the executable file."
+      },
+      {
+        "text": "a: stack, b: BSS, c: stack, *d: stack",
+        "explanation": "Globals aren't on the stack: they exist for the whole run. And `malloc` memory lives on the heap, even though the *pointer* `d` is on the stack."
+      },
+      {
+        "text": "a: text, b: BSS, c: heap, *d: heap",
+        "explanation": "Text holds machine code, not variables. Locals like `c` go on the stack, not the heap."
+      },
+      {
+        "text": "a: data, b: BSS, c: stack, *d: heap",
+        "explanation": "Correct. Initialised globals go in data, zero/uninitialised statics in BSS, locals on the stack, and `malloc`'d memory on the heap."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Classify each by lifetime and initialisation:\n\n| Var | Lifetime | Init | Region |\n|---|---|---|---|\n| a | whole run | 5 | data |\n| b | whole run | zero | BSS |\n| c | call of f | 1 | stack |\n| d | call of f | ptr | stack |\n| *d | until free | n/a | heap |\n\nThe subtle one is `d` versus `*d`: the pointer variable is a local on the stack; the memory it points to is on the heap. When `f` returns, `d` disappears but the 4 bytes leak because nothing frees them.",
+    "link": {
+      "title": "The Abstraction: Address Spaces — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A process is waiting for a disk read to complete. Which state is it in (textbook model), and is it using CPU time?",
+    "options": [
+      {
+        "text": "Running, using CPU while it waits",
+        "explanation": "A process that's waiting doesn't need the CPU; the kernel takes it off so others can run."
+      },
+      {
+        "text": "Ready, using no CPU",
+        "explanation": "Ready means it *could* run if given a CPU. A process waiting on disk can't make progress until the data arrives."
+      },
+      {
+        "text": "Blocked, using no CPU",
+        "explanation": "Correct. It sleeps until the disk's completion interrupt wakes it, then moves to ready."
+      },
+      {
+        "text": "Terminated",
+        "explanation": "It hasn't exited; it's just waiting."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The process called `read`; the data isn't in the page cache.\n2. The kernel issues the disk request and marks the process **blocked**.\n3. The scheduler picks another ready process to use the CPU.\n4. Later the disk raises an interrupt; the kernel moves the process to **ready**.\n5. When the scheduler dispatches it, it's **running** again and `read` returns.\n\nThis overlap of one process's I/O with another's computation is the main reason multiprogramming exists.",
+    "link": {
+      "title": "The Abstraction: The Process — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-intro.pdf"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program declares `static char buffer[200 * 1024 * 1024];` (200 MiB, no initialiser). The compiled binary is only 20 KB. Why?",
+    "options": [
+      {
+        "text": "The compiler shrinks large arrays automatically",
+        "explanation": "Compilers don't shrink arrays; the program can still use all 200 MiB."
+      },
+      {
+        "text": "The array is in BSS; the executable records only its size, and the kernel maps zero-filled pages on demand",
+        "explanation": "Correct. Zero-initialised data needs no bytes on disk. At runtime the pages are mapped lazily, so physical RAM is used only for pages actually touched."
+      },
+      {
+        "text": "The array is allocated on the heap at startup",
+        "explanation": "It's a static, not a `malloc`. It lives in BSS, a fixed region set up by the loader."
+      },
+      {
+        "text": "The array is compressed in the binary",
+        "explanation": "ELF executables don't compress data sections. There's simply nothing to store because the contents are all zero."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. No initialiser on a static or global means it's zero-filled, so it goes in **BSS**.\n2. The ELF file stores BSS's *size* only (try `size ./prog`: the `bss` column shows ~200 MB while the file is 20 KB).\n3. At `exec`, the kernel reserves the virtual range and backs it with the shared zero page.\n4. Real physical pages are allocated only when the program writes to them (a page fault per first touch).\n\nChange it to `= {1}` and the whole array moves to **data**: the binary becomes about 200 MiB.",
+    "link": {
+      "title": "The Abstraction: Address Spaces — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A recursive function uses about 1 KiB of stack per call. On a default Linux system, roughly how deep can it recurse in the main thread before crashing, and what happens?",
+    "options": [
+      {
+        "text": "About 8,000 calls; then the process gets `SIGSEGV` when it touches the guard region below the stack",
+        "explanation": "Correct. The default stack limit is usually 8 MiB. 8 MiB / 1 KiB ≈ 8,192 frames. Beyond that, the access hits unmapped memory and the kernel sends `SIGSEGV`."
+      },
+      {
+        "text": "Unlimited: the stack grows into the heap until RAM runs out",
+        "explanation": "Linux enforces `RLIMIT_STACK` and keeps a guard gap, so the stack can't grow without limit."
+      },
+      {
+        "text": "About 8 million calls; then the kernel kills it with `SIGKILL`",
+        "explanation": "This mixes up KiB and bytes. The crash is a segmentation fault, not an OOM kill."
+      },
+      {
+        "text": "About 1,000 calls; then `malloc` fails",
+        "explanation": "This uses 1 MiB as the limit and confuses the stack with the heap. The stack doesn't use `malloc`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `ulimit -s` typically prints `8192`, i.e. 8 MiB.\n2. Frames are 1 KiB each: 8 × 1,024 KiB / 1 KiB = 8,192 frames (a bit fewer, since `main` and libc use some).\n3. The next call moves the stack pointer below the allowed region; the write faults.\n4. The kernel can't grow the stack further, so it sends `SIGSEGV`: the classic 'stack overflow' crash.\n\nThreads get their own stacks (often 8 MiB too, from `pthread_attr_setstacksize` defaults), and `ulimit -s unlimited` changes the limit for new processes.",
+    "link": {
+      "title": "getrlimit(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/getrlimit.2.html"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this program do?\n\n```c\nint main(void) {\n  char *s = \"hello\";\n  s[0] = 'H';\n  puts(s);\n}\n```",
+    "options": [
+      {
+        "text": "Fails to compile",
+        "explanation": "C allows this (it's undefined behaviour, not a compile error). Compilers may warn; C++ would reject `char *` from a literal."
+      },
+      {
+        "text": "Prints `Hello`",
+        "explanation": "This assumes the literal is writable. On Linux it's stored in read-only memory."
+      },
+      {
+        "text": "Prints `hello`, because the assignment is ignored",
+        "explanation": "The CPU doesn't ignore writes to read-only pages; it faults."
+      },
+      {
+        "text": "Crashes with `SIGSEGV`, because the string literal lives in read-only memory (rodata)",
+        "explanation": "Correct. `s` is a pointer to a literal in a read-only mapping. Writing to it causes a protection fault."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `\"hello\"` is a string literal. The compiler puts it in `.rodata`.\n2. The loader maps `.rodata` read-only.\n3. `s` is a local pointer (on the stack) holding that read-only address.\n4. `s[0] = 'H'` writes to a read-only page; the MMU raises a fault; the kernel sends `SIGSEGV`.\n\nFix: `char s[] = \"hello\";`. Now `s` is an *array on the stack*, initialised by copying the literal, so it's writable.",
+    "link": {
+      "title": "The Abstraction: Address Spaces — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of the following are stored per process in the kernel's process control block (`task_struct` and the structures it points to)? Select all that apply.",
+    "options": [
+      {
+        "text": "Saved CPU registers for when it isn't running",
+        "explanation": "Correct. Without them the kernel couldn't resume the process where it left off."
+      },
+      {
+        "text": "Its open file descriptor table",
+        "explanation": "Correct. The fd table maps small integers like 0, 1, 2 to open files, pipes and sockets."
+      },
+      {
+        "text": "The source code of the program",
+        "explanation": "Wrong. The kernel never sees source code; it runs machine code mapped from the executable file."
+      },
+      {
+        "text": "Its credentials (user and group IDs)",
+        "explanation": "Correct. Every permission check uses them."
+      },
+      {
+        "text": "Pointer to its memory map and page tables",
+        "explanation": "Correct. On a context switch to another process, the kernel loads that process's page-table root."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Ask what the kernel needs to *manage* and *resume* a process:\n\n- Resume it: registers (A), memory map (E).\n- Do I/O for it: fd table (B).\n- Check permissions: credentials (D).\n\nSource code (C) is a developer artefact; it may not even exist on the machine. You can see many of these via `/proc/<pid>/`: `status` (state, creds), `fd/` (open files), `maps` (memory).",
+    "link": {
+      "title": "Process control block — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Process_control_block"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two processes print the same virtual address for a global variable, say `0x5555555580a0`. One sets it to 1, the other to 2. What does each then read back?",
+    "options": [
+      {
+        "text": "Both read 2, because they share the address",
+        "explanation": "The same *virtual* address in different processes maps to different *physical* memory through separate page tables."
+      },
+      {
+        "text": "Each reads its own value: 1 and 2",
+        "explanation": "Correct. Each process has its own address space. The MMU translates the same virtual address to different physical frames."
+      },
+      {
+        "text": "Undefined: there's a race on the shared address",
+        "explanation": "There's no sharing, so there's no race. Sharing has to be set up explicitly with shared memory."
+      },
+      {
+        "text": "The second write segfaults because the address is in use",
+        "explanation": "Addresses are 'in use' only within one address space. The other process's mappings are invisible."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each process has its own page tables.\n2. Virtual `0x...80a0` in process A maps to some physical frame; in process B, to a different one.\n3. A's write changes A's frame; B's changes B's.\n4. They read back 1 and 2.\n\nSame addresses are common: without ASLR, two runs of the same binary load at identical addresses. Isolation comes from the translation, not from the addresses being different.",
+    "link": {
+      "title": "The Abstraction: Address Spaces — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An 8-core server shows a load average of 45, but `top` shows CPUs about 90% idle. Most `nginx` workers are in state `D`. What's the most likely cause?",
+    "options": [
+      {
+        "text": "Workers are in uninterruptible sleep waiting on I/O (for example a hung NFS mount or a saturated disk), and Linux counts `D` tasks in load average",
+        "explanation": "Correct. `D` tasks use no CPU but inflate the load average. The bottleneck is whatever they're waiting on."
+      },
+      {
+        "text": "The workers are zombies and need reaping",
+        "explanation": "Zombies show as `Z`, not `D`, and aren't counted in load average."
+      },
+      {
+        "text": "The workers are stopped by `SIGSTOP`",
+        "explanation": "Stopped tasks show as `T` and aren't counted in load average."
+      },
+      {
+        "text": "The CPUs are overloaded; add more cores",
+        "explanation": "90% idle CPUs means they aren't the bottleneck. Adding cores wouldn't help."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Linux load average = tasks running or runnable (`R`) + tasks in uninterruptible sleep (`D`), averaged over time.\n2. Idle CPUs mean few `R` tasks. So most of the 45 must be `D`.\n3. `D` usually means waiting inside the kernel for I/O that can't be abandoned: disk, NFS, some device drivers.\n4. Next steps: `cat /proc/<pid>/stack` (as root) or `cat /proc/<pid>/wchan` to see where they're stuck; `iostat -x` for disk saturation; check NFS servers.\n\nThis catches people out because most other Unix systems count only runnable tasks.",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A process calls `malloc(1 << 20)` (1 MiB) and then `free()` on it. Its RSS drops back afterwards. If it instead did many 100-byte allocations totalling 1 MiB and freed them all, RSS often stays high. Why the difference on glibc?",
+    "options": [
+      {
+        "text": "The kernel delays reclaiming small pages",
+        "explanation": "The kernel reclaims whatever the process unmaps. The issue is that glibc doesn't unmap small freed chunks."
+      },
+      {
+        "text": "RSS doesn't include heap memory",
+        "explanation": "RSS counts all resident pages, heap included."
+      },
+      {
+        "text": "Small allocations leak by design in glibc",
+        "explanation": "They don't leak: freed memory goes back into the allocator's free lists and is reused for later allocations."
+      },
+      {
+        "text": "Allocations over the mmap threshold (128 KiB by default) get their own `mmap` and `free` unmaps them; small ones come from the `brk` heap, which can only shrink from the top, so freed chunks usually stay in the process",
+        "explanation": "Correct. `munmap` returns pages to the OS straight away. The `brk` heap is contiguous; unless the free space is at the very top, glibc keeps it for reuse rather than returning it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. glibc has two strategies:\n   - Requests ≥ `M_MMAP_THRESHOLD` (128 KiB default, adjusted dynamically): a private `mmap`. `free` = `munmap`. Pages go back at once.\n   - Smaller requests: carved from the heap, grown with `brk`.\n2. The `brk` heap is one contiguous range; it can only shrink from its top end.\n3. If a single live allocation sits above the freed ones, nothing can be trimmed.\n4. So RSS stays high, though the memory is reused by later `malloc`s.\n\nThis is why long-running services see 'memory that never goes down' and why allocators like jemalloc and tcmalloc, which return memory with `madvise`, are popular.",
+    "link": {
+      "title": "mallopt(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
+    }
+  },
+  {
+    "id": "proc-process-abstraction-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A security engineer says ASLR protects against a buffer overflow exploit that overwrites a return address. Which statements are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "ASLR randomises the base addresses of the stack, heap, shared libraries and (for PIE binaries) the executable on every run",
+        "explanation": "Correct. These are the targets an attacker would want to jump to."
+      },
+      {
+        "text": "ASLR prevents the buffer overflow from happening",
+        "explanation": "Wrong. The overflow still occurs; ASLR makes it hard to know what address to write."
+      },
+      {
+        "text": "An information leak that reveals one library address can let the attacker compute other addresses in that library",
+        "explanation": "Correct. ASLR shifts each region as a whole, so one leaked pointer reveals that region's base."
+      },
+      {
+        "text": "A non-PIE executable's code stays at a fixed address even with ASLR on",
+        "explanation": "Correct. Without position-independent code, the main binary must load at its link address, giving attackers fixed gadgets."
+      },
+      {
+        "text": "ASLR makes text pages writable so they can be moved",
+        "explanation": "Wrong. Relocation happens at load time via the page tables; text stays read-only and executable."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. A return-address overwrite needs a *target address*: shellcode, a libc function, or ROP gadgets.\n2. ASLR randomises where regions start (A), so the attacker must guess.\n3. It doesn't stop the overflow (B false). Stack canaries and bounds-checking address that.\n4. Weaknesses: leaks reveal a base (C), and non-PIE binaries aren't moved (D). Modern distros build PIE by default for this reason.\n5. W^X stays in force (E false).\n\nOn Linux, `/proc/sys/kernel/randomize_va_space` = 2 means full randomisation.",
+    "link": {
+      "title": "Address space layout randomization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
+    }
+  }
+]

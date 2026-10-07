@@ -1,0 +1,348 @@
+[
+  {
+    "id": "pipe-out-of-order-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which register dependences does register renaming eliminate?",
+    "options": [
+      {
+        "text": "RAW (true) dependences",
+        "explanation": "RAW is real data flow: the consumer needs the producer's value. No renaming can remove that; it can only be waited for or forwarded."
+      },
+      {
+        "text": "WAR and WAW (name) dependences",
+        "explanation": "Correct. These exist only because two instructions reuse the same register name. Giving each result its own physical register removes them."
+      },
+      {
+        "text": "All three: RAW, WAR and WAW",
+        "explanation": "Renaming leaves RAW in place. If it removed true dependences, programs would compute the wrong answers."
+      },
+      {
+        "text": "Control dependences on branches",
+        "explanation": "Branches are handled by prediction and speculation, not renaming."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. RAW: i2 reads what i1 wrote. Data flows, so i2 must wait. Renaming keeps this: i2 reads i1's physical register.\n2. WAR: i3 overwrites a register i2 still has to read. With renaming, i3 writes a *new* physical register, so i2's input is untouched.\n3. WAW: two writes to the same name. Each gets its own physical register; the RAT points to the newest.\n4. So renaming removes WAR and WAW only.",
+    "link": {
+      "title": "Register renaming — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Register_renaming"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An out-of-order core schedules ready instructions when the required resources are available. Why might its design use a reorder buffer to retire instructions in program order?",
+    "options": [
+      {
+        "text": "To make instructions execute faster",
+        "explanation": "Retirement order doesn't speed execution; it controls when results become architecturally visible."
+      },
+      {
+        "text": "Because functional units can only accept instructions in order",
+        "explanation": "Execution is out of order by design; the scheduler sends any ready instruction to a free unit."
+      },
+      {
+        "text": "So that exceptions are precise and mispredicted work can be discarded before it changes architectural state",
+        "explanation": "Correct. In-order commitment provides a precise architectural boundary for faults and discards uncommitted wrong-path results. It does not by itself impose sequential consistency on memory operations across threads."
+      },
+      {
+        "text": "To store the branch predictor's history",
+        "explanation": "Predictor history lives in the front end; the ROB tracks in-flight instructions."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose instruction 10 executes before instruction 5, and then instruction 5 page-faults.\n2. Without a ROB or another precise-state mechanism, immediate out-of-order register updates could expose instruction 10's result: the OS sees an impossible state (imprecise exception).\n3. With a ROB, instruction 10's result waits in its ROB entry (or an uncommitted physical register).\n4. Instruction 5 reaches the head, faults, and the core discards 5 to 10 and everything after. The state is precise.\n5. The same mechanism undoes wrong-path work after a mispredicted branch.",
+    "link": {
+      "title": "Re-order buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Re-order_buffer"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "This code runs on a core with a single in-order pipeline and on an out-of-order core. The load misses in the cache and takes 200 cycles.\n\n```\nlw  x1, 0(x2)\nadd x3, x1, x4\nmul x5, x6, x7\nsub x8, x9, x10\n```\n\nWhat does the out-of-order core do differently? Assume all four fit in the scheduling window, other operands are ready and suitable units are available; exclude value prediction.",
+    "options": [
+      {
+        "text": "It runs the `add` before the load completes",
+        "explanation": "The `add` truly depends on x1, so no core can run it before the load returns."
+      },
+      {
+        "text": "It skips the load",
+        "explanation": "The load must happen; skipping it would compute the wrong result."
+      },
+      {
+        "text": "Nothing; both cores must wait for the load before doing anything else",
+        "explanation": "That is the in-order core's behaviour. Out-of-order cores exist to avoid it."
+      },
+      {
+        "text": "It executes `mul` and `sub` while the load is outstanding, then the `add` when x1 arrives",
+        "explanation": "Correct. `mul` and `sub` don't depend on x1, so the scheduler issues them as soon as their operands are ready, filling cycles the in-order core wastes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Dependences: `add` needs x1 (from `lw`). `mul` and `sub` need only registers already available.\n2. In-order core: `add` stalls, and `mul` and `sub` are stuck behind it for ~200 cycles.\n3. Out-of-order core: all four enter the window; `mul` and `sub` issue immediately; `add` waits in the scheduler.\n4. Retirement is still in order: `lw`, `add`, `mul`, `sub`, preserving specified architectural results; timing and other microarchitectural effects can differ.",
+    "link": {
+      "title": "Out-of-order execution — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Out-of-order_execution"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The RAT maps each xN to pN, and the free list is p40, p41, p42, ... Rename:\n\n```\nadd x1, x2, x3\nsub x2, x1, x4\nmul x1, x2, x1\n```\n\nWhat does the `mul` become?",
+    "options": [
+      {
+        "text": "`mul p42, p41, p40`",
+        "explanation": "Correct. add → p40 (x1 = p40). sub reads p40, p4 → p41 (x2 = p41). mul reads x2 = p41 and x1 = p40, then gets p42."
+      },
+      {
+        "text": "`mul p42, p41, p42`",
+        "explanation": "This renames the destination before reading the sources, so the mul would read its own output. Sources must be looked up first."
+      },
+      {
+        "text": "`mul p42, p2, p1`",
+        "explanation": "This uses the original mappings, ignoring that add and sub already remapped x1 and x2."
+      },
+      {
+        "text": "`mul p42, p41, p1`",
+        "explanation": "x2 is correctly p41, but x1 was remapped to p40 by the add."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Step through, reading sources from the RAT before updating the destination:\n\n```\nadd x1,x2,x3 -> p40 = add(p2, p3)\n               RAT x1 = p40\nsub x2,x1,x4 -> p41 = sub(p40, p4)\n               RAT x2 = p41\nmul x1,x2,x1 -> p42 = mul(p41, p40)\n               RAT x1 = p42\n```\n\nThe second write to x1 (p42) no longer conflicts with the first (p40), so any later reader of the old x1 still sees p40 while it is live.",
+    "link": {
+      "title": "Register renaming — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Register_renaming"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In Tomasulo's algorithm, the load in reservation station Load1 broadcasts (Load1, 3.5) on the common data bus. Mult1 is waiting with Qj = Load1. The register status table says F6 ← Add1. What happens?",
+    "options": [
+      {
+        "text": "Mult1 captures 3.5, and F6 in the register file is set to 3.5",
+        "explanation": "Mult1 does capture it, but F6's status names Add1, a later writer. Writing 3.5 there would let an older value overwrite the newer one (a WAW error)."
+      },
+      {
+        "text": "Mult1 captures 3.5; the register file is not updated, because a later instruction (Add1) will write F6",
+        "explanation": "Correct. Every waiting RS with a matching tag takes the value. The register file only accepts it if its status still names that tag, which resolves the WAW hazard."
+      },
+      {
+        "text": "Nothing happens until Add1 finishes",
+        "explanation": "The broadcast is consumed immediately by any station waiting on Load1."
+      },
+      {
+        "text": "Mult1 must re-read F6 from the register file",
+        "explanation": "Mult1 recorded a tag at issue precisely so it doesn't have to read the register file again; it captures from the CDB."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Every RS compares its Q fields to the broadcast tag. Mult1 matches Load1, so Vj = 3.5 and Qj is cleared; Mult1 may start if its other operand and the functional unit are ready.\n2. The register file checks F6's status. It names Add1, meaning a younger instruction will produce the architecturally newest F6.\n3. So F6 is **not** written. The load's value lives only in the stations that needed it.\n4. That is register renaming via tags: the 'F6 from the load' and the 'F6 from the add' are different values with different names.",
+    "link": {
+      "title": "Tomasulo's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tomasulo%27s_algorithm"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 4-wide core executes only one long chain of dependent integer adds, each with one-cycle result latency and forwarding. Ignoring loop-control, fetch and retirement overhead, what is the maximum steady-state add IPC?",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "Width is an upper bound, but only independent instructions can issue together. Each add needs the previous one's result."
+      },
+      {
+        "text": "0.25",
+        "explanation": "That would be one instruction every 4 cycles. With 1-cycle latency and forwarding, one add can complete each cycle."
+      },
+      {
+        "text": "1",
+        "explanation": "Correct. A dependence chain with 1-cycle latency allows exactly one instruction per cycle, regardless of width or window size."
+      },
+      {
+        "text": "2",
+        "explanation": "No reordering can create parallelism that a single dependence chain doesn't have."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each add needs the previous result, so at most one add starts per cycle: add IPC = 1. Independent accumulators can expose more parallelism if arithmetic reassociation preserves required semantics and enough ALUs and issue capacity exist. Four-wide decode alone does not imply four add-capable execution units.",
+    "link": {
+      "title": "Instruction-level parallelism — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Instruction-level_parallelism"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Tomasulo's algorithm are true?",
+    "options": [
+      {
+        "text": "Each reservation station operand holds either a value or the tag of the station that will produce it",
+        "explanation": "True. That V/Q pair is the core of the scheme."
+      },
+      {
+        "text": "Results are broadcast on a common data bus to all waiting stations and the register file",
+        "explanation": "True. This lets every consumer pick up a result in the same cycle."
+      },
+      {
+        "text": "The original IBM 360/91 implementation guaranteed precise interrupts",
+        "explanation": "False. Some Model 91 floating-point exceptions were imprecise. Later processor designs used reorder buffers or other precise-state mechanisms; this does not claim a ROB was retrofitted into Model 91."
+      },
+      {
+        "text": "WAR hazards are avoided by capturing the current value or its producer tag when an instruction issues",
+        "explanation": "True. A later register write cannot replace the saved value or change the producer version named by the tag."
+      },
+      {
+        "text": "Instructions enter reservation stations out of program order",
+        "explanation": "False. Issue (into the stations) is in order; only execution is out of order."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. V/Q per operand: **true**.\n2. CDB broadcast: **true**.\n3. The claim that 360/91 always guaranteed precise interrupts is **false**; some floating-point exceptions were imprecise.\n4. Copy at issue removes WAR: **true**.\n5. Issue is in order; execute is out of order: **false**.\n\nMnemonic: in order in, out of order through, (with a ROB) in order out.",
+    "link": {
+      "title": "Tomasulo's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tomasulo%27s_algorithm"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a simplified 3 GHz core, a load at the ROB head has 100 ns remaining. Assume about 512 free entries, allocation at four entries per cycle, no retirement until it returns, and no earlier resource bottleneck. Roughly when does allocation stop?",
+    "options": [
+      {
+        "text": "The ROB hides the miss completely",
+        "explanation": "Maintaining allocation at four entries per cycle for all 300 cycles would require 1,200 free entries. Whether independent work hides latency is a separate workload question; this model only predicts when allocation exhausts capacity."
+      },
+      {
+        "text": "The core stalls immediately for 300 cycles",
+        "explanation": "Retirement is already blocked, but allocation and independent execution can continue while resources remain."
+      },
+      {
+        "text": "The free entries fill in about 128 cycles; allocation then waits roughly another 172 cycles",
+        "explanation": "Correct in this occupancy model: 100 ns × 3 GHz = 300 cycles, 512 / 4 = 128, and 300 − 128 = 172. Already allocated instructions may still execute."
+      },
+      {
+        "text": "The load is retired early to free its entry",
+        "explanation": "A load can't retire before its value arrives: retirement is in order and needs a completed result."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "At 3 GHz, 100 ns is 300 cycles. About 512 free entries fill in 128 cycles at four entries per cycle. Allocation then waits about 172 cycles. Retirement is blocked throughout, but execution need not cease when allocation stops. Real free capacity, dependencies, other queues and memory bandwidth may change this estimate.",
+    "link": {
+      "title": "Re-order buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Re-order_buffer"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A branch was predicted taken, and 40 wrong-path instructions have already executed and written physical registers when the branch resolves as not taken. What does the core do?",
+    "options": [
+      {
+        "text": "Lets them retire, then runs compensating instructions",
+        "explanation": "Wrong-path instructions must never retire; there are no compensating instructions in hardware recovery."
+      },
+      {
+        "text": "Squashes every ROB entry younger than the branch, restores the rename table to its state at the branch, safely reclaims the wrong-path physical registers, and refetches from the correct path",
+        "explanation": "Correct. Since nothing younger had committed, no architectural state changed. The RAT checkpoint (or a walk back through the ROB) restores the mappings."
+      },
+      {
+        "text": "Flushes only the 40 executed instructions; unexecuted wrong-path ones can stay",
+        "explanation": "Every instruction after the branch is on the wrong path, executed or not. All are squashed."
+      },
+      {
+        "text": "Raises an exception to the operating system",
+        "explanation": "Ordinary branch misprediction recovery is handled by hardware; it does not itself require an OS exception."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The branch's ROB entry marks the boundary: everything younger is wrong-path.\n2. Squash: discard those ROB entries, scheduler entries and store-buffer entries.\n3. Restore the RAT: mappings revert, and wrong-path physical registers return to the free list when safely reusable.\n4. Redirect fetch to the correct target.\n5. Architectural state is untouched. Some microarchitectural effects, such as cache changes, may persist; predictor-history recovery varies, which is what the Spectre attacks exploited.",
+    "link": {
+      "title": "Re-order buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Re-order_buffer"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An older store `sw x3, 0(x5)` hasn't computed its address yet. A younger load `lw x7, 0(x6)` is ready. The core speculatively lets the load go first. Later the store's address turns out equal to the load's. What happens? Assume aligned ordinary memory, equal access sizes, no intervening store or external writer, and a design that recovers by squashing from the load.",
+    "options": [
+      {
+        "text": "The load keeps its value; loads and stores can't overlap",
+        "explanation": "The addresses overlap. The load may have read the pre-store value rather than the value required by the older store. The specified design detects the ordering violation and replays; numerical equality would not establish a general ordering guarantee."
+      },
+      {
+        "text": "The store is cancelled",
+        "explanation": "The store is correct and older; it must happen. The load is what went wrong."
+      },
+      {
+        "text": "The core detects the violation and re-executes the load and younger work; the load must obtain the older store’s value",
+        "explanation": "Correct under the stated recovery design. The value may be forwarded when store data is ready, or read after the store becomes visible; immediate forwarding is not guaranteed."
+      },
+      {
+        "text": "The program reads the old value and the OS fixes it",
+        "explanation": "This is invisible to software and handled in hardware."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The younger load must observe the older same-address store under these assumptions. If it speculatively read stale data, the core detects the ordering violation and recovers by the stipulated squash. On re-execution it waits, forwards or reads the now-updated memory as appropriate. Other designs may use more selective replay.",
+    "link": {
+      "title": "Out-of-order execution — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Out-of-order_execution"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which are genuine reasons that making out-of-order cores ever wider gives diminishing returns?",
+    "options": [
+      {
+        "text": "A scheduler may need many result-tag/operand comparisons and selection paths, making width and window expansion costly",
+        "explanation": "True. Comparison count grows with the number of broadcast results and waiting operands in this design. Actual area, timing and power scaling depend on scheduler organisation."
+      },
+      {
+        "text": "Renaming introduces extra RAW dependences",
+        "explanation": "Not a reason. Renaming removes name dependences and adds no true ones."
+      },
+      {
+        "text": "Real programs' true dependence chains and branches limit how much ILP exists",
+        "explanation": "True. Dependences and control flow can prevent a workload from supplying enough independent ready operations."
+      },
+      {
+        "text": "A wider speculative machine can do more wrong-path work before a branch resolves",
+        "explanation": "True as a possible cost, not a universal width-times-depth penalty. Resolution timing, dependencies and occupancy matter."
+      },
+      {
+        "text": "The reorder buffer forces instructions to execute in program order",
+        "explanation": "Not a reason. The ROB only forces in-order retirement; execution is out of order."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Separate real limits from misconceptions:\n\n1. Scheduler complexity: real, a hardware cost.\n2. Renaming adding RAW: false; renaming only removes WAR/WAW.\n3. Limited ILP: real, a property of the code.\n4. Additional speculative capacity can increase wasted work: a real possible cost, not a fixed scaling law.\n5. ROB enforcing execution order: false; it orders retirement.\n\nThese limits, together with power, are why per-core gains slowed and designs turned to more cores.",
+    "link": {
+      "title": "Superscalar processor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Superscalar_processor"
+    }
+  }
+]

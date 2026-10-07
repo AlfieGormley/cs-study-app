@@ -1,0 +1,338 @@
+[
+  {
+    "id": "app-ntp-ssh-grpc-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An NTP exchange records `t1 = 100.000`, `t2 = 100.580`, `t3 = 100.581`, `t4 = 100.041` (seconds). What are the offset and round-trip delay?",
+    "options": [
+      {
+        "text": "Offset +0.580 s, delay 0.041 s",
+        "explanation": "This uses only t2 − t1 for the offset and ignores server processing time in the delay. NTP averages both directions and subtracts t3 − t2."
+      },
+      {
+        "text": "Offset +0.560 s, delay 0.040 s",
+        "explanation": "Correct. Offset = ((0.580) + (0.540)) / 2 = 0.560. Delay = 0.041 − 0.001 = 0.040."
+      },
+      {
+        "text": "Offset −0.560 s, delay 0.040 s",
+        "explanation": "The sign is wrong. A positive offset means the client is behind the server and must move forward."
+      },
+      {
+        "text": "Offset +0.020 s, delay 1.121 s",
+        "explanation": "This adds where it should subtract. The delay can't exceed t4 − t1 = 41 ms."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nt2 - t1 = 0.580\nt3 - t4 = 100.581 - 100.041\n        = 0.540\noffset  = (0.580 + 0.540) / 2\n        = 0.560\n\nt4 - t1 = 0.041\nt3 - t2 = 0.001\ndelay   = 0.041 - 0.001 = 0.040\n```\n\nThe client is 560 ms behind. It is a big offset, so at boot it would step; later it would slew.",
+    "link": {
+      "title": "Network Time Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is SFTP?",
+    "options": [
+      {
+        "text": "FTP with its control and data connections wrapped in TLS",
+        "explanation": "That is FTPS. SFTP shares only the name with FTP."
+      },
+      {
+        "text": "FTP tunnelled through an `ssh -L` port forward",
+        "explanation": "You can tunnel FTP that way, but that is not SFTP; FTP's separate data connections make it awkward anyway."
+      },
+      {
+        "text": "A binary file-access protocol that runs as a subsystem inside an SSH session channel",
+        "explanation": "Correct. SFTP sends requests like OPEN, READ and WRITE with IDs over one SSH channel, with no separate data connection."
+      },
+      {
+        "text": "Another name for `scp`'s original protocol",
+        "explanation": "The original scp protocol was a different, rcp-derived protocol. Since OpenSSH 9.0, `scp` uses SFTP by default."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. You run `sftp host`.\n2. SSH sets up its transport and authenticates you.\n3. The client opens a session channel and requests the `sftp` subsystem.\n4. Over that channel, binary packets flow: `SSH_FXP_INIT`, `OPEN`, `READ`, `DATA`, `CLOSE`.\n\nOne TCP connection, one port (22), and every request has an ID.",
+    "link": {
+      "title": "SSH File Transfer Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A gRPC message is encoded as `08 96 01` in protobuf. What 5-byte prefix does gRPC put in front of it in the DATA frame (uncompressed)?",
+    "options": [
+      {
+        "text": "`03 00 00 00 00`",
+        "explanation": "That puts the length first and in little-endian order. gRPC uses flag first, then big-endian length."
+      },
+      {
+        "text": "`00 03`",
+        "explanation": "The prefix is always 5 bytes: 1 for the flag and 4 for the length."
+      },
+      {
+        "text": "No prefix; HTTP/2 DATA frames already carry length",
+        "explanation": "A DATA frame's length is not a message boundary; messages can span frames or share them, so gRPC adds its own framing."
+      },
+      {
+        "text": "`00 00 00 00 03`",
+        "explanation": "Correct. 1 byte compressed flag (0), then a 4-byte big-endian length (3)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Message length: `08 96 01` = 3 bytes.\n2. Compressed flag: 0.\n3. Length as uint32 big-endian: `00 00 00 03`.\n4. Prefix: `00` + `00 00 00 03`.\n\nWhole payload: `00 00 00 00 03 08 96 01`, 8 bytes.",
+    "link": {
+      "title": "gRPC over HTTP2 protocol spec — GitHub",
+      "url": "https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client's NTP requests reach the server in 4 ms, but responses take 24 ms to return because the client's downlink is congested. The client's clock is in fact correct. What offset will NTP compute?",
+    "options": [
+      {
+        "text": "About −10 ms (it will think the client is 10 ms ahead)",
+        "explanation": "Correct. The error is half the difference between the two directions: (4 − 24) / 2 = −10 ms."
+      },
+      {
+        "text": "0 ms, because NTP corrects for delay",
+        "explanation": "NTP corrects for *total* delay but assumes it is split evenly. It cannot see the asymmetry."
+      },
+      {
+        "text": "About +20 ms",
+        "explanation": "That is the full difference; the formula halves it."
+      },
+      {
+        "text": "About −14 ms, half the round trip",
+        "explanation": "Half the round trip (14 ms) is the maximum *possible* error bound, not the error here."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Let the true clocks agree, server processing 0, t1 = 0.\n\n```\nt2 = 0.004\nt3 = 0.004\nt4 = 0.028\noffset = ((0.004 - 0) +\n          (0.004 - 0.028)) / 2\n       = (0.004 - 0.024) / 2\n       = -0.010\n```\n\nNTP would slow the client clock by 10 ms although it was right. That is why NTP prefers the lowest-delay samples and multiple servers.",
+    "link": {
+      "title": "RFC 5905: Network Time Protocol Version 4 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc5905"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service measures request latency as `time.time()` at the end minus `time.time()` at the start. Occasionally it logs negative latencies. What is the likely cause and fix?",
+    "options": [
+      {
+        "text": "Integer overflow in the subtraction; use a 64-bit type",
+        "explanation": "Python floats don't overflow at these magnitudes. The wall clock itself went backwards."
+      },
+      {
+        "text": "The wall clock was stepped backwards by NTP (or an admin); measure durations with `time.monotonic()`",
+        "explanation": "Correct. Wall-clock time can jump; the monotonic clock never goes backwards, so it is the right tool for intervals."
+      },
+      {
+        "text": "Leap seconds always produce negative intervals; ignore them",
+        "explanation": "A leap second can cause this, but so can any step. Ignoring it hides real bugs; using a monotonic clock fixes it."
+      },
+      {
+        "text": "The CPU executed the lines out of order",
+        "explanation": "Out-of-order execution is invisible at this level; program order is preserved for the results."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `time.time()` reads the wall clock (CLOCK_REALTIME).\n2. NTP may step it if the offset is large (ntpd: > 128 ms by default), and admins or VMs resuming can too.\n3. If a step backwards of 300 ms happens during a 50 ms request: end − start = −250 ms.\n4. `time.monotonic()` (CLOCK_MONOTONIC) only moves forward; NTP slewing changes its rate slightly but never steps it.\n\nRule: wall clock for timestamps, monotonic clock for durations and timeouts.",
+    "link": {
+      "title": "time — Python documentation",
+      "url": "https://docs.python.org/3/library/time.html"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Downloading a 1 GB file with a naive SFTP client that sends one 32 KB READ and waits for the reply before sending the next, over an 80 ms RTT link, takes roughly how long (ignoring bandwidth limits)?",
+    "options": [
+      {
+        "text": "About 8 seconds",
+        "explanation": "That would need about 125 MB/s. One 32 KB block per 80 ms is only 400 KB/s."
+      },
+      {
+        "text": "About 4 hours",
+        "explanation": "This overestimates by using a much smaller block size or larger RTT. 32,768 × 0.08 s ≈ 44 minutes."
+      },
+      {
+        "text": "About 1 minute, because SSH windows allow pipelining automatically",
+        "explanation": "Channel windows allow data to flow, but this client only ever has one request outstanding, so it waits a full RTT per block."
+      },
+      {
+        "text": "About 43 minutes",
+        "explanation": "Correct. 1 GB / 32 KB ≈ 32,768 round trips × 0.08 s ≈ 2,620 s ≈ 44 minutes (around 43 to 44 depending on GB vs GiB)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nblocks = 2^30 / 2^15 = 32,768\ntime   = 32,768 x 0.080 s\n       = 2,621 s ~ 44 min\nrate   = 32 KB / 0.08 s\n       = 400 KB/s (~3.3 Mbit/s)\n```\n\nWith 64 requests outstanding (OpenSSH's default), each RTT moves 64 × 32 KB = 2 MB, so the same transfer takes about 41 seconds if bandwidth allows.",
+    "link": {
+      "title": "SSH File Transfer Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "During SSH public-key authentication the client signs data that includes the **session ID**. Which attacks does this prevent? Select all that apply.",
+    "options": [
+      {
+        "text": "Replaying a captured signature on a new connection",
+        "explanation": "Correct. Each connection has a different session ID, so an old signature is invalid."
+      },
+      {
+        "text": "A man-in-the-middle relaying the signature to the real server",
+        "explanation": "Correct. The MITM has separate key exchanges with each side, so the two session IDs differ and the relayed signature fails on the server."
+      },
+      {
+        "text": "An attacker who already has your private key logging in",
+        "explanation": "With the key they can sign any session ID. Binding to the session does not help."
+      },
+      {
+        "text": "The server learning your public key",
+        "explanation": "The server must know your public key (in authorized_keys) to verify; that is not a secret."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Session ID = exchange hash H from the first key exchange, unique per connection.\n2. Signature covers H plus user name and key.\n3. Replay: new connection → new H → old signature invalid.\n4. MITM: client↔MITM has H1, MITM↔server has H2. Client signs H1; server expects H2 → fails.\n\nThis is also why host key verification matters: if you accept the MITM's host key, it can terminate your session and proxy commands, though it still can't log in to the real server as you with publickey auth.",
+    "link": {
+      "title": "RFC 4253: The SSH Transport Layer Protocol — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc4253"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your gRPC client logs `UNAVAILABLE`, while an HTTP access log on the proxy shows `:status 200` for the same call. How can both be true?",
+    "options": [
+      {
+        "text": "The proxy log is wrong",
+        "explanation": "It's normal: gRPC errors usually ride on HTTP 200."
+      },
+      {
+        "text": "UNAVAILABLE always comes from the client library and never from the server",
+        "explanation": "Clients do generate UNAVAILABLE for connection failures, but servers and proxies can send it too."
+      },
+      {
+        "text": "gRPC carries call status in trailers (`grpc-status`), so the HTTP status can be 200 while the call fails",
+        "explanation": "Correct. The HTTP response started successfully; the final trailers said `grpc-status: 14` (UNAVAILABLE)."
+      },
+      {
+        "text": "HTTP/2 doesn't have status codes",
+        "explanation": "HTTP/2 has `:status`. gRPC just doesn't use it for application status."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The server replies HEADERS `:status 200`, content-type application/grpc.\n2. Maybe some DATA.\n3. Final HEADERS (trailers) with END_STREAM: `grpc-status: 14`, `grpc-message: backend down`.\n4. HTTP-level logs record 200; the gRPC library reads the trailer.\n\nMonitor gRPC status codes, not HTTP codes, for gRPC services.",
+    "link": {
+      "title": "gRPC over HTTP2 protocol spec — GitHub",
+      "url": "https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You put 10 gRPC backends behind a layer-4 (TCP) load balancer. One client service with 4 instances sends 20,000 calls per second. Monitoring shows 4 backends at 100% CPU and 6 idle. Why?",
+    "options": [
+      {
+        "text": "Each client instance holds one long-lived HTTP/2 connection, so the L4 balancer assigned each instance to one backend and all its calls follow it",
+        "explanation": "Correct. 4 connections → at most 4 backends. Use an L7 proxy that balances per request (stream), or client-side balancing over connections to all backends."
+      },
+      {
+        "text": "The L4 balancer is using round robin per packet",
+        "explanation": "L4 balancers pick a backend per connection, not per packet."
+      },
+      {
+        "text": "gRPC requires sticky sessions",
+        "explanation": "gRPC calls are independent; the stickiness here is an accident of connection-level balancing."
+      },
+      {
+        "text": "The 6 idle backends failed health checks",
+        "explanation": "Possible in general, but the pattern of exactly one busy backend per client connection points to connection-level balancing."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. gRPC multiplexes all calls on one HTTP/2 connection per channel.\n2. L4 balancing decides once, at TCP connect.\n3. 4 client instances × 1 connection = 4 backends chosen; the other 6 never see a connection.\n4. Each busy backend gets ~5,000 calls/s.\n\nFixes: an HTTP/2-aware L7 proxy (Envoy, many cloud L7 balancers) that spreads streams; client-side balancing (gRPC `round_robin` over resolved addresses); or periodically recycling connections (max connection age) as a partial fix.",
+    "link": {
+      "title": "gRPC Load Balancing — gRPC blog",
+      "url": "https://grpc.io/blog/grpc-load-balancing/"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What did the Terrapin attack (2023) exploit in SSH?",
+    "options": [
+      {
+        "text": "A weakness in curve25519 that leaked session keys",
+        "explanation": "No cryptographic primitive was broken. The issue was in how sequence numbers interact with the handshake."
+      },
+      {
+        "text": "Weak random padding allowing plaintext recovery",
+        "explanation": "Padding was not the issue; Terrapin manipulated which messages were received, not their content."
+      },
+      {
+        "text": "Sequence numbers that continued from the unencrypted handshake, letting an attacker inject a message before encryption and delete one after without detection",
+        "explanation": "Correct. The counts stayed consistent, so integrity checks passed, while messages such as extension negotiation were removed. Strict KEX resets sequence numbers at NEWKEYS."
+      },
+      {
+        "text": "Clients accepting unknown host keys on first use",
+        "explanation": "TOFU is a separate trade-off. Terrapin works even with a correctly verified host key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. SSH MACs include an implicit per-direction sequence number that counts every packet from the start, including unencrypted handshake packets.\n2. The attacker (on path) injects an ignorable message during the plaintext handshake: the receiver's counter goes up by 1.\n3. After encryption starts, the attacker deletes the first encrypted message (e.g. EXT_INFO): the counter is now back in step.\n4. Every later MAC verifies; the peer never learns that extension negotiation happened.\n5. Fix: strict KEX resets counters after NEWKEYS and rejects unexpected messages during key exchange. Both sides must support it.",
+    "link": {
+      "title": "Terrapin Attack",
+      "url": "https://terrapin-attack.com/"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A gRPC service A has a 300 ms deadline from its caller. It spends 50 ms, then calls service B. Which behaviours are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A should send B a `grpc-timeout` of about 250 ms (less if it needs time to finish afterwards)",
+        "explanation": "Correct. Deadline propagation passes the remaining budget downstream."
+      },
+      {
+        "text": "If the deadline passes, the client sees DEADLINE_EXCEEDED, and the stream is cancelled with RST_STREAM so servers can stop work",
+        "explanation": "Correct. Cancellation propagates; well-written servers check their context and abandon work."
+      },
+      {
+        "text": "A should give B a fresh 300 ms timeout so B has enough time",
+        "explanation": "B would keep working after A's caller has given up. Fresh timeouts at each hop multiply wasted work during overload."
+      },
+      {
+        "text": "`grpc-timeout: 250m` means 250 minutes",
+        "explanation": "Lower-case `m` is milliseconds; minutes is upper-case `M`."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. A's budget: 300 ms. Used: 50 ms. Remaining: 250 ms.\n2. A calls B with `grpc-timeout: 250m` (or e.g. 230m, keeping 20 ms to respond).\n3. If B is slow, the deadline fires everywhere at once; the client library resets the HTTP/2 stream.\n4. B sees cancellation and stops.\n\nUnits: H hours, M minutes, S seconds, m milliseconds, u microseconds, n nanoseconds.",
+    "link": {
+      "title": "gRPC and deadlines — gRPC blog",
+      "url": "https://grpc.io/blog/deadlines/"
+    }
+  }
+]

@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs2-collaborative-editor-q1",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The document is `abc` at revision 10. Alice sends `insert(1, \"X\")` and Bob concurrently sends `delete(2)` (removing `c`), both with `base_rev = 10`. The server commits Alice's op first. Into what must the server transform Bob's op before applying it?",
+    "options": [
+      {
+        "text": "`delete(2)`, unchanged",
+        "explanation": "Wrong. After Alice's insert, the document is `aXbc`, and index 2 is now `b`. Applying the original op would delete Bob's neighbour instead of `c`, violating his intention."
+      },
+      {
+        "text": "Reject Bob's op as a conflict and ask him to retry",
+        "explanation": "Wrong. OT's purpose is that concurrent edits to different characters both succeed automatically. Rejecting them would make real-time collaboration miserable."
+      },
+      {
+        "text": "`delete(1)`",
+        "explanation": "Wrong. This shifts in the wrong direction. Insertions *before* a position push it right, not left. `delete(1)` would remove Alice's `X`."
+      },
+      {
+        "text": "`delete(3)`",
+        "explanation": "Correct. Alice inserted one character at position 1, which is before Bob's target at position 2, so every later index shifts right by one. `delete(3)` on `aXbc` removes `c`, giving `aXb`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work it through:\n\n1. Rev 10: `a b c` at indices 0, 1, 2.\n2. Commit Alice `insert(1,'X')`, giving rev 11: `a X b c` at 0, 1, 2, 3.\n3. Bob's `delete(2)` was meant for `c`. Transform rule for delete-vs-insert: if `insert.pos <= delete.pos`, then `delete.pos += len(insert)`.\n4. 1 <= 2, so it becomes **`delete(3)`**, committed as rev 12: `a X b`.\n5. Bob's client receives Alice's op and transforms it against his own pending `delete(2)`. The insert at 1 is before the delete at 2, so it's unchanged: `insert(1,'X')` on `ab` gives `aXb`.\n\nBoth replicas show `aXb`. That's convergence plus intention preservation.",
+    "link": {
+      "title": "Operational transformation (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Operational_transformation"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do text CRDTs like Yjs or RGA avoid the need to transform operations?",
+    "options": [
+      {
+        "text": "Each character has a unique, immutable id, and inserts reference neighbouring ids rather than numeric positions. Ids don't shift with other edits, so concurrent ops commute and can be applied in any order",
+        "explanation": "Correct. Positions are what OT has to transform. Replacing positions with stable ids, plus a deterministic tie-break for concurrent inserts at the same anchor, makes the merge order irrelevant."
+      },
+      {
+        "text": "They lock the document so only one person edits at a time",
+        "explanation": "Wrong. CRDTs are designed for *concurrent* edits with no locking. Locking would destroy real-time collaboration."
+      },
+      {
+        "text": "They resolve every conflict with last-writer-wins on the whole document",
+        "explanation": "Wrong. Whole-document LWW would throw away one user's edits entirely. Sequence CRDTs merge at character granularity."
+      },
+      {
+        "text": "They send the full document on every keystroke",
+        "explanation": "Wrong. State-based syncing exists, but text CRDTs normally send small ops or deltas. Sending full documents doesn't remove the need to merge concurrent changes anyway."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the two representations of 'insert X after a':\n\n| | Op |\n|---|---|\n| OT | `insert(1, 'X')` (index) |\n| CRDT | `insert('X', id=(alice,7), after=(bob,1))` |\n\nIf Bob concurrently deletes `c`, its id `(bob,3)` is tombstoned, but `(bob,1)`, the `a`, is still there. Alice's insert applies the same way whether it arrives before or after Bob's delete.\n\nIf two users insert after the same anchor at once, every replica orders them by comparing ids (for example by counter, then client id), so everyone gets the same sequence. The price is metadata: ids and tombstones per character.",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q3",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're building a note-taking app where users often edit for hours on aeroplanes and then sync, sometimes directly between their own devices without a server. Which statements about choosing a CRDT here are true? Select all that apply.",
+    "options": [
+      {
+        "text": "CRDTs converge without a central sequencer, so device-to-device sync works naturally",
+        "explanation": "Correct. Commutativity means any replica can merge ops from any other, in any order. That fits peer-to-peer and offline-first use."
+      },
+      {
+        "text": "Long offline divergence is cheap to merge: replicas exchange missing ops (via state vectors) and apply them",
+        "explanation": "Correct. There's no per-op transform cost. Merging is essentially a set union of ops with deterministic ordering, however long the replicas were apart."
+      },
+      {
+        "text": "Document size on disk will equal the visible text size",
+        "explanation": "Wrong. CRDTs keep per-element ids and tombstones for deleted content. Modern implementations compress this well, but heavily edited documents still carry noticeable overhead."
+      },
+      {
+        "text": "Semantic conflicts, like both users rewriting the same sentence, are resolved into what both intended",
+        "explanation": "Wrong. CRDTs guarantee convergence, not that the result makes sense. Both rewrites survive in a merged form, which may read oddly. Product features (highlighting merges) handle that."
+      },
+      {
+        "text": "Tombstones can be garbage-collected only once you're sure no replica still needs them as anchors, which is hard when devices can be offline indefinitely",
+        "explanation": "Correct. GC needs some notion of causal stability across all replicas. A laptop offline for a month blocks it, which is one of the 'hard parts' of CRDTs."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Assess the requirements against each approach:\n\n1. **No server for some syncs** rules out pure OT, which needs a central order.\n2. **Hours offline**: OT would rebase thousands of ops against thousands of others. CRDT merges are linear.\n3. Accept the costs openly:\n   - Metadata: ids and tombstones (a heavily edited document can be noticeably larger than its visible text, even with Yjs-style compression).\n   - GC: needs causal stability, so prefer periodic snapshots that agree a GC point with known devices.\n   - Semantics: convergence is not correctness of meaning.\n\nA CRDT library (Yjs or Automerge) is the pragmatic choice here.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your session server acknowledges ops as soon as they're applied in memory, then writes them to the op log in batches every 2 seconds. A server crash loses the last second of a user's typing, even though their client had shown it as saved. What's the correct fix?",
+    "options": [
+      {
+        "text": "Write batches every 100 ms instead",
+        "explanation": "Wrong. This shrinks the window but doesn't close it. Any acknowledged-but-unpersisted op can still be lost. The bug is acking before the write is durable."
+      },
+      {
+        "text": "Replicate in-memory state to a second server and never write to disk",
+        "explanation": "Wrong. Memory-only replication loses everything if both fail (a rack or power event) and provides no history. You still need a durable log."
+      },
+      {
+        "text": "Ack an op only after it's durably appended to the op log. Clients keep unacknowledged ops and resend them after reconnecting, deduplicated by `client_id + seq`",
+        "explanation": "Correct. Acknowledgement must mean 'durable'. Group commit can still batch writes for efficiency, as long as acks wait for the batch. Client-side retention plus idempotent resend covers the in-flight ops."
+      },
+      {
+        "text": "Save the full document from the client every 30 seconds",
+        "explanation": "Wrong. Full-document saves from many clients conflict with each other, and that defeats the op-based model. It also doesn't stop acknowledged ops being lost in between."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Define the contract: **ack == durable**.\n\n```\nclient: send op (cid=7, seq=17)\nserver: append doc_ops(rev=42,\n          cid=7, seq=17)\n  (group commit: ~5 ms)\nserver: ack seq=17 rev=42; broadcast\n```\n\nCrash handling:\n- Crash **before** the append: no ack was sent, so the client still holds op 17 and resends it to the new owner.\n- Crash **after** the append, before the ack: the client resends, the new owner sees `(cid 7, seq 17)` is already at rev 42, and acks without reapplying.\n\nLocal echo still feels instant, because the client applies its own op immediately. Only the 'saved' indicator waits for the ack, about 50–100 ms.",
+    "link": {
+      "title": "Operational transformation (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Operational_transformation"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 3-year-old design spec has 4 million ops in its log and takes 40 seconds to open. Which storage design fixes load time while keeping full revision history?",
+    "options": [
+      {
+        "text": "Delete ops older than 30 days",
+        "explanation": "Wrong. You'd lose the ability to rebuild old revisions, and without a snapshot you can't even rebuild the *current* state from the remaining ops."
+      },
+      {
+        "text": "Store the document only as a single mutable blob, updated on every op",
+        "explanation": "Wrong. Rewriting a large blob on every keystroke is very write-heavy, it loses the op history needed for revisions, and it races with concurrent writers."
+      },
+      {
+        "text": "Cache the rendered document in the browser forever",
+        "explanation": "Wrong. It doesn't help new devices or collaborators, goes stale with others' edits, and doesn't fix the server-side rebuild cost."
+      },
+      {
+        "text": "Write periodic snapshots (every N ops or minutes). Load the latest snapshot plus the ops after it, and keep older ops (or coarser compacted snapshots) for history",
+        "explanation": "Correct. Load cost becomes bounded by N (say 500 ops) rather than the document's lifetime. History stays available by rebuilding from the nearest earlier snapshot, and old fine-grained ops can be compacted."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Quantify it:\n\n- Replay costs about 10 microseconds per op, so 4 M ops is **40 s**.\n- With a snapshot every 500 ops, a load replays at most 500 ops, about **5 ms**, plus fetching the snapshot (say a 2 MB blob, tens of ms).\n\nHistory:\n\n```\nrevision R requested:\n  s = latest snapshot with rev <= R\n  state = load(s)\n    + replay ops in (s.rev, R]\n```\n\nRetention policy: keep every op for 30 days, and after that keep hourly or daily snapshots plus named versions. Restoring creates a **new** op at the head, never a rewrite.",
+    "link": {
+      "title": "How Figma's multiplayer technology works (Figma blog)",
+      "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You store each user's cursor as an integer offset, broadcast whenever it moves. Users report collaborators' cursors 'jumping' to the wrong place whenever someone types above them. What should you change?",
+    "options": [
+      {
+        "text": "Broadcast cursors 60 times a second so they're always fresh",
+        "explanation": "Wrong. More frequent updates waste bandwidth and still briefly show wrong positions after every remote edit. The positions themselves need to account for edits."
+      },
+      {
+        "text": "Persist cursors to the op log so they're ordered with edits",
+        "explanation": "Wrong. Cursors are ephemeral presence data. Logging them bloats history with high-frequency noise, and still needs transformation to be meaningful."
+      },
+      {
+        "text": "Treat cursors as positions that are transformed by incoming ops (OT), or anchor them to character ids (CRDT), so they move with the text",
+        "explanation": "Correct. A raw offset is just another index, and it goes stale exactly as a raw insert position does. Transforming it, or anchoring it to a stable id, keeps it attached to the same character."
+      },
+      {
+        "text": "Hide remote cursors while anyone is typing",
+        "explanation": "Wrong. It sidesteps the bug by removing a core collaborative feature."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Example: Carol's cursor is at offset 120, inside paragraph 3. Dave inserts 15 characters at offset 40, in paragraph 1.\n\n- Raw offset: Carol's cursor still says 120, but the text she was at is now at 135. Everyone sees her cursor 15 characters too early.\n- OT fix: `transform(cursor=120, insert(40, 15 chars))`. Since 40 <= 120, the cursor becomes 135.\n- CRDT fix: store the cursor as 'after char id (carol, 812)'. That id doesn't move, so the cursor is right without any maths.\n\nKeep presence ephemeral: throttle to about 10 updates a second per user, with a heartbeat TTL, and never write it to the op log.",
+    "link": {
+      "title": "Yjs (GitHub)",
+      "url": "https://github.com/yjs/yjs"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Each document is owned by one session server via a 10 s lease. Server S1 freezes for 15 s, its lease expires, and S2 takes ownership. S1 unfreezes and keeps accepting ops from clients still connected to it. How do you stop the document's history forking?",
+    "options": [
+      {
+        "text": "Make the op-log append conditional: `INSERT (doc_id, rev)` must be unique, and carry a fencing token the store checks. S1's appends then fail, so it drops its clients, which reconnect to S2",
+        "explanation": "Correct. The storage layer enforces a single linear history. S2 has already written rev N+1, so S1's write of rev N+1 conflicts, and its stale fencing token is rejected. S1 learns it's no longer the owner and closes its sessions."
+      },
+      {
+        "text": "Trust S1 to check its lease clock before each op",
+        "explanation": "Wrong. A paused process can check, freeze again, and then write. Time-based leases can't guarantee mutual exclusion on their own."
+      },
+      {
+        "text": "Let both servers accept ops and merge the two histories later with OT",
+        "explanation": "Wrong. Server-side OT assumes one total order per document. Two divergent server histories, each with acknowledged ops, can't be cleanly reconciled after the fact."
+      },
+      {
+        "text": "Use a longer 60 s lease",
+        "explanation": "Wrong. Any lease can be outlived by a pause or partition. It only makes failover slower after genuine crashes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The single-owner model relies on **one linear op log per document**. Enforce it where the data lives:\n\n```\nS2 (token 9):\n  INSERT doc_ops(d1, rev 501) ok\nS1 (token 8):\n  INSERT doc_ops(d1, rev 501)\n   -> duplicate key, or stale token\n   -> S1 marks d1 lost,\n      closes its sockets\nclients reconnect -> routed to S2\nclients resend unacked ops (cid+seq)\n```\n\nNo acknowledged op is lost, because S1 never acked an op it couldn't append. And there's no fork, because only one writer can claim each `rev`.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In client-server OT, Alice's client has op A in flight (sent, not yet acked) and op B buffered (typed since). A server op S from Bob arrives, based on a revision before A. What must Alice's client do?",
+    "options": [
+      {
+        "text": "Apply S directly to the local document, since the server has already ordered it",
+        "explanation": "Wrong. S's positions refer to the document *without* A and B. Applied raw to Alice's local copy, which already includes them, it can land in the wrong place."
+      },
+      {
+        "text": "Discard A and B, apply S, and ask Alice to retype",
+        "explanation": "Wrong. Losing local edits breaks the basic promise of collaborative editing. Transformation exists to avoid exactly this."
+      },
+      {
+        "text": "Transform S against A and then B before applying it locally, and transform A and B against S so they stay valid on the server's history",
+        "explanation": "Correct. The client keeps its pending ops and the incoming op mutually consistent, so both the local view and the eventual server commit converge."
+      },
+      {
+        "text": "Wait until A is acknowledged, then apply S",
+        "explanation": "Wrong. Waiting doesn't change the fact that S doesn't account for A and B, and it stalls remote updates for a round trip."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Picture the two histories:\n\n```\nserver: ... r10 -> S (r11)\nalice:  ... r10 -> A -> B\n```\n\nAlice's screen shows r10 + A + B. To show S, she needs S expressed *after* A and B:\n\n1. S' = transform(S, A)\n2. S'' = transform(S', B), applied locally.\n\nHer pending ops must also move on top of S, because that's what the server will see:\n\n3. A' = transform(A, S), B' adjusted likewise.\n\nWhen the server acks A (as r12), the client sends B'. Keeping only **one op in flight** keeps this bookkeeping to a single in-flight op plus one buffer.",
+    "link": {
+      "title": "Operational transformation (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Operational_transformation"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In a sequence CRDT such as RGA or Yjs, deleting a character leaves a tombstone. Which statements about tombstones are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A document's stored size can grow even while its visible text shrinks",
+        "explanation": "Correct. Deleting a paragraph removes it from view but leaves its tombstones in the structure."
+      },
+      {
+        "text": "They're needed because a concurrent insert may reference the deleted character's id as its anchor",
+        "explanation": "Correct. If Bob inserts 'after char X' while Alice deletes X, Bob's op must still find X's position when it arrives."
+      },
+      {
+        "text": "They can only be garbage-collected once every replica is known to have seen the delete",
+        "explanation": "Correct. Removing a tombstone too early leaves an unknown anchor for a late-arriving op from a replica that hadn't seen the delete."
+      },
+      {
+        "text": "Tombstones make undo impossible",
+        "explanation": "Wrong. Undo is just another operation, for example re-inserting the text. Tombstones don't prevent it."
+      },
+      {
+        "text": "Tombstoned characters are shown to users in a greyed-out style",
+        "explanation": "Wrong. Tombstones are internal metadata. Users never see them. Suggestion mode is a separate product feature."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Replay the case that forces tombstones:\n\n```\ndoc: a b c   (ids a1 b1 c1)\nalice: delete b1\nbob:   insert 'X' after b1\n```\n\nIf Alice's replica *removed* b1, Bob's op arrives and asks 'after what?'. With a tombstone, b1 still sits between a1 and c1, invisible, so X goes there: `a X c`. Bob's replica, after receiving the delete, also shows `a X c`.\n\nWhen can b1 finally go? Only when no replica can still send an op anchored on it. On a server-mediated system that can be agreed at snapshot time. On offline peer-to-peer devices it's hard, because a device might reappear after months.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "200,000 users are actively typing at peak, and each document has about 3 collaborators, so each update goes to about 2 others. Cursor presence is throttled to 10 updates a second per user. Roughly how many presence messages a second does the fan-out tier deliver, and what does it suggest?",
+    "options": [
+      {
+        "text": "About 400,000 a second. Presence is negligible next to ops",
+        "explanation": "Wrong. This forgets the fan-out of 2 recipients and the 10 updates per user. 200,000 x 10 x 2 is ten times larger."
+      },
+      {
+        "text": "About 4 M a second, more than the ~2 M op messages, so presence must be cheap: ephemeral, throttled, coalesced and kept out of the op log",
+        "explanation": "Correct. Presence can be the largest message stream in the system. That's why it never touches durable storage and why throttling matters."
+      },
+      {
+        "text": "About 40 M a second, so presence should be dropped entirely",
+        "explanation": "Wrong. That's 10x too high (it multiplies by 20 recipients), and live cursors are a core feature. The answer is to make them cheap, not remove them."
+      },
+      {
+        "text": "About 4 M a second, so presence should be written to the op log to keep it ordered with edits",
+        "explanation": "Right number, wrong conclusion. Writing 4 M presence updates a second durably would dwarf the real op log for no benefit. A stale cursor only matters for a fraction of a second."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Multiply it out:\n\n```\n200,000 users x 10 updates/s\n  = 2,000,000 updates/s\nx 2 recipients each\n  = 4,000,000 messages/s\n```\n\nCompare ops: 1 M ops/s in, about 2 M/s fanned out. Presence is **twice** the op fan-out.\n\nWithout throttling, raw mouse and caret events at ~60 a second would be 24 M/s. Hence the rules:\n\n- throttle (10/s) and coalesce (send only the latest position)\n- ephemeral pub/sub, no durable writes\n- heartbeat TTL (~30 s) to drop ghosts",
+    "link": {
+      "title": "How Figma's multiplayer technology works (Figma blog)",
+      "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Alice and Bob are both offline. At the same point in a sentence, Alice types `cat ` and Bob types `dog `. After syncing, some users see `cdaotg` instead of `cat dog` or `dog cat`. What has happened?",
+    "options": [
+      {
+        "text": "The CRDT failed to converge",
+        "explanation": "Wrong. Every replica shows the same text, so it *did* converge. Convergence doesn't guarantee a sensible result."
+      },
+      {
+        "text": "The CRDT's ordering of concurrent inserts at the same anchor interleaved the two runs character by character. Algorithms such as Fugue are designed to keep each user's run together",
+        "explanation": "Correct. This is the interleaving anomaly. All replicas agree, but the merged text mixes the two words. Newer sequence CRDTs avoid it."
+      },
+      {
+        "text": "The network delivered characters out of order",
+        "explanation": "Wrong. CRDT ops commute, so delivery order doesn't affect the final state. The interleaving comes from the algorithm's tie-break rules."
+      },
+      {
+        "text": "OT would have produced the same result, so it's unavoidable",
+        "explanation": "Wrong. The anomaly depends on the algorithm. Some designs, whether OT- or CRDT-based, keep runs together and some don't."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Why it can happen. Both users insert after the same anchor P:\n\n```\nalice: c(a1) a(a2) t(a3)\nbob:   d(b1) o(b2) g(b3)\n```\n\nIf the tie-break rule effectively orders each character by comparing ids *independently*, alternate characters can win, giving c d a o t g.\n\nWhat users want is either `cat dog` or `dog cat`: the order between the two runs doesn't matter, but each run should stay intact. Fugue (Weidner and Kleppmann) was designed to minimise this interleaving.\n\nThe lesson: **convergence is necessary but not sufficient**. 'Same everywhere' and 'what users meant' are different properties.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Erin takes a laptop on a flight with edit access to a document. While she's offline, the owner downgrades her to viewer. She lands and her client reconnects with 300 queued ops. Which server behaviours are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Accept them without checks, since the CRDT guarantees convergence",
+        "explanation": "Wrong. Convergence is about consistency between replicas. It says nothing about who's allowed to write."
+      },
+      {
+        "text": "Check authorisation for each op at reconnect time, against current permissions",
+        "explanation": "Correct. The server is the enforcement point. The client's cached view of its permissions is stale."
+      },
+      {
+        "text": "Deduplicate by `client_id + seq` in case some ops were sent before the flight",
+        "explanation": "Correct. Some of the 300 may already have been committed before she lost connection. Idempotent submission keeps resends safe, whatever the permission outcome."
+      },
+      {
+        "text": "Accept them, because she had edit rights when she made them",
+        "explanation": "Wrong. The device's clock and local permission state can't be trusted. Accepting would let anyone with stale access keep editing by staying offline."
+      },
+      {
+        "text": "Reject the ops and tell the client, so the UI can explain why and let her copy her text elsewhere",
+        "explanation": "Correct. Silently discarding work is hostile. A clear rejection lets the product offer something like 'save as a copy' or 'suggest these changes'."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Separate the three questions the server asks about each op:\n\n1. **Have I seen it?** `(client_id, seq)` already in the log means ack and skip.\n2. **Is this user allowed?** Check *current* ACL. Erin is a viewer now, so reject.\n3. **Does it merge?** Only for allowed ops: transform (OT) or integrate (CRDT).\n\n```\nfor op in queued_ops:\n  if seen(op.cid, op.seq): ack\n  elif not can_edit(user): reject\n  else: commit + broadcast\n```\n\nThe same rule applies to local-first CRDT apps that sync through a server: the relay must enforce permissions, because the merge algorithm won't.",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  }
+]

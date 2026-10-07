@@ -1,0 +1,343 @@
+[
+  {
+    "id": "sepr-profiling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A report job takes 100 seconds. Profiling shows a parsing function accounts for 40 seconds. You make that function 4 times faster. What is the new total runtime?",
+    "options": [
+      {
+        "text": "25 seconds",
+        "explanation": "This applies the 4× speedup to the whole job. Only the 40 seconds of parsing gets faster; the other 60 seconds are unchanged."
+      },
+      {
+        "text": "70 seconds",
+        "explanation": "Correct. Parsing drops from 40 s to 10 s; the other 60 s are untouched. 60 + 10 = 70 s, an overall speedup of about 1.43×."
+      },
+      {
+        "text": "90 seconds",
+        "explanation": "This subtracts only 10 seconds. Parsing goes from 40 s to 40 / 4 = 10 s, which saves 30 s."
+      },
+      {
+        "text": "60 seconds",
+        "explanation": "60 s is the runtime if parsing became instant. A 4× speedup still leaves 10 s of parsing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Split the runtime: 40 s parsing, 60 s everything else.\n2. New parsing time: 40 / 4 = 10 s.\n3. New total: 60 + 10 = **70 s**.\n4. With Amdahl's law: p = 0.4, s = 4:\n\n```\n1 / (0.6 + 0.4/4)\n= 1 / 0.7\n≈ 1.43x  ->  100 / 1.43 = 70 s\n```\n\nEven an infinite speedup of parsing would only reach 60 s.",
+    "link": {
+      "title": "Amdahl's law — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+    }
+  },
+  {
+    "id": "sepr-profiling-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume constant-time equality comparisons. What is the worst-case time complexity of this function, where `a` and `b` are both lists of length n?\n\n```python\ndef common(a, b):\n    return [x for x in a if x in b]\n```",
+    "options": [
+      {
+        "text": "O(n)",
+        "explanation": "This would be true if `b` were a set. For a list, `x in b` scans elements one by one."
+      },
+      {
+        "text": "O(n log n)",
+        "explanation": "No sorting or binary search happens here; the membership test is a linear scan."
+      },
+      {
+        "text": "O(n²)",
+        "explanation": "Correct. For each of the n elements of `a`, `x in b` scans up to n elements of `b`: n × n comparisons in the worst case."
+      },
+      {
+        "text": "O(1)",
+        "explanation": "The function must at least look at every element of `a`, so it cannot be constant time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The comprehension loops over `a`: n iterations.\n2. Each iteration evaluates `x in b`. For a list, that is a linear scan: up to n comparisons.\n3. Total: n × n = O(n²). With n = 10,000 that is up to 100 million comparisons.\n4. Fix: `bs = set(b)` first (O(n)), then `x in bs` is O(1) on average, giving O(n) overall. The set replacement requires stable hashable values and uses O(n) extra memory; hash collisions can worsen its worst case.",
+    "link": {
+      "title": "Program optimization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Program_optimization"
+    }
+  },
+  {
+    "id": "sepr-profiling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your team wants to speed up an API. A developer suggests rewriting the JSON serialisation in Rust because \"JSON is always slow\". What should happen first?",
+    "options": [
+      {
+        "text": "Do the rewrite; serialisation is a well-known bottleneck",
+        "explanation": "It might be, but without measurement you could spend weeks speeding up something that takes 2% of each request."
+      },
+      {
+        "text": "Set a target (for example p99 latency) and profile real requests to find where the time actually goes",
+        "explanation": "Correct. A target says when you are done, and a profile tells you which part is worth working on. Guesses about bottlenecks are wrong surprisingly often."
+      },
+      {
+        "text": "Add more servers instead",
+        "explanation": "More servers can reduce queueing latency when capacity is the bottleneck, but measuring the bottleneck should precede the decision."
+      },
+      {
+        "text": "Turn on caching for every endpoint",
+        "explanation": "Caching can help, but applying it everywhere without knowing the bottleneck adds staleness and complexity, possibly for no gain."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Define success: e.g. 'p99 of /orders below 250 ms'. Measure the current value.\n2. Profile representative requests, including wall-clock time, not just CPU.\n3. Suppose serialisation is 3% of time and a database call is 70%. By Amdahl's law, an infinitely fast serialiser saves at most 3%.\n4. Work on the biggest slice, re-measure, and stop when the target is met.",
+    "link": {
+      "title": "Program optimization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Program_optimization"
+    }
+  },
+  {
+    "id": "sepr-profiling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Here is part of a cProfile report (some columns trimmed):\n\n```\nncalls tottime cumtime function\n     1   0.01   12.40  run\n  2000   0.20   12.10  handle\n  2000  11.50   11.50  http_get\n 90000   0.25    0.25  parse_row\n```\n\nWhich change would most likely give the biggest improvement?",
+    "options": [
+      {
+        "text": "Optimise `parse_row`, because it is called 90,000 times",
+        "explanation": "Call count is not cost. `parse_row` costs 0.25 s in total, about 2% of the runtime."
+      },
+      {
+        "text": "Optimise `run`, because it has the largest cumtime",
+        "explanation": "`run`'s cumtime includes everything it calls. Its own tottime is 0.01 s; there is nothing to optimise inside it."
+      },
+      {
+        "text": "Reduce the time spent in `http_get`, for example by batching requests or making them concurrent",
+        "explanation": "Correct. This is the dominant measured cost. Inspect whether it is waiting, computing or retrying before choosing batching or concurrency."
+      },
+      {
+        "text": "Optimise `handle`, because it calls `http_get`",
+        "explanation": "`handle` itself only spends 0.2 s. Its large cumtime comes from `http_get`; you change `handle` only insofar as it decides how `http_get` is called."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "http_get accounts for 11.5/12.4 ≈ 93% of runtime, or 5.75 ms per call. The name and profile do not prove network waiting. If measurements confirm independent equal-duration I/O calls and sufficient downstream capacity, 20-way overlap has an ideal call-time floor of 11.5/20 = 0.575 s, before overhead. Batching and concurrency must preserve ordering, side effects and rate limits.",
+    "link": {
+      "title": "The Python Profilers — Python docs",
+      "url": "https://docs.python.org/3/library/profile.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a CPU-sampled flame graph with complete stack unwinding of a web service, what does a very wide box near the **top** of a stack indicate?",
+    "options": [
+      {
+        "text": "A function that ran for a long time early in the recording, since the x-axis is time",
+        "explanation": "The x-axis in a standard flame graph is not time; stacks are sorted (often alphabetically) and merged. Use a 'flame chart' if you need a timeline."
+      },
+      {
+        "text": "A function that appeared in many samples and was itself running on the CPU, rather than just calling other functions",
+        "explanation": "Correct. Width is the proportion of samples containing the function. Near the top means few or no callees above it, so the time is spent in the function itself: a prime optimisation target."
+      },
+      {
+        "text": "A function with a very deep call stack",
+        "explanation": "Stack depth is shown by height (how many boxes are stacked), not width."
+      },
+      {
+        "text": "A function that was called many times",
+        "explanation": "Flame graphs from sampling profilers show time (samples), not call counts. One long call and many short ones can look the same width."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Y-axis: stack depth. Each box's parent is directly below it.\n2. Width: share of samples in which the function appeared on the stack.\n3. A wide box with nothing (or little) above it is on-CPU itself in many samples.\n4. A wide box with wide children is just a caller; follow the width upwards.\n5. The x-axis order has no meaning; boxes are sorted so identical stacks merge.",
+    "link": {
+      "title": "Flame Graphs — Brendan Gregg",
+      "url": "https://www.brendangregg.com/flamegraphs.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An endpoint takes 900 ms of wall-clock time, but the process uses only about 30 ms of CPU time per request. A CPU sampling profiler shows nothing interesting. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "The profiler is broken; CPU profiles always explain latency",
+        "explanation": "CPU profilers only see threads that are running on a CPU. Time spent blocked does not appear."
+      },
+      {
+        "text": "The Python interpreter is too slow; rewrite in a compiled language",
+        "explanation": "Only 30 ms is spent computing. A compiled language might shave some of that, but the 870 ms of waiting would remain."
+      },
+      {
+        "text": "The machine needs more CPU cores",
+        "explanation": "Low CPU time for one request does not prove the machine is idle. More cores may help scheduler queueing, but first identify whether the delay is scheduling, I/O or locks."
+      },
+      {
+        "text": "The request spends most of its time off-CPU, potentially waiting on I/O, locks or CPU scheduling",
+        "explanation": "Correct. 870 ms of the 900 ms is waiting. Look at tracing, slow-query logs, connection pool waits and lock contention, or use a wall-clock or off-CPU profiler."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Wall time 900 ms, CPU time 30 ms: about 97% of the time the request is not computing.\n2. A sampling CPU profiler records stacks of on-CPU threads, so blocked time is invisible to it.\n3. Candidates: slow queries, N+1 queries, remote API calls, exhausted connection pools, lock waits, or runnable time waiting for a CPU.\n4. Tools: distributed traces with spans per call, database slow-query logs, or off-CPU / wall-clock profiling (py-spy's `--idle` option includes idle stacks).",
+    "link": {
+      "title": "Off-CPU Analysis — Brendan Gregg",
+      "url": "https://www.brendangregg.com/offcpuanalysis.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You compare two implementations with a steady-state benchmark. Which practices make the result more trustworthy? Select all that apply.",
+    "options": [
+      {
+        "text": "Run each version many times and compare the distributions (or the minimum, for a micro-benchmark)",
+        "explanation": "Correct. One run is dominated by noise; repeats show the real difference."
+      },
+      {
+        "text": "Use input sizes similar to production",
+        "explanation": "Correct. Complexity differences only show at scale; an O(n²) algorithm can look fine on 100 items."
+      },
+      {
+        "text": "Include a warm-up phase before measuring",
+        "explanation": "Correct. Cold caches, lazy imports, connection setup and JIT compilation distort the first iterations."
+      },
+      {
+        "text": "Run the old version on your laptop and the new one on a CI server",
+        "explanation": "Different hardware and load make the comparison meaningless. Benchmarks must run on the same machine under the same conditions."
+      },
+      {
+        "text": "Run the benchmark once and report the number to three decimal places",
+        "explanation": "Precision is not accuracy. A single run can vary by tens of percent; three decimal places imply a certainty you do not have."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "A fair benchmark changes only one thing: the code under test.\n\n- Same machine, same data, same conditions (rules out D).\n- Realistic data sizes (B).\n- Warm-up, then many repetitions (A, C).\n- Report a range or a robust statistic, not one number (rules out E).\n\nThe `timeit` docs suggest using the minimum of repeated runs for snippets, since slower runs are usually caused by interference rather than the code itself.",
+    "link": {
+      "title": "timeit — Python docs",
+      "url": "https://docs.python.org/3/library/timeit.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service's memory grows by about 50 MB an hour until the container is OOM-killed after roughly a day. Which approach is most likely to find the cause quickly?",
+    "options": [
+      {
+        "text": "Use `tracemalloc` (or a heap profiler) to take snapshots an hour apart and compare them to see which lines allocated the growing memory",
+        "explanation": "Correct. Comparing snapshots isolates allocations that keep growing. Typical findings: an unbounded dict used as a cache, a list of every request processed, or listeners never removed."
+      },
+      {
+        "text": "Increase the container's memory limit to 8 GB",
+        "explanation": "That only delays the crash. A steady leak will eventually exhaust any limit."
+      },
+      {
+        "text": "Run cProfile to see which functions use the most CPU",
+        "explanation": "CPU time and memory retention are different questions. A leak can come from a cheap function called often."
+      },
+      {
+        "text": "Call `gc.collect()` after every request",
+        "explanation": "Garbage collection frees unreachable objects. Leaked memory is usually still reachable (e.g. from a global cache), so forcing collection will not free it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Steady growth over hours suggests something accumulating, not a one-off spike.\n2. Take a snapshot after warm-up, then another an hour later:\n   - `snap2.compare_to(snap1, \"lineno\")` lists lines whose allocations grew the most.\n3. Suppose the top line is `_cache[key] = result` in a module with no eviction: that dict grows forever.\n4. Fix with a bounded cache (`functools.lru_cache(maxsize=...)` or a TTL cache with a capacity limit and effective expiration) and confirm memory now plateaus. If RSS grows without corresponding traced allocations, investigate native allocations and allocator behavior with suitable tools.",
+    "link": {
+      "title": "tracemalloc — Python docs",
+      "url": "https://docs.python.org/3/library/tracemalloc.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to profile a production Python service that is intermittently slow. Restarting it is undesirable, and you cannot add more than a few percent overhead. Which tool fits best?",
+    "options": [
+      {
+        "text": "`cProfile`, enabled by restarting the service under `python -m cProfile`",
+        "explanation": "This particular command requires a restart; cProfile can also be enabled programmatically in a running process if instrumentation exists. Its per-call overhead must be assessed."
+      },
+      {
+        "text": "Adding `print(time.time())` around every function and redeploying",
+        "explanation": "Requires a deploy, adds I/O to every call, and produces unmanageable output."
+      },
+      {
+        "text": "Running the same code on a laptop with `timeit`",
+        "explanation": "A laptop micro-benchmark will not reproduce production data, load or the intermittent condition."
+      },
+      {
+        "text": "A sampling profiler such as `py-spy`, attached to the running process by PID",
+        "explanation": "Correct among these choices. External attachment can avoid restart, subject to platform/security permissions. Measure its overhead at the chosen sample rate rather than assuming a fixed percentage."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Constraints: no restart, low overhead, real production behaviour.\n2. The offered cProfile launch requires restart, while programmatic activation needs integration and incurs per-call cost.\n3. Sampling profilers take periodic stack snapshots. py-spy runs as a separate process and can attach by PID.\n4. Typical commands:\n\n```\npy-spy top --pid 4321\npy-spy record -o out.svg --pid 4321\n```\n\n(Attaching to another process usually needs root, e.g. `sudo`.)\n\nThe SVG is a flame graph of what the service was doing during the slow period. Verify the profiler meets the overhead limit on this workload.",
+    "link": {
+      "title": "py-spy — sampling profiler for Python (GitHub)",
+      "url": "https://github.com/benfred/py-spy"
+    }
+  },
+  {
+    "id": "sepr-profiling-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your load test reports a p99 latency of 40 ms. Production users report frequent multi-second waits under the same request rate. The load generator uses 10 threads, each sending a request and waiting for the response before sending the next. Which statements are true? Select all that apply. Assume production arrivals continue independently while earlier requests wait.",
+    "options": [
+      {
+        "text": "When the server stalls, the generator stops sending requests, so the slow period contributes few samples and the percentiles look better than reality",
+        "explanation": "Correct. This is coordinated omission: the tool unintentionally coordinates with the system under test and omits the requests that would have queued up."
+      },
+      {
+        "text": "A constant-rate load generator that records latency from each request's intended send time gives a more honest p99",
+        "explanation": "Correct. Tools like wrk2 schedule requests at a fixed rate, so a stall shows up as many slow requests, as it would for real users."
+      },
+      {
+        "text": "The mean latency would have been a better metric than p99",
+        "explanation": "The mean hides tail latency even more. The problem is how samples were collected, not which statistic was used."
+      },
+      {
+        "text": "The difference must be caused by the production network, since load tests are always accurate",
+        "explanation": "Closed-loop load generators systematically under-report tail latency during stalls; the test itself is a likely cause of the discrepancy."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Under the specified production model, requests arrive independently: if the server stalls for 2 s, requests keep arriving and all wait.\n2. A closed-loop generator with 10 threads sends at most 10 requests during that stall. Hundreds of 'would-have-been' slow requests are never sent.\n3. Result: the stall contributes maybe 10 slow samples out of 100,000, so p99 looks fine.\n4. Fix: generate load at a constant rate (open loop) and measure latency from the scheduled send time.",
+    "link": {
+      "title": "wrk2: a constant-throughput HTTP benchmark (GitHub)",
+      "url": "https://github.com/giltene/wrk2"
+    }
+  },
+  {
+    "id": "sepr-profiling-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Profiling a Django view shows 301 database queries for a page listing 300 orders, each displaying its customer's name. What is the problem and the usual fix? Assume customer is a ForeignKey and these are the only queries.",
+    "options": [
+      {
+        "text": "The database is too slow; add read replicas",
+        "explanation": "Replicas spread load but each of the 301 round trips still costs latency. The query pattern is the problem."
+      },
+      {
+        "text": "An N+1 query pattern: one query for the orders plus one per order for its customer; fix it by fetching customers in the same query or one batched query",
+        "explanation": "Correct. In Django, `select_related('customer')` joins the customer in the original query, reducing 301 queries to 1."
+      },
+      {
+        "text": "Too many columns are being selected; use `.only()`",
+        "explanation": "Narrower rows help slightly, but 301 round trips remain."
+      },
+      {
+        "text": "Python is slow at rendering templates; cache the HTML",
+        "explanation": "Caching hides the cost for repeat visitors but leaves every cache miss doing 301 queries."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "One orders query plus 300 lazy ForeignKey lookups is N+1. select_related(\"customer\") joins this single-valued relation and reduces this access pattern to one query. With an illustrative fixed 2 ms round-trip overhead, 301 trips contribute 602 ms before database work; a joined query has one trip but its execution cost still needs measurement. Many-to-many relations require prefetch_related rather than select_related; a simple prefetch normally adds one batched query.",
+    "link": {
+      "title": "The Python Profilers — Python docs",
+      "url": "https://docs.python.org/3/library/profile.html"
+    }
+  }
+]

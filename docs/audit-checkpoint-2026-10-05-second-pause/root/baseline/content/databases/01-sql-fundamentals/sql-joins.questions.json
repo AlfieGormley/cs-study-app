@@ -1,0 +1,373 @@
+[
+  {
+    "id": "sql-joins-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using the shop schema (5 customers; orders 101–106, where order 106 has `customer_id` NULL and Erin has no orders), how many rows does this return?\n\n```sql\nSELECT c.name, o.id\nFROM customers c\nJOIN orders o\n  ON o.customer_id = c.id;\n```",
+    "options": [
+      {
+        "text": "6",
+        "explanation": "This counts every order, including guest order 106. Its `customer_id` is NULL, and `NULL = c.id` is never true, so an inner join drops it."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. Orders 101–105 each match exactly one customer. Order 106 (NULL customer) and Erin (no orders) have no partner, so an inner join drops both."
+      },
+      {
+        "text": "4",
+        "explanation": "This counts distinct customers with orders (Asha, Ben, Chloe, Dev). A join returns one row per matching pair, and Asha matches two orders."
+      },
+      {
+        "text": "7",
+        "explanation": "Seven is what a FULL OUTER JOIN returns, keeping Erin and order 106 as well. An inner join keeps only matches."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. An inner join keeps only pairs where `o.customer_id = c.id` is true.\n2. Go order by order:\n   - 101, 102 → Asha\n   - 103 → Ben\n   - 104 → Chloe\n   - 105 → Dev\n   - 106 → NULL matches nobody\n3. Erin is never referenced, so she has no pair.\n4. Five matching pairs → **5 rows**, with Asha appearing twice.",
+    "link": {
+      "title": "Joins between tables — PostgreSQL tutorial",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "sql-joins-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You change the previous query to `LEFT JOIN orders o`. What does Erin's row look like?",
+    "options": [
+      {
+        "text": "Erin does not appear",
+        "explanation": "That is inner join behaviour. A LEFT JOIN keeps every row of the left table, `customers`, matched or not."
+      },
+      {
+        "text": "`Erin | 106`",
+        "explanation": "Order 106 belongs to no customer; it is not assigned to unmatched customers. A join never invents a match."
+      },
+      {
+        "text": "`Erin | NULL`",
+        "explanation": "Correct. Erin has no matching order, so she appears once, with every column from `orders` filled with NULL."
+      },
+      {
+        "text": "`Erin | 0`",
+        "explanation": "Missing right-side values are NULL, not 0. Zero would appear only if you wrote `COALESCE(o.id, 0)` yourself."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `customers` is on the left, so all 5 customers are kept.\n2. Asha, Ben, Chloe and Dev have matches and appear once per order (5 rows).\n3. Erin has no match. A LEFT JOIN emits her once, padding the right table's columns with NULL:\n\n```\nname | id\nErin | NULL\n```\n\n4. Total: 6 rows. Order 106 is still missing because it is on the right and unmatched.",
+    "link": {
+      "title": "Joins between tables — PostgreSQL tutorial",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "sql-joins-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How many rows does `SELECT * FROM customers, orders;` return for the shop schema (5 customers, 6 orders)?",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "That is the inner join count. Without a `WHERE` condition linking the tables, the comma does not match anything."
+      },
+      {
+        "text": "11",
+        "explanation": "Adding row counts describes stacking tables (`UNION ALL`), not joining them."
+      },
+      {
+        "text": "6",
+        "explanation": "No column is compared, so the result is not limited to one row per order."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. A comma between tables with no join condition is a CROSS JOIN: every customer paired with every order, 5 × 6 = 30."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `FROM a, b` is old-style join syntax. On its own, it is a Cartesian product.\n2. Each of 5 customers pairs with each of 6 orders.\n3. 5 × 6 = **30** rows.\n4. Adding `WHERE o.customer_id = c.id` filters this down to the 5 matching pairs, which is why forgetting that line on large tables is so expensive.",
+    "link": {
+      "title": "Join (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Join_(SQL)"
+    }
+  },
+  {
+    "id": "sql-joins-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want every customer, with their shipped orders if they have any. A colleague writes:\n\n```sql\nSELECT c.name, o.id\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.id\nWHERE o.status = 'shipped';\n```\n\nOnly Asha (101, 102) and Chloe (104) come back. Why?",
+    "options": [
+      {
+        "text": "The `WHERE` filter runs after the join and rejects the NULL-padded rows, turning the LEFT JOIN into an inner join",
+        "explanation": "Correct. Ben, Dev and Erin come out of the join with `status` NULL. `NULL = 'shipped'` is not true, so `WHERE` discards them."
+      },
+      {
+        "text": "LEFT JOIN only keeps unmatched rows when the right table is smaller",
+        "explanation": "Table size has nothing to do with it. A LEFT JOIN always keeps every left row; the later `WHERE` is what removes them."
+      },
+      {
+        "text": "SQLite does not support LEFT JOIN with string comparisons",
+        "explanation": "SQLite handles this fine, and PostgreSQL gives the same three rows. This is standard SQL behaviour, not an engine limitation."
+      },
+      {
+        "text": "Ben, Dev and Erin have no orders at all",
+        "explanation": "Ben has order 103 (pending) and Dev has 105 (cancelled). They have orders, just not shipped ones."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Logical order: `FROM`/`JOIN ... ON` first, then `WHERE`.\n\n1. The LEFT JOIN on `customer_id` alone produces 6 rows, including `Ben | 103 | pending`, `Dev | 105 | cancelled` and `Erin | NULL | NULL`.\n2. `WHERE o.status = 'shipped'` keeps only rows where that is true. Pending, cancelled and NULL all fail.\n3. Three rows remain.\n\nThe fix is to move the filter into the join:\n\n```sql\nLEFT JOIN orders o\n  ON o.customer_id = c.id\n AND o.status = 'shipped'\n```\n\nNow non-shipped orders simply don't match, and Ben, Dev and Erin come back with NULLs (6 rows).",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-joins-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these queries include **Erin** (who has no orders) in their output? Select all that apply.",
+    "options": [
+      {
+        "text": "`customers c JOIN orders o ON o.customer_id = c.id`",
+        "explanation": "An inner join drops rows with no match, and Erin has none."
+      },
+      {
+        "text": "`customers c LEFT JOIN orders o ON o.customer_id = c.id AND o.status = 'shipped'`",
+        "explanation": "Correct. The status test is part of the match condition. Erin has no match, so the LEFT JOIN keeps her with NULLs."
+      },
+      {
+        "text": "`customers c LEFT JOIN orders o ON o.customer_id = c.id WHERE o.id IS NULL`",
+        "explanation": "Correct. This is the anti-join. Erin's padded row has `o.id` NULL, so it is exactly what this keeps."
+      },
+      {
+        "text": "`customers c FULL JOIN orders o ON o.customer_id = c.id`",
+        "explanation": "Correct. A full join keeps unmatched rows from both sides: Erin and guest order 106."
+      },
+      {
+        "text": "`customers c RIGHT JOIN orders o ON o.customer_id = c.id`",
+        "explanation": "A right join keeps unmatched rows from `orders`, the right table. Erin is on the left, so she is dropped."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Ask of each: is Erin on a side that is preserved, and does anything later remove her?\n\n| Query | Keeps left? | Erin? |\n|---|---|---|\n| INNER | no | no |\n| LEFT, filter in ON | yes | yes |\n| LEFT + IS NULL | yes | yes |\n| FULL | yes | yes |\n| RIGHT | no | no |\n\nIn the anti-join, `WHERE o.id IS NULL` removes everyone *except* the unmatched customers, so Erin is the only row.",
+    "link": {
+      "title": "Joins between tables — PostgreSQL tutorial",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "sql-joins-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "How many rows does this self join return?\n\n```sql\nSELECT c.name, r.name\nFROM customers c\nJOIN customers r\n  ON r.id = c.referred_by;\n```\n\n(Ben and Chloe were referred by Asha, Dev by Ben; Asha and Erin have `referred_by` NULL.)",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "Five would need a LEFT JOIN, which keeps Asha and Erin with a NULL referrer. This is an inner join."
+      },
+      {
+        "text": "2",
+        "explanation": "Two is the number of distinct referrers (Asha, Ben). The join returns one row per *referred* customer, not per referrer."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. Ben–Asha, Chloe–Asha and Dev–Ben. Asha and Erin have `referred_by` NULL, which matches no `r.id`, so the inner join drops them."
+      },
+      {
+        "text": "25",
+        "explanation": "That would be a cross join of the table with itself. The `ON` condition keeps only pairs where `r` is `c`'s referrer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Treat `c` and `r` as two separate copies of `customers`.\n2. For each `c`, look up the `r` whose `id` equals `c.referred_by`:\n\n```\nAsha  NULL -> none\nBen   1    -> Asha\nChloe 1    -> Asha\nDev   2    -> Ben\nErin  NULL -> none\n```\n\n3. Inner join keeps the 3 matches. With `LEFT JOIN` you would get 5 rows, two with a NULL referrer.",
+    "link": {
+      "title": "Joins between tables — PostgreSQL tutorial",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "sql-joins-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Asha has two orders: 101 (Kettle and Mug) and 102 (Lamp). What does this return for Asha?\n\n```sql\nSELECT c.name, COUNT(o.id)\nFROM customers c\nJOIN orders o\n  ON o.customer_id = c.id\nJOIN order_items i\n  ON i.order_id = o.id\nGROUP BY c.name;\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "Two is her real number of orders, but the join to `order_items` repeats order 101 once per item before counting."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. The join yields one row per order item: 101-Kettle, 101-Mug, 102-Lamp. `COUNT(o.id)` counts those 3 rows, since 101 appears twice."
+      },
+      {
+        "text": "1",
+        "explanation": "`COUNT` counts rows in the group, not distinct customers. There is one customer but three rows."
+      },
+      {
+        "text": "7",
+        "explanation": "Seven is her total quantity (1 + 4 + 2). `COUNT` counts rows, not the values in `qty`; you would need `SUM(i.qty)` for that."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Write out Asha's rows after both joins:\n\n```\nname order item\nAsha 101   Kettle\nAsha 101   Mug\nAsha 102   Lamp\n```\n\n2. `COUNT(o.id)` counts non-NULL values: 3.\n3. This is **fan-out**: the parent (order) is repeated once per child (item).\n4. `COUNT(DISTINCT o.id)` gives the intended 2. Better still, don't join tables you don't need for the question.",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-joins-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this return?\n\n```sql\nSELECT c.name, o.id\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.id\n AND c.city = 'London';\n```\n\n(London customers: Asha with 101 and 102, Dev with 105.)",
+    "options": [
+      {
+        "text": "3 rows: only the London customers and their orders",
+        "explanation": "That is what `WHERE c.city = 'London'` would do. A condition in a LEFT JOIN's `ON` never removes left rows."
+      },
+      {
+        "text": "An error: `ON` can only reference the right-hand table",
+        "explanation": "`ON` can reference columns from both sides, and any boolean expression is allowed."
+      },
+      {
+        "text": "8 rows: every customer's real orders plus three NULL rows",
+        "explanation": "Ben and Chloe's real orders fail the city test, so they never match. Each of them gets a single padded row instead."
+      },
+      {
+        "text": "6 rows: all five customers; non-London customers have NULL order ids",
+        "explanation": "Correct. The city test only limits which pairs count as matches. Ben, Chloe and Erin fail it, so they are kept with NULLs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A LEFT JOIN keeps **every** left row whatever happens in `ON`.\n2. A pair matches only if `o.customer_id = c.id` **and** `c.city = 'London'`.\n3. Asha (London) matches 101, 102. Dev (London) matches 105.\n4. Ben (Leeds), Chloe (NULL city) and Erin (Bristol) match nothing and each get one padded row.\n\n```\nAsha  101\nAsha  102\nBen   NULL\nChloe NULL\nDev   105\nErin  NULL\n```\n\n6 rows. Filters meant to remove left rows belong in `WHERE`.",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-joins-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For a dashboard you want each customer's number of orders and number of people they referred. Asha has 2 orders and referred 2 people.\n\n```sql\nSELECT r.name,\n  COUNT(o.id) AS orders_n,\n  COUNT(c.id) AS refs\nFROM customers r\nLEFT JOIN orders o\n  ON o.customer_id = r.id\nLEFT JOIN customers c\n  ON c.referred_by = r.id\nGROUP BY r.name;\n```\n\nWhat does Asha's row show, and what is the most robust fix?",
+    "options": [
+      {
+        "text": "2 and 2; the query is correct",
+        "explanation": "Each LEFT JOIN multiplies Asha's rows. After the second one she has 2 × 2 rows, so the counts are inflated."
+      },
+      {
+        "text": "4 and 4; switch both LEFT JOINs to INNER JOINs",
+        "explanation": "Inner joins would still pair every order with every referral (4 rows) and would also drop customers with no orders or referrals."
+      },
+      {
+        "text": "2 and 4; add `DISTINCT` after `SELECT`",
+        "explanation": "`SELECT DISTINCT` removes duplicate *output* rows. After grouping there is one row per name, so it changes nothing."
+      },
+      {
+        "text": "4 and 4; aggregate orders and referrals in separate subqueries, then join those one-row-per-customer results",
+        "explanation": "Correct. Two independent child tables cross-multiply: 2 orders × 2 referrals = 4 rows. Pre-aggregating each child removes the fan-out. `COUNT(DISTINCT ...)` also works for counts, but not for sums."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. First join: Asha × her orders = 2 rows (101, 102).\n2. Second join: each of those rows × her referrals (Ben, Chloe) = 4 rows:\n\n```\n101 Ben    101 Chloe\n102 Ben    102 Chloe\n```\n\n3. `COUNT(o.id)` = 4 and `COUNT(c.id)` = 4. SQLite confirms `Asha | 4 | 4`.\n4. Fix: count each child table on its own, grouped by customer, then LEFT JOIN both results onto `customers`. Each subquery has at most one row per customer, so nothing multiplies.\n5. `COUNT(DISTINCT o.id)` would rescue counts, but `SUM` of order values would still be doubled, so pre-aggregation is the general fix.",
+    "link": {
+      "title": "Join (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Join_(SQL)"
+    }
+  },
+  {
+    "id": "sql-joins-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer writes `SELECT COUNT(*) FROM customers NATURAL JOIN orders;` expecting the 5 matched orders. What happens?",
+    "options": [
+      {
+        "text": "It returns 5: NATURAL JOIN follows the foreign key from `orders` to `customers`",
+        "explanation": "NATURAL JOIN ignores foreign keys entirely. It looks only at column *names* the two tables share."
+      },
+      {
+        "text": "It returns 0: the only shared column name is `id`, so it matches customer ids (1–5) against order ids (101–106)",
+        "explanation": "Correct. NATURAL JOIN means `USING` every common column name. Here that is `id`, no values coincide, and the query silently returns nothing."
+      },
+      {
+        "text": "It raises an error because there is no common column",
+        "explanation": "There is a common column, `id`. If there were none, NATURAL JOIN would degrade to a cross join rather than erroring."
+      },
+      {
+        "text": "It returns 30, because NATURAL JOIN is a cross join",
+        "explanation": "It becomes a cross join only when the tables share no column names. They share `id` here."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. NATURAL JOIN finds all column names present in both tables.\n   - `customers`: id, name, city, referred_by\n   - `orders`: id, customer_id, ordered_on, status\n2. Common: just `id`. So the condition is `customers.id = orders.id`.\n3. Customer ids are 1–5; order ids are 101–106. No overlap → **0 rows**, no error.\n4. Worse, adding a column with a shared name (say `created_at`) to both tables later would change the join condition silently. Use explicit `ON`.",
+    "link": {
+      "title": "SELECT — SQLite docs",
+      "url": "https://www.sqlite.org/lang_select.html"
+    }
+  },
+  {
+    "id": "sql-joins-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "This query is meant to list every customer with their order items, keeping Erin (no orders), but Erin is missing:\n\n```sql\nSELECT c.name, o.id, i.product_id\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.id\nJOIN order_items i\n  ON i.order_id = o.id;\n```\n\nWhich changes bring Erin back as a row with NULLs? Select all that apply.",
+    "options": [
+      {
+        "text": "Change the second join to `LEFT JOIN order_items i`",
+        "explanation": "Correct. Erin's padded row has `o.id` NULL. An inner join to `order_items` finds no match and drops her; a LEFT JOIN keeps her."
+      },
+      {
+        "text": "Nest the inner join: `LEFT JOIN (orders o JOIN order_items i ON i.order_id = o.id) ON o.customer_id = c.id`",
+        "explanation": "Correct. The orders-with-items join is built first, then LEFT JOINed as a unit, so customers without a match are preserved."
+      },
+      {
+        "text": "Move `i.order_id = o.id` into the `WHERE` clause",
+        "explanation": "That still requires a real item row and compares `NULL = NULL` for Erin, which is not true. She stays missing."
+      },
+      {
+        "text": "Swap the order to `customers c JOIN order_items i ... LEFT JOIN orders o`",
+        "explanation": "`order_items` has no customer column to join on directly, and an inner join to items would still drop customers without items."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. After the LEFT JOIN, Erin's row is `Erin | NULL`.\n2. The next inner join needs `i.order_id = NULL`, which is never true, so the row is dropped. One inner join downstream of an optional table undoes the LEFT JOIN.\n3. Option A makes the second join optional too: 9 rows, Erin with NULLs.\n4. Option B joins orders to items first (8 pairs), then LEFT JOINs that block to customers: also 9 rows, Erin preserved. Both verified in SQLite.\n5. Note the semantic difference: with B, an order with no items would vanish entirely, while A keeps it with a NULL item.",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-joins-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Code that runs fine against SQLite contains `SELECT c.name, p.name FROM customers c JOIN products p;` (no `ON`). What happens when it is pointed at PostgreSQL?",
+    "options": [
+      {
+        "text": "It returns the same 25-row cross join",
+        "explanation": "SQLite and MySQL accept a bare `JOIN` as a cross join, but PostgreSQL does not."
+      },
+      {
+        "text": "It returns 0 rows because no condition is true",
+        "explanation": "Without any condition there is nothing to evaluate; the question is whether the syntax is accepted at all."
+      },
+      {
+        "text": "It raises a syntax error; PostgreSQL requires `ON`, `USING` or `NATURAL` for `JOIN`, so write `CROSS JOIN` if a product is intended",
+        "explanation": "Correct. In PostgreSQL only `CROSS JOIN` may omit the condition. Writing `CROSS JOIN` explicitly also makes the intent clear to reviewers."
+      },
+      {
+        "text": "It joins on the shared column `name`",
+        "explanation": "That would be NATURAL JOIN behaviour, and only if you wrote `NATURAL`. A plain `JOIN` never infers a condition."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In SQLite: `SELECT COUNT(*) FROM customers JOIN products;` returns 25, so SQLite treats it as a cross join.\n2. PostgreSQL's grammar requires a join condition for `[INNER] JOIN` and the outer joins. Without it you get a syntax error near the end of the statement.\n3. If you really want every combination, say so:\n\n```sql\nFROM customers c\nCROSS JOIN products p\n```\n\n4. Portable SQL avoids engine leniency, so queries behave the same in tests (often SQLite) and production (often PostgreSQL).",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

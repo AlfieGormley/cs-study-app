@@ -1,0 +1,340 @@
+[
+  {
+    "id": "pattern-anti-patterns-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef add(x, items=[]):\n    items.append(x)\n    return items\n\nadd(1)\nadd(2)\nprint(add(3))\n```",
+    "options": [
+      {
+        "text": "`[3]`",
+        "explanation": "This assumes a fresh list per call. Default values are evaluated once, when `def` runs, so every call without `items` shares one list."
+      },
+      {
+        "text": "`[1, 2, 3]`",
+        "explanation": "Correct. The same default list receives 1, then 2, then 3. This is the mutable default argument trap."
+      },
+      {
+        "text": "`[]`",
+        "explanation": "`append` mutates the list before it's returned, so it can't be empty."
+      },
+      {
+        "text": "A `TypeError`, because lists can't be default values",
+        "explanation": "Any object can be a default value. Mutable ones are legal but shared between calls, which is the problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `def` runs once and creates the default list `L = []`.\n2. Trace:\n\n```\nadd(1)  L = [1]\nadd(2)  L = [1, 2]\nadd(3)  L = [1, 2, 3]  printed\n```\n\n3. Fix with a `None` sentinel:\n\n```python\ndef add(x, items=None):\n    if items is None:\n        items = []\n    items.append(x)\n    return items\n```",
+    "link": {
+      "title": "Default argument values — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/controlflow.html"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What distinguishes an **anti-pattern** from an ordinary bug or mistake?",
+    "options": [
+      {
+        "text": "Anti-patterns only occur in object-oriented code",
+        "explanation": "Big balls of mud, magic numbers and copy-paste programming occur in any paradigm."
+      },
+      {
+        "text": "Anti-patterns cause crashes, while bugs cause wrong output",
+        "explanation": "Most anti-patterns don't crash anything. They make code expensive to change, which is why they survive."
+      },
+      {
+        "text": "An anti-pattern is any GoF pattern used in Python",
+        "explanation": "Many GoF patterns are useful in Python (adapter, composite, visitor). Overusing them can be an anti-pattern, but using them isn't one by definition."
+      },
+      {
+        "text": "It's a commonly recurring solution that looks reasonable at the time, but whose consequences outweigh its benefits, and a better alternative is known",
+        "explanation": "Correct. Its attractiveness is why it recurs. A one-off typo is a bug; repeatedly reaching for a god class because it's the obvious place to add things is an anti-pattern."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Check the three parts of the definition:\n\n1. **Recurring**: many teams do it.\n2. **Attractive**: it solves today's problem quickly.\n3. **Net harmful, with a known alternative**: the long-term cost outweighs the short-term gain, and there's a better-known approach.\n\nA god object passes all three: easy to add to, painful to change, and fixable by extracting responsibilities.",
+    "link": {
+      "title": "Anti-pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Anti-pattern"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A codebase contains `if order.state == 4 and total > 249.99: ship_cost = 0`. Which smell is this, and what's the fix?",
+    "options": [
+      {
+        "text": "Lava flow; delete the line",
+        "explanation": "Lava flow is dead code nobody dares remove. This line is live business logic; the problem is that its meaning is hidden."
+      },
+      {
+        "text": "God object; split the class",
+        "explanation": "One line doesn't tell you anything about class size. The visible problem is unexplained literal values."
+      },
+      {
+        "text": "Magic numbers; replace them with named constants or an enum, such as `OrderState.PAID` and `FREE_SHIPPING_THRESHOLD`",
+        "explanation": "Correct. Named values document intent, can be changed in one place, and make the rule searchable."
+      },
+      {
+        "text": "Golden hammer; use a different language",
+        "explanation": "Golden hammer is about applying a favourite tool everywhere. Nothing here suggests the language is the issue."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Preserve the rule before changing it: total > 249.99 is not generally equivalent to total >= 250 when fractional pennies are possible.\n2. Name the existing values:\n\n```python\nPAID_STATE_CODE = 4\nFREE_SHIPPING_OVER = 249.99\n\nif (order.state == PAID_STATE_CODE\n        and total > FREE_SHIPPING_OVER):\n    ship_cost = 0\n```\n\n3. Converting to an Enum, Decimal or integer pennies can be a separate deliberate migration, with a specified rounding and boundary policy. A readability refactor should not silently change that policy.",
+    "link": {
+      "title": "Magic number (programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Magic_number_(programming)"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Adding support for a new currency requires small edits in 14 files across pricing, invoicing, reporting, the API and the front end. Which smell is this?",
+    "options": [
+      {
+        "text": "Shotgun surgery",
+        "explanation": "Correct. One conceptual change scatters into many small edits, which means knowledge about currencies is spread out. The fix is to gather it in one place, such as a `Money`/`Currency` type."
+      },
+      {
+        "text": "God object",
+        "explanation": "A god object is the opposite symptom: too much in *one* place. Here the knowledge is spread over too many places."
+      },
+      {
+        "text": "Lava flow",
+        "explanation": "Lava flow is dead code nobody dares remove. These 14 files are all live code that needs changing."
+      },
+      {
+        "text": "Golden hammer",
+        "explanation": "Golden hammer is overusing one familiar tool. The issue here is where currency knowledge lives."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Count how many places change for one idea: 14.\n2. That may mean 'what a currency is' (code, symbol, decimal places, rounding) is duplicated.\n3. Gather it:\n\n```python\n@dataclass(frozen=True)\nclass Money:\n    amount: Decimal\n    currency: str\n```\n\n   plus a single currency table.\n4. Centralising shared currency metadata can reduce repeated edits; payments, formatting and business support may still require additional changes. This also cures the related **primitive obsession** (money as bare floats).",
+    "link": {
+      "title": "Shotgun surgery — Refactoring.Guru",
+      "url": "https://refactoring.guru/smells/shotgun-surgery"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A feature flag `LEGACY_PRICING` was added during a 2021 migration. The code behind it is still maintained, but nobody knows if anything uses it. What's the most responsible way to deal with this lava flow?",
+    "options": [
+      {
+        "text": "Leave it: removing old code is always risky",
+        "explanation": "That's how lava flows form. The code keeps costing maintenance and confusion forever."
+      },
+      {
+        "text": "Delete it immediately, since version control has it anyway",
+        "explanation": "Version control makes deletion reversible, but deleting without evidence risks an outage if some job still relies on it."
+      },
+      {
+        "text": "Combine representative metrics with caller/configuration review and owner knowledge, then remove it with a rollback plan",
+        "explanation": "Correct. Gather evidence first, then delete with confidence. Version control is your safety net if you were wrong."
+      },
+      {
+        "text": "Rewrite the legacy pricing so it's cleaner",
+        "explanation": "Polishing code that may be unused is wasted effort and makes it look even more important to keep."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The risk isn't deleting; it's not knowing.\n2. Measure:\n\n```python\nif settings.LEGACY_PRICING:\n    metrics.incr(\"legacy_pricing\")\n    return _old_price(order)\n```\n\n3. Wait for a full business cycle (month-end jobs, quarterly reports).\n4. Combine zero hits with caller/configuration review, rare-path coverage and owner confirmation, then remove with a rollback plan. Absence of observed traffic alone is not proof.\n5. Prevent recurrence: give every flag an owner and an expiry date.",
+    "link": {
+      "title": "Lava flow (programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Lava_flow_(programming)"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which are signs of **pattern overuse**? Assume no separate compatibility, construction-lifecycle or isolation need justifies the extra layer. Select all that apply.",
+    "options": [
+      {
+        "text": "A `GreeterFactory` whose only method returns an `EnglishGreeter`, the only greeter",
+        "explanation": "Correct. A factory with one product adds a class and a call without enabling any variation."
+      },
+      {
+        "text": "A `PaymentProvider` interface with Stripe and Adyen implementations and a test fake",
+        "explanation": "Incorrect. Three real implementations: the interface is earning its keep."
+      },
+      {
+        "text": "A `UserServiceFacadeProxy` that forwards every call unchanged to `UserService`",
+        "explanation": "Correct. A layer that only forwards calls adds indirection, a file and a stack frame with no behaviour."
+      },
+      {
+        "text": "A strategy interface introduced 'for future flexibility' for a rule that has had one implementation for five years",
+        "explanation": "Correct. Speculative generality: years of indirection for flexibility nobody needed."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "For each, count real variants and real behaviour:\n\n| Thing | Variants | Verdict |\n|---|---|---|\n| GreeterFactory | 1 | Overuse |\n| PaymentProvider | 3 | Justified |\n| FacadeProxy | 0 behaviour | Overuse |\n| Strategy, 5 yrs | 1 | Overuse |\n\nThe fix in each overuse case is to inline the indirection, and reintroduce it if a real second variant arrives.",
+    "link": {
+      "title": "Anti-pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Anti-pattern"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nprint(0.1 + 0.2 == 0.3)\n\nfrom decimal import Decimal as D\nprint(D(\"0.1\") + D(\"0.2\")\n      == D(\"0.3\"))\n```",
+    "options": [
+      {
+        "text": "`True` then `True`",
+        "explanation": "0.1, 0.2 and 0.3 have no exact binary floating-point representation, so the float sum is 0.30000000000000004, not 0.3."
+      },
+      {
+        "text": "`False` then `False`",
+        "explanation": "`Decimal` built from strings represents these values exactly in base 10, so the decimal comparison is True."
+      },
+      {
+        "text": "`False` then `True`",
+        "explanation": "Correct. Floats are binary approximations; `Decimal(\"0.1\")` is exact. This is why money as a bare float is a classic case of primitive obsession."
+      },
+      {
+        "text": "`True` then `False`",
+        "explanation": "This reverses the behaviour. Floats are the ones that can't represent 0.1 exactly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In binary, 0.1 = 0.0001100110011... repeating, so it's rounded.\n2. `0.1 + 0.2` gives `0.30000000000000004`, while `0.3` rounds to a slightly different double → `False`.\n3. `Decimal(\"0.1\")` stores the decimal digits exactly → `0.3 == 0.3` → `True`.\n4. Note `Decimal(0.1)` (from a float) would carry the float's error in; build from strings.\n\nWrapping money in a `Money` type based on `Decimal` puts this rule in one place.",
+    "link": {
+      "title": "Primitive obsession — Refactoring.Guru",
+      "url": "https://refactoring.guru/smells/primitive-obsession"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 12-year-old monolith is a big ball of mud. Leadership proposes freezing features for 18 months to rewrite it from scratch. What's the strongest argument for a strangler fig approach instead?",
+    "options": [
+      {
+        "text": "A rewrite must rediscover years of undocumented edge cases with no value delivered until cut-over; strangling moves one feature at a time behind a router, delivering value and learning continuously",
+        "explanation": "Correct. Incremental replacement keeps the system working, lets each migrated slice be verified in production, and can stop partway if priorities change."
+      },
+      {
+        "text": "Rewrites are always slower than refactoring",
+        "explanation": "Not always: tiny systems can be rewritten quickly. The argument is about risk and feedback, not a universal speed rule."
+      },
+      {
+        "text": "The strangler fig approach requires no tests",
+        "explanation": "Migrating slices safely needs good tests and monitoring, often comparing old and new outputs side by side."
+      },
+      {
+        "text": "Big balls of mud can't be replaced, only tolerated",
+        "explanation": "They can be replaced; the question is how to do it without betting everything on one cut-over."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The diagram illustrates one risk scenario, not a forecast of delivery dates or a claim that all rewrites deliver no interim value:\n\n```\nRewrite:\n  0 value for 18 months\n  one big cut-over\n  edge cases found late\n\nStrangler fig:\n  router in front\n  move /invoices first\n  verify, then /orders ...\n  value every few weeks\n```\n\n1. The old system keeps changing during a rewrite, so the target moves.\n2. Undocumented behaviour can surface late; characterization tests, domain expertise and production comparisons can expose it earlier.\n3. Strangling finds it one slice at a time, when it's cheap to fix.",
+    "link": {
+      "title": "Strangler Fig Application — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You have time to refactor one file this quarter. Which data best identifies where an anti-pattern is costing the most?",
+    "options": [
+      {
+        "text": "The longest file in the repository",
+        "explanation": "A rarely changed long file may have low routine change cost, but size alone says nothing about incident severity or runtime impact. Size alone ignores how often the pain is felt."
+      },
+      {
+        "text": "The file with the most TODO comments",
+        "explanation": "TODOs are a weak signal; some teams write many, some none. They don't measure the cost of change."
+      },
+      {
+        "text": "The file that is both highly complex and among the most frequently changed in version control (a hotspot)",
+        "explanation": "Correct. Cost is roughly complexity × how often you pay it. Change frequency from `git log` combined with complexity points to code that slows down work every week."
+      },
+      {
+        "text": "The oldest file in the repository",
+        "explanation": "Old, stable code that works is often fine. Age doesn't indicate cost."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Get change frequency:\n\n```\ngit log --format= --name-only \\\n  | sort | uniq -c | sort -rn\n```\n\n2. Get complexity: lines of code, or a cyclomatic complexity tool.\n3. Plot change frequency against complexity. The top-right corner (complex and often changed) is where developers repeatedly pay for bad structure.\n4. Frequent changes make the smaller file a plausible maintenance hotspot, but incident severity, security exposure and business impact also matter; this metric does not prove which file is most costly.",
+    "link": {
+      "title": "Code smell — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Code_smell"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A class does this:\n\n```python\nclass Checkout:\n    def pay(self, order):\n        gw = Locator.get(\"payments\")\n        db = Locator.get(\"db\")\n        ...\n```\n\nWhich criticisms of this **service locator** usage are valid? Select all that apply.",
+    "options": [
+      {
+        "text": "`Checkout`'s constructor and signature don't reveal that it needs a payment gateway and a database",
+        "explanation": "Correct. Dependencies are hidden in method bodies, so readers and callers can't see them without reading the code."
+      },
+      {
+        "text": "A test must remember to register fakes in the global locator, and forgetting one fails only at run time",
+        "explanation": "Correct. Missing dependencies are discovered when `pay()` runs, not when `Checkout` is constructed."
+      },
+      {
+        "text": "Tests running in parallel can interfere through the shared global registry",
+        "explanation": "Correct. The locator is global mutable state; two tests registering different fakes can see each other's."
+      },
+      {
+        "text": "Python can't look up objects by string key",
+        "explanation": "Incorrect. Lookups by key are trivial in Python. The problems are about hidden dependencies and global state, not mechanics."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Compare with constructor injection:\n\n```python\nclass Checkout:\n    def __init__(self, gw, db):\n        self.gw = gw\n        self.db = db\n```\n\n1. **Visibility:** the signature lists every dependency.\n2. **Fail fast:** forgetting one raises `TypeError` at construction.\n3. **Isolation:** each test builds its own `Checkout(FakeGw(), FakeDb())`, with no shared registry.\n\nA composition root (one place at start-up) wires the real objects together.",
+    "link": {
+      "title": "Inversion of Control Containers and the Dependency Injection pattern — Martin Fowler",
+      "url": "https://martinfowler.com/articles/injection.html"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A reporting service has plain `@dataclass` records and pure functions that transform them; there are no business invariants beyond types. A reviewer calls it an \"anaemic domain model\" anti-pattern. How should you respond?",
+    "options": [
+      {
+        "text": "Agree, and move every function onto the dataclasses as methods",
+        "explanation": "Moving stateless transformations onto records adds coupling without protecting anything. Fowler's criticism targets rich business rules living away from the data they guard."
+      },
+      {
+        "text": "Agree, and add getters and setters to every field",
+        "explanation": "Getters and setters with no rules are exactly what makes a model anaemic. They add ceremony without behaviour."
+      },
+      {
+        "text": "Say anti-patterns don't apply to Python",
+        "explanation": "They do; Python codebases have god objects and lava flows like any other. The point is whether this specific critique fits this code."
+      },
+      {
+        "text": "Point out the critique applies when real domain rules and invariants live outside the objects; for data transformation with none, plain data plus functions is a sound design",
+        "explanation": "Correct. Anaemic models are a problem when rules (an order total can't go negative, a shipped order can't be edited) are scattered and bypassed. With no such rules, there's nothing to encapsulate."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. What is Fowler's objection? Objects that *look* like a domain model but have all the behaviour stripped out into services, so invariants can be violated from anywhere.\n2. Does this code have invariants to protect? No: it reshapes data for reports.\n3. Plain records plus pure functions are easy to test and reason about, which is the functional-programming default.\n4. Revisit if real rules appear. If `discount` must never exceed `total`, that rule belongs next to the data, for example with construction validation plus immutable fields or validated updates. A __post_init__ check alone does not stop later mutation.",
+    "link": {
+      "title": "Anemic Domain Model — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/AnemicDomainModel.html"
+    }
+  }
+]

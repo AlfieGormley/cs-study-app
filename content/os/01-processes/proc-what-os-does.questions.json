@@ -1,0 +1,349 @@
+[
+  {
+    "id": "proc-what-os-does-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A program uses `read(fd, buf, n)` through the same interface for a regular file, pipe or TCP socket, even though details such as blocking and short reads differ. Which job of the OS does this illustrate?",
+    "options": [
+      {
+        "text": "Resource management",
+        "explanation": "Resource management is about sharing scarce hardware (CPU time, RAM) between competitors. Here nothing is being shared out; the point is the uniform interface."
+      },
+      {
+        "text": "Abstraction",
+        "explanation": "Correct. The OS hides the very different hardware and kernel subsystems behind one interface: the file descriptor and `read`."
+      },
+      {
+        "text": "Protection",
+        "explanation": "Protection is about stopping programs harming each other or the kernel. A uniform `read` interface does not by itself stop anything."
+      },
+      {
+        "text": "Scheduling",
+        "explanation": "Scheduling decides which thread runs on a CPU. It is a part of resource management and unrelated to the interface `read` presents."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask what the feature *gives the programmer*:\n\n1. The SSD, the pipe and the socket are implemented by completely different code (a block driver, a kernel buffer, the TCP stack).\n2. The program sees none of that: it sees a small integer and calls `read`.\n3. Turning messy, varied hardware into one clean concept is **abstraction**.\n\nResource management would be the kernel deciding *how much* disk bandwidth this program gets; protection would be the kernel refusing access to a file it doesn't own.",
+    "link": {
+      "title": "Introduction to Operating Systems — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/intro.pdf"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can an ordinary user program without delegated device mappings or I/O permission not directly control the disk controller?",
+    "options": [
+      {
+        "text": "Device registers are only accessible in privileged (kernel) mode, so the CPU and MMU stop user-mode code from touching them",
+        "explanation": "The kernel normally withholds the necessary mappings and I/O permissions. Hardware enforces that policy; selected drivers can receive explicitly delegated access."
+      },
+      {
+        "text": "Disk controllers only accept commands from PID 1",
+        "explanation": "PIDs are an OS-level concept the disk controller knows nothing about. The hardware enforces privilege by CPU mode, not by process ID."
+      },
+      {
+        "text": "The disk is encrypted, so raw access would return garbage",
+        "explanation": "Encryption is optional and unrelated to whether the process has authorised device access."
+      },
+      {
+        "text": "It can, but the C library doesn't expose a function for it",
+        "explanation": "This treats the restriction as a missing API. The block is enforced by hardware: device access is privileged, so it would fault no matter what library you used."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "An ordinary process lacks device mappings and I/O permissions, so an unauthorised access faults. It normally requests file operations through a syscall. The kernel can deliberately expose selected device memory to a user-space driver, as Linux UIO does; user mode alone does not forbid every device access.",
+    "link": {
+      "title": "Protection ring — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Protection_ring"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these runs in **kernel space** on a standard Linux system?",
+    "options": [
+      {
+        "text": "The `bash` shell",
+        "explanation": "The shell is a normal user program. Its name sounds 'system-level', but it has no special privilege."
+      },
+      {
+        "text": "`systemd` (PID 1)",
+        "explanation": "PID 1 is special for process management, but it is an ordinary user-space program. It uses system calls like any other process."
+      },
+      {
+        "text": "`glibc`, the C library",
+        "explanation": "glibc is a user-space library linked into programs. It wraps system calls but does not run with kernel privilege."
+      },
+      {
+        "text": "The ext4 file system driver",
+        "explanation": "Correct. Linux is monolithic: file systems such as ext4 run inside the kernel, in ring 0, whether built in or loaded as a module."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Sort each candidate by whether it runs with CPU privilege:\n\n| Component | Where |\n|---|---|\n| systemd | user space (PID 1) |\n| glibc | user space library |\n| ext4 | kernel |\n| bash | user space |\n\nIn a monolithic kernel like Linux, file systems, the network stack and drivers all live in the kernel. A common trap is to assume anything 'important' such as PID 1 must be in the kernel.",
+    "link": {
+      "title": "Kernel (operating system) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Kernel_(operating_system)"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Suppose a fault in an in-kernel Linux network driver corrupts kernel state, while a comparable fault in an isolated QNX driver process is contained and the service can be restarted. Which design difference explains this?",
+    "options": [
+      {
+        "text": "QNX runs the driver in ring 0 but with a watchdog timer",
+        "explanation": "If the driver ran in ring 0 its wild write could still corrupt the kernel. A watchdog can detect a hang, not prevent memory corruption."
+      },
+      {
+        "text": "QNX has better error handling in its C compiler",
+        "explanation": "The compiler does not decide what a wild pointer write can reach. The difference is which address space and privilege level the driver runs in."
+      },
+      {
+        "text": "Linux runs drivers in kernel space with full privilege; QNX is a microkernel that runs drivers as isolated user-space processes",
+        "explanation": "Correct. In a monolithic kernel a driver shares the kernel's address space, so a bad write can corrupt anything. In a microkernel the driver is a separate process, so the MMU confines the damage."
+      },
+      {
+        "text": "Linux loads drivers as modules, and modules are less stable than built-in code",
+        "explanation": "Loaded and built-in code run identically in ring 0. Being a module changes packaging, not isolation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "An in-kernel driver shares privileged memory, so its corruption can affect unrelated kernel state. A driver in a separate process has a smaller accessible address space and can be supervised for restart. Actual containment also depends on shared memory, device/DMA permissions and dependencies; restart is not an automatic guarantee of uninterrupted service. IPC and scheduling add costs that depend on the implementation.",
+    "link": {
+      "title": "Microkernel — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Microkernel"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Linux **loadable kernel modules** are true? Select all that apply.",
+    "options": [
+      {
+        "text": "They let drivers be added to a running kernel without rebooting",
+        "explanation": "Correct. `modprobe` or `insmod` loads a module's code into the running kernel."
+      },
+      {
+        "text": "A loaded module runs in kernel mode with the same privilege as the rest of the kernel",
+        "explanation": "Correct. There is no isolation boundary between a module and core kernel code; a module bug can crash the system."
+      },
+      {
+        "text": "They turn Linux into a microkernel, because drivers are separate from the core",
+        "explanation": "Wrong: separate *files* are not separate *address spaces*. A microkernel runs services as user processes; modules run in ring 0."
+      },
+      {
+        "text": "A crashing module is automatically restarted by the kernel, like a QNX driver",
+        "explanation": "Wrong. A crash in a module is a kernel oops or panic, exactly like a bug in built-in code."
+      },
+      {
+        "text": "They reduce the size of the kernel image that must be loaded at boot",
+        "explanation": "Correct. Drivers that aren't needed for every boot can be left out of the core image and loaded on demand."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Separate packaging from privilege:\n\n- **Packaging**: modules are separate `.ko` files, loaded on demand (so A and E are true).\n- **Privilege**: once loaded, the code is linked into kernel memory and runs in ring 0 (B true).\n\nBecause there is no MMU boundary, nothing confines a module's bugs, which rules out C and D. Modules are a convenience for a monolithic kernel, not a step towards a microkernel.",
+    "link": {
+      "title": "Loadable kernel module — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Loadable_kernel_module"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague says: \"The OS is always running in the background, using some CPU to supervise every program.\" What's the most accurate correction?",
+    "options": [
+      {
+        "text": "Ordinary instructions run directly in user mode; syscalls, exceptions and interrupts enter the kernel, and scheduled kernel threads can perform background work",
+        "explanation": "The kernel does not interpret every instruction. Hardware enforces protection, while entry events and scheduled kernel work give it CPU time."
+      },
+      {
+        "text": "The kernel interprets each user instruction to check it is safe",
+        "explanation": "That would be emulation and would be enormously slow. Hardware privilege checks let user code run natively and trap only on forbidden operations."
+      },
+      {
+        "text": "The kernel only runs at boot; after that, programs manage themselves",
+        "explanation": "Without the kernel regaining control, one program in an infinite loop could hog the CPU forever, and nothing could handle I/O or page faults."
+      },
+      {
+        "text": "Right: the kernel runs on a dedicated core reserved for it",
+        "explanation": "General-purpose kernels like Linux do not reserve a core. They run on whichever core triggered the entry."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "On one core, a user thread can execute directly until a syscall, exception or interrupt enters kernel code. The scheduler may then run another user thread or a kernel thread. Different cores can execute user and kernel code concurrently. Timer-based preemption can prevent a normal time-sharing task from monopolising a core; the kernel does not supervise each instruction in software.",
+    "link": {
+      "title": "Mechanism: Limited Direct Execution — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a microkernel, an application reads a file. The file system and the disk driver are separate user-space servers. Roughly how many address-space crossings does this need, compared with a monolithic kernel?",
+    "options": [
+      {
+        "text": "Zero: microkernels use shared memory so no crossings are needed",
+        "explanation": "Shared memory can carry bulk data, but setting it up and signalling still goes through the kernel. Microkernels are defined by IPC through the kernel."
+      },
+      {
+        "text": "Fewer, because the microkernel is smaller",
+        "explanation": "A smaller kernel does less itself, so more work moves to other processes and the number of crossings goes up, not down."
+      },
+      {
+        "text": "The same: one syscall in, one return out",
+        "explanation": "That is the monolithic count. In a microkernel the kernel only passes messages; the real work happens in other processes, which adds crossings."
+      },
+      {
+        "text": "Several: app to kernel to FS server, FS server to kernel to driver, and replies back the same way",
+        "explanation": "Correct. Each hop is an IPC through the kernel and a switch of address space. A one-syscall operation becomes a chain of messages, which is the microkernel's main performance cost."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the request:\n\n```\nMonolithic:\napp -> kernel (VFS->ext4->driver)\n    -> back to app\n= 1 round trip\n\nMicrokernel:\napp -> kernel -> FS server\nFS  -> kernel -> disk driver\ndrv -> kernel -> FS (reply)\nFS  -> kernel -> app (reply)\n= 4 IPC hops, each an\n  address-space switch\n```\n\nThis is why L4's big contribution was making IPC very cheap: the design lives or dies on it.",
+    "link": {
+      "title": "Microkernel — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Microkernel"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which of these is the best example of the **mechanism versus policy** split in Linux?",
+    "options": [
+      {
+        "text": "glibc implements `printf` on top of `write`",
+        "explanation": "That is a layering of abstractions (buffered formatted output over a syscall), not a split between a capability and the decision of how to use it."
+      },
+      {
+        "text": "Drivers are compiled as modules",
+        "explanation": "That is packaging. It doesn't separate the ability to do something from the choice of when and how."
+      },
+      {
+        "text": "The kernel provides cgroups to cap a group's CPU and memory; systemd decides which services go in which group with which limits",
+        "explanation": "Correct. The kernel offers the mechanism (resource limits on groups); a user-space manager decides the policy (which service gets 2 GB)."
+      },
+      {
+        "text": "The kernel decides the IP address of every interface",
+        "explanation": "Not the best example as written: address policy may be set by user-space tools, but the kernel also implements mechanisms such as IPv6 autoconfiguration. The cgroup/systemd option is the clearer capability-versus-policy split."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Mechanism answers *how can it be done?* Policy answers *what should be done?*\n\n1. cgroups: the kernel can account and cap CPU, memory and I/O for a group. That is mechanism.\n2. systemd unit files say `MemoryMax=2G` for one service and not another. That is policy.\n3. Because they're separate, you can change limits by editing a unit file instead of patching the kernel.\n\nThe same pattern appears in scheduling: the kernel can preempt and switch threads; priorities and nice values let user space steer *which* thread wins.",
+    "link": {
+      "title": "Kernel (operating system) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Kernel_(operating_system)"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does a small seL4 kernel make whole-kernel functional-correctness verification more tractable than a much larger Linux configuration?",
+    "options": [
+      {
+        "text": "seL4 is written in a safer language than C",
+        "explanation": "seL4's kernel is written in C; the proof covers the C code (and later work the compiled binary). The language isn't the difference."
+      },
+      {
+        "text": "A small kernel limits the implementation and specification that must be covered; Linux configurations can include many more privileged subsystems",
+        "explanation": "A smaller kernel can reduce proof scope. The exact guarantee still depends on verified configuration and assumptions; user-space device authority can matter to the trusted system."
+      },
+      {
+        "text": "Linux has no specification, while seL4 does",
+        "explanation": "Lacking a formal spec is part of it, but even with one, proving tens of millions of lines of rapidly changing kernel code is far beyond current verification effort."
+      },
+      {
+        "text": "Proofs only work for kernels without interrupts",
+        "explanation": "seL4 handles interrupts; its proof accounts for them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "seL4 publishes proofs for particular architecture/configuration combinations. A small privileged kernel makes comprehensive reasoning more tractable, while a larger implementation and changing specification increase effort. This does not prove every device deployment safe: DMA, hardware behaviour, boot assumptions and delegated authority must satisfy the documented proof assumptions.",
+    "link": {
+      "title": "L4 microkernel family — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/L4_microkernel_family"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about **hybrid kernels** such as Windows NT and XNU are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "XNU combines the Mach microkernel with a BSD layer, and both run in kernel space",
+        "explanation": "Correct. macOS's kernel puts Mach (tasks, IPC, VM) and BSD (POSIX processes, networking, VFS) together in one privileged address space."
+      },
+      {
+        "text": "Windows NT runs its file systems and most drivers in kernel mode",
+        "explanation": "Correct. NTFS and the bulk of drivers run in kernel mode, which is why a bad driver can blue-screen Windows."
+      },
+      {
+        "text": "Hybrid kernels get full microkernel fault isolation because their design is message-based",
+        "explanation": "Wrong. Isolation comes from separate address spaces, not from a message-passing code style. Services in kernel space can still corrupt each other."
+      },
+      {
+        "text": "Critics argue they behave much like monolithic kernels in practice",
+        "explanation": "Correct. Once the performance-critical services move into kernel space, the protection properties are monolithic."
+      },
+      {
+        "text": "Apple and Microsoft have both added frameworks for running some drivers in user space",
+        "explanation": "Correct. Apple's DriverKit and Microsoft's User-Mode Driver Framework move certain drivers out for isolation, showing the trade-off is still being adjusted."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Judge each claim by asking *what runs in ring 0?*\n\n1. XNU: Mach + BSD + IOKit all in kernel space (A true).\n2. NT: executive, file systems, most drivers in kernel mode (B true).\n3. If they share one address space, a bug in one can corrupt another, so microkernel isolation is not achieved (C false, D true).\n4. Moving specific drivers out (DriverKit, UMDF) buys isolation back where it matters (E true).\n\n'Hybrid' describes the *internal structure*; the *protection* model is mostly monolithic.",
+    "link": {
+      "title": "Architecture of Windows NT — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Architecture_of_Windows_NT"
+    }
+  },
+  {
+    "id": "proc-what-os-does-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're designing the OS for a medical infusion pump that must pass strict safety certification, and drivers come from third parties. A teammate proposes embedded Linux for its huge driver ecosystem. What is the strongest argument for a microkernel RTOS such as QNX or seL4 instead?",
+    "options": [
+      {
+        "text": "Linux cannot run on embedded hardware",
+        "explanation": "Linux runs on countless embedded devices. The issue is assurance, not capability."
+      },
+      {
+        "text": "Microkernels don't need device drivers",
+        "explanation": "They still need drivers; the drivers simply run as user-space processes."
+      },
+      {
+        "text": "Microkernels are always faster than Linux",
+        "explanation": "They usually aren't: IPC adds overhead. Speed is the weakest argument here."
+      },
+      {
+        "text": "A small trusted kernel with drivers isolated in user space limits the impact of a buggy third-party driver and shrinks the code that must be certified",
+        "explanation": "Correct. Certification effort scales with trusted code. Isolating untrusted drivers means a fault can be contained and the driver restarted, instead of the whole device panicking."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "A small trusted kernel and isolated services can reduce the scope of some assurance arguments and contain some faults. A device safety case still includes application behaviour, deadlines, recovery, hardware and driver/DMA authority. No supplied implementation, hazard analysis or certification evidence establishes whether Linux, QNX or seL4 is suitable for this particular pump, or whether IPC overhead is acceptable.",
+    "link": {
+      "title": "Microkernel — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Microkernel"
+    }
+  }
+]

@@ -1,0 +1,343 @@
+[
+  {
+    "id": "rel-th-relational-model-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A relation `Course(cid, title, dept, credits)` currently holds 40 tuples. What are its degree and cardinality?",
+    "options": [
+      {
+        "text": "Degree 40, cardinality 4",
+        "explanation": "Swapped. Degree counts attributes (columns); cardinality counts tuples (rows)."
+      },
+      {
+        "text": "Degree 4, cardinality 40",
+        "explanation": "Correct. There are 4 attributes in the heading, so the degree is 4. There are 40 tuples, so the cardinality is 40."
+      },
+      {
+        "text": "Degree 4, cardinality 4",
+        "explanation": "This treats cardinality as fixed by the heading. Cardinality is the number of tuples and changes with every insert or delete."
+      },
+      {
+        "text": "Degree 1, cardinality 40",
+        "explanation": "Degree is not the number of keys or relations; it is the number of attributes in the heading."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The heading is `{cid, title, dept, credits}`: 4 attributes, so **degree = 4**.\n2. The body has 40 tuples, so **cardinality = 40**.\n3. Insert another course and the cardinality becomes 41, while the degree stays 4. Only an `ALTER TABLE ... ADD COLUMN` changes the degree.",
+    "link": {
+      "title": "Relational model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Relational_model"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In `Employee(emp_id, email, name, dept)`, both `emp_id` and `email` are unique for every employee the business could ever have. Which statement is correct?",
+    "options": [
+      {
+        "text": "`{emp_id, email}` is a candidate key because it contains both unique columns",
+        "explanation": "It is a superkey, but not minimal: dropping either attribute leaves a set that is still unique. A candidate key must be minimal."
+      },
+      {
+        "text": "Only the primary key can be a candidate key",
+        "explanation": "Backwards. The primary key is chosen *from* the candidate keys; a relation can have several candidate keys."
+      },
+      {
+        "text": "`{emp_id}` and `{email}` are both candidate keys; one is chosen as primary key and the other becomes an alternate key",
+        "explanation": "Correct. Each is unique and minimal (a single attribute cannot be reduced). Pick one as primary key and enforce the other with `UNIQUE`."
+      },
+      {
+        "text": "`{emp_id, name}` is a candidate key because names help identify people",
+        "explanation": "Adding `name` to a key makes a superkey that is not minimal. Usefulness to humans is not part of the definition."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Check each set against the two conditions for a candidate key:\n\n| Set | Unique? | Minimal? |\n|---|---|---|\n| `{emp_id}` | Yes | Yes |\n| `{email}` | Yes | Yes |\n| `{emp_id, email}` | Yes | No |\n| `{emp_id, name}` | Yes | No |\n\nSo there are two candidate keys. In SQL:\n\n```sql\nemp_id INT PRIMARY KEY,\nemail  TEXT NOT NULL UNIQUE\n```",
+    "link": {
+      "title": "Candidate key — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Candidate_key"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A query `SELECT * FROM orders LIMIT 10` returned rows in insertion order every time during testing. In production it suddenly returns a different set of 10 rows. What is the best explanation?",
+    "options": [
+      {
+        "text": "Relations have no tuple order, so without `ORDER BY` the database may return rows in any order it finds convenient",
+        "explanation": "Correct. Insertion order was an accident of the physical layout. Updates, vacuuming, a new index or a parallel scan can all change it. Only `ORDER BY` guarantees order."
+      },
+      {
+        "text": "Production has a bug in its storage engine",
+        "explanation": "Nothing is wrong. Without `ORDER BY`, any order is a correct answer, so a different order is not a bug."
+      },
+      {
+        "text": "`LIMIT` always returns the most recently inserted rows",
+        "explanation": "`LIMIT` takes the first N rows of whatever order the plan produces. It has no notion of recency."
+      },
+      {
+        "text": "Rows were deleted, which renumbered the table",
+        "explanation": "Tables have no row numbers to renumber. References are by key value, not by position."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A relation is a set, and sets are unordered.\n2. SQL keeps this rule for results: with no `ORDER BY`, order is unspecified.\n3. In Postgres, a sequential scan reads pages in physical order, which looks like insertion order until updates move rows (an update writes a new row version elsewhere) or a parallel or synchronised scan starts mid-table.\n4. Fix: `SELECT * FROM orders ORDER BY created_at, id LIMIT 10` (add a unique tie-breaker such as `id`, or ties can still swap).",
+    "link": {
+      "title": "Relational model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Relational_model"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A `page_views(user_id, url, viewed_at)` table has no primary key or unique constraint. A retry bug inserts one row twice, exactly identical. What can you say about this table in relational terms?",
+    "options": [
+      {
+        "text": "It is still a relation; the two rows are different tuples because they were inserted at different times",
+        "explanation": "Insertion time is not an attribute here. Two tuples with identical values for every attribute are the same tuple."
+      },
+      {
+        "text": "Nothing changes; queries automatically remove duplicates",
+        "explanation": "Only `DISTINCT`, `UNION` (without `ALL`) and similar operators remove duplicates. `SELECT COUNT(*)` will count both rows."
+      },
+      {
+        "text": "The database will reject the second insert, because relations cannot hold duplicates",
+        "explanation": "SQL does not enforce set semantics on its own; only a `PRIMARY KEY` or `UNIQUE` constraint would reject it."
+      },
+      {
+        "text": "It is a bag, not a relation: it now contains a duplicate, which a set cannot, and with no key you cannot target just one copy with an ordinary `DELETE ... WHERE`",
+        "explanation": "Correct. Without a key the table can hold duplicates. Any `WHERE` clause that matches one copy matches both, so you need tricks such as Postgres's system column `ctid` or `DELETE ... USING` with row numbering to remove one."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Theory: a relation is a set of tuples, so a duplicate is impossible.\n2. SQL tables are **bags**. With no key, nothing stops a duplicate.\n3. `DELETE FROM page_views WHERE user_id = 7 AND url = '/a' AND viewed_at = '...'` deletes **both** copies, because they are indistinguishable by value.\n4. Remedies: add a key (for example a surrogate `id`, or `UNIQUE (user_id, url, viewed_at)` if that is a real rule), and make the insert idempotent with `ON CONFLICT DO NOTHING`.",
+    "link": {
+      "title": "Relational model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Relational_model"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of the following are ways that SQL tables differ from relations as defined in the relational model? Select all that apply.",
+    "options": [
+      {
+        "text": "A table can contain duplicate rows",
+        "explanation": "Correct. SQL tables and results are bags (multisets) unless a key or `DISTINCT` prevents duplicates."
+      },
+      {
+        "text": "Columns have an ordinal position that `SELECT *` and `INSERT ... VALUES` rely on",
+        "explanation": "Correct. In the model, the heading is a set of named attributes, with no order."
+      },
+      {
+        "text": "A column can hold NULL, giving three-valued logic",
+        "explanation": "Correct. The 1970 model had no NULL; SQL's NULL means a comparison can be *unknown*, not just true or false."
+      },
+      {
+        "text": "Every table must have a primary key",
+        "explanation": "Wrong way round. The model requires every relation to have at least one candidate key; SQL does *not* require a key, which is exactly why duplicates are possible."
+      },
+      {
+        "text": "A table's attributes each have a type (domain)",
+        "explanation": "This is shared, not a difference: the model's attributes each draw values from a domain, which SQL calls a type."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Go through each property and ask \"does the model allow this?\"\n\n1. Duplicates: a set cannot have them; a SQL table can. **Difference.**\n2. Column order: a heading is a set; SQL columns are positional. **Difference.**\n3. NULL: not in Codd's 1970 model; SQL has it. **Difference.**\n4. Mandatory keys: the model implies every relation has a key (at worst all attributes). SQL lets you omit one. So this statement describes the model, not SQL.\n5. Domains/types: present in both. **Not a difference.**",
+    "link": {
+      "title": "Relational model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Relational_model"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`Enrolled(sid, cid)` has foreign keys `sid → Student.sid` and `cid → Course.cid`, both with the default `ON DELETE` action. You run `DELETE FROM student WHERE sid = 3;` and student 3 has two enrolments. What happens in Postgres?",
+    "options": [
+      {
+        "text": "The student and both enrolments are deleted",
+        "explanation": "That would be `ON DELETE CASCADE`, which must be asked for explicitly. It is not the default."
+      },
+      {
+        "text": "The student is deleted and the two enrolments get `sid = NULL`",
+        "explanation": "That is `ON DELETE SET NULL`. It would also fail here, because `sid` is part of the primary key and so cannot be NULL."
+      },
+      {
+        "text": "The delete fails with a foreign-key violation, because the default action (`NO ACTION`) forbids leaving enrolments that reference a missing student",
+        "explanation": "Correct. The default checks referential integrity and raises an error if referencing rows remain. Delete the enrolments first, or declare `ON DELETE CASCADE`."
+      },
+      {
+        "text": "The student is deleted and the enrolments are left pointing at nothing",
+        "explanation": "Referential integrity exists precisely to prevent dangling references; the database will not allow this state."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Referential integrity: every `Enrolled.sid` must match an existing `Student.sid`.\n2. Deleting student 3 would leave two enrolments with `sid = 3` and no matching student.\n3. The default `ON DELETE NO ACTION` checks this (at the end of the statement, or at commit if the constraint is deferred) and raises `violates foreign key constraint`.\n4. Options:\n   - `ON DELETE CASCADE`: removes the enrolments automatically.\n   - Delete from `enrolled` first, in the same transaction.\n   - `SET NULL` is impossible here because `sid` is in the primary key (entity integrity).",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A designer looks at 5,000 rows in `customer(name, postcode, phone)`, sees that no two rows share a `(name, postcode)` pair, and declares it the primary key. What is the main flaw?",
+    "options": [
+      {
+        "text": "A key is a rule about every legal state of the relation, not a pattern in today's rows; two customers with the same name can live in the same postcode",
+        "explanation": "Correct. Uniqueness in a sample proves nothing about the future. Two J. Smiths in one postcode is perfectly legal, so the second one's insert would be wrongly rejected."
+      },
+      {
+        "text": "Keys must be chosen from integer columns",
+        "explanation": "Keys can be any type: text, UUIDs, dates or composites."
+      },
+      {
+        "text": "Composite primary keys are not allowed",
+        "explanation": "They are allowed and common, for example `PRIMARY KEY (sid, cid)` on a link table."
+      },
+      {
+        "text": "`phone` should have been included to make it minimal",
+        "explanation": "Adding attributes makes a key less minimal, not more, and phone numbers are shared and change too."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Ask the domain question: *can two different customers ever have the same name and postcode?* Yes: families, flats, common names.\n2. So `{name, postcode}` is not a superkey of the relation's legal states, whatever the current data shows.\n3. A UK postcode covers on average around 15 addresses (often more in blocks of flats), so collisions are routine.\n4. Better: a surrogate `customer_id`, plus `UNIQUE` only on attributes the business guarantees are unique (perhaps an email used for login).",
+    "link": {
+      "title": "Candidate key — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Candidate_key"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A view `active_students` is defined as `SELECT sid, name FROM student WHERE status = 'active'`. The team later splits `student` into two tables and redefines the view over them, and the reporting queries keep working unchanged. Which property of the relational model does this demonstrate?",
+    "options": [
+      {
+        "text": "Physical data independence",
+        "explanation": "Physical independence covers storage changes, such as adding an index or changing file layout. Splitting a table is a change to the logical schema."
+      },
+      {
+        "text": "The closed-world assumption",
+        "explanation": "That assumption says absent tuples are false. It does not explain why queries survived a schema change."
+      },
+      {
+        "text": "Referential integrity",
+        "explanation": "Referential integrity is about foreign key values matching keys. Nothing here involves foreign keys."
+      },
+      {
+        "text": "Logical data independence",
+        "explanation": "Correct. The logical schema (the tables) changed, but the external schema the reports use (the view) stayed the same, so applications were insulated from the change."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "There are three levels in the classic architecture:\n\n```\nexternal   views used by apps/reports\n   |\nlogical    tables, columns, keys\n   |\nphysical   files, pages, indexes\n```\n\n- Changing the **physical** level without affecting the logical level is *physical* data independence (for example `CREATE INDEX`).\n- Changing the **logical** level without affecting the external level is *logical* data independence. Here the tables changed and the view absorbed it.",
+    "link": {
+      "title": "Relational model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Relational_model"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A `holiday(employee_id, day)` relation lists booked days off. HR asks: \"Was employee 42 working on 3 March?\" There is no row `(42, '2026-03-03')`. A colleague argues the database cannot answer, because \"absence of data is not data\". Which reasoning matches how the relational model treats this?",
+    "options": [
+      {
+        "text": "The colleague is right; relational queries can only report facts that are present",
+        "explanation": "Then `NOT EXISTS` and `EXCEPT` would be meaningless. The model deliberately lets absence carry meaning."
+      },
+      {
+        "text": "Under the closed-world assumption, the relation contains every true instance of its predicate, so a missing tuple means 'employee 42 had no holiday booked on 3 March' is true",
+        "explanation": "Correct. The predicate is 'employee E has a holiday booked on day D'. The absent tuple makes that proposition false, so as long as the predicate is the full story the answer is that 42 was not on holiday."
+      },
+      {
+        "text": "The answer is NULL, because the fact is unknown",
+        "explanation": "NULL is a value inside a tuple. A missing tuple is not a NULL; it is a false proposition."
+      },
+      {
+        "text": "The database should be changed to store a row for every working day too",
+        "explanation": "That would duplicate information the closed-world assumption already gives you, and create update problems. A relation lists the true instances of one predicate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Write the predicate: *employee E has a holiday booked on day D*.\n2. Closed-world assumption: the relation holds **all** true instances, so any (E, D) pair not present is false.\n3. `(42, 2026-03-03)` is absent, so \"42 had holiday booked on 3 March\" is false.\n4. In SQL:\n\n```sql\nSELECT NOT EXISTS (\n  SELECT 1 FROM holiday\n  WHERE employee_id = 42\n    AND day = DATE '2026-03-03');\n```\n\nCaveat: this answers \"not on holiday\", not \"was at work\". Sickness lives in another relation, so the model only answers what its predicates cover.",
+    "link": {
+      "title": "Relational model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Relational_model"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are reviewing `CREATE TABLE enrolled (sid INT REFERENCES student, cid TEXT REFERENCES course, grade TEXT);` Which changes enforce rules that the relational model expects of this relation? Select all that apply.",
+    "options": [
+      {
+        "text": "`PRIMARY KEY (sid, cid)`",
+        "explanation": "Correct. It gives the relation a candidate key, rules out duplicate enrolments, and, through entity integrity, makes `sid` and `cid` NOT NULL."
+      },
+      {
+        "text": "`CHECK (grade IN ('A','B','C','D','E','F'))`",
+        "explanation": "Correct. That is a domain constraint, restricting `grade` to its legal set of values."
+      },
+      {
+        "text": "An index on `grade` to speed up grade reports",
+        "explanation": "An index is a physical design decision. It changes performance, not which states are legal."
+      },
+      {
+        "text": "Making `sid` the first column so it is easier to join",
+        "explanation": "Column position has no meaning in the model, and join performance does not depend on column order."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Sort the proposals into *logical rules* and *physical tuning*:\n\n| Change | Kind | Model rule |\n|---|---|---|\n| PK (sid, cid) | logical | key + entity integrity |\n| CHECK grade | logical | domain |\n| index on grade | physical | none |\n| column order | neither | attributes unordered |\n\nNote that a primary key implies `NOT NULL` on its columns in SQL, which is entity integrity in action.",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the early 1970s, an IMS (hierarchical) application reached a part's suppliers by following physical parent-child pointers. Which outcome is the relational model specifically designed to avoid, compared with that approach?",
+    "options": [
+      {
+        "text": "Slow single-record lookups",
+        "explanation": "Navigational systems were often very fast along their designed access paths. Raw speed for those paths was not the problem the model solved."
+      },
+      {
+        "text": "Needing a query language at all",
+        "explanation": "The relational model introduced declarative query languages; it did not remove them."
+      },
+      {
+        "text": "Storing more than one record type in a database",
+        "explanation": "Both approaches store many record types; the relational model stores each as a relation."
+      },
+      {
+        "text": "Applications breaking or needing rewrites when the storage structure or access paths change",
+        "explanation": "Correct. In the model, programs refer to data by value and use declarative operators, so the system can change storage and access paths (indexes, layout) without changing the programs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. In IMS-style systems, the program encodes the path: \"get the part, then the first child supplier, then the next child\".\n2. If the database administrator restructures the hierarchy, those navigational calls break.\n3. Codd's model removes pointers from the user's view. A query states the result: suppliers whose `part_id` equals X.\n4. The DBMS chooses the access path (index scan, hash join, ...) at run time, which is how the same SQL can speed up after `CREATE INDEX` with no code change.",
+    "link": {
+      "title": "A Relational Model of Data for Large Shared Data Banks — E. F. Codd (1970, PDF)",
+      "url": "https://www.seas.upenn.edu/~zives/03f/cis550/codd.pdf"
+    }
+  }
+]

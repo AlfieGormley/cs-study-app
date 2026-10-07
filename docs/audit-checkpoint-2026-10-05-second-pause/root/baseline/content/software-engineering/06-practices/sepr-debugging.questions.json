@@ -1,0 +1,350 @@
+[
+  {
+    "id": "sepr-debugging-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef add_tag(tag, tags=[]):\n    tags.append(tag)\n    return tags\n\nadd_tag(\"x\")\nprint(add_tag(\"y\"))\n```",
+    "options": [
+      {
+        "text": "`['y']`",
+        "explanation": "This assumes a fresh empty list is created on every call. Python evaluates default values once, at definition time."
+      },
+      {
+        "text": "`['x', 'y']`",
+        "explanation": "Correct. The default list is created once and shared, so the first call's `'x'` is still in it when the second call appends `'y'`."
+      },
+      {
+        "text": "`['y', 'x']`",
+        "explanation": "`append` adds to the end, so `'y'` comes after `'x'`."
+      },
+      {
+        "text": "A `TypeError`, because a list cannot be a default argument",
+        "explanation": "Mutable defaults are legal Python; that is what makes the bug easy to write."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. When `def` runs, Python evaluates `[]` once and stores that list object as the default.\n2. `add_tag(\"x\")`: no `tags` passed, so the shared list is used. It becomes `['x']`.\n3. `add_tag(\"y\")`: the *same* list object is used again. It becomes `['x', 'y']`.\n4. Fix: `tags=None`, then `if tags is None: tags = []` inside the function.",
+    "link": {
+      "title": "Default argument values — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+    }
+  },
+  {
+    "id": "sepr-debugging-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bug appeared somewhere in the last 500 commits. Using `git bisect`, roughly how many commits will you need to test, at most, to find the one that introduced it?",
+    "options": [
+      {
+        "text": "About 9",
+        "explanation": "Correct. Each test halves the range: 2^9 = 512 ≥ 500, so about 9 tests suffice."
+      },
+      {
+        "text": "About 50",
+        "explanation": "This assumes checking every tenth commit. Binary search is logarithmic, not a fixed fraction of N."
+      },
+      {
+        "text": "About 250",
+        "explanation": "That is the average for a linear search from one end. Bisect halves the range each time."
+      },
+      {
+        "text": "Exactly 500",
+        "explanation": "That would be testing every commit, which bisect exists to avoid."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Binary search halves the candidate range each step:\n\n```\n500 -> 250 -> 125 -> 63 -> 32\n    -> 16 -> 8 -> 4 -> 2 -> 1\n```\n\nThat is 9 halvings, matching log2(500) ≈ 8.97. So about 9 tests, each of which you can automate with `git bisect run`.",
+    "link": {
+      "title": "git-bisect documentation — Git",
+      "url": "https://git-scm.com/docs/git-bisect"
+    }
+  },
+  {
+    "id": "sepr-debugging-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Given this traceback, where should you start looking for the cause?\n\n```\nTraceback (most recent call last):\n  File \"api.py\", line 40, in post\n    rate = fx_rate(req.currency)\n  File \"fx.py\", line 8, in fx_rate\n    return RATES[code]\nKeyError: 'gbp'\n```",
+    "options": [
+      {
+        "text": "`api.py` line 40 only, because the top frame is where the error was raised",
+        "explanation": "The top frame is the *oldest* call. Python prints 'most recent call last', so the raise happened in the bottom frame."
+      },
+      {
+        "text": "Python's dictionary implementation, since that is where `KeyError` comes from",
+        "explanation": "Bugs in the standard dictionary are vanishingly rare. The lookup failed because the key is not in `RATES`."
+      },
+      {
+        "text": "`fx.py` line 8, where `RATES` has no key `'gbp'`; then up to `api.py` to see why a lower-case code was passed",
+        "explanation": "Correct. The bottom frame raised; the error message shows the key is lower-case. Either `RATES` uses upper-case keys and the caller should normalise, or the input should have been validated at the API boundary."
+      },
+      {
+        "text": "Neither file; `KeyError` always means a missing environment variable",
+        "explanation": "`KeyError` means any dictionary lookup failed. It is only an environment problem if the dictionary was `os.environ`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. 'Most recent call last': read from the bottom.\n2. Bottom line: `KeyError: 'gbp'`. Frame above: `fx.py` line 8, `RATES[code]`.\n3. Hypothesis: `RATES` keys are upper-case (`'GBP'`). Check it.\n4. Move up one frame: `api.py` passes `req.currency` unchanged. So the root-cause fix is probably to normalise or validate currency at the API boundary, not to add lower-case keys.",
+    "link": {
+      "title": "pdb — The Python Debugger",
+      "url": "https://docs.python.org/3/library/pdb.html"
+    }
+  },
+  {
+    "id": "sepr-debugging-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run `git bisect run ./check.sh`. Some commits in the range do not compile. What should `check.sh` do for those commits?",
+    "options": [
+      {
+        "text": "Exit with 1 so git marks them bad",
+        "explanation": "Marking an unbuildable commit 'bad' may make bisect blame the wrong commit, since the bug you are hunting may not be in it."
+      },
+      {
+        "text": "Exit with 0 so git marks them good",
+        "explanation": "Equally misleading: you have no evidence the bug is absent from that commit."
+      },
+      {
+        "text": "Exit with 125 so git skips them",
+        "explanation": "Correct. 125 tells bisect the commit cannot be tested. It picks a nearby commit instead."
+      },
+      {
+        "text": "Exit with 128 so git retries the build",
+        "explanation": "Exit codes above 127 abort the bisect run; they do not trigger a retry."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "`git bisect run` reads the script's exit code:\n\n```\n0          good\n1-127      bad (except 125)\n125        skip: cannot test\n>127       abort bisect\n```\n\nSo the usual pattern is:\n\n```\nmake || exit 125\n./run_test.sh\n```\n\nA broken build is skipped rather than misclassified, and bisect still finds the culprit (or a small set of candidates if skipped commits sit next to it).",
+    "link": {
+      "title": "git-bisect documentation — Git",
+      "url": "https://git-scm.com/docs/git-bisect"
+    }
+  },
+  {
+    "id": "sepr-debugging-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A batch job crashes on record 48,213 out of 100,000 with a bad value. You are using pdb. What is the most efficient way to stop exactly at the failing record?",
+    "options": [
+      {
+        "text": "Set an ordinary breakpoint in the loop and press `c` until you reach record 48,213",
+        "explanation": "That is 48,213 manual continues. A condition does the filtering for you."
+      },
+      {
+        "text": "Set a conditional breakpoint, for example `b job.py:57, rec.id == 48213`, or run under `python -m pdb` and inspect post-mortem when it crashes",
+        "explanation": "Correct. A conditional breakpoint stops only when the condition is true. Post-mortem mode drops you into the crashing frame with all its locals once the exception happens."
+      },
+      {
+        "text": "Add `print(rec)` inside the loop and read the 100,000 lines of output",
+        "explanation": "This works eventually but buries the one interesting record in noise. If you print, print only when the record matches."
+      },
+      {
+        "text": "Step through every iteration with `s`",
+        "explanation": "Stepping into each call is even slower than continuing; it is for walking through one call in detail."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. You know which record fails, so you want the debugger to skip the rest.\n2. Conditional breakpoint: `b job.py:57, rec.id == 48213`, then `c`. pdb checks the condition each time but stops only once.\n3. Alternative: you know it crashes, so run `python -m pdb job.py`, let it raise, and pdb enters post-mortem in the raising frame. Use `p rec`, `w`, and `u` to see how the bad value arrived.",
+    "link": {
+      "title": "pdb — The Python Debugger",
+      "url": "https://docs.python.org/3/library/pdb.html"
+    }
+  },
+  {
+    "id": "sepr-debugging-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A test fails about 1 run in 50 on CI. When you add logging around the shared counter it updates, the failure stops appearing. What kind of bug is this most likely to be, and what is a good next step?",
+    "options": [
+      {
+        "text": "A Bohrbug in the assertion; rewrite the test",
+        "explanation": "A Bohrbug fails deterministically. An intermittent failure that vanishes when observed is the signature of something else."
+      },
+      {
+        "text": "A CI infrastructure fault; retry failing tests automatically",
+        "explanation": "Automatic retries hide a real concurrency bug that will also hit production."
+      },
+      {
+        "text": "A memory leak; increase the CI machine's RAM",
+        "explanation": "Leaks cause gradual failure, not a timing-sensitive 1-in-50 failure that disappears with logging."
+      },
+      {
+        "text": "A heisenbug, most likely a race condition; run the test thousands of times and use a race detector or in-memory logging that disturbs timing less",
+        "explanation": "Correct. Logging adds I/O and locks that change thread interleaving, hiding the race. Race detectors (ThreadSanitizer, Go's -race) and repeated runs expose it without depending on lucky timing."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Clues: intermittent, involves shared state, and disappears when observed.\n2. That is the textbook heisenbug, and shared mutable state suggests a data race.\n3. Logging through a locked handler serialises threads slightly, so the bad interleaving stops happening.\n4. Next steps:\n   - Loop the test 10,000 times to get a reliable failure rate.\n   - Run with a race detector if available.\n   - Record events in an in-memory list and dump it only on failure.\n5. Fix by protecting the counter (a lock or an atomic operation), then confirm the failure rate drops to zero over many runs.",
+    "link": {
+      "title": "Heisenbug — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Heisenbug"
+    }
+  },
+  {
+    "id": "sepr-debugging-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A service works in staging but returns wrong totals in production for the same request. Which are sensible early checks? Select all that apply.",
+    "options": [
+      {
+        "text": "Compare deployed versions and dependency lock files between the two environments",
+        "explanation": "Correct. A different build or library version is one of the most common causes."
+      },
+      {
+        "text": "Compare configuration and environment variables, including feature flags",
+        "explanation": "Correct. A flag on in one environment and off in the other changes behaviour with identical code."
+      },
+      {
+        "text": "Compare locale and time zone settings",
+        "explanation": "Correct. Number formatting, date boundaries and currency rounding often depend on locale and time zone."
+      },
+      {
+        "text": "Rewrite the totals function, since the bug must be in the code",
+        "explanation": "The same code behaves differently, which points to something other than the code. Rewriting is guessing."
+      },
+      {
+        "text": "Check what changed in production recently (deploys, config pushes, data migrations)",
+        "explanation": "Correct. 'What changed?' is the first question for any new production-only bug."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Same code, different behaviour means some *input* to the code differs. List them and diff each:\n\n1. Build and dependencies (A).\n2. Configuration and flags (B).\n3. Environment: locale, time zone, OS (C).\n4. Data and recent changes (E).\n\nD skips the investigation entirely. Even if the totals function has a bug, you need to know which environmental difference triggers it before you can fix it with confidence.",
+    "link": {
+      "title": "Delta debugging — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Delta_debugging"
+    }
+  },
+  {
+    "id": "sepr-debugging-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A compiler crashes on a 4,000-line source file. You want a minimal input that still triggers the crash. You split the file into halves A and B; neither half alone crashes. What should a delta-debugging approach do next?",
+    "options": [
+      {
+        "text": "Conclude the crash cannot be minimised and report the full file",
+        "explanation": "Delta debugging handles this case: the failure needs parts from both halves, so it moves to finer splits."
+      },
+      {
+        "text": "Split into smaller chunks (for example quarters) and test removing each chunk from the full input, keeping any removal that still crashes",
+        "explanation": "Correct. When neither half fails alone, Zeller's ddmin algorithm increases granularity and tries deleting individual chunks (testing complements), steadily shrinking the input while the failure persists."
+      },
+      {
+        "text": "Pick half A because it comes first and keep shrinking it",
+        "explanation": "Half A alone does not crash, so any further shrinking of A alone will never reproduce the bug."
+      },
+      {
+        "text": "Randomly delete single lines until it stops crashing, then report that line",
+        "explanation": "Finding the line whose removal *stops* the crash tells you one ingredient, not a minimal failing input, and random deletion of 4,000 lines one at a time is slow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The failure depends on something in A *and* something in B (say, a declaration in A and its use in B).\n2. ddmin responds by increasing granularity: split into n = 4 chunks.\n3. Test each **complement** (the input with one chunk removed). If removing chunk 3 still crashes, drop chunk 3 for good.\n4. Continue, doubling the number of chunks when no removal works, until single lines cannot be removed.\n5. The result is a 1-minimal input: removing any one remaining piece makes the crash go away. Tools like C-Reduce and Hypothesis's shrinking use the same idea.",
+    "link": {
+      "title": "Delta debugging — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Delta_debugging"
+    }
+  },
+  {
+    "id": "sepr-debugging-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Orders occasionally get a negative total. You trace it to `apply_discount`, which can subtract more than the subtotal when two promotions stack. A teammate proposes adding `total = max(total, 0)` at the end of `checkout()`. What is the best response?",
+    "options": [
+      {
+        "text": "Reject it; first write a test reproducing the double discount, fix the stacking rule in `apply_discount`, then search for other places that apply promotions the same way",
+        "explanation": "Correct. The root cause is the stacking rule. A failing test proves the cause, the fix addresses it where it originates, and checking for siblings catches the same mistake elsewhere. A clamp can still be added as defence in depth, alongside an alert."
+      },
+      {
+        "text": "Accept it; the customer never sees a negative total, so the bug is fixed",
+        "explanation": "This hides the symptom. Discounts that should not stack still stack, and other code that reads the discount (refunds, reports, revenue) still sees the wrong value."
+      },
+      {
+        "text": "Reject it and remove all promotions until a full rewrite is ready",
+        "explanation": "Disproportionate. The cause is understood and can be fixed precisely."
+      },
+      {
+        "text": "Accept it but log a warning; logs are enough to track the issue",
+        "explanation": "Logging a symptom you have already diagnosed defers the real fix and still leaves wrong discount data elsewhere."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Ask *why* the total went negative: two promotions both applied in full.\n2. That is a business-rule bug in `apply_discount`. Fixing it there corrects every consumer of the discount, not just `checkout`.\n3. Write the test first: basket £20, two £15 promotions, expect the rule you agree with product (e.g. best single promotion, total £5).\n4. Fix, watch it pass, run the suite.\n5. Search for other code paths that apply promotions (e.g. the mobile API) and check them too.\n6. A `max(…, 0)` guard plus an alert can stay as a safety net, but it is not the fix.",
+    "link": {
+      "title": "Rubber duck debugging — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Rubber_duck_debugging"
+    }
+  },
+  {
+    "id": "sepr-debugging-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You have spent two hours on a bug. You have changed several settings, reverted some, and are no longer sure what state the system is in. Which actions follow methodical debugging practice? Select all that apply.",
+    "options": [
+      {
+        "text": "Return to a known state (clean checkout, default config) and re-establish the reproduction",
+        "explanation": "Correct. You cannot reason from an unknown starting point. Reset, then confirm the bug still reproduces."
+      },
+      {
+        "text": "Write down the hypotheses already tested and their results before continuing",
+        "explanation": "Correct. An audit trail stops you re-testing the same idea and often exposes a gap in the reasoning."
+      },
+      {
+        "text": "Explain the problem step by step to a colleague or a rubber duck",
+        "explanation": "Correct. Saying your assumptions aloud often reveals the false one; a fresh view is one of Agans' rules."
+      },
+      {
+        "text": "Change several more settings at once to save time",
+        "explanation": "Changing many things at once is what created the confusion. One change at a time is the only way to attribute an effect."
+      },
+      {
+        "text": "Check basic assumptions, such as whether the code you are editing is the code that is actually running",
+        "explanation": "Correct. 'Check the plug': stale builds, the wrong config file, or testing against the wrong host are surprisingly common."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Map each to a principle:\n\n- A: make it fail from a known state.\n- B: keep an audit trail.\n- C: get a fresh view.\n- E: check the plug (question your assumptions).\n- D: violates 'change one thing at a time'.\n\nAfter two hours, the most productive next step is usually A plus E: reset and verify the basics.",
+    "link": {
+      "title": "Rubber duck debugging — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Rubber_duck_debugging"
+    }
+  },
+  {
+    "id": "sepr-debugging-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user reports a bug. Which reproduction is most valuable to have before you start changing code?",
+    "options": [
+      {
+        "text": "A screen recording of the user hitting the bug once",
+        "explanation": "Useful evidence, but you cannot rerun it after a fix to confirm the bug is gone."
+      },
+      {
+        "text": "A description from the user of roughly what they were doing",
+        "explanation": "A starting point for investigation, not a reproduction."
+      },
+      {
+        "text": "An automated test that fails in seconds on the current code",
+        "explanation": "Correct. It is reliable, fast and repeatable: you can run it after every hypothesis, and once the fix lands it becomes a regression test."
+      },
+      {
+        "text": "A production log line showing the error",
+        "explanation": "Logs show *that* it happened, and help form hypotheses, but you cannot rerun a log line to check a fix."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A good reproduction is reliable, fast and automated.\n\n1. Use the report, recording and logs to work out the triggering inputs.\n2. Encode those inputs as a test. Confirm it fails for the same reason the user saw.\n3. Now every experiment takes seconds, and 'fixed' has an objective meaning: the test passes.\n4. Keep the test, so the bug cannot quietly return.",
+    "link": {
+      "title": "pdb — The Python Debugger",
+      "url": "https://docs.python.org/3/library/pdb.html"
+    }
+  }
+]

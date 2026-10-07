@@ -1,0 +1,340 @@
+[
+  {
+    "id": "sea-layered-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a layered application with presentation, application, domain and data layers, which import breaks the layering rule? Assume relaxed layering in the order listed.",
+    "options": [
+      {
+        "text": "`presentation/views.py` imports `application/services.py`",
+        "explanation": "Allowed: presentation sits above application, and calls may go downwards."
+      },
+      {
+        "text": "`application/services.py` imports `domain/order.py`",
+        "explanation": "Allowed: the application layer orchestrates domain objects, which sit below it."
+      },
+      {
+        "text": "`domain/order.py` imports `presentation/serializers.py`",
+        "explanation": "Correct. The domain is below presentation, so this import points upwards. The business rules would now depend on how JSON is formatted, and a change to the API could break the domain."
+      },
+      {
+        "text": "`presentation/views.py` imports `domain/order.py` to catch `OrderClosed`",
+        "explanation": "Allowed: it skips the application layer, but it still points downwards. Relaxed layering permits this; only upward imports break the rule."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Write down the order, top to bottom: presentation, application, domain, data.\n2. The rule: a module may import from layers *below* it, never above.\n3. Check each import:\n   - views → services: down. Fine.\n   - services → domain: down. Fine.\n   - views → domain: down, skipping one. Fine under relaxed layering.\n   - domain → presentation: **up**. Violation.\n4. Why it matters: the domain is meant to be the most stable code. If it imports a serializer, a change to the HTTP response shape can force a change to the business rules, and you can't reuse the domain from a CLI without dragging the web layer along.",
+    "link": {
+      "title": "Presentation Domain Data Layering — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PresentationDomainDataLayering.html"
+    }
+  },
+  {
+    "id": "sea-layered-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A product team says: \"Our discount rules need to run both in the web checkout and in a nightly batch job that re-prices abandoned baskets.\" Where should the rule \"a closed order cannot be discounted\" live?",
+    "options": [
+      {
+        "text": "In the domain layer, for example `Order.apply_discount`",
+        "explanation": "Correct. It's a business rule that would exist without software, so it belongs in the domain, where both the web and batch entry points reach it through the application layer."
+      },
+      {
+        "text": "In the SQL `UPDATE` statement as a `WHERE status = 'open'` clause",
+        "explanation": "A guarded database update can reinforce the invariant atomically under concurrency. It is not a substitute for a shared domain rule, and a separate read-then-save must also prevent races."
+      },
+      {
+        "text": "In the Flask view for `/discount`",
+        "explanation": "Then the batch job can't reuse it without faking an HTTP request. Rules placed in views are the problem layering exists to solve."
+      },
+      {
+        "text": "In both the view and the batch script, so each can be tuned",
+        "explanation": "Duplication increases the risk of divergent rules; divergence is not logically inevitable."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask what kind of knowledge it is:\n\n1. Is it about HTTP, JSON or screens? No, so not presentation.\n2. Is it about how rows are stored? No, so not data.\n3. Is it a sequence of steps for one use case (load, change, save, email)? That is the application layer.\n4. Is it a rule the business would state even on paper? Yes: \"closed orders can't be discounted\". That is **domain**.\n\nPutting it in `Order.apply_discount` means every entry point (view, batch job, admin CLI) goes through the same rule.",
+    "link": {
+      "title": "Presentation Domain Data Layering — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PresentationDomainDataLayering.html"
+    }
+  },
+  {
+    "id": "sea-layered-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the main reason for separating code into layers?",
+    "options": [
+      {
+        "text": "It makes the program run faster, because each layer can be optimised separately",
+        "explanation": "Layering adds indirection, if anything. Its benefits are about change and understanding, not speed."
+      },
+      {
+        "text": "It removes the need for automated tests",
+        "explanation": "Layering makes testing easier (rules can be tested without a database), but it doesn't replace tests."
+      },
+      {
+        "text": "It is required to deploy each layer as a separate service",
+        "explanation": "Layers here are logical code structure inside one application. Deploying tiers separately (multi-tier) is a separate, optional decision."
+      },
+      {
+        "text": "So concerns have separate responsibilities and changes can be more local",
+        "explanation": "Separation can localize changes, but a feature or database semantic change may still affect multiple layers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think of three likely future changes:\n\n| Change | Layer touched |\n|---|---|\n| Mobile app wants a new JSON shape | Presentation |\n| VAT rate changes | Domain |\n| Move from MySQL to Postgres | Data |\n\nIn a tangled codebase each of these touches the same big functions. With suitable boundaries, these changes can be more localized; this is a design aim, not a guarantee. That locality is the payoff; everything else (testability, reuse) follows from it.",
+    "link": {
+      "title": "Multitier architecture — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Multitier_architecture"
+    }
+  },
+  {
+    "id": "sea-layered-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What happens when this view is called with the code `\"WINTER5\"`?\n\n```python\n@app.post(\"/orders/<int:oid>/disc\")\ndef disc(oid):\n    code = request.json[\"code\"]\n    row = load(oid)\n    if code == \"SPRING10\":\n        new = row[\"total\"] * 0.9\n    save(oid, new)\n    return {\"total\": new}\n```",
+    "options": [
+      {
+        "text": "It returns the original total unchanged",
+        "explanation": "Nothing assigns `new` to the original total. Python doesn't fall back to a default for a missing local."
+      },
+      {
+        "text": "It raises `UnboundLocalError` when `save(oid, new)` runs",
+        "explanation": "Correct. Because `new` is assigned somewhere in the function, Python treats it as a local. The `if` branch didn't run, so reading it raises `UnboundLocalError` (a subclass of `NameError`), which Flask turns into a 500."
+      },
+      {
+        "text": "It returns `{\"total\": None}`",
+        "explanation": "Python doesn't initialise locals to `None`; an unassigned local can't be read at all."
+      },
+      {
+        "text": "It raises `KeyError` on `request.json[\"code\"]`",
+        "explanation": "The key `code` is present in the request body, so that lookup succeeds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `code` is `\"WINTER5\"`, so the `if` condition is false and the body is skipped.\n2. At compile time Python saw an assignment to `new` in this function, so `new` is a **local** variable for the whole function.\n3. `save(oid, new)` reads `new` before any assignment, which raises `UnboundLocalError: cannot access local variable 'new'...`.\n4. The architectural point: business logic mixed into a view is hard to test in isolation, so bugs like this slip through. Moved into a domain method with a unit test for an unknown code, it would be caught at once.",
+    "link": {
+      "title": "Architecture Patterns with Python: Service Layer",
+      "url": "https://www.cosmicpython.com/book/chapter_04_service_layer.html"
+    }
+  },
+  {
+    "id": "sea-layered-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You look at a codebase and find this pattern on almost every endpoint:\n\n```python\ndef get_user_view(uid):\n    return svc.get_user(uid)\n\nclass UserService:\n    def get_user(self, uid):\n        return self.repo.get_user(uid)\n```\n\nThe service adds nothing. What is this called, and what's a reasonable response?",
+    "options": [
+      {
+        "text": "The architecture sinkhole anti-pattern; if it's widespread, relax the layering (or simplify) rather than writing more pass-throughs",
+        "explanation": "Correct. Requests falling straight through layers with no logic added is the sinkhole. A few such paths are normal; if most are, the strict layering is costing more than it gives, and allowing simple reads to skip the service layer is a common fix."
+      },
+      {
+        "text": "The anaemic domain model; move all the logic into the repository",
+        "explanation": "Anaemic domain describes domain objects with no behaviour. And moving logic into the repository would mix rules with storage, which is worse."
+      },
+      {
+        "text": "A circular dependency; split the service into two",
+        "explanation": "Nothing here is circular: view → service → repository is a straight line downwards."
+      },
+      {
+        "text": "This is ideal strict layering and should be applied everywhere",
+        "explanation": "Strict layering is a choice with a cost. Pure pass-through layers add files and indirection without adding isolation where none is needed."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Trace the call: view → service → repository → one query. Nothing is decided or transformed on the way.\n2. That's a **sinkhole** path. There is no measured universal acceptable percentage supplied here. Judge whether the boundary provides useful isolation or merely forwards calls.\n3. Options:\n   - Make the service layer **open** for reads, so views may call the repository (or a read model) directly.\n   - Keep the service only where use cases have real orchestration: transactions, permissions, events.\n4. Don't confuse this with an anaemic domain, which is about *domain* classes lacking behaviour.",
+    "link": {
+      "title": "Presentation Domain Data Layering — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PresentationDomainDataLayering.html"
+    }
+  },
+  {
+    "id": "sea-layered-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are symptoms of an **anaemic domain model**? Select all that apply.",
+    "options": [
+      {
+        "text": "`Order` has only fields, plus getters and setters",
+        "explanation": "Correct. Domain objects with data but no behaviour are the defining symptom."
+      },
+      {
+        "text": "`OrderService.cancel(order)` checks status, refunds, sets `order.status = \"cancelled\"`",
+        "explanation": "Correct. Business rules (when can an order be cancelled?) sit in a service that manipulates the object from outside, rather than in `order.cancel()`."
+      },
+      {
+        "text": "`Order.cancel()` raises if the order has already shipped",
+        "explanation": "Not a symptom. This is a rich domain object enforcing its own rule, the opposite of anaemic."
+      },
+      {
+        "text": "The same \"can this order be cancelled?\" check is copied in three different services",
+        "explanation": "Correct. When rules live in services rather than on the object, each new service tends to re-implement them, and the copies drift."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Fowler's description: the domain objects look real (names match the business), but \"there is hardly any behaviour on these objects\". Logic sits in services that treat objects as data structures.\n\nCheck each option:\n\n1. Only fields and accessors: symptom.\n2. Service flips `status` after its own checks: symptom; the rule belongs on `Order`.\n3. `Order.cancel()` guarding itself: healthy.\n4. Duplicated checks across services: a typical *consequence* of anaemia, because there is no single home for the rule.\n\nThe fix is \"tell, don't ask\": call `order.cancel()` and let the object decide.",
+    "link": {
+      "title": "Anemic Domain Model — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/AnemicDomainModel.html"
+    }
+  },
+  {
+    "id": "sea-layered-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team packages its code as `views/`, `services/`, `models/`, `repos/`. Adding a \"gift message\" field to orders touched files in all four folders, plus their tests. Which change reduces the scatter while retaining separate modules for each layer?",
+    "options": [
+      {
+        "text": "Merge all four layers into one `orders.py` file",
+        "explanation": "A single file can preserve conceptual separation, but distinct feature modules make import boundaries easier to express and check; merging files does not inherently erase the rule."
+      },
+      {
+        "text": "Add a fifth layer of DTOs between services and views",
+        "explanation": "Another layer means one more folder to touch per feature, which is the opposite of what's wanted."
+      },
+      {
+        "text": "Package by feature: an `orders/` package containing its own views, services, model and repo modules",
+        "explanation": "Correct. Most features are vertical slices through every layer. Keeping each feature's layers together puts related code side by side (high cohesion), while the imports inside the package still respect the layering rule."
+      },
+      {
+        "text": "Move the field into a JSON column so no code needs to change",
+        "explanation": "That hides the field from the domain rather than modelling it, and the view and validation still need to change."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Classify the change: \"gift message\" is a **vertical** change, meaning it touches UI, rules and storage for one feature.\n2. Package-by-layer puts each layer of that feature in a different top-level folder, so vertical changes scatter.\n3. Package-by-feature groups by business capability:\n\n```\norders/\n  views.py\n  services.py\n  model.py\n  repo.py\n```\n\n4. Inside `orders/` the same rule applies (`model.py` must not import `views.py`), so you keep layering *and* locality.",
+    "link": {
+      "title": "Presentation Domain Data Layering — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PresentationDomainDataLayering.html"
+    }
+  },
+  {
+    "id": "sea-layered-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This `import-linter` contract is in place:\n\n```ini\ntype = layers\nlayers =\n    shop.presentation\n    shop.application\n    shop.domain\n    shop.data\n```\n\nWhich import makes the check fail?",
+    "options": [
+      {
+        "text": "`shop.presentation.views` imports `shop.data.repo`",
+        "explanation": "A `layers` contract allows higher layers to import any lower layer, even skipping levels. That's relaxed layering, and this contract permits it."
+      },
+      {
+        "text": "`shop.application.services` imports `shop.domain.order`",
+        "explanation": "Higher importing lower is allowed."
+      },
+      {
+        "text": "`shop.domain.order` imports `decimal` from the standard library",
+        "explanation": "Contracts only constrain the listed packages; standard-library imports are outside them."
+      },
+      {
+        "text": "`shop.data.repo` imports `shop.application.services`",
+        "explanation": "Correct. `data` is listed below `application`, so this import goes upwards and breaks the contract."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. In an import-linter `layers` contract, the list runs from highest to lowest.\n2. The rule: a lower layer may not import a higher one. Higher may import any lower.\n3. Check the options:\n   - presentation → data: high to low (skipping two). Allowed.\n   - application → domain: high to low. Allowed.\n   - data → application: **low to high**. Fails.\n   - domain → `decimal`: not a listed layer. Ignored.\n4. If you wanted strict layering (no skipping), you'd need extra `forbidden` contracts, such as forbidding direct presentation-to-data imports with allow_indirect_imports=True so a legal chain through intervening layers remains allowed.",
+    "link": {
+      "title": "Import Linter documentation",
+      "url": "https://import-linter.readthedocs.io/en/stable/"
+    }
+  },
+  {
+    "id": "sea-layered-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a classic layered design, the domain layer sits above the data layer. Your `Order` class inherits from the ORM's base model so it can be saved. Six months later you want to unit-test pricing rules without a database, and to add a second storage backend for an archive. What is the root architectural cause of the difficulty?",
+    "options": [
+      {
+        "text": "The domain is coupled to persistence machinery, which can complicate isolation and alternate storage even if some ORM methods can be tested without a live database.",
+        "explanation": "This design names the ORM inside domain classes. Dependency inversion or extracting pure calculations can reduce that coupling; ORM inheritance alone does not imply every test opens a database."
+      },
+      {
+        "text": "There are too few layers; add a caching layer between domain and data",
+        "explanation": "Another layer doesn't change the direction of the dependency. The domain would still import storage code."
+      },
+      {
+        "text": "Python's dynamic typing makes it impossible to separate concerns",
+        "explanation": "Plenty of Python projects separate domain and storage cleanly, for example with repositories and plain classes or dataclasses."
+      },
+      {
+        "text": "The presentation layer is calling the domain directly instead of via services",
+        "explanation": "That might be untidy, but it doesn't explain why the *domain* can't be tested without a database."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Draw the dependencies: `Order` → ORM base → database connection.\n2. Constructing Order requires the ORM classes and possibly framework setup; whether a live database is needed depends on what its methods access.\n3. A second backend is awkward because `Order` *is* a table mapping for the first one.\n4. The fix: the domain defines what it needs (an `OrderRepository` interface) and stays a plain class. The data layer implements that interface for the ORM and for the archive. Now the arrow points from data to domain. That inversion is the core idea of hexagonal architecture.",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-layered-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your application layer function looks like this:\n\n```python\ndef place_order(repo, mailer, cmd):\n    o = repo.get(cmd.oid)\n    if o.total > 500 and \\\n       o.customer.tier != \"gold\":\n        o.status = \"needs_review\"\n    else:\n        o.status = \"placed\"\n    repo.save(o)\n    mailer.send(o.customer.email)\n```\n\nWhich statements are fair observations? Select all that apply.",
+    "options": [
+      {
+        "text": "The review threshold is a business rule and belongs in the domain, such as `o.place()`",
+        "explanation": "In the intended rich-model design the rule belongs in a shared domain operation. A service can itself be reused by multiple entry points, so its location does not make reuse impossible."
+      },
+      {
+        "text": "Setting `o.status` directly from outside lets any caller put the order into an invalid state",
+        "explanation": "A domain method centralizes valid transitions, but Python public attributes can still be assigned directly unless access is otherwise controlled."
+      },
+      {
+        "text": "Loading, saving and sending the email are orchestration, which is the application layer's job",
+        "explanation": "Correct. This part is in the right place: coordinating repository, domain and side effects for one use case is exactly what a service layer does."
+      },
+      {
+        "text": "The application layer should never call infrastructure like a mailer",
+        "explanation": "It's normal for a use case to coordinate side effects. The important thing is that it depends on an abstraction (any object with `send`), which it does here because the mailer is passed in."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Split the function into what it *decides* and what it *coordinates*:\n\n- Decides: the 500 threshold and the gold-tier exception. That's policy → domain.\n- Mutates: `o.status = ...` from outside → the object can't defend its invariants.\n- Coordinates: get, save, send email → application layer. Correct as it is.\n\nRefactored:\n\n```python\ndef place_order(repo, mailer, cmd):\n    o = repo.get(cmd.oid)\n    o.place()\n    repo.save(o)\n    mailer.send(o.customer.email)\n```\n\nThe service is now a thin script of steps and the rule lives in `Order.place()`.\nThe snippet illustrates responsibility placement, not atomic delivery: committing an order and sending email require an explicit failure/retry policy, often an outbox.",
+    "link": {
+      "title": "Service Layer — Patterns of Enterprise Application Architecture",
+      "url": "https://martinfowler.com/eaaCatalog/serviceLayer.html"
+    }
+  },
+  {
+    "id": "sea-layered-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Django codebase follows the \"fat models\" style: `Invoice(models.Model)` holds fields and business methods like `invoice.mark_paid()`. A new requirement is to compute invoice totals in a pure-Python pricing library shared with a non-Django service. What is the most proportionate change?",
+    "options": [
+      {
+        "text": "Rewrite the whole app in hexagonal style with repositories for every model",
+        "explanation": "Large rewrites for one shared calculation are disproportionate. The cost lands everywhere; the benefit is in one place."
+      },
+      {
+        "text": "Make the non-Django service install Django and import the models",
+        "explanation": "That couples the second service to Django, its settings and your schema, which is exactly the dependency you're trying to avoid."
+      },
+      {
+        "text": "Extract the pricing rules into plain functions or classes with no Django imports, and have `Invoice` call them",
+        "explanation": "Correct. Pull out only the part that must be framework-free. Django models keep doing persistence and simple behaviour, while the shared rules become a small pure module both services can import and test without a database."
+      },
+      {
+        "text": "Copy the pricing methods into the other service",
+        "explanation": "Two copies can drift and produce different totals, increasing synchronization and testing work."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Identify what actually needs to be independent: the pricing calculation, not every model.\n2. Extract it into a module with no framework imports:\n\n```python\n# pricing.py\ndef total(lines, vat_rate):\n    net = sum(l.qty * l.price\n              for l in lines)\n    return net * (1 + vat_rate)\n```\n\n3. `Invoice.total()` delegates to `pricing.total(...)`; the other service calls it with its own data.\n4. This is the incremental version of the domain/data split. Apply it where a real need appears, rather than restructuring everything up front.",
+    "link": {
+      "title": "Architecture Patterns with Python: Service Layer",
+      "url": "https://www.cosmicpython.com/book/chapter_04_service_layer.html"
+    }
+  }
+]

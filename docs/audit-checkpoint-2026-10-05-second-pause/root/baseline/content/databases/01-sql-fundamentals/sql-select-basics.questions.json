@@ -1,0 +1,378 @@
+[
+  {
+    "id": "sql-select-basics-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using the shop schema, what does this return?\n\n```sql\nSELECT name FROM products\nWHERE price BETWEEN 25 AND 40\nORDER BY price;\n```",
+    "options": [
+      {
+        "text": "Kettle, Lamp",
+        "explanation": "This treats `BETWEEN` as exclusive at the lower end. `BETWEEN` includes both bounds, so Toaster at exactly 25 is kept."
+      },
+      {
+        "text": "Toaster, Kettle, Lamp",
+        "explanation": "Correct. `BETWEEN 25 AND 40` means `price >= 25 AND price <= 40`: Toaster 25, Kettle 30, Lamp 40, sorted ascending."
+      },
+      {
+        "text": "Toaster, Kettle",
+        "explanation": "This treats `BETWEEN` as excluding the upper bound. Lamp at exactly 40 is included."
+      },
+      {
+        "text": "Lamp, Kettle, Toaster",
+        "explanation": "Right rows, wrong order. `ORDER BY price` with no direction is ascending, so the cheapest comes first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Expand the shorthand: `price >= 25 AND price <= 40`.\n2. Check each product:\n\n| product | price | kept? |\n|---|---|---|\n| Kettle | 30 | yes |\n| Toaster | 25 | yes (= 25) |\n| Lamp | 40 | yes (= 40) |\n| Rug | 90 | no |\n| Mug | 8 | no |\n\n3. Sort ascending by price: Toaster (25), Kettle (30), Lamp (40).",
+    "link": {
+      "title": "SELECT — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this return?\n\n```sql\nSELECT name FROM customers\nWHERE city = 'London'\n   OR city = 'Leeds' AND id > 2;\n```\n\n(Asha 1 London, Ben 2 Leeds, Chloe 3 NULL, Dev 4 London, Erin 5 Bristol.)",
+    "options": [
+      {
+        "text": "Dev only",
+        "explanation": "That would be the result of `(city = 'London' OR city = 'Leeds') AND id > 2`. Without brackets, `AND` is evaluated first, so the `id > 2` test only applies to the Leeds branch."
+      },
+      {
+        "text": "Asha, Ben, Dev",
+        "explanation": "Ben is from Leeds but has id 2, so `city = 'Leeds' AND id > 2` is false for him, and he is not in London either."
+      },
+      {
+        "text": "Asha, Dev",
+        "explanation": "Correct. `AND` binds tighter than `OR`, so this means `London OR (Leeds AND id > 2)`. Both Londoners pass; Ben fails the id test."
+      },
+      {
+        "text": "Nobody: a city cannot be both London and Leeds",
+        "explanation": "That misreads the query as `city = 'London' AND city = 'Leeds'`. The top-level operator is `OR`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Add the implicit brackets. `AND` comes before `OR`:\n\n```\ncity = 'London'\nOR (city = 'Leeds' AND id > 2)\n```\n\n2. Test each row:\n   - Asha: London, so true.\n   - Ben: Leeds, but id 2 is not > 2, so false.\n   - Chloe: city is NULL, so neither branch is true.\n   - Dev: London, so true.\n   - Erin: Bristol, so false.\n3. Result: Asha, Dev. If you meant both cities with id > 2, write the brackets yourself.",
+    "link": {
+      "title": "SELECT — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A query works in SQLite but fails in PostgreSQL with `column \"London\" does not exist`:\n\n```sql\nSELECT name FROM customers\nWHERE city = \"London\";\n```\n\nWhat is the fix?",
+    "options": [
+      {
+        "text": "Write `WHERE city = 'London'`",
+        "explanation": "Correct. In SQL, single quotes make a string literal and double quotes name an identifier. SQLite falls back to treating an unknown double-quoted identifier as a string; PostgreSQL follows the standard."
+      },
+      {
+        "text": "Create a column called London",
+        "explanation": "The error message is a symptom, not the goal. You want to compare `city` with the text London, not with a column."
+      },
+      {
+        "text": "Write `WHERE city LIKE \"London\"`",
+        "explanation": "Changing the operator does not help: `\"London\"` is still parsed as an identifier in PostgreSQL."
+      },
+      {
+        "text": "Quote the column too: `\"city\" = \"London\"`",
+        "explanation": "Quoting `city` is harmless, but `\"London\"` is still an identifier, so the error remains."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Read the error: PostgreSQL thinks `London` is a column name.\n2. Why: in standard SQL, `\"...\"` is a quoted identifier (for names like `\"order\"` that clash with keywords) and `'...'` is a string.\n3. SQLite has a backwards-compatibility quirk: when a double-quoted name matches no column, it uses it as a string. That hid the mistake.\n4. Fix: `WHERE city = 'London'`, which works the same in both databases.",
+    "link": {
+      "title": "Quirks, caveats and gotchas in SQLite",
+      "url": "https://www.sqlite.org/quirks.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This query runs in SQLite but PostgreSQL rejects it:\n\n```sql\nSELECT name, price * 2 AS dbl\nFROM products\nWHERE dbl > 60\nORDER BY dbl;\n```\n\nWhich explanation is right?",
+    "options": [
+      {
+        "text": "PostgreSQL does not allow aliases in ORDER BY",
+        "explanation": "It does. `ORDER BY` is evaluated after `SELECT`, so it can see `dbl`. That part of the query is fine."
+      },
+      {
+        "text": "Arithmetic is not allowed in a SELECT list in PostgreSQL",
+        "explanation": "Expressions such as `price * 2` are allowed in any SQL database."
+      },
+      {
+        "text": "WHERE is evaluated before SELECT, so the alias does not exist yet; repeat the expression as `WHERE price * 2 > 60`",
+        "explanation": "Correct. Logically, FROM and WHERE run before SELECT computes aliases. SQLite is lenient and resolves the alias anyway; PostgreSQL follows the standard."
+      },
+      {
+        "text": "`dbl` is a reserved word",
+        "explanation": "It isn't. Renaming the alias would give the same error, because no alias is visible to WHERE."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Recall the logical order: FROM, WHERE, GROUP BY, HAVING, SELECT, DISTINCT, ORDER BY, LIMIT.\n2. `WHERE` runs at step 2, but `dbl` is only defined at step 5. PostgreSQL raises `column \"dbl\" does not exist`.\n3. `ORDER BY dbl` is fine, because step 7 comes after step 5.\n4. Fix:\n\n```sql\nSELECT name, price * 2 AS dbl\nFROM products\nWHERE price * 2 > 60\nORDER BY dbl;\n```\n\nThis returns Lamp (80) and Rug (180) in both databases.",
+    "link": {
+      "title": "SELECT — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which WHERE clauses return exactly the two products Rug and Mug? Select all that apply.",
+    "options": [
+      {
+        "text": "`name LIKE '_ug'`",
+        "explanation": "Correct. `_` matches exactly one character, so this matches three-letter names ending in ug: Rug and Mug."
+      },
+      {
+        "text": "`name LIKE '%ug'`",
+        "explanation": "Correct. `%` matches any run of characters, so any name ending in ug matches. Here that is still just Rug and Mug."
+      },
+      {
+        "text": "`price NOT BETWEEN 25 AND 40`",
+        "explanation": "Correct. This keeps prices below 25 or above 40: Mug (8) and Rug (90)."
+      },
+      {
+        "text": "`price > 30`",
+        "explanation": "This returns Lamp (40) and Rug (90). Mug at £8 fails, and Lamp sneaks in."
+      },
+      {
+        "text": "`name LIKE 'ug%'`",
+        "explanation": "This means names *starting* with ug. No product does, so it returns nothing."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each clause against the five products (Kettle 30, Toaster 25, Lamp 40, Rug 90, Mug 8):\n\n| clause | rows |\n|---|---|\n| `LIKE '_ug'` | Rug, Mug |\n| `LIKE '%ug'` | Rug, Mug |\n| `NOT BETWEEN 25 AND 40` | Rug, Mug |\n| `price > 30` | Lamp, Rug |\n| `LIKE 'ug%'` | none |\n\nRemember: `_` is one character, `%` is zero or more, and the pattern is anchored at both ends.",
+    "link": {
+      "title": "Pattern matching — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-matching.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run `SELECT name FROM customers ORDER BY city;` in SQLite and then in PostgreSQL. Chloe's city is NULL. Where does Chloe appear?",
+    "options": [
+      {
+        "text": "First in both",
+        "explanation": "That is SQLite's behaviour only. PostgreSQL sorts NULL as if it were larger than every value."
+      },
+      {
+        "text": "Last in both",
+        "explanation": "That is PostgreSQL's behaviour only. SQLite sorts NULL as smaller than every value."
+      },
+      {
+        "text": "Nowhere: rows with a NULL sort key are dropped",
+        "explanation": "`ORDER BY` never removes rows. It only changes their order."
+      },
+      {
+        "text": "First in SQLite, last in PostgreSQL",
+        "explanation": "Correct. SQLite treats NULL as the smallest value, PostgreSQL as the largest. Add `NULLS FIRST` or `NULLS LAST` to make it explicit and portable."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. SQLite: NULL sorts below everything, so ascending order is Chloe (NULL), Erin (Bristol), Ben (Leeds), Asha and Dev (London).\n2. PostgreSQL: by default NULL sorts above everything, so ascending order puts Chloe last (and `DESC` puts her first).\n3. To get the same result in both, write `ORDER BY city NULLS LAST` (SQLite has supported this since 3.30).\n4. Note also that Asha and Dev tie on London, so their relative order is not guaranteed without a tiebreaker such as `name`.",
+    "link": {
+      "title": "Sorting rows (ORDER BY) — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-order.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An admin screen lists orders 20 per page with `ORDER BY ordered_on LIMIT 20 OFFSET :n`. Many orders share the same date. Users report an order appearing on both page 3 and page 4, and another never appearing. What is the cause and fix?",
+    "options": [
+      {
+        "text": "OFFSET is off by one; use `OFFSET :n + 1`",
+        "explanation": "The offset arithmetic is not the problem. Shifting it by one would skip a row on every page."
+      },
+      {
+        "text": "Ties on `ordered_on` have no defined order, so each page query may order them differently; add a unique tiebreaker, `ORDER BY ordered_on, id`",
+        "explanation": "Correct. Rows with equal sort keys can come back in any order, and each page is a separate query. A unique final sort column makes the order total and the pages consistent."
+      },
+      {
+        "text": "The database is caching old pages",
+        "explanation": "Databases don't cache query results like this. The inconsistency comes from the sort being non-deterministic."
+      },
+      {
+        "text": "LIMIT should come before ORDER BY",
+        "explanation": "Syntax requires `ORDER BY` before `LIMIT`, and logically the sort must happen before the cut anyway."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Suppose 30 orders share `2026-03-01`, straddling the page boundary.\n2. `ORDER BY ordered_on` says nothing about the order *within* that date. The database may return those 30 in a different order each time, for example after a different plan or a concurrent update.\n3. Page 3 and page 4 are separate queries. If the tied rows shuffle between them, one row can land in both slices and another in neither.\n4. Fix: make the ordering total with a unique column:\n\n```sql\nORDER BY ordered_on, id\nLIMIT 20 OFFSET 40\n```",
+    "link": {
+      "title": "Sorting rows (ORDER BY) — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-order.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In PostgreSQL, `placed_at` is a `timestamp`. A February sales report uses:\n\n```sql\nWHERE placed_at BETWEEN\n  '2026-02-01' AND '2026-02-28'\n```\n\nThe total is lower than finance expects. Why?",
+    "options": [
+      {
+        "text": "BETWEEN excludes its upper bound",
+        "explanation": "`BETWEEN` includes both ends. The problem is what the upper bound actually means."
+      },
+      {
+        "text": "Timestamps can't be compared with string literals",
+        "explanation": "PostgreSQL casts `'2026-02-28'` to a timestamp automatically. The comparison works; it just compares with the wrong instant."
+      },
+      {
+        "text": "`'2026-02-28'` means midnight at the start of 28 February, so every order placed later that day is excluded; use `>= '2026-02-01' AND < '2026-03-01'`",
+        "explanation": "Correct. A date literal compared with a timestamp becomes `2026-02-28 00:00:00`. Almost all of the last day falls outside the range. A half-open range has no such gap."
+      },
+      {
+        "text": "February 2026 has 29 days",
+        "explanation": "2026 is not a leap year, so February has 28 days. The missing data is from the 28th itself."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The upper bound `'2026-02-28'` is cast to `2026-02-28 00:00:00`.\n2. An order at `2026-02-28 14:30` is greater than that, so `BETWEEN` excludes it.\n3. Nearly a whole day of sales is missing. (The same thing happens with ISO text in SQLite: `'2026-02-28 14:00' > '2026-02-28'`.)\n4. Use a half-open range, which is correct for dates, timestamps and text alike:\n\n```sql\nWHERE placed_at >= '2026-02-01'\n  AND placed_at <  '2026-03-01'\n```\n\nIt also handles leap years with no special case.",
+    "link": {
+      "title": "SELECT — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this return in SQLite, and in PostgreSQL? (Categories: kitchen, kitchen, home, home, NULL.)\n\n```sql\nSELECT DISTINCT category\nFROM products\nORDER BY category\nLIMIT 2;\n```",
+    "options": [
+      {
+        "text": "SQLite: NULL, home. PostgreSQL: home, kitchen",
+        "explanation": "Correct. DISTINCT leaves three values (home, kitchen, NULL). SQLite sorts NULL first, so the top two are NULL and home; PostgreSQL sorts NULL last, giving home and kitchen."
+      },
+      {
+        "text": "Both: home, kitchen",
+        "explanation": "That holds for PostgreSQL. SQLite puts NULL first in ascending order, so NULL takes one of the two slots."
+      },
+      {
+        "text": "Both: NULL, home",
+        "explanation": "That holds for SQLite. PostgreSQL places NULLs last in ascending order by default."
+      },
+      {
+        "text": "Both: home, kitchen, because DISTINCT discards NULL",
+        "explanation": "DISTINCT keeps one NULL row. It treats NULLs as equal to each other for this purpose, so they collapse to one but don't disappear."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FROM: five rows. SELECT category: kitchen, kitchen, home, NULL, home.\n2. DISTINCT: home, kitchen, NULL (one of each; NULLs collapse together).\n3. ORDER BY category:\n   - SQLite: NULL, home, kitchen.\n   - PostgreSQL: home, kitchen, NULL.\n4. LIMIT 2 cuts after sorting.\n\nA \"top N\" query over a nullable column is a classic portability bug. Write `NULLS LAST`, or filter with `WHERE category IS NOT NULL` if NULL shouldn't count.",
+    "link": {
+      "title": "Sorting rows (ORDER BY) — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-order.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer meant to write `WHERE city = 'city'` but typed double quotes. How many rows does this return in SQLite?\n\n```sql\nSELECT name FROM customers\nWHERE city = \"city\";\n```\n\n(Five customers; Chloe's city is NULL.)",
+    "options": [
+      {
+        "text": "0, because no customer lives in a city called 'city'",
+        "explanation": "That is what the single-quoted version would do. With double quotes, `\"city\"` *is* a column name, so SQLite never falls back to a string."
+      },
+      {
+        "text": "5, because every value equals itself",
+        "explanation": "Close, but Chloe's city is NULL, and `NULL = NULL` is not true. WHERE keeps only rows where the condition is true."
+      },
+      {
+        "text": "4, because it compares the column with itself, which is true except where city is NULL",
+        "explanation": "Correct. `\"city\"` names the column, so the condition is `city = city`. That is true for the four known cities and unknown (not true) for Chloe's NULL."
+      },
+      {
+        "text": "It raises an error",
+        "explanation": "It would only fail if no column were called city. Here one is, so the query runs."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Double quotes mark an identifier. There *is* a column `city`, so `\"city\"` refers to it. The SQLite quirk of falling back to a string only applies to names that match nothing.\n2. The condition is `city = city`.\n3. For London, Leeds, London and Bristol, a value equals itself, so the row is kept.\n4. For Chloe, `NULL = NULL` gives NULL (unknown), and WHERE drops anything that isn't true.\n5. Result: Asha, Ben, Dev, Erin. That is 4 rows and no error: a silent bug. Lesson 4 covers why NULL behaves this way.",
+    "link": {
+      "title": "Quirks, caveats and gotchas in SQLite",
+      "url": "https://www.sqlite.org/quirks.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your tests run on SQLite but production is PostgreSQL. Which of these queries can return **different rows** on the two databases, using the shop data? Select all that apply.",
+    "options": [
+      {
+        "text": "`SELECT name FROM products WHERE name LIKE 'k%'`",
+        "explanation": "Correct. SQLite's `LIKE` ignores ASCII case and finds Kettle; PostgreSQL's is case-sensitive and finds nothing. Use `ILIKE` or `lower(name)` in PostgreSQL."
+      },
+      {
+        "text": "`SELECT name FROM customers ORDER BY city LIMIT 1`",
+        "explanation": "Correct. SQLite sorts NULL first and returns Chloe; PostgreSQL sorts NULL last and returns Erin (Bristol)."
+      },
+      {
+        "text": "`SELECT 7/2`",
+        "explanation": "Both return 3. Integer division truncates in SQLite and PostgreSQL alike."
+      },
+      {
+        "text": "`SELECT name FROM products WHERE price >= 30 AND category <> 'home'`",
+        "explanation": "Both return Kettle only. The NULL-category Mug fails the price test anyway, and `<>` with NULL is treated the same way in both."
+      },
+      {
+        "text": "`SELECT name FROM customers WHERE city = \"Leeds\"`",
+        "explanation": "Correct. SQLite falls back to the string 'Leeds' and returns Ben; PostgreSQL raises an error because there is no column called Leeds."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Work through each one:\n\n1. `LIKE 'k%'`: SQLite matches Kettle (case-insensitive for ASCII). PostgreSQL matches nothing. Different.\n2. `ORDER BY city LIMIT 1`: SQLite gives Chloe (NULL first). PostgreSQL gives Erin (Bristol; NULL last). Different.\n3. `7/2`: 3 in both.\n4. Kettle in both.\n5. `\"Leeds\"`: Ben in SQLite; an error in PostgreSQL. Different.\n\nThe lesson: test against the database you deploy to, for example with PostgreSQL in a container in CI.",
+    "link": {
+      "title": "Pattern matching — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-matching.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An API pages through a 50-million-row `events` table, newest first, with `ORDER BY id DESC LIMIT 50 OFFSET :n`. Page 1 takes 2 ms; page 20,000 takes several seconds. What is the best fix?",
+    "options": [
+      {
+        "text": "Add an index on `id`",
+        "explanation": "`id` is the primary key and already indexed. The index lets the database read in order, but it still has to step over every skipped row."
+      },
+      {
+        "text": "Remember the last id the client saw and query `WHERE id < :last_id ORDER BY id DESC LIMIT 50`",
+        "explanation": "Correct. This is keyset (seek) pagination. The index lets the database jump straight to `:last_id` and read 50 rows, so every page costs about the same."
+      },
+      {
+        "text": "Raise LIMIT to 500 so fewer pages are needed",
+        "explanation": "Bigger pages reduce the number of requests but the deep pages are still slow, because OFFSET still walks past all the earlier rows."
+      },
+      {
+        "text": "Use `FETCH FIRST 50 ROWS ONLY` instead of LIMIT",
+        "explanation": "That is just the SQL-standard spelling of LIMIT. The plan, and the cost of the offset, are the same."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `OFFSET 999950` (page 20,000 × 50) means: produce the first 999,950 rows in order, throw them away, then return 50.\n2. Even with the primary-key index, that is about a million index entries walked per request, so cost grows linearly with page number.\n3. Keyset pagination asks for \"the 50 rows after the last one I saw\":\n\n```sql\nSELECT id, kind FROM events\nWHERE id < :last_id\nORDER BY id DESC\nLIMIT 50;\n```\n\n4. The database seeks to `:last_id` in the index and reads 50 entries: about the same cost for page 1 and page 20,000.\n5. Trade-off: you can't jump to an arbitrary page number, which is fine for infinite scroll and APIs.",
+    "link": {
+      "title": "Paging through results without OFFSET — Use The Index, Luke",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  }
+]

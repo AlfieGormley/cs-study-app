@@ -1,0 +1,169 @@
+[
+  {
+    "id": "virt-k8s-os-view-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A pod has an app container listening on `127.0.0.1:8080` and a sidecar. Why can the sidecar reach it at `localhost:8080`?",
+    "options": [
+      { "text": "Kubernetes rewrites `localhost` to the pod IP with iptables", "explanation": "No rewriting is involved. Loopback works because both containers literally share one network stack." },
+      { "text": "Both containers share the same mount namespace", "explanation": "Each container has its own mount namespace and root file system. Sharing a mount namespace would not make TCP connections work anyway." },
+      { "text": "All containers in a pod join one network namespace, held open by the pause container, so they share interfaces, including loopback", "explanation": "Correct. One network namespace means one `lo`, one `eth0` and one pod IP." },
+      { "text": "The CNI plugin creates a veth pair between the two containers", "explanation": "CNI creates a veth between the pod's namespace and the host, not between containers in the same pod." }
+    ],
+    "answer": 2,
+    "workedExample": "1. RunPodSandbox creates a network namespace and starts the pause container in it.\n2. Each app container is created with `setns()` into that same network namespace.\n3. So there is one loopback device, and `127.0.0.1:8080` is the same socket address for every container.\n4. The flip side: any container in the pod can reach any other's localhost-only ports.",
+    "link": { "title": "Pods — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/workloads/pods/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A container has `limits.cpu: 500m`. What does the runtime write to its cgroup v2 `cpu.max`?",
+    "options": [
+      { "text": "`500 1000`", "explanation": "The units are microseconds and the default period is 100,000 µs, not 1,000." },
+      { "text": "`50000 100000`", "explanation": "Correct. 0.5 CPU × 100,000 µs period = 50,000 µs of quota per period." },
+      { "text": "`max 100000`", "explanation": "That means no limit, which is what you get when `limits.cpu` is not set." },
+      { "text": "Nothing; CPU limits are set in `cpu.weight`", "explanation": "`cpu.weight` comes from the *request* and is a relative share. The *limit* is a hard quota in `cpu.max`." }
+    ],
+    "answer": 1,
+    "workedExample": "1. The CFS period is 100 ms = 100,000 µs.\n2. 500m = 0.5 CPU.\n3. Quota = 0.5 × 100,000 = 50,000 µs.\n4. `cpu.max` is written as `<quota> <period>`, so `50000 100000`.",
+    "link": { "title": "Resource management for pods and containers — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A container's memory usage reaches its `limits.memory` and the kernel can reclaim nothing more. What happens?",
+    "options": [
+      { "text": "The container is throttled until usage falls", "explanation": "Throttling is how CPU limits behave. Memory in use cannot simply be paused." },
+      { "text": "The kubelet moves the pod to another node with more memory", "explanation": "Kubernetes does not live-migrate pods. A pod that is evicted or killed is restarted or replaced, not moved." },
+      { "text": "The pod swaps to disk without limit", "explanation": "Swap is off by default on Kubernetes nodes, and `memory.max` caps usage regardless." },
+      { "text": "The cgroup OOM killer kills a process in that container; Kubernetes reports `OOMKilled` with exit code 137", "explanation": "Correct. 137 = 128 + 9 (SIGKILL). The container is then restarted according to its restartPolicy." }
+    ],
+    "answer": 3,
+    "workedExample": "1. `limits.memory` becomes `memory.max` on the container's cgroup.\n2. At the limit, the kernel tries to reclaim memory, such as clean page cache.\n3. If it can't, the cgroup's OOM killer picks a process in that cgroup and sends SIGKILL.\n4. Exit status 128 + 9 = 137, and Kubernetes shows `OOMKilled`.\n5. Summary: CPU limits throttle; memory limits kill.",
+    "link": { "title": "Resource management for pods and containers — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Java service with 8 busy worker threads has `limits.cpu: 1` (period 100 ms). Its average CPU use is 40% of a core, yet p99 latency has spikes of about 85 ms. What is the most likely cause?",
+    "options": [
+      { "text": "CFS quota throttling: in bursts, 8 threads use the 100 ms quota in 12.5 ms of wall time, and then the whole cgroup is paused for the remaining 87.5 ms", "explanation": "Correct. Quota is summed across all threads, so bursts exhaust it early in the period even when the average is low." },
+      { "text": "Garbage collection must be the cause, because CPU use is below the limit", "explanation": "A low *average* does not rule out throttling within individual 100 ms periods. Check `nr_throttled` before blaming GC." },
+      { "text": "The CPU request is too low, so the scheduler gives it fewer cores", "explanation": "Requests set `cpu.weight` and matter only under contention. They don't produce a hard pause like this." },
+      { "text": "The OOM killer is restarting threads", "explanation": "The OOM killer kills processes and would show up as restarts, not latency spikes." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Limit 1 CPU means quota 100 ms per 100 ms period.\n2. In a burst, 8 threads run in parallel: 100 ms / 8 = 12.5 ms of wall time to use the quota.\n3. Then every thread waits until the period ends: 100 − 12.5 = 87.5 ms.\n4. Requests landing in that window see roughly 85 ms of extra latency.\n5. Averaged over seconds, usage is only 40%, which hides the problem.\n6. Confirm with `cpu.stat` (`nr_throttled`, `throttled_usec`). Fix by raising or removing the limit or by matching thread counts to it.",
+    "link": { "title": "About cgroup v2 — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/architecture/cgroups/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is this pod's QoS class?\n\n```\ncontainers:\n- name: app\n  resources:\n    requests: {cpu: 1, memory: 1Gi}\n    limits:   {cpu: 1, memory: 1Gi}\n- name: sidecar\n  resources:\n    requests: {cpu: 100m, memory: 64Mi}\n```",
+    "options": [
+      { "text": "Guaranteed, because the main container has requests equal to limits", "explanation": "Guaranteed requires *every* container to have equal CPU and memory requests and limits. The sidecar has no limits." },
+      { "text": "Burstable", "explanation": "Correct. At least one container has a request, but not all containers meet the Guaranteed rule." },
+      { "text": "BestEffort, because the sidecar has no limits", "explanation": "BestEffort means no requests or limits on any container. Both containers here have requests." },
+      { "text": "It depends on the node's free memory", "explanation": "QoS class is computed from the spec alone, not from node state." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Guaranteed: every container needs CPU and memory limits, with requests equal to limits. The sidecar has no limits, so this fails.\n2. BestEffort: no container has any request or limit. Both have requests, so this fails too.\n3. Everything else is Burstable.\n4. Consequence: the pod sits under `kubepods-burstable.slice`, and its `oom_score_adj` is between 2 and 999.",
+    "link": { "title": "Pod Quality of Service classes — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A node has 64 GiB of memory. A Burstable container requests 16 GiB. What `oom_score_adj` does the kubelet give it?",
+    "options": [
+      { "text": "250", "explanation": "That is 1000 × request/capacity, the fraction itself. The formula subtracts it from 1000." },
+      { "text": "−997", "explanation": "−997 is for Guaranteed pods (and system-node-critical ones), not Burstable." },
+      { "text": "750", "explanation": "Correct. 1000 − 1000 × 16/64 = 1000 − 250 = 750, which is inside the clamp range 2–999." },
+      { "text": "1000", "explanation": "1000 is for BestEffort pods, which are killed first." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Formula: `min(max(2, 1000 − 1000 × req / capacity), 999)`.\n2. req / capacity = 16 / 64 = 0.25.\n3. 1000 × 0.25 = 250.\n4. 1000 − 250 = 750.\n5. Clamp to [2, 999]: 750 stands.\n6. Intuition: the more memory you reserve, the less likely you are to be the kernel's victim.",
+    "link": { "title": "Node-pressure eviction — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about CPU **requests** on a cgroup v2 node are true? Select all that apply.",
+    "options": [
+      { "text": "They are converted (via shares) into `cpu.weight`, a relative share", "explanation": "Correct. Millicores become shares (×1024/1000), which runc maps to a weight between 1 and 10,000." },
+      { "text": "On an idle node, a container may use far more CPU than its request", "explanation": "Correct. Weights matter only under contention; spare CPU is free to use." },
+      { "text": "Under contention, busy sibling cgroups get CPU in proportion to their weights", "explanation": "Correct. That's how a 500m request gets twice the CPU of a 250m request when both are saturated." },
+      { "text": "A request caps the container's CPU use, like a limit", "explanation": "Wrong. Only `cpu.max` (from the limit) imposes a hard cap." },
+      { "text": "The scheduler uses requests to decide which node has room", "explanation": "Correct. The scheduler sums requests against node allocatable capacity; it ignores actual usage." }
+    ],
+    "answer": [0, 1, 2, 4],
+    "workedExample": "1. Request → shares → `cpu.weight`, which is proportional, not absolute.\n2. Idle node: no competition, so no proportional split is enforced.\n3. Busy node: A (weight w1) and B (weight w2) split CPU as w1 : w2.\n4. Requests also drive scheduling: a pod fits only if the sum of requests ≤ allocatable.\n5. A hard cap needs a limit (`cpu.max`).",
+    "link": { "title": "Resource management for pods and containers — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A namespace is labelled `pod-security.kubernetes.io/enforce=restricted`. Which securityContext will the API server accept?",
+    "options": [
+      { "text": "`privileged: false`, `runAsUser: 0`, no other settings", "explanation": "Restricted requires `runAsNonRoot`, dropping ALL capabilities, no privilege escalation and a seccomp profile. Running as UID 0 also fails." },
+      { "text": "`runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `capabilities.add: [SYS_ADMIN]`, `seccompProfile: RuntimeDefault`", "explanation": "Restricted allows adding back only `NET_BIND_SERVICE`. SYS_ADMIN is rejected." },
+      { "text": "`runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile: Unconfined`", "explanation": "Restricted requires RuntimeDefault or Localhost seccomp. Unconfined is not allowed." },
+      { "text": "`runAsNonRoot: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: [ALL]`, `seccompProfile: RuntimeDefault`", "explanation": "Correct. This meets every container-level requirement of the restricted standard." }
+    ],
+    "answer": 3,
+    "workedExample": "Check each requirement of the restricted standard:\n\n| Rule | Needed |\n|---|---|\n| non-root | `runAsNonRoot: true` |\n| no escalation | `allowPrivilegeEscalation: false` |\n| caps | drop ALL, add at most NET_BIND_SERVICE |\n| seccomp | RuntimeDefault or Localhost |\n\nOnly the last option passes all four. In kernel terms: setuid to non-root, `no_new_privs`, an empty capability bounding set and a seccomp filter.",
+    "link": { "title": "Pod Security Standards — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/security/pod-security-standards/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A pod has `limits.memory: 1Gi` and mounts an `emptyDir` with `medium: Memory`. The app writes 900 MiB of scratch files there, then allocates 200 MiB of heap. What happens?",
+    "options": [
+      { "text": "Nothing; emptyDir lives on the node's disk, outside the memory limit", "explanation": "With `medium: Memory`, emptyDir is tmpfs, held in RAM and charged to the pod's memory cgroup." },
+      { "text": "The pod is likely OOM-killed: tmpfs pages are charged to the cgroup and cannot be reclaimed like ordinary page cache, so 900 + 200 MiB exceeds 1 GiB", "explanation": "Correct. tmpfs can't be written back to a file and dropped; without swap it is pinned in RAM." },
+      { "text": "The kernel evicts the tmpfs files to make room", "explanation": "tmpfs data has no backing file. Without swap, the kernel cannot drop it, and it won't delete your files." },
+      { "text": "The write fails with ENOSPC at 512 MiB, protecting the heap", "explanation": "A tmpfs size limit may apply (by default related to the pod's limit), but nothing reserves room for the heap. Charging is shared." }
+    ],
+    "answer": 1,
+    "workedExample": "1. `medium: Memory` mounts tmpfs.\n2. tmpfs pages are anonymous-like shmem pages charged to the writing cgroup.\n3. Page cache for disk files can be written back and reclaimed; tmpfs pages cannot (no swap).\n4. Total charged: 900 MiB + 200 MiB heap + runtime overhead ≈ 1,100 MiB > 1,024 MiB.\n5. Reclaim fails, so the cgroup OOM killer fires and the pod shows `OOMKilled`.\n6. Fix: use disk-backed emptyDir or include scratch space in the memory limit.",
+    "link": { "title": "Resource management for pods and containers — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A multi-tenant CI platform runs untrusted build jobs as pods. Which change gives the strongest isolation boundary without changing the job YAML beyond one field?",
+    "options": [
+      { "text": "Add `shareProcessNamespace: false`", "explanation": "That's already the default and only affects PID visibility within a pod. It does nothing about the shared kernel." },
+      { "text": "Set `runtimeClassName` to a RuntimeClass whose handler is Kata (microVM), so each pod gets its own guest kernel", "explanation": "Correct. RuntimeClass swaps runc for a VM-backed runtime, adding a hardware virtualisation boundary per pod." },
+      { "text": "Raise the CPU and memory limits", "explanation": "Resource limits prevent noisy neighbours, not kernel exploits." },
+      { "text": "Set `hostNetwork: true` for faster builds", "explanation": "This removes the network namespace, which weakens isolation." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Untrusted code plus a shared kernel means one kernel bug compromises the node.\n2. securityContext hardening shrinks the attack surface, but the kernel is still shared.\n3. RuntimeClass `handler: kata` makes the pod sandbox a lightweight VM with its own kernel; gVisor (`runsc`) is the other option, using a user-space kernel.\n4. The only YAML change is `runtimeClassName: kata`.\n5. Set RuntimeClass `overhead` so the scheduler accounts for each VM's extra memory.",
+    "link": { "title": "Runtime Class — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/containers/runtime-class/" }
+  },
+  {
+    "id": "virt-k8s-os-view-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You run `kubectl exec -it web -c app -- sh`. Which statements describe what happens on the node? Select all that apply.",
+    "options": [
+      { "text": "The kubelet issues a CRI `Exec` call, and containerd/the shim runs something like `runc exec`", "explanation": "Correct. Exec goes through the same CRI and runtime stack as container creation." },
+      { "text": "The new `sh` process joins the container's existing namespaces with `setns()`", "explanation": "Correct. It sees the container's file system, PID namespace and network." },
+      { "text": "The shell is placed in the container's cgroup, so its memory counts towards the container's limit", "explanation": "Correct. Running something heavy in an exec shell can OOM-kill the app." },
+      { "text": "Kubernetes starts a new container from the image to host the shell", "explanation": "Wrong. That describes `kubectl debug` ephemeral containers. `exec` adds a process to the existing container." },
+      { "text": "The shell runs without the container's seccomp filter and capability restrictions", "explanation": "Wrong. runc applies the container's process security settings to exec'd processes too." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. kubectl → API server → kubelet (streaming endpoint).\n2. kubelet → CRI `Exec` → containerd → shim → `runc exec`.\n3. runc `setns()`s into the container's mnt, pid, net, ipc and uts namespaces.\n4. It writes the new PID into the container's cgroup, applies capabilities and seccomp, then `execve(\"sh\")`.\n5. So the shell is constrained exactly like the app, and shares its memory budget.",
+    "link": { "title": "Container Runtime Interface — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/architecture/cri/" }
+  }
+]

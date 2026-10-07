@@ -1,0 +1,369 @@
+[
+  {
+    "id": "net-dns-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A recursive resolver with an empty cache receives a query for `www.example.com`. Which server does it ask first?",
+    "options": [
+      {
+        "text": "The authoritative server for `example.com`",
+        "explanation": "The resolver doesn't yet know which servers are authoritative for `example.com`; it discovers that from referrals, starting at the root."
+      },
+      {
+        "text": "The `.com` TLD server",
+        "explanation": "It needs the root's referral to learn where the `.com` servers are, unless that referral is already cached, which the question rules out."
+      },
+      {
+        "text": "The domain's registrar",
+        "explanation": "Registrars publish `NS` records into the TLD zone, but they aren't queried during resolution. The path is root → TLD → authoritative."
+      },
+      {
+        "text": "A root server",
+        "explanation": "Correct. With nothing cached, the only thing a resolver knows is the root server addresses (built in as 'root hints'). The root refers it to the `.com` TLD servers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Cold cache: the resolver knows only the root hints.\n2. Root replies: \"I don't know `www.example.com`, but here are the `.com` servers.\"\n3. `.com` replies: \"Here are `example.com`'s name servers (`NS`).\"\n4. The authoritative server returns the `A` record.\n5. The resolver caches **each** answer for its TTL. The next lookup for anything under `.com` can skip the root and go straight to the `.com` servers; the next lookup for anything under `example.com` can go straight to its name servers.",
+    "link": {
+      "title": "Domain Name System (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System"
+    }
+  },
+  {
+    "id": "net-dns-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want `example.com` (the bare apex) to point at your CDN's hostname `d123.cdn.net`. Why can't you just add `example.com CNAME d123.cdn.net`?",
+    "options": [
+      {
+        "text": "CNAMEs can only point to IP addresses",
+        "explanation": "It's the other way around: a CNAME always points to another *name*. `A` and `AAAA` records hold IP addresses."
+      },
+      {
+        "text": "The apex must hold `SOA` and `NS` records, and a CNAME cannot coexist with the required SOA and NS data at the same name",
+        "explanation": "Correct. The DNS specification says a CNAME cannot coexist with ordinary data such as SOA and NS (DNSSEC-related exceptions do not permit an apex CNAME). Since the apex must have `SOA`/`NS`, an apex CNAME is invalid; providers offer ALIAS/ANAME records as a workaround."
+      },
+      {
+        "text": "CNAMEs are not cached, so it would be too slow",
+        "explanation": "CNAME records have TTLs and are cached like any other record. The restriction is about the specification, not performance."
+      },
+      {
+        "text": "Browsers refuse to follow CNAMEs on the apex",
+        "explanation": "Browsers don't see record types; the resolver follows CNAMEs for them. The problem is in the DNS zone, not the browser."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Every zone apex must have an `SOA` record and `NS` records.\n2. RFC rules: if a name has a CNAME, it must have **no other ordinary data**, apart from specified DNSSEC-related records.\n3. Both can't be true at `example.com`, so the CNAME is invalid.\n4. Fix: use your provider's ALIAS/ANAME (Route 53 alias) record, which resolves `d123.cdn.net` itself and returns plain `A`/`AAAA` records. Or redirect the apex to `www.example.com` and CNAME that.",
+    "link": {
+      "title": "List of DNS record types (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/List_of_DNS_record_types"
+    }
+  },
+  {
+    "id": "net-dns-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`api.example.com` has a TTL of 86,400 s (24 h). On Monday at 09:00 you lower it to 60 s, and at 09:30 you change the `A` record to a new data centre. When can you be reasonably confident almost all well-behaved resolvers are using the new IP?",
+    "options": [
+      {
+        "text": "From about 09:00 on Tuesday, 24 hours after the TTL was lowered",
+        "explanation": "Correct. A resolver that cached the old record at 08:59 Monday with TTL 86,400 keeps it until about 08:59 Tuesday. Only then is normally expiring caches stop reusing the old long-TTL entry; they re-query when needed, subject to serve-stale policy."
+      },
+      {
+        "text": "Around 09:31, one minute after the change",
+        "explanation": "That would be true only if every cache already held the 60 s TTL. Resolvers that cached the record before 09:00 hold it with a 24 h TTL and won't look again until it expires."
+      },
+      {
+        "text": "Around 10:30, an hour later",
+        "explanation": "There's nothing special about an hour. Caches populated just before 09:00 keep the old record for up to 24 hours."
+      },
+      {
+        "text": "Never, because DNS changes need the registrar to propagate them",
+        "explanation": "Changing an `A` record happens at your authoritative server; the registrar is only involved for `NS` delegation changes. Caches converge as TTLs expire."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Worst case: a resolver cached the record at 08:59 with TTL = 86,400 s.\n2. Lowering the TTL at 09:00 doesn't reach that cache; it only affects answers given *after* 09:00.\n3. That cache keeps the old IP until 08:59 + 24 h = **08:59 Tuesday**.\n4. Correct playbook: lower the TTL, **wait the old TTL** (24 h), then make the change. Then caches converge within ~60 s.\n5. Even then, keep the old servers up for a while: some clients ignore TTLs.",
+    "link": {
+      "title": "RFC 1035: Domain names, implementation and specification",
+      "url": "https://www.rfc-editor.org/rfc/rfc1035"
+    }
+  },
+  {
+    "id": "net-dns-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You use plain round-robin DNS with three `A` records for `api.example.com`. One server dies. What happens?",
+    "options": [
+      {
+        "text": "DNS automatically stops returning the dead IP",
+        "explanation": "Plain DNS has no idea whether a server is alive. Health-checked DNS (e.g. Route 53 failover) can do this, but plain round robin keeps returning all three records."
+      },
+      {
+        "text": "All traffic fails because DNS needs every server healthy",
+        "explanation": "DNS doesn't check servers at all. Clients given one of the two live IPs succeed normally."
+      },
+      {
+        "text": "Traffic is automatically spread over the two remaining servers with no errors",
+        "explanation": "That's what a load balancer with health checks does. DNS round robin has no feedback loop, so errors continue until the record is removed and caches expire."
+      },
+      {
+        "text": "Roughly a third of new connection attempts hit the dead IP, and clients that don't retry another address fail until the record is changed and caches expire",
+        "explanation": "Correct. Each resolver keeps handing out the dead IP. Some clients (browsers) try the next address after a timeout; many API clients don't, so they fail."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Resolvers return all three IPs in rotating order; clients usually take the first.\n2. With one server dead, ~1/3 of fresh lookups put the dead IP first.\n3. Browsers implement fallback (try the next IP after a timeout, often seconds); typical HTTP libraries may just fail.\n4. Recovery: remove the record (manually or via health checks) **and** wait for TTL expiry.\n5. That's why DNS is used for coarse routing, with a health-checking load balancer behind each IP.",
+    "link": {
+      "title": "Configuring DNS failover (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
+    }
+  },
+  {
+    "id": "net-dns-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your DNS failover is configured with a 30 s TTL, yet after a region fails, 5% of traffic keeps hitting the dead region for over an hour. Which are plausible causes? Select all that apply.",
+    "options": [
+      {
+        "text": "Some clients cache DNS results far longer than the TTL (e.g. an old JVM caching forever)",
+        "explanation": "Correct. Java historically cached successful lookups indefinitely when a security manager was installed, and many SDKs and apps cache at startup. They never ask again."
+      },
+      {
+        "text": "Long-lived connections (connection pools, HTTP/2, WebSockets) never re-resolve while the connection stays open",
+        "explanation": "Correct. DNS is consulted only when a new connection is opened. A pooled connection to a now-broken region may hang or fail slowly instead of moving."
+      },
+      {
+        "text": "Some resolvers enforce a minimum TTL higher than 30 s",
+        "explanation": "Correct. Some ISP resolvers clamp low TTLs up to several minutes or more to reduce load, so they serve the stale answer longer."
+      },
+      {
+        "text": "UDP packets are slower than TCP, so the new answer takes longer to arrive",
+        "explanation": "UDP is if anything faster (no handshake). Transport speed affects milliseconds per query, not hour-long staleness."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think about where the old answer can still live:\n\n1. **Client caches** that ignore TTL (JVM `networkaddress.cache.ttl`, apps that resolve once).\n2. **Open connections**, which bypass DNS entirely until they close.\n3. **Resolvers clamping TTLs** to a minimum.\n\nUDP vs TCP speed is irrelevant. Mitigations: configure client DNS caching, set a max connection lifetime on pools (e.g. 5 min) so they re-resolve, and fail fast on errors so clients reconnect.",
+    "link": {
+      "title": "Time to live (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Time_to_live"
+    }
+  },
+  {
+    "id": "net-dns-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You use geo-based DNS to send European users to `eu-west` and US users to `us-east`. Analytics show many users in Germany are being routed to `us-east`. They all use a large public resolver. What's the most likely cause and fix?",
+    "options": [
+      {
+        "text": "German ISPs block European IP ranges",
+        "explanation": "There's no such blocking. The users aren't failing to reach Europe; DNS is choosing the wrong region for them."
+      },
+      {
+        "text": "The `A` record TTL is too long",
+        "explanation": "A long TTL slows changes, but it doesn't cause the wrong region to be chosen in the first place. The selection uses the resolver's location."
+      },
+      {
+        "text": "The public resolver's query reaches your authoritative server from a US-located IP, so geo-DNS sees the resolver's location. Support EDNS Client Subnet (ECS) so you see the client's subnet.",
+        "explanation": "Correct. Authoritative servers only see the resolver's address. ECS lets the resolver include a truncated client subnet, so the geo decision uses the user's real network."
+      },
+      {
+        "text": "Geo-DNS only works with IPv6",
+        "explanation": "Geo-DNS works on IPv4 and IPv6 equally. The problem is whose IP the geolocation is based on."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Geo-DNS decides based on **the IP that sent the query**, which is the recursive resolver, not the user.\n2. If the resolver's egress appears to be in the US (or its anycast routing lands the query at a US site), users get the US answer.\n3. **ECS** adds e.g. the client's /24 to the query, so the authoritative server can geolocate the user.\n4. Trade-offs: ECS leaks some client information and fragments resolver caches (one entry per subnet), so not every resolver sends it.\n5. Alternative fix: anycast at the network layer, which routes by where the user's packets actually enter.",
+    "link": {
+      "title": "GeoDNS (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/GeoDNS"
+    }
+  },
+  {
+    "id": "net-dns-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're designing DNS for a service that must stay reachable even if your DNS provider suffers a large DDoS like the 2016 Dyn attack. Which approach most directly addresses that risk?",
+    "options": [
+      {
+        "text": "Lower all TTLs to 5 seconds so you can react faster",
+        "explanation": "This makes things worse: when the provider is down, caches expire within seconds and every client immediately fails to resolve. Longer TTLs actually ride out short DNS outages."
+      },
+      {
+        "text": "Host the zone on two independent authoritative providers and list both sets of name servers in your `NS` records",
+        "explanation": "Correct. Resolvers try the other `NS` set if one doesn't answer, so an attack on one provider doesn't take you offline. You must keep the zones in sync (via zone transfers or automation)."
+      },
+      {
+        "text": "Put the website behind a CDN",
+        "explanation": "A CDN protects your origin servers, but users still need DNS to find the CDN. If the DNS provider is down, they can't resolve the name at all."
+      },
+      {
+        "text": "Use DNS over HTTPS",
+        "explanation": "DoH protects the privacy of the client–resolver hop. It does nothing if the authoritative servers can't answer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The failure is: **authoritative servers unreachable**.\n2. Once cached records expire, clients without usable serve-stale data cannot resolve the name, however healthy your servers are.\n3. Redundancy at that layer = **multiple providers**: e.g. `NS` records for both `ns1.provider-a.net` and `ns1.provider-b.net`.\n4. Supporting moves: moderate TTLs (minutes to hours for stable records) so caches bridge short outages.\n5. Cost: keeping two providers' zones in sync, and advanced features (geo, health checks) may differ between them.",
+    "link": {
+      "title": "Domain Name System (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System"
+    }
+  },
+  {
+    "id": "net-dns-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer runs `dig new.example.com` before the record exists, then creates it. The zone's `SOA` record has a TTL of 900 s and a `MINIMUM` field of 3,600 s. For roughly how long might the resolver they used keep saying the name doesn't exist?",
+    "options": [
+      {
+        "text": "Up to about 15 minutes",
+        "explanation": "Correct. Under RFC 2308 the negative-caching TTL is the smaller of the SOA record's own TTL and its MINIMUM field: min(900, 3,600) = 900 s."
+      },
+      {
+        "text": "Up to about an hour",
+        "explanation": "That uses the MINIMUM field alone. RFC 2308 caps the negative TTL at the SOA record's own TTL as well, so the smaller value wins."
+      },
+      {
+        "text": "Not at all, because negative answers are never cached",
+        "explanation": "They are cached, precisely to stop repeated lookups for non-existent names hammering authoritative servers."
+      },
+      {
+        "text": "Until the registrar propagates the change, usually 24 to 48 hours",
+        "explanation": "Adding a record happens on your authoritative servers; the registrar isn't involved. The '48 hours to propagate' folklore is really just TTLs expiring."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The `NXDOMAIN` response includes the zone's `SOA` record.\n2. RFC 2308: negative TTL = min(SOA TTL, SOA MINIMUM) = min(900, 3,600) = **900 s**.\n3. So that resolver may answer 'doesn't exist' for up to 15 minutes after the record is created.\n4. Other resolvers that never cached the miss see the new record immediately.\n5. Lesson: create records *before* anything starts querying them, or keep the negative TTL short.",
+    "link": {
+      "title": "RFC 2308: Negative caching of DNS queries",
+      "url": "https://www.rfc-editor.org/rfc/rfc2308"
+    }
+  },
+  {
+    "id": "net-dns-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A recursive resolver fetched `api.example.com` (TTL 300 s) from the authoritative server at 10:00:00. A laptop asks that resolver for the name at 10:04:00. What TTL does the laptop receive, and when does its own cached copy expire?",
+    "options": [
+      {
+        "text": "300 s; the laptop's copy expires at 10:09:00",
+        "explanation": "Resolvers don't reset the TTL when they hand out a cached answer. They pass on the time remaining."
+      },
+      {
+        "text": "0 s; the laptop must ask again immediately",
+        "explanation": "The resolver's entry still has 60 s left, so it hands that remaining time on."
+      },
+      {
+        "text": "60 s; the laptop's copy expires at 10:05:00, the same moment as the resolver's",
+        "explanation": "Correct. The TTL counts down in the resolver's cache. Every downstream cache inherits the remaining time, so they all expire together."
+      },
+      {
+        "text": "It depends on the laptop's clock, so it can't be known",
+        "explanation": "TTLs are relative durations in seconds, not absolute timestamps, so clock skew doesn't change the result."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. 10:00:00 the resolver caches the record with 300 s to live → expires at 10:05:00.\n2. 10:04:00 the laptop asks: 240 s have passed, so 300 − 240 = **60 s** remain.\n3. The resolver answers with TTL 60.\n4. The laptop caches it for 60 s → expires at **10:05:00**.\n\nConsequence: after you change a record, the worst-case wait is about one TTL from the most recent fetch of the old answer before the change, not one TTL per layer of caching.",
+    "link": {
+      "title": "Time to live (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Time_to_live"
+    }
+  },
+  {
+    "id": "net-dns-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You add many `TXT` records and enable DNSSEC, so some responses for your domain grow to about 3 KB. Users on a few corporate networks now fail to resolve the name, while everyone else is fine. Which are plausible causes? Select all that apply.",
+    "options": [
+      {
+        "text": "The answer no longer fits in the UDP size the client advertised, so the server sets the truncated flag, and the corporate firewall blocks the TCP port 53 retry",
+        "explanation": "Correct. Large answers fall back to TCP. Some firewalls still wrongly allow only UDP 53, so the TCP retry fails."
+      },
+      {
+        "text": "Large UDP responses are fragmented at the IP layer, and some middleboxes drop the fragments",
+        "explanation": "Correct. This is why the DNS community settled on advertising around 1,232 bytes (DNS Flag Day 2020): stay under typical path limits and use TCP for anything bigger."
+      },
+      {
+        "text": "DNSSEC makes resolvers ignore TTLs",
+        "explanation": "DNSSEC does not tell resolvers to ignore TTLs; validation can further limit use of data by signature validity."
+      },
+      {
+        "text": "A CNAME now sits at the zone apex",
+        "explanation": "Nothing in the scenario adds a CNAME. Apex CNAMEs are a zone-configuration error that would break resolution for everyone, not only a few networks."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Classic DNS assumed 512-byte UDP answers; EDNS(0) lets clients advertise more.\n2. If the response is bigger than advertised, the server returns a truncated (TC) reply → the client must retry over **TCP**.\n3. Failure path A: TCP/53 blocked → retry fails.\n4. Failure path B: a big UDP answer fragments; fragments get dropped → timeout.\n5. Fixes: trim records, prefer compact DNSSEC algorithms (ECDSA), and ask affected networks to allow TCP/53 (which RFC 7766 makes mandatory).",
+    "link": {
+      "title": "Domain Name System (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System"
+    }
+  },
+  {
+    "id": "net-dns-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your apex `example.com` uses your DNS provider's ALIAS record pointing at a CDN hostname, while `www.example.com` is a normal CNAME to the same CDN. The CDN steers users with DNS. Users in Asia report that `example.com` is much slower than `www.example.com`. What's the likely cause?",
+    "options": [
+      {
+        "text": "ALIAS records are cached for longer than CNAMEs",
+        "explanation": "TTL length affects how quickly changes spread, not which PoP a user gets on a given lookup."
+      },
+      {
+        "text": "The apex can't use HTTPS",
+        "explanation": "The apex can use HTTPS like any other name; certificates can cover `example.com` as a SAN."
+      },
+      {
+        "text": "Browsers deprioritise apex domains",
+        "explanation": "Browsers don't treat apex names differently when connecting."
+      },
+      {
+        "text": "Your DNS provider resolves the CDN's name itself, so the CDN's geo-steering sees the provider's location (perhaps in the US) rather than the user's resolver, and hands back a far-away PoP",
+        "explanation": "Correct. With a CNAME, the user's own resolver queries the CDN, which can pick a nearby PoP. With ALIAS, the lookup happens server-side, so the location signal is lost unless the provider forwards client-subnet information."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `www` → CNAME → the user's resolver (in Asia) asks the CDN's DNS → the CDN sees an Asian resolver → returns an Asian PoP.\n2. `example.com` → ALIAS → your DNS provider looks up the CDN name *itself*, from its own servers.\n3. The CDN sees the DNS provider's address → may return a US or EU PoP → your provider passes those `A` records to the Asian user.\n4. Fixes: redirect the apex to `www`, use a provider whose ALIAS integration supports the CDN properly (e.g. Route 53 alias records to CloudFront, or EDNS Client Subnet), or use a CDN with anycast addresses at the apex.",
+    "link": {
+      "title": "Choosing a routing policy (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy.html"
+    }
+  },
+  {
+    "id": "net-dns-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your authoritative DNS provider is unreachable for two hours. Your records have a 300 s TTL. You expected everyone to fail after five minutes, but many users kept resolving your name throughout. What most likely explains this?",
+    "options": [
+      {
+        "text": "Root servers keep a backup copy of every domain's records",
+        "explanation": "Root servers only hold delegations to TLD servers. They never store your `A` records."
+      },
+      {
+        "text": "Many recursive resolvers implement serve-stale (RFC 8767), returning expired cached answers when the authoritative servers can't be reached",
+        "explanation": "Correct. Major public resolvers do this deliberately: a slightly stale answer is better than a failure. It cushions DNS outages, though you can't rely on every resolver doing it."
+      },
+      {
+        "text": "The TTL was silently raised by the registrar",
+        "explanation": "Registrars don't edit the TTLs of records in your zone."
+      },
+      {
+        "text": "Browsers ignore DNS entirely after the first visit",
+        "explanation": "Browsers cache DNS briefly and reuse connections, but they still resolve names when opening new connections; they don't skip DNS for hours."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Expected: after 300 s, caches expire → resolvers ask your provider → no answer → failure.\n2. Serve-stale changes step 3: if the refresh fails, the resolver keeps serving the expired entry (RFC 8767 suggests a maximum staleness of 1 to 3 days).\n3. Users behind such resolvers carry on; users behind strict resolvers fail.\n4. Don't design around it: you still want multiple providers. But it explains partial survival and also why some clients see old data longer than the TTL.",
+    "link": {
+      "title": "RFC 8767: Serving stale data to improve DNS resiliency",
+      "url": "https://www.rfc-editor.org/rfc/rfc8767"
+    }
+  }
+]

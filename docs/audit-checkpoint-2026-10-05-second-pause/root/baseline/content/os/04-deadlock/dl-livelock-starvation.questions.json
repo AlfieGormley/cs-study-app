@@ -1,0 +1,348 @@
+[
+  {
+    "id": "dl-livelock-starvation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A service stops completing requests. Two worker threads show 100% CPU. Thread dumps taken a second apart show them in different places each time, repeatedly acquiring and releasing the same two locks. No thread is blocked. What is this most likely to be?",
+    "options": [
+      {
+        "text": "Deadlock",
+        "explanation": "Deadlocked threads are blocked, sleeping in the kernel at near-zero CPU, and every dump shows them in the same place. These threads are running."
+      },
+      {
+        "text": "Livelock",
+        "explanation": "Correct. The threads are active and changing state, but in response to each other, so neither gets anywhere. High CPU with no progress is the signature."
+      },
+      {
+        "text": "Priority inversion",
+        "explanation": "Priority inversion means a high-priority thread is blocked while lower-priority work runs. Nothing here is blocked."
+      },
+      {
+        "text": "A data race",
+        "explanation": "A data race corrupts results; it doesn't by itself stop progress. The repeated acquire–release pattern points to try-lock retries."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Check CPU: deadlocked threads sleep (0% CPU); these use 100%.\n2. Check whether the stacks change: deadlocked threads sit at the same lock call forever; these move.\n3. Check whether anything completes: nothing does.\n4. Busy, changing, no progress: **livelock**. A likely cause is two threads using try-lock and back-off on locks in opposite order, without random jitter.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is a **liveness** property rather than a safety property?",
+    "options": [
+      {
+        "text": "Two threads are never inside the critical section at the same time",
+        "explanation": "That's mutual exclusion, a safety property: it says something bad never happens. A program that does nothing satisfies it."
+      },
+      {
+        "text": "A bank balance never goes negative",
+        "explanation": "Also safety: it forbids a bad state. It says nothing about whether transfers ever complete."
+      },
+      {
+        "text": "Every thread that requests the lock eventually acquires it",
+        "explanation": "Correct. It promises that something good *eventually* happens. Starvation violates it, even when the program is otherwise correct."
+      },
+      {
+        "text": "A freed buffer is never read again",
+        "explanation": "Safety again: it rules out a bad event (use-after-free). It can be checked by spotting a single bad step."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Safety: *nothing bad ever happens*. A violation is a finite event you can point to (two threads inside at once, a negative balance).\n2. Liveness: *something good eventually happens*. A violation is an infinite execution in which the good thing never occurs.\n3. \"Eventually acquires the lock\" can only be violated by waiting forever, so it's liveness.\n4. Deadlock, livelock and starvation are all liveness failures.",
+    "link": {
+      "title": "Starvation (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Starvation_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two threads run this try-lock loop on locks taken in opposite orders. Why does adding `time.sleep(random.uniform(0, 0.01))` after `first.release()` prevent livelock?\n\n```python\nwhile True:\n    first.acquire()\n    if second.acquire(\n            blocking=False):\n        return\n    first.release()\n```",
+    "options": [
+      {
+        "text": "Sleeping makes the threads take the locks in the same order",
+        "explanation": "The code still takes `first` then `second`, and the two threads still pass the locks in opposite orders. Only the timing changes."
+      },
+      {
+        "text": "A sleeping thread holds its lock, so the other thread is forced to wait",
+        "explanation": "The sleep comes *after* `first.release()`, so the thread holds nothing while it sleeps. That's the point: it never waits while holding a lock."
+      },
+      {
+        "text": "`time.sleep` makes the lock fair",
+        "explanation": "Fairness is a property of the lock's hand-off policy. Sleeping doesn't change which waiter the lock prefers."
+      },
+      {
+        "text": "Random delays make it unlikely the threads stay in lockstep, so one soon finds both locks free",
+        "explanation": "Correct. Livelock needs the threads to keep colliding in the same rhythm. Different random delays desynchronise them, and one gets both locks while the other is asleep."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Without the sleep, two threads in lockstep can repeat: take own lock, fail on the other, release, retry, forever.\n2. Livelock depends on **symmetry**: both threads doing the same thing at the same time.\n3. A random sleep breaks the symmetry. If T1 sleeps 2 ms and T2 sleeps 7 ms, T1 wakes, takes both locks while T2 is asleep, and finishes.\n4. The same idea appears in Ethernet's randomised back-off and Raft's randomised election timeouts.\n5. Ordering the locks would fix the problem outright; jitter is the fix when ordering isn't possible.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client retries with \"full jitter\": `sleep = random(0, min(cap, base * 2**attempt))`, with `base = 100 ms`, `cap = 2 s` and `attempt` starting at 0. What is the **longest** possible sleep before attempt 4 and before attempt 6?",
+    "options": [
+      {
+        "text": "1.6 s and 2 s",
+        "explanation": "Correct. Attempt 4: 100 × 2⁴ = 1,600 ms, under the cap. Attempt 6: 100 × 2⁶ = 6,400 ms, capped to 2,000 ms."
+      },
+      {
+        "text": "1.6 s and 6.4 s",
+        "explanation": "That forgets the cap. The upper bound grows exponentially only until it reaches 2 s."
+      },
+      {
+        "text": "0.8 s and 3.2 s",
+        "explanation": "That uses 2^(attempt − 1). With attempt starting at 0, attempt 4 multiplies base by 2⁴ = 16."
+      },
+      {
+        "text": "2 s and 2 s",
+        "explanation": "Attempt 4's bound is 1.6 s, which is below the cap, so the cap doesn't apply yet."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Bound = min(cap, base × 2^attempt).\n\n```\nattempt  base*2^a   bound\n0        100 ms     100 ms\n1        200 ms     200 ms\n2        400 ms     400 ms\n3        800 ms     800 ms\n4        1600 ms    1600 ms\n5        3200 ms    2000 ms\n6        6400 ms    2000 ms\n```\n\n2. The actual sleep is uniform in [0, bound], so on average it's half the bound.\n3. The randomness matters as much as the growth: if a thousand clients all slept exactly 1.6 s, they'd retry together and recreate the storm.",
+    "link": {
+      "title": "Exponential Backoff And Jitter — AWS Architecture Blog",
+      "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service uses a reader-preferring readers-writer lock. Readers arrive every 10 ms and each holds the lock for 50 ms. A writer arrives and waits. What happens to the writer, and what is the standard fix?",
+    "options": [
+      {
+        "text": "It gets the lock within 50 ms, when the current reader finishes",
+        "explanation": "A new reader arrives every 10 ms and joins while others still hold the lock, so the lock never becomes free. 'The current reader' is always replaced."
+      },
+      {
+        "text": "It deadlocks with the readers; the fix is lock ordering",
+        "explanation": "There's no cycle: readers don't wait for the writer. The readers keep making progress; only the writer doesn't. That's starvation."
+      },
+      {
+        "text": "It may wait forever; once a writer is waiting, block new readers until it has run",
+        "explanation": "Correct. With around five readers overlapping at all times, the read count never reaches zero. Writer preference (or a FIFO lock) bounds the wait."
+      },
+      {
+        "text": "It gets the lock immediately, because writers have priority",
+        "explanation": "That describes a writer-preferring lock. A reader-preferring lock (such as glibc's default `pthread_rwlock`) lets new readers in while a writer waits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each reader holds for 50 ms, and one arrives every 10 ms, so about 50 / 10 = 5 readers hold the lock at any moment.\n2. A reader-preferring lock admits a new reader whenever readers already hold it.\n3. The reader count therefore never drops to zero, and the writer, which needs zero readers, waits indefinitely.\n4. The system is progressing (readers are served), so this is **starvation**, not deadlock.\n5. Fix: once a writer is waiting, queue new readers behind it. Readers already inside finish within 50 ms, then the writer runs, then the queued readers.",
+    "link": {
+      "title": "Readers–writer lock — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about progress guarantees are true? Select all that apply.",
+    "options": [
+      {
+        "text": "An atomic counter incremented by a compare-and-swap retry loop is lock-free",
+        "explanation": "Correct. Whenever several threads race, one CAS succeeds, so the system as a whole always progresses."
+      },
+      {
+        "text": "That same CAS loop is wait-free",
+        "explanation": "A particular thread can lose every race and retry indefinitely. Lock-free guarantees *some* thread finishes, not *every* thread."
+      },
+      {
+        "text": "A spinlock isn't lock-free: if its holder is descheduled, every other thread spins without progress",
+        "explanation": "Correct. Non-blocking guarantees require that a paused thread can't stop others. A preempted spinlock holder stops everyone who needs the lock."
+      },
+      {
+        "text": "Every wait-free algorithm is also lock-free",
+        "explanation": "Correct. If every thread finishes in bounded steps, then certainly some thread does. Wait-free is the strongest guarantee in the hierarchy."
+      },
+      {
+        "text": "A deadlock-free lock is automatically starvation-free",
+        "explanation": "Deadlock-free only promises that *some* waiter gets the lock. An unfair mutex is deadlock-free, yet a particular waiter can be overtaken forever."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Line the guarantees up from strongest to weakest:\n\n```\nwait-free        every thread finishes\nlock-free        some thread finishes\nobstruction-free a lone thread finishes\n--- blocking (locks) ---\nstarvation-free  every waiter gets lock\ndeadlock-free    some waiter gets lock\n```\n\n1. CAS loop: some CAS always wins, so lock-free (A true). One thread can keep losing, so not wait-free (B false).\n2. Spinlock: blocking. A descheduled holder stops all others (C true).\n3. Each guarantee implies those below it in its group, so wait-free ⇒ lock-free (D true).\n4. Deadlock-free doesn't imply starvation-free; fairness is extra (E false).",
+    "link": {
+      "title": "Non-blocking algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "One CPU, strict priorities H > M > L, no priority inheritance. At t = 0 L locks `m`; its critical section needs 3 ms of CPU. At t = 1 ms H wakes and blocks on `m`. At t = 2 ms M becomes runnable and needs 100 ms of CPU, using no locks. When does H acquire `m`? And when would it with priority inheritance?",
+    "options": [
+      {
+        "text": "103 ms without inheritance; 3 ms with it",
+        "explanation": "Correct. Without inheritance M preempts L from 2 to 102 ms, and L finishes its last 1 ms at 103. With inheritance L runs at H's priority from t = 1, M can't preempt, and L unlocks at 3 ms."
+      },
+      {
+        "text": "3 ms in both cases",
+        "explanation": "Without inheritance L has only priority L, so M (which outranks it) preempts it at t = 2 and runs for 100 ms before L can continue."
+      },
+      {
+        "text": "102 ms without inheritance; 2 ms with it",
+        "explanation": "This forgets the critical section's remaining work. At t = 2 L has done 2 of its 3 ms, so it still needs 1 ms after M stops."
+      },
+      {
+        "text": "Never without inheritance, because H is deadlocked",
+        "explanation": "There's no cycle. M finishes after 100 ms, then L runs and releases `m`. The delay is unbounded in general (more M-level work could arrive), but here it ends."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Without inheritance:\n\n```\n0-1    L runs (1 ms of CS done)\n1      H wakes, blocks on m\n1-2    L runs (2 ms done)\n2-102  M runs (preempts L)\n102-103 L runs (3 ms), unlocks\n103    H acquires m\n```\n\nWith inheritance:\n\n```\n0-1    L runs (1 ms done)\n1      H blocks; L inherits H\n1-3    L runs (3 ms done); M can't\n       preempt at t = 2\n3      L unlocks, drops back to L;\n       H acquires m\n```\n\nH's wait goes from 102 ms (and unbounded in general, since any M-level work extends it) to 2 ms, bounded by L's critical section.",
+    "link": {
+      "title": "Priority inversion — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Priority_inversion"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Go service has one heavily contended `sync.Mutex`. Most of the time, a goroutine that has just unlocked it can grab it again before a woken waiter runs. What stops a waiting goroutine from being overtaken indefinitely?",
+    "options": [
+      {
+        "text": "Nothing; Go mutexes are unfair, so waiters can starve",
+        "explanation": "Go's mutex is unfair in normal mode, but it has a defence: it switches mode when a waiter has waited too long."
+      },
+      {
+        "text": "The mutex always hands ownership to waiters in FIFO order",
+        "explanation": "That's only starvation mode. In normal mode new arrivals compete with the woken waiter and often win, which is good for throughput."
+      },
+      {
+        "text": "The Go scheduler raises the waiting goroutine's priority",
+        "explanation": "Goroutines have no priorities that the mutex manipulates. The fix is in the mutex's hand-off policy."
+      },
+      {
+        "text": "If a waiter fails to get the lock for more than 1 ms, the mutex enters starvation mode and hands ownership directly to the waiter at the front of the queue",
+        "explanation": "Correct. In starvation mode newcomers don't spin or barge; they queue at the tail. The mutex returns to normal mode once the queue drains or a waiter's wait was short."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Normal mode is unfair on purpose: the running goroutine is cache-hot and can re-acquire in nanoseconds, while waking a waiter costs a scheduler round-trip.\n2. Unfairness risks starvation, so the mutex watches waiting time.\n3. Once a waiter has waited more than 1 ms (`starvationThresholdNs = 1e6` in the source), the mutex switches to starvation mode: unlock hands ownership straight to the head of the queue.\n4. When a waiter acquires the lock and either is the last waiter or waited less than 1 ms, the mutex returns to normal mode.\n5. The result: high throughput most of the time, and a bounded tail latency when contention gets bad.",
+    "link": {
+      "title": "Go source: sync mutex fairness",
+      "url": "https://go.dev/src/internal/sync/mutex.go"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A real-time audio thread H waits on a **semaphore** that low-priority loader thread L posts after decoding each buffer. A medium-priority analytics thread M is CPU-bound. Every mutex in the process uses `PTHREAD_PRIO_INHERIT`. H misses deadlines whenever M is busy. Why doesn't priority inheritance help?",
+    "options": [
+      {
+        "text": "Priority inheritance only works on multi-core machines",
+        "explanation": "Inheritance works on any number of CPUs; it was designed for exactly the single-CPU case shown in Pathfinder."
+      },
+      {
+        "text": "A semaphore has no owner, so the kernel can't know that L is the thread to boost",
+        "explanation": "Correct. Inheritance boosts a lock's *owner*. Any thread can post a semaphore, so waiting on one gives the kernel no idea whom H depends on."
+      },
+      {
+        "text": "Inheritance is disabled whenever a thread is CPU-bound",
+        "explanation": "There's no such rule. The protocol is about who holds what, not how busy a thread is."
+      },
+      {
+        "text": "H is actually deadlocked with L",
+        "explanation": "There's no cycle: L will post once it gets CPU time. H is delayed by M, an unrelated lower-priority thread, which is priority inversion."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Priority inheritance works like this: H blocks on mutex `m`; `m` records its owner L; the kernel boosts L to H's priority.\n2. A semaphore records a count, not an owner. When H blocks on it, the kernel only knows H is waiting for *someone* to post.\n3. So L stays at low priority, M preempts it, and H waits as long as M runs. Classic inversion.\n4. Fixes: run L at a priority at least as high as anything it must beat (or above M); hand data over through a structure protected by an inheritance mutex; or redesign so H never waits on lower-priority work, for example with a lock-free ring buffer and pre-decoded data.\n5. The same applies to condition variables, queues and pipes: no owner, no inheritance.",
+    "link": {
+      "title": "Priority inversion — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Priority_inversion"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're choosing between a fair (FIFO hand-off) and an unfair (barging) mutex for a lock acquired millions of times per second by 32 threads. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With a fair lock, every release to a sleeping waiter costs a wake-up and context switch, so throughput can collapse into a lock convoy",
+        "explanation": "Correct. The lock sits idle, owned by a thread that isn't running yet, while the releasing thread, which could have used it, has to wait its turn."
+      },
+      {
+        "text": "An unfair lock lets the releasing thread re-acquire while its cache is hot, which usually gives higher throughput",
+        "explanation": "Correct. That's why Java's `ReentrantLock`, Go's normal mode and most OS mutexes are unfair by default."
+      },
+      {
+        "text": "An unfair lock can let one waiter be overtaken for a long time, hurting tail latency",
+        "explanation": "Correct. Barging trades fairness for throughput; the cost shows up in p99 and p99.9 latency for unlucky threads."
+      },
+      {
+        "text": "A fair lock prevents priority inversion",
+        "explanation": "FIFO order ignores priority entirely, so a high-priority thread can queue behind low-priority ones. Inversion needs inheritance or ceilings."
+      },
+      {
+        "text": "An unfair lock can deadlock in cases where a fair lock can't",
+        "explanation": "Fairness doesn't affect the Coffman conditions. Both kinds deadlock under the same lock-order mistakes, and both are deadlock-free with correct ordering."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Fair hand-off: on unlock, ownership goes to the head waiter, who is asleep. Until it is scheduled (microseconds), nobody can use the lock. At millions of acquisitions per second, that idle gap dominates: a **convoy**.\n2. Barging: the running thread grabs the lock again immediately, so throughput is high (B true), but a waiter can lose repeatedly (C true).\n3. The usual compromise is unfair by default with an escape hatch: Go's 1 ms starvation mode, or Linux's hand-off flag.\n4. Fairness is about order among waiters. It says nothing about priorities (D false) or lock-order cycles (E false).\n5. Better still: reduce contention (sharding, per-thread counters) so neither policy matters much.",
+    "link": {
+      "title": "Starvation (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Starvation_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Compared with priority inheritance, what does the original **priority ceiling protocol** (Sha, Rajkumar and Lehoczky) add, and what does it cost?",
+    "options": [
+      {
+        "text": "It removes the need for mutexes entirely, at the cost of more context switches",
+        "explanation": "It's a locking protocol: threads still take mutexes. It changes *when* a thread may lock and at what priority it runs."
+      },
+      {
+        "text": "It prevents deadlock and limits each high-priority job to at most one lower-priority critical section of blocking, but every mutex's ceiling must be known in advance",
+        "explanation": "Correct. The rule (lock only if your priority beats the ceilings of all mutexes others hold) rules out cycles and chained blocking. Working out ceilings needs a static list of which threads use which locks."
+      },
+      {
+        "text": "It works with semaphores and condition variables, but only on single-core systems",
+        "explanation": "Ceiling protocols are defined for mutex-like resources with holders; they don't fix waits on ownerless primitives."
+      },
+      {
+        "text": "It has no cost, so it's the default for `pthread_mutex_t` on Linux",
+        "explanation": "Linux's default mutex protocol is `PTHREAD_PRIO_NONE`. Ceilings must be configured per mutex (`PTHREAD_PRIO_PROTECT`) and need correct values."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Priority inheritance boosts a holder only *after* a higher-priority thread blocks. It bounds inversion but allows **chained blocking** (blocked once per lock) and doesn't prevent deadlock.\n2. The priority ceiling protocol assigns each mutex a ceiling = highest priority of any thread that uses it.\n3. A thread may lock a mutex only if its priority is higher than the ceilings of all mutexes currently held by other threads.\n4. Consequences: no cycle of waits can form (deadlock prevented), and a high-priority job is blocked by at most one lower-priority critical section.\n5. Cost: you must know every thread's lock usage up front to set ceilings. That suits static real-time systems (avionics, automotive), not a general-purpose server with dynamic threads.",
+    "link": {
+      "title": "Priority ceiling protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Priority_ceiling_protocol"
+    }
+  }
+]

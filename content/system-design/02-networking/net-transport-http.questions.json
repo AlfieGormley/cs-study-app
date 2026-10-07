@@ -1,0 +1,378 @@
+[
+  {
+    "id": "net-transport-http-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You're building a multiplayer game that sends each player's position 30 times a second. Why do many such games use UDP rather than TCP for position updates?",
+    "options": [
+      {
+        "text": "UDP encrypts packets automatically",
+        "explanation": "UDP has no encryption at all. Encryption comes from a layer on top (DTLS, QUIC or the game's own scheme)."
+      },
+      {
+        "text": "UDP guarantees delivery faster than TCP",
+        "explanation": "UDP guarantees nothing about delivery. It's attractive precisely because it doesn't try to deliver everything."
+      },
+      {
+        "text": "TCP can't send more than one message per second",
+        "explanation": "TCP can carry very high message rates. The issue isn't throughput but head-of-line blocking and retransmission delay."
+      },
+      {
+        "text": "A lost update is superseded 33 ms later, so retransmitting it (and blocking newer updates behind it, as TCP would) only adds lag",
+        "explanation": "Correct. TCP's in-order delivery would hold back fresh positions until a stale one is retransmitted. UDP lets the game drop the stale packet and use the newest state."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Updates every 1000 / 30 ≈ **33 ms**.\n2. With TCP, if one packet is lost, retransmission takes at least 1 RTT (say 60 ms). Meanwhile the next two updates have arrived but TCP **can't deliver them** until the lost one is filled in.\n3. Result: a 60+ ms stutter, all to deliver a position that's already out of date.\n4. With UDP, the game just uses the newest packet it has. Important events (a kill, a purchase) can be sent with the game's own lightweight acknowledgements.",
+    "link": {
+      "title": "User Datagram Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/User_Datagram_Protocol"
+    }
+  },
+  {
+    "id": "net-transport-http-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In HTTP/1.1, why did browsers open about six TCP connections per origin?",
+    "options": [
+      {
+        "text": "HTTP/1.1 closes the connection after every request",
+        "explanation": "HTTP/1.1 made connections persistent by default (keep-alive). The limit is concurrency on a connection, not reuse."
+      },
+      {
+        "text": "Without HTTP/1.1 pipelining, each connection handles one request/response at a time, so parallel fetching needs more connections",
+        "explanation": "Correct. Without working pipelining, a connection waits for each response to finish before the next can be sent; multiple connections are the only way to fetch resources concurrently."
+      },
+      {
+        "text": "Servers limited each connection to 100 KB",
+        "explanation": "There's no such per-connection size limit in HTTP/1.1. Connections can carry arbitrarily large responses."
+      },
+      {
+        "text": "To provide redundancy in case one TCP connection drops",
+        "explanation": "Redundancy isn't the reason. The six connections are for parallel fetching to work around HTTP-level head-of-line blocking."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A page needs, say, 60 resources.\n2. On one HTTP/1.1 connection, they come back strictly one after another, each costing at least 1 RTT.\n3. At 50 ms RTT: 60 × 50 = 3 s minimum.\n4. With 6 connections: ~10 rounds × 50 ms ≈ 0.5 s (plus 5 extra handshakes).\n5. HTTP/2 instead multiplexes all 60 on one connection: roughly 1–2 RTTs for requests to go out, limited mainly by bandwidth.",
+    "link": {
+      "title": "High Performance Browser Networking: HTTP/1.x",
+      "url": "https://hpbn.co/http1x/"
+    }
+  },
+  {
+    "id": "net-transport-http-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After moving from HTTP/1.1 to HTTP/2, your site is faster on office broadband but *slower* for users on a congested mobile network with ~2% packet loss. What best explains this?",
+    "options": [
+      {
+        "text": "All streams share one TCP connection, so each lost packet stalls every stream until it's retransmitted; with HTTP/1.1, a loss stalled only one of six connections",
+        "explanation": "Correct. This is TCP-level head-of-line blocking. HTTP/2 concentrates everything on one connection, so loss has a bigger blast radius, and every loss shrinks the congestion window that all traffic shares, instead of one of six."
+      },
+      {
+        "text": "HTTP/2's binary framing is harder for phones to parse",
+        "explanation": "Parsing binary frames is cheap, cheaper than parsing text HTTP/1.1. CPU cost isn't the explanation for loss-related slowdown."
+      },
+      {
+        "text": "HPACK compression fails on mobile networks",
+        "explanation": "HPACK works the same on any network. It saves bytes everywhere; it doesn't make loss worse."
+      },
+      {
+        "text": "Mobile networks don't support HTTP/2",
+        "explanation": "HTTP/2 runs inside TLS over TCP; the mobile network just sees encrypted TCP traffic and can't tell the difference."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. HTTP/2 = many streams, **one** TCP connection.\n2. TCP delivers bytes in order. If packet 17 is lost, packets 18–40 wait in the kernel even if they belong to other streams.\n3. At 2% loss with ~100 packets in flight, a loss happens almost every RTT, so every stream stalls repeatedly.\n4. TCP also cuts its congestion window on loss (by half for Reno, about 30% for CUBIC). With one connection, *all* throughput drops; with six, only one connection's share does.\n5. HTTP/3 fixes this with per-stream loss recovery in QUIC.",
+    "link": {
+      "title": "Head-of-line blocking (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Head-of-line_blocking"
+    }
+  },
+  {
+    "id": "net-transport-http-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine advantages of HTTP/3 (QUIC) over HTTP/2 (TCP + TLS)? Select all that apply.",
+    "options": [
+      {
+        "text": "Loss of application-stream data need not block delivery on unrelated streams",
+        "explanation": "Correct. QUIC tracks ordering per stream, so loss on stream A doesn't hold back streams B and C."
+      },
+      {
+        "text": "Connections can survive a client's IP address changing, for example Wi-Fi to 4G",
+        "explanation": "Correct. QUIC identifies connections by connection ID rather than the IP/port 4-tuple, so it can migrate when the network changes."
+      },
+      {
+        "text": "Transport and TLS handshakes are combined, so a new connection needs 1 RTT instead of 2",
+        "explanation": "Correct. QUIC integrates TLS 1.3 into its handshake, and resumption can use 0-RTT."
+      },
+      {
+        "text": "It needs less CPU than TCP on servers",
+        "explanation": "Generally the opposite: QUIC runs in user space with per-packet encryption, and has historically cost more CPU than kernel TCP, though offloads are narrowing the gap."
+      },
+      {
+        "text": "It works on every network, because UDP is never blocked",
+        "explanation": "Some enterprise firewalls block or throttle UDP 443. That's why browsers keep an HTTP/2 fallback."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each claim against how QUIC works:\n\n1. **Per-stream ordering** → no transport HOL across streams. (yes)\n2. **Connection IDs** → migration across networks. (yes)\n3. **Integrated TLS 1.3** → 1 RTT new, 0-RTT resume. (yes)\n4. CPU: user-space UDP plus encryption per packet → typically *more* CPU. (no)\n5. UDP blocking exists → fallback is needed. (no)",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "net-transport-http-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a simplified round-based model, a fresh TCP/TLS1.3 call has two setup RTTs, then a response window starting at 14 KB and doubling each RTT; ignore handshake bytes growing that window, loss, delayed ACKs and serialisation. RTT is 30 ms and the response is 60 KB. Compare with a warm connection able to send the whole response in one round.",
+    "options": [
+      {
+        "text": "About 30 ms either way, because bandwidth is high",
+        "explanation": "High bandwidth doesn't help the handshakes or slow start; a new connection can't send 60 KB in one RTT because its window starts at ~14 KB."
+      },
+      {
+        "text": "About 60 ms fresh versus 30 ms warm",
+        "explanation": "This counts only one handshake RTT plus one data RTT. It misses TLS (another RTT) and the extra RTTs slow start needs for 60 KB."
+      },
+      {
+        "text": "About 300 ms fresh, because TLS needs 4 RTTs",
+        "explanation": "TLS 1.3 needs one round trip for a full handshake, not four. That overestimates the setup cost."
+      },
+      {
+        "text": "About 150 ms fresh (2 RTT handshakes + ~3 RTT of slow start), versus about 30 ms warm",
+        "explanation": "Correct. TCP + TLS = 60 ms, then 14 + 28 + 56 KB windows means 3 RTTs (90 ms) to deliver 60 KB. A warm connection with a large window does it in ~1 RTT."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Fresh connection:\n\n| Step | RTTs |\n|---|---|\n| TCP handshake | 1 |\n| TLS 1.3 | 1 |\n| Data: 14 KB | 1 |\n| Data: +28 KB (42) | 1 |\n| Data: +56 KB (98 ≥ 60) | 1 |\n\n5 RTT × 30 ms = **150 ms**. (The request itself goes out with the first data round.)\n\nWarm connection: window already large, so 1 RTT = **30 ms**. Connection pooling gives a 5× speed-up here.",
+    "link": {
+      "title": "High Performance Browser Networking: Building blocks of TCP",
+      "url": "https://hpbn.co/building-blocks-of-tcp/"
+    }
+  },
+  {
+    "id": "net-transport-http-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your gRPC clients (HTTP/2) talk to 10 server pods behind an L4 (TCP) load balancer. After a scale-up from 10 to 20 pods, the new pods sit idle while the old ones stay hot. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "gRPC doesn't support more than 10 servers",
+        "explanation": "gRPC has no such limit. The issue is how connections and requests are distributed, not a server count cap."
+      },
+      {
+        "text": "The new pods failed their health checks",
+        "explanation": "Possible in general, but the symptom here is a well-known pattern: healthy new pods get no traffic because no new connections are being made."
+      },
+      {
+        "text": "The L4 balancer balances TCP connections, and each client multiplexes all its requests over one long-lived HTTP/2 connection made before scale-up. Use L7 (per-request) balancing or client-side balancing, and/or a max connection age.",
+        "explanation": "Correct. An L4 balancer only decides when a connection opens. Existing connections stay pinned to old pods. L7 proxies (Envoy) or client-side balancing spread individual requests; a max connection age forces periodic reconnection."
+      },
+      {
+        "text": "HTTP/2 header compression routes requests to the same server",
+        "explanation": "HPACK compresses headers within a connection; it has no role in choosing servers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. L4 load balancing = choose a backend **per TCP connection**.\n2. HTTP/2 clients open a connection once and send thousands of requests over it for hours.\n3. Scale-up adds pods, but no client opens a new connection, so the new pods get nothing.\n4. Fixes:\n  - **L7 balancing** (Envoy, Linkerd, an ALB with gRPC support): balance each request (stream).\n  - **Client-side balancing**: the gRPC client resolves all pod IPs and round-robins.\n  - **`MAX_CONNECTION_AGE`** on the server: e.g. close after 5 minutes so clients reconnect and rebalance.",
+    "link": {
+      "title": "Supported load balancers (Envoy)",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers"
+    }
+  },
+  {
+    "id": "net-transport-http-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You enable HTTP/3 on your CDN. Real-user monitoring shows that on a user's *first* visit, almost all requests still use HTTP/2, yet repeat visits use HTTP/3. Why?",
+    "options": [
+      {
+        "text": "HTTP/3 only works after a TLS session ticket has been cached",
+        "explanation": "Session tickets enable 0-RTT resumption, but a full 1-RTT HTTP/3 handshake works without them. Tickets aren't required for HTTP/3 at all."
+      },
+      {
+        "text": "Browsers learn that an origin supports HTTP/3 from an `Alt-Svc` header (or DNS `HTTPS` record) and so typically start with TCP on the first contact",
+        "explanation": "Correct. Without prior knowledge, the browser connects over TCP; the response's `Alt-Svc: h3=\":443\"` advertises HTTP/3, which is then used for later connections. Publishing an `HTTPS` DNS record can enable HTTP/3 from the start."
+      },
+      {
+        "text": "QUIC needs the server to pre-warm a congestion window per client",
+        "explanation": "QUIC uses normal congestion control starting from an initial window, like TCP. There's no per-client pre-warming requirement."
+      },
+      {
+        "text": "The CDN deliberately disables HTTP/3 on first visits for security",
+        "explanation": "There's no such security policy. The behaviour comes from how clients discover HTTP/3 support."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A URL says `https://`, not which HTTP version to use. TCP+TLS with ALPN is the safe default.\n2. The server replies (over HTTP/2) with `Alt-Svc: h3=\":443\"; ma=86400`.\n3. The browser caches that hint for `ma` seconds and tries QUIC next time, racing it against TCP in case UDP is blocked.\n4. To get HTTP/3 on the very first connection, publish a DNS `HTTPS` record (RFC 9460) with `alpn=h3`, which the browser can fetch alongside the `A` record.",
+    "link": {
+      "title": "RFC 9460: SVCB and HTTPS resource records",
+      "url": "https://www.rfc-editor.org/rfc/rfc9460"
+    }
+  },
+  {
+    "id": "net-transport-http-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a simplified response-round model, RTT is 100 ms, the response window starts at 14 KB and doubles each round, and bandwidth is 1 Gbps. Count from sending the request, ignore setup and processing, and assume no loss or prior window growth. How many milliseconds for a 90 KB response?",
+    "options": [
+      {
+        "text": "About 1 ms, because 90 KB at 1 Gbps takes under a millisecond",
+        "explanation": "That's the serialisation time if the window were unlimited. Slow start caps how much can be in flight per round trip, so bandwidth isn't the limit on a new connection."
+      },
+      {
+        "text": "About 100 ms, one round trip",
+        "explanation": "One round trip delivers only the initial window of about 14 KB, not 90 KB."
+      },
+      {
+        "text": "About 300 ms, three round trips of slow start",
+        "explanation": "Correct. The window grows 14 → 28 → 56 KB, so cumulative delivery is 14, 42 and 98 KB after one, two and three round trips. 90 KB needs three: about 300 ms."
+      },
+      {
+        "text": "About 900 ms, because each 10 KB needs its own round trip",
+        "explanation": "The window isn't fixed at 10 KB; it roughly doubles each round trip during slow start."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Track the congestion window round by round:\n\n| RTT | Window | Total |\n|---|---|---|\n| 1 | 14 KB | 14 KB |\n| 2 | 28 KB | 42 KB |\n| 3 | 56 KB | 98 KB |\n\n98 KB ≥ 90 KB after 3 RTTs → **≈ 300 ms**.\n\nThe link could clock out 90 KB in about 0.7 ms. On a new connection, latency, not bandwidth, sets the transfer time for small responses, which is why reused connections matter so much.",
+    "link": {
+      "title": "High Performance Browser Networking: Building blocks of TCP",
+      "url": "https://hpbn.co/building-blocks-of-tcp/"
+    }
+  },
+  {
+    "id": "net-transport-http-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A QUIC connection has independent streams A, B and C. One packet carrying only B application data is lost; later A/C bytes arrive in order with no missing header/control dependencies. Assume the loss triggers congestion-window reduction. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The A and C data that arrived can be delivered to the application straight away",
+        "explanation": "Correct. QUIC orders data per stream, so a gap in stream B doesn't hold back other streams."
+      },
+      {
+        "text": "Stream B's data after the gap waits until the lost data is retransmitted",
+        "explanation": "Correct. Ordering still applies *within* a stream, so B stalls until the gap is filled."
+      },
+      {
+        "text": "The connection's congestion controller treats the loss as a congestion signal, slowing sending for all streams",
+        "explanation": "Correct. Congestion control is per connection in QUIC, so loss still reduces the rate for everything, even though it no longer blocks delivery."
+      },
+      {
+        "text": "All three streams stall, just as they would over TCP",
+        "explanation": "That's HTTP/2's problem. Avoiding cross-stream blocking is the main reason QUIC exists."
+      },
+      {
+        "text": "The lost data is never resent, because QUIC runs over UDP",
+        "explanation": "QUIC implements its own acknowledgements and retransmission on top of UDP; it's a reliable transport."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Separate the three things loss can affect:\n\n1. **Delivery of other streams:** QUIC keeps a reorder buffer per stream → A and C unaffected.\n2. **Delivery of the same stream:** in-order within B → B waits for the retransmission.\n3. **Sending rate:** one congestion window per connection → everyone slows a bit.\n\nSo HTTP/3 removes *cross-stream* head-of-line blocking, not every effect of loss. And reliability is still there: QUIC detects the loss from its ACKs and resends the missing frames in a new packet.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "net-transport-http-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your site moved to HTTP/2 but still serves images from `img1.example.com`, `img2.example.com` and `img3.example.com`, a domain-sharding scheme from the HTTP/1.1 days. Each shard has its own IP and certificate. What's the effect now?",
+    "options": [
+      {
+        "text": "A big speed-up: three multiplexed connections are three times faster than one",
+        "explanation": "Multiplexing on one connection already removes the reason for sharding. Extra connections add setup cost and compete with each other; they don't triple speed."
+      },
+      {
+        "text": "Each shard costs its own DNS lookup, TCP and TLS handshakes and slow start, and splits traffic across separate congestion windows and priority schemes; removing the shards usually helps",
+        "explanation": "Correct. Sharding existed to get around the 6-connection limit. Under HTTP/2 it brings back the handshake cost and defeats the single-connection design."
+      },
+      {
+        "text": "No effect, because browsers merge all subdomains into one HTTP/2 connection automatically",
+        "explanation": "Browsers can only *coalesce* connections when the hostnames resolve to the same IP and one certificate covers them all. Separate IPs and certificates rule that out here."
+      },
+      {
+        "text": "Images will fail to load, because HTTP/2 forbids multiple hostnames",
+        "explanation": "HTTP/2 has no such rule. Pages load resources from many origins all the time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. HTTP/1.1 problem: one request at a time per connection, ~6 connections per origin → shard to get more connections.\n2. HTTP/2: multiple concurrent streams, subject to negotiated limits on one connection → that problem is gone.\n3. Keeping shards: 3 extra origins × (DNS + TCP + TLS) ≈ 3 extra round trips each, plus 3 fresh slow-start windows.\n4. Each connection is also prioritised separately, so the browser can't order images against CSS and scripts globally.\n5. Fix: serve from one origin, or make the shards coalescible (same IP, one certificate covering all names).",
+    "link": {
+      "title": "High Performance Browser Networking: HTTP/2",
+      "url": "https://hpbn.co/http2/"
+    }
+  },
+  {
+    "id": "net-transport-http-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You enable HTTP/3 behind an L4 load balancer that hashes each UDP packet's 4-tuple (source and destination IP and port) to pick a backend. Users on phones report that downloads restart whenever they walk out of Wi-Fi range onto mobile data. Why?",
+    "options": [
+      {
+        "text": "QUIC doesn't support connection migration",
+        "explanation": "It does: connections are identified by a connection ID, so they can survive an address change. The migration is failing at the load balancer, not in the protocol."
+      },
+      {
+        "text": "Mobile networks block HTTP/3",
+        "explanation": "If mobile networks blocked UDP, the connection would fall back to HTTP/2, not restart mid-download after a network change."
+      },
+      {
+        "text": "The phone's new IP address changes the 4-tuple, so the balancer hashes its packets to a different backend that has no state or keys for the connection",
+        "explanation": "Correct. The client migrated correctly, but the balancer routed by 4-tuple. Route by QUIC connection ID (for example with a QUIC-aware balancer that decodes server-chosen IDs) so packets keep reaching the same backend."
+      },
+      {
+        "text": "TLS session tickets expire when the IP changes",
+        "explanation": "Tickets aren't tied to the client's IP. And migration doesn't need a new handshake at all; the existing connection continues."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: phone on Wi-Fi, 4-tuple `(198.51.100.4:51000 → VIP:443)` → hashes to backend 3.\n2. Phone switches to mobile data: new source IP and port → new 4-tuple.\n3. QUIC on the phone continues the same connection using a valid server-issued connection ID (normally a different ID on a new path for privacy).\n4. The L4 balancer hashes the *new* 4-tuple → backend 7, which has never seen this connection → it can't decrypt and drops or resets.\n5. Fix: have backends encode a routing hint in the connection IDs they issue and have the balancer route on it (the IETF QUIC-LB work describes this), or use a QUIC-aware balancer.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "net-transport-http-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A site advertises HTTP/3 and also serves HTTPS over TCP. A browser supports TCP fallback; the customer's network blocks outbound UDP but permits TCP 443. What happens?",
+    "options": [
+      {
+        "text": "The site is unreachable from that network until HTTP/3 is disabled",
+        "explanation": "Here the server and browser both support the permitted TCP path, so blocking UDP does not make the site unreachable. This is not a guarantee for every possible client or deployment."
+      },
+      {
+        "text": "The site works over HTTP/2 (or HTTP/1.1) on TCP, perhaps after a short delay the first time QUIC is tried and fails",
+        "explanation": "Correct. Browsers race or fall back from QUIC to TCP, and remember that QUIC failed for a while. Users lose HTTP/3's benefits but nothing breaks."
+      },
+      {
+        "text": "The browser tunnels QUIC over TCP port 443",
+        "explanation": "Browsers don't encapsulate QUIC in TCP; they just use HTTP/2 over TCP and TLS instead."
+      },
+      {
+        "text": "Requests succeed over UDP port 53 instead",
+        "explanation": "Browsers don't move web traffic to the DNS port. UDP 53 is for DNS queries to resolvers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Discovery via `Alt-Svc` or an `HTTPS` DNS record tells the browser HTTP/3 is *available*, not mandatory.\n2. The browser attempts QUIC on UDP 443; the packets are dropped.\n3. It has a TCP connection racing alongside (or starts one after a short timeout) and uses HTTP/2 over it.\n4. It marks QUIC as broken for that network for a while, so later loads go straight to TCP.\n\nThis is why every HTTP/3 deployment still needs a healthy HTTP/2 path.",
+    "link": {
+      "title": "RFC 9114: HTTP/3",
+      "url": "https://www.rfc-editor.org/rfc/rfc9114"
+    }
+  }
+]

@@ -1,0 +1,167 @@
+[
+  {
+    "id": "fp-pure-functions-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these Python functions is pure?\n\n```python\nimport random\nCOUNT = 0\n\ndef a(x):\n    return x + random.random()\n\ndef b(xs):\n    xs.sort()\n    return xs\n\ndef c(xs):\n    return sorted(xs)\n\ndef d(x):\n    global COUNT\n    COUNT += 1\n    return x * 2\n```",
+    "options": [
+      { "text": "`a`", "explanation": "`a` reads from a random number generator, which is hidden state. Calling `a(1)` twice gives different results, so it fails the 'same input, same output' rule." },
+      { "text": "`b`", "explanation": "`b` returns a sensible value, but `xs.sort()` sorts the caller's list in place. That mutation is a side effect visible outside the function." },
+      { "text": "`c`", "explanation": "Correct. `sorted` builds and returns a new list, leaving the argument untouched, and the result depends only on `xs`." },
+      { "text": "`d`", "explanation": "The return value depends only on `x`, but incrementing a global is a side effect. Purity needs both conditions, not just a deterministic result." }
+    ],
+    "answer": 2,
+    "workedExample": "Check each function against the two rules.\n\n| Fn | Same in, same out? | No side effects? |\n|---|---|---|\n| a | No (random) | Yes |\n| b | Yes | No (mutates arg) |\n| c | Yes | Yes |\n| d | Yes | No (writes global) |\n\nOnly `c` passes both. Note that `d` is the trap: its *output* is deterministic, but a function that changes the world when called is still impure.",
+    "link": { "title": "Pure function — Wikipedia", "url": "https://en.wikipedia.org/wiki/Pure_function" }
+  },
+  {
+    "id": "fp-pure-functions-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this JavaScript print?\n\n```javascript\nconst xs = [1, 2, 3];\nxs.push(4);\nconsole.log(xs.length);\n```",
+    "options": [
+      { "text": "It throws a TypeError because `xs` is `const`", "explanation": "`const` stops you reassigning the name `xs`. It does not stop you changing the array the name points to." },
+      { "text": "`3`, because `push` on a `const` array is silently ignored", "explanation": "That describes writes to a *frozen* object in sloppy mode, not a `const` binding. The array here isn't frozen at all." },
+      { "text": "`4`", "explanation": "Correct. `const` makes the binding immutable, not the value. `push` mutates the array in place, so its length becomes 4." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `const xs = [1, 2, 3]` creates an array and binds the name `xs` to it permanently.\n2. `xs.push(4)` doesn't rebind `xs`; it changes the array object. That is allowed.\n3. The array is now `[1, 2, 3, 4]`, so `xs.length` is 4.\n4. Only `xs = []` would throw: `TypeError: Assignment to constant variable.`\n\nTo make the *value* immutable you'd need `Object.freeze(xs)` (shallow) or non-mutating methods like `[...xs, 4]`.",
+    "link": { "title": "const — MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/const" }
+  },
+  {
+    "id": "fp-pure-functions-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does *referential transparency* mean?",
+    "options": [
+      { "text": "Every variable can be inspected in a debugger", "explanation": "That's about tooling visibility. Referential transparency is a property of expressions, not of debuggers." },
+      { "text": "An expression can be replaced by its value without changing the program's behaviour", "explanation": "Correct. If `f(2)` is referentially transparent and equals 7, every `f(2)` in the program can be rewritten as `7`. Pure functions give you this." },
+      { "text": "Objects are passed by reference rather than copied", "explanation": "This confuses 'referential' with reference semantics. Passing by reference is about how arguments are passed; it actually makes mutation-based surprises *more* likely." },
+      { "text": "A function's source code is visible to its callers", "explanation": "Transparency here means 'you can see through the call to its value', not that source is readable." }
+    ],
+    "answer": 1,
+    "workedExample": "Take `y = f(x) + f(x)`.\n\n- If `f` is pure, you can rewrite it as `y = 2 * f(x)`, calling `f` once. The program means the same thing.\n- If `f` logs a line or increments a counter, the rewrite changes behaviour: one log line instead of two.\n\nThat substitution test (\"can I replace the call with its result?\") is referential transparency. It's what lets compilers, caches and humans rearrange pure code safely.",
+    "link": { "title": "Referential transparency — Wikipedia", "url": "https://en.wikipedia.org/wiki/Referential_transparency" }
+  },
+  {
+    "id": "fp-pure-functions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef add(item, bag=[]):\n    bag.append(item)\n    return bag\n\nadd(\"a\")\nadd(\"b\")\nprint(add(\"c\"))\n```",
+    "options": [
+      { "text": "`['c']`", "explanation": "This assumes the default `[]` is created fresh on every call. In Python, default values are evaluated once, when the `def` statement runs." },
+      { "text": "`['a', 'b', 'c']`", "explanation": "Correct. All three calls share the single default list, and each `append` mutates it. By the third call it holds all three items." },
+      { "text": "`['a']`", "explanation": "There's no reason the list would stop growing after the first call; the same object is reused and mutated every time." },
+      { "text": "A `TypeError`, because a list can't be a default", "explanation": "Mutable defaults are perfectly legal Python. That's exactly what makes this bug so common." }
+    ],
+    "answer": 1,
+    "workedExample": "1. When Python executes `def`, it evaluates `[]` once and stores that list object on the function (`add.__defaults__`).\n2. `add(\"a\")`: `bag` is that list; append gives `['a']`.\n3. `add(\"b\")`: same list; now `['a', 'b']`.\n4. `add(\"c\")`: same list; now `['a', 'b', 'c']`, which is printed.\n\nThe function is impure because it mutates state that outlives the call. The fix:\n\n```python\ndef add(item, bag=()):\n    return [*bag, item]\n```",
+    "link": { "title": "Python FAQ: why are default values shared between objects?", "url": "https://docs.python.org/3/faq/programming.html#why-are-default-values-shared-between-objects" }
+  },
+  {
+    "id": "fp-pure-functions-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What happens here?\n\n```python\nt = (1, [2, 3])\nt[1].append(4)\nprint(t)\nd = {t: \"x\"}\n```",
+    "options": [
+      { "text": "`t[1].append(4)` raises `TypeError` because tuples are immutable", "explanation": "The tuple's slots can't be reassigned, but slot 1 holds a list, and the list itself is mutable. `append` modifies the list, not the tuple." },
+      { "text": "It prints `(1, [2, 3, 4])`, then `d = {t: \"x\"}` raises `TypeError: unhashable type: 'list'`", "explanation": "Correct. Tuple immutability is shallow. And because the inner list could change, the tuple can't be hashed, so it can't be a dict key." },
+      { "text": "It prints `(1, [2, 3, 4])` and the dict is created normally", "explanation": "A tuple is only hashable if all its elements are. A tuple containing a list isn't, so it can't be used as a key." },
+      { "text": "It prints `(1, [2, 3])` because the tuple holds a copy of the list", "explanation": "Python stores references, not copies. The tuple and `t[1]` refer to the same list object." }
+    ],
+    "answer": 1,
+    "workedExample": "1. `t` is a tuple of two references: one to `1`, one to a list.\n2. `t[1]` fetches the list; `.append(4)` mutates that list. The tuple still holds the same two references, so tuple immutability isn't violated.\n3. `print(t)` shows `(1, [2, 3, 4])`.\n4. `hash(t)` hashes every element; `hash([2, 3, 4])` raises `TypeError: unhashable type: 'list'`.\n\nLesson: immutability in Python is shallow. For a deeply immutable value, use immutable types all the way down, e.g. `(1, (2, 3, 4))`.",
+    "link": { "title": "Data model: immutable sequences — Python docs", "url": "https://docs.python.org/3/reference/datamodel.html" }
+  },
+  {
+    "id": "fp-pure-functions-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague adds `@functools.lru_cache` to this function to speed up a web service. What goes wrong?\n\n```python\n@lru_cache\ndef price(sku):\n    base = db.get_price(sku)\n    return base * fx_rate()\n```",
+    "options": [
+      { "text": "Nothing; `lru_cache` makes any function faster with no change in behaviour", "explanation": "Caching is only behaviour-preserving for pure functions. This function reads a database and a live exchange rate, both of which can change." },
+      { "text": "It raises an error because `lru_cache` only works on recursive functions", "explanation": "`lru_cache` works on any function with hashable arguments. Recursive memoisation is a popular use, not a requirement." },
+      { "text": "Once a SKU is cached, later price or exchange-rate changes are ignored and stale prices are served", "explanation": "Correct. The cache assumes same input means same output. Here the output also depends on hidden inputs (DB contents, FX rate), so cached results go stale." },
+      { "text": "It leaks memory without bound because `lru_cache` never evicts", "explanation": "By default `lru_cache` has `maxsize=128` and evicts least-recently-used entries. Unbounded growth only happens with `maxsize=None`." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `lru_cache` maps arguments to results: `{'A1': 12.0}`.\n2. The first `price('A1')` queries the DB and FX rate, computes 12.0 and stores it.\n3. The DB price is updated, or the FX rate moves. Calling `price('A1')` returns the cached 12.0 without running the body.\n4. The real inputs were `sku`, the DB and the FX rate, but the cache key only includes `sku`.\n\nA safer design: make a pure core `compute(base, rate)` and only cache that, or add a TTL cache keyed on the inputs that actually vary.",
+    "link": { "title": "functools.lru_cache — Python docs", "url": "https://docs.python.org/3/library/functools.html#functools.lru_cache" }
+  },
+  {
+    "id": "fp-pure-functions-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these JavaScript array methods return a new array and leave the original unchanged? Select all that apply.",
+    "options": [
+      { "text": "`arr.sort()`", "explanation": "`sort` sorts in place and returns the same array. A common bug is `const sorted = arr.sort()`, which also reorders `arr`." },
+      { "text": "`arr.toSorted()`", "explanation": "Correct. Added in ES2023 as the non-mutating counterpart of `sort`." },
+      { "text": "`arr.map(f)`", "explanation": "Correct. `map` always builds a new array of the results." },
+      { "text": "`arr.reverse()`", "explanation": "`reverse` reverses in place. Its copying counterpart is `toReversed()`." },
+      { "text": "`arr.with(0, x)`", "explanation": "Correct. `with` returns a copy with one index replaced; it's the immutable form of `arr[0] = x`." }
+    ],
+    "answer": [1, 2, 4],
+    "workedExample": "Sort the methods into two buckets:\n\n| Mutates | Copies |\n|---|---|\n| `sort` | `toSorted` |\n| `reverse` | `toReversed` |\n| `splice` | `toSpliced` |\n| `a[i] = x` | `with(i, x)` |\n| `push` | `[...a, x]` |\n\n`map`, `filter`, `slice` and `concat` have always returned new arrays. The `to*` and `with` methods arrived in ES2023 to fill the gaps.",
+    "link": { "title": "Array.prototype.toSorted() — MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/toSorted" }
+  },
+  {
+    "id": "fp-pure-functions-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want to unit-test this function without mocking anything. What is the best refactor?\n\n```python\ndef is_overdue(invoice):\n    return date.today() > invoice.due\n```",
+    "options": [
+      { "text": "Pass the current date in as a parameter: `is_overdue(invoice, today)`", "explanation": "Correct. This turns a hidden input (the clock) into an explicit one. The function becomes pure, and the caller (the imperative shell) supplies `date.today()`." },
+      { "text": "Cache the result with `lru_cache` so it is deterministic", "explanation": "Caching an impure function doesn't make it pure; it just freezes whatever answer it gave first, which would be wrong tomorrow." },
+      { "text": "Store `date.today()` in a module-level global at import time", "explanation": "That's still a hidden input, now also stale. Tests would have to patch the global, which is a mock by another name." },
+      { "text": "Wrap the body in `try`/`except` so it never fails", "explanation": "Error handling is unrelated. The test difficulty comes from the hidden dependency on the clock." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Identify the hidden input: `date.today()` gives a different answer each day.\n2. Make it explicit:\n\n```python\ndef is_overdue(invoice, today):\n    return today > invoice.due\n```\n\n3. Now the test is trivial: `is_overdue(inv, date(2026, 1, 1))`.\n4. The shell calls `is_overdue(inv, date.today())`.\n\nThis is the functional-core/imperative-shell pattern in miniature: impurity becomes a parameter.",
+    "link": { "title": "Functional Core, Imperative Shell — Destroy All Software", "url": "https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell" }
+  },
+  {
+    "id": "fp-pure-functions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a React app, a reducer handles \"add todo\" like this. Users report the list doesn't re-render. Why?\n\n```javascript\nfunction reducer(state, action) {\n  state.todos.push(action.todo);\n  return state;\n}\n```",
+    "options": [
+      { "text": "`push` is asynchronous, so the update lands after rendering", "explanation": "`push` is synchronous. The data really is updated; the problem is how React detects that it changed." },
+      { "text": "The reducer returns the same object reference, so React's `prev !== next` check sees no change", "explanation": "Correct. React (and Redux) detect changes by reference equality. Mutating in place and returning the same object makes the new state `===` the old, so the re-render is skipped." },
+      { "text": "Reducers must return `undefined` to trigger a re-render", "explanation": "Returning `undefined` would wipe out state. Reducers must return the next state value." },
+      { "text": "`push` deep-freezes the array, blocking future changes", "explanation": "Nothing is frozen here. The issue is identity, not writability." }
+    ],
+    "answer": 1,
+    "workedExample": "1. React compares old and new state with `Object.is(prev, next)`, an O(1) reference check.\n2. The reducer mutates `state.todos` and returns `state`, the same object. `Object.is(prev, next)` is `true`.\n3. React concludes nothing changed and bails out.\n4. Fix by returning new objects along the changed path:\n\n```javascript\nreturn {\n  ...state,\n  todos: [...state.todos, action.todo],\n};\n```\n\nImmutability is what makes a cheap identity check a correct change check.",
+    "link": { "title": "Updating Objects in State — React docs", "url": "https://react.dev/learn/updating-objects-in-state" }
+  },
+  {
+    "id": "fp-pure-functions-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about purity are true? Select all that apply.",
+    "options": [
+      { "text": "A function that uses a local mutable list internally, but returns a fresh list and touches nothing else, can still be pure", "explanation": "Correct. Purity is about what's observable from outside. Local mutation that never escapes is invisible to callers." },
+      { "text": "If two calls `f(x)` appear in an expression and `f` is pure, a compiler may evaluate it once and reuse the result", "explanation": "Correct. That's common subexpression elimination, and referential transparency is what makes it safe." },
+      { "text": "Any function whose return value depends only on its arguments is pure", "explanation": "Deterministic output is only half the definition. A function can be deterministic and still write logs, mutate globals or send emails." },
+      { "text": "Calls to pure functions with no data dependency between them can be run in parallel without locks", "explanation": "Correct. With no shared mutable state, there's nothing to race on, so independent pure calls can run concurrently." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Go through each claim with the two-part definition: (1) output depends only on inputs, (2) no observable side effects.\n\n- A: local list is created per call and never escapes. Both rules hold. True.\n- B: if `f` is pure, `f(x) + f(x)` and `let y = f(x) in y + y` mean the same thing. True.\n- C: only checks rule 1. `def f(x): print(x); return x` is deterministic but impure. False.\n- D: purity means no shared mutable state, so no data races. True.\n\nHaskell's `ST` monad is the formal version of A: it allows real in-place mutation and the type system proves it doesn't escape.",
+    "link": { "title": "Pure function — Wikipedia", "url": "https://en.wikipedia.org/wiki/Pure_function" }
+  },
+  {
+    "id": "fp-pure-functions-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this print in a non-strict (sloppy mode) script?\n\n```javascript\nconst cfg = Object.freeze({\n  db: { host: \"a\" }, port: 1\n});\ncfg.port = 2;\ncfg.db.host = \"b\";\nconsole.log(cfg.port, cfg.db.host);\n```",
+    "options": [
+      { "text": "`1 a`", "explanation": "This assumes `Object.freeze` is deep. It isn't: the inner `db` object is not frozen, so its `host` can still change." },
+      { "text": "`2 b`", "explanation": "The outer object *is* frozen, so `cfg.port = 2` has no effect. Only the nested object is writable." },
+      { "text": "`1 b`", "explanation": "Correct. Freeze is shallow: `port` is protected (the write is silently ignored in sloppy mode), but `cfg.db` points to an ordinary object whose properties can still change." },
+      { "text": "A `TypeError` on `cfg.port = 2`", "explanation": "That happens in strict mode (modules and classes are strict by default). The question specifies a sloppy-mode script, where the write fails silently." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `Object.freeze` makes the *outer* object's own properties read-only and non-configurable.\n2. `cfg.port = 2`: `port` is read-only. In sloppy mode the assignment is ignored; `cfg.port` stays 1.\n3. `cfg.db` is read-only as a *reference*, but the object it points to was never frozen.\n4. `cfg.db.host = \"b\"` succeeds.\n5. Output: `1 b`.\n\nFor deep immutability, recursively freeze every nested object, or use a library like Immer.",
+    "link": { "title": "Object.freeze() — MDN", "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze" }
+  }
+]

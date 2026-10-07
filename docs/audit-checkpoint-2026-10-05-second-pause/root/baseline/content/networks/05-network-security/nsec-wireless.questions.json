@@ -1,0 +1,348 @@
+[
+  {
+    "id": "nsec-wireless-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does Wi-Fi need link-layer encryption in a way that a switched office Ethernet traditionally did not?",
+    "options": [
+      {
+        "text": "Wi-Fi uses a different IP protocol",
+        "explanation": "Wi-Fi carries the same IP packets as Ethernet; the difference is the medium."
+      },
+      {
+        "text": "Radio frames are received by anyone in range, so there is no physical boundary to keep eavesdroppers out",
+        "explanation": "Correct. On a cable you need physical access; on Wi-Fi, anyone in the car park can receive every frame."
+      },
+      {
+        "text": "Wi-Fi is slower, so attackers have more time",
+        "explanation": "Speed is irrelevant to whether frames can be captured."
+      },
+      {
+        "text": "Ethernet frames are already encrypted by switches",
+        "explanation": "Standard switches do not encrypt; Ethernet relies on physical access control (and optionally MACsec)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ethernet: to sniff, you must plug into the network or tap a cable inside the building.\n2. Wi-Fi: frames radiate through walls; a laptop with a directional antenna can capture from far away.\n3. So the protocol must provide access control, confidentiality and integrity that walls provide for cables.\n4. Even then, defence in depth (TLS on top) remains wise.",
+    "link": {
+      "title": "Wi-Fi Protected Access — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access"
+    }
+  },
+  {
+    "id": "nsec-wireless-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "WEP uses a 24-bit IV. Roughly how many frames before there is a 50% chance that some IV has repeated, assuming random IVs?",
+    "options": [
+      {
+        "text": "About 16.8 million",
+        "explanation": "That is 2^24, the total number of IVs. The birthday effect makes a repeat likely far sooner."
+      },
+      {
+        "text": "About 8.4 million",
+        "explanation": "Half of 2^24 is the expected wait for one specific value, not for any collision."
+      },
+      {
+        "text": "About 4,800",
+        "explanation": "Correct. By the birthday bound, a 50% collision chance arrives after about 1.18 × √(2^24) ≈ 1.18 × 4,096 ≈ 4,800 frames."
+      },
+      {
+        "text": "About 24",
+        "explanation": "24 is the bit length, not a count of frames."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Number of IVs: N = 2^24 = 16,777,216.\n2. Birthday bound: 50% chance of any collision after about √(2 ln 2 · N) samples.\n\n```\nsqrt(N) = 4,096\nx 1.1774 = ~4,823 frames\n```\n\n3. A busy network sends thousands of frames a second, so IVs repeat within seconds.\n4. Two frames with the same IV and key share a keystream; XOR them and the keystream cancels, leaking plaintext.",
+    "link": {
+      "title": "Birthday problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Birthday_problem"
+    }
+  },
+  {
+    "id": "nsec-wireless-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In WPA2-Personal, what is the role of the SSID in deriving the Pairwise Master Key?",
+    "options": [
+      {
+        "text": "It is the encryption key for broadcast traffic",
+        "explanation": "Broadcast traffic uses the GTK delivered in message 3."
+      },
+      {
+        "text": "It is not used; only the passphrase is",
+        "explanation": "The SSID is an input to PBKDF2."
+      },
+      {
+        "text": "It is used as the nonce in the four-way handshake",
+        "explanation": "The handshake nonces are the random ANonce and SNonce."
+      },
+      {
+        "text": "It is the salt for PBKDF2, so the same passphrase gives different PMKs on differently named networks",
+        "explanation": "Correct. PMK = PBKDF2(HMAC-SHA1, passphrase, SSID, 4096, 256 bits). Common SSIDs therefore share precomputed tables."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nPMK = PBKDF2(HMAC-SHA1,\n             passphrase,\n             salt = SSID,\n             4096 iterations,\n             256 bits)\n```\n\n1. The salt stops one big precomputed table working for every network.\n2. But the salt is the SSID, which is public and often a default (`linksys`, `NETGEAR`), so attackers precompute tables for popular SSIDs.\n3. Changing a default SSID helps a little; a strong passphrase helps a lot.",
+    "link": {
+      "title": "Wi-Fi Protected Access — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access"
+    }
+  },
+  {
+    "id": "nsec-wireless-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker captures a complete WPA2-Personal four-way handshake. Why can they now guess the passphrase without any further contact with the network?",
+    "options": [
+      {
+        "text": "Message 1 contains the passphrase hashed with MD5",
+        "explanation": "No message contains a hash of the passphrase directly; what leaks is enough to *check* guesses."
+      },
+      {
+        "text": "Every input to the PTK except the PMK is in the captured frames, so each guess can be tested by recomputing the MIC on message 2",
+        "explanation": "Correct. ANonce, SNonce and MACs are in clear. For each guess: PMK → PTK → MIC, compare with the captured MIC. No lockout is possible."
+      },
+      {
+        "text": "The AP sends the PMK in message 3",
+        "explanation": "Message 3 carries the GTK, encrypted; the PMK is never sent in Personal mode."
+      },
+      {
+        "text": "They cannot; WPA2 is immune to offline attacks",
+        "explanation": "This is WPA2-Personal's biggest weakness, and the main reason for WPA3's SAE."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Captured: ANonce (M1), SNonce + MIC (M2), both MACs.\n2. For a guess g:\n\n```\npmk = PBKDF2(g, ssid, 4096)\nptk = PRF(pmk, nonces, macs)\nmic = MIC(ptk, M2)\n```\n\n3. If `mic` equals the captured MIC, g is the passphrase.\n4. All offline: GPU speed is the only limit, at roughly a million guesses a second.\n5. SAE in WPA3 removes this: an eavesdropper sees nothing that verifies a guess.",
+    "link": {
+      "title": "Wi-Fi Protected Access — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access"
+    }
+  },
+  {
+    "id": "nsec-wireless-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An 8-character passphrase is drawn uniformly from lowercase letters. An attacker with an offline WPA2 handshake tests 10^6 guesses per second. What is the expected time to find it?",
+    "options": [
+      {
+        "text": "About 58 seconds",
+        "explanation": "26^8 is about 2.1 × 10^11, not 5.8 × 10^7."
+      },
+      {
+        "text": "About 58 hours",
+        "explanation": "58 hours is the time to search the *whole* space; on average you find it halfway through."
+      },
+      {
+        "text": "About 29 hours",
+        "explanation": "Correct. 26^8 ≈ 2.09 × 10^11; at 10^6/s the full search takes 2.09 × 10^5 s ≈ 58 hours; the expected time is half, about 29 hours."
+      },
+      {
+        "text": "Centuries",
+        "explanation": "Lowercase-only 8 characters is a small space for GPUs; this overestimates badly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\n26^8 = 208,827,064,576\n     ≈ 2.09 x 10^11\n2.09e11 / 1e6 = 208,827 s\n208,827 / 3600 ≈ 58 hours\nexpected = 58 / 2 ≈ 29 hours\n```\n\nContrast with five random words from a 7,776-word list:\n\n```\n7776^5 ≈ 2.8 x 10^19\n```\n\nThat is about 10^8 times larger, so hundreds of thousands of years at the same rate.",
+    "link": {
+      "title": "Wi-Fi Protected Access — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access"
+    }
+  },
+  {
+    "id": "nsec-wireless-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What did the KRACK attack actually cause a victim client to do?",
+    "options": [
+      {
+        "text": "Reveal the WPA2 passphrase",
+        "explanation": "KRACK does not recover the passphrase or the PMK."
+      },
+      {
+        "text": "Downgrade from WPA2 to WEP",
+        "explanation": "There is no WEP fallback; KRACK works within WPA2."
+      },
+      {
+        "text": "Join an attacker's access point with a different SSID",
+        "explanation": "The attacker relays the real network on another channel; the client still joins the real SSID."
+      },
+      {
+        "text": "Reinstall an already-in-use session key on a retransmitted message 3, resetting its packet number so nonces and keystream were reused",
+        "explanation": "Correct. Nonce reuse lets the attacker decrypt (and with TKIP/GCMP forge) frames, repeating WEP's core mistake."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The attacker positions as a MITM on a different channel.\n2. They block message 4, so the AP retransmits message 3.\n3. The client, following the standard, installs the PTK again on the second M3.\n4. Installing resets the transmit packet number (the CCMP nonce) to its initial value.\n5. New frames reuse nonces already used under the same key → identical keystream → XOR of two ciphertexts reveals plaintext.\n6. Fix: never reinstall a key already in use. A client-side patch, compatible with unpatched APs.",
+    "link": {
+      "title": "Key Reinstallation Attacks (KRACK)",
+      "url": "https://www.krackattacks.com/"
+    }
+  },
+  {
+    "id": "nsec-wireless-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these does WPA3-Personal improve compared with WPA2-Personal? Select all that apply.",
+    "options": [
+      {
+        "text": "Captured handshakes can no longer be used to test passphrase guesses offline",
+        "explanation": "Correct. SAE reveals nothing that verifies a guess; each guess needs a live, rate-limitable exchange."
+      },
+      {
+        "text": "Learning the password later does not decrypt previously recorded sessions",
+        "explanation": "Correct. SAE gives forward secrecy because each session's PMK comes from fresh ephemeral values."
+      },
+      {
+        "text": "Forged deauthentication frames are rejected, because Protected Management Frames are mandatory",
+        "explanation": "Correct. PMF (802.11w) authenticates deauth/disassoc frames."
+      },
+      {
+        "text": "Weak passphrases become safe against all attacks",
+        "explanation": "Incorrect. Online guessing still works, slowly, and transition-mode downgrade can expose a WPA2 handshake."
+      },
+      {
+        "text": "Open café networks become authenticated",
+        "explanation": "Incorrect. That is not WPA3-Personal; OWE encrypts open networks but authenticates nobody, so evil twins still work."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "| Improvement | WPA3-Personal? |\n|---|---|\n| No offline dictionary | Yes, SAE |\n| Forward secrecy | Yes, SAE |\n| Anti-deauth | Yes, PMF |\n| Weak password safe | No |\n| Open nets authenticated | No |\n\nA strong passphrase still matters: SAE stops the *offline* attack, not someone trying guesses against the AP.",
+    "link": {
+      "title": "Dragonblood — Mathy Vanhoef",
+      "url": "https://wpa3.mathyvanhoef.com/"
+    }
+  },
+  {
+    "id": "nsec-wireless-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An office runs its AP in WPA3 transition mode so old laptops can still connect with WPA2. Why does this weaken security even for WPA3-capable clients?",
+    "options": [
+      {
+        "text": "WPA3 clients must use TKIP in transition mode",
+        "explanation": "Transition mode uses CCMP for WPA2 clients; TKIP is not involved."
+      },
+      {
+        "text": "An attacker can advertise a WPA2-only copy of the network, lure a client into a WPA2 handshake and crack the captured handshake offline",
+        "explanation": "Correct. This is the Dragonblood downgrade. The same password is used for both modes, so cracking the WPA2 handshake gives the WPA3 password too."
+      },
+      {
+        "text": "Transition mode disables PMF entirely",
+        "explanation": "PMF is optional for WPA2 clients in transition mode, but the core weakness is the downgrade to a crackable handshake."
+      },
+      {
+        "text": "SAE is turned off in transition mode",
+        "explanation": "SAE is still used by WPA3 clients; the problem is that WPA2 is also accepted with the same password."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Transition mode: the AP accepts SAE (WPA3) *and* PSK (WPA2) with the same passphrase.\n2. The attacker sets up a rogue AP with the same SSID offering only WPA2.\n3. A client that remembers the network (and does not enforce WPA3 for it) starts a WPA2 handshake.\n4. The attacker gets M1–M2: enough for offline guessing.\n5. The cracked passphrase also unlocks the WPA3 side.\n6. Mitigations: clients remembering that a network supports WPA3 (\"transition disable\"), and retiring WPA2 devices.",
+    "link": {
+      "title": "Dragonblood — Mathy Vanhoef",
+      "url": "https://wpa3.mathyvanhoef.com/"
+    }
+  },
+  {
+    "id": "nsec-wireless-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company uses WPA2-Enterprise with PEAP-MSCHAPv2. Laptops are configured to accept any server certificate. What attack does this enable?",
+    "options": [
+      {
+        "text": "Offline cracking of the shared WPA2 passphrase",
+        "explanation": "Enterprise mode has no shared passphrase; each user's PMK comes from RADIUS."
+      },
+      {
+        "text": "KRACK",
+        "explanation": "KRACK is a handshake implementation flaw unrelated to certificate validation."
+      },
+      {
+        "text": "An evil-twin AP with its own RADIUS server completes the PEAP tunnel and captures users' MSCHAPv2 exchanges, which can be cracked to recover passwords",
+        "explanation": "Correct. The TLS tunnel only protects the password if the client checks it ends at the real server."
+      },
+      {
+        "text": "Nothing, because the password is inside a TLS tunnel",
+        "explanation": "A tunnel to an unverified server is a tunnel to the attacker."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. PEAP: client builds TLS to the RADIUS server, then runs MSCHAPv2 inside.\n2. If the client does not check the server certificate, any certificate is accepted.\n3. Attacker: same SSID, stronger signal, their own RADIUS (e.g. hostapd-based).\n4. Clients connect, build TLS to the attacker and run MSCHAPv2.\n5. MSCHAPv2 reduces to one DES key search, so the captured exchange yields the password or its NT hash.\n6. Fix: deploy profiles that pin the CA and server name, or move to EAP-TLS with client certificates.\n\nThis is lesson 1's MITM principle again: encryption without authentication protects nothing.",
+    "link": {
+      "title": "IEEE 802.1X — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/IEEE_802.1X"
+    }
+  },
+  {
+    "id": "nsec-wireless-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which are genuine advantages of 802.1X (WPA2/WPA3-Enterprise) over a shared passphrase for a 500-person office? Select all that apply.",
+    "options": [
+      {
+        "text": "Each user and session gets its own PMK, so one employee cannot decrypt another's traffic",
+        "explanation": "Correct. With a shared PSK, anyone who knows it and sees a handshake can derive another client's PTK."
+      },
+      {
+        "text": "A departing employee's access can be revoked without changing everyone's password",
+        "explanation": "Correct. Disable their account or certificate on the RADIUS/identity side."
+      },
+      {
+        "text": "RADIUS can assign users to VLANs by role",
+        "explanation": "Correct. That ties Wi-Fi into network segmentation."
+      },
+      {
+        "text": "No server-side infrastructure is required",
+        "explanation": "Incorrect. You need a RADIUS server, a directory and, for EAP-TLS, a PKI."
+      },
+      {
+        "text": "It makes the four-way handshake unnecessary",
+        "explanation": "Incorrect. The four-way handshake still runs, using the PMK delivered by RADIUS."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Per-user keys: RADIUS sends the AP a unique key per authentication, so PMKs differ between users.\n2. Revocation: per account, not per network.\n3. Role-based VLANs: staff, contractors and devices land in different segments.\n4. Costs: RADIUS, directory integration, certificate management, client configuration.\n5. The flow is still: EAP → PMK → four-way handshake → PTK.",
+    "link": {
+      "title": "IEEE 802.1X — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/IEEE_802.1X"
+    }
+  },
+  {
+    "id": "nsec-wireless-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why did the WEP integrity check (CRC-32) fail to stop attackers modifying encrypted frames?",
+    "options": [
+      {
+        "text": "CRC-32 is linear, so flipping chosen bits in the ciphertext changes the checksum predictably and the attacker can fix it up without the key",
+        "explanation": "Correct. With a stream cipher, flipping ciphertext bits flips the same plaintext bits, and the CRC change can be computed and applied in the encrypted ICV too."
+      },
+      {
+        "text": "CRC-32 is only 32 bits, so attackers brute-force it",
+        "explanation": "The size is not the main problem; even a larger CRC would be linear and forgeable."
+      },
+      {
+        "text": "The CRC was sent unencrypted",
+        "explanation": "The ICV was encrypted along with the data; it was still forgeable because of linearity."
+      },
+      {
+        "text": "WEP had no integrity check",
+        "explanation": "It had one, CRC-32, which detects accidents but not attackers."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. RC4 is a stream cipher: ciphertext = plaintext ⊕ keystream.\n2. Flip bit i of ciphertext → bit i of plaintext flips.\n3. CRC is linear: CRC(a ⊕ b) = CRC(a) ⊕ CRC(b) ⊕ c, for a constant c depending only on the length.\n4. So for a desired change Δ, the attacker XORs Δ into the data and CRC(Δ) ⊕ c into the encrypted ICV.\n5. The frame still checks out.\n\nLesson: integrity needs a keyed MAC (WPA2 uses CCMP, which authenticates every frame).",
+    "link": {
+      "title": "Wired Equivalent Privacy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wired_Equivalent_Privacy"
+    }
+  }
+]

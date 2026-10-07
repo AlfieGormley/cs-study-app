@@ -1,0 +1,388 @@
+[
+  {
+    "id": "arch-multi-region-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A company's RPO is 5 minutes and RTO is 1 hour. What does that mean?",
+    "options": [
+      {
+        "text": "They can lose at most 5 minutes of data and must be back up within 1 hour of a disaster.",
+        "explanation": "Correct. RPO (recovery point objective) bounds data loss measured in time; RTO (recovery time objective) bounds downtime."
+      },
+      {
+        "text": "They can be down for at most 5 minutes and lose at most 1 hour of data.",
+        "explanation": "Wrong. This swaps the two. RPO is about data loss (the point you recover *to*); RTO is about time to recover."
+      },
+      {
+        "text": "Backups run every hour and take 5 minutes.",
+        "explanation": "Wrong. RPO and RTO are objectives, not backup schedules. Hourly backups would actually give an RPO of up to an hour, missing the 5-minute target."
+      },
+      {
+        "text": "Replication lag must always be exactly 5 minutes.",
+        "explanation": "Wrong. RPO is a maximum tolerable loss. Normal replication lag should be well below it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. RPO = 'how far back in time might we have to go?' Here, at most 5 minutes of writes lost.\n   - So async replication with lag well under 5 min, or backups/log shipping at least every 5 min.\n2. RTO = 'how long until service is restored?' Here, within 1 hour.\n   - Backup-and-restore of a large DB may take longer, so a pilot-light or warm standby is likely needed.\n3. Tighter objectives (RPO 0, RTO seconds) push you towards synchronous replication and active-active, at higher cost.",
+    "link": {
+      "title": "AWS: Disaster recovery options in the cloud",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A UK-based service has growing numbers of users in Australia, who complain about slowness. Each page makes 4 sequential API round trips to London (about 280 ms each). What's the main benefit of serving them from an Australian region?",
+    "options": [
+      {
+        "text": "It removes most of the ~1.1 s of network latency per page, because round trips to a nearby region take a few tens of milliseconds instead of ~280 ms.",
+        "explanation": "Correct. Distance sets a hard floor on round-trip time. 4 × 280 ms ≈ 1.1 s becomes 4 × ~20 ms ≈ 80 ms when served locally."
+      },
+      {
+        "text": "It makes the London servers' CPUs faster.",
+        "explanation": "Wrong. Server CPU speed isn't the issue. The delay is propagation time over about 17,000 km of fibre."
+      },
+      {
+        "text": "Nothing; the speed of light is fast enough that distance doesn't matter.",
+        "explanation": "Wrong. Light in fibre covers about 200 km/ms, so London to Sydney is at least ~85 ms one way. Distance matters a lot for chatty pages."
+      },
+      {
+        "text": "It guarantees strong consistency with London.",
+        "explanation": "Wrong. Adding a region makes consistency *harder*. Cross-region replication is either slow (sync) or lagging (async)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Distance London–Sydney ≈ 17,000 km; fibre ≈ 200 km/ms, so ≈ 85 ms one way, 170 ms round trip at the physical minimum. Real routes give ~250–300 ms.\n2. Per page: 4 sequential trips × 280 ms ≈ 1,120 ms of pure network wait.\n3. Local region: ~10–30 ms RTT, so 4 × 20 ≈ 80 ms.\n4. Saving ≈ 1 s per page.\n5. Cheaper partial fixes first: a CDN for static assets, and fewer sequential round trips (batch the API calls).",
+    "link": {
+      "title": "Azure Architecture Center: Geode pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/geodes"
+    }
+  },
+  {
+    "id": "arch-multi-region-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run active-active across two regions, each at 70% CPU in normal operation. One region fails and all its traffic moves to the other. What happens, and what's the principle?",
+    "options": [
+      {
+        "text": "The survivor needs about 140% of its capacity, so it overloads; in an N-region active-active setup, each region must have headroom to absorb the failed region's share.",
+        "explanation": "Correct. 70% + 70% = 140% of one region's capacity. With 2 regions, normal utilisation must stay under about 50% (or the survivor must autoscale fast enough) for failover to work."
+      },
+      {
+        "text": "The surviving region runs at 70%, because load balancers spread traffic evenly.",
+        "explanation": "Wrong. The survivor now gets both regions' traffic. The load balancer can't spread it to a region that's down."
+      },
+      {
+        "text": "The failed region's traffic is dropped, and the survivor stays at 70%.",
+        "explanation": "Wrong. That defeats the purpose of active-active. Routing will send failed-region users to the survivor."
+      },
+      {
+        "text": "Active-active doesn't need spare capacity because both regions are already serving traffic.",
+        "explanation": "Wrong. Serving traffic in both regions removes the idle *standby*, but each region still needs headroom for the other's load during failure."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Total load = 2 regions × 70% = 140% of one region's capacity.\n2. After failure, one region must handle 140%, so it overloads and the outage can cascade into the second region.\n3. General rule for N equal regions surviving 1 failure: each region's max normal utilisation = (N − 1) / N.\n   - N = 2: 50%\n   - N = 3: 67%\n   - N = 4: 75%\n4. So more regions mean less wasted headroom, but more complexity.\n5. Also cap traffic shifts and shed load so a failover can't knock over the survivor.",
+    "link": {
+      "title": "AWS: Disaster recovery options in the cloud",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your user profiles are stored in DynamoDB global tables replicated across eu-west-1 and us-east-1. A user updates their display name in the EU at the same moment a support agent in the US updates the same user's email address. Both write the whole item. What does DynamoDB global tables do by default?",
+    "options": [
+      {
+        "text": "It merges both changes field by field, so the item ends up with the new name and the new email.",
+        "explanation": "Wrong. Global tables don't merge fields. Conflicting writes to the same item are resolved for the item as a whole."
+      },
+      {
+        "text": "It applies last-writer-wins: one whole-item write survives and the other's change is silently lost.",
+        "explanation": "Correct. Global tables (in their default multi-region eventual consistency mode) reconcile concurrent writes with last-writer-wins, so one of the two updates disappears with no error."
+      },
+      {
+        "text": "It rejects the second write with a conflict error.",
+        "explanation": "Wrong. Both regions accept the writes locally. The conflict is resolved later during replication, without errors to either writer."
+      },
+      {
+        "text": "It keeps both versions as siblings for the application to resolve.",
+        "explanation": "Wrong. That's the Riak/Dynamo-paper approach, not DynamoDB global tables."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. EU writes `{name: 'Sam', email: old}`; US writes `{name: old, email: new}` at the same moment.\n2. Each region accepts its own write locally and replicates asynchronously.\n3. Conflict resolution: the write with the later timestamp wins everywhere.\n4. Outcome: either the new name or the new email is lost.\n5. Mitigations:\n   - Use `UpdateItem` on just the changed attribute (`SET email = :e`) instead of overwriting the whole item. This narrows the window, but concurrent updates to the *same* attribute still conflict.\n   - Route writes for a user to their home region.\n   - Use a strongly consistent multi-region mode if your store offers one, accepting higher write latency.",
+    "link": {
+      "title": "AWS: DynamoDB global tables",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GlobalTables.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An EU healthcare customer requires that patient data never leaves the EU. Your platform runs in eu-central-1 and us-east-1. Which copies of data must you check? Select all that apply.",
+    "options": [
+      {
+        "text": "Database backups and snapshots, including cross-region DR copies.",
+        "explanation": "Correct. Backups are full copies of personal data. Automatic cross-region snapshot copy to us-east-1 would breach the requirement."
+      },
+      {
+        "text": "Application logs and error-tracking events that include request payloads.",
+        "explanation": "Correct. Logs often contain names, IDs or health details and are frequently shipped to a central (possibly US) logging service."
+      },
+      {
+        "text": "The search index and caches built from patient records.",
+        "explanation": "Correct. Derived copies are still personal data. A global search cluster or a cache in the US would break residency."
+      },
+      {
+        "text": "The global product catalogue of software features, which contains no personal data.",
+        "explanation": "Wrong. Data without personal information isn't in scope for this requirement, so it can be replicated globally."
+      },
+      {
+        "text": "Analytics events flowing into the data warehouse.",
+        "explanation": "Correct. Analytics pipelines frequently centralise data. Events about EU patients must be processed and stored in EU-resident infrastructure."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "1. Residency applies to *every* copy of in-scope data, not just the primary database.\n2. List the places data flows: primary DB, replicas, backups, DR copies, caches, search indexes, queues, logs, traces, analytics, support tools, third-party processors.\n3. For each, ask: does it contain patient data, and where is it stored or processed?\n4. Keep EU tenants' cells, backups and DR pairs inside the EU (e.g. Frankfurt ↔ Ireland), and scrub or regionalise logs and analytics.\n5. The catalogue has no personal data, so it's out of scope.\n6. Answer: 0, 1, 2 and 4.",
+    "link": {
+      "title": "Azure Architecture Center: Deployment Stamps pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/deployment-stamp"
+    }
+  },
+  {
+    "id": "arch-multi-region-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A global ticketing platform must never sell the same seat twice, and wants low-latency browsing worldwide. Which data architecture fits best?",
+    "options": [
+      {
+        "text": "Active-active with multi-region writes and last-writer-wins for seat records.",
+        "explanation": "Wrong. LWW would silently discard one of two concurrent sales. Both buyers get a confirmation and the seat is double-sold."
+      },
+      {
+        "text": "Replicate seat maps globally for browsing; route seat reservations for each event to a single home region (or a strongly consistent store) so each seat has one serialised writer.",
+        "explanation": "Correct. Browsing tolerates slightly stale availability and is served locally; the invariant-critical write path has exactly one authority, paying the cross-region latency only on the purchase step."
+      },
+      {
+        "text": "Use CRDT sets so each region can add seat sales independently and merge later.",
+        "explanation": "Wrong. CRDTs guarantee convergence, not invariants. Both sales would merge into the set, still selling the seat twice."
+      },
+      {
+        "text": "Active-passive, with all browsing and purchases served from one region.",
+        "explanation": "Wrong. It's correct for the invariant, but browsing from one region gives distant users high latency, which fails the second requirement."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Split the workload:\n   - Browsing: read-heavy, staleness of a few seconds acceptable.\n   - Reserving: needs a global invariant (one sale per seat).\n2. Browsing: async replicas or caches in every region, so ~20 ms reads.\n3. Reserving: one writer per event, e.g. event 123's home region is eu-west-1. A buyer in Sydney sends the reservation there (≈ 280 ms), which runs a conditional write `reserve seat if status = free`.\n4. Alternatively, a consensus-based store (Spanner, CockroachDB) gives serialisable writes across regions at similar latency.\n5. A ~300 ms extra on the purchase click is acceptable; a double-sold seat isn't.",
+    "link": {
+      "title": "Wikipedia: Conflict-free replicated data type",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "arch-multi-region-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A SaaS company already runs in three regions, yet most of its major outages last year were caused by bad deploys and one large customer's runaway workload, each affecting every customer in a region. Which change most directly reduces the impact of these incidents?",
+    "options": [
+      {
+        "text": "Add a fourth region.",
+        "explanation": "Wrong. The incidents weren't regional infrastructure failures. A bad deploy or noisy tenant would hit the fourth region's customers in the same way."
+      },
+      {
+        "text": "Move to a cell-based architecture: split each region into independent, size-capped cells with no shared state, map each customer to one cell, and deploy to cells in waves.",
+        "explanation": "Correct. Cells limit blast radius to a fraction of customers. A bad deploy is caught in the first cell, and a runaway tenant only affects its own cell (or gets a dedicated one)."
+      },
+      {
+        "text": "Switch from active-passive to active-active.",
+        "explanation": "Wrong. Active-active changes how regions share traffic. Within each region, every customer still shares the same deployment and the same noisy neighbours."
+      },
+      {
+        "text": "Increase the size of each region's database.",
+        "explanation": "Wrong. More capacity may delay saturation from the runaway tenant, but it doesn't isolate it and does nothing about bad deploys."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Classify the incidents: self-inflicted (deploys) and noisy neighbour (one tenant). Neither is a region outage.\n2. Multi-region protects against region failure; what's needed is isolation *within* regions.\n3. Cells: say 10 cells per region, each a full stack (app, DB, cache, queues), sized to a tested maximum.\n   - Bad deploy → first wave is 1 cell = 1/30 of customers, caught by alarms, rolled back.\n   - Runaway tenant → only its cell's customers are affected; move it to a dedicated cell.\n4. Keep the cell router very thin and static (customer → cell lookup) so it isn't itself a shared failure point.\n5. Shuffle sharding can shrink overlap between customers even further.",
+    "link": {
+      "title": "AWS: What is a cell-based architecture?",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A payments database in London synchronously replicates every commit to a replica in Virginia before acknowledging (RTT about 75 ms). A checkout flow performs 4 sequential commits. Compared with async replication, roughly how much latency does sync replication add to checkout, and what do you get for it?",
+    "options": [
+      {
+        "text": "About 75 ms in total, because replication happens once per checkout.",
+        "explanation": "Wrong. Each commit waits for its own round trip, so the cost is per commit, not per flow."
+      },
+      {
+        "text": "Nothing noticeable, because replication runs in the background.",
+        "explanation": "Wrong. That describes async replication. Sync means the commit isn't acknowledged until the remote replica confirms."
+      },
+      {
+        "text": "About 300 ms (4 × 75 ms), in exchange for RPO = 0 if London is lost; and if Virginia is unreachable, commits stall unless you fall back to async.",
+        "explanation": "Correct. Every sequential commit pays one inter-region round trip. The reward is no data loss on regional failure; the cost is latency and availability coupling."
+      },
+      {
+        "text": "About 4 × 1–2 ms, the same as cross-AZ replication.",
+        "explanation": "Wrong. Cross-AZ links are 1–2 ms; transatlantic round trips are tens of milliseconds."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Sync commit = local work + wait for the remote ack ≈ +75 ms.\n2. 4 sequential commits → +300 ms.\n3. Gain: RPO = 0 for London's loss.\n4. Cost: if the link fails, you choose between stopping writes (consistency) or degrading to async (availability). That's PACELC.\n5. Alternatives: fewer commits per flow, or sync to a nearby region (e.g. London → Ireland, about 10 ms) and async further away.",
+    "link": {
+      "title": "AWS: Disaster recovery options in the cloud",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run active-active across 4 equal regions and want to survive the loss of any one region without overload. What's the highest safe normal utilisation per region, and how does that compare with 2 regions?",
+    "options": [
+      {
+        "text": "50%, the same as with 2 regions.",
+        "explanation": "Wrong. With more regions, each survivor absorbs only a share of the failed region's load."
+      },
+      {
+        "text": "100%, because the other regions will autoscale.",
+        "explanation": "Wrong. Autoscaling takes minutes and may itself be impaired. You need standing headroom."
+      },
+      {
+        "text": "25%, one quarter of capacity.",
+        "explanation": "Wrong. That over-provisions heavily; 25% is the share of load each region carries, not its utilisation limit."
+      },
+      {
+        "text": "75%: after a failure, 3 regions carry 4 regions' load, so each must be at most 3/4 loaded normally; with 2 regions it's 50%.",
+        "explanation": "Correct. The rule is (N − 1) / N. More regions waste less headroom, at the cost of more complexity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Total load L spread over 4 regions: L/4 each.\n2. Lose 1 → 3 regions carry L → L/3 each.\n3. Require L/3 ≤ capacity C → L/4 ≤ 0.75 C.\n4. Max normal utilisation = 75%.\n5. N = 2 → 50%; N = 3 → 67%; N = 4 → 75%.\n6. Also leave margin for retry storms and cold caches in the survivors.",
+    "link": {
+      "title": "AWS: What is a cell-based architecture?",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You need a global \"likes\" counter per post that every region can increment locally, with no lost increments, even during a network partition. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A G-Counter CRDT works: each region increments only its own slot, and the value is the sum of all slots.",
+        "explanation": "Correct. Merging takes the maximum of each slot, which is commutative and idempotent, so all replicas converge without losing increments."
+      },
+      {
+        "text": "Last-writer-wins on a single integer works just as well.",
+        "explanation": "Wrong. If EU writes 101 and US writes 101 from 100, LWW keeps one 101, losing an increment."
+      },
+      {
+        "text": "Supporting un-likes needs a PN-Counter: one G-Counter for increments and one for decrements, with value = P − N.",
+        "explanation": "Correct. G-Counters only grow, so decrements are tracked in a second counter."
+      },
+      {
+        "text": "During a partition, each region shows a slightly different total, and they converge once replication resumes.",
+        "explanation": "Correct. That's the eventual consistency you accept for availability and local writes."
+      },
+      {
+        "text": "CRDTs can also enforce \"likes may never exceed 1,000\" across regions.",
+        "explanation": "Wrong. A global upper bound is an invariant needing coordination; CRDTs guarantee convergence, not constraints."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. G-Counter state: `{eu: 40, us: 61}` → value 101.\n2. EU +1 → `{eu: 41, us: 61}`; US +1 → `{eu: 40, us: 62}`.\n3. Merge = slot-wise max → `{eu: 41, us: 62}` → 103. No increment lost.\n4. LWW on an int: both write 102 from 101, one wins, so 102. Lost.\n5. Un-like: PN-Counter = P − N.\n6. Invariants (caps, uniqueness) need a single writer or consensus.",
+    "link": {
+      "title": "Wikipedia: Conflict-free replicated data type",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "arch-multi-region-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service has 100 workers. With plain sharding, customers are split into 25 groups of 4 workers each, and one customer's poison requests crash all 4 workers in its group. With shuffle sharding, each customer is instead assigned a random combination of 4 of the 100 workers. Why is the blast radius so much smaller?",
+    "options": [
+      {
+        "text": "Shuffle sharding gives each customer more workers, so the bad customer can't crash them all.",
+        "explanation": "Wrong. Each customer still has 4 workers, and the poison customer still crashes its own 4."
+      },
+      {
+        "text": "Other customers almost never share all 4 of the same workers, so nearly all still have healthy workers to retry on; with C(100, 4) ≈ 3.9 million possible combinations, a full overlap is very unlikely.",
+        "explanation": "Correct. In plain sharding, everyone in the bad group loses all their workers. In shuffle sharding, most customers overlap with the bad customer on at most one or two workers, so retries reach healthy ones."
+      },
+      {
+        "text": "Shuffle sharding detects and blocks poison requests automatically.",
+        "explanation": "Wrong. It doesn't recognise bad requests; it limits how many others share the same fate."
+      },
+      {
+        "text": "It moves the bad customer to a different region.",
+        "explanation": "Wrong. It's an assignment scheme within a fleet, not cross-region routing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Plain: 25 groups, so a bad customer takes down 1/25 of customers entirely (4%).\n2. Shuffle: number of 4-worker combinations = C(100, 4) = 3,921,225.\n3. The chance another customer has exactly the same 4 workers ≈ 1 in 3.9 million.\n4. Most customers share 0 or 1 workers with the bad one, so they lose at most a quarter of their capacity, and retry elsewhere.\n5. Requires clients to retry across their assigned workers.",
+    "link": {
+      "title": "AWS Builders' Library: Workload isolation using shuffle-sharding",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  },
+  {
+    "id": "arch-multi-region-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "At 14:02 a faulty migration deletes 30% of rows in your primary database in eu-west-1. It replicates asynchronously to a warm standby in eu-central-1 with about 1 s of lag. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Failing over to eu-central-1 recovers the deleted rows.",
+        "explanation": "Wrong. The deletes replicated within about a second, so the standby is missing the same rows."
+      },
+      {
+        "text": "You need a point-in-time restore from backups or log archives to a moment just before 14:02.",
+        "explanation": "Correct. Point-in-time recovery from backups plus the write-ahead log can restore to just before the bad migration."
+      },
+      {
+        "text": "For this incident, the effective RPO depends on your backup and log-archive cadence, not on replication lag.",
+        "explanation": "Correct. Replication lag sets RPO for losing a region; for logical corruption, the backups set it."
+      },
+      {
+        "text": "Writes made after 14:02 must be reconciled after the restore, because a point-in-time restore discards them.",
+        "explanation": "Correct. Rows written after the restore point have to be replayed or merged deliberately."
+      },
+      {
+        "text": "Keeping backups in a separate account protects them from the same mistake or a compromised credential.",
+        "explanation": "Correct. Isolation stops a single bad actor or script from deleting both the data and its backups."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "workedExample": "1. Replication copies *everything*, including deletes. The standby is equally broken.\n2. Recovery: restore a snapshot, replay the WAL to 14:01:59.\n3. Data written between 14:02 and the restore must be extracted and reconciled.\n4. RPO for corruption = how fine-grained your backups/log archives are.\n5. Separate accounts guard against 'delete the backups too'.",
+    "link": {
+      "title": "AWS: Disaster recovery options in the cloud",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  }
+]

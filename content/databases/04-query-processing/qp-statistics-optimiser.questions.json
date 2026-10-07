@@ -1,0 +1,348 @@
+[
+  {
+    "id": "qp-statistics-optimiser-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`pg_stats` for `orders.status` (1,000,000 rows) shows:\n\n```\nmost_common_vals:\n  {shipped,cancelled,pending}\nmost_common_freqs:\n  {0.8976,0.0716,0.0308}\n```\n\nHow many rows will the planner estimate for `WHERE status = 'cancelled'`?",
+    "options": [
+      {
+        "text": "333,333",
+        "explanation": "That's 1/3, treating the three values as equally common. The MCV list exists precisely so the planner doesn't have to assume that."
+      },
+      {
+        "text": "71,600",
+        "explanation": "Correct. 'cancelled' is in the MCV list, so the planner uses its measured frequency: 0.0716 x 1,000,000."
+      },
+      {
+        "text": "5,000",
+        "explanation": "That's the 0.5% default for equality when there are no usable statistics. Here there are."
+      },
+      {
+        "text": "1",
+        "explanation": "A 1-row estimate happens when a value appears to be absent from the sample. 'cancelled' is clearly present."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Is the value in `most_common_vals`? Yes, in position 2.\n2. Take the matching frequency: 0.0716.\n3. Multiply by the table's row count:\n\n```\n0.0716 x 1,000,000 = 71,600\n```\n\nThe illustrative estimate is `rows=71600`. ANALYZE samples large tables (typically about 30,000 rows with the default target for built-in scalar types), so sampled frequency need not equal the true frequency.",
+    "link": {
+      "title": "Row estimation examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For `orders.customer_id`, `pg_stats` shows `n_distinct = 91709` and no most-common values. The table has 1,000,000 rows and no NULL customer IDs. What does the planner estimate for `WHERE customer_id = 42`?",
+    "options": [
+      {
+        "text": "About 91,709",
+        "explanation": "That's the number of distinct values, not the rows per value. It inverts the calculation."
+      },
+      {
+        "text": "Exactly 14, the real count",
+        "explanation": "The planner doesn't count rows at plan time; that would mean running the query. It estimates from statistics."
+      },
+      {
+        "text": "About 11",
+        "explanation": "Correct. With no MCVs, it assumes the rows are spread evenly over the distinct values: 1,000,000 / 91,709 = 10.9, rounded to 11."
+      },
+      {
+        "text": "About 5,000",
+        "explanation": "That's the 0.5% default for an expression with no statistics. A plain column with stats gets a proper estimate."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nselectivity = 1 / n_distinct\n            = 1 / 91,709\nrows = 1,000,000 / 91,709\n     = 10.9 -> 11\n```\n\n(If there were MCVs, the planner would first subtract their total frequency and divide the rest among the remaining distinct values.) The real count for customer 42 is 14, so the estimate is close. Good enough to pick an index scan.",
+    "link": {
+      "title": "Row estimation examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A query becomes much slower after a plan change. Which diagnostic checks the cardinality-estimation problem highlighted by the cited optimiser study?",
+    "options": [
+      {
+        "text": "The cost constants (like `random_page_cost`) are wrong",
+        "explanation": "Cost constants matter, but they rarely change on their own, and studies found they cause far smaller errors than wrong row counts."
+      },
+      {
+        "text": "The search strategy missed the best join order",
+        "explanation": "Below the default GEQO threshold, PostgreSQL uses a dynamic-programming search subject to join restrictions and pruning; it does not guarantee the globally fastest real execution plan."
+      },
+      {
+        "text": "Compare estimated and actual row counts throughout the plan",
+        "explanation": "Correct. Row estimates feed every cost calculation. A large error, from stale stats or correlated columns, can flip the choice of join algorithm or access path."
+      },
+      {
+        "text": "The parser chose a different interpretation of the SQL",
+        "explanation": "Parsing is deterministic: the same SQL always produces the same parse tree. Plan changes come from the optimiser."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The optimiser has three parts: estimation, cost model, search. Leis et al. (VLDB 2015) tested several real systems and found:\n\n1. Cardinality estimates were often wrong by orders of magnitude, especially after several joins.\n2. Those errors, not the cost model, caused most of the slow plans.\n\nSo when a plan suddenly changes, compare `rows=` (estimated) with `actual rows=` at each node and look for the first big gap.",
+    "link": {
+      "title": "How Good Are Query Optimizers, Really? (VLDB 2015)",
+      "url": "https://www.vldb.org/pvldb/vol9/p204-leis.pdf"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 2,000,000-row `events` table has `region = 'eu'` with selectivity 0.2 and `kind = 'click'` with selectivity 0.05. The two columns are unrelated. What does Postgres estimate for `WHERE region = 'eu' AND kind = 'click'`?",
+    "options": [
+      {
+        "text": "20,000",
+        "explanation": "Correct. Under the independence assumption the planner multiplies selectivities: 0.2 x 0.05 = 0.01, and 0.01 x 2,000,000 = 20,000."
+      },
+      {
+        "text": "100,000",
+        "explanation": "That uses only the more selective condition (0.05 x 2,000,000). AND keeps rows satisfying both, so it's smaller."
+      },
+      {
+        "text": "500,000",
+        "explanation": "That adds the selectivities (0.25). Adding is roughly what you'd do for OR, not AND."
+      },
+      {
+        "text": "400,000",
+        "explanation": "That uses only the region condition. The kind condition removes most of those rows too."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nsel(A AND B) = sel(A) x sel(B)\n             = 0.2 x 0.05 = 0.01\nrows = 0.01 x 2,000,000 = 20,000\n```\n\nThis is exactly right if the columns are independent. If they're correlated (say every click comes from the EU), the true answer is 100,000 and the estimate is five times too low. Fix with `CREATE STATISTICS ... (dependencies)` or `(mcv)`. For OR, Postgres uses `sel(A) + sel(B) - sel(A) x sel(B)`.",
+    "link": {
+      "title": "Row estimation examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In `customers` (100,000 rows), 8 cities are equally common, and `country` is always determined by `city`; Glasgow and Scotland each occur in 1/8 of rows. EXPLAIN for `WHERE city = 'Glasgow' AND country = 'Scotland'` says `rows=1559`; the true answer is 12,500. What's the best fix?",
+    "options": [
+      {
+        "text": "Raise `default_statistics_target` to 1000 and re-analyse",
+        "explanation": "A bigger sample makes each column's frequencies slightly more precise, but the planner still multiplies them as if independent. The 8x error remains."
+      },
+      {
+        "text": "Add an index on `(city, country)`",
+        "explanation": "A plain multi-column index doesn't give the planner combined selectivity statistics. The estimate would stay around 1,560."
+      },
+      {
+        "text": "Create extended statistics on the two columns and re-analyse",
+        "explanation": "Correct. `CREATE STATISTICS ... (dependencies) ON city, country` records that city determines country (degree 1.0), and the estimate rises to about 12,700."
+      },
+      {
+        "text": "Nothing; Postgres can't estimate correlated columns",
+        "explanation": "It can since Postgres 10, via extended statistics. It just doesn't by default."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each condition alone: about 1/8 of rows (frequency ~0.125).\n2. Independence: 0.125 x 0.125 x 100,000 ~ 1,560.\n3. Reality: every Glasgow row is Scottish, so it's 0.125 x 100,000 = 12,500.\n\n```sql\nCREATE STATISTICS cust_city_country\n  (dependencies) ON city, country\n  FROM customers;\nANALYZE customers;\n```\n\nANALYZE then records `city => country: 1.0`, and the planner stops double-counting the restriction.",
+    "link": {
+      "title": "Multivariate statistics examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/multivariate-statistics-examples.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table has 5,000 pages and 400,000 rows. In the simplified nonparallel model with default costs, integer comparisons and no additional projection costs, what total cost does a Seq Scan have with **two** filter conditions (`WHERE a = 1 AND b = 2`)?",
+    "options": [
+      {
+        "text": "9,000",
+        "explanation": "That's pages plus `cpu_tuple_cost` per row, but it forgets the `cpu_operator_cost` for evaluating the two conditions on each row."
+      },
+      {
+        "text": "10,000",
+        "explanation": "That counts only one condition (400,000 x 0.0025 = 1,000). Each condition is charged separately."
+      },
+      {
+        "text": "25,000",
+        "explanation": "That charges `random_page_cost` (4) for 5,000 pages. A sequential scan uses `seq_page_cost` (1)."
+      },
+      {
+        "text": "11,000",
+        "explanation": "Correct. 5,000 x 1.0 for pages, 400,000 x 0.01 for rows, and 400,000 x 2 x 0.0025 for the two comparisons: 5,000 + 4,000 + 2,000."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\npages:  5,000 x 1.0           = 5,000\nrows:   400,000 x 0.01        = 4,000\nquals:  400,000 x 2 x 0.0025  = 2,000\ntotal                         = 11,000\n```\n\nApply the same model to the illustrative plan: `orders` has 7,353 pages and 1,000,000 rows. With one condition: 7,353 + 10,000 + 2,500 = 19,853. With two: 22,353. These match the illustrative costs in the lesson.",
+    "link": {
+      "title": "Query planning configuration — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A `users` table has 2,000,000 rows with distinct lowercase, non-NULL emails, including `ann@example.com`. EXPLAIN for `WHERE lower(email) = 'ann@example.com'` estimates `rows=10000`. Where does 10,000 come from, and what improves it?",
+    "options": [
+      {
+        "text": "It's 1/200 of the table: the default 0.5% selectivity for equality on an expression without statistics; an expression index on `lower(email)` gives ANALYZE something to measure",
+        "explanation": "Correct. Postgres has stats on `email` but not on `lower(email)`. An expression index makes ANALYZE gather stats on the expression, and also lets the query use the index."
+      },
+      {
+        "text": "It's from the histogram for `email`",
+        "explanation": "The histogram describes `email` values, not `lower(email)`. The planner can't see through the function to use them."
+      },
+      {
+        "text": "It's 2,000,000 / n_distinct; running ANALYZE will fix it",
+        "explanation": "Emails are unique, so 1/n_distinct would give 1 row. ANALYZE alone doesn't collect stats on arbitrary expressions."
+      },
+      {
+        "text": "It's a sign the table needs VACUUM FULL",
+        "explanation": "Table bloat changes page counts and costs, not this selectivity. 10,000 is a fixed default fraction."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\ndefault eq selectivity = 0.005\n0.005 x 2,000,000 = 10,000\n```\n\nThe true answer is 1, so the estimate is 10,000 times too high. That could push the planner away from an index in a join. In the lesson, the same default gave 500 for 100,000 customers. After\n\n```sql\nCREATE INDEX ON users (lower(email));\nANALYZE users;\n```\n\nthe statistics can support an estimate near 1 and make an Index Scan attractive; exact plans depend on the data and cost settings.",
+    "link": {
+      "title": "Indexes on expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-expressional.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about PostgreSQL's `pg_stats` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`n_distinct = -1` means every row has a different value",
+        "explanation": "Correct. Negative values are a fraction of the row count, so -1 means distinct values = rows, as for a primary key. It scales automatically as the table grows."
+      },
+      {
+        "text": "The histogram covers the values not in the most-common-values list",
+        "explanation": "Correct. MCVs are handled exactly by frequency; the histogram describes the rest, split into buckets with equal numbers of rows."
+      },
+      {
+        "text": "Statistics are updated on every INSERT",
+        "explanation": "They're only updated by ANALYZE (manual or autovacuum). That's why bulk loads can leave stats stale."
+      },
+      {
+        "text": "`correlation` near 1 means the table's physical order matches the column's order, making index range scans cheaper",
+        "explanation": "Correct. Rows that are adjacent in the index are then adjacent on disk, so a range scan reads few heap pages. Near 0, each index entry may point to a different page."
+      },
+      {
+        "text": "ANALYZE reads every row of the table",
+        "explanation": "For large tables it uses a sample; the target depends on column types and statistics targets. Small tables can be read completely."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Go through each:\n\n1. `n_distinct`: positive = count; negative = fraction of rows. `orders.id` shows -1. True.\n2. MCV list plus histogram partition the values. True.\n3. Stats come only from ANALYZE. False.\n4. Correlation: `orders.id` has 1.0 because ids were inserted in order. True.\n5. ANALYZE samples 30,000 rows with the default target. False.",
+    "link": {
+      "title": "pg_stats view — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/view-pg-stats.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An ETL job creates a temporary table, inserts 2,000,000 rows (all with `batch = 1`), then immediately runs a join filtered on `WHERE t.batch = 1`. EXPLAIN shows the temp table scan estimated at `rows=10000` (actual 2,000,000), and the plan sorts that \"small\" input for a merge join. Why is the estimate wrong, and what is the fix?",
+    "options": [
+      {
+        "text": "The planner doesn't know how big the temp table is; use a real table",
+        "explanation": "It does know the size: without a filter, the same scan was estimated at about 2,000,100 rows from the table's page count. What it lacks is column statistics. A real table has the same problem until autovacuum analyses it."
+      },
+      {
+        "text": "Autovacuum never analyses temporary tables, so there are no column statistics and `batch = 1` gets the default 0.5% selectivity; run `ANALYZE` on the temp table after loading it",
+        "explanation": "Correct. 0.5% of 2,000,000 is 10,000. Autovacuum can't access temp tables, so they only get stats if you ANALYZE them. With stats, the planner sees that every row matches and picks a hash join."
+      },
+      {
+        "text": "`work_mem` is too low; increase it",
+        "explanation": "`work_mem` affects whether a sort or hash spills, not the row estimate. The plan shape came from believing only 10,000 rows match."
+      },
+      {
+        "text": "The join needs an index on the temp table",
+        "explanation": "An index won't fix the misestimate. With accurate stats a hash join is right for 2,000,000 rows, and it doesn't need an index."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Unfiltered, the scan estimate is about 2,000,100 rows: Postgres measures the table's current pages and estimates rows from them.\n2. But `pg_stats` has nothing for `batch`: no ANALYZE has run, and autovacuum skips temp tables (it can't see another session's temporary data).\n3. So `batch = 1` gets the default equality selectivity:\n\n```\n0.005 x 2,000,000 = 10,000\n```\n\n4. The true selectivity is 100%, so the estimate is 200x too low and the join is planned for a small input.\n5. Fix:\n\n```sql\nINSERT INTO tmp_load ...;\nANALYZE tmp_load;\nSELECT ... JOIN orders ...;\n```\n\nAfter ANALYZE, the same query became a hash join estimated at the right size.",
+    "link": {
+      "title": "Routine vacuuming — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/routine-vacuuming.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A column has no MCVs, so its histogram describes all 2,000,000 rows in 100 equal-count buckets. The constant `v` lies 25% of the way through bucket 41 (40 complete buckets lie below it). Assuming linear interpolation within the bucket, what is the estimate for `WHERE col < v`?",
+    "options": [
+      {
+        "text": "820,000",
+        "explanation": "That counts all of bucket 41 as below `v` (41%). Only the first quarter of that bucket lies below."
+      },
+      {
+        "text": "805,000",
+        "explanation": "Correct. 40 full buckets plus a quarter of bucket 41 is 40.25% of the rows: 0.4025 x 2,000,000."
+      },
+      {
+        "text": "1,195,000",
+        "explanation": "That's the estimate for `col >= v` (59.75%). The question asks for rows below `v`."
+      },
+      {
+        "text": "666,667",
+        "explanation": "That's the 1/3 default for inequalities without statistics. Here a histogram exists, so it's used."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each bucket holds 1% of the rows (20,000 rows).\n\n```\nfull buckets below v: 40  -> 40%\npart of bucket 41:   0.25 -> 0.25%\nselectivity = 40.25%\nrows = 0.4025 x 2,000,000 = 805,000\n```\n\nThe lesson's date example worked the same way from the other end: 8 full buckets above plus a third of one gave about 8.3%.",
+    "link": {
+      "title": "Row estimation examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about how PostgreSQL searches for a join order are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Below `geqo_threshold` (default 12) FROM items, it uses dynamic programming over subsets of tables",
+        "explanation": "Correct. It builds the best plan for each subset from the best plans of smaller subsets, System R style."
+      },
+      {
+        "text": "It tries every possible join tree, which for 10 tables is over 17 billion shapes",
+        "explanation": "There are that many trees, which is exactly why it doesn't enumerate them. Dynamic programming reuses the best plan for each subset (1,024 subsets for 10 tables)."
+      },
+      {
+        "text": "At or above the threshold (with GEQO enabled) it uses a genetic algorithm (GEQO) that finds a good plan but not necessarily the best",
+        "explanation": "Correct. GEQO trades optimality for planning time on very large joins."
+      },
+      {
+        "text": "It may keep a more expensive path for a subset if that path produces a sort order useful later",
+        "explanation": "Correct. These \"interesting orders\" (pathkeys in Postgres) can avoid a later sort, for a merge join or an ORDER BY."
+      },
+      {
+        "text": "Explicit `JOIN` syntax always fixes the join order exactly as written",
+        "explanation": "Explicit inner JOINs can be reordered when flattened. `join_collapse_limit` limits flattening, but exceeding it does not freeze every join inside the retained subtrees. Outer joins also constrain legal reordering."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Count the space: 10 tables have 10! = 3,628,800 left-deep orders and 18!/9! ~ 17.6 billion trees of any shape.\n\nDynamic programming avoids that:\n\n1. Best plan for each single table.\n2. Best plan for each pair, using step 1.\n3. Best for each triple, using step 2. And so on.\n\nThere are 2^n subsets, but search work also includes candidate partitions and physical paths; 2^n is not a general time-complexity bound. It also keeps paths with useful sort orders. At 12 or more FROM items, GEQO is used by default to limit search time. `join_collapse_limit = 8` stops explicit JOIN lists longer than 8 being flattened for reordering.",
+    "link": {
+      "title": "Controlling the planner with explicit JOINs — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/explicit-joins.html"
+    }
+  }
+]

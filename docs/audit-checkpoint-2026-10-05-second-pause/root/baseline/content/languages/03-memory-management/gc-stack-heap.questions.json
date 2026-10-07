@@ -1,0 +1,344 @@
+[
+  {
+    "id": "gc-stack-heap-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why is allocating a local variable on the stack so much cheaper than allocating an object on the heap?",
+    "options": [
+      {
+        "text": "The stack lives in faster RAM chips than the heap",
+        "explanation": "Stack and heap are both ordinary virtual memory in the same RAM. The speed difference comes from the bookkeeping, not the hardware (although stack memory is usually hot in cache)."
+      },
+      {
+        "text": "Allocating a frame is just moving the stack pointer by a fixed amount, and freeing it is moving it back",
+        "explanation": "Correct. Because frames are freed in strict last-in-first-out order, there is no free list to search, no size header to record and no fragmentation. One instruction allocates the whole frame."
+      },
+      {
+        "text": "The operating system pre-zeroes stack memory, so no work is needed",
+        "explanation": "Whether memory is zeroed has nothing to do with allocation cost; C locals are not even initialised. The saving is the absence of any allocator bookkeeping."
+      },
+      {
+        "text": "Stack values are never freed, so there is no deallocation cost",
+        "explanation": "Stack values are freed, automatically and all at once, when the function returns. That is precisely why they cannot outlive the call."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Think about what a heap allocator must do: find a free block big enough, record its size, and later accept it back in any order.\n2. A stack frame is freed in the reverse order it was created, always.\n3. With LIFO order, the free space is always one contiguous region above the stack pointer.\n4. So allocation is `sp -= frame_size` and freeing is `sp += frame_size`.\n\nThe price of that speed is the LIFO restriction: nothing in the frame can outlive the call.",
+    "link": {
+      "title": "Stack-based memory allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Stack-based_memory_allocation"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this Python code print?\n\n```python\na = [1, 2]\nb = a\nb.append(3)\nprint(a)\n```",
+    "options": [
+      {
+        "text": "`[1, 2]`",
+        "explanation": "This assumes `b = a` copies the list (value semantics). In Python, assignment copies only the reference, so both names point at one heap object."
+      },
+      {
+        "text": "`[1, 2, 3]`",
+        "explanation": "Correct. There is one list object on the heap and two names referring to it. Appending through `b` changes the object that `a` also sees."
+      },
+      {
+        "text": "`[1, 2, 3, 3]`",
+        "explanation": "Only one `append` runs, on one object. Nothing appends twice."
+      },
+      {
+        "text": "An error, because `a` and `b` cannot share a list",
+        "explanation": "Sharing objects through multiple references is normal in Python; it is what reference semantics means."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `a = [1, 2]` creates a list object on the heap and binds the name `a` to it.\n2. `b = a` binds `b` to the **same** object. No copy is made.\n\n```\na --+\n    +--> [1, 2]\nb --+\n```\n\n3. `b.append(3)` mutates that object to `[1, 2, 3]`.\n4. `print(a)` follows `a` to the same object: `[1, 2, 3]`.\n\nTo get an independent copy you would write `b = a.copy()` or `b = list(a)`.",
+    "link": {
+      "title": "Stack-based memory allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Stack-based_memory_allocation"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these values most clearly *needs* to be on the heap rather than the stack?",
+    "options": [
+      {
+        "text": "A loop counter `i` used inside one function",
+        "explanation": "A counter whose lifetime is one call is the textbook stack value: fixed size and dies when the function returns."
+      },
+      {
+        "text": "A fixed-size `int point[2]` used only inside the function that declares it",
+        "explanation": "Small, fixed-size and confined to one call: the stack handles this perfectly."
+      },
+      {
+        "text": "A list of lines read from a file of unknown length, returned to the caller",
+        "explanation": "Correct. Its size is only known at run time and it must outlive the function that builds it. Both are reasons for the heap."
+      },
+      {
+        "text": "A function parameter `n` of type `int`",
+        "explanation": "Parameters live in the callee's frame (or registers) and die with the call. No heap needed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask the four heap questions for each value:\n\n| Value | Outlives call? | Size at run time? |\n|---|---|---|\n| loop counter | no | no |\n| `point[2]` | no | no |\n| file lines | **yes** | **yes** |\n| parameter `n` | no | no |\n\nOnly the list of lines fails the stack's rules: it must survive the return, and the compiler cannot know how big a frame it would need.",
+    "link": {
+      "title": "Stack-based memory allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Stack-based_memory_allocation"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C programmer writes this and finds it prints `42` in a quick test, but random values in production. Why?\n\n```c\nint *get(void) {\n    int x = 42;\n    return &x;\n}\n/* caller */\nint *p = get();\nlog_something();\nprintf(\"%d\\n\", *p);\n```",
+    "options": [
+      {
+        "text": "`x` is a global variable, so other threads overwrite it",
+        "explanation": "`x` is a local (automatic) variable, not a global. The problem is its lifetime, not sharing between threads."
+      },
+      {
+        "text": "`printf` cannot print through a pointer",
+        "explanation": "Dereferencing a valid `int *` with `*p` is fine. The pointer is the problem, not `printf`."
+      },
+      {
+        "text": "`x` lived in `get`'s stack frame, which was popped on return; `log_something` reuses that memory",
+        "explanation": "Correct. `p` is a dangling pointer to a dead frame. Reading it is undefined behaviour. Whether it shows 42 depends on whether a later call has overwritten the slot, which is why it looks fine in a simple test."
+      },
+      {
+        "text": "The compiler automatically moves `x` to the heap, but frees it before `printf`",
+        "explanation": "That is what Go does (minus the early free). C never moves locals to the heap; it just warns that you returned a stack address."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Calling `get` pushes a frame containing `x = 42`.\n2. `return &x` hands back the address of that slot.\n3. The frame is popped. The memory is not wiped, so `*p` may still read 42 for a moment.\n4. `log_something()` pushes its own frame at the **same addresses**, overwriting the old slot with its locals.\n5. `*p` now reads whatever `log_something` left there.\n\nFix: allocate with `malloc` (and have the caller `free`), or let the caller pass in a pointer to its own variable. Compilers warn about this (`-Wreturn-stack-address` in Clang).",
+    "link": {
+      "title": "Dangling pointer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dangling_pointer"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What happens when this Go function is called?\n\n```go\nfunc newPoint() *Point {\n    p := Point{1, 2}\n    return &p\n}\n```",
+    "options": [
+      {
+        "text": "It returns a dangling pointer, exactly like the C equivalent",
+        "explanation": "That is C's behaviour. Go's compiler tracks pointers out of a function and never lets a stack slot be referenced after the frame dies."
+      },
+      {
+        "text": "It fails to compile: you cannot take the address of a local",
+        "explanation": "Taking `&p` of a local is legal and idiomatic Go."
+      },
+      {
+        "text": "Escape analysis sees that `p` outlives the call and allocates it on the heap; the GC frees it later",
+        "explanation": "Correct. `go build -gcflags=-m` reports `moved to heap: p`. The pointer is valid for as long as anyone holds it."
+      },
+      {
+        "text": "`p` is copied into the caller's stack frame on return",
+        "explanation": "The function returns a pointer, not a `Point` value. The pointed-to object must live somewhere that survives, which is the heap."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The compiler runs escape analysis on `newPoint`.\n2. It sees `&p` flowing out through the return value.\n3. A stack slot cannot survive the return, so `p` is allocated on the heap instead.\n4. The returned pointer refers to that heap object, and the garbage collector reclaims it once nothing references it.\n\nIf `newPoint` returned `Point` (a value) instead, `p` could stay on the stack and be copied out, costing the GC nothing.",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In Go, which of these functions cause `x` (or `c`) to escape to the heap? Select all that apply.",
+    "options": [
+      {
+        "text": "```go\nfunc a() *int {\n    x := 1\n    return &x\n}\n```",
+        "explanation": "Escapes. The address leaves the function through the return value, so `x` must outlive the frame."
+      },
+      {
+        "text": "```go\nfunc b() int {\n    x := 1\n    p := &x\n    return *p\n}\n```",
+        "explanation": "Does not escape. `p` is used only inside `b` and only the value `*p` is returned, so `x` can stay on the stack. Taking an address does not by itself force a heap allocation."
+      },
+      {
+        "text": "```go\nvar g *int\n\nfunc c() {\n    x := 1\n    g = &x\n}\n```",
+        "explanation": "Escapes. Storing the address in a global means it is reachable after `c` returns."
+      },
+      {
+        "text": "```go\nfunc d() func() int {\n    c := 0\n    return func() int {\n        c++\n        return c\n    }\n}\n```",
+        "explanation": "Escapes. The returned closure captures `c` by reference and outlives `d`, so `c` must live on the heap."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The rule: a value escapes if a reference to it can be reached after its function returns.\n\n| Fn | Reference leaves? | Escapes |\n|---|---|---|\n| a | via return | yes |\n| b | no, only a copy | no |\n| c | via global | yes |\n| d | via closure | yes |\n\nYou can confirm each with `go build -gcflags=-m`, which prints `moved to heap: x` for a, c and d.",
+    "link": {
+      "title": "Escape analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Escape_analysis"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A recursive C function uses about 128 bytes of stack per call. Roughly how deep can it recurse on a Linux main thread with the default 8 MB stack before it overflows?",
+    "options": [
+      {
+        "text": "About 6,500 calls",
+        "explanation": "That is 8 MB divided by roughly 1,280 bytes, ten times the frame size given."
+      },
+      {
+        "text": "About 65,000 calls",
+        "explanation": "Correct. 8 MiB is 8,388,608 bytes; divided by 128 bytes per frame that is 65,536 frames, minus a little for `main` and the C runtime."
+      },
+      {
+        "text": "About 8 million calls",
+        "explanation": "That treats each call as using 1 byte. A frame holds the return address, saved registers and locals, so it is tens to hundreds of bytes."
+      },
+      {
+        "text": "Unlimited, because the stack grows into the heap as needed",
+        "explanation": "A thread's stack has a fixed maximum (set by `ulimit -s` for the main thread). Exceed it and you hit a guard page and crash with a segmentation fault."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Default limit: `ulimit -s` shows 8192 KB on most Linux systems.\n2. Convert: 8192 × 1024 = 8,388,608 bytes.\n3. Divide by the frame size:\n\n```\n8,388,608 / 128 = 65,536\n```\n\n4. Subtract a small amount for `main`, the C runtime and environment, giving roughly 65,000.\n\nA Java thread with the 1 MB default `-Xss` would manage about one-eighth of that for the same frame size.",
+    "link": {
+      "title": "Stack-based memory allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Stack-based_memory_allocation"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Consider this Java method. Which statements are true? Select all that apply.\n\n```java\nvoid f(int n) {\n    int count = n;\n    int[] a = new int[n];\n}\n```",
+    "options": [
+      {
+        "text": "`count` is stored in `f`'s stack frame",
+        "explanation": "True. Local primitives live in the frame (or registers) and vanish when `f` returns."
+      },
+      {
+        "text": "The reference variable `a` is stored in `f`'s stack frame",
+        "explanation": "True. The local variable holds a reference (pointer-sized), and that reference lives in the frame."
+      },
+      {
+        "text": "The array object is allocated on the stack because `a` is a local",
+        "explanation": "False. In Java's model every object, including arrays, is on the heap. Only the reference is local. (The JIT may optimise away a non-escaping allocation, but that is an optimisation, not the semantics.)"
+      },
+      {
+        "text": "The array becomes eligible for garbage collection once `f` returns",
+        "explanation": "True. After the return no reference to the array exists, so the next collection that examines it can reclaim it."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Separate the variable from the object it refers to:\n\n```\n frame of f        heap\n +-----------+     +--------------+\n | n         |     | int[n]       |\n | count     |     | 0 0 0 ...    |\n | a  -------+---> +--------------+\n +-----------+\n```\n\n1. `count` and `a` are locals, so both live in the frame.\n2. `new` always creates the object on the heap.\n3. When `f` returns, the frame and the only reference disappear, so the array is unreachable and collectable.",
+    "link": {
+      "title": "Escape analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Escape_analysis"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server spawns 100,000 concurrent tasks. In Go each is a goroutine; in a thread-per-task Java design each is an OS thread with the default 1 MB stack. Roughly how much stack *address space* does each design start with?",
+    "options": [
+      {
+        "text": "Go about 200 MB; Java about 100 GB reserved",
+        "explanation": "Correct. 100,000 × ~2 KB ≈ 200 MB for goroutines; 100,000 × 1 MB ≈ 100 GB of reserved stack for threads. The OS commits thread stack pages lazily, but the reservations, kernel thread structures and scheduling cost still make this impractical."
+      },
+      {
+        "text": "Both about 100 GB, because stacks are the same everywhere",
+        "explanation": "Goroutine stacks are managed by the Go runtime, not the OS. They start at a few kilobytes and grow by copying, so they are far smaller than OS thread stacks."
+      },
+      {
+        "text": "Go about 200 KB; Java about 100 MB",
+        "explanation": "Off by a factor of 1,000 in both cases: 100,000 × 2 KB is 200,000 KB, about 200 MB."
+      },
+      {
+        "text": "Go 0, because goroutines have no stack",
+        "explanation": "Every goroutine has its own stack; it is just small and growable."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Goroutine: initial stack about 2 KB.\n\n```\n100,000 x 2 KB = 200,000 KB\n               ~ 200 MB\n```\n\n2. Java platform thread: default `-Xss` of 1 MB on 64-bit Linux.\n\n```\n100,000 x 1 MB = 100,000 MB\n               ~ 100 GB\n```\n\n3. Goroutine stacks grow on demand: when a call needs more space, the runtime allocates a larger stack and copies the frames over.\n\nThis is why Go (and Java's newer virtual threads, which also use small growable stacks on the heap) can handle huge numbers of concurrent tasks.",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Java developer says: \"My `Point` objects are created and discarded inside one hot loop, so the JVM puts them on the stack.\" What is the most accurate response?",
+    "options": [
+      {
+        "text": "Correct: the JVM always stack-allocates objects that are created inside a loop",
+        "explanation": "The JVM makes no such guarantee. Placement depends on the JIT's analysis of each allocation site after inlining."
+      },
+      {
+        "text": "Wrong: Java objects are always heap-allocated and every one costs a GC allocation",
+        "explanation": "Too strong. Semantically objects are on the heap, but HotSpot's C2 compiler can eliminate allocations it proves never escape."
+      },
+      {
+        "text": "Partly right: if the JIT's escape analysis proves the object never escapes, it can scalar-replace it, keeping its fields in registers or the frame with no heap allocation",
+        "explanation": "Correct. HotSpot does not literally stack-allocate objects; it removes the allocation and treats the fields as separate locals. It only works after the code is JIT-compiled, and passing the object to a method that isn't inlined or storing it in a field defeats it."
+      },
+      {
+        "text": "Wrong: escape analysis is only done by Go, never by the JVM",
+        "explanation": "HotSpot has done escape analysis since Java 6 (`-XX:+DoEscapeAnalysis`, on by default). Go simply makes its version visible with `-gcflags=-m`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The Java language says `new` creates an object on the heap.\n2. The JIT is free to optimise as long as behaviour is unchanged.\n3. If, after inlining, the object is never stored anywhere that outlives the loop body, it does not *escape*.\n4. HotSpot then applies **scalar replacement**: `p.x` and `p.y` become two ordinary locals.\n5. Things that defeat it: calls that aren't inlined, storing `p` in a field or collection, using it as a lock, or interpreted (not yet compiled) code.\n\nSo the effect is real but conditional.",
+    "link": {
+      "title": "Escape analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Escape_analysis"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "On a 64-bit machine, consider `let v: Vec<i32> = vec![1, 2, 3];` in Rust. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The stack holds a pointer, a length and a capacity, 24 bytes in total",
+        "explanation": "True. A `Vec` is three machine words on the stack: the buffer pointer, `len` and `cap`."
+      },
+      {
+        "text": "The three `i32` elements (12 bytes) live in a heap buffer owned by `v`",
+        "explanation": "True. `vec!` allocates a heap buffer and the `Vec` owns it."
+      },
+      {
+        "text": "The heap buffer is freed when the garbage collector next runs",
+        "explanation": "False. Rust has no garbage collector. The buffer is freed deterministically when `v` goes out of scope (its `Drop` runs)."
+      },
+      {
+        "text": "`let w = v;` copies the 24-byte header, not the heap buffer, and `v` can no longer be used",
+        "explanation": "True. This is a move: the pointer, length and capacity are copied into `w`, ownership transfers, and the compiler rejects later uses of `v` so the buffer is never freed twice."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Draw the layout:\n\n```\n stack (v)        heap\n +-----------+    +---+---+---+\n | ptr  -----+--> | 1 | 2 | 3 |\n | len = 3   |    +---+---+---+\n | cap = 3   |     12 bytes\n +-----------+\n  3 x 8 = 24 bytes\n```\n\n1. Three words on the stack: 24 bytes.\n2. Three 4-byte integers on the heap: 12 bytes.\n3. Freeing happens when the owner's scope ends, with no GC.\n4. `let w = v;` copies the three words and marks `v` as moved. Only `w` will free the buffer.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  }
+]

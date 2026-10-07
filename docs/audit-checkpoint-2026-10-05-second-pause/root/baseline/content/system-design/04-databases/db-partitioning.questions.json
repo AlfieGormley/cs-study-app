@@ -1,0 +1,381 @@
+[
+  {
+    "id": "db-partitioning-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An event log is range-partitioned by `created_at`. Writes are 50,000 per second, and the cluster has 10 nodes. Monitoring shows one node at 100% CPU and the others nearly idle. Why?",
+    "options": [
+      {
+        "text": "The hash function is poorly distributed",
+        "explanation": "Wrong. Range partitioning doesn't hash the key at all; it assigns contiguous key ranges to partitions."
+      },
+      {
+        "text": "All new writes have the current timestamp, so they all fall into the single partition covering 'now', making it a hot spot",
+        "explanation": "Correct. Time-ordered keys under range partitioning send every new write to the latest range. Nine nodes hold old data; one takes all 50,000 writes per second."
+      },
+      {
+        "text": "The cluster needs more replicas",
+        "explanation": "Wrong. Replicas of the hot partition would receive the same write stream; replication doesn't spread writes in a single-leader setup."
+      },
+      {
+        "text": "The idle nodes have failed",
+        "explanation": "Wrong. They're idle because no current writes map to their ranges, not because they're down."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Range partitioning: partition 10 covers `created_at ≥ yesterday`, say.\n2. Every new event has `created_at = now()`, which falls into partition 10.\n3. So partition 10 takes 50,000 writes per second; partitions 1–9 take none.\n4. Effective capacity = one node's capacity, regardless of cluster size.\n5. Fixes: prefix the key with something high-cardinality (`(source_id, created_at)`), or hash-partition on an id and keep time ordering within each partition.",
+    "link": {
+      "title": "DynamoDB: Designing partition keys to distribute your workload",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A cache cluster assigns keys with `hash(key) mod N`. It grows from N = 4 to N = 5 nodes. Roughly what fraction of keys now map to a different node?",
+    "options": [
+      {
+        "text": "About 20%, the new node's share",
+        "explanation": "Wrong. That's the *ideal* (what consistent hashing achieves). With mod N, almost every key's remainder changes."
+      },
+      {
+        "text": "About 25%",
+        "explanation": "Wrong. There's no reason the moved fraction would equal one old node's share; the remainders change for most keys, not just one node's worth."
+      },
+      {
+        "text": "None; existing keys stay where they are",
+        "explanation": "Wrong. Lookups recompute `hash mod 5`, so keys go wherever the new formula says, and most of them now land on a different node."
+      },
+      {
+        "text": "About 80%",
+        "explanation": "Correct. A key stays put only if `h mod 4 = h mod 5`, which happens for 4 out of every 20 consecutive hash values: 20%. So about 80% of keys move, and for a cache that means an 80% miss storm."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `h mod 4` and `h mod 5` together repeat every lcm(4, 5) = 20 values.\n2. Count h in 0–19 where they're equal: h = 0, 1, 2, 3 (both give h). That's 4 values.\n3. 4/20 = 20% stay; 80% move.\n4. For a cache, 80% of requests suddenly miss and hit the database: a classic cause of outages during scaling.\n5. Consistent hashing moves only about 1/5 = 20% of keys (just the new node's share), and with virtual nodes those come evenly from all four old nodes.",
+    "link": {
+      "title": "Wikipedia: Consistent hashing",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  },
+  {
+    "id": "db-partitioning-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do systems using consistent hashing (such as Cassandra) give each physical node many virtual nodes on the ring, rather than one point each?",
+    "options": [
+      {
+        "text": "To store more replicas of each key",
+        "explanation": "Wrong. Replication factor is configured separately; virtual nodes affect how ranges are distributed, not how many copies exist."
+      },
+      {
+        "text": "Because hashing is too slow with only one point per node",
+        "explanation": "Wrong. Lookup cost isn't the issue; finding the next point on a sorted ring is a fast binary search either way."
+      },
+      {
+        "text": "To even out range sizes and load, and so that a joining or leaving node shares its data with many nodes instead of one neighbour",
+        "explanation": "Correct. With one random point each, range sizes vary widely, and a new node only relieves one neighbour. Many small ranges per node average out, and transfers spread across the cluster."
+      },
+      {
+        "text": "To allow range scans across the ring",
+        "explanation": "Wrong. Hash-based placement scatters adjacent keys regardless of the number of virtual nodes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With 4 nodes and one random point each, the gaps between points (each node's share) can easily differ by 3× or more.\n2. Add a fifth node: it lands in one gap and takes keys only from the next node clockwise. That one node does all the streaming, and the others stay unbalanced.\n3. With 16–256 tokens per node, each node owns many small ranges. Shares average out (law of large numbers).\n4. A new node takes small slices from every existing node, so streaming load is shared and the result stays balanced.\n5. Trade-off: more tokens means more ranges to track and repair; Cassandra 4.0 reduced the default from 256 to 16 with a token allocation algorithm that keeps balance good.",
+    "link": {
+      "title": "Wikipedia: Consistent hashing",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  },
+  {
+    "id": "db-partitioning-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A product catalogue is sharded across 20 shards by `product_id`, with a *local* secondary index on `category` in each shard. Each shard answers a category query in 5 ms at p50 and 80 ms at p99. Roughly what p99 should you expect for 'list products in category X'?",
+    "options": [
+      {
+        "text": "About 5 ms, since the query uses an index",
+        "explanation": "Wrong. The index makes each shard fast, but the query must go to all 20 shards and wait for the slowest one."
+      },
+      {
+        "text": "Roughly 80 ms or worse, because the scatter-gather waits on the slowest of 20 shards, and the chance of at least one shard being slow is high",
+        "explanation": "Correct. With 20 shards, P(all under their p99) = 0.99²⁰ ≈ 82%, so about 18% of queries hit at least one 80 ms shard. The overall p99 is at or beyond the per-shard p99."
+      },
+      {
+        "text": "About 100 ms, i.e. 20 × 5 ms",
+        "explanation": "Wrong. The shard requests run in parallel, not serially, so latency isn't the sum. It's governed by the maximum of 20 parallel responses."
+      },
+      {
+        "text": "About 4 ms, because the work is split 20 ways",
+        "explanation": "Wrong. Splitting data doesn't make each shard's fixed latency smaller, and you still wait for every shard."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Local index → the category could be on any shard → query all 20 in parallel, merge results.\n2. Latency = max of 20 shard latencies.\n3. P(a given shard is under its p99) = 0.99. P(all 20 are) = 0.99²⁰ ≈ 0.818.\n4. So ~18% of requests include at least one shard at or beyond 80 ms. The combined p99 is therefore well past 80 ms, in the tail of the slowest shard.\n5. Mitigations: a global index partitioned by `category` (one shard per query, but async index updates), hedged requests to replicas, or a search engine built for this access pattern.",
+    "link": {
+      "title": "MongoDB: Sharding",
+      "url": "https://www.mongodb.com/docs/manual/sharding/"
+    }
+  },
+  {
+    "id": "db-partitioning-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user updates an item in a DynamoDB table and immediately queries a global secondary index (GSI) for it. The query returns the old value. Why?",
+    "options": [
+      {
+        "text": "GSIs are maintained asynchronously, so they're eventually consistent and can briefly lag the base table",
+        "explanation": "Correct. A GSI is partitioned by its own key, so an item update may need to change an index partition on a different node. DynamoDB propagates this asynchronously and GSI queries don't support strongly consistent reads."
+      },
+      {
+        "text": "The update failed silently",
+        "explanation": "Wrong. DynamoDB returns success only after the base-table write is durably stored; a later `GetItem` on the table would see it."
+      },
+      {
+        "text": "The GSI only updates nightly",
+        "explanation": "Wrong. GSI propagation is continuous, normally within a fraction of a second, though it can lag more under throttling."
+      },
+      {
+        "text": "The query used the wrong partition key",
+        "explanation": "Wrong. If the key were wrong, the query wouldn't find the item at all, rather than finding its old version."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The base table is partitioned by its partition key, say `itemId`.\n2. The GSI is partitioned by a *different* attribute, say `status`. The index entry for this item lives on whichever partition owns its `status` value.\n3. Updating synchronously would mean a cross-partition transaction on every write. Instead DynamoDB updates the GSI asynchronously.\n4. Result: a short window where the GSI shows the old value.\n5. Design for it: read from the base table (with `ConsistentRead`) when you need the latest value, and treat GSI results as possibly slightly stale. Also give the GSI enough write capacity, or throttling there can back up.\n6. If you need strongly consistent reads on an alternate sort order *within* one partition key, a local secondary index supports them, but only if it was defined when the table was created.",
+    "link": {
+      "title": "DynamoDB: Global secondary indexes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A social app stores a user's follower notifications under partition key `user_id`. One celebrity's posts generate 40,000 writes per second to their partition, far above the per-partition limit. Which mitigations are reasonable? Select all that apply.",
+    "options": [
+      {
+        "text": "Salt the hot key: write to `user_id#0` … `user_id#49` chosen randomly, and read from all 50 suffixes",
+        "explanation": "Correct. It spreads writes for that key over 50 partitions (about 800/s each, under a 1,000/s limit). The cost is that reads must gather from 50 keys, so apply it only to known-hot keys."
+      },
+      {
+        "text": "Switch from hash to range partitioning on `user_id`",
+        "explanation": "Wrong. A single key still maps to a single partition under any scheme. The problem is one key, not the distribution of many keys."
+      },
+      {
+        "text": "Add more nodes to the cluster",
+        "explanation": "Wrong by itself. More nodes increase total capacity, but a single key still lives in one partition; the hot partition stays hot."
+      },
+      {
+        "text": "Buffer and batch the celebrity's writes (e.g. via a queue), aggregating many events into fewer writes",
+        "explanation": "Correct. Aggregating, say, 100 events per write turns 40,000 writes/s into 400, comfortably within limits, at the cost of a little delay."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "1. Identify the bottleneck: one *key* gets 40,000 writes/s; the per-partition limit is around 1,000 (DynamoDB WCU) or whatever one node can take.\n2. Partitioning schemes and more nodes only help with *many* keys. One key always lands in one place.\n3. Option: split the key. With 50 salts, each sub-key gets 40,000 ÷ 50 = 800/s, under a 1,000/s limit. (20 salts would give 2,000/s each, still too many.) Choose the salt count from the numbers, with headroom.\n4. Option: reduce the write count by batching. 40,000 events/s in batches of 100 = 400 writes/s.\n5. Often you'd combine both, and treat celebrity accounts as a special case in the design (as Twitter's fan-out does).",
+    "link": {
+      "title": "DynamoDB: Designing partition keys to distribute your workload",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A multi-tenant SaaS on MySQL needs to move from 4 to 8 shards without downtime. Shard key is `tenant_id`. Which sequence is safest?",
+    "options": [
+      {
+        "text": "Take the site offline, dump and reload each moving tenant, update the routing map, bring the site back",
+        "explanation": "Wrong for the requirement. It's simple and safe but needs downtime proportional to data size, which the brief rules out."
+      },
+      {
+        "text": "Update the routing map first, then copy data to the new shards in the background",
+        "explanation": "Wrong. Reads and writes would go to shards that don't have the data yet, causing errors or missing data until the copy finishes."
+      },
+      {
+        "text": "Change the shard function to `tenant_id mod 8` and let each shard work out what it should hold",
+        "explanation": "Wrong. Without an orchestrated copy, rows would simply be unreachable on the old shards. And mod-based mapping moves more tenants than necessary."
+      },
+      {
+        "text": "Backfill moving tenants to new shards from a snapshot, stream ongoing changes via CDC (or double-write), verify with checksums, then cut over each tenant's routing with a brief write pause, keeping rollback possible",
+        "explanation": "Correct. This is the standard online-migration pattern (as Vitess's MoveTables/Reshard workflows do): the new location is kept in sync until it's verified, and cutover is a small, reversible step."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Plan**: decide which tenants move (half of each old shard's tenants) using a lookup table, not `mod`, so you can move tenants individually.\n2. **Backfill**: copy a consistent snapshot of those tenants' rows to the new shards.\n3. **Catch up**: stream the binlog (CDC) from the snapshot position so new writes also reach the new shard.\n4. **Verify**: compare row counts and checksums per table per tenant.\n5. **Cut over**: briefly pause writes for that tenant (seconds), let CDC drain, flip the routing entry, resume.\n6. **Rollback path**: keep reverse replication running for a while so you can flip back.\n7. **Clean up** old copies once confident.",
+    "link": {
+      "title": "Vitess documentation",
+      "url": "https://vitess.io/docs/"
+    }
+  },
+  {
+    "id": "db-partitioning-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An existing DynamoDB table has partition key `customerId` and sort key `orderDate`. A new feature needs \"this customer's orders sorted by `totalAmount`\", and finance insists the results be strongly consistent. What are your options?",
+    "options": [
+      {
+        "text": "Add a local secondary index on `(customerId, totalAmount)` to the existing table",
+        "explanation": "Wrong. That's the right *shape*, but LSIs can only be defined when a table is created. You can't add one to an existing table."
+      },
+      {
+        "text": "Add a GSI on `(customerId, totalAmount)` and query it with `ConsistentRead = true`",
+        "explanation": "Wrong. GSIs don't support strongly consistent reads; a `ConsistentRead` query on a GSI is rejected. A GSI would be fine if eventual consistency were acceptable."
+      },
+      {
+        "text": "Either create a new table with that LSI and migrate the data, or query the base table by `customerId` with a strongly consistent read and sort by amount in the application",
+        "explanation": "Correct. An LSI gives strongly consistent reads in the needed order, but requires a new table. For a modest number of orders per customer, a strongly consistent `Query` on the partition key plus an in-app sort also works."
+      },
+      {
+        "text": "Use a `Scan` with a filter on `customerId`",
+        "explanation": "Wrong. A scan reads the whole table and filters afterwards: very expensive, and it still returns results unsorted by amount."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The pattern stays within one partition key (`customerId`), with a different sort key. That's the definition of an LSI.\n2. LSI facts:\n   - Strongly consistent reads: yes.\n   - When can you add one? Only at table creation.\n   - Max 5 per table; 10 GB per partition-key value.\n3. GSI facts:\n   - Can be added any time (default quota 20).\n   - Eventually consistent reads only.\n4. So with strong consistency required and an existing table:\n   - New table with the LSI, then backfill (for example via a stream or export/import), or\n   - Strongly consistent `Query(customerId)` on the base table, then sort by amount in code (fine for tens or hundreds of orders).\n5. Lesson: decide LSIs up front, because they're fixed for the table's lifetime.",
+    "link": {
+      "title": "DynamoDB: Local secondary indexes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LSI.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about DynamoDB secondary indexes are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A table can have at most 5 local secondary indexes, and they must be defined when the table is created",
+        "explanation": "Correct. The limit of 5 LSIs is fixed, and LSIs can't be added to or removed from an existing table."
+      },
+      {
+        "text": "A table with any LSI limits each partition-key value to 10 GB of data across the table and its LSIs",
+        "explanation": "Correct. This is the *item collection* limit. A customer with a huge number of items can hit it, and further writes for that key are then rejected."
+      },
+      {
+        "text": "If a GSI lacks write capacity to keep up, writes to the base table are throttled",
+        "explanation": "Correct. Every base-table write that affects the index must also be applied to the GSI, so an under-provisioned GSI throttles the table's writes."
+      },
+      {
+        "text": "GSI queries can request strongly consistent reads with `ConsistentRead = true`",
+        "explanation": "Wrong. GSIs are updated asynchronously and support only eventually consistent reads."
+      },
+      {
+        "text": "The 20-GSI limit per table is a hard limit that can't be raised",
+        "explanation": "Wrong. 20 is the *default* quota for GSIs per table, and it's adjustable through a service quota request."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "| | LSI | GSI |\n|---|---|---|\n| Partition key | Same as table | Any attribute |\n| Limit | 5, fixed | 20 default |\n| Add later? | No | Yes |\n| Strong reads? | Yes | No |\n| Capacity | Table's | Its own |\n\n1. LSI limit and creation-time rule: true.\n2. 10 GB item-collection limit applies when the table has LSIs: true.\n3. GSI write back-pressure throttles the base table: true. Give GSIs enough capacity (or use on-demand mode).\n4. GSIs are eventually consistent: the option is false.\n5. 20 is a default quota, not a hard limit: false.",
+    "link": {
+      "title": "DynamoDB: Global secondary indexes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Redis Cluster, `MGET user:42:cart user:42:profile` fails with a `CROSSSLOT` error, although it worked on a single Redis server. What's the cleanest fix?",
+    "options": [
+      {
+        "text": "Rename the keys with a hash tag, such as `{user:42}:cart` and `{user:42}:profile`, so both hash to the same slot",
+        "explanation": "Correct. When a key contains `{...}`, Redis hashes only the part inside the braces, so all of a user's keys share a slot and multi-key commands work."
+      },
+      {
+        "text": "Increase the number of hash slots so both keys fit in one",
+        "explanation": "Wrong. Redis Cluster always has exactly 16,384 slots. The issue is that the two keys hash to different slots, not that there are too few."
+      },
+      {
+        "text": "Run the command on every node and merge the results",
+        "explanation": "Wrong. That works around the symptom at the cost of extra round trips, and it can't make transactions or Lua scripts span slots."
+      },
+      {
+        "text": "Disable cluster mode for multi-key commands",
+        "explanation": "Wrong. There's no per-command switch; cluster mode either shards the keyspace or it doesn't."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Redis Cluster: `slot = CRC16(key) mod 16384`; each node owns a set of slots.\n2. `user:42:cart` and `user:42:profile` are different strings, so they almost certainly land in different slots, possibly on different nodes.\n3. Multi-key commands, `MULTI`/`EXEC` and Lua scripts need all keys in one slot, hence `CROSSSLOT`.\n4. Hash tags:\n```\n{user:42}:cart     -> CRC16(\"user:42\")\n{user:42}:profile  -> CRC16(\"user:42\")\n```\n   Same slot, so `MGET` works.\n5. Caution: don't put a popular constant in the tag (`{global}:...`), or every key piles into one slot and one node becomes a hot spot.",
+    "link": {
+      "title": "Redis Cluster specification",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
+    }
+  },
+  {
+    "id": "db-partitioning-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A B2B SaaS shards Postgres by `hash(tenant_id) mod 16`. One enterprise tenant now holds 35% of all data and generates 40% of queries, and its shard is saturated while others are idle. What's the best long-term design change?",
+    "options": [
+      {
+        "text": "Change to `hash(tenant_id) mod 32`",
+        "explanation": "Wrong. One tenant still hashes to one shard, so its load stays on one machine, and changing the modulus moves almost every other tenant too."
+      },
+      {
+        "text": "Switch the shard key to `user_id` so the big tenant spreads out",
+        "explanation": "Wrong. That spreads the big tenant, but nearly every query is per-tenant, so most queries would now need scatter-gather across all shards, and tenant-level transactions would become cross-shard."
+      },
+      {
+        "text": "Replicate the hot shard to more read replicas",
+        "explanation": "Partially useful for reads, but it doesn't help writes or the data volume, and the root cause, a fixed formula placing a giant tenant with others, remains."
+      },
+      {
+        "text": "Route tenants through a directory (lookup table), give the giant tenant its own dedicated shard, and if it outgrows one machine, shard it internally by a second key",
+        "explanation": "Correct. A directory lets you place tenants individually and move them one at a time. Isolating the outlier fixes the hot spot without touching other tenants, and a second-level key (say `account_id`) only for that tenant handles further growth."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Diagnose: skew from one *key* (a tenant), not bad hashing.\n2. Any formula `f(tenant_id)` puts all of that tenant on one shard.\n3. Directory-based sharding:\n```\ntenant_id -> shard\n  1..n    -> shards 1-16\n  BIG     -> shard 17 (dedicated)\n```\n4. Moving BIG: backfill, CDC, verify, cut over (as in the resharding steps).\n5. If BIG later needs several machines, shard its data by a second key such as `account_id`, keeping its queries mostly single-shard.\n6. Systems like Citus and Vitess support this pattern of isolating large tenants.",
+    "link": {
+      "title": "Citus: Choosing a distribution column",
+      "url": "https://docs.citusdata.com/en/stable/sharding/data_modeling.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You create an Elasticsearch index with 5 primary shards on a 5-node cluster and expect to grow to 50 nodes. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The primary shard count is fixed at index creation; changing it means reindexing or using the split API, which first requires making the index read-only",
+        "explanation": "Correct. Elasticsearch uses a fixed number of partitions per index. The split API can multiply the count, but only on a read-only index."
+      },
+      {
+        "text": "With 5 primaries, indexing work can't spread over more than 5 nodes, though replicas can spread search load further",
+        "explanation": "Correct. Each document belongs to one primary shard, so at most 5 nodes do primary indexing work. Replica shards can be placed on other nodes to serve searches."
+      },
+      {
+        "text": "Creating 500 primary shards now would be free insurance",
+        "explanation": "Wrong. Every shard has memory, file and cluster-state overhead, and searches fan out to every shard. Oversharding is a common cause of slow, unstable clusters."
+      },
+      {
+        "text": "When you add nodes, Elasticsearch automatically splits shards to use them",
+        "explanation": "Wrong. Adding nodes moves existing shards around; it never changes the number of primaries."
+      },
+      {
+        "text": "Using time-based indexes (one per day or month) lets each new index pick a shard count suited to the current cluster",
+        "explanation": "Correct. A common pattern for logs and events: new indexes, often via rollover, can use more shards as the cluster grows, without touching old ones."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Elasticsearch: `shard = hash(_routing) mod number_of_primary_shards`. That's why the count can't change freely: it would move every document.\n2. 5 primaries → at most 5 nodes doing primary indexing.\n3. Replicas add search capacity and redundancy, not indexing capacity.\n4. Too many shards: overhead per shard plus search fan-out. Aim for shards in the tens of GB.\n5. Growth options:\n   - Split API (×2, ×5, ...) on a read-only index.\n   - Reindex into a new index.\n   - Time-based indexes with rollover, each sized for its time.",
+    "link": {
+      "title": "Elasticsearch: Split index API",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-split-index.html"
+    }
+  }
+]

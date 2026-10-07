@@ -1,0 +1,343 @@
+[
+  {
+    "id": "isa-loops-arrays-structs-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`rdi` holds the address of an `int` array and `rsi` holds a 64-bit index `i`. Which x86-64 operand reads `a[i]`? Assume a 4-byte int and an in-range index.",
+    "options": [
+      {
+        "text": "`dword ptr [rdi + rsi]`",
+        "explanation": "Without a scale this reads byte offset `i`, which is only right for a `char` array. Each `int` is 4 bytes."
+      },
+      {
+        "text": "`dword ptr [rdi + 4*rsi]`",
+        "explanation": "Correct. Address = base + index × element size = `rdi + 4*rsi`, and `dword` reads 4 bytes."
+      },
+      {
+        "text": "`dword ptr [rsi + 4*rdi]`",
+        "explanation": "This swaps base and index: it scales the array's *address* by 4, which points somewhere meaningless."
+      },
+      {
+        "text": "`qword ptr [rdi + 8*rsi]`",
+        "explanation": "That is `a[i]` for an 8-byte type such as `long` or a pointer, not `int`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Address of `a[i]` = byte address `base + i * sizeof(int)` = `base + 4i` (C pointer arithmetic already scales `a + i`).\n2. The base is in `rdi`, the index in `rsi`, and 4 is a legal x86 scale (1, 2, 4 or 8).\n3. So the operand is `[rdi + 4*rsi]`, with `dword ptr` for a 4-byte load.\n4. ARM64 equivalent: `ldr w8, [x0, x1, lsl #2]` (shift left by 2 = multiply by 4).",
+    "link": {
+      "title": "Computer Systems: A Programmer's Perspective",
+      "url": "https://csapp.cs.cmu.edu/"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On x86-64 Linux, what is `sizeof` this struct?\n\n```\nstruct T {\n    char c;\n    int  x;\n    char d;\n};\n```",
+    "options": [
+      {
+        "text": "6",
+        "explanation": "That is just the sum of the field sizes (1 + 4 + 1). It ignores the padding needed to align `x` and the end of the struct."
+      },
+      {
+        "text": "9",
+        "explanation": "This accounts for the padding before `x` (so `d` lands at offset 8), but forgets that the total must be rounded up to a multiple of 4."
+      },
+      {
+        "text": "12",
+        "explanation": "Correct. `c` at 0, 3 bytes of padding, `x` at 4, `d` at 8, then 3 bytes of tail padding so the size is a multiple of 4, the struct's alignment."
+      },
+      {
+        "text": "16",
+        "explanation": "16 would be the result if the struct's alignment were 8, but its largest member is a 4-byte `int`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `c`: offset 0, 1 byte.\n2. `x` needs 4-byte alignment: next multiple of 4 is 4. Padding bytes 1–3. `x` occupies 4–7.\n3. `d`: offset 8, 1 byte. Fields end at 9.\n4. Struct alignment = largest member alignment = 4. Round 9 up to a multiple of 4: **12**.\n5. Reordering to `int x; char c; char d;` gives 4 + 1 + 1 = 6, rounded up to 8.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which is a useful first clue when looking for a loop in a conventional scalar assembly listing, to be confirmed by inspecting control-flow paths?",
+    "options": [
+      {
+        "text": "A `call` instruction",
+        "explanation": "Calls are function calls; a function may have none, or many, and they don't indicate repetition."
+      },
+      {
+        "text": "A `ret` instruction in the middle of the function",
+        "explanation": "An early `ret` is just an early return path, such as the `n <= 0` guard in `sum`."
+      },
+      {
+        "text": "Any `cmp` instruction",
+        "explanation": "Comparisons also occur in selections and guards, and not every selection uses CMP. A comparison alone does not establish repetition."
+      },
+      {
+        "text": "A conditional branch whose target label is at a lower address, above the branch",
+        "explanation": "A backward conditional branch is a common clue. Confirm that control can cycle back to it; layout alone does not uniquely identify a source-level loop."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "In the lesson’s SUM, the backward JNE returns to the loop body, whose fall-through path reaches JNE again. That forms a cycle. Arbitrary code can place non-loop blocks at lower addresses, and loops can use indirect or unconditional branches, so use the control-flow graph to confirm the pattern.",
+    "link": {
+      "title": "Compiler Explorer",
+      "url": "https://godbolt.org/"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A `switch` over cases 0–4 begins like this. What happens when `x = -1`?\n\n```\n    cmp   edi, 4\n    ja    .Ldefault\n    mov   eax, edi\n    lea   rcx, [rip + .Ltab]\n    ...\n```",
+    "options": [
+      {
+        "text": "It goes to the default, because `ja` compares unsigned and -1 is 0xffffffff, which is above 4",
+        "explanation": "Correct. One unsigned compare rejects both negative values and values above 4."
+      },
+      {
+        "text": "It reads `.Ltab[-1]`, one entry before the table, and jumps to garbage",
+        "explanation": "A signed JG would fail to reject −1, but MOV EAX,EDI then zero-extends it to 4,294,967,295. The subsequent lookup would use a huge positive index, not table[−1]."
+      },
+      {
+        "text": "It goes to case 4, because values are clamped to the table size",
+        "explanation": "Nothing clamps the value; out-of-range inputs are sent to the default label."
+      },
+      {
+        "text": "It depends on the upper 32 bits of `rdi`",
+        "explanation": "The comparison is on `edi`, and `mov eax, edi` zero-extends, so the upper bits of `rdi` play no part."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `x = -1` is the bit pattern 0xffffffff in `edi`.\n2. `cmp edi, 4` computes 0xffffffff - 4 and sets flags.\n3. `ja` (jump if above) is unsigned: 4,294,967,295 > 4, so it jumps to the default.\n4. Similarly, x = 5 is above 4 and goes to the default. Only 0–4 fall through to the table lookup.\n\nOne unsigned compare replaces the pair `x < 0 || x > 4`. This is the standard range check for jump tables.",
+    "link": {
+      "title": "Branch table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_table"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For this ARM64 loop, called with `x1 = 5`, how many times is the `b.ne` branch **taken**?\n\n```\n.Lloop:\n    ldr   x9, [x0], #8\n    subs  x1, x1, #1\n    add   x8, x9, x8\n    b.ne  .Lloop\n```",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "The body runs 5 times, but on the last pass `subs` produces 0, so `b.ne` falls through instead of jumping."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. `x1` goes 5→4, 4→3, 3→2, 2→1 (branch taken each time), then 1→0 (Z set, not taken). Four taken branches, five iterations."
+      },
+      {
+        "text": "6",
+        "explanation": "That counts an extra check at the top. This loop is bottom-tested: there is no test before the first iteration."
+      },
+      {
+        "text": "0, because `add` overwrites the flags set by `subs`",
+        "explanation": "Plain `add` on ARM64 does not set flags; only the `s` forms (`adds`, `subs`) do. So `b.ne` still sees the result of `subs`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Iteration 1: `x1` 5→4, not zero, branch taken (1).\n2. Iteration 2: 4→3, taken (2).\n3. Iteration 3: 3→2, taken (3).\n4. Iteration 4: 2→1, taken (4).\n5. Iteration 5: 1→0, Z flag set, `b.ne` not taken; the loop exits.\n\nFive iterations, four taken branches. This also shows why the `add` can sit between `subs` and `b.ne`: on ARM64, ordinary arithmetic leaves NZCV alone.",
+    "link": {
+      "title": "Compiler Explorer",
+      "url": "https://godbolt.org/"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You are reverse engineering a binary and see:\n\n```\nlea   rax, [rsi + 4*rsi]\nmov   eax, [rdi + 8*rax + 4]\n```\n\n`rdi` is a pointer to an array of structs and `rsi` an index. What can you conclude? Assume rdi is the exact base and these instructions implement a direct p[i].field access with no further index transformation.",
+    "options": [
+      {
+        "text": "Each element is 20 bytes and the field read is at offset 8",
+        "explanation": "This multiplies only 4 × 5 and misreads the displacement. The scale 8 multiplies the `lea` result, and the `+ 4` is the field offset."
+      },
+      {
+        "text": "Each element is 8 bytes and the index is multiplied by 5 for alignment",
+        "explanation": "The scale alone is not the element size here; the compiler split the stride 40 into 5 × 8 because 40 is not a legal scale."
+      },
+      {
+        "text": "The array holds 5 pointers per element",
+        "explanation": "The address arithmetic alone does not establish member types. EAX receives four bytes; it does not reveal whether those bits came from an integer, float or another representation."
+      },
+      {
+        "text": "Each element is 40 bytes and a 4-byte field at offset 4 is read",
+        "explanation": "Correct. `rax = 5i`, then the address is `rdi + 8*5i + 4` = `rdi + 40i + 4`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "LEA computes 5i, and MOV loads four bytes from base + 40i + 4. Under the stated direct indexing assumption, the element stride is 40 and the field offset is 4. This does not reveal the member’s name, semantic type, declaration position or the other fields.",
+    "link": {
+      "title": "Computer Systems: A Programmer's Perspective",
+      "url": "https://csapp.cs.cmu.edu/"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`int a[8][10]` starts at address 0x1000. What is the address of `a[2][3]`? Assume 4-byte int.",
+    "options": [
+      {
+        "text": "0x1017",
+        "explanation": "This adds 2 × 10 + 3 = 23 bytes, forgetting that each element is a 4-byte `int`."
+      },
+      {
+        "text": "0x1053",
+        "explanation": "This finds the start of row 2 correctly (0x1000 + 2 × 40 = 0x1050) but then adds 3 bytes instead of 3 ints (12 bytes)."
+      },
+      {
+        "text": "0x105C",
+        "explanation": "Correct. Row-major: offset = (2 × 10 + 3) × 4 = 92 = 0x5C, so 0x1000 + 0x5C = 0x105C."
+      },
+      {
+        "text": "0x1068",
+        "explanation": "That is the column-major address, (3 × 8 + 2) × 4 = 104. C stores rows one after another, not columns."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. C arrays are row-major: all of row 0, then all of row 1, and so on.\n2. Each row has 10 ints = 40 bytes.\n3. `a[2][3]` is after 2 full rows (2 × 10 = 20 elements) plus 3 more: element number 23.\n4. Byte offset = 23 × 4 = 92 = 0x5C.\n5. Address = 0x1000 + 0x5C = **0x105C**.\n\nIn assembly: `i*10` via `lea` tricks, then `[rdi + 4*rax]`. The row count 8 never appears.",
+    "link": {
+      "title": "Row- and column-major order — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Row-_and_column-major_order"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about how compilers lower `switch` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Dense cases with distinct code bodies can use a jump table and an indirect branch",
+        "explanation": "Correct as a possible lowering. Case count, target, optimization settings and profiling influence the choice."
+      },
+      {
+        "text": "Widely spaced case values can use compare chains or trees instead of a huge sparse table",
+        "explanation": "Correct. A compiler may choose comparisons, bit tests, several smaller clusters or another profitable form."
+      },
+      {
+        "text": "If every case just returns a constant, the compiler can replace the jumps with a table of the return values",
+        "explanation": "Correct. Clang's `switch.table` turns this into a range check plus one load, with no indirect branch."
+      },
+      {
+        "text": "A jump table is always faster than compares, so compilers use one whenever there are more than two cases",
+        "explanation": "Indirect branches can mispredict badly, and tables cost memory. Compilers weigh density and case count; small switches stay as compares."
+      },
+      {
+        "text": "`switch` always compiles to a jump table; only `if`/`else` chains become compares",
+        "explanation": "The source construct doesn't dictate the lowering. Compilers can also turn `if` chains into tables and switches into compares."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Dense code cases can use jump tables; sparse cases can use comparisons; constant-result cases can use data tables or arithmetic. None is unconditionally fastest. The compiler considers target costs, case structure and options such as -fno-jump-tables.",
+    "link": {
+      "title": "Branch table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_table"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On x86-64 Linux, how many bytes per element are saved by reordering this struct's fields to minimise padding?\n\n```\nstruct P {\n    char   a;\n    double b;\n    char   c;\n    int    d;\n};\n```",
+    "options": [
+      {
+        "text": "0: the compiler already reorders fields for you",
+        "explanation": "C compilers must keep fields in declaration order; the standard requires it. Reordering is the programmer's job."
+      },
+      {
+        "text": "4 bytes",
+        "explanation": "The original has 10 padding bytes (7 before b and 3 before d), and the reordered layout has 2. The saving is 8 bytes, not 4."
+      },
+      {
+        "text": "8 bytes",
+        "explanation": "Correct. As declared it is 24 bytes; ordered `double, int, char, char` it is 16 bytes."
+      },
+      {
+        "text": "10 bytes",
+        "explanation": "That compares against the raw field total of 14, but the reordered struct still needs 2 bytes of tail padding to reach a multiple of 8."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "As declared:\n```\na  @0   (1) + 7 pad\nb  @8   (8)\nc  @16  (1) + 3 pad\nd  @20  (4)\nend 24 -> already a multiple of 8\n```\nReordered largest-first:\n```\nb  @0   (8)\nd  @8   (4)\na  @12  (1)\nc  @13  (1)\nend 14 -> round up to 16\n```\n24 - 16 = **8 bytes** per element. For 10 million elements that is 80 MB less memory for allocation. A complete streaming scan has roughly one-third fewer bytes; exact cache-line traffic depends on access patterns and alignment.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does `f(4)` return, and what does `f(0)` do?\n\n```\n// int f(unsigned n), n in edi\nf:\n    xor   eax, eax\n.L:\n    add   eax, edi\n    dec   edi\n    jne   .L\n    ret\n```",
+    "options": [
+      {
+        "text": "`f(4)` = 10; `f(0)` runs about 4.3 billion iterations before returning",
+        "explanation": "Correct. This is a do-while without the guard a compiler would add for a `for` loop. 0 decrements to 0xffffffff and counts all the way down."
+      },
+      {
+        "text": "`f(4)` = 10; `f(0)` also returns 0 immediately",
+        "explanation": "There is no guard before the loop. With `n = 0`, `dec` produces 0xffffffff, which is non-zero, so the loop keeps going."
+      },
+      {
+        "text": "`f(4)` = 6; `f(0)` returns 0",
+        "explanation": "6 would be 3 + 2 + 1: it misses that the first `add` happens before the first `dec`, so 4 itself is included."
+      },
+      {
+        "text": "`f(4)` = 4; `f(0)` returns 0",
+        "explanation": "This assumes the body runs once. `jne` loops back while `edi` is non-zero after the decrement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Tracing f(4):\n| edi before | eax after add | edi after dec | jne |\n|---|---|---|---|\n| 4 | 4 | 3 | taken |\n| 3 | 7 | 2 | taken |\n| 2 | 9 | 1 | taken |\n| 1 | 10 | 0 | not taken |\n\nSo f(4) = 10.\n\nTracing f(0): `add` leaves 0, `dec` wraps to 0xffffffff, `jne` is taken, and it runs 2^32 times in total (wrapping `eax` along the way). The missing piece is the entry guard (`test edi, edi` / `je`) that a compiler adds when it rotates a `for` or `while` loop. Hand-written loops that forget it are a classic bug.",
+    "link": {
+      "title": "Compiler Explorer",
+      "url": "https://godbolt.org/"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In the shown position-independent jump table, targets and table move together and every offset fits signed 32 bits. Compared with 64-bit absolute entries, which are genuine benefits of 32-bit relative entries? Select all that apply.",
+    "options": [
+      {
+        "text": "The table is half the size",
+        "explanation": "Each entry uses four rather than eight bytes, before any padding. Fewer cache lines may suffice, depending on table size, alignment and accessed entries."
+      },
+      {
+        "text": "No load-time relocations are needed, because the offsets stay valid wherever the executable is loaded",
+        "explanation": "The target-minus-table differences remain fixed when both move by the same amount. These entries therefore need no load-time base fixups and can remain in shareable read-only storage."
+      },
+      {
+        "text": "The indirect jump becomes perfectly predictable",
+        "explanation": "The branch target still depends on `x`. Prediction is a property of the input pattern, not of the table format."
+      },
+      {
+        "text": "It is required because x86-64 cannot jump to a 64-bit address",
+        "explanation": "JMP RAX uses a 64-bit target, subject to canonical-address, mapping, permission and other architectural checks. Relative table entries are an encoding choice."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "With targets and table in the same relocated module, target−table is fixed at link time. Four-byte entries halve entry storage and avoid load-time base relocations for those entries. The dispatch adds each offset to the table’s runtime base. This changes storage and address calculation, not a guarantee about exact branch prediction or runtime cost.",
+    "link": {
+      "title": "Branch table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Branch_table"
+    }
+  }
+]

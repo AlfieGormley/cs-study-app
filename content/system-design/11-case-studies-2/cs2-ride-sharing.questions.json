@@ -1,0 +1,385 @@
+[
+  {
+    "id": "cs2-ride-sharing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "2 M drivers are online at peak, and each sends a location every 4 seconds. Roughly what write rate must the location tier handle?",
+    "options": [
+      {
+        "text": "About 8 M writes/s",
+        "explanation": "Wrong. This multiplies by 4 instead of dividing. Each driver sends one update every 4 s, which is 0.25 updates per second, not 4."
+      },
+      {
+        "text": "About 500,000 writes/s",
+        "explanation": "Correct. 2,000,000 drivers / 4 s = 500,000 updates per second."
+      },
+      {
+        "text": "About 23,000 writes/s",
+        "explanation": "23,000/s does not follow from the stated data. Two million updates per day would be about 23/s; two billion per day would be about 23,000/s. The actual interval is 4 seconds."
+      },
+      {
+        "text": "About 1,200 writes/s",
+        "explanation": "Wrong. That's roughly the peak *trip request* rate. Location pings outnumber trip requests by more than 400x."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Rate per driver = 1 update / 4 s = **0.25 /s**.\n2. Total = 2,000,000 x 0.25 = **500,000 writes/s**.\n3. Bandwidth: 500 k x ~100 B = **50 MB/s**.\n4. State size: only the latest position per driver, 2 M x 100 B = **200 MB**.\n\nSo the workload is huge in writes but tiny in state. That points to a sharded **in-memory** index where each write overwrites the last, not a durable OLTP database writing to disk 500 k times a second.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You index drivers by geohash at precision 6 and answer 'nearby drivers' by looking only at the rider's own cell. Riders standing near cell boundaries report 'no cars available' while the map shows a car 50 m away. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Query all cells intersecting the required search area, including neighbors across boundaries, then filter by actual distance.",
+        "explanation": "A3×3 neighborhood suffices only when its geometry covers the desired radius at that latitude. Expand beyond immediate neighbors when necessary."
+      },
+      {
+        "text": "Geohash precision 6 is too coarse. Switch to precision 9",
+        "explanation": "Wrong. Finer cells make the boundary problem *more* frequent, because more riders sit near an edge. Precision isn't the root cause."
+      },
+      {
+        "text": "Geohash cells overlap, so drivers are being double-counted and then removed",
+        "explanation": "Wrong. Geohash cells tile the plane with no overlap. The issue is the opposite: there's a hard boundary that a single-cell lookup can't see past."
+      },
+      {
+        "text": "The geohash needs to be stored as an integer rather than a string",
+        "explanation": "Wrong. The representation (base-32 string or interleaved integer bits) doesn't change which points fall in which cell, so it doesn't fix boundary misses."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A driver50m across a boundary is invisible to a single-cell lookup. Cover every cell intersecting the desired metric search region, fetch candidates, then distance-filter. Geohash widths shrink with latitude, so the equatorial1.2×0.6km dimensions do not prove coverage everywhere. H3 gridDisk supplies graph-distance neighbors; pentagons and projection distortion mean it is not an exact equal-distance circle.",
+    "link": {
+      "title": "Geohash (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Geohash"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two dispatcher instances, handling two different riders, both select driver D as the best candidate at the same moment. What mechanism most simply guarantees D receives only one offer?",
+    "options": [
+      {
+        "text": "Rely on the location index: once D is offered, it removes D from the cell set",
+        "explanation": "Wrong. The location index is eventually consistent soft state. Both dispatchers read it before either update lands, so both still see D as available. It can't provide mutual exclusion."
+      },
+      {
+        "text": "Let both offers go out and have the driver app reject the second",
+        "explanation": "Wrong. It pushes correctness to an unreliable mobile client. If the driver accepts both quickly, or the app is offline, you now have two riders expecting one car."
+      },
+      {
+        "text": "Route all dispatching globally through a single thread",
+        "explanation": "Wrong. It would be correct, but at ~1,200 requests/s with ETA calls per request it's a throughput and availability bottleneck. A single global thread also can't survive a data-centre failure."
+      },
+      {
+        "text": "A conditional write (compare-and-set) on D's state: set `offered` only `WHERE state='available' AND version=v`",
+        "explanation": "Correct. Exactly one of the two conditional updates succeeds. The loser sees 0 rows affected and moves to its next candidate. It's simple, has no lock service, and is correct even with retries."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Two authoritative CAS updates against available/version 7 cannot both succeed. Bind the winning offer to a unique offer ID and epoch. Only that still-pending offer can be expired or declined; a stale timeout must not release a later accepted trip. Driver reservation and trip acceptance must commit atomically or follow a recoverable protocol preserving both invariants.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Uber built H3 using hexagons rather than squares. Which advantages of hexagonal cells matter for surge pricing and supply/demand analysis? Select all that apply.",
+    "options": [
+      {
+        "text": "Regular planar hexagons have six equally spaced edge neighbors, which provides a useful approximation for local H3 smoothing.",
+        "explanation": "H3 approximates this geometry on a sphere; actual distances vary with projection distortion and near pentagons. It does not make every direction exactly equal."
+      },
+      {
+        "text": "k-ring queries (all cells within k steps) approximate a circle well",
+        "explanation": "Correct. A hexagonal k-ring is a reasonable approximation of a radius, which suits 'demand within about 1 km'. Square rings are squares, with corners much further away than their edges."
+      },
+      {
+        "text": "Hexagons nest perfectly, so each parent is exactly 7 children with no gaps or overlap",
+        "explanation": "Wrong. Hexagons *can't* be tiled exactly by smaller hexagons. H3's children only approximately cover their parent (with a rotation between resolutions). S2's square cells, by contrast, nest exactly."
+      },
+      {
+        "text": "Hexagonal cells eliminate the need for any neighbour lookups",
+        "explanation": "Wrong. You still need neighbours. Hexagons just make neighbour relationships uniform and cheap to compute."
+      },
+      {
+        "text": "Cells at a given resolution have roughly uniform area, so per-cell supply/demand ratios are comparable",
+        "explanation": "Correct. Neighbouring H3 cells at one resolution are very close in area, unlike lat/lng rectangles, which shrink towards the poles. (Across the whole globe, area at one resolution varies by up to about 2x, but within a city that hardly matters.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Hexagonal graph neighborhoods are useful for local smoothing and approximately circular candidate regions. H3 has projection distortion and twelve pentagons per resolution, so actual distances/areas vary. The roughly 2× global area ratio refers to hexagons only. Parent-child logical hierarchy is exact, while geometric containment is approximate.",
+    "link": {
+      "title": "H3 documentation",
+      "url": "https://h3geo.org/docs/"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your greedy dispatcher assigns each request, the moment it arrives, to the driver with the lowest ETA. Average pickup times are worse than a competitor's in dense downtown areas. Which change best addresses this?",
+    "options": [
+      {
+        "text": "Collect requests over a 1–2 s window, build an ETA cost matrix between those riders and nearby drivers, and solve the assignment problem to minimise total ETA",
+        "explanation": "Batching can improve the assignment objective on the chosen candidates, but adds waiting and computation. Net real-world pickup benefit must be measured;1–2 seconds is a hypothetical window."
+      },
+      {
+        "text": "Rank by straight-line distance instead of ETA, because it's cheaper and lets you consider more drivers",
+        "explanation": "Wrong. Straight-line distance ignores one-way streets, rivers and traffic. It's fine for pre-filtering but makes the final ranking worse, not better."
+      },
+      {
+        "text": "Increase the location update interval to 15 s to reduce load",
+        "explanation": "Wrong. Staler locations make ETAs less accurate, which worsens matching. Load isn't the problem described."
+      },
+      {
+        "text": "Offer each request to the 5 nearest drivers at the same time and take the first acceptance",
+        "explanation": "Wrong. Broadcasting causes the double-booking and fairness problems that CAS state machines prevent. It annoys drivers and still doesn't optimise globally."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A tiny example shows the greedy failure:\n\n| | Driver X | Driver Y |\n|---|---|---|\n| Rider A | 2 min | 3 min |\n| Rider B | 3 min | 10 min |\n\nGreedy: A arrives first and takes X (2 min), so B gets Y (10 min). Total **12 min**.\n\nBatched: A gets Y (3 min) and B gets X (3 min). Total **6 min**.\n\nWith a 2 s window downtown, you might batch dozens of riders and drivers and solve with a Hungarian-style or min-cost-flow solver. In quiet suburbs a batch has one rider, so batching degenerates gracefully to greedy.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Surge multipliers are recomputed every minute per H3 cell. A rider sees £14.00 (1.4x), taps Request 20 seconds later, and surge has risen to 1.8x. What should happen?",
+    "options": [
+      {
+        "text": "Honour the price via the `quote_id` returned with it, which is valid until its `expires_at`",
+        "explanation": "Correct. Quotes lock the price for a short window (a few minutes). Surge can then be computed asynchronously and eventually consistently, while each rider's price stays consistent."
+      },
+      {
+        "text": "Charge 1.8x, because that's the current market price",
+        "explanation": "The displayed unexpired quote is the contract in this scenario. Silently replacing it with a higher price breaks that contract; legal requirements depend on jurisdiction and product terms."
+      },
+      {
+        "text": "Recompute surge synchronously at request time so it's always exact",
+        "explanation": "Wrong. Computing demand/supply over sliding windows and neighbours on every request is expensive, and still wouldn't match the price the rider was shown a moment ago."
+      },
+      {
+        "text": "Reject the request and force the rider to refresh",
+        "explanation": "Wrong. It's poor user experience and causes extra request churn exactly when demand is highest. A quote with an expiry is the standard pattern."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The design separates two concerns:\n\n1. **Market signal**: the stream job computes `cell -> multiplier` every ~60 s. It's eventually consistent and may change at any moment.\n2. **Customer contract**: `GET /quotes` reads the multiplier, computes a price and stores `{quote_id, price, expires_at = now + 2 min}`.\n3. `POST /trips {quote_id}` checks the quote exists, is unexpired and belongs to this rider, then uses *its* price.\n\nIf the quote has expired, the app fetches a fresh one and shows the new price before confirming. Store quotes in a fast KV store with a TTL, so expiry cleans up automatically.",
+    "link": {
+      "title": "H3 documentation",
+      "url": "https://h3geo.org/docs/"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "One shard of your in-memory location index crashes and loses all its data. What is the impact, and what is the recovery strategy implied by a good design?",
+    "options": [
+      {
+        "text": "Catastrophic. You must restore it from the last nightly backup",
+        "explanation": "Wrong. A nightly backup of positions that change every 4 s is worthless. The data is stale within seconds, so backing it up is pointless."
+      },
+      {
+        "text": "Trips in progress are lost, because trip state lives in the location index",
+        "explanation": "Wrong in a good design. Trip state belongs in a durable, transactional store, separate from soft location state, precisely so a location-shard loss can't lose trips."
+      },
+      {
+        "text": "Rebuild the soft-state index from fresh pings once routing recovers, keeping authoritative trip/driver-assignment state in durable storage.",
+        "explanation": "Nominal 4-second updates help recovery for connected drivers, but detection, routing, reconnection and network delays can extend degradation. Missing/stale drivers should be excluded until refreshed."
+      },
+      {
+        "text": "Replay the last 24 hours of Kafka location events into the new shard",
+        "explanation": "Wrong. Replaying hours of history is slow and unnecessary. Only the latest point per driver matters, and fresh pings will arrive in 4 s anyway."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A shard crash removes candidate locations, not durable trips. Reassign ownership safely, accept fresh sequenced pings and rebuild the geo index. A lost or disconnected device may not refresh promptly; apply a freshness threshold. Optional recent-state replication or log replay can reduce degradation. No measured one-to-four-second recovery guarantee is available.",
+    "link": {
+      "title": "Gossip protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Gossip_protocol"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Away from H3 pentagon distortions, approximate resolution 8 cells as regular hexagons with average area 0.74km². For graph radiusk=2, about how many cells and total area are covered?",
+    "options": [
+      {
+        "text": "9 cells, about 6.7 km²",
+        "explanation": "Wrong. 9 is the geohash answer (a cell plus its 8 square neighbours). A hexagon has 6 neighbours, and a k-ring grows by 6k cells per ring."
+      },
+      {
+        "text": "13 cells, about 9.6 km²",
+        "explanation": "Wrong. This adds 6 for each ring (1 + 6 + 6) but forgets that each ring is longer than the last. Ring k has 6k cells, so ring 2 has 12."
+      },
+      {
+        "text": "19 cells, about 14 km²",
+        "explanation": "Correct. 1 (the centre) + 6 (ring 1) + 12 (ring 2) = 19 cells. 19 x 0.74 km² is about 14 km², roughly a circle of radius 2 km."
+      },
+      {
+        "text": "25 cells, about 18.5 km²",
+        "explanation": "Wrong. 25 is a 5 x 5 square block. Hexagonal rings grow as 1 + 3k(k + 1), not as (2k + 1)²."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count the cells ring by ring. Ring k contains 6k hexagons:\n\n```\nk=0: 1\nk=1: 6   (total 7)\nk=2: 12  (total 19)\n```\n\nThe general formula is 1 + 3k(k + 1). For k = 2: 1 + 3 x 2 x 3 = **19**.\n\nArea: 19 x 0.74 km² = **~14 km²**. A circle of that area has radius sqrt(14 / 3.14), about 2.1 km.\n\nThat's a sensible pickup search in a city. If it comes back empty, expand to k = 3 (37 cells, ~27 km²).",
+    "link": {
+      "title": "H3: hexagonal hierarchical geospatial indexing (docs)",
+      "url": "https://h3geo.org/docs/"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In this design, which authoritative mutation paths need coordination to prevent conflicting driver assignments and invalid trip transitions? Select all that apply.",
+    "options": [
+      {
+        "text": "Whether driver D is `available`, `offered` or `on_trip`",
+        "explanation": "The reservation write needs an authoritative atomic guard. Candidate reads can be stale if that guard rejects obsolete choices; the authority can be replicated through consensus rather than one physical copy."
+      },
+      {
+        "text": "The surge multiplier per H3 cell",
+        "explanation": "Wrong. Surge is a smoothed market signal recomputed every minute. What has to be consistent is the price the rider accepted, which lives in the quote."
+      },
+      {
+        "text": "Each driver's latest latitude and longitude",
+        "explanation": "Wrong. Location is soft state that refreshes every 4 s. A position a few seconds stale only makes the ranking slightly less accurate, and making it CP would add replication cost to 500,000 writes a second."
+      },
+      {
+        "text": "Trip state transitions such as `driver_assigned` to `in_trip` to `completed`",
+        "explanation": "Correct. The trip drives payment. A lost or duplicated transition means a lost trip or a double charge."
+      },
+      {
+        "text": "Every read of an immutable, signed, rider-bound quote must use a linearizable database.",
+        "explanation": "Not necessarily. An immutable authenticated quote can carry its price, rider, route and expiry; an eventual store must not substitute a different price on a miss. Revocation or single-use redemption can require coordination, but ordinary quote reads need not all be linearizable."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "Coordinate driver reservation and authoritative trip-state changes. Candidate locations, surge estimates and display reads can be stale under explicit policies. An immutable signed quote can preserve the offered price without a linearizable lookup; validate identity, route and expiry, and coordinate redemption if the product requires it.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "At peak you handle about 1,200 ride requests a second, and a k-ring search in a busy city returns around 300 available drivers. A teammate wants to call the road-routing ETA service for all 300 candidates. What's the better approach?",
+    "options": [
+      {
+        "text": "Call ETA for all 300, because straight-line distance is misleading",
+        "explanation": "Wrong. Distance is misleading for the final ranking, but routing every candidate costs 1,200 x 300 = 360,000 route computations a second, mostly for drivers who were never going to win."
+      },
+      {
+        "text": "Skip ETA entirely and rank by straight-line distance",
+        "explanation": "Wrong. A driver 300 m away across a river with no bridge can be 15 minutes away by road. Crow-flies distance alone gives bad matches."
+      },
+      {
+        "text": "Pre-filter cheaply by straight-line distance (and vehicle type), then call ETA only for the top ~10 and rank those",
+        "explanation": "Correct. The cheap filter cuts ETA load by about 30x (12,000 calls/s instead of 360,000), and the expensive ETA call is spent only where it changes the decision."
+      },
+      {
+        "text": "Precompute ETAs between every pair of H3 cells once a day",
+        "explanation": "Wrong. ETAs depend on live traffic, and the number of cell pairs is enormous. Cached cell-to-cell estimates can help as a coarse filter, but they can't replace live routing for the final choice."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Routing all 300 candidates at 1,200 requests/s means 360,000 route computations/s. A top 10 shortlist reduces that to 12,000, a30× reduction. This trades candidate recall for cost: the best ETA may lie outside the distance shortlist, especially around rivers or limited crossings. Measure recall and widen or improve the coarse filter where needed.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A rider taps Request. The `POST /v1/trips` reaches the server and a trip is created, but the response is lost when the phone switches from Wi-Fi to 4G. The app retries automatically. What stops the rider ending up with two cars?",
+    "options": [
+      {
+        "text": "The client sends the same `Idempotency-Key` on the retry, and the server returns the existing trip for that key instead of creating another",
+        "explanation": "Correct. The server stores key to trip_id when it first creates the trip. The retry finds the key and gets the original response back."
+      },
+      {
+        "text": "The server rejects any second request from the same rider within 60 seconds",
+        "explanation": "Wrong. This blocks legitimate cases (a rider booking for a friend, or cancelling and rebooking) and still returns an error rather than the trip the rider actually has."
+      },
+      {
+        "text": "The driver CAS prevents it, because a driver can only hold one trip",
+        "explanation": "Wrong. The CAS stops one *driver* getting two trips. Two duplicate trips would simply be matched to two different drivers."
+      },
+      {
+        "text": "TCP guarantees the request is only delivered once",
+        "explanation": "Wrong. TCP guarantees ordering within one connection. After a network switch the retry travels on a new connection, and the server can't tell it from a new request without an application-level key."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk the timeline:\n\n```\nt0 POST /trips  key=K1\nt1 server: insert trip T1, save K1->T1\nt2 response lost (network switch)\nt3 retry POST /trips  key=K1\nt4 server: K1 exists -> return T1\n```\n\nThe key is generated **once per user intent** (one tap of Request), not per HTTP attempt. Save the key and the trip in the same transaction, so a crash between them can't leave a trip with no key.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A stadium empties after a concert, and about 50,000 ride requests arrive from a handful of H3 cells within 15 minutes. The shard owning those cells is overloaded. Which measures help? Select all that apply.",
+    "options": [
+      {
+        "text": "Use batched matching for the area, assigning many riders to many drivers per window",
+        "explanation": "Correct. Batching amortises work over each window and produces much better assignments when demand is dense."
+      },
+      {
+        "text": "Route every request in the city to one global dispatcher so nothing is double-booked",
+        "explanation": "Wrong. Double-booking is already prevented by the driver CAS. Centralising dispatch would turn a hot shard into a hot *system*."
+      },
+      {
+        "text": "Let surge rise in those cells, which draws in drivers and spreads out demand",
+        "explanation": "Higher prices may affect supply and demand, but the response is not immediate or guaranteed. Admission controls and technical capacity protection are still required."
+      },
+      {
+        "text": "Index dense areas at a finer resolution so the hotspot spans more cells, which can live on different shards",
+        "explanation": "Finer cells can distribute a spatially broad hotspot if shard placement separates them. A co-located crowd can remain hot, and queries across more cells add fan-out; refinement is not an automatic load split."
+      },
+      {
+        "text": "Ask drivers' apps to send locations every second instead of every 4 s",
+        "explanation": "Wrong. That quadruples location writes into the same overloaded cells and doesn't add a single driver."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Size the spike:\n\n```\nrequests: 50,000 / 900 s = ~55/s\nwaiting riders: tens of thousands,\n  each app polling 'nearby cars'\n  every few seconds = ~10,000 reads/s\n```\n\nThe request rate alone looks modest, but it all lands on one shard, and each request triggers k-ring scans, CAS attempts and ETA calls over the same few cells. On top of that, every waiting rider's map is reading the same cells, and arriving drivers are writing to them.\n\nThe fixes attack different parts of the problem:\n\n- **Finer cells** spread the *index* load across shards.\n- **Batching** spreads the *matching* work over fewer, better decisions.\n- **Surge** changes the *market*, adding supply and smoothing demand.\n\nMore frequent pings and a central dispatcher both make the hotspot worse.",
+    "link": {
+      "title": "H3: hexagonal hierarchical geospatial indexing (docs)",
+      "url": "https://h3geo.org/docs/"
+    }
+  }
+]

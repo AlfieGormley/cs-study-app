@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs2-ticket-booking-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two users click seat 14F at the same instant. Your code does `SELECT status FROM seats WHERE id=14F`, sees `AVAILABLE`, then runs `UPDATE seats SET status='HELD' WHERE id=14F`. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing. Databases execute statements one at a time",
+        "explanation": "Wrong. Databases run transactions concurrently. Under the default isolation level (READ COMMITTED in Postgres), both SELECTs can see AVAILABLE before either UPDATE commits."
+      },
+      {
+        "text": "The database deadlocks",
+        "explanation": "Wrong. A deadlock needs two transactions each waiting on a lock the other holds. Here the second UPDATE just waits briefly for the first's row lock, then overwrites it."
+      },
+      {
+        "text": "The second UPDATE fails with a unique-constraint violation",
+        "explanation": "Wrong. Updating a status column violates no unique constraint. Both updates succeed silently, which is exactly why this bug is dangerous."
+      },
+      {
+        "text": "Both users read AVAILABLE, both UPDATEs succeed, and both believe they hold 14F: a classic check-then-act race",
+        "explanation": "Correct. The check and the act are separate steps, so another transaction can slip between them. The fix is to fold the check into the write (`UPDATE ... WHERE status='AVAILABLE'`) or to lock the row first."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Timeline under READ COMMITTED:\n\n```\nT1: SELECT 14F -> AVAILABLE\nT2: SELECT 14F -> AVAILABLE\nT1: UPDATE 14F SET HELD (h1); COMMIT\nT2: UPDATE 14F SET HELD (h2); COMMIT\n```\n\nThe final state is held by h2, but user 1 was also told 'held'. Two fixes:\n\n1. **Conditional write** (preferred):\n```\nUPDATE seats\nSET status='HELD', hold_id=:h\nWHERE id='14F'\n  AND status='AVAILABLE'\n```\nThen check rows affected: 1 means won, 0 means lost.\n\n2. **Pessimistic lock**: `SELECT ... FOR UPDATE` makes T2 wait for T1's commit, then re-read the row and see HELD.",
+    "link": {
+      "title": "Explicit locking (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Admitted shoppers spend about 5 minutes from entry to payment. Your booking tier and payment provider comfortably sustain 30,000 concurrent shoppers. At what rate should the waiting room admit users?",
+    "options": [
+      {
+        "text": "30,000 users per minute",
+        "explanation": "Wrong. Admitting 30,000 a minute while each stays 5 minutes builds up to 150,000 concurrent shoppers, five times the safe capacity."
+      },
+      {
+        "text": "6,000 users per minute",
+        "explanation": "Correct. By Little's law, concurrency = rate x time in system. 30,000 = rate x 5 min, so rate = 6,000 per minute (100 per second)."
+      },
+      {
+        "text": "150,000 users per minute",
+        "explanation": "Wrong. This multiplies capacity by time instead of dividing. It would overwhelm the system 25x."
+      },
+      {
+        "text": "Admit everyone at once and let autoscaling handle it",
+        "explanation": "Wrong. The constraint is the **contended inventory rows** and the payment provider's rate limits, neither of which autoscale. Stateless API servers scaling up doesn't help a hot database partition."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Little's law: **L = lambda x W**.\n\n- L (safe concurrency) = 30,000\n- W (time per shopper) = 5 min\n- lambda = L / W = 30,000 / 5 = **6,000 per minute** = 100 per second\n\nIn practice:\n1. Start below this (say 4,000 a minute) because the first minutes are the most contended.\n2. Run a feedback loop: if p99 hold latency or error rate rises, cut lambda. If they're healthy, raise it.\n3. Also factor in **abandonment**. If 30% of admitted users leave within a minute, effective W falls and you can admit faster.\n\nWith 2 M people waiting, the last in line waits about 2 M / 6,000 = 333 min, so you'd show 'sold out' long before then, once inventory is gone.",
+    "link": {
+      "title": "Cloudflare Waiting Room (developer docs)",
+      "url": "https://developers.cloudflare.com/waiting-room/"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user's hold on 4 seats expires at 20:00:00. Their card authorisation, started at 19:59:50, returns success at 20:00:05. Meanwhile, another user held those seats at 20:00:02. What design prevents a double sale?",
+    "options": [
+      {
+        "text": "Capture the payment, then mark the seats SOLD, because the first user started paying first",
+        "explanation": "Wrong. 'Started first' isn't a lock. The seats now belong to hold #2. Blindly marking them SOLD for user 1 overwrites user 2's valid hold and creates a double sale."
+      },
+      {
+        "text": "Make holds last 60 minutes so they never expire during payment",
+        "explanation": "Wrong. It reduces the race but locks up inventory for an hour each time someone abandons. Seats look sold out, then reappear, and the race still exists for very slow payments."
+      },
+      {
+        "text": "On checkout start, extend the hold (PAYMENT_PENDING with a longer TTL). After authorisation, conditionally transition `HELD -> SOLD WHERE hold_id = mine`. Capture only if that update succeeds, otherwise void the authorisation",
+        "explanation": "Correct. Extending the hold stops it expiring mid-payment, and the conditional update with the hold id is the final guard. Authorise, then conditionally commit, then capture (or void) means money and seats can't disagree."
+      },
+      {
+        "text": "Use a distributed lock in Redis around the whole checkout",
+        "explanation": "Wrong. A Redis lock with a TTL has the same expiry problem (a slow payment outlives the lock), and without fencing it can't stop a stale holder's write. The database's conditional update is the real safeguard."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Sequence that stays safe:\n\n1. **Checkout start** (19:59:50): `UPDATE seats SET status='PAYMENT_PENDING', hold_expires_at=now()+5min WHERE hold_id=:h AND status='HELD' AND hold_expires_at>now()`. If 0 rows change, the hold is already lost, so stop before charging.\n2. **Authorise** the card (no money moves yet).\n3. **Commit**: `UPDATE seats SET status='SOLD', order_id=:o WHERE hold_id=:h AND status='PAYMENT_PENDING'`, and insert the order (UNIQUE hold_id) in the same transaction.\n4. If step 3 affected all 4 rows, **capture**. Otherwise **void** the authorisation.\n\nBecause step 1 extended the hold, user 2 could never have taken the seats at 20:00:02. And even if something went wrong, step 3's `WHERE hold_id=:h` stops user 1 overwriting someone else.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're designing a virtual waiting room for an on-sale with 2 M expected visitors. Which design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Serve the waiting page and queue-position polling from the CDN or edge, with no per-user origin calls",
+        "explanation": "Correct. At about 67 k polls per second (2 M every 30 s), origin calls would recreate the very overload the queue exists to prevent. Edge-served status from a published counter is cheap."
+      },
+      {
+        "text": "Give everyone who arrived before the start time a random position, so refreshing at exactly 10:00:00 gives no advantage",
+        "explanation": "Correct. Random initial ordering removes the incentive (for humans and bots) to stampede at the open, smoothing the spike."
+      },
+      {
+        "text": "Issue admitted users a signed, short-lived token that the booking API verifies statelessly",
+        "explanation": "Correct. Stateless verification (a JWT signature check) is cheap at the edge and the API, and stops users bypassing the queue by calling the booking API directly."
+      },
+      {
+        "text": "Keep each user's queue position in the main inventory database, so it's strongly consistent",
+        "explanation": "Wrong. It puts millions of rows and polling reads on the exact database you're trying to protect. Queue state belongs in a separate, edge-friendly store."
+      },
+      {
+        "text": "Admit users at a fixed rate configured a week in advance",
+        "explanation": "Wrong. Static rates ignore live conditions: payment-provider slowdowns, abandonment, error rates. Admission should be a feedback loop on downstream health."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Design principle: **protect the core, keep the queue cheap**.\n\n| Concern | Choice |\n|---|---|\n| 67 k polls/s | edge-served, cached counter |\n| Stampede at open | random positions for early arrivals |\n| Queue bypass | signed admission token |\n| Overload | adaptive admission rate |\n\nThe queue is just **ordering plus rate-limiting**. Its state can be approximate and edge-distributed. Only the final seat allocation needs a strongly consistent store, and that store should only ever see admitted users.",
+    "link": {
+      "title": "Building Cloudflare Waiting Room (Cloudflare blog)",
+      "url": "https://blog.cloudflare.com/cloudflare-waiting-room/"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A general-admission festival sells 20,000 standing tickets, tracked in a single row `remaining = 20000`. At on-sale, 3,000 purchase transactions a second try to decrement it, and p99 latency explodes. What is the best fix?",
+    "options": [
+      {
+        "text": "Split inventory into N bucket rows (for example 50 rows of 400). Decrement a random bucket with `WHERE remaining >= qty`, and fall back to others when a bucket is empty",
+        "explanation": "Correct. Every decrement on one row serialises on its lock. With 50 buckets, contention per row drops about 50x while the total stays exact, because each bucket can't go negative."
+      },
+      {
+        "text": "Switch the row's isolation level to READ UNCOMMITTED",
+        "explanation": "Wrong. Lower isolation doesn't remove row-lock contention for writes, and it risks reading uncommitted decrements, which can cause overselling."
+      },
+      {
+        "text": "Cache `remaining` in Redis and decrement only there, syncing to the database hourly",
+        "explanation": "Wrong as stated. Redis can decrement fast, but making it the sole authority with hourly sync means a Redis failover can lose decrements and oversell. Redis can work if it's treated as an authoritative ledger with persistence and care, but hourly sync isn't that."
+      },
+      {
+        "text": "Remove the check and reconcile oversells later with refunds",
+        "explanation": "Wrong. Overselling a venue's safety capacity is a legal and safety issue, not just a customer-service one. 'No oversell' is the hard requirement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Why one row melts: each `UPDATE ... SET remaining = remaining - 2` takes the row lock until commit. If a transaction holds it for about 2 ms, the row's ceiling is about **500 transactions/s**, against 3,000 offered.\n\nBucketing:\n\n```\nbuckets: 50 rows x 400 tickets\npick b = random(0..49)\nUPDATE ga SET remaining = remaining - :q\nWHERE event=:e AND bucket=:b\n  AND remaining >= :q\n0 rows? try another bucket\n```\n\n- Capacity is now about 50 x 500 = **25,000 transactions/s** of headroom.\n- Each bucket's `remaining >= :q` check means the total can never go negative.\n- Near sell-out, most buckets are empty and retries rise. Consolidate the last few hundred tickets into fewer buckets, or accept a little extra latency at the end.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your hold-expiry sweeper runs every minute and resets expired HELD seats to AVAILABLE. During a big on-sale, the sweeper falls 6 minutes behind. With the design in this lesson, what is the impact?",
+    "options": [
+      {
+        "text": "Seats are double-booked, because expired holds are still marked HELD",
+        "explanation": "Wrong. A stale HELD status can't cause a double booking. If anything it would hide seats, and the design handles even that."
+      },
+      {
+        "text": "Expired seats are unsellable for 6 minutes, so the event looks sold out",
+        "explanation": "Wrong for this design. The hold statement treats `status='HELD' AND hold_expires_at < now()` as available, so new holds can take expired seats whether or not the sweeper has run."
+      },
+      {
+        "text": "Correctness and sellability are unaffected, because expiry is evaluated at hold time. Only the cached seat map may show some expired seats as held until the sweeper or cache catches up",
+        "explanation": "Correct. The sweeper is cosmetic housekeeping. The authoritative check compares `hold_expires_at` with now() inside the conditional update, so a lagging sweeper only affects what browsing users see."
+      },
+      {
+        "text": "Payments fail, because they depend on the sweeper",
+        "explanation": "Wrong. Checkout transitions check the hold id and state directly. They don't depend on the sweeper."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Look at where expiry is *evaluated*:\n\n```\nWHERE status='AVAILABLE'\n   OR (status='HELD'\n       AND hold_expires_at < now())\n```\n\nThis is **lazy expiry**: time-based state is computed when it's needed, not maintained by a background job. Consequences:\n\n1. Holds: correct, because expired seats can be taken immediately.\n2. Checkout: correct, because PAYMENT_PENDING has its own expiry and conditional transitions.\n3. Seat map: the cache built from `status` may show stale HELD seats. Fix that by computing availability in the map query using the same predicate.\n\nThe general lesson: never make correctness depend on a cron job running on time.",
+    "link": {
+      "title": "Ticketmaster system design breakdown (Hello Interview)",
+      "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user selects 4 seats and your service locks them one at a time with `SELECT ... FOR UPDATE`, in the order the user clicked. Under load you see frequent deadlock errors. Why, and what's the minimal fix?",
+    "options": [
+      {
+        "text": "Row locks always deadlock under load. Switch to table-level locks",
+        "explanation": "Wrong. Table locks would remove deadlocks by serialising *every* booking for the event, destroying throughput. Row locks are fine if acquired in a consistent order."
+      },
+      {
+        "text": "Increase the deadlock timeout so the database waits longer",
+        "explanation": "Wrong. A deadlock is a cycle. Waiting longer doesn't resolve it, it just delays the inevitable abort and holds locks longer, which makes contention worse."
+      },
+      {
+        "text": "The hold TTL is too short",
+        "explanation": "Wrong. TTLs govern when holds expire, not lock acquisition order in the database. Deadlocks happen within milliseconds, regardless of TTL."
+      },
+      {
+        "text": "Two transactions lock overlapping seats in different orders (A: 14F then 14G; B: 14G then 14F), so each waits on the other. Acquire locks in a canonical order, such as sorted seat_id, ideally in one statement",
+        "explanation": "Correct. Consistent lock ordering removes the circular wait that deadlocks need. A single set-based conditional UPDATE also avoids holding locks across round trips."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The deadlock recipe needs four conditions (Coffman). Ordering removes **circular wait**:\n\n```\nA: lock 14F ... wants 14G\nB: lock 14G ... wants 14F\n=> cycle, so the database aborts one\n```\n\nWith sorted ordering, both lock 14F first. B waits on 14F while A takes 14G and commits, then B proceeds and sees the seats taken. No cycle.\n\nEven better: lock in one statement, `SELECT ... WHERE seat_id IN (...) ORDER BY seat_id FOR UPDATE`, then one conditional UPDATE. All the locks are taken in a canonical order within one round trip, so the lock-hold window is tiny. Then check that rows affected = 4, or roll back.",
+    "link": {
+      "title": "Explicit locking (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "To make holds fast, a teammate makes Redis the **only** record of holds: `SET seat:e1:14F h1 NX PX 480000`. The SOLD transition later reads the hold from Redis. During the on-sale the Redis primary crashes and a replica is promoted. Two fans later both complete checkout for 14F. How did that happen?",
+    "options": [
+      {
+        "text": "`NX` doesn't work under concurrency, so both `SET`s succeeded on the primary",
+        "explanation": "Wrong. On a single Redis node, `SET ... NX` is atomic, so only one of two concurrent calls succeeds."
+      },
+      {
+        "text": "Redis replication is asynchronous. The primary acknowledged h1's hold and crashed before replicating it, so on the promoted replica 14F looked free and a second `SET NX` succeeded",
+        "explanation": "Correct. The acknowledged write was lost in failover. With Redis as the only source of truth, a lost write becomes a double allocation."
+      },
+      {
+        "text": "The `PX 480000` expiry is too short, so the hold expired before checkout",
+        "explanation": "Wrong. 480,000 ms is 8 minutes, the intended hold length. Expiry returns the seat to the pool. It doesn't by itself give it to two people."
+      },
+      {
+        "text": "The database's isolation level was too weak",
+        "explanation": "Wrong. In this design the database never checked anything, which is the actual problem. The final transition must be a conditional update in the strongly consistent store."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Replay the failover:\n\n```\nt0 fan1: SET 14F h1 NX -> OK (primary)\nt1 primary crashes before replicating\nt2 replica promoted, has no 14F key\nt3 fan2: SET 14F h2 NX -> OK\nt4 both reach checkout\n```\n\nRedis is fine as a **pre-filter**: it turns away most losers cheaply. But the authoritative step has to be the database's conditional update:\n\n```\nUPDATE seats SET status='SOLD'\nWHERE seat_id='14F'\n  AND hold_id=:h\n  AND status IN ('HELD',\n    'PAYMENT_PENDING')\n```\n\nIf the database never recorded h1's hold, fan 1's transition fails cleanly instead of selling the seat twice.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A fan double-taps Pay, and their phone also retries the first request after a timeout, so three `POST /holds/{h}/checkout` calls arrive within a second. Which server-side mechanisms together ensure exactly one order and one charge? Select all that apply.",
+    "options": [
+      {
+        "text": "Capturing the payment immediately on each request, then refunding duplicates overnight",
+        "explanation": "Wrong. That double-charges the fan and makes support and the ledger clean up a problem that idempotency would have prevented."
+      },
+      {
+        "text": "An `Idempotency-Key` stored with a UNIQUE constraint, so repeats with the same key return the first result",
+        "explanation": "Correct. The retry and the double-tap (if the app generates one key per checkout attempt) map to the same stored result rather than running again."
+      },
+      {
+        "text": "A UNIQUE constraint on `orders.hold_id`",
+        "explanation": "Correct. Even if two requests carried different keys, one hold can produce only one order. The second insert fails."
+      },
+      {
+        "text": "The conditional `HELD -> SOLD WHERE hold_id = :h` transition, with capture only if it succeeds",
+        "explanation": "Correct. Only one transaction can move the seats to SOLD, and only the winner captures payment. A loser voids its authorisation."
+      },
+      {
+        "text": "Disabling the Pay button after the first tap",
+        "explanation": "Wrong as a guarantee. It's a good UX touch, but it does nothing about network retries, a second device or a modified client. The server must be safe on its own."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Layer the defences, each catching what the previous one misses:\n\n1. **Idempotency key**: the same logical request (a retry) returns the stored response.\n2. **UNIQUE hold_id on orders**: different requests for the same hold can't both create orders.\n3. **Conditional SOLD transition**: only one transaction wins the seats, and capture is tied to winning.\n\n```\nreq A key=K1 -> new: authorise,\n   SOLD ok, capture -> order O1\nreq B key=K1 -> stored: return O1\nreq C key=K2 -> insert order fails\n   (hold_id taken) -> void auth\n```\n\nClient-side measures reduce noise, but correctness has to live on the server.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You admit 2,000 shoppers a minute. Each holds 4 seats, holds last 8 minutes, and 30% of shoppers abandon after holding without paying or cancelling. In steady state, roughly how many seats are tied up by **abandoned** holds at any moment?",
+    "options": [
+      {
+        "text": "About 2,400 seats",
+        "explanation": "Wrong. That is the number of seats abandoned *per minute* (2,000 x 0.3 x 4). Each abandoned hold stays in place for 8 minutes, so multiply by the hold duration."
+      },
+      {
+        "text": "About 19,200 seats",
+        "explanation": "Correct. Little's law: 600 abandoners/min x 4 seats x 8 min = 19,200 seats. In a 60,000-seat stadium that's nearly a third of the inventory sitting in dead holds."
+      },
+      {
+        "text": "About 64,000 seats",
+        "explanation": "Wrong. This applies the 8 minutes to all 2,000 shoppers rather than the 30% who abandon. Fans who pay release their hold into SOLD."
+      },
+      {
+        "text": "Zero, because expired holds are treated as available at read time",
+        "explanation": "Wrong. Lazy expiry makes seats available once they *expire*. Until then, for up to 8 minutes, an abandoned hold still blocks the seat."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Little's law again: **L = lambda x W**.\n\n1. Abandoners per minute: 2,000 x 0.3 = **600**.\n2. Seats per abandoner: 4, so lambda = **2,400 seats/min** entering dead holds.\n3. W = time each stays held = **8 min**.\n4. L = 2,400 x 8 = **19,200 seats**.\n\nThat's why the lesson warns about 'sold out' followed by seats reappearing. Levers:\n\n| Change | Dead seats |\n|---|---|\n| hold 8 -> 4 min | 9,600 |\n| explicit cancel on exit | lower |\n| short initial hold, extend at checkout | lower |\n\nExtending the hold only when checkout starts lets you use a short browse hold without punishing fans who are actually paying.",
+    "link": {
+      "title": "Building Cloudflare Waiting Room (Cloudflare blog)",
+      "url": "https://blog.cloudflare.com/cloudflare-waiting-room/"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the first minute of a big on-sale, 90% of hold attempts return 409 because thousands of admitted fans are all clicking the same few front sections on the seat map. Fans are furious and retry constantly. What change most reduces the contention?",
+    "options": [
+      {
+        "text": "Refresh the seat-map cache every 100 ms instead of every 2 s",
+        "explanation": "Wrong. A fresher map helps a little, but fans still race for the same seats, and you've multiplied the cache rebuild load by 20x."
+      },
+      {
+        "text": "Switch from conditional updates to `SELECT ... FOR UPDATE`",
+        "explanation": "Wrong. Pessimistic locks make losers *wait* before failing instead of failing fast. The contention, and the 409s, stay the same."
+      },
+      {
+        "text": "Offer 'best available': the fan chooses a price tier and quantity, and the server allocates contiguous seats from a pre-computed list",
+        "explanation": "Correct. The server hands different fans different seats, so they stop colliding. Hold attempts mostly succeed first time and retries collapse."
+      },
+      {
+        "text": "Raise the admission rate so more fans get to try",
+        "explanation": "Wrong. More shoppers in the same sections means even more collisions. The fix has to change how seats are chosen."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Look at why the 409s happen. It's not the database being slow. It's many fans asking for **the same rows**:\n\n```\nfans clicking row A: 3,000\nseats in row A:        40\n=> at most 40 succeed\n```\n\nWith best available, the allocator walks a list of seats ordered by quality and assigns each request the next contiguous block in its tier. Each request targets *different* rows, so the conditional update almost always succeeds.\n\nThe same idea applies anywhere many clients want 'one of these': let the server choose, instead of having every client race for the best item.",
+    "link": {
+      "title": "Ticketmaster system design breakdown (Hello Interview)",
+      "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're expanding to three regions. Each event's inventory lives in one home region. Which parts of the flow can safely be served from **any** region with eventually consistent data? Select all that apply.",
+    "options": [
+      {
+        "text": "Creating holds on specific seats",
+        "explanation": "Wrong. Two regions each accepting a hold on 14F from their own replica would double-allocate. Holds must go to the home region's authoritative store."
+      },
+      {
+        "text": "Event catalogue and venue information",
+        "explanation": "Correct. It's read-mostly and changes rarely, so it can be replicated globally."
+      },
+      {
+        "text": "The waiting-room page and queue-position polling",
+        "explanation": "Correct. These are edge-served and approximate by design. A position a few seconds stale harms nobody."
+      },
+      {
+        "text": "The `HELD -> SOLD` transition at checkout",
+        "explanation": "Wrong. This is the final allocation decision and must run against the single authoritative copy, with the hold_id condition."
+      },
+      {
+        "text": "Seat-map availability snapshots",
+        "explanation": "Correct. The map is already allowed to be a couple of seconds stale, because the hold's conditional update is the real check."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Sort each operation by asking: **could a stale read here allocate a seat twice?**\n\n| Operation | Stale read harms? | Where |\n|---|---|---|\n| waiting room | no | any edge |\n| catalogue | no | any region |\n| seat map | no (409 handles it) | any region |\n| hold | yes | home region |\n| SOLD | yes | home region |\n\nOnly the writes that change seat ownership need the home region. A fan in Sydney buying for a London event pays a cross-region round trip (~250 ms) on the hold and checkout calls, which is acceptable for a booking that happens once.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  }
+]

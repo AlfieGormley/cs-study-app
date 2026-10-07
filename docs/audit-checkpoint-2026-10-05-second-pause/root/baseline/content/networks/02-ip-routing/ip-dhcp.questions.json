@@ -1,0 +1,183 @@
+[
+  {
+    "id": "ip-dhcp-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A freshly booted laptop sends a DHCPDISCOVER. What are its IP source, IP destination and UDP ports?",
+    "options": [
+      { "text": "Source 169.254.1.1, destination the DHCP server's IP, ports 68 to 67", "explanation": "The client doesn't know the server's address yet, and 169.254 is the fallback used only after DHCP fails." },
+      { "text": "Source 0.0.0.0, destination 255.255.255.255, UDP 68 to 67", "explanation": "Correct. 0.0.0.0 means \"no address yet\", the limited broadcast reaches every host on the link, and clients use port 68, servers 67." },
+      { "text": "Source 0.0.0.0, destination the default gateway, UDP 67 to 68", "explanation": "The client has no gateway yet; that's one of the things DHCP will tell it. And the ports are reversed." },
+      { "text": "Source the laptop's MAC, destination ff:ff:ff:ff:ff:ff, no IP at all", "explanation": "The Ethernet frame is sent to the broadcast MAC, but DHCP is carried in UDP over IP, with 0.0.0.0 as source." }
+    ],
+    "answer": 1,
+    "workedExample": "1. The laptop has no address, so the source is **0.0.0.0**.\n2. It doesn't know any server, so it sends to **255.255.255.255**, which every host on the link receives and routers don't forward.\n3. DHCP uses UDP with fixed ports: client **68**, server **67**.\n4. At layer 2 the frame goes to ff:ff:ff:ff:ff:ff, and chaddr inside the message carries the laptop's MAC.",
+    "link": { "title": "RFC 2131: DHCP", "url": "https://www.rfc-editor.org/rfc/rfc2131" }
+  },
+  {
+    "id": "ip-dhcp-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the order of messages in a normal DHCP address assignment?",
+    "options": [
+      { "text": "Request, Offer, Discover, Ack", "explanation": "The client can't request a specific server's offer before any server has made one." },
+      { "text": "Discover, Request, Offer, Ack", "explanation": "The Request names an offer, so it must come after the Offer." },
+      { "text": "Discover, Offer, Request, Ack", "explanation": "Correct. DORA: the client discovers servers, they offer, the client requests one offer, and that server acknowledges." },
+      { "text": "Discover, Ack", "explanation": "That skips the step where the client chooses between offers. (A rapid-commit option exists, but normal DHCP uses all four.)" }
+    ],
+    "answer": 2,
+    "workedExample": "Remember **DORA**:\n\n1. **D**iscover: \"any servers?\"\n2. **O**ffer: \"you can have 192.168.1.42\"\n3. **R**equest: \"I'll take server X's offer\"\n4. **A**ck: \"confirmed, lease starts now\"\n\nThen the client ARP-probes the address before using it.",
+    "link": { "title": "Dynamic Host Configuration Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol" }
+  },
+  {
+    "id": "ip-dhcp-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A desktop on the office network shows the address 169.254.37.200 and can't reach the Internet. What does that most likely mean?",
+    "options": [
+      { "text": "The ISP has assigned it a carrier-grade NAT address", "explanation": "CGNAT uses 100.64.0.0/10, and it's assigned to the router's WAN side, not to LAN hosts." },
+      { "text": "It is using a private address from the office DHCP pool, so the router must be down", "explanation": "Office pools use 10/8, 172.16/12 or 192.168/16. 169.254 isn't handed out by DHCP servers." },
+      { "text": "Its IPv6 link-local address is being shown as IPv4", "explanation": "IPv6 link-local is fe80::/10. 169.254.0.0/16 is the IPv4 link-local range." },
+      { "text": "DHCP failed, so it self-assigned an IPv4 link-local address", "explanation": "Correct. With no DHCP reply, the OS picks a random 169.254.x.x address (APIPA). It has no gateway, so only same-link hosts are reachable." }
+    ],
+    "answer": 3,
+    "workedExample": "1. 169.254.0.0/16 is the IPv4 link-local range (RFC 3927).\n2. Hosts use it only when no DHCP server answered.\n3. So check the path to DHCP: is the cable in the right VLAN, is the switch port up, is the relay (`ip helper-address`) configured, is the server running and does its pool have free addresses?",
+    "link": { "title": "Link-local address — Wikipedia", "url": "https://en.wikipedia.org/wiki/Link-local_address" }
+  },
+  {
+    "id": "ip-dhcp-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client gets an 8-hour lease at 09:00 with default timers. When does it start renewing, and when does it start rebinding if renewal fails?",
+    "options": [
+      { "text": "Renew at 13:00, rebind at 16:00", "explanation": "Correct. T1 = 50% of 8 h = 4 h, so 13:00. T2 = 87.5% of 8 h = 7 h, so 16:00." },
+      { "text": "Renew at 13:00, rebind at 17:00", "explanation": "17:00 is lease expiry (100%). Rebinding starts earlier, at 87.5%." },
+      { "text": "Renew at 16:00, rebind at 17:00", "explanation": "This puts renewal at T2. Renewal starts at the halfway point." },
+      { "text": "Renew only when the lease expires at 17:00", "explanation": "Waiting until expiry would cut the client off if the server was slow. The timers exist to renew well in advance." }
+    ],
+    "answer": 0,
+    "workedExample": "1. T1 = 0.5 × 8 h = **4 h** after 09:00 = **13:00**: unicast Request to the original server.\n2. T2 = 0.875 × 8 h = **7 h** after 09:00 = **16:00**: broadcast Request to any server.\n3. Expiry at 17:00: stop using the address and start over with Discover.",
+    "link": { "title": "RFC 2131: DHCP (section 4.4.5)", "url": "https://www.rfc-editor.org/rfc/rfc2131" }
+  },
+  {
+    "id": "ip-dhcp-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two DHCP servers on a subnet both send Offers. The client accepts server A's. Why does the client **broadcast** its Request instead of unicasting it to A?",
+    "options": [
+      { "text": "The client doesn't know A's IP address", "explanation": "It does: the Offer contains A's server identifier (option 54), and the Request includes it." },
+      { "text": "So server B also hears it, sees it wasn't chosen, and returns its offered address to the pool", "explanation": "Correct. The Request names server A; B sees a different server identifier and releases the address it had reserved for this client." },
+      { "text": "Because UDP can't be unicast", "explanation": "UDP unicasts all the time, and DHCP renewals at T1 are unicast." },
+      { "text": "So the default gateway can record the lease", "explanation": "The gateway has no role here unless it's also a DHCP server or relay." }
+    ],
+    "answer": 1,
+    "workedExample": "1. A and B each tentatively reserve an address for this client.\n2. The client broadcasts a Request with option 54 = A's address and option 50 = the address A offered.\n3. A sees itself named and sends Ack.\n4. B sees another server named and frees its reserved address.\n5. The client still has no confirmed IP at this point, so a broadcast is the natural way to reach everyone.",
+    "link": { "title": "RFC 2131: DHCP", "url": "https://www.rfc-editor.org/rfc/rfc2131" }
+  },
+  {
+    "id": "ip-dhcp-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A central DHCP server has pools for 10.10.0.0/24 and 10.20.0.0/24. It receives a relayed Discover with giaddr 10.20.0.1. What does it do?",
+    "options": [
+      { "text": "Offers from the 10.10.0.0/24 pool, since it was configured first", "explanation": "Pool order doesn't decide this. The server must give an address that works on the client's subnet." },
+      { "text": "Offers 10.20.0.1, the giaddr", "explanation": "giaddr is the relay router's own interface address; giving it to a client would create a conflict with the gateway." },
+      { "text": "Offers an address from 10.20.0.0/24 and sends the reply to the relay at 10.20.0.1", "explanation": "Correct. giaddr tells the server which subnet the client is on, so it picks the matching pool, and the reply goes back via the relay." },
+      { "text": "Ignores it, because DHCP broadcasts can't cross routers", "explanation": "The broadcast didn't cross the router; the relay agent turned it into a unicast. That's exactly what relaying is for." }
+    ],
+    "answer": 2,
+    "workedExample": "1. The client broadcast on VLAN 20; the router's VLAN 20 interface is 10.20.0.1.\n2. The relay fills in **giaddr = 10.20.0.1** and unicasts to the server.\n3. The server finds the pool containing giaddr: 10.20.0.0/24.\n4. It offers, say, 10.20.0.57, with router option 3 = 10.20.0.1, and sends the Offer to the relay.\n5. The relay delivers it onto VLAN 20.",
+    "link": { "title": "Dynamic Host Configuration Protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol" }
+  },
+  {
+    "id": "ip-dhcp-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `parse_options`, what does this print?\n\n```python\nraw = bytes([53, 1, 1,\n             0, 0,\n             55, 3, 1, 3, 6,\n             255,\n             51, 4, 0, 0, 1, 0])\no = parse_options(raw)\nprint(sorted(o), list(o[55]))\n```",
+    "options": [
+      { "text": "`[0, 53, 55] [1, 3, 6]`", "explanation": "Pad (0) bytes are skipped, not stored as options." },
+      { "text": "`[51, 53, 55] [1, 3, 6]`", "explanation": "Option 51 comes after the End marker (255). The loop breaks at End, so 51 is never parsed." },
+      { "text": "`[53, 55] [3, 1, 3]`", "explanation": "This includes the length byte (3) in the value. The value starts at `i + 2`, after code and length." },
+      { "text": "`[53, 55] [1, 3, 6]`", "explanation": "Correct. 53 is parsed, two pads are skipped, 55 is parsed with value 1, 3, 6, then End stops the loop before 51." }
+    ],
+    "answer": 3,
+    "workedExample": "Trace `i`:\n\n| i | code | action |\n|---|---|---|\n| 0 | 53 | len 1, store, i = 3 |\n| 3 | 0 | pad, i = 4 |\n| 4 | 0 | pad, i = 5 |\n| 5 | 55 | len 3, store [1, 3, 6], i = 10 |\n| 10 | 255 | break |\n\nResult: `[53, 55] [1, 3, 6]`. Option 55 is the parameter request list: the client is asking for subnet mask (1), router (3) and DNS (6).",
+    "link": { "title": "RFC 2132: DHCP Options", "url": "https://www.rfc-editor.org/rfc/rfc2132" }
+  },
+  {
+    "id": "ip-dhcp-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which measures help defend an office LAN against a rogue DHCP server? Select all that apply.",
+    "options": [
+      { "text": "DHCP snooping, with only the uplink towards the real server marked trusted", "explanation": "Correct. Offers and Acks arriving on untrusted access ports are dropped, so the rogue's replies never reach clients." },
+      { "text": "Dynamic ARP inspection using the snooping binding table", "explanation": "Correct. It stops a device spoofing ARP replies (for example claiming to be the gateway) using the IP-to-MAC bindings learnt from genuine Acks." },
+      { "text": "Lengthening the lease time to a week", "explanation": "Longer leases don't stop new or rebooted clients accepting a rogue offer; a client that falls for it keeps the bad settings for longer." },
+      { "text": "IP source guard on access ports", "explanation": "Correct. It drops packets whose source IP doesn't match the port's binding, limiting what a device with a self-assigned or stolen address can do." },
+      { "text": "Putting the LAN behind NAT", "explanation": "NAT sits at the edge between LAN and Internet. A rogue server on the LAN itself is unaffected." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "1. The attack: a device answers Discovers first and names itself as gateway or DNS.\n2. Snooping stops server messages from untrusted ports, which kills the attack directly.\n3. Snooping's binding table also feeds ARP inspection and IP source guard, which stop related spoofing.\n4. Lease length and NAT don't stop a client accepting an offer from a box on its own LAN.",
+    "link": { "title": "DHCP snooping — Wikipedia", "url": "https://en.wikipedia.org/wiki/DHCP_snooping" }
+  },
+  {
+    "id": "ip-dhcp-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Following the lesson's end-to-end trace, the laptop (192.168.1.42, port 51000) sends a TCP SYN with TTL 64 to 198.51.100.80:443. The home router's public address is 203.0.113.7 and it picks NAT port 40000. What is true of the packet as it leaves the router's WAN interface?",
+    "options": [
+      { "text": "Source 192.168.1.42:51000, destination 198.51.100.80:443, TTL 64", "explanation": "That's the packet on the LAN. The router decrements TTL and NAT rewrites the private source before it leaves." },
+      { "text": "Source 203.0.113.7:40000, destination 198.51.100.80:443, TTL 63", "explanation": "Correct. NAPT replaces the private source address and port, the destination is unchanged, and TTL drops by one at the router." },
+      { "text": "Source 203.0.113.7:40000, destination the ISP router's IP, TTL 63", "explanation": "The destination IP is always the final server. The ISP router is only the next hop, identified by MAC on the WAN link." },
+      { "text": "Source 203.0.113.7:51000, destination 198.51.100.80:443, TTL 64", "explanation": "NAPT normally changes the port too (to keep mappings unique), and every router decrements TTL." }
+    ],
+    "answer": 1,
+    "workedExample": "At the home router:\n\n1. TTL 64 → **63**; recompute header checksum.\n2. LPM: default route towards the ISP.\n3. NAPT: 192.168.1.42:51000 → **203.0.113.7:40000**; record the mapping; fix the IP and TCP checksums.\n4. Destination stays **198.51.100.80:443**.\n5. New frame: source MAC = router's WAN MAC, destination MAC = ISP next hop.",
+    "link": { "title": "Network address translation — Wikipedia", "url": "https://en.wikipedia.org/wiki/Network_address_translation" }
+  },
+  {
+    "id": "ip-dhcp-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The office network is 10.1.0.0/16. On Monday some users report no connectivity. Their machines show addresses in 192.168.0.0/24 with gateway 192.168.0.1; others are fine. What's the most likely cause?",
+    "options": [
+      { "text": "The real DHCP pool ran out, so the server switched to a backup range", "explanation": "DHCP servers don't invent new subnets when a pool fills; clients would get no offer and fall back to 169.254." },
+      { "text": "The users' DNS servers are misconfigured", "explanation": "Bad DNS breaks names, not addressing. These hosts have addresses from an entirely different subnet." },
+      { "text": "Someone plugged in a consumer router or similar device that is answering DHCP, and those clients took its offer first", "explanation": "Correct. 192.168.0.1 / 192.168.0.x is a classic home-router default. Whichever offer arrives first usually wins, so some clients get the rogue's settings. DHCP snooping would block it." },
+      { "text": "The default route has been withdrawn from OSPF", "explanation": "That would leave hosts with correct 10.1.x.x addresses but no Internet. It wouldn't change their addresses." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symptom: wrong subnet entirely, on only some clients.\n2. DHCP clients usually take the first Offer they receive.\n3. A second server on the LAN, often a home router connected by its LAN port, hands out its default 192.168.0.0/24 range with itself as gateway.\n4. Clients that hear it first are now on an isolated network.\n5. Find it: check the DHCP server identifier (option 54) on an affected client, then the switch's MAC table. Prevent it: DHCP snooping.",
+    "link": { "title": "Rogue DHCP — Wikipedia", "url": "https://en.wikipedia.org/wiki/Rogue_DHCP" }
+  },
+  {
+    "id": "ip-dhcp-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A client gets a 24-hour lease from server A at 00:00. A fails permanently at 11:00. Server B on the same subnet can extend leases (it shares A's lease database). When does the client first send a message B can answer, and what happens before that?",
+    "options": [
+      { "text": "At 11:00, because the client notices A has failed", "explanation": "DHCP clients don't monitor servers. Nothing happens until the T1 timer." },
+      { "text": "At 12:00 (T1), because renewal Requests are broadcast", "explanation": "Renewal at T1 is **unicast** to the server that granted the lease, so only A would see it, and A is dead." },
+      { "text": "At 24:00, when the lease expires and the client sends Discover", "explanation": "Rebinding at T2 gives B a chance well before expiry, so the client shouldn't lose its address at all." },
+      { "text": "At 21:00 (T2): from 12:00 it unicasts renewals to A with no reply; at 21:00 it broadcasts a rebinding Request, which B answers", "explanation": "Correct. T1 = 12 h, T2 = 0.875 × 24 = 21 h. Rebinding broadcasts so any server can extend the lease, and the client keeps its address." }
+    ],
+    "answer": 3,
+    "workedExample": "1. T1 = 0.5 × 24 = 12 h: **12:00**. The client unicasts Request to A. A is dead; the client retries periodically.\n2. T2 = 0.875 × 24 = 21 h: **21:00**. The client broadcasts Request.\n3. B hears it and Acks, extending the lease. The client keeps the same address throughout.\n4. If no server had answered, at 24:00 the client would drop the address and restart with Discover.",
+    "link": { "title": "RFC 2131: DHCP", "url": "https://www.rfc-editor.org/rfc/rfc2131" }
+  },
+  {
+    "id": "ip-dhcp-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about configuring IPv6 hosts are correct? Select all that apply.",
+    "options": [
+      { "text": "The default router always comes from router advertisements, never from DHCPv6", "explanation": "Correct. DHCPv6 has no default-router option; even a fully DHCPv6-managed network needs RAs." },
+      { "text": "DHCPv6 uses UDP ports 546 (client) and 547 (server)", "explanation": "Correct. Different ports from DHCPv4's 68 and 67." },
+      { "text": "DHCPv6 clients find servers by broadcasting to 255.255.255.255", "explanation": "IPv6 has no broadcast at all. DHCPv6 clients use a link-local multicast group instead." },
+      { "text": "ISPs commonly use DHCPv6 prefix delegation to give a home router a /56 or /48", "explanation": "Correct. The router then carves /64s from the delegated prefix for its LANs and advertises them with RAs." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Go through each claim:\n\n1. Default router: only RAs carry it. **True.**\n2. Ports 546/547. **True.**\n3. Broadcast: IPv6 replaced broadcast with multicast. **False.**\n4. Prefix delegation: the standard way ISPs give a CPE router its block, e.g. a /56 = 256 /64 subnets. **True.**",
+    "link": { "title": "RFC 8415: DHCP for IPv6", "url": "https://www.rfc-editor.org/rfc/rfc8415" }
+  }
+]

@@ -1,0 +1,378 @@
+[
+  {
+    "id": "dist-crdts-gossip-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two users edit the same shopping cart on different replicas at the same moment: one adds a book, the other adds a pen. The store uses **last-write-wins**. What happens?",
+    "options": [
+      {
+        "text": "One of the additions is silently lost.",
+        "explanation": "Correct. Each write replaces the whole cart; the one with the lower timestamp is discarded, even though both clients were told their write succeeded."
+      },
+      {
+        "text": "The cart contains both items.",
+        "explanation": "Wrong. LWW keeps one whole value (the one with the higher timestamp) and discards the other; it doesn't merge."
+      },
+      {
+        "text": "Both writes fail with a conflict error.",
+        "explanation": "Wrong. LWW never reports conflicts; it resolves them automatically by timestamp. That's its appeal and its danger."
+      },
+      {
+        "text": "The store keeps both carts as siblings.",
+        "explanation": "Wrong. Keeping siblings is what version-vector stores like Riak do; LWW throws one away."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Replica A: cart = [book], ts = 10.050.\n2. Replica B: cart = [pen], ts = 10.020.\n3. Replication: both see both versions; LWW keeps max ts → [book].\n4. The pen is gone, and neither user was told.\n\nBetter: model the cart as an OR-Set CRDT so the merge is [book, pen].",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A G-Counter has three replicas. Their states are A = [A:4, B:1, C:0], B = [A:2, B:3, C:0], C = [A:3, B:1, C:2]. After all three merge, what is the counter's value?",
+    "options": [
+      {
+        "text": "16",
+        "explanation": "Wrong. That sums every entry across all three states, which double counts increments seen by more than one replica."
+      },
+      {
+        "text": "7",
+        "explanation": "Wrong. 7 isn't the value of any consistent state: replica A alone is 5 and C alone is 6. The merged state takes the max of every entry, giving 9."
+      },
+      {
+        "text": "5",
+        "explanation": "Wrong. That's just replica A's value (4 + 1 + 0). It ignores B's and C's newer local increments."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. Element-wise max gives [A:4, B:3, C:2], and 4 + 3 + 2 = 9."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Merge = element-wise max:\n\n| | A | B | C |\n|---|---|---|---|\n| A's state | 4 | 1 | 0 |\n| B's state | 2 | 3 | 0 |\n| C's state | 3 | 1 | 2 |\n| **max** | **4** | **3** | **2** |\n\nValue = 4 + 3 + 2 = **9**.\n\nEach entry is only ever incremented by its owner, so the max is that owner's true count. Summing would count A's increments up to three times.",
+    "link": {
+      "title": "A comprehensive study of CRDTs (Shapiro et al.)",
+      "url": "https://hal.inria.fr/inria-00555588/document"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why can't you implement decrement on a G-Counter by simply lowering your own entry?",
+    "options": [
+      {
+        "text": "Because negative numbers aren't allowed in vectors.",
+        "explanation": "Wrong. Lowering from 5 to 4 isn't negative; the real problem is the merge function."
+      },
+      {
+        "text": "Because the merge takes the element-wise max, so the lower value would be overwritten by any replica holding the old, higher one.",
+        "explanation": "Correct. Max-merge only lets values grow. A decrement would be undone the moment you merged with a replica that saw the pre-decrement value. Hence PN-Counter's separate N vector."
+      },
+      {
+        "text": "Because decrements need consensus.",
+        "explanation": "Wrong. PN-Counters support decrements without consensus. Only invariants like 'never below zero' need coordination."
+      },
+      {
+        "text": "Because the sum would overflow.",
+        "explanation": "Wrong. Overflow isn't related; the issue is that max-merge isn't compatible with decreasing values."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A = [A:5], gossips to B. B = [A:5].\n2. A decrements by lowering: A = [A:4].\n3. Merge(A, B) = [max(4, 5)] = [A:5]. The decrement vanished.\n\nPN-Counter fix: keep P = [A:5] and N = [A:1]. Both only grow, so max-merge is correct. Value = 5 − 1 = 4.",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In an **OR-Set**, replica A adds \"milk\" (tag a1) and syncs to B. Then, concurrently, B removes \"milk\" and A adds \"milk\" again (tag a2). After they merge, is milk in the set?",
+    "options": [
+      {
+        "text": "Yes: tag a2 was never observed by the remove, so it survives (add wins).",
+        "explanation": "Correct. The merged add-set is {a1, a2}, the remove-set is {a1}, leaving a2. Concurrent add and remove resolve to add-wins."
+      },
+      {
+        "text": "No: the remove happened, so milk is gone.",
+        "explanation": "Wrong. B's remove only removes tags B had observed, i.e. a1. It can't remove a2, which it never saw."
+      },
+      {
+        "text": "It depends on which operation had the higher timestamp.",
+        "explanation": "Wrong. OR-Sets don't use timestamps at all; that's an LWW-Element-Set. Resolution comes from observed tags."
+      },
+      {
+        "text": "The merge fails and needs manual resolution.",
+        "explanation": "Wrong. CRDTs by definition always merge automatically and deterministically."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track tags:\n\n1. A: add(milk, a1). Sync → B sees {a1}.\n2. B: remove(milk) → tombstones the tags it sees: {a1}.\n3. A (concurrently): add(milk, a2).\n4. Merge:\n  - adds = {a1, a2}\n  - removed = {a1}\n  - live = {a2} → milk **present**.\n\nA 2P-Set would have said 'removed forever'. The OR-Set's unique tags let re-adds survive.",
+    "link": {
+      "title": "A comprehensive study of CRDTs (Shapiro et al.)",
+      "url": "https://hal.inria.fr/inria-00555588/document"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which properties must a state-based CRDT's merge function have so that replicas converge over gossip? Select all that apply.",
+    "options": [
+      {
+        "text": "Commutative",
+        "explanation": "Correct. Replicas may merge states in either order (A into B, or B into A); results must be equal."
+      },
+      {
+        "text": "Associative",
+        "explanation": "Correct. States arrive via different paths and groupings; merge(merge(a, b), c) must equal merge(a, merge(b, c))."
+      },
+      {
+        "text": "Idempotent",
+        "explanation": "Correct. Gossip delivers the same state repeatedly; merging something twice must not change the result."
+      },
+      {
+        "text": "Invertible (every merge can be undone)",
+        "explanation": "Wrong. Merges are joins in a semilattice; they only move 'upwards' and are not undone. Invertibility isn't required and generally isn't possible."
+      },
+      {
+        "text": "Dependent on wall-clock timestamps",
+        "explanation": "Wrong. CRDT convergence doesn't need clocks; LWW registers use them as one design choice, but G-Counters and OR-Sets don't."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Gossip gives you no control over:\n\n- **order** of merges → need commutativity,\n- **grouping/path** → need associativity,\n- **duplicates** → need idempotence.\n\nThese three make the state a *join-semilattice*: merge = least upper bound. Every replica that has seen the same set of updates computes the same join. That's strong eventual consistency.",
+    "link": {
+      "title": "crdt.tech",
+      "url": "https://crdt.tech/"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 1,024-node cluster uses push gossip with fanout 1 per second. Roughly how long until a new membership change reaches (almost) every node?",
+    "options": [
+      {
+        "text": "About 1,024 seconds",
+        "explanation": "Wrong. That's linear spread (one new node per round). Gossip spreads exponentially because every informed node also gossips."
+      },
+      {
+        "text": "About 1 second",
+        "explanation": "Wrong. In one round, only one more node learns it; it can't reach 1,024 nodes in a single exchange with fanout 1."
+      },
+      {
+        "text": "About 15–20 seconds: O(log N) rounds",
+        "explanation": "Correct. The informed set roughly doubles each round at first (log₂ 1024 = 10), but random peer choice makes the last few nodes slow to reach. Push gossip needs about log₂N + ln N ≈ 17 rounds."
+      },
+      {
+        "text": "It never converges without a central server.",
+        "explanation": "Wrong. Gossip is specifically designed to converge without a coordinator."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each round, every informed node tells one random peer.\n\n| Round | Informed (ideal) |\n|---|---|\n| 0 | 1 |\n| 1 | 2 |\n| 2 | 4 |\n| 10 | ~1,024 |\n\nThat doubling is the best case. As more nodes know, more pushes land on nodes that already know, so the final stragglers take extra rounds. For push gossip the expected total is about log₂N + ln N:\n\n- log₂ 1024 = 10\n- ln 1024 ≈ 6.9\n- total ≈ **17 rounds ≈ 17 s**\n\nPush-pull shortens the tail. Per-node load stays at one message per second regardless of cluster size.",
+    "link": {
+      "title": "Gossip protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Gossip_protocol"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In SWIM, node A pings B and gets no ack. What does A do next, and why?",
+    "options": [
+      {
+        "text": "Immediately declares B dead and gossips it.",
+        "explanation": "Wrong. The problem might be A's own link or a dropped packet. SWIM avoids premature conviction with indirect probes and a suspicion phase."
+      },
+      {
+        "text": "Pings B in a tight loop until it answers.",
+        "explanation": "Wrong. That would add load to a struggling node and network, and doesn't scale. SWIM uses one probe per period plus indirect probes."
+      },
+      {
+        "text": "Asks a central coordinator whether B is alive.",
+        "explanation": "Wrong. SWIM is fully decentralised; there is no coordinator."
+      },
+      {
+        "text": "Asks k other nodes to ping B on its behalf (ping-req); if none get an ack, B becomes suspected, and can refute with a higher incarnation number.",
+        "explanation": "Correct. Indirect probing separates 'B is down' from 'the A–B path is bad'. The suspicion phase plus incarnation numbers let a live B clear its name before being declared dead."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "SWIM probe cycle:\n\n1. A → ping → B. Wait (e.g. 500 ms).\n2. No ack → A → ping-req(B) → C, D, E (k = 3).\n3. Each helper pings B and relays any ack to A.\n4. Ack via C → B is alive; A's direct path was the problem.\n5. No acks → mark B **suspect**, gossip it.\n6. B hears it, increments its incarnation number, gossips 'alive, inc = 7', which overrides the suspicion.\n7. If no refutation within the timeout → **dead**.",
+    "link": {
+      "title": "SWIM paper",
+      "url": "https://www.cs.cornell.edu/projects/Quicksilver/public_pdfs/SWIM.pdf"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Cassandra's standard phi failure detector uses an exponential model based on the observed mean heartbeat interval. Two peers have the same mean but different jitter. Does higher jitter alone guarantee later conviction?",
+    "options": [
+      {
+        "text": "Yes: the detector directly uses a larger standard deviation.",
+        "explanation": "Incorrect. That describes a variance-sensitive model, not Cassandra's standard exponential model."
+      },
+      {
+        "text": "No: with the same observed mean and elapsed silence, this model gives the same phi.",
+        "explanation": "Correct. Its scaled phi is elapsed silence divided by the mean, multiplied by log10(e). Variance is not a separate input."
+      },
+      {
+        "text": "Yes: phi 8 always means eight seconds.",
+        "explanation": "Incorrect. Phi is dimensionless; time to reach a threshold depends on the mean interval."
+      },
+      {
+        "text": "Noisy peers can never be convicted.",
+        "explanation": "Incorrect. Phi increases as silence grows."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For the exponential model, phi = (silence / mean) × log10(e). With mean 1 s and silence 1.1 s, phi is about 0.478 for either peer, regardless of variance. Longer observed mean intervals slow phi growth. This tail probability is not the posterior probability that the node is alive, nor a guaranteed false-positive rate.",
+    "link": {
+      "title": "Cassandra failure detector implementation",
+      "url": "https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/gms/FailureDetector.java"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these replicated designs are valid **state-based CRDTs**, guaranteed to converge however states are gossiped? Select all that apply.",
+    "options": [
+      {
+        "text": "A register holding a number, where updates only raise it and merge takes the max",
+        "explanation": "Valid. Max is commutative, associative and idempotent, and updates only move the value upwards, so it's a join-semilattice."
+      },
+      {
+        "text": "A counter where merge adds the two replicas' totals",
+        "explanation": "Not valid. Addition isn't idempotent: merging the same state twice doubles it, and gossip delivers duplicates all the time."
+      },
+      {
+        "text": "A last-write-wins register: keep the value with the highest (timestamp, replica id) pair",
+        "explanation": "Valid. Max over a total order of pairs is a proper join, so replicas converge. It's still a CRDT even though it can discard concurrent writes; \"converges\" doesn't mean \"keeps everything\"."
+      },
+      {
+        "text": "A register where merge keeps whichever value arrived most recently at this replica",
+        "explanation": "Not valid. Arrival order differs per replica, so merge isn't commutative: A may end with B's value while B ends with A's."
+      },
+      {
+        "text": "A grow-only set merged by union",
+        "explanation": "Valid. Union is commutative, associative and idempotent, and adds only grow the set."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Test each merge for the three laws plus \"updates only go up\":\n\n| Design | Comm. | Assoc. | Idem. |\n|---|---|---|---|\n| max-register | ✓ | ✓ | ✓ |\n| sum-counter | ✓ | ✓ | ✗ |\n| LWW (ts, id) | ✓ | ✓ | ✓ |\n| arrival order | ✗ | ✗ | ✓ |\n| G-Set union | ✓ | ✓ | ✓ |\n\nThe LWW register is the trap: it **is** a CRDT, because it converges deterministically. Whether it loses data you care about is a separate design question.",
+    "link": {
+      "title": "A comprehensive study of CRDTs (Shapiro et al.)",
+      "url": "https://hal.inria.fr/inria-00555588/document"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An active-active shop runs in EU and US with stock held in a PN-Counter. One unit of an item is left. During a few hundred milliseconds of replication lag, a customer in each region buys it. What happens, and which design keeps stock from going negative **without** coordinating on every sale?",
+    "options": [
+      {
+        "text": "The PN-Counter rejects the second decrement, so nothing goes wrong.",
+        "explanation": "Wrong. Each region decrements its own N entry without knowing about the other. After merging, stock is 1 − 2 = −1. CRDTs can't enforce invariants."
+      },
+      {
+        "text": "Stock ends at −1. Use an escrow counter: give each region its own share of stock to sell locally, and coordinate only to transfer shares.",
+        "explanation": "Correct. With escrow, the region holding the last unit can sell it; the other has a share of zero and must ask for more before selling, so the invariant holds and coordination only happens near the limit."
+      },
+      {
+        "text": "Stock ends at 0, because the merge takes the max of the two decrements.",
+        "explanation": "Wrong. N entries are per replica; the merge keeps both decrements, one from EU's entry and one from US's."
+      },
+      {
+        "text": "Stock ends at −1. Switch to an OR-Set of stock units.",
+        "explanation": "Wrong fix. Concurrent removals of the same unit in an OR-Set would both \"succeed\" locally too; it doesn't stop two buyers taking one item."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "PN-Counter state before: P = [EU:1, US:0], N = [0, 0] → value 1.\n\n1. EU sells: N[EU] = 1.\n2. US sells concurrently: N[US] = 1.\n3. Merge: P = 1, N = 1 + 1 = 2 → **−1**.\n\nEscrow version:\n\n- EU holds 1 unit of allowance, US holds 0.\n- EU sells locally: allowance 0.\n- US must request a transfer before selling; EU has none to give → \"sold out\".\n\nCoordination happens only when a region runs out of allowance, not on every sale.",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Riak read returns two siblings with version vectors **{A:2, B:1}** and **{A:1, B:2}**. The client merges them and writes the result back through coordinator B. What version vector should the new value carry?",
+    "options": [
+      {
+        "text": "{A:2, B:2}",
+        "explanation": "Wrong. That's the element-wise max, which dominates both siblings, but the write itself is a new update on B, so B's entry must also be incremented."
+      },
+      {
+        "text": "{A:3, B:3}",
+        "explanation": "Wrong. Only the coordinating replica's entry is incremented. Bumping A as well would claim an update on A that never happened."
+      },
+      {
+        "text": "{A:1, B:1}",
+        "explanation": "Wrong. That's the element-wise minimum, which is dominated by both siblings, so the store would treat the merged value as older than both and discard it."
+      },
+      {
+        "text": "{A:2, B:3}",
+        "explanation": "Correct. Take the element-wise max, {A:2, B:2}, so the new version dominates both siblings, then increment B for this write."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Max of the siblings:\n\n| | A | B |\n|---|---|---|\n| sibling 1 | 2 | 1 |\n| sibling 2 | 1 | 2 |\n| max | 2 | 2 |\n\n2. Increment the coordinator's entry (B): **{A:2, B:3}**.\n3. Check: {A:2, B:1} ≤ {A:2, B:3} ✓ and {A:1, B:2} ≤ {A:2, B:3} ✓, so both siblings are now obsolete and can be discarded.\n\nIf the client had written without the context from its read, the store would see a new vector concurrent with both, and you'd have three siblings instead of one.",
+    "link": {
+      "title": "Version vector (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Version_vector"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To save space, an OR-Set implementation deletes tombstones (removed tags) **24 hours** after a remove. A mobile client that holds a full replica goes offline for 3 days. While it's away, \"milk\" (tag a1) is removed and the tombstone is purged. What happens when it syncs?",
+    "options": [
+      {
+        "text": "Milk stays removed, because the remove happened first.",
+        "explanation": "Wrong. OR-Sets don't order by time. Once the tombstone for a1 is gone, nothing records that a1 was removed."
+      },
+      {
+        "text": "Milk reappears: the client still has a1 in its add-set, and with no tombstone left, the merge treats a1 as live.",
+        "explanation": "Correct. The merge sees a1 added and not removed. The removal is lost, the same resurrection problem Cassandra avoids with gc_grace_seconds and repair."
+      },
+      {
+        "text": "The sync fails with a conflict that a user must resolve.",
+        "explanation": "Wrong. CRDT merges never report conflicts; that's their defining property. The danger is a silent wrong answer."
+      },
+      {
+        "text": "Milk appears twice, because the client and server each have a copy.",
+        "explanation": "Wrong. A set contains milk at most once. The question is only whether it's present."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Day 0: all replicas: adds {a1}, removes {}.\n2. Day 0.5: server removes milk → removes {a1}.\n3. Day 1.5: server purges the tombstone → adds {}, removes {} (a1 forgotten entirely).\n4. Day 3: client syncs with adds {a1}, removes {}.\n5. Merge: adds {a1}, removes {} → milk **present**.\n\nA tombstone can be dropped safely only once **every** replica has seen it, which requires tracking replica progress (coordination), or bounding how long a replica may stay offline and forcing a full resync after that.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  }
+]

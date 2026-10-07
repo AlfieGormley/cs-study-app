@@ -1,0 +1,379 @@
+[
+  {
+    "id": "arch-service-communication-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a Kubernetes cluster, the Orders service calls `http://payments:8080`. Which discovery style is this?",
+    "options": [
+      {
+        "text": "Server-side discovery: the Service name resolves to a virtual IP and kube-proxy forwards to a ready pod.",
+        "explanation": "Correct. The client calls a stable address and the platform's routing layer picks the instance. That's server-side discovery."
+      },
+      {
+        "text": "Client-side discovery, because Orders chooses which pod to call.",
+        "explanation": "Wrong. Orders never sees the list of pods. It calls one stable name and something else decides which pod gets the request."
+      },
+      {
+        "text": "No discovery; the IP is hard-coded.",
+        "explanation": "Wrong. `payments` is a DNS name managed by Kubernetes, and the pods behind it change constantly. That's dynamic discovery."
+      },
+      {
+        "text": "Peer-to-peer gossip discovery.",
+        "explanation": "Wrong. Kubernetes Services use the API server's endpoint lists and node-level forwarding rules, not gossip between services."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Who picks the instance? Not Orders, which only knows `payments`.\n2. DNS returns the Service's ClusterIP.\n3. kube-proxy rules on the node rewrite that to one of the ready pod IPs.\n4. Because a component other than the client chooses the instance, this is server-side discovery.\n5. Contrast: in client-side discovery the client would fetch `[ip1, ip2, ip3]` and choose itself.",
+    "link": {
+      "title": "Kubernetes: Service",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/"
+    }
+  },
+  {
+    "id": "arch-service-communication-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After a customer places an order, the system must send a confirmation email. The email provider sometimes takes 5 seconds or is briefly down. How should the Orders service trigger the email?",
+    "options": [
+      {
+        "text": "Call the Email service synchronously and fail the order if the email fails.",
+        "explanation": "Wrong. This makes the order depend on a non-critical side effect, so an email outage would block revenue."
+      },
+      {
+        "text": "Call the Email service synchronously with no timeout.",
+        "explanation": "Wrong. With no timeout, a hung email provider ties up Orders' threads and can bring Orders down too."
+      },
+      {
+        "text": "Publish an `OrderPlaced` event; the Email service consumes it asynchronously and retries independently.",
+        "explanation": "Correct. Email is a side effect that doesn't need to finish before replying to the user. A broker buffers messages during outages and decouples the two services in time."
+      },
+      {
+        "text": "Have the browser call the email provider directly after checkout.",
+        "explanation": "Wrong. It exposes provider credentials, is unreliable (users close tabs), and can't be retried server-side."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Does the user need the email result to finish checkout? No.\n2. Is the dependency slow or unreliable? Yes, up to 5 s and occasional outages.\n3. Those two facts point to async messaging.\n4. Orders writes the order and publishes `OrderPlaced` (ideally via a transactional outbox so they can't diverge), then returns.\n5. Email consumes the event, retries with backoff, and catches up after outages.",
+    "link": {
+      "title": "microservices.io: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  },
+  {
+    "id": "arch-service-communication-q3",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which capabilities does a service-mesh sidecar proxy (such as Envoy in Istio) typically provide without changing application code? Select all that apply.",
+    "options": [
+      {
+        "text": "Mutual TLS between services with automatic certificate rotation.",
+        "explanation": "Correct. The proxies terminate and originate mTLS using certificates issued by the control plane, so apps can speak plain HTTP to localhost."
+      },
+      {
+        "text": "Retries, timeouts and circuit breaking configured centrally.",
+        "explanation": "Correct. Resilience policies live in mesh config and are applied by the proxies on every call."
+      },
+      {
+        "text": "Rewriting the application's SQL queries to be faster.",
+        "explanation": "Wrong. Sidecars see network traffic between services; they don't understand or optimise application database logic."
+      },
+      {
+        "text": "Per-call metrics and distributed-tracing spans.",
+        "explanation": "Correct. Every request passes through the proxy, so it can emit latency, error and throughput metrics. (Full tracing still needs apps to propagate trace headers.)"
+      },
+      {
+        "text": "Guaranteeing exactly-once processing of every request.",
+        "explanation": "Wrong. Retries can produce duplicates. Exactly-once effects need idempotency in the application."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. A sidecar sits on the network path of every call in and out of the pod.\n2. Anything that can be done to the traffic itself is fair game: encryption (mTLS), routing, retries, timeouts, metrics.\n3. Anything requiring application semantics is not: query optimisation, business-level exactly-once.\n4. Note the subtlety on tracing: the proxy creates spans, but the app must forward headers like `traceparent` to link them.\n5. Answer: 0, 1 and 3.",
+    "link": {
+      "title": "Istio architecture",
+      "url": "https://istio.io/latest/docs/ops/deployment/architecture/"
+    }
+  },
+  {
+    "id": "arch-service-communication-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A company has services in Java, Go, Python and Node.js and uses client-side discovery with a Java-only library. What's the main drawback they'll hit, and a common fix?",
+    "options": [
+      {
+        "text": "Client-side discovery always adds an extra network hop; switch to UDP.",
+        "explanation": "Wrong. Client-side discovery *avoids* the extra hop, and switching transport protocol doesn't address the problem."
+      },
+      {
+        "text": "The discovery and load-balancing logic must be reimplemented and maintained in every language; move that logic into a sidecar proxy or use server-side discovery.",
+        "explanation": "Correct. This is the classic weakness of client-side discovery. Sidecars provide the same smart client behaviour in a language-agnostic way."
+      },
+      {
+        "text": "Client-side discovery can't do health checks; replace the registry with static IPs.",
+        "explanation": "Wrong. Registries do track health (heartbeats or platform readiness), and static IPs don't work with autoscaling."
+      },
+      {
+        "text": "Non-Java services can't make HTTP calls at all.",
+        "explanation": "Wrong. They can make HTTP calls; what they lack is the library for registry lookups, balancing and retry behaviour."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Client-side discovery puts logic in the client: registry lookup, caching, instance selection, retries.\n2. With four languages, you need four implementations kept consistent, which is where bugs and drift creep in.\n3. Options:\n   - Server-side discovery: clients call a stable name; logic lives in the LB.\n   - Sidecar: same smart balancing, but in one proxy shared by all languages.\n4. Netflix's own move from Ribbon towards proxy-based approaches reflects exactly this pressure.",
+    "link": {
+      "title": "microservices.io: Client-side discovery",
+      "url": "https://microservices.io/patterns/client-side-discovery.html"
+    }
+  },
+  {
+    "id": "arch-service-communication-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API gateway has a 2 s timeout. It calls Service A with a 5 s timeout, and A calls Service B with a 10 s timeout. B becomes slow (8 s per call). What happens?",
+    "options": [
+      {
+        "text": "Everything works, just slowly, because every layer eventually gets an answer.",
+        "explanation": "Wrong. The gateway gives up after 2 s, so the user gets an error no matter what happens below."
+      },
+      {
+        "text": "The user gets an error after 2 s, but A keeps waiting up to 5 s and B keeps working up to 8 s on requests nobody is waiting for, wasting capacity.",
+        "explanation": "Correct. Inner timeouts longer than outer ones mean downstream services keep doing work whose result will be thrown away, which can amplify an overload."
+      },
+      {
+        "text": "A times out first, at 5 s, and returns a cached answer to the user.",
+        "explanation": "Wrong. The gateway's 2 s timeout fires before A's 5 s one. Also, nothing in the scenario says A has a cache."
+      },
+      {
+        "text": "B's 10 s timeout means the gateway waits 10 s.",
+        "explanation": "Wrong. Each caller enforces its own timeout. The gateway gives up at 2 s regardless of the downstream settings."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Timeline for one request:\n   - t = 0: gateway → A → B.\n   - t = 2 s: gateway gives up and returns 504 to the user.\n   - t = 5 s: A gives up on B.\n   - t = 8 s: B finishes, but no one is listening.\n2. Each user request wastes about 3 s of A's capacity and 8 s of B's.\n3. Under load, the wasted work makes B even slower, a feedback loop.\n4. Fix: inner timeouts shorter than outer ones (e.g. gateway 2 s > A 1.5 s > B 1 s), and propagate deadlines (gRPC does this natively) so downstream work stops when the caller has given up.",
+    "link": {
+      "title": "gRPC: Deadlines",
+      "url": "https://grpc.io/docs/guides/deadlines/"
+    }
+  },
+  {
+    "id": "arch-service-communication-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Product pages call Recommendations synchronously. Recommendations' database has an outage. Within a minute, product pages are timing out across the whole site, even though the pages don't need recommendations to render. Which combination best fixes this?",
+    "options": [
+      {
+        "text": "Increase the timeout on Recommendations calls so they have more time to succeed.",
+        "explanation": "Wrong. Longer timeouts make it worse: threads stay blocked longer and the product service exhausts its pools faster."
+      },
+      {
+        "text": "Add more retries to Recommendations calls.",
+        "explanation": "Wrong. Retrying a dependency that's down multiplies the load on it and keeps the caller's threads busy even longer."
+      },
+      {
+        "text": "A short timeout, a circuit breaker that fails fast once errors pass a threshold, a separate bulkhead pool for Recommendations calls, and a fallback such as popular items.",
+        "explanation": "Correct. The bulkhead limits how many threads the bad dependency can consume, the breaker stops calling it, and the fallback keeps pages rendering. The optional dependency fails without taking the page down."
+      },
+      {
+        "text": "Move Recommendations into the same process as product pages.",
+        "explanation": "Wrong. Co-locating it doesn't fix the database outage, and in-process blocking would still tie up the same threads."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Diagnose: a non-critical dependency's failure spread to the whole site, a cascading failure.\n2. Mechanism: each page request blocks a thread waiting for Recommendations. With a 200-thread pool and a 5 s timeout, you can only handle about 40 req/s before every thread is waiting.\n3. Fixes, layer by layer:\n   - Timeout of about 200 ms: limits how long each thread is held.\n   - Bulkhead (e.g. max 20 concurrent Recommendations calls): the other 180 threads stay free for page rendering.\n   - Circuit breaker: after a 50% error rate over 10 s, skip the call for 30 s.\n   - Fallback: show cached 'popular items'.\n4. Result: pages render with generic recommendations during the outage.",
+    "link": {
+      "title": "Martin Fowler: Circuit Breaker",
+      "url": "https://martinfowler.com/bliki/CircuitBreaker.html"
+    }
+  },
+  {
+    "id": "arch-service-communication-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the chain gateway → A → B, both the gateway and Service A retry failed calls up to 3 times (4 attempts in total per hop). B starts failing every request. For one user request, how many calls does B receive in the worst case, and what's the fix?",
+    "options": [
+      {
+        "text": "4 calls; retries at each layer are independent and don't multiply.",
+        "explanation": "Wrong. Each attempt at an upper layer triggers a full set of retries at the layer below, so the counts multiply."
+      },
+      {
+        "text": "12 calls; add the retries together.",
+        "explanation": "Wrong. Retries compound multiplicatively along the chain, not additively."
+      },
+      {
+        "text": "16 calls; fix it by retrying only at one layer (usually closest to the failure, or at the edge) and using retry budgets.",
+        "explanation": "Correct. The gateway makes 4 attempts to A, and each A attempt makes 4 attempts to B: 4 × 4 = 16. Retrying at one layer with a budget (say retries ≤ 10% of requests) stops a failure from turning into a retry storm."
+      },
+      {
+        "text": "64 calls; fix it by removing all timeouts.",
+        "explanation": "Wrong. 64 would need three layers retrying *into* B, but only A calls B (gateway → A → B gives two multiplying layers). Removing timeouts makes failures worse, not better."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Retries per layer: 1 attempt + 3 retries = 4 attempts.\n2. The gateway calls A up to 4 times.\n3. Each of those A invocations calls B up to 4 times.\n4. Calls reaching B = 4 × 4 = 16 for one user request.\n5. With 1,000 req/s of user traffic, B sees 16,000 req/s just as it's struggling, which makes recovery very unlikely.\n6. Fixes:\n   - Retry at a single layer.\n   - Retry budgets: allow retries only up to about 10% of normal traffic.\n   - Exponential backoff with jitter.\n   - Circuit breakers so the retries stop once B is clearly down.",
+    "link": {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "arch-service-communication-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Orders publishes `OrderPlaced`, and Inventory, Email and Loyalty each react to it. Separately, Orders sends `ChargeCard` to Payments. What's the key difference between these two messages?",
+    "options": [
+      {
+        "text": "`OrderPlaced` is synchronous and `ChargeCard` is asynchronous.",
+        "explanation": "Wrong. Both can travel through a broker asynchronously. The difference is in what they mean, not how they travel."
+      },
+      {
+        "text": "`OrderPlaced` is an event (a fact, with no specific recipient); `ChargeCard` is a command (a request for a specific service to do something).",
+        "explanation": "Correct. The publisher of an event doesn't know who listens, so new consumers can be added without changing Orders. A command's sender expects a particular handler and usually an outcome."
+      },
+      {
+        "text": "Commands can only be sent over gRPC; events only over Kafka.",
+        "explanation": "Wrong. Either can use any transport; the distinction is semantic."
+      },
+      {
+        "text": "Events must be processed exactly once; commands may be dropped.",
+        "explanation": "Wrong. Both need reliable handling, and both are usually delivered at least once, so consumers must be idempotent."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Event = past tense, a fact: `OrderPlaced`, `PaymentFailed`.\n2. Command = imperative, to a target: `ChargeCard`, `SendEmail`.\n3. Adding Analytics as a new listener to `OrderPlaced` needs no change to Orders. That's the loose coupling.\n4. A command couples sender to receiver: Orders knows Payments exists and expects a reply event.",
+    "link": {
+      "title": "Azure Architecture Center: Asynchronous messaging options",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/guide/technology-choices/messaging"
+    }
+  },
+  {
+    "id": "arch-service-communication-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Java service calls `inventory.internal`, a DNS name with a 30-second TTL pointing at a set of VMs. After a deploy replaces all the VMs, this one service keeps calling the old, now-dead IPs for hours, while other services recover within a minute. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The DNS server ignored the TTL and kept serving old records.",
+        "explanation": "Wrong. Other services recovered within a minute using the same DNS, so the server is returning the new records."
+      },
+      {
+        "text": "The new VMs failed their health checks.",
+        "explanation": "Wrong. Other services reach them fine."
+      },
+      {
+        "text": "The client runtime is caching DNS results beyond the TTL; the JVM, for instance, can cache lookups indefinitely depending on its security settings.",
+        "explanation": "Correct. The record changed, but this process never asked again. Set the JVM's `networkaddress.cache.ttl` to a short value, or use a discovery mechanism that doesn't rely on client DNS caching."
+      },
+      {
+        "text": "Long-lived connections from a pool were still connected to the old VMs.",
+        "explanation": "Wrong here. Connections to terminated VMs would fail and be re-established, which forces a fresh lookup unless the result is cached."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Other services recovered, so DNS itself is fine.\n2. This service keeps using old IPs, so it isn't re-resolving.\n3. JVM: `networkaddress.cache.ttl`. When a security manager is installed the default is to cache forever; without one, it's implementation-specific (often 30 s).\n4. Fix: set an explicit short TTL (say 30–60 s), or call a stable load balancer address that never changes.",
+    "link": {
+      "title": "microservices.io: Server-side discovery",
+      "url": "https://microservices.io/patterns/server-side-discovery.html"
+    }
+  },
+  {
+    "id": "arch-service-communication-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're considering Istio with sidecar proxies across 400 pods. Which are real costs or risks you should plan for? Select all that apply.",
+    "options": [
+      {
+        "text": "Extra CPU and memory for a proxy in every pod.",
+        "explanation": "Correct. 400 extra proxies each reserve resources, which adds up to a noticeable share of the cluster."
+      },
+      {
+        "text": "An extra proxy hop on both the client and server side of every call.",
+        "explanation": "Correct. Usually sub-millisecond each, but deep call chains multiply it."
+      },
+      {
+        "text": "The application can no longer use HTTP.",
+        "explanation": "Wrong. The app keeps speaking plain HTTP or gRPC to localhost; the sidecar does the rest."
+      },
+      {
+        "text": "A control plane to run and upgrade, whose misconfiguration can affect every service at once.",
+        "explanation": "Correct. Central configuration is powerful, and a bad routing or mTLS rule can break traffic everywhere."
+      },
+      {
+        "text": "Retries configured in both the mesh and the application can multiply load during failures.",
+        "explanation": "Correct. Layered retries amplify. Decide which layer owns retries."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "1. Resource cost: per-pod proxies (or per-node in ambient mode).\n2. Latency: two proxy hops per call.\n3. Operations: the control plane is now critical infrastructure.\n4. Behavioural traps: duplicate retries, timeouts set in two places.\n5. Benefit side: mTLS, telemetry and traffic shifting with no code changes. Worth it for many services; often not for five.",
+    "link": {
+      "title": "Istio architecture",
+      "url": "https://istio.io/latest/docs/ops/deployment/architecture/"
+    }
+  },
+  {
+    "id": "arch-service-communication-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Orders writes a new order to its database and then publishes `OrderPlaced` to Kafka. Very occasionally the process crashes between the two steps, and the order exists but no email or stock reservation ever happens. What's the standard fix?",
+    "options": [
+      {
+        "text": "Publish to Kafka first, then write to the database.",
+        "explanation": "Wrong. Now a crash between the steps produces an event for an order that doesn't exist."
+      },
+      {
+        "text": "Wrap the database write and the Kafka publish in a two-phase commit across both systems.",
+        "explanation": "Wrong in practice. Distributed 2PC across a database and a broker is rarely supported well, and it couples their availability."
+      },
+      {
+        "text": "Retry the Kafka publish three times before giving up.",
+        "explanation": "Wrong. Retries don't help if the process has already crashed."
+      },
+      {
+        "text": "Use a transactional outbox: write the order and an `outbox` row in the same database transaction, and have a relay (or CDC) publish outbox rows to Kafka.",
+        "explanation": "Correct. The two writes now commit atomically. The relay publishes at least once, so consumers must be idempotent."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Problem: two systems, no shared transaction, the dual-write problem.\n2. Outbox:\n   - `BEGIN; INSERT order; INSERT outbox(event); COMMIT;`\n   - Relay polls or tails the WAL (e.g. Debezium) and publishes.\n   - Marks rows sent, or relies on log offsets.\n3. Crash after commit: the relay publishes later. Nothing lost.\n4. Crash after publish but before marking sent: published twice, so consumers deduplicate by event ID.",
+    "link": {
+      "title": "microservices.io: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  },
+  {
+    "id": "arch-service-communication-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Checkout's p99 latency budget is 800 ms. It calls Payments (p99 300 ms), then Fraud (p99 250 ms), then Inventory (p99 200 ms) in sequence. The team proposes adding a synchronous call to a new Loyalty service (p99 150 ms) to show points earned. What's the best response?",
+    "options": [
+      {
+        "text": "Add it: 300 + 250 + 200 + 150 = 900 ms is close enough to 800 ms.",
+        "explanation": "Wrong. It already exceeds the budget, and summed p99s understate the chance that one of several calls is slow."
+      },
+      {
+        "text": "Add it, but with retries, to make it reliable.",
+        "explanation": "Wrong. Retries add latency in the slow cases, which is exactly the tail you're trying to keep in budget."
+      },
+      {
+        "text": "Don't put Loyalty on the synchronous path: publish `OrderPlaced` and let Loyalty compute points asynchronously, showing them on the confirmation page when ready (or 'points pending').",
+        "explanation": "Correct. The user doesn't need points to complete checkout, so the call can be async. That also removes Loyalty's availability from checkout's."
+      },
+      {
+        "text": "Call all four services in parallel to stay within budget.",
+        "explanation": "Wrong as the main answer. Parallel calls can help independent steps, but Payments, Fraud and Inventory are often ordered, and Loyalty still doesn't need to be on the critical path at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Current serial path ≈ 300 + 250 + 200 = 750 ms at p99 (roughly; p99s don't add exactly).\n2. Adding 150 ms → about 900 ms, over budget.\n3. Ask: does the user need this answer to finish? No.\n4. So make it async: event → Loyalty → points stored → UI fetches or receives them.\n5. Bonus: a Loyalty outage no longer breaks checkout.",
+    "link": {
+      "title": "Azure Architecture Center: Asynchronous messaging options",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/guide/technology-choices/messaging"
+    }
+  }
+]

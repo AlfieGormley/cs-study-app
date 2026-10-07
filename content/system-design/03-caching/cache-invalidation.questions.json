@@ -1,0 +1,378 @@
+[
+  {
+    "id": "cache-invalidation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do most cache-aside designs **delete** the cache key on write rather than **update** it with the new value?",
+    "options": [
+      {
+        "text": "Deletes are faster than sets in Redis",
+        "explanation": "The speed difference is negligible. The reason is correctness under concurrency, not performance."
+      },
+      {
+        "text": "Updating the cache is impossible without write-through",
+        "explanation": "Cache-aside apps can certainly `SET` the cache after a write; the problem is the race it introduces, not that it can't be done."
+      },
+      {
+        "text": "Deleting guarantees the cache is never stale",
+        "explanation": "Deletion still has a stale-read window and the read/write race, where a slow reader re-inserts an old value after the delete."
+      },
+      {
+        "text": "Deletes from concurrent writers commute: in any order they leave an empty key, so the next read loads the true value. Concurrent updates can land out of order and leave an old value",
+        "explanation": "Correct. Two `SET`s racing can leave the loser's older value in the cache. Two `DEL`s racing always converge on \"no entry\", which is safe."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Race with updates:\n\n```\nA: DB name=Ann\nB: DB name=Bea\nB: SET Bea\nA: SET Ann   <- arrives late\n```\n\nDB = Bea, cache = Ann. Wrong until TTL.\n\nSame race with deletes:\n\n```\nA: DB name=Ann\nB: DB name=Bea\nB: DEL\nA: DEL\n```\n\nCache empty; the next read loads Bea. Correct regardless of order.",
+    "link": {
+      "title": "Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  },
+  {
+    "id": "cache-invalidation-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your cache-aside service deletes the key after every DB update, with a 24-hour TTL. Occasionally a product shows an old price for hours, even though the DB is correct. Logs show a read that started just before the update and finished just after. What happened?",
+    "options": [
+      {
+        "text": "The delete failed silently",
+        "explanation": "Possible in general, but the logs point to a specific interleaving with a slow reader, not a failed delete."
+      },
+      {
+        "text": "The reader fetched the old row before the update, then wrote it to the cache **after** the writer's delete, re-caching the old price with a fresh 24-hour TTL",
+        "explanation": "Correct. This is the classic cache-aside read/write race: the reader's `SET` is based on a stale read but lands after the invalidation, and nothing deletes it again."
+      },
+      {
+        "text": "Redis replication lag returned an old value",
+        "explanation": "The observed stale refill explains this timeline. Replica lag can also be arbitrarily long during faults; duration alone does not rule it out."
+      },
+      {
+        "text": "The TTL was too short",
+        "explanation": "The opposite: a long TTL is why the stale value survives for hours. A shorter TTL would limit the damage."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Reconstruct the timeline:\n\n```\nms   who  action\n000  R    GET -> miss\n005  R    SELECT -> £10\n010  W    UPDATE -> £12\n012  W    DEL product:9\n300  R    SET product:9 £10\n          (EX 86400)\n```\n\n1. R's read happened before W's commit, so it holds £10.\n2. R was slow (a GC pause) and its `SET` arrived after W's `DEL`.\n3. The cache now says £10 for 24 hours.\n\nFixes: leases (the delete voids R's token, so the set is rejected), versioned set-if-newer with tombstones, or at least a shorter TTL and a delayed second delete.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-invalidation-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How do Facebook-style **leases** prevent the stale-set race from the previous question?",
+    "options": [
+      {
+        "text": "On a miss the cache issues a token; a later delete of the key invalidates it, so the slow reader's `set` with the old token is rejected",
+        "explanation": "Correct. The cache can tell that the reader's data predates an invalidation, because the token it holds is no longer valid."
+      },
+      {
+        "text": "They lock the database row until the cache is updated",
+        "explanation": "Leases are entirely within memcached; they do not lock database rows."
+      },
+      {
+        "text": "They give each key a short TTL so stale data expires quickly",
+        "explanation": "A short TTL limits damage but does not stop the stale set from happening; leases reject it outright."
+      },
+      {
+        "text": "They force all reads to go to the primary database for 10 seconds after a write",
+        "explanation": "That resembles Facebook's remote markers for cross-region read-your-writes, a different mechanism."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. R misses on `product:9`; memcached returns token **T1** and records it.\n2. R queries the DB and gets £10.\n3. W commits £12 and sends `delete product:9`. Memcached removes the key **and voids T1**.\n4. R sends `set product:9 £10 token=T1`. T1 is invalid, so the set is rejected.\n5. The next reader misses, gets a fresh token T2, reads £12, and sets it successfully.\n\nSide effect: Facebook configured memcached to issue at most one token per key every 10 s, so other missing clients wait briefly and retry instead of all hitting the DB, which also tames thundering herds.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-invalidation-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your team adds change data capture (Debezium reading the Postgres WAL) to drive cache invalidation. Assume the relevant logged tables/operations are captured, all dependent keys are mapped, ordering is preserved where required, and retention/retries are reliable. Which benefits does this bring over invalidating in application code? Select all that apply.",
+    "options": [
+      {
+        "text": "Writes made outside the app (migrations, admin SQL, other services) still trigger invalidation",
+        "explanation": "Correct for captured tables and operations, regardless of which client wrote them. Publication/filter configuration, unlogged data, truncation handling and missing derived-key mappings can still create gaps."
+      },
+      {
+        "text": "Only committed captured changes drive invalidation; preserve the relevant per-key ordering through delivery.",
+        "explanation": "Correct. PostgreSQL logical decoding exposes committed changes, but a multi-topic/partition pipeline does not automatically provide one global consumption order."
+      },
+      {
+        "text": "The cache becomes strongly consistent with the database",
+        "explanation": "Incorrect. CDC is asynchronous: there is still a delay (often tens to hundreds of ms) between commit and delete, during which reads are stale."
+      },
+      {
+        "text": "Failed deletes can be retried from the durable log",
+        "explanation": "Correct. Because the events sit in Kafka (or the WAL), the consumer can retry until the delete succeeds instead of losing it on a network blip."
+      },
+      {
+        "text": "It removes the need to know which cache keys depend on which rows",
+        "explanation": "Incorrect. The consumer still has to map a changed row to every key derived from it, which is hard for aggregates and joined views."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. App-level invalidation relies on every write path calling `DEL`. One forgotten script leaves stale data.\n2. With CDC, PostgreSQL WAL also contains physical work from uncommitted transactions; logical decoding emits captured committed changes. Debezium delivery depends on its configured capture scope.\n3. A consumer maps `products id=9` → `DEL product:9`, `DEL category:3:list`, and retries on failure.\n4. Limits: it's still eventual (commit → event → delete takes time), and you must maintain the row-to-key mapping.",
+    "link": {
+      "title": "Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  },
+  {
+    "id": "cache-invalidation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You cache each user's profile with a version number from the DB and write to Redis using an atomic \"set only if the new version is greater\" script. Assume database-ordered versions and retained comparison metadata (no intervening eviction, expiry or reset). Which race does this fix?",
+    "options": [
+      {
+        "text": "A reader re-caching old data after the key was deleted",
+        "explanation": "After a plain delete, there is no stored version to compare against, so the stale set succeeds. You'd need a tombstone holding the new version to fix this."
+      },
+      {
+        "text": "Cache stampede on a popular key",
+        "explanation": "Versioning controls which write wins; it does nothing to stop many concurrent misses from all querying the DB."
+      },
+      {
+        "text": "Two concurrent writers updating the cache out of order",
+        "explanation": "Correct. If writer A (version 7) arrives after writer B (version 8), the script sees 8 ≥ 7 and rejects A's write, so the cache keeps the newer value."
+      },
+      {
+        "text": "Redis losing data on a crash",
+        "explanation": "Versioning is about ordering of writes, not durability. Persistence and replication address crashes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. DB rows carry `version`. A commits v7, B commits v8.\n2. B's cache write arrives first: cache has no entry → write v8.\n3. A's cache write arrives: current v8 ≥ 7 → rejected.\n4. Cache ends at v8, matching the DB.\n\nWhy not the delete race? After `DEL`, the key is gone. A slow reader holding v7 finds no current version and the script accepts it. Storing a tombstone `{v: 8, data: null}` instead of deleting would make v7 lose.\nEvicting or expiring the version metadata loses this protection. Retain an authoritative high-water mark or bound and reject all older in-flight fills before removing it.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-invalidation-q6",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should cached entries have a TTL even when the application explicitly invalidates on every write?",
+    "options": [
+      {
+        "text": "Because Redis requires a TTL on every key",
+        "explanation": "Redis keys can live forever; TTLs are optional."
+      },
+      {
+        "text": "Because TTLs make the cache strongly consistent",
+        "explanation": "Wrong. TTL limits one entry’s residence since insertion, not necessarily the age of its underlying data. A stale replica or delayed fill may insert old data with a fresh TTL."
+      },
+      {
+        "text": "To improve hit ratio",
+        "explanation": "TTLs reduce hit ratio slightly, since entries expire and must be reloaded. They are a correctness safeguard, not a performance one."
+      },
+      {
+        "text": "As a safety net, expire an individual cached copy after a bounded residence time; total freshness also depends on where and when it was loaded.",
+        "explanation": "Correct. TTL helps recover from lost invalidations, but does not guarantee eventual freshness when every refill can keep loading stale data."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A missed invalidation can leave a stale copy behind.\n2. TTL makes that individual entry expire.\n3. A delayed request or lagging replica may then insert an already-old value, restarting the TTL.\n4. For a hard freshness target, track source versions/timestamps, bound loading delays and replica lag, or use an authoritative read. TTL alone is insufficient.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-invalidation-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user updates their bio and immediately reloads. Your system tolerates 5 s of global staleness, but product wants **this user** to see their change at once. The cache is shared Redis with CDC-based invalidation (≈200 ms lag). What is the most targeted fix?",
+    "options": [
+      {
+        "text": "Drop the TTL to 1 second for all profiles",
+        "explanation": "TTL doesn't address the 200 ms CDC lag on the first reload, and it would increase misses for everyone to solve one user's experience."
+      },
+      {
+        "text": "Carry the committed row version for that user; accept cached data only if it is at least that version, otherwise read the primary.",
+        "explanation": "Correct. A durable session/version requirement gives a checkable read-your-writes condition. A fixed bypass window is only a heuristic unless lag and stale refills are bounded."
+      },
+      {
+        "text": "Disable caching for profiles",
+        "explanation": "This removes the cache's benefit for every reader to solve a problem only the writer has."
+      },
+      {
+        "text": "Switch Redis to synchronous replication",
+        "explanation": "Redis replication isn't the source of the staleness; the stale value comes from the gap before the CDC delete arrives."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The user needs to observe at least the version their write committed.\n2. Return/store that ordered version in the session or request context.\n3. Compare a cached value’s version with it. If too old or missing, read an authoritative source (with appropriate failover handling).\n4. Keep the version requirement until future reads satisfy it; do not assume an arbitrary five-second timeout proves freshness.\n5. Versioned write-through can help only if concurrent ordering and failure cases are also handled.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-invalidation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team switches to **versioned keys**: each user's current version number is stored in a small `user:42:ver` key, and profiles are cached as `user:42:v<N>`. On update, the writer commits to the DB and increments the version. What happens to the old entry `user:42:v8` after the version becomes 9?",
+    "options": [
+      {
+        "text": "It is overwritten in place by the v9 data",
+        "explanation": "Versioned keys never overwrite: v9 is a different key, written by the next reader that misses on it."
+      },
+      {
+        "text": "Readers stop asking for it, because they now build the key `user:42:v9`; the old entry ages out via its TTL or eviction",
+        "explanation": "Correct. Invalidation becomes renaming. Nobody deletes v8; it simply becomes unreachable and is reclaimed by TTL or eviction."
+      },
+      {
+        "text": "Redis deletes it automatically when the version number changes",
+        "explanation": "Redis knows nothing about the naming scheme. The old key stays until its TTL expires or it is evicted."
+      },
+      {
+        "text": "Readers keep getting v8 until its TTL expires",
+        "explanation": "Readers look up the version first, see 9, and request `user:42:v9`, which is a miss and loads fresh data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Read path:\n\n```\nv = GET user:42:ver      -> 9\nGET user:42:v9           -> miss\nload from DB, SET v9\n```\n\n2. new readers observing version 9 stop requesting user:42:v8; older in-flight readers may still use it, so it is dead weight until its TTL or eviction removes it.\n3. Trade-offs:\n   - Every read now costs an extra lookup for the version (the value key depends on the version result, so a single ordinary MGET cannot batch both unknown-dependent lookups; an atomic server-side routine or carefully scoped local version cache changes the tradeoff).\n   - Old versions use memory until they expire, so keep a TTL.\n   - The version key itself must be updated reliably; if that bump is lost, readers keep using the old version.\n4. This is the same idea as fingerprinted asset URLs in HTTP caching.\nUse a database-ordered revision and verify the fetched payload matches the versioned key. Independent Redis increments can reorder relative to database commits; in-flight readers and stale version caches may continue requesting v8 temporarily.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-invalidation-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the **leases** described in *Scaling Memcache at Facebook* are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A `set` carrying a lease token is rejected if the key was deleted after the token was issued",
+        "explanation": "Correct. The delete invalidates the token, so a set based on data read before the delete cannot land."
+      },
+      {
+        "text": "By default, a server issued at most one token per key every 10 seconds, and other missing clients were told to wait briefly and retry",
+        "explanation": "Correct. This is the thundering-herd half of leases: only one client goes to the database, and the others usually find the value cached on retry."
+      },
+      {
+        "text": "Leases lock the database row until the cache is repopulated",
+        "explanation": "Incorrect. Leases live entirely inside memcached; the database is not involved."
+      },
+      {
+        "text": "On keys prone to thundering herds, Facebook measured peak database query rates falling from about 17K/s to 1.3K/s",
+        "explanation": "Correct. That was the paper's week-long measurement, and it matters because databases are provisioned for peak load."
+      },
+      {
+        "text": "Leases make the cache strongly consistent with the database",
+        "explanation": "Incorrect. They prevent stale sets and herds, but readers can still see a value that is milliseconds stale, and the paper even lets clients choose to read deliberately stale values."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Leases solve two problems with one token:\n\n| Problem | How the token helps |\n|---|---|\n| Stale set | Delete voids it; late set fails |\n| Thundering herd | One token per key per 10 s |\n\n1. A and B are about correctness and load respectively (true).\n2. D is the measured effect (true): roughly a 13× cut in peak DB load for those keys.\n3. C confuses a cache-level token with a database lock (false).\n4. E overstates the guarantee: the cache is still eventually consistent (false).",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-invalidation-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your service uses delete-on-write and sees the occasional stale-set race. Database reads on the miss path take 20 ms at the median and 400 ms at p99.9. You add a **delayed double delete**. Which delay is most sensible, and what is its limitation?",
+    "options": [
+      {
+        "text": "About 20 ms, the median read time; it removes the race entirely",
+        "explanation": "A delay at the median still leaves half of slow readers able to set after the second delete, so many races survive."
+      },
+      {
+        "text": "Zero: issue both deletes back to back",
+        "explanation": "Two immediate deletes are equivalent to one. The point is to delete again *after* any in-flight slow reader has finished its set."
+      },
+      {
+        "text": "About 500 ms, just above the slowest typical read; it narrows the window but cannot guarantee correctness, since a reader can still be slower than any fixed delay",
+        "explanation": "Correct. The second delete catches readers whose stale set landed in the first half-second. A reader stalled by a long GC pause can still arrive later, which is why leases or versioning are the real fix."
+      },
+      {
+        "text": "About 24 hours, matching the TTL",
+        "explanation": "A day-long delay is far too late to reduce the near-term stale window. Expiry starts when the stale entry is inserted, so it is not necessarily simultaneous with a delete scheduled from the writer’s commit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The race: a reader reads the old row, the writer deletes, then the reader's `SET` lands.\n2. The second delete must land **after** that late `SET` to clean it up.\n3. So the delay must exceed the slow-reader time: p99.9 ≈ 400 ms, so ~500 ms.\n4. Timeline:\n\n```\n0 ms    W: commit, DEL\n300 ms  R: stale SET lands\n500 ms  W: DEL again -> fixed\n```\n\n5. If R stalls for 2 s instead, its set lands after both deletes and survives until TTL. Hence \"heuristic, not guarantee\".",
+    "link": {
+      "title": "Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  },
+  {
+    "id": "cache-invalidation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You use an atomic \"set only if newer version\" script. To close the delete race, the writer replaces `DEL user:42` with a **tombstone** `{v: 8, data: null}` (with a TTL). Assume the script explicitly permits equal-version replacement of a tombstone by data, and retains the version floor while older readers may still write. A slow reader then tries to set data it read at version 7. What happens, and what must readers do when they see the tombstone?",
+    "options": [
+      {
+        "text": "The reader's set succeeds, because tombstones are treated as empty keys",
+        "explanation": "If the script treated the tombstone as empty, it would be no better than a delete. The tombstone exists precisely to carry the version 8."
+      },
+      {
+        "text": "The reader's set is rejected because 8 ≥ 7; any reader that finds the tombstone treats it as a miss, loads from the DB and sets version 8 or later",
+        "explanation": "Correct. The tombstone keeps the latest version visible after the data is gone, so the stale v7 write loses, while fresh v8+ data can still replace it."
+      },
+      {
+        "text": "The reader's set is rejected, and the tombstone is served to users as an empty profile",
+        "explanation": "Readers must not show `null` as the profile. A tombstone means \"no data cached, but the version is at least 8\", so it is handled as a miss."
+      },
+      {
+        "text": "Both values are stored and readers pick the newer one",
+        "explanation": "The script stores one value per key. It decides which write wins rather than keeping both."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Without a tombstone:\n\n```\nW: commit v8, DEL key\nR: SET v7 -> key empty -> ACCEPTED\n```\n\n2. With a tombstone:\n\n```\nW: commit v8, SET {v:8,null}\nR: SET v7 -> 8 >= 7 -> REJECTED\n```\n\n3. The next reader sees `data: null`, treats it as a miss, reads v8 from the DB and sets it. One detail: the lesson's script rejects equal versions (`cur >= new`), so for tombstones it must accept a set whose version *equals* the tombstone's, otherwise fresh v8 data could never replace the v8 tombstone.\n4. Do not expire or evict the version floor while an older request can still fill the cache. Use retained authoritative metadata or a proven bound that rejects old fills before reclamation.\n\nThis is how versioning closes the race that a plain delete leaves open.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-invalidation-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your primary database is in Europe and a read replica with its own cache cluster runs in the US, with replication lag that can reach several seconds. A US user updates their profile (the write goes to Europe) and reloads at once. What does a Facebook-style **remote marker** do here?",
+    "options": [
+      {
+        "text": "It copies the new value directly into the US cache, so the reload hits",
+        "explanation": "Remote markers carry no data. They only say \"the local replica may be stale for this key\"."
+      },
+      {
+        "text": "It blocks the user's reload until replication catches up",
+        "explanation": "Nothing is blocked. The reload is simply routed to a different database."
+      },
+      {
+        "text": "It deletes the replica's copy of the row",
+        "explanation": "Markers live in memcache; they never modify the replica database."
+      },
+      {
+        "text": "Before writing, the server sets a marker for the key in the US region; on the reload, the cache misses, the server sees the marker and reads from the European primary instead of the lagging replica",
+        "explanation": "Correct. The marker trades extra latency on that miss for a lower chance of reading stale data. It is removed as part of the write's invalidations once replication delivers them."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The paper's three steps for a write from a non-master region to key `k`:\n\n1. Set remote marker `r_k` in the local region.\n2. Write to the master, embedding `k` and `r_k` as keys to invalidate once the change replicates.\n3. Delete `k` in the local cluster.\n\nOn the reload:\n\n```\nGET k        -> miss\nGET r_k      -> present\n=> query master (Europe)\n```\n\nOnce replication catches up, the invalidation removes `r_k`, and reads go back to the local replica. The cost is a cross-region round trip (tens of ms) on those misses only.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  }
+]

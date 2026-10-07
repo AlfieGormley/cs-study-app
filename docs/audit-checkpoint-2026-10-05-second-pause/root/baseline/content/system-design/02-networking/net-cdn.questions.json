@@ -1,0 +1,378 @@
+[
+  {
+    "id": "net-cdn-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your origin serves 10,000 requests per second through a CDN with a 95% cache hit ratio. You improve the hit ratio to 99%. How does the origin's load change?",
+    "options": [
+      {
+        "text": "It drops from 500 to 100 requests per second, a 5× reduction",
+        "explanation": "Correct. Misses fall from 5% of 10,000 = 500 rps to 1% of 10,000 = 100 rps."
+      },
+      {
+        "text": "It drops by about 4%",
+        "explanation": "That confuses the change in hit ratio (4 points) with the change in misses. The origin only sees misses, which go from 5% to 1%."
+      },
+      {
+        "text": "It doesn't change; hit ratio only affects user latency",
+        "explanation": "Hit ratio directly determines how many requests reach the origin; every miss is an origin request."
+      },
+      {
+        "text": "It drops to zero",
+        "explanation": "At 99% hit ratio, 1% of requests still miss and go to the origin: 100 rps here."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Origin load = total × (1 − hit ratio).\n2. Before: 10,000 × 0.05 = **500 rps**.\n3. After: 10,000 × 0.01 = **100 rps**.\n4. Ratio: 500 / 100 = **5×** less origin load.\n\nThat's why chasing the last few percent of hit ratio is worth it: the miss rate, not the hit rate, sets origin cost.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "net-cdn-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A games company ships a 40 GB update that millions of players will download within an hour of release at 18:00. Which CDN approach suits this best?",
+    "options": [
+      {
+        "text": "Pull, with a short TTL so it stays fresh",
+        "explanation": "With pull, the first requests at 18:00 miss at every PoP at once, hammering the origin with huge downloads exactly when demand peaks. A short TTL makes that worse."
+      },
+      {
+        "text": "Serve it directly from the origin to avoid CDN costs",
+        "explanation": "Millions of 40 GB downloads would need petabytes of egress from one origin within an hour, far beyond what a single site can deliver."
+      },
+      {
+        "text": "Push (or pre-warm) the files to the CDN ahead of release, with versioned file names",
+        "explanation": "Correct. The content and timing are known in advance, so pre-positioning avoids a cold-cache stampede at 18:00; versioned names mean no purging is needed."
+      },
+      {
+        "text": "Disable caching so every player gets the latest bytes",
+        "explanation": "The update is immutable once released. Disabling caching sends every byte to the origin, defeating the purpose of a CDN."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Demand: say 2 million players × 40 GB = **80 PB** in an hour. That's ~178 Tbps, which only a CDN's aggregate capacity can serve.\n2. Pull at 18:00: hundreds of PoPs miss simultaneously → hundreds of origin fetches of 40 GB each (plus partial range requests).\n3. Push/pre-warm before 18:00 → every PoP (or shield) already has it → origin sees almost nothing.\n4. Name it `patch-1.42.0.pak` and cache it for a year: immutable, no purges.",
+    "link": {
+      "title": "How CloudFront delivers content (AWS)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/HowCloudFrontWorks.html"
+    }
+  },
+  {
+    "id": "net-cdn-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Product pages are cacheable for 5 minutes, but the CDN hit ratio is only 20%. Logs show URLs like `/p/42?utm_source=mail&utm_campaign=x&fbclid=...`. What's the best fix?",
+    "options": [
+      {
+        "text": "Increase the TTL to 24 hours",
+        "explanation": "A longer TTL helps only if the same key is requested again. With unique tracking parameters, most keys are seen once, so TTL barely matters (and stale prices become a risk)."
+      },
+      {
+        "text": "Add `Vary: Cookie` to the response",
+        "explanation": "That fragments the cache even further, by every distinct cookie header, lowering the hit ratio."
+      },
+      {
+        "text": "Purge the cache more often",
+        "explanation": "Purging removes cached entries and lowers the hit ratio. The problem is too many distinct keys, not stale content."
+      },
+      {
+        "text": "Exclude tracking parameters from the cache key (allow-list only parameters that change the response)",
+        "explanation": "Correct. `/p/42` with any `utm_*` or `fbclid` returns the same page, so they shouldn't fragment the cache. Allow-listing collapses thousands of keys into one per product."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Diagnose: same page, many URLs → **cache-key fragmentation**.\n2. A page shared in a campaign might get 5,000 distinct `fbclid` values → 5,000 cache entries, each hit once.\n3. Fix: cache key = path + allow-listed params (e.g. `colour`, `size`); drop `utm_*`, `fbclid`, `gclid`; sort what remains.\n4. Now all 5,000 requests share one object: 1 miss + 4,999 hits.\n5. Analytics still work, because the browser keeps the full URL for client-side tracking.",
+    "link": {
+      "title": "Understand the cache key (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html"
+    }
+  },
+  {
+    "id": "net-cdn-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After a release, some users see *other people's* names on the `/dashboard` page. The page recently started being cached by the CDN. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The CDN's TLS certificate is shared between users",
+        "explanation": "All users share a site's certificate; that's normal and doesn't mix up response content."
+      },
+      {
+        "text": "A personalised response was cached under a key that doesn't include the user's identity, so one user's page was served to others",
+        "explanation": "Correct. The first user's response populated the cache entry for `/dashboard`, and later users with the same key got it. Personalised responses must be `private`/`no-store` or keyed on identity."
+      },
+      {
+        "text": "The origin's database returned the wrong rows",
+        "explanation": "Possible in theory, but the timing (started when CDN caching began) and the pattern (whole pages belonging to other users) point to cache-key leakage."
+      },
+      {
+        "text": "Users' browsers are caching too aggressively",
+        "explanation": "A browser cache only stores responses for that one user. It can't show user A's page to user B."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Alice requests `/dashboard` → miss → origin returns \"Hi Alice\" → CDN stores it under key `/dashboard`.\n2. Bob requests `/dashboard` → same key → **hit** → Bob sees \"Hi Alice\".\n3. Immediate fix: purge `/dashboard`, stop caching it.\n4. Durable fix: send `Cache-Control: private, no-store` on authenticated responses; configure the CDN to bypass the cache when an auth cookie is present; alert on cacheable responses that also contain `Set-Cookie`.",
+    "link": {
+      "title": "Configuring caching (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ConfiguringCaching.html"
+    }
+  },
+  {
+    "id": "net-cdn-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You have 300 edge PoPs and a fragile origin. A news story goes viral and an uncached article is suddenly requested worldwide. Which mechanisms reduce the number of requests hitting your origin? Select all that apply.",
+    "options": [
+      {
+        "text": "An origin shield that all PoPs fetch through on a miss",
+        "explanation": "Correct. Instead of up to 300 PoPs each fetching from the origin, they all ask the shield, which fetches once."
+      },
+      {
+        "text": "Request collapsing (coalescing) at the edge and shield",
+        "explanation": "Correct. Concurrent requests for the same uncached object wait for one in-flight fetch rather than each going upstream."
+      },
+      {
+        "text": "Adding `Vary: User-Agent` to the article",
+        "explanation": "This creates a separate cached copy per user-agent string, multiplying misses and origin requests."
+      },
+      {
+        "text": "Serving stale content while revalidating (`stale-while-revalidate`) after the TTL expires",
+        "explanation": "Correct. Users keep getting the stale copy while one background request refreshes it, avoiding a burst of synchronous misses at each expiry."
+      },
+      {
+        "text": "Purging the whole CDN cache to make sure the article is fresh",
+        "explanation": "A full purge makes every object miss at once, creating exactly the origin stampede you're trying to avoid."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Count origin requests for 1 article, 300 PoPs, 10,000 simultaneous users:\n\n| Setup | Origin requests |\n|---|---|\n| No shield, no collapsing | up to 10,000 |\n| Collapsing per PoP | ≤ 300 |\n| + Origin shield | 1 |\n\nThen at each TTL expiry, `stale-while-revalidate` keeps it to one background refresh. `Vary: User-Agent` and global purges push the numbers back up.",
+    "link": {
+      "title": "Using Amazon CloudFront Origin Shield (AWS)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html"
+    }
+  },
+  {
+    "id": "net-cdn-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A checkout API is fully personalised and never cacheable. A user in Sydney (origin in Frankfurt, RTT 280 ms; Sydney PoP RTT 8 ms) makes one request on a new connection with TLS 1.3. Roughly how long does it take direct, versus via the CDN with a warm edge→origin connection? Ignore server time.",
+    "options": [
+      {
+        "text": "840 ms direct vs 840 ms via CDN, because nothing is cached",
+        "explanation": "This assumes a CDN only helps with cache hits. Edge termination and warm origin connections remove the expensive handshakes from the long path."
+      },
+      {
+        "text": "560 ms direct vs 8 ms via CDN",
+        "explanation": "8 ms would only be possible for a cache hit. An uncacheable request must still travel to Frankfurt and back once. Also, direct needs three RTTs (TCP, TLS, request), not two."
+      },
+      {
+        "text": "840 ms direct vs about 304 ms via CDN",
+        "explanation": "Correct. Direct: 3 × 280 = 840 ms. Via CDN: TCP 8 + TLS 8 + request 8 + edge→origin 280 = 304 ms."
+      },
+      {
+        "text": "280 ms direct vs 280 ms via CDN",
+        "explanation": "This ignores the TCP and TLS handshakes on the direct path; a new connection can't send its request in the first round trip."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "**Direct** (new connection):\n\n- TCP: 280 ms\n- TLS 1.3: 280 ms\n- Request/response: 280 ms\n- Total: **840 ms**\n\n**Via CDN**:\n\n- TCP to Sydney edge: 8 ms\n- TLS at edge: 8 ms\n- Request to edge: 8 ms\n- Edge → Frankfurt on an existing connection: 280 ms\n- Total: **304 ms**\n\n~2.8× faster with no caching at all. The remaining 280 ms is the speed-of-light floor; only moving the data closer removes it.",
+    "link": {
+      "title": "Cloud CDN overview (Google Cloud)",
+      "url": "https://cloud.google.com/cdn/docs/overview"
+    }
+  },
+  {
+    "id": "net-cdn-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You deploy a new front-end build. With `app.js` cached for 1 year, users still get the old JavaScript; with a 60 s TTL, your hit ratio is poor and deploys still show a minute of mixed versions. What's the standard solution?",
+    "options": [
+      {
+        "text": "Content-hashed file names (`app.3f9a1c.js`) cached for a year as `immutable`, with the HTML that references them on a short TTL",
+        "explanation": "Correct. Each build produces new URLs, so old and new assets never collide; only the small HTML document needs to refresh, and long-lived assets get near-100% hit ratios."
+      },
+      {
+        "text": "Purge the entire CDN on every deploy",
+        "explanation": "This works but causes a miss storm against the origin on every deploy, and browsers still hold their own cached `app.js` that a CDN purge can't reach."
+      },
+      {
+        "text": "Add `?v=random` to every request at runtime",
+        "explanation": "A random query string per request makes every request a cache miss, destroying the hit ratio entirely."
+      },
+      {
+        "text": "Set `Vary: Date` on the JavaScript",
+        "explanation": "Varying on `Date` makes nearly every request a different cache key, so nothing is ever reused."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Problem: one URL, changing content → you must trade freshness against hit ratio.\n2. Break the link: **new content → new URL**. The build emits `app.<hash>.js`.\n3. Assets: `Cache-Control: public, max-age=31536000, immutable` → cached at the edge and in browsers for a year.\n4. HTML: `max-age=60` or revalidated → after a deploy, it points at the new hashes within a minute.\n5. Old HTML still references old assets, which still exist, so there's no mixed-version breakage.",
+    "link": {
+      "title": "Configuring caching (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ConfiguringCaching.html"
+    }
+  },
+  {
+    "id": "net-cdn-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your CDN is configured to cache anything ending in `.css`, `.js` or `.png` for a day, whatever the origin says. Your app framework ignores unknown path suffixes, so `/account/settings/x.css` returns the logged-in user's settings page. What's the risk and the best fix?",
+    "options": [
+      {
+        "text": "No risk: the CSS rule only matches real stylesheets",
+        "explanation": "The CDN matches on the URL's extension, not on what the response actually contains. Here an HTML account page has a `.css` URL."
+      },
+      {
+        "text": "Only a performance risk, because HTML is larger than CSS",
+        "explanation": "The real danger is data exposure, not size."
+      },
+      {
+        "text": "Web cache deception: an attacker tricks a victim into visiting that URL, the CDN caches the victim's private page, and the attacker then fetches it. Cache based on the origin's `Cache-Control` (with `private`/`no-store` on account pages) and make the origin reject unknown suffixes",
+        "explanation": "Correct. The CDN and the origin disagree about what the URL is. Respecting origin cache headers, and having the origin return 404 for unexpected paths, closes the gap."
+      },
+      {
+        "text": "The browser will refuse to render HTML served as CSS",
+        "explanation": "The attacker doesn't need the victim's browser to render anything; they just need the CDN to store the response so they can request it themselves."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Attacker sends the victim a link: `/account/settings/x.css`.\n2. The victim's browser sends it with their session cookie → the origin returns the victim's settings page.\n3. The CDN sees `.css` → caches it publicly for a day.\n4. Attacker requests the same URL with no cookie → **cache hit** → reads the victim's data.\n5. Defences: cache by the origin's `Cache-Control` rather than by extension; send `private, no-store` on authenticated pages; return 404 for unknown path suffixes; don't cache responses to requests carrying session cookies.",
+    "link": {
+      "title": "Understand the cache key (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html"
+    }
+  },
+  {
+    "id": "net-cdn-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A public product page differs by language (English, French or German) and has separate mobile and desktop HTML. Which cache-key choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Normalise `Accept-Language` into one of `en`, `fr` or `de` and key on that",
+        "explanation": "Correct. Raw `Accept-Language` values vary enormously (`fr-FR,fr;q=0.9,en;q=0.8`...). Collapsing them to the three languages you serve gives at most three variants."
+      },
+      {
+        "text": "Include the full `User-Agent` string in the key",
+        "explanation": "There are thousands of distinct user-agent strings, so this fragments the cache massively. Bucket them instead."
+      },
+      {
+        "text": "Include the session cookie, to be safe",
+        "explanation": "The page is public and identical for every user in the same bucket. Keying on the session makes every visitor a separate miss."
+      },
+      {
+        "text": "Allow-list only the query parameters that change the page (say `page` and `sort`) and sort them",
+        "explanation": "Correct. This drops tracking parameters and makes `?a=1&b=2` and `?b=2&a=1` share an entry."
+      },
+      {
+        "text": "Map the user agent to a `mobile` or `desktop` device bucket and key on that",
+        "explanation": "Correct. Two buckets capture the real difference in the HTML without fragmenting by every browser version."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "Rule: **key on exactly what changes the response, normalised to as few values as possible.**\n\n| Input | Key on |\n|---|---|\n| Language | en / fr / de |\n| Device | mobile / desktop |\n| Query | `page`, `sort` only |\n| Session | nothing (public page) |\n\nMaximum variants per product page = 3 × 2 = 6 (times the distinct `page`/`sort` combinations), instead of thousands.",
+    "link": {
+      "title": "Vary header (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Vary"
+    }
+  },
+  {
+    "id": "net-cdn-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your origin is in Frankfurt and most of your users are in Asia, so a colleague proposes enabling the origin shield in Singapore. Why is a region near Frankfurt usually the better choice?",
+    "options": [
+      {
+        "text": "Shields only work in the same region as the origin",
+        "explanation": "Shields can be placed in many regions. The question is which placement minimises extra latency, not what is allowed."
+      },
+      {
+        "text": "Singapore PoPs have smaller caches",
+        "explanation": "Cache size isn't the reason. The concern is the routing detour that a far-from-origin shield adds."
+      },
+      {
+        "text": "A shield in Singapore would cache less",
+        "explanation": "Hit ratio at the shield depends on the demand it aggregates, which is the same wherever it is."
+      },
+      {
+        "text": "Every edge miss must go via the shield. With a Singapore shield, misses from European or American PoPs detour through Asia before reaching Frankfurt; a shield near the origin sits on every edge's path anyway, so the shield-to-origin hop is short",
+        "explanation": "Correct. Edges already have to cross the distance to Frankfurt on a miss. Putting the shield beside the origin adds almost nothing, whereas a Singapore shield adds a long detour for all non-Asian traffic."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Compare a miss from a London edge:\n\n| Shield | Path | Approx. RTT |\n|---|---|---|\n| Frankfurt | LON → FRA → origin | ~15 ms |\n| Singapore | LON → SIN → FRA | ~320 ms |\n\nFrom a Tokyo edge, both cost about the same, because the long leg to Europe must be crossed either way. So a shield near the origin is roughly free for everyone, while a distant shield taxes everyone else. (Some CDNs pick the shield automatically, close to the origin, for this reason.)",
+    "link": {
+      "title": "Using Amazon CloudFront Origin Shield (AWS)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html"
+    }
+  },
+  {
+    "id": "net-cdn-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your CDN serves 50,000 requests per second at a 98% hit ratio. During a price update, someone runs a **purge everything** at peak. Roughly what happens to origin traffic in the first moments, and what should you do instead?",
+    "options": [
+      {
+        "text": "Origin traffic stays about 1,000 rps, because the CDN refills gradually",
+        "explanation": "Right after a full purge, nothing is cached, so almost every request misses. Refilling happens through those misses."
+      },
+      {
+        "text": "Origin traffic briefly jumps from about 1,000 rps towards 50,000 rps (up to 50×, softened by request collapsing); purge only the affected objects by surrogate key or tag, and use versioned URLs for static assets",
+        "explanation": "Correct. Normal origin load is 2% of 50,000 = 1,000 rps. With an empty cache, misses approach 100%. Targeted purges keep everything else warm."
+      },
+      {
+        "text": "Origin traffic drops to zero while the purge runs",
+        "explanation": "Purges don't pause traffic; requests keep flowing and now miss."
+      },
+      {
+        "text": "Origin traffic doubles to about 2,000 rps",
+        "explanation": "That would be a hit ratio of 96%. An empty cache gives a hit ratio near zero at first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before: misses = 50,000 × 0.02 = **1,000 rps**.\n2. Just after purge-all: hit ratio ≈ 0 → misses approach **50,000 rps**.\n3. Request collapsing and a shield limit this to one fetch per distinct object per shield, but a large catalogue still means a huge spike.\n4. Better:\n  - Tag responses (`Surrogate-Key: product-42 prices`) and purge just `prices`.\n  - Version static assets so deploys need no purge.\n  - Use `stale-while-revalidate` so expiry refreshes in the background.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "net-cdn-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You move page rendering into an edge function in Sydney. For each page it makes 3 *sequential* queries to your database in us-east-1 (RTT about 200 ms from Sydney). Previously, the origin rendered the page next to the database (about 1 ms per query) and the Sydney edge proxied it over a warm connection. Which is faster for a Sydney user, ignoring compute time?",
+    "options": [
+      {
+        "text": "The edge function, because code runs closer to the user",
+        "explanation": "Running near the user only helps if the data is near too. Each query now crosses the Pacific."
+      },
+      {
+        "text": "They're about the same",
+        "explanation": "The difference is three trans-Pacific round trips versus one."
+      },
+      {
+        "text": "The old origin rendering: about 200 ms (one edge-to-origin trip plus 3 ms of queries) versus about 600 ms for the edge function",
+        "explanation": "Correct. The edge function pays 3 × 200 ms for its queries. Origin rendering pays one 200 ms trip for the whole page. Edge compute shines when its data is cached or replicated at the edge."
+      },
+      {
+        "text": "The edge function, because edge platforms batch database queries automatically",
+        "explanation": "Edge runtimes don't batch independent sequential queries for you; each one waits for the previous result."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ignore the user↔edge hop (the same in both designs):\n\n| Design | Edge-to-data time |\n|---|---|\n| Edge function | 3 × 200 = 600 ms |\n| Origin render | 200 + 3 × 1 = 203 ms |\n\nPut compute next to its **data**. Edge functions suit work that needs no origin data (redirects, A/B assignment, JWT checks) or reads from edge-replicated stores. Otherwise, keep chatty data access in the region and send one round trip across the ocean.",
+    "link": {
+      "title": "Cloud CDN overview (Google Cloud)",
+      "url": "https://cloud.google.com/cdn/docs/overview"
+    }
+  }
+]

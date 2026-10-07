@@ -1,0 +1,344 @@
+[
+  {
+    "id": "app-http2-quic-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An HTTP/2 frame begins with these 9 bytes:\n\n```\n00 00 10 00 01 00 00 00 03\n```\n\nWhat is it?",
+    "options": [
+      {
+        "text": "A 10-byte HEADERS frame on stream 1",
+        "explanation": "This reads the hex length `10` as decimal and confuses the flags byte with the type. The fourth byte (`00`) is the type, DATA."
+      },
+      {
+        "text": "A 16-byte SETTINGS frame on the connection (stream 0)",
+        "explanation": "SETTINGS is type 0x4, and it must use stream 0. The last four bytes here say stream 3."
+      },
+      {
+        "text": "A DATA frame on stream 3 whose payload is 4,096 bytes",
+        "explanation": "The 24-bit length is `00 00 10`, i.e. 0x000010 = 16, not 0x1000."
+      },
+      {
+        "text": "A 16-byte DATA frame on stream 3 with END_STREAM set",
+        "explanation": "Correct. Length `00 00 10` = 16, type `00` = DATA, flags `01` = END_STREAM, stream ID `00 00 00 03` = 3."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Split the 9 bytes by field:\n\n```\n00 00 10    length  = 0x10 = 16\n00          type    = DATA\n01          flags   = END_STREAM\n00 00 00 03 R + stream ID = 3\n```\n\nStream 3 is odd, so the client opened it. A DATA frame with END_STREAM from the client means this is the last chunk of a request body (for example a POST).",
+    "link": {
+      "title": "RFC 9113: HTTP/2 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9113"
+    }
+  },
+  {
+    "id": "app-http2-quic-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In HPACK, the static table has `:method: GET` at index 2 and `:path: /` at index 4. What single byte encodes `:path: /` as an indexed header field?",
+    "options": [
+      {
+        "text": "`0x84`",
+        "explanation": "Correct. Indexed fields are `1` followed by the index in 7 bits: `1 0000100` = 0x84."
+      },
+      {
+        "text": "`0x04`",
+        "explanation": "Without the leading 1 bit, `0x04` begins with `0000`, which means a literal field without indexing, not an indexed field."
+      },
+      {
+        "text": "`0x44`",
+        "explanation": "`0x44` = `01 000100`: a literal with incremental indexing whose *name* is from index 4. The value would follow as a string."
+      },
+      {
+        "text": "`0x82`",
+        "explanation": "`0x82` is index 2, `:method: GET`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Indexed header field representation: top bit 1, then a 7-bit-prefix integer index.\n2. Index 4 in 7 bits: `0000100`.\n3. Prepend the 1: `10000100` = **0x84**.\n\nSo a typical GET for `/` costs three bytes for method, scheme and path: `82 87 84` (with https).",
+    "link": {
+      "title": "RFC 7541: HPACK — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc7541"
+    }
+  },
+  {
+    "id": "app-http2-quic-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Decode the QUIC variable-length integer `0x40 0x25`.",
+    "options": [
+      {
+        "text": "16,421",
+        "explanation": "That is 0x4025 read as a plain 16-bit integer, forgetting to strip the two length bits."
+      },
+      {
+        "text": "37, using 2 bytes",
+        "explanation": "Correct. Top bits `01` mean 2 bytes. Masking them leaves `0x0025` = 37. It is a valid but non-minimal encoding of 37."
+      },
+      {
+        "text": "64, followed by a separate value 37",
+        "explanation": "The first byte's top bits `01` say the integer is 2 bytes long, so both bytes are one value."
+      },
+      {
+        "text": "Invalid, because 37 must be encoded in one byte",
+        "explanation": "RFC 9000 allows non-minimal encodings in most places (its own examples show 37 as `0x4025`); senders usually use the shortest form."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. First byte `0x40` = `01000000`. Top two bits `01` → length 2 bytes.\n2. Remaining 6 bits of byte one: `000000`.\n3. Combine with byte two: `000000 00100101` = 0x0025 = **37**.\n\nThe same value in one byte is `0x25` (top bits `00`, value 37 ≤ 63).",
+    "link": {
+      "title": "RFC 9000: QUIC — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "app-http2-quic-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An HTTP/2 server leaves the initial stream window at the default 65,535 bytes and never sends WINDOW_UPDATE early. A client downloads one large file over a link with 80 ms RTT and plenty of bandwidth. Roughly what is the maximum throughput for that stream?",
+    "options": [
+      {
+        "text": "About 800 kbit/s",
+        "explanation": "This divides by 80 without converting bytes to bits and ms to seconds correctly. 65,535 B per 0.08 s is about 819 KB/s, i.e. about 6.5 Mbit/s."
+      },
+      {
+        "text": "Unlimited, because TCP's window controls throughput, not HTTP/2's",
+        "explanation": "Both apply. The smaller of TCP's window and HTTP/2's stream window caps throughput."
+      },
+      {
+        "text": "About 52 Mbit/s",
+        "explanation": "That multiplies by 8 twice. 819 KB/s × 8 bits ≈ 6.5 Mbit/s."
+      },
+      {
+        "text": "About 6.5 Mbit/s",
+        "explanation": "Correct. At most one window of data can be in flight per round trip: 65,535 B ÷ 0.08 s ≈ 819 KB/s ≈ 6.5 Mbit/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Throughput ≤ window / RTT (the sender stalls after a window until credit returns).\n2. 65,535 B / 0.080 s = 819,187 B/s.\n3. × 8 = 6.55 Mbit/s.\n\nThe receiver here is the client, so in fact it is the **client's** advertised window that limits a download. Browsers raise it via SETTINGS_INITIAL_WINDOW_SIZE and send WINDOW_UPDATE frames promptly for exactly this reason.",
+    "link": {
+      "title": "RFC 9113: HTTP/2 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9113"
+    }
+  },
+  {
+    "id": "app-http2-quic-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An HPACK encoder adds `user-agent: Mozilla/5.0 (X11)` (name 10 bytes, value 18 bytes) to a dynamic table that already holds 4,050 bytes. The table limit is 4,096. What happens?",
+    "options": [
+      {
+        "text": "The entry is rejected because it does not fit",
+        "explanation": "An entry is only rejected (with the whole table emptied) if it is larger than the entire table limit. Otherwise old entries are evicted to make room."
+      },
+      {
+        "text": "The new entry is added with a size of 28 bytes, so it fits without eviction",
+        "explanation": "This forgets the 32-byte per-entry overhead HPACK adds. 4,050 + 28 would fit, but the real size is 60."
+      },
+      {
+        "text": "The oldest entries are evicted until 4,050 − evicted + 60 ≤ 4,096",
+        "explanation": "Correct. Entry size is 10 + 18 + 32 = 60 bytes. The table needs at least 14 bytes freed, so it evicts oldest entries (one or more) until the new entry fits."
+      },
+      {
+        "text": "The table grows beyond 4,096 until the peer sends a SETTINGS update",
+        "explanation": "The limit is a hard bound the encoder and decoder both enforce. Exceeding it would desynchronise the tables."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Entry size = name + value + 32 = 10 + 18 + 32 = **60**.\n2. 4,050 + 60 = 4,110 > 4,096, so 14 bytes too many.\n3. Evict from the oldest end (highest index) until the sum fits. Even a small old entry (min 33 bytes) frees enough.\n4. Insert the new entry at index 62; everything else shifts up.\n\nBoth sides run the same algorithm, so the decoder's table stays identical without any explicit eviction messages.",
+    "link": {
+      "title": "RFC 7541: HPACK — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc7541"
+    }
+  },
+  {
+    "id": "app-http2-quic-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are true of the HTTP/2 Rapid Reset attack (CVE-2023-44487)? Select all that apply.",
+    "options": [
+      {
+        "text": "The attacker sends HEADERS and immediately RST_STREAM, repeating at high rate",
+        "explanation": "Correct. Each stream is opened and cancelled at once."
+      },
+      {
+        "text": "It evades SETTINGS_MAX_CONCURRENT_STREAMS because reset streams stop counting as open",
+        "explanation": "Correct. The concurrency limit counts open streams; a stream reset straight away is closed, so the client can open another immediately."
+      },
+      {
+        "text": "It requires breaking TLS",
+        "explanation": "No cryptography is involved. It uses normal, valid HTTP/2 frames from an ordinary client connection."
+      },
+      {
+        "text": "Servers mitigate it by limiting or counting client resets and closing abusive connections",
+        "explanation": "Correct. Patched servers track the RST_STREAM rate and send GOAWAY when it looks abusive."
+      },
+      {
+        "text": "It works because HPACK lets the attacker forge other users' stream IDs",
+        "explanation": "Stream IDs are per connection and HPACK only compresses headers. The attack stays within the attacker's own connections."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. MAX_CONCURRENT_STREAMS (often 100) was meant to bound work per connection.\n2. A stream reset by the client is closed at once, so it no longer counts.\n3. The server, however, has already dispatched the request to a backend or worker.\n4. So one connection can cause unbounded request work: Google saw ~398 M requests/s at peak.\n5. Fix: account for resets as work, cap them per connection, and GOAWAY offenders.",
+    "link": {
+      "title": "HTTP/2 Rapid Reset: deconstructing the record-breaking attack — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/technical-breakdown-http2-rapid-reset-ddos-attack/"
+    }
+  },
+  {
+    "id": "app-http2-quic-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A QUIC sender's packet 7 carrying STREAM data for bytes 1000–1999 is declared lost. What does the sender transmit?",
+    "options": [
+      {
+        "text": "A new packet (e.g. number 12) with a STREAM frame for bytes 1000–1999, possibly combined with other frames",
+        "explanation": "Correct. QUIC retransmits *frames* in new packets with new numbers. An ACK for packet 12 unambiguously refers to this transmission."
+      },
+      {
+        "text": "Packet 7 again, byte for byte, so the receiver can match it",
+        "explanation": "QUIC never reuses packet numbers. Resending packet 7 would bring back TCP's retransmission ambiguity."
+      },
+      {
+        "text": "Nothing; QUIC streams are unreliable like UDP",
+        "explanation": "QUIC streams are reliable and ordered. Only the DATAGRAM extension provides unreliable delivery."
+      },
+      {
+        "text": "The whole stream from byte 0, because QUIC uses go-back-N",
+        "explanation": "QUIC uses selective ACK ranges and resends only what was lost."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Packet numbers increase monotonically in each number space and are never reused.\n2. The lost information is a STREAM frame (stream ID, offset 1000, length 1000).\n3. The sender puts an equivalent STREAM frame into the next packet it builds, say packet 12, perhaps beside a new ACK frame.\n4. The stream **offset** tells the receiver where the bytes go, so the packet number does not need to match.\n5. When packet 12 is ACKed, the RTT sample is clean: there is only one packet 12.",
+    "link": {
+      "title": "RFC 9000: QUIC — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "app-http2-quic-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A QUIC client opens HTTP/3 request streams. Which stream IDs will its first three requests use?",
+    "options": [
+      {
+        "text": "1, 3, 5",
+        "explanation": "That is HTTP/2's numbering for client streams. QUIC encodes stream type in the two low bits."
+      },
+      {
+        "text": "0, 1, 2",
+        "explanation": "IDs 1 and 2 have type bits `01` (server bidirectional) and `10` (client unidirectional), not client bidirectional."
+      },
+      {
+        "text": "0, 4, 8",
+        "explanation": "Correct. Client-initiated bidirectional streams have low bits `00`, so they go 0, 4, 8, 12..."
+      },
+      {
+        "text": "2, 6, 10",
+        "explanation": "Low bits `10` mean client-initiated **unidirectional** streams, used by HTTP/3 for its control and QPACK streams, not requests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Stream ID low two bits:\n\n```\n0x0 client bidi   0, 4, 8 ...\n0x1 server bidi   1, 5, 9 ...\n0x2 client uni    2, 6, 10 ...\n0x3 server uni    3, 7, 11 ...\n```\n\nHTTP/3 requests are client-initiated bidirectional streams, so 0, 4, 8.",
+    "link": {
+      "title": "RFC 9000: QUIC — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "app-http2-quic-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A phone on Wi-Fi has an active QUIC connection. It moves to 5G, and its next packet arrives from a new IP address with a new destination connection ID. What must the server do **before** sending large amounts of data to the new address?",
+    "options": [
+      {
+        "text": "Send PATH_CHALLENGE and wait for a matching PATH_RESPONSE, sending at most limited data meanwhile, then reset congestion state for the new path",
+        "explanation": "Correct. Path validation proves reachability at the new address; until then anti-amplification limits apply. The congestion controller starts afresh because the new path's capacity is unknown."
+      },
+      {
+        "text": "Nothing; the connection ID proves the packet is genuine, so it can send at full rate immediately",
+        "explanation": "The ID proves the packet came from the peer (it decrypts), but not that the peer is reachable at that address. An attacker could replay or forge the source address to direct a flood at a victim."
+      },
+      {
+        "text": "Perform a new TLS handshake to derive fresh keys",
+        "explanation": "Migration keeps the existing keys; no new handshake is needed. That is the whole point."
+      },
+      {
+        "text": "Reject the packet, because only the server may migrate",
+        "explanation": "It is the other way round: only the client can actively migrate under RFC 9000."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The packet decrypts with the connection's keys and uses a connection ID the server issued, so it belongs to the connection.\n2. But the source address could be spoofed: an on-path attacker could rewrite it to aim traffic at a victim.\n3. So the server sends PATH_CHALLENGE (8 random bytes) to the new address. Only a real endpoint there can echo them in PATH_RESPONSE.\n4. Meanwhile it limits what it sends there (3× received).\n5. After validation it resets cwnd and RTT estimates, since 5G may differ wildly from Wi-Fi.",
+    "link": {
+      "title": "RFC 9000: QUIC — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "app-http2-quic-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does HTTP/3 use QPACK instead of reusing HPACK unchanged?",
+    "options": [
+      {
+        "text": "HPACK's Huffman code is too slow for QUIC's speeds",
+        "explanation": "QPACK uses the same Huffman code. Speed is not the issue."
+      },
+      {
+        "text": "QUIC encrypts headers, so compression is no longer allowed",
+        "explanation": "Encryption does not forbid compression; HTTP/2 over TLS compresses too."
+      },
+      {
+        "text": "HPACK is limited to 61 headers",
+        "explanation": "61 is the size of HPACK's static table, not a limit on headers. QPACK's static table is actually larger (99 entries)."
+      },
+      {
+        "text": "HPACK assumes header blocks arrive in a single total order; over independent QUIC streams that would reintroduce head-of-line blocking or desynchronise tables",
+        "explanation": "Correct. HPACK's dynamic table updates are implicit in the order of header blocks. QPACK puts table updates on dedicated unidirectional streams and lets each request state which table entries it depends on."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. HPACK: request A's header block inserts entry 62; request B's block references 62.\n2. On TCP, A always arrives before B, so this works.\n3. On QUIC, A and B are on different streams. If A's packet is lost, B may arrive first and reference an entry the decoder lacks.\n4. Options: block B until A arrives (head-of-line blocking again) or break.\n5. QPACK's fix: encoder instructions travel on a separate stream, and each header block declares the table state it needs. Encoders can choose to avoid references that could block.",
+    "link": {
+      "title": "RFC 9204: QPACK — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9204"
+    }
+  },
+  {
+    "id": "app-http2-quic-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You run QUIC behind a layer-4 load balancer that hashes the UDP 4-tuple to pick a backend. Users report HTTP/3 connections dropping when they walk between Wi-Fi and cellular, or after NAT rebinding. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "After migration the 4-tuple changes, so the balancer likely sends packets to a backend with no state for the connection",
+        "explanation": "Correct. Hashing the 4-tuple defeats migration: the same connection now maps to a different server."
+      },
+      {
+        "text": "Routing on the destination connection ID, with backends encoding a server identifier in the IDs they issue, fixes this",
+        "explanation": "Correct. This is the approach of QUIC-LB style designs: the ID, not the address, identifies the connection, so routing on it survives migration."
+      },
+      {
+        "text": "Setting `disable_active_migration` stops NAT rebinding from changing the client's address",
+        "explanation": "That parameter asks the client not to migrate deliberately; a NAT can still rebind the port, and the 4-tuple hash will still break."
+      },
+      {
+        "text": "Because the connection ID is in the clear in short headers, the balancer can read it without decryption keys",
+        "explanation": "Correct. The destination connection ID is not encrypted (it must be readable for routing), though the packet number and payload are protected."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Migration or rebinding changes source IP and/or port.\n2. 4-tuple hash → different backend → that backend cannot decrypt or find the connection → it drops it (or sends a stateless reset).\n3. The DCID is readable in every packet, so the balancer can route by it.\n4. Backends issue connection IDs that embed (often encrypt) a server ID, so any balancer node can map ID → backend consistently.\n5. `disable_active_migration` cannot prevent NAT rebinding, which the client does not control.",
+    "link": {
+      "title": "The Illustrated QUIC Connection",
+      "url": "https://quic.xargs.org/"
+    }
+  }
+]

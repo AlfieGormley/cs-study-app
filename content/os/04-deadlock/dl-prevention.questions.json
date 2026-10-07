@@ -1,0 +1,344 @@
+[
+  {
+    "id": "dl-prevention-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team fixes a deadlock by requiring that every code path acquires the `accounts` lock before the `ledger` lock, never the other way round. Which Coffman condition does this break?",
+    "options": [
+      {
+        "text": "Mutual exclusion",
+        "explanation": "Both locks are still exclusive; only one thread can hold each at a time."
+      },
+      {
+        "text": "Hold and wait",
+        "explanation": "Threads still hold `accounts` while waiting for `ledger`. That is allowed under lock ordering; it just always happens in the same direction."
+      },
+      {
+        "text": "No preemption",
+        "explanation": "Nothing forces a holder to give up a lock. Threads still release voluntarily."
+      },
+      {
+        "text": "Circular wait",
+        "explanation": "Correct. If every thread takes locks in the same order, waits only ever point from a lower lock to a higher one, so they can never loop back to form a cycle."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A cycle needs some thread to hold `ledger` and wait for `accounts`, closing the loop with a thread that holds `accounts` and waits for `ledger`.\n2. The rule forbids holding `ledger` while acquiring `accounts`.\n3. So every wait edge points \"upwards\" in the order `accounts` < `ledger`, and a path that only goes upwards can never return to its start.\n4. Mutual exclusion, hold and wait and no preemption all still hold, but since all four are needed, removing circular wait is enough.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-prevention-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which change to this code prevents the deadlock when one thread calls `transfer(a, b)` and another calls `transfer(b, a)`?\n\n```python\ndef transfer(src, dst, amt):\n    with src.lock:\n        with dst.lock:\n            move(src, dst, amt)\n``` Assume distinct accounts with unique, immutable IDs and no other held locks.",
+    "options": [
+      {
+        "text": "Replace each `threading.Lock` with a `threading.RLock`",
+        "explanation": "Reentrancy only lets the *same* thread re-acquire a lock it already holds. The deadlock is between two different threads, so `RLock` changes nothing."
+      },
+      {
+        "text": "Add `time.sleep(0.01)` between the two `with` statements",
+        "explanation": "Sleeping widens the window in which the other thread grabs the second lock, making the deadlock *more* likely, not less."
+      },
+      {
+        "text": "Always lock the account with the smaller `id` first",
+        "explanation": "Correct. Both calls now lock the same account first. Whichever thread gets it second waits while holding nothing, so no cycle can form."
+      },
+      {
+        "text": "Give the thread that started first a higher priority",
+        "explanation": "Priorities affect scheduling, not lock ownership. A blocked high-priority thread still cannot take a lock held by another."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The deadlock comes from the two calls taking the two locks in opposite orders.\n2. Sort the pair by a stable key so both calls agree:\n\n```python\nfirst, second = sorted(\n    (src, dst), key=lambda x: x.id)\nwith first.lock:\n    with second.lock:\n        move(src, dst, amt)\n```\n\n3. Both threads now go for the lower id first. One wins; the other waits *holding nothing*.\n4. The winner gets the second lock, finishes and releases both. The waiter proceeds.\n5. Circular wait is impossible, so deadlock is impossible.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-prevention-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In this function, what does `b.acquire(blocking=False)` do if another thread holds `b`?\n\n```python\ndef lock_both(a, b):\n    while True:\n        a.acquire()\n        if b.acquire(blocking=False):\n            return\n        a.release()\n        time.sleep(random.random()/100)\n```",
+    "options": [
+      {
+        "text": "Blocks until `b` is free, then returns `True`",
+        "explanation": "That is what `acquire()` does with the default `blocking=True`. With `blocking=False` it never waits."
+      },
+      {
+        "text": "Returns `False` immediately, so the thread releases `a` and retries",
+        "explanation": "Correct. A non-blocking acquire returns at once with `False` when the lock is held. The thread gives back `a`, sleeps briefly, and starts again, so it never waits while holding a lock."
+      },
+      {
+        "text": "Raises a `RuntimeError` because the lock is owned by another thread",
+        "explanation": "A failed try-acquire returns False. Python Lock.release raises RuntimeError if the lock is unlocked, not merely because another thread acquired it: primitive Lock has no owner."
+      },
+      {
+        "text": "Steals `b` from the other thread",
+        "explanation": "A try-acquire never releases another acquisition. For primitive Python Lock a different thread can call release, but doing so here would violate the coordination protocol."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The try-acquire returns False without waiting, then a is released before retry. Under the assumption of no other held locks, this removes blocking hold-and-wait for the pair. It does not forcibly take a resource from another holder. Random delay reduces synchronized retries but guarantees neither bounded waiting nor success.",
+    "link": {
+      "title": "pthread_mutex_trylock — man7.org",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_mutex_trylock.3p.html"
+    }
+  },
+  {
+    "id": "dl-prevention-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After adding lock ordering, this code ships:\n\n```python\ndef transfer(src, dst, amt):\n    first, second = sorted(\n        (src, dst), key=lambda x: x.id)\n    with first.lock:\n        with second.lock:\n            src.bal -= amt\n            dst.bal += amt\n```\n\nThe locks are `threading.Lock`. A customer calls `transfer(acct, acct, 0)`. What happens?",
+    "options": [
+      {
+        "text": "It completes and the balance is unchanged",
+        "explanation": "That would be true with an `RLock` or with a same-account check. With a plain `Lock`, the second acquisition never succeeds."
+      },
+      {
+        "text": "It raises `ValueError` from `sorted` because the two keys are equal",
+        "explanation": "`sorted` handles equal keys fine; it just returns both items in their original order."
+      },
+      {
+        "text": "The thread blocks forever on `second.lock`",
+        "explanation": "Correct. `first` and `second` are the same object, so the thread holds the lock and then waits for it. `Lock` isn't reentrant, so this is a self-deadlock."
+      },
+      {
+        "text": "It deadlocks only if another thread transfers to `acct` at the same time",
+        "explanation": "No other thread is needed. The single thread is waiting on itself."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `sorted((acct, acct), ...)` returns `[acct, acct]`. So `first is second`.\n2. `with first.lock` acquires the lock.\n3. `with second.lock` calls `acquire()` on the *same* `Lock`, which is held, by this thread.\n4. A plain `Lock` has no owner tracking, so it waits for a release that only this thread could perform.\n5. Fix by checking explicitly:\n\n```python\nif src is dst:\n    return  # or take one lock\n```\n\nEdge cases like this are why lock-ordering helpers need tests for equal keys.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-prevention-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these changes **prevent** a deadlock in a multithreaded service? Select all that apply.",
+    "options": [
+      {
+        "text": "Make a lock taken only on a timeout path log a warning after 5 s and then keep waiting",
+        "explanation": "Logging a warning and continuing to wait leaves all four conditions intact. It helps you notice a deadlock, but doesn't prevent one."
+      },
+      {
+        "text": "Use a correctly published and safely retained immutable snapshot so readers need no lock on that resource",
+        "explanation": "Correct. Readers no longer take a lock at all, so that resource can't be part of a wait cycle. This removes mutual exclusion for that resource."
+      },
+      {
+        "text": "Release the cache lock before calling a user-supplied callback, instead of calling it while holding the lock",
+        "explanation": "Correct. The callback may take other locks; calling it with no locks held (an *open call*) removes the hold-and-wait edge."
+      },
+      {
+        "text": "Change all the service's `Lock`s to `RLock`s",
+        "explanation": "Reentrancy only helps a thread re-acquire a lock it holds. Two threads taking two locks in opposite orders deadlock just the same."
+      },
+      {
+        "text": "Require every code path to acquire locks in increasing order of an assigned level",
+        "explanation": "Correct. A consistent order makes circular wait impossible."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "For each option, ask which Coffman condition (if any) it removes.\n\n1. A: the thread still waits forever. No condition is removed, so it doesn't prevent anything.\n2. B: there is no lock left on the read path. Mutual exclusion is gone for that resource.\n3. C: the thread holds nothing while the callback runs. Hold and wait is gone for that path.\n4. D: changes self-deadlock behaviour only. Cross-thread cycles remain possible.\n5. E: total order, so no circular wait.\n\nPrevention means *structurally impossible*, not \"noticed sooner\".",
+    "link": {
+      "title": "Deadlock prevention algorithms — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms"
+    }
+  },
+  {
+    "id": "dl-prevention-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `LevelLock` class, with `account = LevelLock(20, \"account\")` and `ledger = LevelLock(30, \"ledger\")`, a **single-threaded** unit test runs:\n\n```python\nwith ledger:\n    with account:\n        post_entry()\n```\n\nWhat happens?",
+    "options": [
+      {
+        "text": "It runs normally, because deadlock needs at least two threads",
+        "explanation": "Self-deadlock can involve one thread. Here the LevelLock checker instead rejects the decreasing acquisition level before attempting the second lock."
+      },
+      {
+        "text": "It raises `RuntimeError` when entering `account`, before acquiring it",
+        "explanation": "Correct. The thread's stack has `ledger` (level 30) on top; `account` is level 20, which isn't higher, so `__enter__` raises."
+      },
+      {
+        "text": "It deadlocks, because `account` is already held",
+        "explanation": "`account` isn't held by anyone. The check fails before `acquire()` is ever called."
+      },
+      {
+        "text": "It raises `RuntimeError` when leaving the `ledger` block",
+        "explanation": "The check is in `__enter__`, which runs when the inner `with` begins. `__exit__` only pops and releases."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `with ledger:` the stack is empty, so the check passes. `ledger` is acquired and pushed: stack = `[ledger(30)]`.\n2. `with account:` the top of the stack is `ledger` with level 30.\n3. The check is `top.level >= self.level`, so `30 >= 20` is true and it raises `RuntimeError(\"account taken while holding ledger\")`.\n4. Because the inner `__enter__` raised, the inner `__exit__` never runs, but the outer `with ledger` exits normally and pops `ledger`.\n5. The value of a hierarchy check: the bad order is caught on the first test that exercises the path, with no need for the unlucky interleaving.",
+    "link": {
+      "title": "Deadlock prevention algorithms — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms"
+    }
+  },
+  {
+    "id": "dl-prevention-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two nightly batch jobs update the same 5,000 rows of an `inventory` table in PostgreSQL. Job A updates rows in the order they appear in a supplier's CSV; job B updates them in `sku` order. Both run in a single transaction each. They frequently fail with `deadlock detected`. What is the best fix?",
+    "options": [
+      {
+        "text": "Increase `deadlock_timeout` so PostgreSQL waits longer before giving up",
+        "explanation": "`deadlock_timeout` only controls how long a session waits before *checking* for deadlock. A real cycle is still a cycle; one job is still aborted, just later."
+      },
+      {
+        "text": "Run both jobs at `SERIALIZABLE` isolation",
+        "explanation": "Stricter isolation doesn't remove row-lock conflicts; it adds serialisation failures on top. The two jobs would still block on each other's rows."
+      },
+      {
+        "text": "Wrap each job in an automatic retry loop",
+        "explanation": "A retry can recover from an occasional deadlock when the whole unit is safe to retry, but it does not remove the conflicting order. Use a retry limit and inspect repeated failures."
+      },
+      {
+        "text": "Have both jobs lock or update rows in the same order, for example by sorting the CSV by `sku` first",
+        "explanation": "Correct. With a consistent order, whichever job reaches a row second waits for the first without holding any row the first will need later, so no cycle forms."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Job A takes row locks in an order like `x, y, ...` (CSV order); job B locks `y, x, ...` (`sku` order). Somewhere they overlap in opposite orders.\n2. That's the transfer bug at scale: A holds `x` wants `y`; B holds `y` wants `x`.\n3. Make the orders agree. The simplest way is to sort the CSV keys by `sku` before updating, or lock up front:\n\n```sql\nSELECT sku FROM inventory\nWHERE sku = ANY($1)\nORDER BY sku\nFOR UPDATE;\n```\n\n4. The PostgreSQL docs say the best defence against deadlocks is acquiring locks in a consistent order across applications.\n5. Also consider smaller transactions (batches of a few hundred rows), which shrink each job's lock footprint.",
+    "link": {
+      "title": "PostgreSQL docs: Explicit Locking",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "dl-prevention-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two threads call try-lock code **without** the random sleep:\n\n```python\ndef lock_both(x, y):\n    while True:\n        x.acquire()\n        if y.acquire(blocking=False):\n            return\n        x.release()\n```\n\nThread 1 calls `lock_both(a, b)` and thread 2 calls `lock_both(b, a)`. On a multicore machine, what is the main risk?",
+    "options": [
+      {
+        "text": "Livelock: both threads repeatedly take one lock, fail on the other, release and retry, without progress",
+        "explanation": "Correct. If the threads run in step on two cores, each keeps finding the other's lock taken. They burn CPU but get nowhere. Random back-off breaks the symmetry."
+      },
+      {
+        "text": "Deadlock, because both threads may hold one lock each",
+        "explanation": "Each thread may hold one lock briefly, but it never *waits* while holding it: a failed try-lock releases it at once. Deadlock is impossible."
+      },
+      {
+        "text": "A `RuntimeError` from releasing a lock twice",
+        "explanation": "Each `release()` follows its own successful `acquire()`, so nothing is released twice."
+      },
+      {
+        "text": "No risk: try-lock code is always correct",
+        "explanation": "It is safe from deadlock, but not from livelock. That's why real implementations add randomised back-off."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Picture both threads on separate cores, perfectly in step:\n\n```\nT1: take a     T2: take b\nT1: try b: no  T2: try a: no\nT1: drop a     T2: drop b\nT1: take a     T2: take b\n... repeat ...\n```\n\n2. Neither thread ever *waits* while holding a lock, so this isn't deadlock.\n3. But neither makes progress either: that is **livelock**, and CPU use is high.\n4. Timing variation may break this pattern, but it does not guarantee eventual progress.\n5. Mitigations: random back-off (`time.sleep(random.uniform(0, d))`, growing `d` on repeated failure), or just use lock ordering where possible.",
+    "link": {
+      "title": "pthread_mutex_trylock — man7.org",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_mutex_trylock.3p.html"
+    }
+  },
+  {
+    "id": "dl-prevention-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A codebase assigns levels to locks and checks that each new lock has a level *no lower than* the highest level held (so `>=` is allowed, not just `>`). Every `Account` lock is level 20. Can it still deadlock?",
+    "options": [
+      {
+        "text": "No: any hierarchy prevents circular wait",
+        "explanation": "Only a *strict* order does. Allowing equal levels means two locks at the same level can be taken in either order."
+      },
+      {
+        "text": "No, because locks at the same level are different instances",
+        "explanation": "Being different instances is exactly the problem: thread 1 takes account X then Y, thread 2 takes Y then X, and the level check passes both times."
+      },
+      {
+        "text": "Yes: two threads can each hold one account lock and wait for the other's, since equal levels pass the check",
+        "explanation": "Correct. The proof that ordering prevents cycles needs the order to strictly increase along each wait. With `>=`, a cycle among same-level locks is allowed."
+      },
+      {
+        "text": "Yes, but only if a lock at a lower level is involved",
+        "explanation": "Lower-level acquisitions are already rejected by the check. The hole is entirely within one level."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The cycle-freedom argument: along any wait cycle, each step goes from a held lock to a *strictly* higher one. You can't return to your starting level, so no cycle.\n2. With `>=`, a step can stay at the same level, so a cycle that never leaves level 20 is possible:\n\n```\nT1 holds X(20), wants Y(20)\nT2 holds Y(20), wants X(20)\n```\n\n3. Both acquisitions pass the `>=` check, and the threads deadlock.\n4. Fixes: make the check strict and forbid holding two same-level locks, or add a tie-breaker within a level (always lock lower account id first).\n5. Linux's lockdep handles this with *nesting annotations* such as `mutex_lock_nested()`, which represent a separately justified hierarchy. Incorrect annotations can hide bugs; the annotation does not impose a safe order by itself.",
+    "link": {
+      "title": "Deadlock prevention algorithms — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms"
+    }
+  },
+  {
+    "id": "dl-prevention-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service reads a user's record under a `users` lock, and the record says which of 1,024 shard locks the request must also take. A colleague suggests preventing deadlock by acquiring all needed locks up front, all or nothing. Why is this a poor fit?",
+    "options": [
+      {
+        "text": "Acquiring locks all-or-nothing is impossible in Python",
+        "explanation": "It is easy to build (for example, take a global 'acquisition' lock, then try-lock each one and back off if any fails). The issue is what you'd have to request."
+      },
+      {
+        "text": "It would introduce priority inversion",
+        "explanation": "Priority inversion is about a high-priority thread waiting on a low-priority holder. It is unrelated to how many locks are requested at once."
+      },
+      {
+        "text": "It doesn't break any Coffman condition",
+        "explanation": "It does: a thread that waits holding nothing breaks hold and wait. The problem is cost, not correctness."
+      },
+      {
+        "text": "The required shard is not known initially; locking every possible shard would be conservative but expensive, so discovering and revalidating the set or imposing an order is preferable",
+        "explanation": "The direct one-pass up-front scheme lacks its required lock set. It could over-lock, or use a separate discovery/revalidation protocol; this makes it a less natural fit than a known global order."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The shard depends on protected state. A naive request-everything-before-reading scheme would take a large conservative set. Alternatives include reading the shard, releasing, acquiring the discovered set consistently and revalidating, or defining users before shard locks. Revalidation must itself respect that order; do not acquire users after shard if that reverses it.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-prevention-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A codebase has a documented lock order: `session` < `account` < `ledger`. Which of these new pieces of code could reintroduce deadlock? Select all that apply.",
+    "options": [
+      {
+        "text": "A plugin callback is invoked while holding `account`, and plugins may take any lock",
+        "explanation": "Correct. If a plugin takes `session` while the caller holds `account`, that is an acquisition against the order. Calling unknown code under a lock lets it break your order."
+      },
+      {
+        "text": "A reporting path takes `ledger` and then `account`",
+        "explanation": "Correct. That directly reverses the documented order. Combined with a normal path (`account` then `ledger`), it can form a cycle."
+      },
+      {
+        "text": "A new `metrics` lock that is only ever taken on its own, with nothing else held, and never held while taking another lock",
+        "explanation": "A lock that never appears in a hold-and-wait pair can't be part of a cycle. It is safe without even being in the order."
+      },
+      {
+        "text": "While holding `ledger`, a thread waits on a `Future` whose task needs `ledger`",
+        "explanation": "Correct. The waiting thread holds `ledger`; the task waits for `ledger`; the thread waits for the task. A cycle without a second lock."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each for a possible wait cycle.\n\n1. A: the callback runs under `account`. If it takes `session` (lower), you have `account → session`, while normal code does `session → account`. Cycle possible.\n2. B: `ledger → account` reverses the order. Cycle possible with any normal transfer.\n3. C: never held while waiting for another lock and never waited for while holding one. It can't appear in a cycle.\n4. D: thread waits for the future while holding `ledger`; the future's task waits for `ledger`. A cycle through the \"task completes\" event.\n\nLesson: an order only protects you if all code, including callbacks and blocking waits, respects it.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  }
+]

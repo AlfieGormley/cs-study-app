@@ -1,0 +1,378 @@
+[
+  {
+    "id": "cs1-news-feed-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the stated read-heavy workload, why might a feed default to **fan-out on write** (precomputing each follower's timeline) rather than **fan-out on read**?",
+    "options": [
+      {
+        "text": "Because writes are far more frequent than reads.",
+        "explanation": "Wrong. It's the other way round: feeds are read many times more often than posts are written. That imbalance is precisely why precomputing at write time pays off."
+      },
+      {
+        "text": "Because fan-out on read can't show posts in time order.",
+        "explanation": "Wrong. Fan-out on read can order posts perfectly with a k-way merge by timestamp. The issue is cost and latency, not ordering."
+      },
+      {
+        "text": "Because reads vastly outnumber writes, so moving the merging work to the (asynchronous) write path makes the hot read path a single cache lookup.",
+        "explanation": "Correct. You pay the fan-out cost once per post, off the user's critical path, instead of on every one of the many timeline loads."
+      },
+      {
+        "text": "Because fan-out on write uses less storage.",
+        "explanation": "Wrong. Fan-out on write uses *more* storage: a post ID is copied into every follower's timeline. It trades storage and write work for read speed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the work per day with 500M posts, 3B timeline reads, 200 average followers and users following ~200 accounts:\n\n```\nPush: 500M x 200 followers\n    = 100B cheap appends (async)\nPull: 3B reads x 200 followees\n    = 600B lookups (hot path)\n```\n\nPull performs 6x as many enumerated operations in this simplified model; lookups and appends do not have identical cost, all of it while a user is waiting. Push's work happens in background workers, so the timeline load is one Redis read plus hydration.",
+    "link": {
+      "title": "InfoQ: Timelines at Scale",
+      "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your platform has **400 million posts/day** and the average post reaches **150 eligible follower timelines**. With pure fan-out on write, roughly how many timeline inserts per second must the fan-out fleet sustain on average?",
+    "options": [
+      {
+        "text": "About 4,600/s",
+        "explanation": "Wrong. That's the post rate (400M / 86,400). It forgets that each post is inserted into 150 timelines."
+      },
+      {
+        "text": "About 70,000/s",
+        "explanation": "Wrong. This is roughly 6B inserts/day, about 10x too low. Check the multiplication: 400M × 150 = 60B, not 6B."
+      },
+      {
+        "text": "About 60 million/s",
+        "explanation": "Wrong. 60 billion is the *daily* total; you still need to divide by the ~86,400 seconds in a day."
+      },
+      {
+        "text": "About 700,000/s",
+        "explanation": "Correct. 400M × 150 = 60B inserts/day; 60B / 86,400 ≈ 694,000/s. At a 3x peak, plan for about 2M/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nInserts/day = 400M x 150 = 6 x 10^10\nPer second  = 6x10^10 / 8.64x10^4\n            ≈ 694,000/s\nPeak (x3)   ≈ 2.1M/s\n```\n\nIs that feasible? Use a representative pipelined-fan-out benchmark to determine per-shard capacity and memory; a generic Redis operation rate does not establish how many nodes absorb this workload. Note that the average hides the skew: the celebrity accounts in the tail are what break it.",
+    "link": {
+      "title": "System Design Primer: design the Twitter timeline",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your feed service has a user with **50 million followers** who posts 20 times a day. Your fan-out fleet sustains **1 million inserts/s** in total. Which approach should you take for this account?",
+    "options": [
+      {
+        "text": "Don't fan out this account's posts; at read time, fetch this account's recent posts from its (heavily cached) user timeline and merge them into each follower's precomputed timeline.",
+        "explanation": "Correct. This is the hybrid model. Each follower pays a single extra lookup for each celebrity they follow, and that celebrity's timeline is so frequently read it's always cached."
+      },
+      {
+        "text": "Fan out on write like everyone else, but add more fan-out workers.",
+        "explanation": "Wrong. Each post would need 50M inserts, ~50 s of the *entire* fleet's capacity, and 20 posts/day is 1 billion inserts from one account. When several celebrities post at once, ordinary users' feeds back up for minutes. Scaling workers treats the symptom expensively."
+      },
+      {
+        "text": "Switch the entire platform to fan-out on read.",
+        "explanation": "Wrong. This fixes one account by making every timeline read expensive for every user: hundreds of lookups and a merge per load, on the hot path."
+      },
+      {
+        "text": "Fan out only to followers whose user IDs hash to an even number.",
+        "explanation": "Wrong. Half the followers would never see the post. Arbitrary sampling breaks correctness; the hybrid gives everyone the post without the write amplification."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Cost of pushing:\n\n```\nPer post: 50M / 1M per s = 50 s\n          of whole-fleet time\nPer day:  20 x 50M = 1B inserts\n```\n\nCost of pulling instead:\n\n- Each follower's timeline load adds one cached lookup (the celebrity's last ~20 posts) and a merge of a few items into a sorted list.\n- The celebrity's user timeline is requested millions of times, so it stays hot in cache.\n\nSo set a threshold (e.g. > 1M followers) above which accounts are pulled, not pushed.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why should home timelines in the cache store **post IDs** rather than full post objects?",
+    "options": [
+      {
+        "text": "IDs sort faster than JSON.",
+        "explanation": "Partly true but not the main reason. Sorting a capped list of 800 entries is trivial either way; the important wins are storage and mutability."
+      },
+      {
+        "text": "A post shown in a million timelines is stored once, so edits, deletions and counter updates touch one object, and timelines stay small (~16 bytes per entry).",
+        "explanation": "Correct. Storing bodies would multiply storage by the fan-out factor and turn every edit or like-count change into millions of writes. IDs plus a hydration step from a post cache avoid both."
+      },
+      {
+        "text": "Redis can't store strings longer than 64 bytes.",
+        "explanation": "Wrong. Redis values can be up to 512 MB. The limit isn't technical capability but the cost of duplication."
+      },
+      {
+        "text": "So the timeline can be served without any further lookups.",
+        "explanation": "Wrong. It's the opposite: IDs require a hydration step (a multi-get from the post cache). That extra step is the price paid for storing each post once."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare the memory for 300M active timelines × 800 entries:\n\n```\nIDs:   300M x 800 x 16 B ≈ 3.8 TB\nPosts: 300M x 800 x 1 KB ≈ 240 TB\n```\n\nAnd for a deletion of a post seen by 10M followers:\n\n- IDs: mark the post deleted once; hydration drops it.\n- Full copies: 10M updates.\n\nHydration is one multi-get of ~50 posts, whose latency depends on payloads, shard fan-out, misses and workload; no benchmark is supplied.",
+    "link": {
+      "title": "InfoQ: Timelines at Scale",
+      "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your fan-out fleet's Kafka consumer lag reaches **10 minutes** during a global sporting final. Which mitigations are reasonable? Select all that apply.",
+    "options": [
+      {
+        "text": "Skip fan-out to followers who haven't been active for 30 days, rebuilding their timelines by pull when they return.",
+        "explanation": "Correct. A large share of followers on any big platform are dormant. Skipping them removes a big chunk of write amplification with no visible effect on active users."
+      },
+      {
+        "text": "Temporarily lower the celebrity threshold so more high-follower accounts are pulled at read time instead of pushed.",
+        "explanation": "Correct. The accounts with the most followers generate the most fan-out work; moving more of them to pull cuts the backlog, at a modest increase in read cost."
+      },
+      {
+        "text": "Prioritise fan-out to followers who are currently online.",
+        "explanation": "Correct. Online users will load their feed in the next few minutes; offline users won't. Ordering work by who'll actually look makes the lag invisible to most people."
+      },
+      {
+        "text": "Make the post API wait until fan-out completes before returning success.",
+        "explanation": "Incorrect. That makes authors wait minutes for a 'posted' confirmation and creates timeouts and retries (which generate *more* work). Fan-out must stay asynchronous."
+      },
+      {
+        "text": "Drop posts that are older than 1 minute from the fan-out queue.",
+        "explanation": "Incorrect. Followers would silently never see those posts in their precomputed timelines. Lag is temporary; data loss is permanent."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Treat it as a work-reduction and prioritisation problem:\n\n1. **Reduce work**: inactive followers and mega-accounts are the largest sources of inserts. Removing them can cut the fan-out volume by a large fraction.\n2. **Prioritise**: online-first ordering means the lag is mostly absorbed by people who aren't looking.\n3. **Don't** couple the write API to fan-out, and **don't** drop work silently.\n\nAlso autoscale the fan-out workers on consumer lag, so the system reacts before humans need to.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user posts and immediately refreshes their home timeline, but their post isn't there because fan-out hasn't processed it yet. What's the best fix?",
+    "options": [
+      {
+        "text": "Make fan-out synchronous for all followers.",
+        "explanation": "Wrong. Synchronous fan-out to hundreds or millions of followers makes posting slow and fragile. Only the author's own view needs to be immediate."
+      },
+      {
+        "text": "Tell users that posts may take a few minutes to appear.",
+        "explanation": "Wrong. It's a poor experience and leads users to post duplicates, thinking the first attempt failed. The fix is cheap, so there's no reason to accept the problem."
+      },
+      {
+        "text": "Switch the timeline store to strong consistency across all replicas.",
+        "explanation": "Wrong. The post isn't missing because of replica lag; it hasn't been written to the timeline at all yet. Strong consistency on the cache doesn't change when fan-out runs."
+      },
+      {
+        "text": "Provide read-your-own-writes: insert the post into the author's own timeline synchronously (or have the client insert it optimistically), and let fan-out to followers stay asynchronous.",
+        "explanation": "Correct. The author is the one person who knows the post exists, so their immediate post-refresh interaction needs a stronger guarantee than the follower feed. A single synchronous write (or client-side insertion) fixes their experience at negligible cost."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Separate who needs what consistency:\n\n| Reader | Needs to see the post | Guarantee |\n|---|---|---|\n| Author | Immediately | Read-your-own-writes |\n| Followers | Within seconds | Eventual |\n\nImplementation options:\n\n1. Post service does `LPUSH timeline:{authorId} postId` before returning 201.\n2. Or, at read time, the timeline service merges the author's last few posts from their user timeline.\n3. Or, the client inserts the post into its local feed on success.\n\nFor a server-side read-your-writes guarantee, keep hydration consistent with the acknowledged post and avoid stale cache replicas. Optimistic insertion alone is only a local UI behavior and does not guarantee another device or refresh sees the post. Fan-out to everyone else remains asynchronous.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You introduce a ranked \"For you\" feed. Each request scores **1,500 candidates** with a neural network costing an assumed **0.2 ms of normalized, additive GPU capacity per candidate**, already accounting for the selected batching strategy, at **90,000 feed requests/s** at peak. Which statement is most accurate?",
+    "options": [
+      {
+        "text": "Ranking cost is negligible compared with the Redis timeline read.",
+        "explanation": "Wrong. A Redis read is around a millisecond of a cheap CPU; scoring 1,500 candidates with a neural network is hundreds of milliseconds of accelerator time per request. Ranking usually dominates the cost of a modern feed."
+      },
+      {
+        "text": "That's about 27 GPU-seconds per second, easily handled by a few GPUs.",
+        "explanation": "Wrong. This drops a factor of 1,000: 0.2 ms is 0.0002 s, and 90,000 × 1,500 × 0.0002 = 27,000, not 27."
+      },
+      {
+        "text": "That's 27,000 GPU-seconds per second, so you need roughly 27,000 GPUs' worth of capacity; use a cheap first-stage model to prune to a few hundred candidates before the heavy model.",
+        "explanation": "Correct. 90k × 1,500 × 0.2 ms = 27,000 s of GPU time every second. Multi-stage ranking (light model on all candidates, heavy model on, say, the top 300) cuts this by ~5x, and caching recent ranked results cuts it further."
+      },
+      {
+        "text": "Score all candidates on CPU instead, because GPUs aren't used for ranking.",
+        "explanation": "Wrong. Large ranking models are commonly served on accelerators, and moving the same work to CPU would make it slower and more expensive, not cheaper."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nCandidates/s = 90,000 x 1,500\n             = 135,000,000\nGPU time/s   = 135M x 0.0002 s\n             = 27,000 s\n```\n\nSo you need ~27,000 GPU-equivalents running flat out (more with headroom). Reduce it:\n\n1. **Two-stage ranking**: a light model (~0.01 ms) scores all 1,500, keep the top 300 for the heavy model: `90k × 300 × 0.2 ms = 5,400 s/s`, 5x less for the heavy stage alone. The light stage adds 90k × 1,500 × 0.01 ms = 1,350 GPU-seconds/s, so total capacity is 6,750, a 4x reduction under these assumptions.\n2. **Cache** ranked pages for a minute or two per user; many refreshes reuse them.\n3. **Degrade** to chronological order under extreme load.\n\nThis is why feeds such as X's and Meta's use multi-stage ranking pipelines.\n\n(Real batching and hardware can change normalized per-candidate cost in either comparison; no deployment benchmark establishes that it is lower than 0.2 ms; the point is that scoring cost scales with requests × candidates, so cutting candidates per heavy model is the main lever.)",
+    "link": {
+      "title": "Meta engineering: how machine learning powers News Feed ranking",
+      "url": "https://engineering.fb.com/2021/01/26/ml-applications/news-feed-ranking/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user **unfollows** an account that posted 40 times this week. Those 40 post IDs are already in the user's precomputed timeline (a capped Redis list). What's the most practical way to stop them appearing?",
+    "options": [
+      {
+        "text": "Scan the user's timeline list and remove every ID by that author with `LREM`, synchronously in the unfollow request.",
+        "explanation": "Wrong as the main approach. It works for one user, but it needs post-to-author lookups for up to 800 entries and makes unfollow slow. Mass unfollows (spam clean-ups) would hammer Redis."
+      },
+      {
+        "text": "Filter at hydration: when building the page, drop posts whose author isn't in the reader's (cached) following set, and let the old IDs age out of the capped list.",
+        "explanation": "Correct. Hydration already fetches each post and its author, so one set-membership check per post is cheap. It needs no list rewrite, but immediate enforcement requires the following/permission cache to reflect the change."
+      },
+      {
+        "text": "Do nothing; the posts will scroll out of view eventually.",
+        "explanation": "Wrong. Users expect an unfollow to take effect immediately, and seeing posts from someone you just unfollowed (or blocked) feels broken."
+      },
+      {
+        "text": "Rebuild the user's whole timeline by pull from scratch.",
+        "explanation": "Wrong. It works but is far more expensive than needed for a small change, and doing it for every unfollow adds heavy read load on the posts store."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Treat the precomputed timeline as a list of *candidates*, not a final answer:\n\n```\nids = LRANGE timeline:u 0 49\nposts = multiget(ids)\nshow = [p for p in posts\n        if p.author in following(u)\n        and not p.deleted]\n```\n\nThe same read-time filter handles unfollows, blocks, mutes and deletes, so none of them needs a fan-out of its own.",
+    "link": {
+      "title": "System Design Primer: design the Twitter timeline",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which visibility or permission changes must be enforced at hydration, rather than trusting earlier fan-out decisions? Select all that apply.",
+    "options": [
+      {
+        "text": "The reader has blocked or muted the author since the post was fanned out.",
+        "explanation": "Correct. Blocks and mutes must take effect immediately, and fan-out may already have placed hundreds of the author's posts in the reader's list."
+      },
+      {
+        "text": "The author has made their account protected, so only approved followers may see their posts.",
+        "explanation": "Correct. Visibility can change after fan-out. Hydration must check current permissions for each post, or private posts could leak."
+      },
+      {
+        "text": "The post has been deleted.",
+        "explanation": "Correct. Deletes are handled by marking the post once and having hydration drop it, instead of removing it from millions of timelines."
+      },
+      {
+        "text": "The post's like count has gone up.",
+        "explanation": "Incorrect. That's not a permission check. Counts come from the counter service during hydration anyway; nothing in the timeline list needs to change."
+      },
+      {
+        "text": "The author changed their display name.",
+        "explanation": "Incorrect. Profiles are hydrated from the user cache on each read, so the new name appears automatically. It isn't a visibility rule."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Use the principle: **fan-out decides what might be shown; hydration decides what may be shown.**\n\n| Change | Where enforced |\n|---|---|\n| Block, mute | read time |\n| Protected account | read time |\n| Delete | read time (flag) |\n| Counts, names | hydrated anyway |\n\nAnything that could make showing a post *wrong* (privacy, safety, legal) must be checked against current state on every read.",
+    "link": {
+      "title": "TAO: Facebook's distributed data store for the social graph",
+      "url": "https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a hypothetical feed, 400M posts produce 30B eligible timeline inserts per day: 75 per post. A naive calculation instead uses 200 followers per account. Which explanation could account for the difference?",
+    "options": [
+      {
+        "text": "Twitter only delivered every third tweet to save resources.",
+        "explanation": "Wrong. Twitter's design delivered tweets to all eligible timelines; it didn't sample tweets."
+      },
+      {
+        "text": "Follower counts are heavily skewed and many accounts post to few or inactive followers, and fan-out only writes to users who have a cached timeline.",
+        "explanation": "Correct as a possible explanation: posting frequency weights the follower distribution, and eligibility/activity filters reduce deliveries. Skew alone does not prove that post-weighted fan-out is lower."
+      },
+      {
+        "text": "Each delivery covered several followers at once using Redis transactions.",
+        "explanation": "Wrong. A delivery here is one insert into one timeline. Batching changes the number of network calls, not the number of deliveries."
+      },
+      {
+        "text": "The 30 billion figure counts only celebrity tweets.",
+        "explanation": "Wrong. Celebrity fan-out was the hardest part of the 30B, not the only part."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\n30B / 400M = 75 deliveries per tweet\n30B / 86,400 s ≈ 350,000 per second\n```\n\nTwo effects shrink the real number:\n\n1. **Skew**: mean follower counts are pulled up by a few accounts with millions of followers, but most tweets come from ordinary accounts.\n2. **Activity**: timelines are kept only for active users, so dormant followers receive nothing.\n\nLesson for interviews: an unweighted account-average follower count is not a safe upper bound. Use the post-weighted eligible-recipient mean; prolific high-follower accounts can make it larger.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your timeline cache holds **800 IDs × 16 B** for each of **300M** users (~3.8 TB, ~11.5 TB with 3 replicas). Analysis shows 95% of reads never go past the first **200** entries, and only **150M** users open the app in a typical week. If you cap timelines at 200 and keep them only for weekly-active users, roughly what is the replicated raw payload footprint, excluding storage overhead?",
+    "options": [
+      {
+        "text": "About 1.4 TB",
+        "explanation": "Correct. 150M × 200 × 16 B = 480 GB; × 3 replicas ≈ 1.44 TB, about 8x less than before. Deeper pages and returning users are served by pull."
+      },
+      {
+        "text": "About 5.8 TB",
+        "explanation": "Wrong. That applies only the active-user filter (150M × 800 × 16 B × 3 ≈ 5.8 TB), leaving the 800 cap in place."
+      },
+      {
+        "text": "About 480 GB",
+        "explanation": "Wrong. That's the single-copy size; you still keep three replicas for availability."
+      },
+      {
+        "text": "About 2.9 TB",
+        "explanation": "Wrong. That applies the cap reduction (300M × 200 × 16 B × 3 ≈ 2.9 TB) but not the active-user filter."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nBefore: 300M x 800 x 16 B ≈ 3.84 TB\n        x 3 replicas        ≈ 11.5 TB\nAfter:  150M x 200 x 16 B  = 480 GB\n        x 3 replicas        ≈ 1.44 TB\n```\n\nThe trade-off: the 5% of reads that scroll past 200 entries, and users returning after more than a week, need a pull-based rebuild. That's a small, slower path in exchange for an 8x memory saving. Say which you'd monitor: the rebuild rate and its latency.",
+    "link": {
+      "title": "InfoQ: Timelines at Scale",
+      "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A celebrity with 40M followers posts, and fan-out takes several minutes. A follower near the front of the list replies within seconds, and the reply is fanned out to mutual followers *before* the original reaches them. They see the reply before the post it answers. What's the best structural fix?",
+    "options": [
+      {
+        "text": "Make the reply's fan-out wait until the celebrity's fan-out has finished.",
+        "explanation": "Wrong. Cross-post dependencies in the fan-out pipeline would be complex and fragile, and would delay replies by minutes."
+      },
+      {
+        "text": "Use the hybrid model: don't fan out the celebrity's posts; merge them in at read time from their cached user timeline, so everyone sees the original as soon as it exists.",
+        "explanation": "Correct. With pull for huge accounts, pull avoids the bulk fan-out delay, but stale source/cache reads and partial failures can still hide the parent. If causal presentation is required, fetch or defer replies whose parent is unavailable."
+      },
+      {
+        "text": "Sort each timeline by post ID before returning it.",
+        "explanation": "Partly helps ordering within a timeline, but it can't show a post that hasn't arrived in that timeline yet. The reply still appears without its parent."
+      },
+      {
+        "text": "Add more fan-out workers so the celebrity's fan-out completes in under 5 seconds.",
+        "explanation": "Wrong as the main fix. 40M inserts in 5 s means 8M inserts/s just for one post, many times a normal fleet's capacity, and the race returns as soon as several celebrities post together."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The race exists because one post's delivery is spread over minutes:\n\n```\nt=0     celebrity posts\nt=5s    follower A gets it, replies\nt=10s   reply fanned out to B\nt=3min  original finally reaches B\n```\n\nWith pull for huge accounts, B's timeline read at t=10s merges the celebrity's latest posts directly from their user timeline, so the original is there. Do not infer causality from Snowflake IDs under clock skew; use the reply-parent relationship if parent-before-reply display is required.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  }
+]

@@ -1,0 +1,349 @@
+[
+  {
+    "id": "app-email-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`bob.example` publishes `MX 20 mxa.bob.example`, `MX 10 mxb.bob.example` and `MX 10 mxc.bob.example`. Where does a sending server try first?",
+    "options": [
+      {
+        "text": "`mxa`, because 20 is the highest priority",
+        "explanation": "MX preference works the other way: lower numbers are preferred. `mxa` is the backup."
+      },
+      {
+        "text": "All three in parallel, using whichever answers first",
+        "explanation": "Senders try hosts in preference order, one at a time; parallel delivery would risk duplicate messages."
+      },
+      {
+        "text": "`mxb` or `mxc`, chosen between them (often randomly), falling back to `mxa` only if both fail",
+        "explanation": "Correct. Lowest preference (10) wins, and equal-preference hosts share the load."
+      },
+      {
+        "text": "The A record of `bob.example`",
+        "explanation": "The A/AAAA fallback (implicit MX) is used only when there are no MX records at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Sort MX records by preference, ascending: 10 (mxb, mxc), 20 (mxa).\n2. Within the same preference, RFC 5321 says to randomise to spread load.\n3. Try one of mxb/mxc; if it fails (timeout, 4xx), try the other.\n4. Only then try mxa.\n5. If all fail temporarily, queue and retry later.",
+    "link": {
+      "title": "RFC 5321: Simple Mail Transfer Protocol — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc5321"
+    }
+  },
+  {
+    "id": "app-email-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "During delivery a receiving server replies `451 4.7.1 Try again later` to `RCPT TO`. What should a well-behaved sending MTA do?",
+    "options": [
+      {
+        "text": "Keep the message queued and retry later, giving up only after a long period (typically days)",
+        "explanation": "Correct. 4xx means transient failure; the message stays in the queue and is retried with backoff."
+      },
+      {
+        "text": "Immediately bounce the message to the sender",
+        "explanation": "Bounces are for 5xx (permanent) failures. A 4xx code explicitly means the condition is temporary."
+      },
+      {
+        "text": "Retry the same command in a tight loop until it succeeds",
+        "explanation": "Hammering the server is antisocial and likely to get the sender blocked. Retries should back off over minutes and hours."
+      },
+      {
+        "text": "Switch to port 587 and try again",
+        "explanation": "587 is for client submission with authentication, not server-to-server relay."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Look at the first digit: **4** = temporary.\n2. The sender keeps the message in its queue.\n3. Typical schedule: retry after a few minutes, then with growing intervals, for up to around 4 to 5 days.\n4. Only after the queue lifetime expires does it bounce.\n\nThis is how greylisting works: unknown senders get a 451 first; real MTAs retry and get through, while much spam software never retries.",
+    "link": {
+      "title": "RFC 5321: Simple Mail Transfer Protocol — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc5321"
+    }
+  },
+  {
+    "id": "app-email-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Alice sends a message with `To: bob@x.example` and Bcc to `carol@y.example`. How does Carol receive it without her address appearing in the headers?",
+    "options": [
+      {
+        "text": "The sending server encrypts her address in the header",
+        "explanation": "Headers aren't encrypted per recipient. Bcc relies on the separation of envelope and header."
+      },
+      {
+        "text": "Bob's server forwards a copy to Carol",
+        "explanation": "Bob's server never learns about Carol. Alice's server delivers to Carol's domain separately."
+      },
+      {
+        "text": "Her address appears in the SMTP envelope (`RCPT TO`) but not in the message headers",
+        "explanation": "Correct. Delivery is decided by `RCPT TO`; the headers are just part of the message content."
+      },
+      {
+        "text": "Carol's client fetches it from Alice's sent folder over IMAP",
+        "explanation": "Carol has no access to Alice's mailbox. Mail is delivered by SMTP to Carol's provider."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Alice's client submits with `RCPT TO:<bob@x.example>` and `RCPT TO:<carol@y.example>`.\n2. The message headers contain `To: bob@x.example` and no Bcc line (the client strips it).\n3. Alice's server delivers to x.example with `RCPT TO` Bob, and to y.example with `RCPT TO` Carol, both with the same headers.\n4. Carol sees a message apparently addressed only to Bob.",
+    "link": {
+      "title": "RFC 5321: Simple Mail Transfer Protocol — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc5321"
+    }
+  },
+  {
+    "id": "app-email-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A message arrives from IP 203.0.113.9 with `MAIL FROM:<news@promo.shop.example>` and `From: Shop <hello@shop.example>`. SPF for `promo.shop.example` passes; there is no DKIM signature. `_dmarc.shop.example` says `v=DMARC1; p=reject` with default (relaxed) alignment. Does it pass DMARC?",
+    "options": [
+      {
+        "text": "Yes, because SPF passed and `promo.shop.example` aligns with `shop.example` under relaxed alignment",
+        "explanation": "Correct. Both share the organisational domain `shop.example`, and one aligned pass (SPF here) is enough."
+      },
+      {
+        "text": "No, because the envelope domain is not exactly the From domain",
+        "explanation": "That would be true only in strict mode (`aspf=s`). Relaxed alignment compares organisational domains."
+      },
+      {
+        "text": "No, because DMARC requires both SPF and DKIM to pass",
+        "explanation": "DMARC needs SPF **or** DKIM to pass with alignment, not both."
+      },
+      {
+        "text": "Yes, because SPF passing is always enough for DMARC",
+        "explanation": "SPF passing is only enough if it is also aligned with the From domain. Without alignment, a spammer's own SPF pass would count."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Visible From domain: `shop.example`.\n2. SPF: checked against `promo.shop.example` → pass.\n3. Alignment (relaxed): organisational domain of `promo.shop.example` is `shop.example` → matches → **aligned**.\n4. DKIM: absent, but not needed.\n5. One aligned pass → DMARC **pass**.\n\nWith `aspf=s` it would fail, because `promo.shop.example` ≠ `shop.example` exactly.",
+    "link": {
+      "title": "DMARC — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/DMARC"
+    }
+  },
+  {
+    "id": "app-email-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Bob forwards all mail from his university address to Gmail by plain SMTP forwarding (the message is unchanged). Alice's domain has SPF `-all`, DKIM signing, and DMARC `p=reject`. What happens to Alice's mail at Gmail?",
+    "options": [
+      {
+        "text": "It is rejected, because SPF fails at Gmail",
+        "explanation": "SPF does fail (the university's IP is not Alice's), but DMARC only needs one aligned pass."
+      },
+      {
+        "text": "It passes SPF, because the university is a trusted forwarder",
+        "explanation": "SPF only knows about IPs in Alice's record. It has no notion of trusted forwarders (ARC addresses that separately)."
+      },
+      {
+        "text": "It is quarantined, because forwarding always breaks email authentication",
+        "explanation": "Forwarding breaks SPF, but DKIM is designed to survive it unless the message is modified."
+      },
+      {
+        "text": "It passes DMARC via DKIM, because the signature survives an unmodified forward",
+        "explanation": "Correct. DKIM signs the content, not the path. The signature still verifies and `d=` aligns with Alice's From domain."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "At Gmail:\n\n| Check | Result |\n|---|---|\n| SPF | fail (uni IP) |\n| DKIM | pass, d=alice |\n| Aligned? | DKIM yes |\n| DMARC | pass |\n\nIf the university added a footer or rewrote the subject, the DKIM body or header hash would no longer match and DMARC would fail. That is exactly the mailing-list problem ARC helps with.",
+    "link": {
+      "title": "DMARC overview — dmarc.org",
+      "url": "https://dmarc.org/overview/"
+    }
+  },
+  {
+    "id": "app-email-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your SPF record is `v=spf1 include:_spf.google.com include:sendgrid.net include:mailgun.org include:servers.mcsv.net include:spf.protection.outlook.com mx a -all`, and the includes themselves contain nested includes. Some receivers report SPF `permerror`. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The record has more than one `include`",
+        "explanation": "Multiple includes are allowed. The problem is the total number of DNS lookups they cause."
+      },
+      {
+        "text": "Evaluation needs more than 10 DNS lookups (includes, mx, a and their nested includes all count)",
+        "explanation": "Correct. RFC 7208 caps lookups at 10; exceeding it is a permanent error, and nested SaaS includes eat the budget quickly."
+      },
+      {
+        "text": "`-all` is too strict and causes permerror",
+        "explanation": "`-all` sets a hard fail for unlisted IPs; it is not an error."
+      },
+      {
+        "text": "TXT records cannot be longer than 255 characters",
+        "explanation": "Each string in a TXT record is limited to 255 bytes, but a record can contain several strings that are concatenated. Length gives a different error, if any."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Count the top-level lookups: 5 includes + `mx` + `a` = 7.\n2. Each provider's include typically contains further includes (Google's alone has several).\n3. The running total passes 10 → **permerror**.\n4. Under DMARC, a permerror is not an SPF pass, so you rely on DKIM alone.\n\nFixes: drop unused senders, move senders to subdomains with their own SPF records, or flatten includes into IP ranges (and keep them updated).",
+    "link": {
+      "title": "RFC 7208: Sender Policy Framework — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc7208"
+    }
+  },
+  {
+    "id": "app-email-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An IMAP client caches messages by UID for `INBOX`. On reconnecting, `SELECT INBOX` returns a different `UIDVALIDITY` from the one it stored. What should the client do?",
+    "options": [
+      {
+        "text": "Nothing; UIDs are permanent",
+        "explanation": "UIDs are only meaningful together with UIDVALIDITY. A new UIDVALIDITY means old UIDs may now refer to different messages."
+      },
+      {
+        "text": "Switch to using sequence numbers, which are stable",
+        "explanation": "Sequence numbers are less stable: they shift every time a message is expunged."
+      },
+      {
+        "text": "Discard its cached UIDs for INBOX and resynchronise the mailbox",
+        "explanation": "Correct. The server is signalling that the UID numbering was reset (for example the mailbox was rebuilt), so the cache can't be trusted."
+      },
+      {
+        "text": "Report a corrupted server and stop",
+        "explanation": "A UIDVALIDITY change is a normal, specified event, not corruption."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A message is identified by (mailbox, UIDVALIDITY, UID).\n2. Stored: UIDVALIDITY 3857529045. Now: something else.\n3. UID 4827 may no longer be the same message, or exist at all.\n4. Client deletes local cache for INBOX and refetches headers and flags.\n\nThis is rare (mailbox migrations, restores), but clients that ignore it show the wrong message bodies.",
+    "link": {
+      "title": "RFC 9051: IMAP4rev2 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9051"
+    }
+  },
+  {
+    "id": "app-email-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about SMTP security are true? Select all that apply.",
+    "options": [
+      {
+        "text": "STARTTLS on port 25 is opportunistic: an active attacker can strip it and many senders will fall back to plaintext",
+        "explanation": "Correct. The STARTTLS offer is in a plaintext EHLO response, so a man-in-the-middle can remove it."
+      },
+      {
+        "text": "MTA-STS lets a receiving domain tell senders to require valid TLS for its MX hosts",
+        "explanation": "Correct. The policy is fetched over HTTPS, so it can't be stripped like the STARTTLS line."
+      },
+      {
+        "text": "DKIM encrypts the message body between servers",
+        "explanation": "DKIM signs; it provides integrity and authenticity, not confidentiality."
+      },
+      {
+        "text": "Port 465 uses implicit TLS, starting TLS before any SMTP is exchanged",
+        "explanation": "Correct. RFC 8314 recommends implicit TLS for submission."
+      },
+      {
+        "text": "SPF prevents attackers from reading mail in transit",
+        "explanation": "SPF is a sender authorisation check; it does nothing for confidentiality."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Sort the mechanisms by what they protect:\n\n| Mechanism | Protects |\n|---|---|\n| STARTTLS | confidentiality (if not stripped) |\n| MTA-STS / DANE | prevents stripping |\n| 465 implicit TLS | confidentiality |\n| SPF / DKIM / DMARC | sender authenticity |\n\nDKIM and SPF are about who sent it, never about who can read it.",
+    "link": {
+      "title": "RFC 8461: SMTP MTA Strict Transport Security — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc8461"
+    }
+  },
+  {
+    "id": "app-email-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're moving `corp.example` from `p=none` to `p=reject`. Aggregate reports show three sources claiming your domain: your Microsoft 365 tenant (SPF and DKIM pass, aligned), an invoicing SaaS sending from its own IPs with `MAIL FROM:<bounce@invoicer.example>` and DKIM `d=invoicer.example`, and unknown IPs in another country (all fail). What must you do before switching?",
+    "options": [
+      {
+        "text": "Nothing; the invoicer passes SPF and DKIM so it will pass DMARC",
+        "explanation": "It passes SPF and DKIM for **invoicer.example**, not for corp.example. Neither aligns with `From: billing@corp.example`, so DMARC fails."
+      },
+      {
+        "text": "Add the unknown foreign IPs to SPF so their mail is delivered",
+        "explanation": "Those are almost certainly spoofers; the point of reject is to block them."
+      },
+      {
+        "text": "Switch strict alignment on so the invoicer's subdomain matches",
+        "explanation": "Strict alignment makes matching harder, not easier, and invoicer.example is a different organisational domain anyway."
+      },
+      {
+        "text": "Configure the invoicer to DKIM-sign with `d=corp.example` (publishing its key under a selector) or use a custom return-path on your domain",
+        "explanation": "Correct. Either gives an aligned pass. DKIM with your domain is the robust choice because it survives forwarding."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. DMARC needs SPF **or** DKIM to pass *and* align with the From domain (`corp.example`).\n2. Microsoft 365: aligned pass. Fine.\n3. Invoicer: SPF domain `invoicer.example`, DKIM `d=invoicer.example`. Neither aligns → would be rejected.\n4. Fix: the invoicer signs with `d=corp.example` using a selector like `inv1._domainkey.corp.example`, and/or uses `bounce.corp.example` as return path with SPF there.\n5. The failing foreign IPs are the spoofing you want reject to stop.\n6. Watch reports for a while after the change, perhaps via `p=quarantine` first.",
+    "link": {
+      "title": "DMARC overview — dmarc.org",
+      "url": "https://dmarc.org/overview/"
+    }
+  },
+  {
+    "id": "app-email-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the 2023 SMTP smuggling research, an outbound server accepted `<LF>.<LF>` as normal message content, while the inbound server treated it as end of data. What could an attacker achieve?",
+    "options": [
+      {
+        "text": "Send a second, smuggled message that the inbound server attributes to the outbound provider, so spoofed mail can pass SPF and DMARC checks",
+        "explanation": "Correct. After the fake end-of-data, the attacker's text is parsed as new SMTP commands (`MAIL FROM`, `RCPT TO`, `DATA`) arriving from the legitimate provider's IP."
+      },
+      {
+        "text": "Read other users' mailboxes on the inbound server",
+        "explanation": "Smuggling injects outgoing messages; it does not grant mailbox access."
+      },
+      {
+        "text": "Decrypt STARTTLS sessions",
+        "explanation": "The attack is about framing disagreements inside the session, not cryptography."
+      },
+      {
+        "text": "Crash the inbound server with an oversized message",
+        "explanation": "The impact is spoofing, not denial of service."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Attacker, authenticated at provider A, sends a body containing:\n\n```\nhello\n<LF>.<LF>\nMAIL FROM:<ceo@victim.example>\nRCPT TO:<target@b.example>\nDATA\n...forged message...\n```\n\n2. Provider A sees one message and relays it to B, from A's IP.\n3. B treats `<LF>.<LF>` as end of data, then sees new commands.\n4. If victim.example's SPF includes A's IPs (common for big shared providers), the forged message passes SPF and possibly DMARC.\n\nSame pattern as HTTP request smuggling: two parsers disagreeing on where a message ends.",
+    "link": {
+      "title": "SMTP smuggling: spoofing e-mails worldwide — SEC Consult",
+      "url": "https://sec-consult.com/blog/detail/smtp-smuggling-spoofing-e-mails-worldwide/"
+    }
+  },
+  {
+    "id": "app-email-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A mailing list receives a DKIM-signed message from `alice@alice.example` (DMARC `p=reject`), adds `[team]` to the subject and a footer, and redistributes it from its own servers. Which are true at subscribers' providers? Select all that apply.",
+    "options": [
+      {
+        "text": "Alice's DKIM signature fails, because signed headers and the body changed",
+        "explanation": "Correct. Both `bh=` (body hash) and the header signature cover what the list modified."
+      },
+      {
+        "text": "SPF for alice.example fails or doesn't apply, because the list's IPs send it and lists usually rewrite the envelope sender",
+        "explanation": "Correct. Even if SPF passes for the list's own bounce domain, it doesn't align with alice.example."
+      },
+      {
+        "text": "The message may be rejected, because no aligned pass remains",
+        "explanation": "Correct. That's why many lists rewrite `From:` to the list's own address (\"Alice via team\") for p=reject senders."
+      },
+      {
+        "text": "ARC can let a receiver trust the list's record that DKIM passed on arrival",
+        "explanation": "Correct. ARC seals let a receiver that trusts the intermediary use its authentication results."
+      },
+      {
+        "text": "DMARC automatically exempts mailing lists",
+        "explanation": "There is no automatic exemption; that is exactly the long-standing interoperability problem."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "1. Modifications break DKIM: subject is in `h=`, body is in `bh=`.\n2. SPF is evaluated for the list's envelope domain, which doesn't align with alice.example.\n3. No aligned pass → DMARC fail → with `p=reject`, rejected.\n4. Mitigations: rewrite `From:` to the list domain, stop modifying messages, or rely on ARC (the receiver must choose to trust the list's ARC seal).",
+    "link": {
+      "title": "DMARC — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/DMARC"
+    }
+  }
+]

@@ -1,0 +1,348 @@
+[
+  {
+    "id": "tcp-performance-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an ideal timing model, a browser makes a new TCP + full TLS 1.3 connection at RTT 50 ms, without Fast Open, early data, handshake retries, loss or DNS delay. A 10,000-byte response fits the available initial window. Ignore serialization and processing. When does the complete response arrive?",
+    "options": [
+      {
+        "text": "After about 50 ms",
+        "explanation": "One RTT is only enough for the TCP handshake. TLS and the request itself each need another round trip."
+      },
+      {
+        "text": "After about 150 ms",
+        "explanation": "Correct. 1 RTT for TCP, 1 RTT for TLS 1.3, then 1 RTT for the request and the response, which fits in one window."
+      },
+      {
+        "text": "After about 250 ms",
+        "explanation": "The stated model requires three round trips: TCP setup, TLS setup, and request/response."
+      },
+      {
+        "text": "It depends mainly on the link bandwidth",
+        "explanation": "Serialization is explicitly ignored in this model. On a slow link it would matter: 10,000 bytes alone take 8 ms at 10 Mbit/s."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. TCP handshake: SYN, SYN+ACK. **1 RTT** (the ACK can carry the ClientHello).\n2. TLS 1.3: ClientHello, ServerHello...Finished. **1 RTT**.\n3. HTTP request and response: 10 KB ≈ 7 segments, within the 10-segment initial window. **1 RTT**.\n\n```\n3 RTT x 50 ms = 150 ms\n```\n\nUnder the stated assumptions this is 150 ms. An already usable connection with sufficient send window reduces the model to one request/response RTT, or 50 ms.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "tcp-performance-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Whenever someone in a house uploads a large video, everyone's video calls stutter and web pages load slowly, even though download bandwidth is plentiful. Ping times jump from 20 ms to over a second. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The upload is using UDP, which has no congestion control",
+        "explanation": "UDP itself has no congestion-control algorithm, but protocols running over it can provide one. The observed delay does not identify the transport protocol."
+      },
+      {
+        "text": "The ISP is throttling the household",
+        "explanation": "A rate limit can contribute to queueing, depending on its implementation. The leading explanation for this load-correlated delay is an excessive standing queue; confirm it by measurement."
+      },
+      {
+        "text": "Bufferbloat: a persistent queue at a shared uplink delays other traffic using that queue",
+        "explanation": "Correct as the leading hypothesis. For a FIFO packet, delay is approximately the queued work ahead divided by service rate; not every packet or priority class necessarily sees the same backlog."
+      },
+      {
+        "text": "TCP's receive window on the video-call server is too small",
+        "explanation": "A small receive window can limit that connection’s sending allowance, but it does not by itself explain the observed load-correlated ping delay. A shared uplink queue is the leading hypothesis; queue classes and traffic paths determine which packets are affected."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A large increase in RTT during upload is consistent with a shared standing queue. Identify the bottleneck and queue discipline before concluding. If traffic shares a FIFO, a packet behind B queued bytes at rate R bit/s waits approximately 8B/R seconds. AQM and appropriate shaping at a controlled router can reduce queueing, with configuration and throughput trade-offs.",
+    "link": {
+      "title": "Introduction to bufferbloat — bufferbloat.net",
+      "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/"
+    }
+  },
+  {
+    "id": "tcp-performance-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A page loads 20 resources over a single HTTP/2 connection on TCP. One segment carrying part of a JavaScript file is lost. What happens to the other 19 resources' data that arrives just after it?",
+    "options": [
+      {
+        "text": "It waits in the receiver's TCP buffer until the lost segment is retransmitted, because TCP delivers bytes strictly in order",
+        "explanation": "Correct. TCP doesn't know about HTTP/2 streams; it only sees one byte stream, and it can't deliver later bytes past a hole. This is transport-level head-of-line blocking."
+      },
+      {
+        "text": "It is delivered immediately; only the JavaScript stream waits",
+        "explanation": "QUIC removes the requirement for a stream to wait solely for another stream’s missing bytes. Shared flow control, congestion control and application dependencies can still delay delivery. TCP uses one ordered byte stream."
+      },
+      {
+        "text": "It is discarded and must be resent too",
+        "explanation": "Out-of-order data can be retained and reported with SACK when negotiated. Receivers can also discard buffered data, so retention is not an unconditional guarantee."
+      },
+      {
+        "text": "The browser opens a new connection for the remaining resources",
+        "explanation": "TCP handles this gap on the existing connection. The supplied scenario does not imply that the browser opens a replacement connection; doing so would require application-level recovery logic."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "HTTP/2 frames share TCP byte ordering. Later bytes cannot be delivered past the missing range until it is recovered; data already delivered is unaffected. Recovery duration is not fixed at one RTT. QUIC removes this cross-stream byte-order dependency, but shared congestion control, flow control and application dependencies can still delay multiple streams.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "tcp-performance-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson’s ideal Reno Mathis approximation with C = 1.22, MSS 1,460 bytes, RTT 20 ms and p = 0.0001, what rate does the formula return? Assume its model conditions hold.",
+    "options": [
+      {
+        "text": "About 14 Mbit/s",
+        "explanation": "That's the result for a 100 ms RTT. With 20 ms, the ceiling is five times higher."
+      },
+      {
+        "text": "About 7 Mbit/s",
+        "explanation": "The square root is 0.01; dividing 584,000 × 1.22 by that value gives 71,248,000 bit/s."
+      },
+      {
+        "text": "About 710 Mbit/s",
+        "explanation": "This is ten times too high, as if √p were 0.001. The square root of 0.0001 is 0.01."
+      },
+      {
+        "text": "About 71 Mbit/s",
+        "explanation": "Correct. 1,460 × 8 / 0.02 = 584,000 bit/s; × 1.22 / 0.01 ≈ 71.2 Mbit/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nMSS/RTT = 1460 x 8 / 0.02\n        = 584,000 bit/s\nsqrt(p) = sqrt(0.0001) = 0.01\nrate = 584,000 x 1.22 / 0.01\n     = 71,248,000 bit/s\n     = ~71 Mbit/s\n```\n\nThis is approximately 71.2 Mbit/s in the specified model, not a universal ceiling for every TCP algorithm or loss pattern.",
+    "link": {
+      "title": "The Macroscopic Behavior of the TCP Congestion Avoidance Algorithm",
+      "url": "https://www.cs.utexas.edu/~lam/395t/papers/Mathis1998.pdf"
+    }
+  },
+  {
+    "id": "tcp-performance-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Reno-style flow gets 71 Mbit/s at RTT 20 ms and 0.01% loss. The same flow is moved to a path with RTT 80 ms and 0.04% loss. According to the Mathis formula, roughly what throughput should you expect?",
+    "options": [
+      {
+        "text": "About 4.5 Mbit/s",
+        "explanation": "This divides by 4 for the loss and by 4 for the RTT. The loss only enters through its square root, so 4× loss costs a factor of 2."
+      },
+      {
+        "text": "About 8.9 Mbit/s",
+        "explanation": "Correct. 4× the RTT divides by 4; 4× the loss divides by √4 = 2. 71 ÷ 8 ≈ 8.9 Mbit/s."
+      },
+      {
+        "text": "About 17.8 Mbit/s",
+        "explanation": "This accounts for the RTT but forgets the higher loss rate."
+      },
+      {
+        "text": "About 35.6 Mbit/s",
+        "explanation": "This accounts for the loss but forgets that throughput is inversely proportional to RTT."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Mathis: `rate ∝ 1 / (RTT × √p)`.\n\n1. RTT: 20 → 80 ms, a factor of 4. Rate ÷ 4.\n2. Loss: 0.01% → 0.04%, a factor of 4. √4 = 2, so rate ÷ 2.\n3. Combined: ÷ 8.\n\n```\n71.2 / 8 = ~8.9 Mbit/s\n```\n\nThe model’s RTT and loss factors compound. Closer servers can reduce propagation delay, but geographic distance alone does not determine RTT or measured throughput.",
+    "link": {
+      "title": "The Macroscopic Behavior of the TCP Congestion Avoidance Algorithm",
+      "url": "https://www.cs.utexas.edu/~lam/395t/papers/Mathis1998.pdf"
+    }
+  },
+  {
+    "id": "tcp-performance-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A FIFO has 500,000 queued bytes ahead of a newly admitted packet, served at a constant 10 Mbit/s. Ignore overhead, priorities and the new packet’s own transmission. What is its waiting time?",
+    "options": [
+      {
+        "text": "About 50 ms",
+        "explanation": "This treats 500 KB as 500 kilobits. Convert bytes to bits first: 500 KB is 4 Mbit."
+      },
+      {
+        "text": "About 4 ms",
+        "explanation": "This is off by a factor of 100. 4 Mbit at 10 Mbit/s takes 0.4 s to drain."
+      },
+      {
+        "text": "About 0.4 s",
+        "explanation": "Correct. 500,000 B × 8 = 4,000,000 bits; ÷ 10,000,000 bit/s = 0.4 s."
+      },
+      {
+        "text": "None, because CUBIC avoids filling buffers",
+        "explanation": "The question supplies a backlog. Neither CUBIC nor BBR guarantees that queues remain empty."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "500,000 bytes × 8 / 10,000,000 bit/s = 0.4 seconds. This is the waiting time behind the specified backlog. CoDel’s 5 ms default target is not a hard guarantee for every packet.",
+    "link": {
+      "title": "Introduction to bufferbloat — bufferbloat.net",
+      "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/"
+    }
+  },
+  {
+    "id": "tcp-performance-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine features of QUIC compared with TCP plus TLS? Select all that apply.",
+    "options": [
+      {
+        "text": "It combines transport and TLS setup and can support eligible 0-RTT early data",
+        "explanation": "Correct. Prior state/configuration is required for early data; rejection, replay concerns, Retry or loss can alter timing."
+      },
+      {
+        "text": "Its per-stream ordering avoids making one stream wait solely for missing bytes on another stream",
+        "explanation": "Correct. Shared congestion control, flow control and application dependencies can still affect several streams."
+      },
+      {
+        "text": "Connection IDs can support client address changes when migration conditions are satisfied",
+        "explanation": "Correct. Negotiated restrictions, handshake state, usable connection IDs, path validation and reachability matter; seamless success is not guaranteed."
+      },
+      {
+        "text": "It delivers all streams' data in one global order, like TCP",
+        "explanation": "That would reintroduce head-of-line blocking. Ordering is per stream only."
+      },
+      {
+        "text": "It is implemented in the OS kernel, which makes it faster to deploy",
+        "explanation": "QUIC can run in user-space libraries or other implementation locations. Its specification does not require a kernel implementation."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The first three describe protocol capabilities with their conditions. QUIC does not impose a single global stream delivery order, and its specification does not dictate kernel placement.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "tcp-performance-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A previously idle CoDel queue uses target 5 ms and interval 100 ms. No hard buffer limit is reached. Case A spikes to 40 ms but empties within 20 ms. Case B remains at 30–40 ms for seconds with sufficient backlog to satisfy CoDel’s remaining-byte check. Which behaviour is expected?",
+    "options": [
+      {
+        "text": "It drops packets in both cases, because delay exceeded 5 ms",
+        "explanation": "Exceeding the target briefly does not alone trigger CoDel’s persistent-delay response. A burst could still encounter a finite-buffer limit, which this question excludes."
+      },
+      {
+        "text": "It drops in case A only, because sudden spikes are the problem",
+        "explanation": "Bursts are what buffers exist for. The harmful case is the standing queue in B, which adds delay without adding throughput."
+      },
+      {
+        "text": "It doesn't drop in either case; CoDel only drops when the buffer is full",
+        "explanation": "CoDel can signal persistent queueing before the buffer fills. It also retains checks intended to avoid starving the link."
+      },
+      {
+        "text": "It leaves case A alone, and in case B starts dropping (or ECN-marking), at increasing frequency while the delay stays above target",
+        "explanation": "Correct. In B, the minimum delay over every 100 ms interval stays above 5 ms, which signals a standing queue. Responsive senders can reduce their offered load; the response depends on the protocol, controller and delivered feedback."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Case A clears before a full interval of excessive delay, so it does not trigger the persistent-delay response under these assumptions. Case B satisfies both the persistent-delay and backlog conditions and enters dropping/marking behaviour. The control law schedules increasingly frequent signals using interval divided by the square root of the count. Actual delay still depends on traffic response; 5 ms is a target, not a per-packet guarantee.",
+    "link": {
+      "title": "RFC 8289: Controlled Delay Active Queue Management",
+      "url": "https://www.rfc-editor.org/rfc/rfc8289"
+    }
+  },
+  {
+    "id": "tcp-performance-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Within a QUIC packet-number space, each newly sent packet gets a new increasing packet number, even when it resends stream data. Which TCP retransmission ambiguity does this remove?",
+    "options": [
+      {
+        "text": "Packets are smaller, because packet numbers are shorter than sequence numbers",
+        "explanation": "Size isn't the point; QUIC packet numbers can be encoded compactly, but the real gain is unambiguous acknowledgements."
+      },
+      {
+        "text": "An ACK identifies which numbered packet transmission arrived, removing original-versus-retransmission ambiguity for that packet",
+        "explanation": "Correct. Other estimation errors and spurious loss declarations remain possible; packet numbers do not make all loss detection infallible."
+      },
+      {
+        "text": "Data never needs to be retransmitted",
+        "explanation": "Lost data must still be resent; it is simply sent in a new packet with a new number, with stream offsets keeping the data's position."
+      },
+      {
+        "text": "It allows middleboxes to reorder packets correctly",
+        "explanation": "Packet numbers have header protection. An observer can derive Initial protection keys, so “middleboxes can never read any packet numbers” would also be too strong."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "TCP reuses byte sequence numbers when resending data, so an ACK may not reveal which copy caused it; Karn’s rule or timestamps address RTT-sampling ambiguity. QUIC identifies packet transmissions separately from stream offsets, within each packet-number space. This removes that particular ambiguity. ACK delay, sampling choices and reordering still require careful recovery logic.",
+    "link": {
+      "title": "RFC 9002: QUIC Loss Detection and Congestion Control",
+      "url": "https://www.rfc-editor.org/rfc/rfc9002"
+    }
+  },
+  {
+    "id": "tcp-performance-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which mechanisms can make transport extensions harder to deploy or help QUIC evolve? Select all that apply.",
+    "options": [
+      {
+        "text": "Some middleboxes interfere with unfamiliar TCP options or SYN data",
+        "explanation": "Correct. Compatibility and fallback matter; this is not a claim that every middlebox behaves this way."
+      },
+      {
+        "text": "A TCP change in a kernel stack can depend on OS deployment cycles; a QUIC library can be updated with an application",
+        "explanation": "Correct. Some TCP changes are sender-only, and neither TCP nor QUIC is required to live exclusively in one implementation layer."
+      },
+      {
+        "text": "Protecting QUIC control frames and selected header fields reduces the information middleboxes can depend on",
+        "explanation": "Correct. Some wire fields remain visible and Initial keys are publicly derivable, so encryption does not eliminate all ossification or interference."
+      },
+      {
+        "text": "The TCP header has no room for any options",
+        "explanation": "The base TCP header allows up to 40 option bytes. That finite space can constrain extensions too, but it is not zero; unfamiliar-option handling by middleboxes is a separate deployment obstacle."
+      },
+      {
+        "text": "The IETF has forbidden new TCP extensions since QUIC was standardised",
+        "explanation": "TCP is still being extended (for example RACK-TLP in 2021 and AccECN work). Deployment, not permission, is the barrier."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The first three describe compatibility, implementation deployment and protection mechanisms. The base TCP header permits up to 40 option bytes, and TCP standards work continues. None of these mechanisms guarantees a fixed adoption speed.",
+    "link": {
+      "title": "The QUIC Transport Protocol: Design and Internet-Scale Deployment",
+      "url": "https://research.google/pubs/the-quic-transport-protocol-design-and-internet-scale-deployment/"
+    }
+  },
+  {
+    "id": "tcp-performance-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A phone loses its old Wi-Fi path and gains a new address on 5G. Compare ordinary TCP (without MPTCP or an address-preserving tunnel) with a confirmed QUIC connection using usable connection IDs. Assume active migration is allowed and the new path passes validation and remains reachable. Which connection can continue at the transport level?",
+    "options": [
+      {
+        "text": "Both continue seamlessly, because the server recognises the device",
+        "explanation": "TCP has no concept of a device; a connection is its 4-tuple. A new client IP is a different connection as far as TCP is concerned."
+      },
+      {
+        "text": "Both break; the application must resume the download in either case",
+        "explanation": "Under the supplied conditions, QUIC can migrate the existing connection to the new path."
+      },
+      {
+        "text": "Ordinary TCP cannot move the existing connection to the new address; QUIC can continue through migration",
+        "explanation": "Correct under the stated assumptions. QUIC still needs appropriate path validation and congestion-control handling; this does not promise no interruption."
+      },
+      {
+        "text": "The QUIC connection breaks but TCP continues, because TCP retransmits to the new address",
+        "explanation": "TCP has no way to change a connection's addresses. Segments from the new IP don't match any existing connection."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ordinary TCP identifies the connection by its endpoint addresses and ports, so the stated address change cannot simply retarget it. An application can reconnect and resume if its protocol supports that. QUIC connection IDs allow the established connection to be found from a new address; validation and path-state changes still apply. The question explicitly supplies successful migration conditions rather than assuming every network change succeeds.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  }
+]

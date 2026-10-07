@@ -1,0 +1,378 @@
+[
+  {
+    "id": "dist-transactions-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In two-phase commit, what does a participant promise when it votes **yes** to prepare?",
+    "options": [
+      {
+        "text": "That it has already committed the transaction.",
+        "explanation": "Wrong. It hasn't committed yet; it's waiting for the coordinator's decision. Committing early would break atomicity if another participant votes no."
+      },
+      {
+        "text": "That it will commit if a majority of participants also vote yes.",
+        "explanation": "Wrong. 2PC requires *all* participants to vote yes; majority voting is consensus, not atomic commit."
+      },
+      {
+        "text": "Nothing binding; it can still abort if it times out.",
+        "explanation": "Wrong. Before voting it can abort freely; after a yes vote it can't, which is exactly what causes the blocking problem."
+      },
+      {
+        "text": "That it will commit if told to, even after a crash, so it has durably written the changes and keeps its locks.",
+        "explanation": "Correct. A yes vote surrenders the right to abort unilaterally. The participant persists everything needed to commit and holds locks until it hears the decision."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Lifecycle of a participant:\n\n1. Executes the transaction's writes (uncommitted).\n2. Receives PREPARE.\n3. If able to commit: `fsync` changes + prepare record, then vote YES. Now **in doubt** until the decision.\n4. Receives COMMIT or ABORT and applies it, releasing locks.\n\nIn Postgres, step 3 is `PREPARE TRANSACTION 'tx42'`; step 4 is `COMMIT PREPARED 'tx42'`.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  },
+  {
+    "id": "dist-transactions-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In 2PC with participants P1, P2 and P3: all three vote yes, the coordinator writes COMMIT to its log, sends commit to P1 only, then crashes. P2 and P3 time out waiting. What should P2 do?",
+    "options": [
+      {
+        "text": "Abort, since it never got a decision.",
+        "explanation": "Wrong. The coordinator decided COMMIT and P1 already committed. Aborting P2 would break atomicity."
+      },
+      {
+        "text": "Stay in doubt holding locks; it may ask P1, and if P1 reports it committed, P2 can commit.",
+        "explanation": "Correct. P2 must not decide alone. If it can reach a participant that knows the outcome (P1 committed), it can follow; otherwise it waits for the coordinator to recover."
+      },
+      {
+        "text": "Commit, since it voted yes.",
+        "explanation": "Wrong as a general rule. Voting yes doesn't mean the decision was commit; another participant might have voted no. P2 only *happens* to be safe here if it can learn the outcome."
+      },
+      {
+        "text": "Ask P3 and follow the majority.",
+        "explanation": "Wrong. P3 is also in doubt, so it knows nothing more. Majority vote among in-doubt participants doesn't reveal the coordinator's decision."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Commit point = coordinator's COMMIT log record. Decision is **commit**.\n2. P1 knows (it received commit).\n3. P2 and P3 know only that *they* voted yes.\n4. Options for P2:\n  - Ask P1: 'I committed tx42' → P2 commits (cooperative termination).\n  - If P1 is unreachable too: wait for the coordinator to restart, read its log, and resend COMMIT.\n5. Meanwhile P2 holds locks; transactions touching those rows block. That's the **blocking problem**.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  },
+  {
+    "id": "dist-transactions-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why isn't three-phase commit widely used to solve 2PC's blocking problem?",
+    "options": [
+      {
+        "text": "Its non-blocking guarantee assumes bounded delays and perfect failure detection; under a network partition, groups can reach different decisions.",
+        "explanation": "Correct. Participants decide on timeout. If a partition separates those that saw preCommit from those that didn't, one side commits and the other aborts."
+      },
+      {
+        "text": "It needs three coordinators.",
+        "explanation": "Wrong. 3PC has one coordinator; the 'three' refers to message phases, not coordinators."
+      },
+      {
+        "text": "It's slower than sagas.",
+        "explanation": "Wrong. Speed isn't the core problem; 3PC's flaw is safety under partitions, and sagas offer different (weaker) guarantees altogether."
+      },
+      {
+        "text": "It can't handle participants voting no.",
+        "explanation": "Wrong. 3PC handles no votes just like 2PC: the coordinator aborts."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "3PC's timeout rule:\n\n- Got preCommit, then timeout → **commit** (everyone voted yes).\n- No preCommit, then timeout → **abort** (nobody can have committed).\n\nPartition scenario:\n\n1. Coordinator sends preCommit to P1, then the network splits {P1} | {P2, P3}, and the coordinator dies.\n2. P1 times out with preCommit → commits.\n3. P2, P3 time out without preCommit → abort.\n4. Inconsistent outcome.\n\nThis is why production systems use 2PC with a consensus-replicated coordinator instead.",
+    "link": {
+      "title": "Three-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Three-phase_commit_protocol"
+    }
+  },
+  {
+    "id": "dist-transactions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An order saga runs: (1) create order PENDING, (2) reserve stock, (3) charge card, (4) send confirmation email. Step 3 fails (card declined). What does the saga do?",
+    "options": [
+      {
+        "text": "Roll back the database transactions of steps 1 and 2.",
+        "explanation": "Wrong. Steps 1 and 2 already committed in their own services; there's no open transaction to roll back. A saga undoes them with new compensating transactions."
+      },
+      {
+        "text": "Retry step 3 until it succeeds.",
+        "explanation": "Wrong. A declined card is a business failure, not a transient error. Retrying forever won't help; only steps after the pivot should be retried to completion."
+      },
+      {
+        "text": "Run compensations in reverse: release the stock, then cancel the order.",
+        "explanation": "Correct. Each completed step gets a semantic undo, executed in reverse order, while step 4 never runs."
+      },
+      {
+        "text": "Send the confirmation email, then refund.",
+        "explanation": "Wrong. The email (step 4) shouldn't run because the saga failed before it; it's not compensatable, which is why it comes last."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Steps and their compensations:\n\n| Step | Compensation |\n|---|---|\n| T1 create order | C1 cancel order |\n| T2 reserve stock | C2 release stock |\n| T3 charge card (pivot) | – |\n| T4 email (retriable) | – |\n\nT3 fails, so: run **C2** (release), then **C1** (cancel). Each compensation is idempotent and retried until it succeeds. The customer sees 'payment declined, order cancelled'.",
+    "link": {
+      "title": "Saga pattern (microservices.io)",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    }
+  },
+  {
+    "id": "dist-transactions-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about sagas are true? Select all that apply.",
+    "options": [
+      {
+        "text": "They provide isolation: other transactions never see intermediate states.",
+        "explanation": "Wrong. Each local transaction commits immediately, so intermediate states (reserved stock, a charge that will be refunded) are visible. Sagas lack the I in ACID."
+      },
+      {
+        "text": "Compensating transactions must be idempotent.",
+        "explanation": "Correct. Compensations are retried after timeouts or crashes; running a refund twice must not refund twice."
+      },
+      {
+        "text": "Non-compensatable actions should come after the pivot step.",
+        "explanation": "Correct. Things like sending emails or shipping can't be undone, so they belong after the point of no return, as retriable steps."
+      },
+      {
+        "text": "Choreography makes the end-to-end flow easier to see and change than orchestration.",
+        "explanation": "Wrong. Choreography spreads the flow across event subscriptions; orchestration keeps it in one state machine, which is easier to understand and change."
+      },
+      {
+        "text": "A transactional outbox prevents a service from committing its change without emitting the event.",
+        "explanation": "Correct. The event is written in the same local transaction as the state change, then relayed, so a crash can't separate them."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Check each claim against how sagas work:\n\n1. Isolation: local commits are visible immediately. ✗\n2. Idempotent compensations: needed because of retries. ✓\n3. Step ordering: compensatable → pivot → retriable. ✓\n4. Choreography visibility: the opposite is true. ✗\n5. Outbox: atomic 'write + event' within one database. ✓",
+    "link": {
+      "title": "Saga distributed transactions (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/saga"
+    }
+  },
+  {
+    "id": "dist-transactions-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How do Spanner and CockroachDB avoid 2PC's blocking problem while still using 2PC across shards?",
+    "options": [
+      {
+        "text": "They use 3PC instead.",
+        "explanation": "Wrong. Neither uses 3PC; its partition behaviour is unsafe."
+      },
+      {
+        "text": "They skip the prepare phase for single-row writes only.",
+        "explanation": "Wrong. Single-range optimisations exist, but that doesn't explain how multi-shard transactions avoid blocking."
+      },
+      {
+        "text": "They use sagas internally.",
+        "explanation": "Wrong. Sagas give up atomicity and isolation; these databases provide serializable ACID transactions."
+      },
+      {
+        "text": "The coordinator and each participant are consensus-replicated groups, so a node failure triggers a leader election rather than losing the decision.",
+        "explanation": "Correct. The commit decision is written to a Raft/Paxos log. If the coordinator's leader dies, another replica takes over with the decision intact, so participants are never stuck waiting for one machine."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The blocking problem arises because the decision lives on **one** coordinator machine.\n\n1. Make the coordinator a Raft group of 3 or 5 replicas.\n2. The COMMIT record is a Raft log entry, committed on a majority.\n3. If the coordinator's leader crashes, a new leader is elected in seconds and already has the log.\n4. It resumes sending COMMIT.\n\nParticipants are Raft groups too, so their prepared state is replicated. 2PC stays blocking only if a *majority* of a group fails, which is much rarer.",
+    "link": {
+      "title": "Spanner (OSDI 2012)",
+      "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"
+    }
+  },
+  {
+    "id": "dist-transactions-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a choreographed saga, the Payments service updates its database to CHARGED and then publishes `PaymentSucceeded` to Kafka. It crashes between the two. What happens and what's the fix?",
+    "options": [
+      {
+        "text": "Kafka replays the message automatically; no fix needed.",
+        "explanation": "Wrong. The message was never sent, so Kafka has nothing to replay."
+      },
+      {
+        "text": "The saga stalls: the customer is charged but no downstream service learns of it. Fix with a transactional outbox.",
+        "explanation": "Correct. The database change committed but the event was lost. Writing the event to an outbox table in the same transaction, and relaying it, makes the two atomic."
+      },
+      {
+        "text": "The charge rolls back automatically.",
+        "explanation": "Wrong. The local transaction committed before the crash; nothing undoes it."
+      },
+      {
+        "text": "Fix it by publishing first, then updating the database.",
+        "explanation": "Wrong. That just reverses the failure: an event saying 'charged' with no record of the charge if the crash happens after publishing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "This is the **dual-write problem**.\n\n1. `UPDATE payments SET status='CHARGED'` commits.\n2. Crash.\n3. `PaymentSucceeded` never published → Inventory and Orders wait forever.\n\nOutbox fix:\n\n```\nBEGIN;\nUPDATE payments ...;\nINSERT INTO outbox(event) ...;\nCOMMIT;\n```\n\nA relay (polling or CDC like Debezium) reads the outbox and publishes. It may publish twice after a crash, so consumers deduplicate by event id.",
+    "link": {
+      "title": "Saga pattern (microservices.io)",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    }
+  },
+  {
+    "id": "dist-transactions-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 2PC coordinator receives yes votes from both participants, then crashes **before** writing any decision record. It restarts and finds the transaction in its log with no COMMIT or ABORT. What should it do?",
+    "options": [
+      {
+        "text": "Commit, because both participants voted yes.",
+        "explanation": "Wrong. It may not know that both votes arrived, and in any case the decision is only made when it's logged. With no record, the safe and conventional choice is abort."
+      },
+      {
+        "text": "Wait for an operator to decide.",
+        "explanation": "Wrong. There is no ambiguity here. Without a decision record, no participant can have been told to commit, so aborting can't conflict with anything."
+      },
+      {
+        "text": "Abort (presumed abort): no participant can have been told to commit, so aborting is safe.",
+        "explanation": "Correct. The commit point is the COMMIT log record. Since it was never written, nobody committed. The coordinator aborts and tells the in-doubt participants, which then release their locks."
+      },
+      {
+        "text": "Ask the participants to vote again.",
+        "explanation": "Wrong. Participants that voted yes are already bound to their vote. Re-voting adds nothing, because the problem is the missing decision, not missing votes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Commit point = the coordinator's durable COMMIT record.\n2. No record → the coordinator never reached the commit point.\n3. It only sends COMMIT after logging it, so no participant has received COMMIT.\n4. Therefore aborting can't contradict any participant. **Abort**, and send ABORT to everyone in doubt.\n\nThis is **presumed abort**: \"no record means abort\". It also saves work, because the coordinator doesn't need to force ABORT records to disk.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  },
+  {
+    "id": "dist-transactions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An orchestrated saga calls Payments to charge £40 for order 77 with idempotency key `o77-charge`. The call times out, so the orchestrator compensates: it calls refund, Payments finds no charge, and returns OK. Ten seconds later, the original charge request, delayed in a queue, reaches Payments. How should the system be designed so the customer isn't charged for a cancelled order?",
+    "options": [
+      {
+        "text": "Retry the refund on a timer for an hour, in case a charge turns up.",
+        "explanation": "Wrong. It narrows the window but doesn't close it, and the customer may still see a charge and a refund on their statement."
+      },
+      {
+        "text": "Make the forward step the pivot so it never needs compensating.",
+        "explanation": "Wrong. Calling it the pivot doesn't change the fact that its outcome is unknown after a timeout; the saga still has to decide what to do."
+      },
+      {
+        "text": "It can't be prevented; this is an inherent weakness of sagas.",
+        "explanation": "Wrong. It is preventable with careful design at the participant."
+      },
+      {
+        "text": "Payments records \"o77-charge cancelled\" when it handles the refund, and rejects any later charge with that key.",
+        "explanation": "Correct. The compensation leaves a tombstone keyed by the same idempotency key, so a late forward request is recognised and refused. The compensation is also safe when the charge never happened."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The race:\n\n```\nt=0   charge(o77) sent, delayed\nt=5   timeout -> refund(o77)\n      no charge found -> OK\nt=15  charge(o77) arrives\n```\n\nWithout a record of the refund, Payments would charge at t=15 and nothing would undo it.\n\nDesign rules:\n\n1. The compensation must be safe if the forward step never ran (refund of nothing = no-op).\n2. It must leave a durable record under the **same key**, so the forward step arriving later is rejected.\n3. Better still, before compensating, query the step's status by key.",
+    "link": {
+      "title": "Compensating Transaction pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction"
+    }
+  },
+  {
+    "id": "dist-transactions-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A travel-booking saga has four steps: hold a seat (can be released), charge the card, issue the e-ticket (can't be undone once sent to the airline), and email the itinerary. Which ordering follows the compensatable → pivot → retriable pattern?",
+    "options": [
+      {
+        "text": "Hold seat, charge card, issue ticket, email",
+        "explanation": "Correct. The hold is compensatable, the charge is the pivot, and once it succeeds the ticket and email are retriable steps that must eventually succeed."
+      },
+      {
+        "text": "Issue ticket, hold seat, charge card, email",
+        "explanation": "Wrong. Issuing the ticket first puts an irreversible step before anything that might fail, such as a declined card, with no way to undo it."
+      },
+      {
+        "text": "Email, hold seat, charge card, issue ticket",
+        "explanation": "Wrong. Emailing an itinerary before you know the booking will succeed tells the customer something that may turn out to be false."
+      },
+      {
+        "text": "Charge card, hold seat, issue ticket, email",
+        "explanation": "Wrong. Charging before holding the seat means a \"no seats left\" failure requires a refund, which is exactly the kind of messy compensation good ordering avoids."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Classify each step:\n\n| Step | Type |\n|---|---|\n| Hold seat | compensatable (release) |\n| Charge card | pivot (go/no-go) |\n| Issue ticket | retriable (can't undo) |\n| Email | retriable |\n\nPut everything that may fail for business reasons (no seat, card declined) **before** the pivot, so failures are undone cheaply. After the pivot, the saga only moves forward: ticket issuance and email are retried, idempotently, until they succeed.",
+    "link": {
+      "title": "Saga pattern (microservices.io)",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    }
+  },
+  {
+    "id": "dist-transactions-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about two-phase commit are true? Select all that apply.",
+    "options": [
+      {
+        "text": "If a participant crashes before voting, the coordinator can safely abort the transaction.",
+        "explanation": "True. No yes vote means no promise to commit, so the coordinator treats the missing vote as no and aborts."
+      },
+      {
+        "text": "A participant that crashes after voting yes must, on restart, stay in doubt and ask the coordinator for the outcome.",
+        "explanation": "True. Its prepare record shows it promised to commit if told to. It can't abort on its own, and it doesn't know the decision, so it must find out."
+      },
+      {
+        "text": "If the coordinator crashes after logging COMMIT, in-doubt participants may safely abort after a timeout.",
+        "explanation": "False. The decision was commit, and some participants may already have committed. Aborting would break atomicity."
+      },
+      {
+        "text": "While participants are in doubt, other transactions that need the same rows are blocked.",
+        "explanation": "True. In-doubt participants keep their locks, so contention spreads the outage to unrelated transactions."
+      },
+      {
+        "text": "2PC keeps working through a coordinator crash as long as a majority of participants are up.",
+        "explanation": "False. Plain 2PC has no majority rule; the decision lives on the coordinator alone. Tolerating its failure needs a replicated (consensus-backed) coordinator."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk through the failure cases:\n\n1. **Participant fails before voting** → coordinator times out, aborts. ✓ safe.\n2. **Participant fails after yes** → restarts in doubt from its prepare record. ✓\n3. **Coordinator fails after COMMIT logged** → outcome is commit; participants must wait or learn it from a peer. Aborting is wrong. ✗\n4. **In doubt** → locks held, others block. ✓\n5. **Majority survival** → not a 2PC concept. ✗\n\nThe fix for 3 and 5 is the same: make the coordinator a Raft or Paxos group, as Spanner and CockroachDB do.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  },
+  {
+    "id": "dist-transactions-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A loan-approval process has nine steps across six services, with branches (manual review if a credit score is borderline), timeouts measured in days, and frequent rule changes. Which saga style fits best?",
+    "options": [
+      {
+        "text": "Choreography, because it avoids a central point of failure.",
+        "explanation": "Wrong for this flow. With nine steps, branches and long timeouts, the logic would be spread across event subscriptions in six services, making it hard to see, test or change."
+      },
+      {
+        "text": "Orchestration, with durable state in a workflow engine such as Temporal or Step Functions.",
+        "explanation": "Correct. One state machine holds the whole flow, including branches and long timers, so it's visible, testable and changeable in one place, and survives crashes by persisting its state."
+      },
+      {
+        "text": "2PC across all six services.",
+        "explanation": "Wrong. 2PC would hold locks across services for days while waiting for manual review; that's exactly what sagas exist to avoid."
+      },
+      {
+        "text": "No coordination: each service retries until the loan is approved.",
+        "explanation": "Wrong. Without a saga there's no defined way to undo completed steps when a later one rejects the loan."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Score the flow against the table in the lesson:\n\n| Factor | Favours |\n|---|---|\n| 9 steps, 6 services | orchestration |\n| Branches | orchestration |\n| Day-long timers | durable orchestrator |\n| Frequent changes | orchestration |\n\nChoreography shines for short, stable flows of two or three steps. Here, a durable orchestrator keeps the saga's state in one place, can sleep for days on a timer, and resumes correctly after a crash.",
+    "link": {
+      "title": "Saga distributed transactions (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/saga"
+    }
+  }
+]

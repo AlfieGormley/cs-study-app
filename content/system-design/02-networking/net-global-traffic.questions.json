@@ -1,0 +1,378 @@
+[
+  {
+    "id": "net-global-traffic-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does it mean for a service to use **anycast**?",
+    "options": [
+      {
+        "text": "The same service IP prefix is announced from several locations, and routing delivers each packet to one location chosen by routing policy",
+        "explanation": "Correct. BGP picks the best route to the shared prefix from each network, so users land at a nearby site without any DNS tricks."
+      },
+      {
+        "text": "Each user gets a unique IP address for the service",
+        "explanation": "That's closer to per-client steering by DNS. Anycast is the opposite: everyone uses the same IP."
+      },
+      {
+        "text": "Packets are sent to all locations at once and the fastest replies",
+        "explanation": "That describes broadcast or multicast. With anycast, each packet goes to exactly one location."
+      },
+      {
+        "text": "DNS returns a different IP depending on the user's country",
+        "explanation": "That's GeoDNS. Anycast works at the routing layer, below DNS."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. London, Virginia and Tokyo all announce `203.0.113.0/24` via BGP.\n2. A router in Paris sees three paths to that prefix and picks the best by its policy, likely London.\n3. A router in Osaka picks Tokyo.\n4. Both users connect to `203.0.113.1`, yet reach different machines.\n5. If London withdraws its announcement, Paris's routers converge on the next-best path, often within seconds, though a withdrawal can take a minute or more to settle everywhere.",
+    "link": {
+      "title": "Anycast (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Anycast"
+    }
+  },
+  {
+    "id": "net-global-traffic-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your policy assigns EU tenants to an EU region, enforced independently in application, storage and failover controls. Which routing technique can help steer EU users there, without itself guaranteeing residency?",
+    "options": [
+      {
+        "text": "Latency-based routing",
+        "explanation": "Latency routing picks the fastest region, which for some EU users (e.g. on certain ISPs) might be outside the EU. It optimises speed, not jurisdiction."
+      },
+      {
+        "text": "Weighted round-robin DNS across all regions",
+        "explanation": "Weighted routing splits traffic by percentage with no regard to where users are, so EU users would land in other regions."
+      },
+      {
+        "text": "Geolocation-based routing (GeoDNS) mapping EU locations to the EU region",
+        "explanation": "Correct. Geo routing decides by the user's location, which is exactly what a residency rule is about. Back it up with server-side enforcement, since geolocation isn't perfect."
+      },
+      {
+        "text": "Plain anycast",
+        "explanation": "Anycast sends users to the BGP-nearest site, which you don't fully control; an EU user could be routed to a non-EU site."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Configure geographic DNS rules to prefer the EU endpoint for relevant locations.\n2. Resolver location, VPNs and cached answers can still misroute clients.\n3. Enforce tenant placement, storage, replication and authorized failover separately. A request reaching an out-of-region proxy may already expose data there; blindly proxying it onward is not proof of residency compliance.\n4. The exact legal requirement is outside this networking example; no blanket compliance guarantee is given.",
+    "link": {
+      "title": "Geolocation routing (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-geo.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an ideal equal-capacity model with CPU proportional to load and no failover overhead, three regions each run at 70%. One fails and load splits evenly over the other two. What happens, and what is the pre-failure ceiling that avoids exceeding 100%?",
+    "options": [
+      {
+        "text": "The other two go to 80%; any utilisation under 90% is safe",
+        "explanation": "This underestimates the shift. The failed region's 70 units of load are split over two regions: +35 each, not +10."
+      },
+      {
+        "text": "Nothing; autoscaling will instantly add capacity",
+        "explanation": "Autoscaling takes minutes to add instances, and cloud capacity in a region can itself be constrained during big incidents. You need headroom already in place for the first minutes."
+      },
+      {
+        "text": "The other two go to 140%; the safe maximum is 33%",
+        "explanation": "140% would mean each surviving region absorbed the entire failed region's load. It's shared between two, and 33% is the limit for surviving two simultaneous failures, not one."
+      },
+      {
+        "text": "The other two go to 105% and overload; to survive one failure, run at most about 66% per region",
+        "explanation": "Correct. Total load is 210 units; over two regions that's 105 each. To fit, per-region load must be ≤ 2/3 of capacity: (N − 1) / N with N = 3."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Total peak load = 3 × 70 = **210** units (capacity 100 per region).\n2. After losing one: 210 / 2 = **105** per region → overloaded.\n3. Condition to survive one loss: N × u ≤ (N − 1) × 100.\n4. For N = 3: u ≤ 200 / 3 ≈ **66.7%**. For N = 2: 50%. For N = 5: 80%.\n5. So more regions mean less wasted headroom per region, one reason large services run in many regions.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to fail traffic away from a region within about 30 seconds of it going down, for clients that hold long-lived connections and sometimes cache DNS for hours. Which approach best meets this?",
+    "options": [
+      {
+        "text": "DNS failover with a 10 s TTL",
+        "explanation": "A short TTL doesn't help clients that cache DNS for hours or keep connections open; those never re-resolve, so they stay pinned to the dead region."
+      },
+      {
+        "text": "Anycast IPs (e.g. AWS Global Accelerator or an anycast edge) that route to healthy regions behind a stable address",
+        "explanation": "Correct as an architecture choice: a stable edge address can route reconnecting clients to healthy regions without fresh DNS answers. Meeting a 30-second objective still requires suitable health detection, connection timeouts and tested reconnect behavior; anycast alone does not guarantee it."
+      },
+      {
+        "text": "Weighted DNS with 50/50 weights",
+        "explanation": "Weights split traffic in normal conditions but don't remove the failed region quickly, and still depend on clients re-resolving."
+      },
+      {
+        "text": "Ask users to refresh the page",
+        "explanation": "That doesn't help API clients, and a refresh may still use the cached DNS answer or pooled connection to the dead region."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Constraint: clients **won't re-resolve DNS** quickly → any DNS-based approach has an hours-long tail.\n2. So keep the IP the same and change what's *behind* it.\n3. Anycast edge: client → nearest edge (same IP everywhere) → healthy region chosen per connection.\n4. When health checks fail for a region (e.g. after 3 × 10 s checks), the edge routes new connections elsewhere; dropped long-lived connections reconnect to the same IP and land in a healthy region.\n5. Clients need to reconnect on failure, but never need a new DNS answer.",
+    "link": {
+      "title": "What is AWS Global Accelerator?",
+      "url": "https://docs.aws.amazon.com/global-accelerator/latest/dg/what-is-global-accelerator.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which are real limitations of anycast for global traffic management? Select all that apply.",
+    "options": [
+      {
+        "text": "BGP's choice of 'nearest' may not be the lowest-latency site",
+        "explanation": "Correct. BGP prefers routes by policy and AS-path length, not measured latency, so some users land at a farther site."
+      },
+      {
+        "text": "A routing change mid-connection can send a TCP flow's packets to a different site, breaking it",
+        "explanation": "Correct. The new site has no state for that connection, so it resets. This matters most for long-lived connections."
+      },
+      {
+        "text": "Precise percentage-based traffic splits are hard",
+        "explanation": "Correct. You can only influence BGP indirectly (withdrawals, prepending, communities), so 'send 30% to London' isn't directly expressible."
+      },
+      {
+        "text": "Clients must be updated whenever a site is added",
+        "explanation": "The opposite: clients keep using the same IP, and new sites just start announcing it. That's one of anycast's strengths."
+      },
+      {
+        "text": "It can't work over IPv4",
+        "explanation": "Anycast works for IPv4 and IPv6; 1.1.1.1 and 8.8.8.8 are IPv4 anycast addresses."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Separate what BGP gives you from what it doesn't:\n\n- Gives: one stable IP, automatic nearest-by-routing, fast reroute on withdrawal, spread of DDoS traffic.\n- Doesn't give: latency awareness, per-connection stickiness across route changes, fine-grained weights.\n\nSo the first three options are limitations; the last two are false. Large operators compensate with careful peering, stable announcements and a layer that keeps connection state consistent.",
+    "link": {
+      "title": "Border Gateway Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Border_Gateway_Protocol"
+    }
+  },
+  {
+    "id": "net-global-traffic-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Region A fails at 14:00. Automation shifts 100% of A's traffic to region B in one step. At 14:03, B also falls over. A review shows B's caches were cold and its autoscaling group was at minimum size. Which change best prevents a repeat?",
+    "options": [
+      {
+        "text": "Lower DNS TTLs so traffic moves even faster",
+        "explanation": "Moving traffic faster makes the herd arrive sooner. B didn't fail because traffic was slow to arrive, but because it arrived all at once to an unprepared region."
+      },
+      {
+        "text": "Fail back to region A as soon as possible",
+        "explanation": "Region A is the one that failed; sending traffic back before it's healthy just moves the outage. Failback should wait for sustained health."
+      },
+      {
+        "text": "Shift traffic in weighted steps while B scales up and warms caches, keep pre-provisioned headroom in B, and use load shedding or rate limits to protect it",
+        "explanation": "Correct. Gradual shifts give autoscaling and caches time to catch up; headroom absorbs the first minutes; shedding excess load keeps B serving most users instead of collapsing."
+      },
+      {
+        "text": "Remove health checks so failover never triggers",
+        "explanation": "Then region A's outage would have stayed a full outage for its users. The problem was how failover was executed, not that it happened."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. B at minimum size might handle, say, 30% of A's peak. Receiving 100% at once → overload.\n2. Cold caches multiply the problem: every request hits B's databases, which were sized for B's normal hit ratio.\n3. Better runbook:\n  - Keep B with enough standing headroom (see the (N−1)/N rule).\n  - Shift 10% → 25% → 50% → 100% over minutes, watching error rates and latency.\n  - Scale B ahead of each step.\n  - Shed or degrade non-critical traffic if B nears its limits.\n4. A partial, controlled shift beats a total, cascading one.",
+    "link": {
+      "title": "Weighted routing (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-weighted.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your failover runbook says: 'During a regional outage, call the cloud provider's API to update the load balancer and DNS configuration.' A reviewer says this is fragile. Why?",
+    "options": [
+      {
+        "text": "Control-plane APIs may be degraded during the same incident (possibly hosted in the failing region), so recovery should rely on data-plane mechanisms like pre-configured health checks that flip routing automatically",
+        "explanation": "Correct. Control planes are more complex and less available than data planes. AWS's guidance is to avoid control-plane dependencies in recovery paths: pre-provision everything and let health checks drive failover."
+      },
+      {
+        "text": "APIs are slower than the console",
+        "explanation": "Speed isn't the main concern, and consoles call the same APIs. The issue is whether those APIs are available during the incident."
+      },
+      {
+        "text": "DNS can't be changed during an outage",
+        "explanation": "DNS can be changed when its control plane is healthy. Pre-configured health-driven failover avoids needing a record edit during the incident, but cached DNS answers and existing connections still delay client movement."
+      },
+      {
+        "text": "Load balancers don't support configuration changes",
+        "explanation": "They do support configuration changes. The risk is depending on making changes at the worst possible moment."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. **Data plane** = the parts that serve traffic (DNS answering queries, health checks, load balancers forwarding packets). Highly available, simple.\n2. **Control plane** = the parts that create or change resources (APIs, consoles). More complex; may be regional; often impaired during large events.\n3. A runbook requiring control-plane calls fails exactly when it's needed most.\n4. Better: pre-create standby resources and failover records; let health checks (data plane) trigger the switch; if a manual lever is needed, make it a data-plane one (e.g. a health check that reads a flag file you can flip).",
+    "link": {
+      "title": "Configuring DNS failover (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run anycast PoPs in Paris and Amsterdam. Measurements show that customers of one French ISP, sitting in Paris, are consistently served by Amsterdam, with 15 ms higher latency. The Paris PoP is healthy. What's the most likely explanation?",
+    "options": [
+      {
+        "text": "BGP always picks the geographically closest site, so the measurements must be wrong",
+        "explanation": "BGP knows nothing about geography or latency. It picks routes by policy and AS-path length."
+      },
+      {
+        "text": "The Paris PoP is overloaded and anycast shifted traffic away automatically",
+        "explanation": "Plain anycast doesn't react to load; routes only change when announcements change. The PoP is healthy, and the routing is consistent."
+      },
+      {
+        "text": "The ISP's routing policy prefers the route it learns in Amsterdam (for example via a peer or transit provider it favours, through local preference), which BGP applies before path length or anything resembling distance",
+        "explanation": "Correct. Each network chooses among routes by its own commercial policy first. If the ISP only peers with you in Amsterdam, or prefers that path, its Paris users go there. Fixes include peering with the ISP in Paris or adjusting announcements."
+      },
+      {
+        "text": "DNS returned the Amsterdam IP",
+        "explanation": "With anycast, both PoPs share the same IP. Which one users reach is decided by routing, not DNS."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "BGP route selection, simplified:\n\n1. Highest **local preference**: the network's own policy (customers > peers > transit, commercial deals).\n2. Shortest **AS path**.\n3. Further tie-breakers (origin, MED, IGP cost...).\n\nLatency isn't on the list. So if the ISP learns your prefix via a peering link in Amsterdam and prefers it, Paris users cross the border.\n\nOperator options: set up direct peering with that ISP in Paris, use BGP communities the ISP supports, or prepend AS paths on Amsterdam's announcement to that peer, then re-measure.",
+    "link": {
+      "title": "Border Gateway Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Border_Gateway_Protocol"
+    }
+  },
+  {
+    "id": "net-global-traffic-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You withdraw the anycast announcement from your large Frankfurt PoP, which handles about 30% of European traffic, for maintenance. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Its users move to whichever sites BGP now considers next best, often nearby PoPs such as Amsterdam or Paris, rather than spreading evenly across the network",
+        "explanation": "Correct. Each network falls back to its next-best route, which is usually a neighbouring PoP, so load concentrates nearby."
+      },
+      {
+        "text": "Open TCP connections to Frankfurt break, because their packets now arrive at a site with no state for them",
+        "explanation": "If packets move to a site without connection state or forwarding support, existing TCP sessions fail. Simply prepending or withdrawing BGP routes also moves existing flows; graceful draining requires connection-aware handling or application reconnect support."
+      },
+      {
+        "text": "Clients must receive a new DNS answer before they can reach another PoP",
+        "explanation": "Anycast uses the same IP everywhere; only the routing behind it changes. No DNS change is involved."
+      },
+      {
+        "text": "Neighbouring PoPs need enough headroom to absorb Frankfurt's traffic",
+        "explanation": "Correct. If Amsterdam inherits most of Frankfurt's 30%, Amsterdam needs that capacity spare, not just the network as a whole."
+      },
+      {
+        "text": "All traffic moves the instant the announcement is withdrawn, with no convergence period",
+        "explanation": "BGP withdrawals propagate router by router; it usually takes seconds, sometimes a minute or more, to settle everywhere."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Withdraw Frankfurt → each network picks its next-best route → mostly nearby PoPs.\n2. Long-lived TCP connections hit a stateless new site → reset → clients reconnect.\n3. No DNS involved: same IP.\n4. Capacity is **local**: plan which PoPs inherit each site's users.\n5. Good practice: test which sites inherit load, use connection-aware draining/forwarding or planned reconnects, and stage routing changes while watching capacity. Prepending itself does not preserve existing flows.",
+    "link": {
+      "title": "Anycast (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Anycast"
+    }
+  },
+  {
+    "id": "net-global-traffic-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your automated failover moves traffic from region A to B whenever A fails 2 health checks in a row, and back as soon as A passes 2 in a row. During a partial network problem, A alternates between passing and failing, and traffic swings between regions every minute, causing errors on every switch. What's the best fix?",
+    "options": [
+      {
+        "text": "Lower the DNS TTL so each switch takes effect faster",
+        "explanation": "Faster switching makes the swinging worse, not better. The problem is switching too often, not too slowly."
+      },
+      {
+        "text": "Remove health checks from region A",
+        "explanation": "Then a genuine outage in A would never trigger failover."
+      },
+      {
+        "text": "Add hysteresis: require more failures over a longer window to fail over, and a sustained period of health (often with human approval) before failing back",
+        "explanation": "Correct. Different thresholds for leaving and returning stop marginal health from causing repeated flips. Failback is the less urgent action, so it can afford to be slow and deliberate."
+      },
+      {
+        "text": "Fail over to a third region instead",
+        "explanation": "That just changes where traffic swings to. The flapping comes from the decision rule, not from the choice of standby."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symmetric, sensitive thresholds (2 fails out, 2 passes back) + a marginal region = **flapping**.\n2. Every flip costs: dropped connections, cold caches, possibly a thundering herd.\n3. Hysteresis:\n  - Fail over after, say, 3 of 5 checks failing from several vantage points.\n  - Fail back only after, say, 15 minutes of continuous health, ideally confirmed by a human.\n4. Also consider sticking with the standby until the next planned window: an unnecessary failback is a second risky event.",
+    "link": {
+      "title": "Configuring DNS failover (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume the standby is exactly 5 seconds behind at failure and the primary accepted 2,000 writes/s during that window. The primary region is permanently lost but the standby survives. Roughly how many acknowledged writes are at risk, and what changes can give zero loss for this failure model?",
+    "options": [
+      {
+        "text": "Nothing, because asynchronous replication is eventually consistent",
+        "explanation": "Eventual consistency means replicas catch up *if the primary survives*. If the primary is gone, writes not yet shipped are gone too."
+      },
+      {
+        "text": "About 10,000 writes; require acknowledged writes to be durably recorded in the surviving region before acknowledging them, adding cross-region coordination latency",
+        "explanation": "Correct under the stated assumptions: 5 × 2,000 = 10,000 writes at risk. Durable synchronous replication before acknowledgment can protect against loss of the primary region, at the cost of remote coordination and availability coupling. It does not protect against every correlated failure."
+      },
+      {
+        "text": "About 2,000 writes, one second's worth",
+        "explanation": "That uses a 1 s lag. With 5 s of lag, five seconds of writes may be unreplicated."
+      },
+      {
+        "text": "About 10,000 writes; reaching zero just needs more frequent backups",
+        "explanation": "Periodic backups generally leave a nonzero recovery gap. For the stated loss of the primary, acknowledged writes must already be durable in a surviving failure domain; ordinary more-frequent backups do not establish that condition."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Actual recovery gap in this scenario: 5 seconds. Writes at risk: 5 × 2,000 = 10,000. RPO is a time objective, not a count of writes.\n2. To avoid losing acknowledged writes after this primary-region failure, acknowledgment must depend on durable storage in a surviving failure domain.\n3. A primary that waits for a remote durable acknowledgment adds inter-region coordination to commit latency; pipeline/batching can improve throughput but not remove that dependency.\n4. A zero-loss claim is limited to its failure model. Simultaneous loss of both copies, corruption or a mistaken deletion needs additional controls.\n5. Typical replication lag is not a guaranteed upper bound; monitor actual lag against the RPO.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Three regions (eu-west, us-east, us-west) each run at 60% at peak, which seems safe under the (N − 1)/N ≈ 66% rule. When eu-west fails, latency-based routing sends about 90% of its traffic to us-east and 10% to us-west. What happens?",
+    "options": [
+      {
+        "text": "Both survivors go to 90%, safely under 100%",
+        "explanation": "That assumes eu-west's load splits evenly. Latency routing sends most European users to the nearest survivor."
+      },
+      {
+        "text": "Nothing changes, because latency routing ignores failures",
+        "explanation": "Latency routing combined with health checks does move traffic away from a failed region; that's why the load shifts."
+      },
+      {
+        "text": "us-west overloads, because it's furthest away",
+        "explanation": "us-west receives only 10% of eu-west's load: 60 + 6 = 66%. It's us-east that receives most of it."
+      },
+      {
+        "text": "us-east reaches about 114% and overloads, even though the average across survivors is only 90%; plan headroom per region for the traffic it would actually inherit, or cap and spread failover traffic with weights",
+        "explanation": "Correct. us-east: 60 + 0.9 × 60 = 114%. The (N − 1)/N rule assumes an even redistribution, which proximity-based routing rarely gives you."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Load to redistribute: eu-west's 60 units.\n2. us-east: 60 + 0.9 × 60 = **114%** → overloaded.\n3. us-west: 60 + 0.1 × 60 = **66%** → fine.\n4. Average of survivors = 90%, which hides the problem.\n5. Fixes:\n  - Size us-east for the European traffic it would inherit (if it must absorb 90% of a 60% region, i.e. 54 units, it can run at no more than about 46% itself).\n  - During failover, use weights to send part of the European traffic to us-west deliberately.\n  - Load-shed non-critical traffic.",
+    "link": {
+      "title": "Latency-based routing (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-latency.html"
+    }
+  }
+]

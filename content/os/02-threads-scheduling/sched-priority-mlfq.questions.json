@@ -1,0 +1,343 @@
+[
+  {
+    "id": "sched-priority-mlfq-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On Linux, a CPU-bound process runs at **nice 10** and another at **nice −5**. Which one does the scheduler favour?",
+    "options": [
+      {
+        "text": "The nice 10 process, because a higher number means higher priority",
+        "explanation": "That's the convention for Linux real-time priorities (1–99) and Windows, not for nice values. Nice runs the other way: a 'nicer' process is more generous to others."
+      },
+      {
+        "text": "The nice −5 process",
+        "explanation": "Lower nice means greater fair-scheduling weight when competing within the same scheduling group. Lowering nice normally needs permission, but RLIMIT_NICE can authorise an unprivileged process to do so."
+      },
+      {
+        "text": "Neither; nice only affects I/O priority",
+        "explanation": "I/O priority is a separate setting (ionice). Nice directly changes the CPU share a thread gets."
+      },
+      {
+        "text": "Neither; nice values only matter for real-time threads",
+        "explanation": "It's the reverse: nice applies to normal (non-real-time) threads. Real-time threads use a separate 1–99 priority."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify the scale: nice runs from −20 to 19.\n2. Recall the direction: on the nice scale, a **lower** number is a **higher** priority (the process is less 'nice' to others).\n3. Compare: −5 < 10, so the nice −5 process is favoured.\n\nThe lesson's table is the thing to remember: Linux nice is 'lower is higher', Linux real-time and Windows are 'higher is higher'. Always check which way a system's numbers run.",
+    "link": {
+      "title": "Scheduling: The Multi-Level Feedback Queue — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A strict, preemptive priority scheduler runs a steady stream of high-priority web requests. A low-priority log-compaction job has been ready for an hour and has never run. What is this called, and what is the classic fix?",
+    "options": [
+      {
+        "text": "Priority inversion; fix it with priority inheritance",
+        "explanation": "Inversion is when a high-priority thread is stuck behind lower-priority ones because of a lock. Here no lock is involved: the low-priority job is simply always outranked."
+      },
+      {
+        "text": "Deadlock; fix it by ordering lock acquisition",
+        "explanation": "Deadlock needs a cycle of threads waiting on each other. The web requests are making progress; only the low-priority job is stuck."
+      },
+      {
+        "text": "Starvation; fix it with aging",
+        "explanation": "Correct. The job is perpetually outranked, which is starvation. Aging raises its priority the longer it waits until it eventually wins."
+      },
+      {
+        "text": "Convoy effect; fix it with a shorter quantum",
+        "explanation": "The convoy effect is short jobs stuck behind a long one under FCFS. Changing the quantum doesn't help a job that is never selected at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Is any thread waiting for a lock? No, so it's not inversion or deadlock.\n2. Is the job ready but never chosen because higher-priority work keeps arriving? Yes. That is **starvation**.\n3. The fix must eventually let the job win. **Aging** does this: each second it waits, its priority improves, until it outranks the newcomers, runs, and drops back.\n\nMLFQ's periodic priority boost is another cure for the same problem.",
+    "link": {
+      "title": "Starvation (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Starvation_(computer_science)"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the textbook MLFQ rules, where does a **newly arrived** job start, and why?",
+    "options": [
+      {
+        "text": "In the lowest queue, so that it can't disrupt established jobs",
+        "explanation": "That would make every new short job wait behind CPU-bound work, the opposite of what MLFQ is designed for."
+      },
+      {
+        "text": "In the middle queue, as a neutral guess",
+        "explanation": "MLFQ deliberately makes an optimistic guess, not a neutral one. A middle start would delay short interactive jobs."
+      },
+      {
+        "text": "In a queue chosen from the job's declared run time",
+        "explanation": "MLFQ exists precisely because the OS doesn't know run times. Jobs don't declare them."
+      },
+      {
+        "text": "In the highest queue, assuming it might be short or interactive",
+        "explanation": "Correct. Rule 3: start at the top. If the job is short it finishes there with SJF-like speed; if not, Rule 4 demotes it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "MLFQ wants SJF-like behaviour without knowing job lengths. So it guesses optimistically:\n\n1. Put every new job at the **top** (Rule 3).\n2. A short or interactive job finishes or blocks while still at the top, so it gets fast service.\n3. A long CPU-bound job uses up its allotment and sinks level by level (Rule 4) until it sits with the other long jobs.\n\nThe scheduler learns each job's character from its behaviour.",
+    "link": {
+      "title": "Scheduling: The Multi-Level Feedback Queue — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Priorities run from 0 (highest) to 127. A waiting thread improves by one level every 2 seconds, starting at 100. How long until it reaches the same priority as work arriving at priority 40?",
+    "options": [
+      {
+        "text": "About 60 seconds",
+        "explanation": "That's the number of levels to climb (100 − 40 = 60), but it forgets that each level takes 2 seconds."
+      },
+      {
+        "text": "About 120 seconds",
+        "explanation": "Correct. It must climb 60 levels at 2 seconds each: 60 × 2 = 120 seconds."
+      },
+      {
+        "text": "About 200 seconds",
+        "explanation": "Aging lowers the numeric priority under this model. The question asks when it reaches 40; actual service also depends on the runnable queue and tie-breaking."
+      },
+      {
+        "text": "Never, because the stream never stops",
+        "explanation": "That would be true without aging. Aging is exactly what guarantees it eventually runs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The gap is 100 - 40 = 60 levels; 60 × 2 = 120 seconds. That establishes equal priority, not an exact first-run time. Tie-breaking, queue length and scheduling overhead determine when it actually runs.",
+    "link": {
+      "title": "Aging (scheduling) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Aging_(scheduling)"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An MLFQ uses the **old** rule: a job that gives up the CPU before its 10 ms quantum expires keeps its priority. A malicious job runs for 9.9 ms, then does a trivial 0.1 ms I/O, and repeats. Two honest CPU-bound jobs are in the bottom queue. Roughly what share of the CPU does the malicious job get?",
+    "options": [
+      {
+        "text": "About one third, like the others",
+        "explanation": "That would be fair sharing, but the attacker never leaves the top queue, so it always outranks the honest jobs."
+      },
+      {
+        "text": "About half",
+        "explanation": "There's no mechanism here that splits the CPU evenly between the top queue and the rest."
+      },
+      {
+        "text": "Almost all of it (around 99%)",
+        "explanation": "Correct. It stays at the top forever and preempts the bottom queue whenever it's ready. The honest jobs only run during its 0.1 ms I/O gaps."
+      },
+      {
+        "text": "None, because I/O demotes it",
+        "explanation": "Under the old rule, giving up the CPU early is rewarded, not punished. That's the hole."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Under the old rule the attacker never uses a full quantum, so it never moves down.\n2. Top-queue jobs always beat bottom-queue jobs (Rule 1).\n3. The attacker is runnable 9.9 ms of every 10 ms, so it gets about 9.9 / 10 = **99%**.\n4. The honest jobs share the remaining ~1%.\n\nThe new Rule 4 fixes this by counting *total* CPU used at a level: after about one allotment's worth of CPU (10 ms), the attacker is demoted however many times it yielded.",
+    "link": {
+      "title": "Scheduling: The Multi-Level Feedback Queue — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "MLFQ has cumulative CPU accounting and a 10 ms top-queue allotment. A job runs 2 ms then blocks repeatedly, with no intervening priority boost. After how many bursts is it demoted?",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "Correct. Each burst uses 2 ms of the 10 ms allotment. After 5 bursts it has used 10 ms and moves down."
+      },
+      {
+        "text": "1",
+        "explanation": "That would be the case if blocking caused demotion. Under Rule 4 only accumulated CPU time matters."
+      },
+      {
+        "text": "Never, because it always blocks before the quantum ends",
+        "explanation": "That's the old, gameable rule. The new rule counts total usage at the level, not usage per burst."
+      },
+      {
+        "text": "10",
+        "explanation": "That would require 1 ms bursts. With 2 ms bursts, 10 ms is reached after 5."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Rule 4 tracks total CPU time used at a level:\n\n| Burst | Used so far |\n|---|---|\n| 1 | 2 ms |\n| 2 | 4 ms |\n| 3 | 6 ms |\n| 4 | 8 ms |\n| 5 | 10 ms → demoted |\n\nThis is the price of game-proofing: even honest interactive jobs slowly sink. The periodic priority boost (Rule 5) brings them back to the top.",
+    "link": {
+      "title": "Scheduling: The Multi-Level Feedback Queue — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which problems does MLFQ's periodic **priority boost** (Rule 5) solve? Select all that apply.",
+    "options": [
+      {
+        "text": "Jobs in the bottom queue starving when many interactive jobs fill the top",
+        "explanation": "Boosting gives low-queue jobs access to the top queue again. With fair queue ordering it combats starvation, but service within every boost period is not guaranteed when the runnable queue is large."
+      },
+      {
+        "text": "A job that was CPU-bound becoming interactive but staying stuck at the bottom",
+        "explanation": "Correct. The boost gives it another chance to show its new behaviour from the top queue."
+      },
+      {
+        "text": "Unbounded priority inversion on a mutex",
+        "explanation": "Inversion is a lock problem, fixed by priority inheritance or ceilings. A boost every S ms doesn't bound how long a high-priority thread waits on a lock."
+      },
+      {
+        "text": "The need to choose any tuning constants",
+        "explanation": "The boost period S is itself a 'voodoo constant': too long starves long jobs, too short erodes the advantage of interactive ones."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "A boost returns low-priority jobs to the highest queue, helping old jobs and jobs whose behaviour changed. Queue ordering and available capacity still determine service; not every job must run once per period. Boosting does not by itself solve lock-owner inversion or eliminate tuning parameters.",
+    "link": {
+      "title": "Multilevel feedback queue — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Multilevel_feedback_queue"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "One CPU, strict preemptive priorities. L (low) locks mutex `m`. H (high) wakes and blocks on `m`. M (medium, CPU-bound, never touches `m`) wakes. With **no** priority inheritance, what runs, and for how long is H delayed?",
+    "options": [
+      {
+        "text": "L runs until it releases `m`; H waits only for L's critical section",
+        "explanation": "That's what priority inheritance would give you. Without it, M outranks L and preempts it."
+      },
+      {
+        "text": "H runs, because it has the highest priority",
+        "explanation": "H is blocked on `m`. A blocked thread can't run regardless of priority."
+      },
+      {
+        "text": "M runs; H is delayed for as long as M (and any other medium work) keeps running",
+        "explanation": "Correct. M preempts L, L can't release `m`, and H waits on M. The delay is unbounded: this is priority inversion."
+      },
+      {
+        "text": "The threads deadlock and nothing runs",
+        "explanation": "There's no cycle: M is running and will finish eventually, then L, then H. It's an unbounded delay, not a deadlock."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Step through it:\n\n1. H is blocked on `m`, so it's not ready.\n2. Ready threads: L and M. M outranks L, so **M runs**.\n3. L can't run, so `m` stays locked, so H stays blocked.\n4. H's wait now depends on how long M runs, which has nothing to do with the short critical section.\n\n```\nL holds m --- preempted -----------\nH blocked on m ...................\nM runs runs runs runs ............\n```\n\nWith priority inheritance, L would run at H's priority, M couldn't preempt it, and H would wait only for L's critical section.",
+    "link": {
+      "title": "Priority inversion — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Priority_inversion"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Mars Pathfinder, 1997: the spacecraft suffered repeated total resets. What was the root cause, and how was it fixed?",
+    "options": [
+      {
+        "text": "A deadlock between two tasks; fixed by reordering lock acquisition in a software patch",
+        "explanation": "There was no cycle of waits. The high-priority task was delayed by a medium-priority one, which is inversion, not deadlock."
+      },
+      {
+        "text": "Priority inversion in a select/pipe semaphore; engineers enabled inheritance, tested the change and applied it through the spacecraft patch process",
+        "explanation": "Reeves identifies the semaphore in VxWorks select/pipe handling. His firsthand account rejects the claim that the shell/C interpreter was used to patch it."
+      },
+      {
+        "text": "Cosmic-ray memory corruption; fixed by enabling error-correcting memory",
+        "explanation": "The fault was reproduced on an identical replica on the ground with tracing on, which pointed squarely at a software scheduling problem."
+      },
+      {
+        "text": "Starvation of the weather task; fixed by adding aging",
+        "explanation": "The low-priority weather task was a participant, but the failure was the *high-priority* bus task missing its deadline, caused by the lock."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The ASI/MET task held a resource needed by bc_dist. Intermediate-priority work delayed the holder; bc_sched detected the missed deadline and initiated reset. After reproducing the failure, engineers enabled inheritance, checked system-wide effects and used the validated onboard patch mechanism. This was not an interactive C-interpreter fix.",
+    "link": {
+      "title": "Glenn Reeves: firsthand Pathfinder correction in RISKS",
+      "url": "https://catless.ncl.ac.uk/Risks/19.54.html"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about **priority inheritance** and **priority ceiling** are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With inheritance, a lock holder is boosted only when a higher-priority thread actually blocks on its lock",
+        "explanation": "Correct. Inheritance is reactive: the boost happens when contention appears and ends when the lock is released."
+      },
+      {
+        "text": "Inheritance must be transitive: if the boosted holder is itself blocked on another lock, that lock's holder is boosted too",
+        "explanation": "Correct. Otherwise a chain of locks would reintroduce the inversion one level down. Linux's rt_mutex handles such chains."
+      },
+      {
+        "text": "The ceiling protocol needs, in advance, the highest priority of any thread that may take the lock",
+        "explanation": "Correct. The ceiling is computed ahead of time, and any holder runs at it immediately."
+      },
+      {
+        "text": "Inheritance eliminates all waiting by the high-priority thread",
+        "explanation": "Inheritance removes the medium-priority interference in the simple example. General delay bounds also depend on nested locks, holder blocking and higher-priority work; inheritance does not eliminate waiting."
+      },
+      {
+        "text": "In POSIX, inheritance is chosen with PTHREAD_PRIO_PROTECT",
+        "explanation": "PTHREAD_PRIO_PROTECT selects the ceiling protocol. Inheritance is PTHREAD_PRIO_INHERIT."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Options 1, 2 and 3 describe inheritance, transitive inheritance and immediate priority ceilings. Option 4 is false: inheritance removes medium-priority interference in the simple example but H still waits for the holder; general bounds depend on nesting and other interference. Option 5 reverses the constants: INHERIT requests inheritance and PROTECT requests a priority ceiling.",
+    "link": {
+      "title": "RT-mutex subsystem with PI support — Linux kernel docs",
+      "url": "https://docs.kernel.org/locking/rt-mutex.html"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An MLFQ has three levels with quanta 10, 20 and 40 ms and an allotment of one quantum per level. A CPU-bound job A arrives at t = 0. An interactive job B arrives at t = 50, runs 2 ms, then waits 8 ms for I/O, repeatedly. Ignoring boosts, **at what time is B first demoted** to the middle queue?",
+    "options": [
+      {
+        "text": "t = 60",
+        "explanation": "That's when B becomes ready for its second burst. It has used only 2 ms of its 10 ms allotment so far."
+      },
+      {
+        "text": "t = 52",
+        "explanation": "That's the end of B's first burst. Blocking doesn't demote a job under Rule 4; only using the full allotment does."
+      },
+      {
+        "text": "t = 100",
+        "explanation": "The fifth burst ends at 92; 100 is eight milliseconds later, when the next burst becomes ready after its I/O wait."
+      },
+      {
+        "text": "t = 92",
+        "explanation": "Correct. Bursts run 50–52, 60–62, 70–72, 80–82, 90–92. After the fifth, B has used 10 ms at the top level and is demoted at t = 92."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "B preempts A each time it becomes ready, so its bursts run immediately:\n\n| Burst | Runs | Total used |\n|---|---|---|\n| 1 | 50–52 | 2 ms |\n| 2 | 60–62 | 4 ms |\n| 3 | 70–72 | 6 ms |\n| 4 | 80–82 | 8 ms |\n| 5 | 90–92 | 10 ms |\n\nEach cycle is 2 ms of CPU plus 8 ms of I/O = 10 ms. After the fifth burst B has used its whole 10 ms allotment, so at **t = 92** it moves to the 20 ms queue. A has long since sunk to the bottom (demoted at 10 and 30), so B still beats it.",
+    "link": {
+      "title": "Scheduling: The Multi-Level Feedback Queue — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+    }
+  }
+]

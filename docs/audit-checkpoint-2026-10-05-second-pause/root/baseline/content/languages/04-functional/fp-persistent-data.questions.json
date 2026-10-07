@@ -1,0 +1,386 @@
+[
+  {
+    "id": "fp-persistent-data-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the phrase *persistent data structure*, what does \"persistent\" mean?",
+    "options": [
+      {
+        "text": "The data is saved to disk and survives a restart",
+        "explanation": "That's the database meaning of persistence. Here it's about versions in memory, not storage."
+      },
+      {
+        "text": "Old versions remain valid and usable after an update",
+        "explanation": "Correct. An update returns a new version, and anyone holding the previous version still sees it unchanged."
+      },
+      {
+        "text": "The structure can never be garbage collected",
+        "explanation": "Old versions are collected normally once nothing references them. Persistence is about not *destroying* them on update."
+      },
+      {
+        "text": "Every update copies the entire structure",
+        "explanation": "That would give persistence, but it's the naive approach. Real persistent structures share unchanged parts so updates are cheap."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare with a normal (ephemeral) Python list:\n\n```python\nxs = [1, 2]\nys = xs\nxs.append(3)\nys    # [1, 2, 3]: old\n      # version is gone\n```\n\nWith a persistent vector, `xs2 = xs.append(3)` returns a new version, and `xs` is still `[1, 2]`. Structural sharing makes keeping both cheap.",
+    "link": {
+      "title": "Persistent data structure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Persistent_data_structure"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "On an immutable singly linked (cons) list of n elements, which operations take O(1) time? Select all that apply.",
+    "options": [
+      {
+        "text": "Prepending a new element",
+        "explanation": "Correct. Allocate one cell pointing at the existing list; the old list is shared, untouched."
+      },
+      {
+        "text": "Reading the first element",
+        "explanation": "Correct. The head is stored in the first cell."
+      },
+      {
+        "text": "Getting the tail (everything but the first element)",
+        "explanation": "Correct. The tail is just the first cell's pointer, already a complete list."
+      },
+      {
+        "text": "Appending an element at the end",
+        "explanation": "The last cell's pointer must change, so every cell that leads to it must be copied: O(n)."
+      },
+      {
+        "text": "Reading the last element",
+        "explanation": "There's no pointer to the end; you have to walk all n cells."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask: does the operation touch only the first cell?\n\n| Operation | Cells touched |\n|---|---|\n| prepend | 1 new |\n| head | 1 |\n| tail | 1 |\n| append | n copied |\n| last | n walked |\n\nThis is why functional code builds lists by prepending and, if order matters, reverses once at the end.",
+    "link": {
+      "title": "Persistent data structure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Persistent_data_structure"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Python, `t` is a tuple of 1,000,000 items. What does `t2 = t + (x,)` cost?",
+    "options": [
+      {
+        "text": "O(1), because tuples are immutable and share structure",
+        "explanation": "Being immutable doesn't imply structural sharing. CPython tuples are flat arrays, so concatenation builds a new one."
+      },
+      {
+        "text": "O(n) time and memory: it copies all 1,000,000 references into a new tuple",
+        "explanation": "Correct. Python's built-in immutables are not persistent structures. `pyrsistent`'s `pvector` would make this effectively constant."
+      },
+      {
+        "text": "O(log n), because Python uses path copying for tuples",
+        "explanation": "Path copying needs a tree. A tuple is a single contiguous block of references."
+      },
+      {
+        "text": "It raises an error because tuples can't be changed",
+        "explanation": "Concatenation doesn't change `t`; it creates a new tuple. That's allowed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A CPython tuple stores its items in one contiguous array.\n2. `t + (x,)` allocates a new array of 1,000,001 slots and copies every reference.\n3. With 8-byte pointers that's about 8 MB copied for one append.\n\nIn a loop of n appends that's O(n²). Immutable isn't the same as persistent: you also need a shared, tree-shaped layout.",
+    "link": {
+      "title": "pyrsistent — GitHub",
+      "url": "https://github.com/tobgu/pyrsistent"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You insert one key into a persistent, balanced binary search tree holding about 1,000,000 keys. Roughly how many new nodes are allocated?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "Only true for prepending to a list. In a tree, the new leaf's parent changes, so it must be copied, and so must its parent, up to the root."
+      },
+      {
+        "text": "About 20",
+        "explanation": "Correct. Path copying copies the nodes on the root-to-leaf path, about log₂(1,000,000) ≈ 20, plus the new leaf. Rebalancing touches only nodes near that path."
+      },
+      {
+        "text": "About 1,000",
+        "explanation": "√n has no role here. The number copied is the height of the tree."
+      },
+      {
+        "text": "About 1,000,000",
+        "explanation": "That's copying the whole tree. Path copying shares every subtree off the path."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A balanced tree with n keys has height about log₂ n.\n2. log₂(1,000,000) ≈ 19.9, so about 20 levels.\n3. Each node on the path needs a new copy with one child pointer changed.\n4. Everything else (roughly 999,980 nodes) is reused by pointer.\n\nSo each version costs about 20 nodes of extra memory, and old and new versions remain fully usable.",
+    "link": {
+      "title": "Persistent data structure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Persistent_data_structure"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`v1` is the 7-node tree from the lesson (root 50; 30 with children 20, 40; 70 with children 60, 80). After `v2 = insert(v1, 65)` with the path-copying `insert`, which are `True`? Select all that apply.",
+    "options": [
+      {
+        "text": "`v2.left is v1.left`",
+        "explanation": "Correct. 65 > 50, so insertion goes right; the left subtree (30, 20, 40) is reused by pointer."
+      },
+      {
+        "text": "`v2.right is v1.right`",
+        "explanation": "65 goes into 70's subtree, so node 70 is copied with a new left child. It's a different object."
+      },
+      {
+        "text": "`v2.right.right is v1.right.right`",
+        "explanation": "Correct. 65 < 70, so the path goes left at 70; the 80 node is shared."
+      },
+      {
+        "text": "`v2 is v1`",
+        "explanation": "The root is always on the path, so it's always copied when a new key is inserted."
+      },
+      {
+        "text": "`v2.left.left is v1.left.left`",
+        "explanation": "Correct. If the 30 subtree is shared, its child 20 is the same object too."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Trace the path for 65:\n\n```\n50: 65 > 50, go right\n70: 65 < 70, go left\n60: 65 > 60, go right\nNone: create 65\n```\n\nCopied: 50, 70, 60 (plus the new 65). Shared: 30 and everything under it, and 80.\n\nSo anything reached through `.left` from the root, and `.right.right`, is the same object in both versions.",
+    "link": {
+      "title": "Persistent data structure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Persistent_data_structure"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A persistent vector uses a 32-way trie (ignore the tail optimisation). How many levels does it need for 30,000 elements?",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "Two levels hold at most 32² = 1,024 elements, far fewer than 30,000."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. 32² = 1,024 is too few and 32³ = 32,768 is enough, so 3 levels."
+      },
+      {
+        "text": "5",
+        "explanation": "That's roughly log₁₀ or a mix-up with the 5 bits per level. Each level consumes 5 bits of the index; 15 bits cover 32,768 indices."
+      },
+      {
+        "text": "15",
+        "explanation": "15 is the number of index *bits* needed, not levels. Each level uses 5 of them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each level multiplies capacity by 32:\n\n| Levels | Capacity |\n|---|---|\n| 1 | 32 |\n| 2 | 1,024 |\n| 3 | 32,768 |\n\n30,000 ≤ 32,768, so 3 levels. Equivalently log₃₂(30,000) ≈ 2.97, rounded up to 3.\n\nIn bits: indices 0 to 29,999 need 15 bits, and 15 / 5 = 3 levels.",
+    "link": {
+      "title": "Data Structures — Clojure reference",
+      "url": "https://clojure.org/reference/data_structures"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You update one element of a persistent vector of about 1,000,000 elements (a 4-level, 32-way trie, 8-byte pointers). Roughly how much new memory is allocated, compared with copying a flat array of 1,000,000 pointers?",
+    "options": [
+      {
+        "text": "About 32 bytes versus 8 MB",
+        "explanation": "Only one slot changes, but whole nodes are copied, not single slots; each node is a 32-pointer array."
+      },
+      {
+        "text": "About 1 KB versus 8 MB",
+        "explanation": "Correct. 4 nodes on the path, each 32 pointers × 8 bytes = 256 bytes, so about 1,024 bytes. A full copy is 1,000,000 × 8 = 8 MB."
+      },
+      {
+        "text": "About 256 KB versus 8 MB",
+        "explanation": "That would be copying about a thousand nodes. Path copying copies only the 4 on the path."
+      },
+      {
+        "text": "8 MB either way",
+        "explanation": "Path copying shares every node off the path, so it doesn't copy the whole vector."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Depth: log₃₂(1,000,000) ≈ 4 levels.\n2. Each level on the path gets a fresh 32-slot array: 32 × 8 = 256 bytes.\n3. 4 × 256 = 1,024 bytes ≈ 1 KB (plus small per-object headers).\n4. A flat copy: 1,000,000 × 8 bytes = 8 MB.\n\nThat's roughly 8,000 times less. The trade-off is that a lookup does 4 dependent pointer loads instead of 1.",
+    "link": {
+      "title": "Data Structures — Clojure reference",
+      "url": "https://clojure.org/reference/data_structures"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Redux reducer does `state.items.push(item); return state;`. The store's state really does contain the new item, but components using `useSelector(s => s.items)` don't re-render. Why?",
+    "options": [
+      {
+        "text": "Redux batches updates and will re-render later",
+        "explanation": "Batching delays work but doesn't drop it. No later render happens, because no change is detected at all."
+      },
+      {
+        "text": "`useSelector` compares the selected value by reference; the mutated array is the same object, so it looks unchanged",
+        "explanation": "Correct. Change detection by reference equality only works if every change produces a new object. Mutating in place defeats it."
+      },
+      {
+        "text": "`push` doesn't work on arrays inside objects",
+        "explanation": "`push` worked; the state does contain the item. The problem is detecting that it changed."
+      },
+      {
+        "text": "Reducers must return `undefined` to trigger a re-render",
+        "explanation": "Returning `undefined` from a reducer is an error in Redux. It must return the next state."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before and after the action, `s.items` is the **same array object**.\n2. `useSelector` checks `prev === next`; that's `true`, so it concludes nothing changed.\n3. No re-render.\n\nThe fix is a persistent-style update that creates new objects along the path to the change and shares the rest:\n\n```javascript\nreturn { ...state,\n  items: [...state.items, item] };\n```\n\nOr use Immer (built into Redux Toolkit), which writes that for you from mutating-looking code.",
+    "link": {
+      "title": "Immer documentation",
+      "url": "https://immerjs.github.io/immer/"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Using the lesson's two-list queue, `q` has an empty `front` and 1,000 items in `back`. A program calls `pop(q)` five times, **each time on the same `q`** (say, five branches of a search). How many element copies do the reversals do in total?",
+    "options": [
+      {
+        "text": "About 1,000, since the reversal cost is amortised",
+        "explanation": "The amortised argument assumes each reversal happens once. Persistence lets you replay the expensive step from the same old version."
+      },
+      {
+        "text": "About 5,000",
+        "explanation": "Correct. Every `pop(q)` sees the same empty `front` and reverses all 1,000 items again: 5 × 1,000."
+      },
+      {
+        "text": "About 5, since each pop is O(1)",
+        "explanation": "Pop is O(1) only when `front` is non-empty. Here it's empty every time, because `q` itself never changes."
+      },
+      {
+        "text": "About 1,000,000, because each pop reverses n² items",
+        "explanation": "A single reverse is O(n), not O(n²): 1,000 copies each."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `pop(q)` finds `front` empty, so it reverses 1,000 items to make a new front.\n2. It returns a **new** queue; `q` is untouched (that's persistence).\n3. The next `pop(q)` sees the same empty `front` and does it again.\n4. 5 calls × 1,000 = 5,000 copies.\n\nUsed linearly (always popping from the latest version), the first pop pays 1,000 and the next ones are O(1). Okasaki's fix is to make the reversal a lazy, memoised thunk shared by all versions, so it's computed at most once.",
+    "link": {
+      "title": "Purely Functional Data Structures (thesis) — Chris Okasaki",
+      "url": "https://www.cs.cmu.edu/~rwh/students/okasaki.pdf"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A HAMT node has the bitmap `0b10110` (bit 0 is the rightmost) and a compact child array. A lookup's 5 hash bits select slot 4. Which array index holds that child?",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "That would be true in an uncompressed 32-slot array. The compact array only stores occupied slots, so you count set bits instead."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. Bits 1, 2 and 4 are set. Slots 1 and 2 come before slot 4, so the child is at array index 2."
+      },
+      {
+        "text": "3",
+        "explanation": "That's the total number of set bits. The index is the number of set bits *below* slot 4."
+      },
+      {
+        "text": "The child is absent",
+        "explanation": "Bit 4 is set (0b1_0110), so the slot is occupied. An absent slot would have its bit clear."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Bitmap `0b10110`: bits set at positions 1, 2, 4.\n2. Check bit 4 is set: yes, so a child exists.\n3. Mask off bits at or above 4: `0b10110 & 0b01111 = 0b00110`.\n4. `popcount(0b00110) = 2`, so it's array index 2.\n\n```\nslot:  4 3 2 1 0\nbit:   1 0 1 1 0\narray: [s1, s2, s4]\nindex:   0   1   2\n```\n\nCPUs have a single `popcount` instruction, which is why this compression costs almost nothing per level.",
+    "link": {
+      "title": "Hash array mapped trie — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hash_array_mapped_trie"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these uses of local mutation inside a persistent-data codebase are safe? Select all that apply.",
+    "options": [
+      {
+        "text": "Inside a function, build a 100,000-element Clojure vector with a transient and `conj!`, then call `persistent!` before returning it",
+        "explanation": "Correct. Nobody else can see the transient while it's being mutated, and `persistent!` freezes it in O(1)."
+      },
+      {
+        "text": "Mutating a vector that is already stored in an atom other threads read from",
+        "explanation": "Readers hold references to that value and assume it never changes. Mutating it breaks every one of them."
+      },
+      {
+        "text": "Using Immer's `produce` to push to a draft array in a reducer",
+        "explanation": "Correct. You mutate a draft proxy; Immer produces a new immutable object that shares untouched parts with the original."
+      },
+      {
+        "text": "Calling `persistent!` on a transient and then continuing to `conj!` onto the same transient",
+        "explanation": "After `persistent!` the transient is invalidated; Clojure throws if you keep using it, precisely because the frozen vector may share its nodes."
+      },
+      {
+        "text": "Batching updates with Immutable.js `withMutations` on a freshly created map",
+        "explanation": "Correct. The temporary mutable copy is private until `withMutations` returns the immutable result."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "The test for every case: **can anyone else hold a reference to the thing being mutated?**\n\n| Case | Shared? | Safe |\n|---|---|---|\n| transient, then `persistent!` | no | yes |\n| mutate value in atom | yes | no |\n| Immer draft | no | yes |\n| reuse after `persistent!` | yes | no |\n| `withMutations` | no | yes |\n\nPersistent structures rely on old versions never changing. Mutation is fine as long as no old version can observe it.",
+    "link": {
+      "title": "Transient Data Structures — Clojure reference",
+      "url": "https://clojure.org/reference/transients"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You build a list of n results in Haskell. Version A does `acc ++ [x]` for each item; version B does `x : acc` and calls `reverse` once at the end. What are their total costs?",
+    "options": [
+      {
+        "text": "Both O(n)",
+        "explanation": "`++` must copy its whole left argument, which is the growing accumulator, so A is not linear."
+      },
+      {
+        "text": "A is O(n²); B is O(n)",
+        "explanation": "Correct. Each append in A copies the accumulator (1 + 2 + ... + n cells), while each prepend in B is O(1) and the single reverse is O(n)."
+      },
+      {
+        "text": "A is O(n); B is O(n log n)",
+        "explanation": "Neither prepending nor reversing a list involves a log factor; B is linear."
+      },
+      {
+        "text": "A is O(n log n); B is O(n²)",
+        "explanation": "This is backwards. Prepending shares the old list; appending copies it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A: the k-th append copies the existing k - 1 cells:\n\n```\n0 + 1 + 2 + ... + (n - 1)\n= n(n - 1) / 2  ->  O(n²)\n```\n\nFor n = 100,000 that's about 5 billion cell copies.\n\nB: n prepends at O(1) each, plus one reverse at O(n): O(n) total, about 200,000 steps.\n\nIt's the cons list's cost table in action: prepend shares the tail, append copies everything before the end.",
+    "link": {
+      "title": "Persistent data structure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Persistent_data_structure"
+    }
+  }
+]

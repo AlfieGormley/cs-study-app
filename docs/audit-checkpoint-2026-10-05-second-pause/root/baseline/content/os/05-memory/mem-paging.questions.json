@@ -1,0 +1,375 @@
+[
+  {
+    "id": "mem-paging-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A system uses 4 KiB pages. The page table maps **VPN 0x5 to PFN 0x12**. What physical address does virtual address **0x5ABC** translate to?",
+    "options": [
+      {
+        "text": "0x5ABC",
+        "explanation": "This forgets to translate at all: the page number must be replaced by the frame number."
+      },
+      {
+        "text": "0x12ABC",
+        "explanation": "Correct. Offset = low 12 bits = 0xABC; VPN = 0x5 maps to PFN 0x12; physical = 0x12 followed by 0xABC."
+      },
+      {
+        "text": "0x17ABC",
+        "explanation": "This adds the PFN to the VPN (0x12 + 0x5 = 0x17). Paging *replaces* the page number; it does not add a base like base-and-bounds."
+      },
+      {
+        "text": "0x120ABC",
+        "explanation": "This shifts the PFN by 16 bits instead of 12. With 4 KiB pages the offset is 12 bits, i.e. exactly three hex digits."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 4 KiB = 2^12, so the offset is the low **12 bits**: three hex digits.\n2. 0x5ABC → VPN = 0x5, offset = 0xABC.\n3. Look up VPN 0x5 → PFN 0x12.\n4. Physical = (PFN << 12) | offset = 0x12000 | 0xABC = **0x12ABC**.\n\nShortcut: with 4 KiB pages, write the PFN and then append the last three hex digits of the virtual address.",
+    "link": {
+      "title": "OSTEP: Paging: Introduction (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A system uses **16 KiB** pages and 48-bit virtual addresses. How many bits of each virtual address form the page offset, and how many form the virtual page number?",
+    "options": [
+      {
+        "text": "12-bit offset, 36-bit VPN",
+        "explanation": "Those are the numbers for 4 KiB pages. A 16 KiB page needs 2 more offset bits."
+      },
+      {
+        "text": "16-bit offset, 32-bit VPN",
+        "explanation": "2^16 is 64 KiB, so this would be the split for 64 KiB pages."
+      },
+      {
+        "text": "14-bit offset, 34-bit VPN",
+        "explanation": "Correct. 16 KiB = 2^14 bytes, so 14 bits locate a byte within a page, leaving 48 − 14 = 34 bits of page number."
+      },
+      {
+        "text": "14-bit offset, 48-bit VPN",
+        "explanation": "The VPN is what is *left* after the offset: the two fields together make up the 48-bit address."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Offset bits = log2(page size). 16 KiB = 16 × 1024 = 16,384 = **2^14**, so 14 bits.\n2. VPN bits = address bits − offset bits = 48 − 14 = **34**.\n3. Sanity check: 2^34 pages × 2^14 bytes per page = 2^48 bytes, the whole address space.\n\nApple's M-series Macs use 16 KiB pages, so this is a real configuration.",
+    "link": {
+      "title": "OSTEP: Paging: Introduction (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A 32-bit system uses 4 KiB pages and a **single-level (flat)** page table with 4-byte entries. How large is each process's page table?",
+    "options": [
+      {
+        "text": "4 KiB",
+        "explanation": "That is one page, enough for 1,024 entries, which maps only 4 MiB of address space."
+      },
+      {
+        "text": "1 MiB",
+        "explanation": "This counts the number of entries (2^20) but forgets each entry is 4 bytes."
+      },
+      {
+        "text": "4 GiB",
+        "explanation": "That is the size of the whole 32-bit address space, not of the table describing it."
+      },
+      {
+        "text": "4 MiB",
+        "explanation": "Correct. 2^32 / 2^12 = 2^20 pages, each needing a 4-byte entry: 2^22 bytes = 4 MiB, even if the process uses almost none of it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Number of virtual pages = 2^32 / 2^12 = 2^20 = 1,048,576.\n2. A flat table needs one entry per page, used or not.\n3. Size = 2^20 × 4 bytes = 2^22 bytes = **4 MiB** per process.\n4. With 200 processes that is 800 MiB just for page tables, which is why even 32-bit x86 used a two-level table (a page directory of 1,024 entries pointing to page tables of 1,024 entries).",
+    "link": {
+      "title": "OSTEP: Paging: Introduction (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On x86-64 with 4-level paging, which table indices does the MMU use to translate virtual address **0x0000004020123456**?",
+    "options": [
+      {
+        "text": "PML4 0, PDPT 256, PD 256, PT 291, offset 0x456",
+        "explanation": "Correct. Shift and mask 9 bits at a time: bits 47–39 = 0, 38–30 = 256, 29–21 = 256, 20–12 = 291 (0x123), and the low 12 bits are 0x456."
+      },
+      {
+        "text": "PML4 0, PDPT 1, PD 1, PT 0x123, offset 0x456",
+        "explanation": "This reads the hex digits as if each level were a 4-bit or 8-bit field. Each level is 9 bits, which does not line up with hex digits."
+      },
+      {
+        "text": "PML4 1, PDPT 0, PD 256, PT 291, offset 0x456",
+        "explanation": "This assigns bit 38 to the PML4 field. The PML4 index is bits 47 to 39, all of which are 0 here."
+      },
+      {
+        "text": "PML4 0, PDPT 256, PD 256, PT 291, offset 0x3456",
+        "explanation": "The offset is only 12 bits (three hex digits); the 0x3 belongs to the PT index."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Do it with shifts:\n\n```\nva = 0x4020123456\noff  = va & 0xFFF          = 0x456\npt   = (va >> 12) & 0x1FF  = 0x123\n                           = 291\npd   = (va >> 21) & 0x1FF  = 256\npdpt = (va >> 30) & 0x1FF  = 256\npml4 = (va >> 39) & 0x1FF  = 0\n```\n\nCheck one: `0x4020123456 >> 30` = 0x100 = 256, and 256 & 511 = 256.\n\nOr think in binary: 0x40_2012_3456 has bit 38 set (giving PDPT 256, since 2^38 / 2^30 = 256) and bit 29 set (PD 2^29 / 2^21 = 256).",
+    "link": {
+      "title": "Page tables — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/mm/page_tables.html"
+    }
+  },
+  {
+    "id": "mem-paging-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A load instruction misses in the TLB on x86-64 with 4-level paging. Ignoring caches of page-table entries, how many memory accesses does the CPU make in total to complete that load?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "That would only be true on a TLB hit, when the translation is already cached."
+      },
+      {
+        "text": "4",
+        "explanation": "Four accesses are needed for the walk, but the load itself still has to read the data afterwards."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. One read from each of the PML4, PDPT, PD and PT tables, then the actual data access."
+      },
+      {
+        "text": "2",
+        "explanation": "That is the cost with a single-level page table: one PTE read plus the data."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The TLB misses, so the hardware page walker starts at CR3.\n2. Read the PML4 entry (access 1), the PDPT entry (2), the PD entry (3) and the PT entry (4).\n3. Now it has the frame number, so it performs the real load (5).\n4. That is 5× the work of a hit. Real CPUs soften this with paging-structure caches (which skip upper levels) and because page-table entries are often in the L1/L2 data cache, but the worst case is still several DRAM round trips.\n\nWith 5-level paging the count becomes 6.",
+    "link": {
+      "title": "OSTEP: TLBs (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-tlbs.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these accesses cause a page fault on x86-64? Select all that apply.",
+    "options": [
+      {
+        "text": "Reading a page whose PTE has the Present bit clear",
+        "explanation": "Correct. A non-present entry always faults; the kernel then decides whether to load the page or send SIGSEGV."
+      },
+      {
+        "text": "Writing to a page whose PTE has R/W clear",
+        "explanation": "Correct. Write-protection violations fault. Copy-on-write relies on exactly this."
+      },
+      {
+        "text": "User-mode code reading a page whose PTE has U/S clear",
+        "explanation": "Correct. Supervisor-only pages fault from user mode; this protects the kernel's mappings."
+      },
+      {
+        "text": "Reading a page whose Dirty bit is clear",
+        "explanation": "Wrong. D = 0 just means the page hasn't been written since the bit was last cleared. The CPU sets it on the next write, with no fault."
+      },
+      {
+        "text": "Executing code from a page with the NX bit set",
+        "explanation": "Correct. Instruction fetches from no-execute pages fault, which blocks code injected into data or the stack."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Separate the bits the OS sets for **protection** from the bits the CPU sets for **bookkeeping**:\n\n| Bit | Who sets | Faults? |\n|---|---|---|\n| P | OS | if 0 |\n| R/W | OS | write if 0 |\n| U/S | OS | user if 0 |\n| NX | OS | fetch if 1 |\n| A, D | CPU | never |\n\nThe accessed and dirty bits are set silently by the hardware during the walk. The OS clears them periodically to learn which pages are being used and which need writing back.",
+    "link": {
+      "title": "Page fault — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_fault"
+    }
+  },
+  {
+    "id": "mem-paging-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A process on x86-64 maps and touches exactly **1 GiB** of contiguous, 1 GiB-aligned virtual memory using 4 KiB pages. Approximately how much memory do its page tables need for that region?",
+    "options": [
+      {
+        "text": "About 4 KiB",
+        "explanation": "That is a single PT, which maps only 2 MiB."
+      },
+      {
+        "text": "About 2 MiB",
+        "explanation": "Correct. 1 GiB / 2 MiB = 512 PTs at 4 KiB each = 2 MiB, plus one PD, one PDPT and the PML4 (12 KiB): about 2 MiB."
+      },
+      {
+        "text": "About 512 MiB",
+        "explanation": "This seems to compute one 4 KiB table per 8 KiB of memory. Each PT holds 512 entries and maps 2 MiB."
+      },
+      {
+        "text": "About 2 GiB",
+        "explanation": "Page tables are about 0.2% of the memory mapped with 4 KiB pages, not twice as large."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each PTE maps 4 KiB. One PT has 512 entries, so it maps 512 × 4 KiB = **2 MiB**.\n2. Number of PTs for 1 GiB: 1,024 MiB / 2 MiB = **512**.\n3. PT memory: 512 × 4 KiB = **2 MiB**.\n4. Upper levels: one PD (its 512 entries point to those 512 PTs), one PDPT entry, one PML4 entry. About 3 more pages = 12 KiB.\n5. Total ≈ **2 MiB**, about 0.2% overhead.\n\nWith 2 MiB huge pages, the PTs vanish: just one PD of 4 KiB. With a 1 GiB page, a single PDPT entry.",
+    "link": {
+      "title": "OSTEP: Paging: Smaller Tables (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A process uses a **2 MiB huge page**. The PD entry for virtual address **0x7f0012345678** has PS = 1 and points to the 2 MiB frame starting at physical **0x40000000**. What is the physical address?",
+    "options": [
+      {
+        "text": "0x40000678",
+        "explanation": "This uses a 12-bit offset as for a 4 KiB page. With a 2 MiB page the offset is 21 bits."
+      },
+      {
+        "text": "0x40345678",
+        "explanation": "This keeps 24 bits (six hex digits) as the offset. 21 bits is 0x1FFFFF, so bit 21 (the 0x2 in 0x345678) belongs to the PD index."
+      },
+      {
+        "text": "0x7f0012345678",
+        "explanation": "The address still has to be translated; huge pages change the size of the page, not whether translation happens."
+      },
+      {
+        "text": "0x40145678",
+        "explanation": "Correct. A 2 MiB page has a 21-bit offset: 0x7f0012345678 & 0x1FFFFF = 0x145678. Add it to the frame base: 0x40145678."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. 2 MiB = 2^21, so the offset is the low **21 bits**: mask with `0x1FFFFF`.\n2. The low five hex digits, 0x45678, are bits 0 to 19. Bit 20 is the lowest bit of the next digit, 0x3 = `0011`. Keep that bit (1) and drop the rest (bit 21 belongs to the PD index), so the sixth digit becomes 0x1.\n\n```\n0x345678 & 0x1FFFFF = 0x145678\n```\n\n3. The walk stops at the PD (PS = 1), so there is no PT lookup.\n4. Physical = 0x40000000 + 0x145678 = **0x40145678**.",
+    "link": {
+      "title": "Transparent Hugepage Support — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html"
+    }
+  },
+  {
+    "id": "mem-paging-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Suppose an architecture uses **64 KiB pages** and 8-byte page table entries, with each table occupying exactly one page. How many levels are needed to translate a **48-bit** virtual address?",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "Two levels of 13 bits plus a 16-bit offset covers only 42 bits, 6 short of 48."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. Offset = 16 bits, each table has 65,536 / 8 = 8,192 = 2^13 entries, so each level covers 13 bits. 48 − 16 = 32 bits need ceil(32 / 13) = 3 levels."
+      },
+      {
+        "text": "4",
+        "explanation": "Four levels is the x86-64 answer for 4 KiB pages (9 bits per level). Larger pages mean both a bigger offset and more bits per level."
+      },
+      {
+        "text": "5",
+        "explanation": "Five levels is x86-64 with 57-bit addresses and 4 KiB pages."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Offset bits = log2(64 KiB) = **16**.\n2. Entries per table = page size / entry size = 65,536 / 8 = 8,192 = 2^13, so each level resolves **13 bits**.\n3. Bits to translate = 48 − 16 = **32**.\n4. Levels = ceil(32 / 13) = ceil(2.46) = **3**. The top level is only partly used (32 − 26 = 6 bits).\n\nThis matches ARM64 with the 64 KiB granule, which uses 3 levels for 48-bit addresses (and 2 levels for 42-bit). Bigger pages mean shallower trees and fewer memory accesses per TLB miss, at the cost of more internal fragmentation.",
+    "link": {
+      "title": "OSTEP: Paging: Smaller Tables (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about multi-level page tables are true? Select all that apply.",
+    "options": [
+      {
+        "text": "They save memory when the address space is sparse, because unused regions need no lower-level tables",
+        "explanation": "Correct. A not-present upper entry stands in for a whole 512 GiB, 1 GiB or 2 MiB region."
+      },
+      {
+        "text": "A TLB miss costs more memory accesses than with a flat table",
+        "explanation": "Correct. A flat table needs one PTE read; a 4-level tree needs four. That is the price of the space saving."
+      },
+      {
+        "text": "If every virtual page were mapped, the tree would use slightly more memory than a flat table",
+        "explanation": "Correct. The leaf tables equal the flat table in total, and the upper levels add a little on top."
+      },
+      {
+        "text": "They eliminate internal fragmentation",
+        "explanation": "Wrong. Internal fragmentation comes from rounding allocations up to whole pages, which is unaffected by how the page table is organised."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think of the tree as a time-for-space trade.\n\n- **Space**: memory used scales with what is *mapped*, not the size of the address space. A 28 KiB tree can describe a small process in a 256 TiB space.\n- **Time**: each level is another dependent memory read on a TLB miss (4 on x86-64, 5 with LA57).\n- **Dense worst case**: if all 2^36 pages were mapped, the leaf PTs alone would equal the flat table (512 GiB), plus about 1/512 extra for the PDs, and so on. Nobody does this, so in practice the tree wins enormously.\n- **Fragmentation**: page granularity still rounds a 1-byte mapping up to 4 KiB. The tree changes how mappings are stored, not how big a page is.",
+    "link": {
+      "title": "OSTEP: Paging: Smaller Tables (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "50 PostgreSQL backend processes each map the same **64 GiB** shared buffer pool. With 4 KiB pages, roughly how much memory do all their page tables use for that region? And with 2 MiB huge pages?",
+    "options": [
+      {
+        "text": "About 128 MiB with 4 KiB pages; about 256 KiB with huge pages",
+        "explanation": "These are the figures for one process. Each process has its own page tables, even for a shared region, so multiply by 50."
+      },
+      {
+        "text": "About 6.4 GiB with 4 KiB pages; about 12.5 MiB with huge pages",
+        "explanation": "Correct. 64 GiB / 2 MiB = 32,768 PTs × 4 KiB = 128 MiB per process, × 50 = 6,400 MiB. With 2 MiB pages, 64 PDs × 4 KiB = 256 KiB per process, × 50 = 12.5 MiB."
+      },
+      {
+        "text": "Nothing extra: shared memory shares its page tables too",
+        "explanation": "On x86-64 Linux, each process normally has its own page-table pages even for shared mappings. Sharing the frames does not share the tables."
+      },
+      {
+        "text": "About 64 GiB, the same as the data",
+        "explanation": "Page tables cost about 0.2% of mapped memory with 4 KiB pages, not 100%."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "**4 KiB pages, per process**:\n\n1. One PT maps 2 MiB. 64 GiB / 2 MiB = 32,768 PTs.\n2. 32,768 × 4 KiB = **128 MiB** per process.\n3. × 50 processes = 6,400 MiB ≈ **6.4 GiB**.\n\n**2 MiB pages, per process**:\n\n1. PD entries point straight at 2 MiB frames, so there are no PTs.\n2. One PD covers 1 GiB, so 64 PDs × 4 KiB = **256 KiB**.\n3. × 50 = 12,800 KiB = **12.5 MiB**.\n\nThis is a real reason the PostgreSQL docs recommend `huge_pages` for large `shared_buffers`: on a busy server, page tables for the shared buffers can otherwise use gigabytes (visible as `PageTables` in `/proc/meminfo`).",
+    "link": {
+      "title": "HugeTLB pages — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/mm/hugetlbpage.html"
+    }
+  },
+  {
+    "id": "mem-paging-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The scheduler switches the CPU from process A to process B. What does the kernel do to switch address spaces on x86-64?",
+    "options": [
+      {
+        "text": "Copies B's page tables into a fixed kernel location that the MMU always reads",
+        "explanation": "There is no fixed location: the MMU reads whatever tree CR3 points to, so copying would be pointless and very slow."
+      },
+      {
+        "text": "Rewrites every PTE in the shared page table to point to B's frames",
+        "explanation": "Each process has its own tree. Rewriting entries would cost time proportional to B's memory on every switch."
+      },
+      {
+        "text": "Swaps A's memory out to disk and B's back in",
+        "explanation": "Both processes can be resident at once; paging to disk is unrelated to a context switch."
+      },
+      {
+        "text": "Loads the physical address of B's top-level table into CR3",
+        "explanation": "Correct. One register write switches the whole address space. Without PCIDs this also flushes non-global TLB entries; lesson 3 covers how PCIDs avoid that."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Every process has its own page-table tree in kernel memory, built up as it maps memory.\n2. The MMU starts every walk at the table whose physical address is in **CR3**.\n3. So switching address spaces is just `mov B_pgd_phys, %cr3`.\n4. Side effect: cached translations in the TLB belong to A. Traditionally the CPU flushes non-global entries on a CR3 write. With **PCIDs**, CR3 also carries a 12-bit address-space tag, so A's entries can stay in the TLB without being confused with B's.\n\nThreads of the same process share one tree, so switching between them needs no CR3 change at all.",
+    "link": {
+      "title": "Page tables — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/mm/page_tables.html"
+    }
+  }
+]

@@ -1,0 +1,387 @@
+[
+  {
+    "id": "cs2-job-scheduler-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A worker finishes sending a customer's weekly report email, then crashes before acknowledging the run. Its lease expires and the run is redelivered. This is expected behaviour of which delivery guarantee, and what must the job do about it?",
+    "options": [
+      {
+        "text": "At-most-once. The job needn't do anything, because it will never run twice",
+        "explanation": "Wrong. At-most-once systems ack *before* doing the work, so a crash loses the run rather than repeating it. Redelivery after a crash is the hallmark of at-least-once."
+      },
+      {
+        "text": "At-least-once. The fix is to make the lease timeout infinite",
+        "explanation": "Wrong. With an infinite lease, a crashed worker's run would never be retried, which turns the system into at-most-once and silently loses runs."
+      },
+      {
+        "text": "Exactly-once. The scheduler guarantees the email is sent once, so redelivery is a bug",
+        "explanation": "Wrong. No scheduler can guarantee exactly-once *execution* of external side effects: a worker can always die after acting but before reporting. Exactly-once is only achievable as idempotent *effects*."
+      },
+      {
+        "text": "At-least-once. The job should make its side effects idempotent, for example by recording the run id `(job_id, scheduled_at)` with the email send and skipping if it's already sent",
+        "explanation": "Correct. Acking after the work means a crash between work and ack causes a re-run. Idempotency keyed on the run id turns 'executed twice' into 'had its effect once'."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Map out where the ack sits:\n\n| Ack timing | Crash window | Guarantee |\n|---|---|---|\n| ack, then work | after ack | at-most-once (lost) |\n| work, then ack | after work | at-least-once (dup) |\n\nThe scheduler chose 'work, then ack', so duplicates are possible. Make the job idempotent:\n\n```\nrun_id = job_id + '@' + scheduled_at\nif not sent_log.insert(run_id):\n    return   # already done\nsend_email(...)\n```\n\nOr pass `run_id` as the email provider's idempotency key, if it supports one.",
+    "link": {
+      "title": "Amazon SQS visibility timeout (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You host 100 M recurring schedules averaging one run every 3 hours. Roughly what is the average firing rate, and what should you size for?",
+    "options": [
+      {
+        "text": "About 930 runs/s. Size for that average",
+        "explanation": "Wrong on both counts. 100 M / 10,800 s is about 9,300/s, not 930. And sizing only for the average ignores the top-of-hour and top-of-minute spikes created by cron's round-number bias."
+      },
+      {
+        "text": "About 9,300 runs/s on average, but size for top-of-hour spikes that can be tens to hundreds of times higher in the first seconds of each hour",
+        "explanation": "Correct. 100e6 / (3 x 3,600) = 9,259/s. Because humans write `0 * * * *` and `0 0 * * *`, firings cluster at :00. Design for that burst, or spread it with jitter."
+      },
+      {
+        "text": "About 28,000 runs/s, because each job runs three times an hour",
+        "explanation": "Wrong. 'Once every 3 hours' is 1/3 of a run per hour, not 3 runs per hour. That inverts the frequency."
+      },
+      {
+        "text": "About 1.2 M runs/s, since all jobs could fire at once",
+        "explanation": "Wrong. It's a theoretical worst case, but schedules aren't all identical. Real peaks are tens to hundreds of thousands per second, not every job at once."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 3 hours = 10,800 s.\n2. Each schedule fires 1/10,800 times per second.\n3. 100,000,000 / 10,800 = **~9,300 runs/s** average.\n\nNow the spike. Suppose 10 M of those jobs are hourly, and 20% of them use minute 0:\n\n- 2 M runs due at hh:00:00, about **215x** the per-second average.\n- Even spread over the first 10 s, that's **200,000 runs/s**, about 22x average.\n\nMitigations:\n1. **Read-ahead**: claim jobs due in the next 30 s early, so dispatch is spread out.\n2. **Jitter**: `offset = hash(job_id) % window` for tenants who opt into 'hourly, anywhere in the first 5 min'.\n3. **Queue buffering**: the work queue absorbs the burst, and workers drain it at their own pace.",
+    "link": {
+      "title": "Executing cron scripts reliably at scale (Slack Engineering)",
+      "url": "https://slack.engineering/executing-cron-scripts-reliably-at-scale/"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Scheduler node A owns shard 17 via a 10 s etcd lease. A hits a 20 s GC pause, the lease expires, and node B takes over shard 17. A wakes up and, unaware, fires the 09:00 runs for shard 17, which B has already fired. Which mechanism stops this causing duplicate side effects?",
+    "options": [
+      {
+        "text": "A longer lease TTL, such as 60 s",
+        "explanation": "Wrong. It only shifts the threshold. A 61 s pause (or a VM migration) causes the same problem, and longer leases slow failover after real crashes."
+      },
+      {
+        "text": "Checking `if lease.is_valid()` before each write",
+        "explanation": "Wrong. The check and the write aren't atomic. A can check, pause again, then write. Time-based leases can't be made safe by the holder checking its own clock."
+      },
+      {
+        "text": "Fencing tokens (writes carry the lease revision, and the store rejects stale ones), plus a unique `(job_id, scheduled_at)` key so a duplicate run insert fails",
+        "explanation": "Correct. The store, not the client, enforces ordering. A's token is lower than B's, so its writes are rejected. And even without that, the second `INSERT` of the same run key fails, so no duplicate run is enqueued."
+      },
+      {
+        "text": "Using Redis Redlock instead of etcd",
+        "explanation": "Wrong. Redlock has the same fundamental problem: a paused client can't know its lock expired. Without fencing tokens, it's no safer, which was Martin Kleppmann's argument in his critique of Redlock."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Timeline:\n\n```\nt=0   A gets lease, token=41\nt=2   A pauses (GC)\nt=10  lease expires\nt=11  B gets lease, token=42\nt=12  B inserts run(j9, 09:00) ok\nt=22  A wakes, tries run(j9, 09:00)\n```\n\nTwo independent guards:\n1. **Fencing**: the job store has seen token 42 for shard 17, and A's write carries 41, so it's **rejected**.\n2. **Idempotent key**: `INSERT runs(j9, 09:00)` hits the primary key and does nothing (`ON CONFLICT DO NOTHING`).\n\nThe principle: safety must be enforced by the **resource being protected**, because a client can never be sure its lease is still valid.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Three scheduler processes poll the same PostgreSQL shard for due jobs with `SELECT ... WHERE next_run_at <= now() FOR UPDATE`. Throughput is poor: two processes are usually blocked waiting. What one-word change to the query helps most?",
+    "options": [
+      {
+        "text": "`SKIP LOCKED`",
+        "explanation": "Correct. `FOR UPDATE SKIP LOCKED` returns only rows not locked by another transaction, so the three pollers naturally split the due jobs among themselves without blocking. It's the standard Postgres and MySQL 8 queue-claiming idiom."
+      },
+      {
+        "text": "`NOWAIT`",
+        "explanation": "Wrong. `NOWAIT` makes the query *error* immediately if any target row is locked. The pollers would mostly get errors and retry, rather than taking other free rows."
+      },
+      {
+        "text": "`DISTINCT`",
+        "explanation": "Wrong. Removing duplicate result rows has nothing to do with lock contention, and the rows are already unique by job_id."
+      },
+      {
+        "text": "`SERIALIZABLE`",
+        "explanation": "Wrong. Raising the isolation level adds more conflict detection and serialisation failures. It makes contention worse, not better."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Without SKIP LOCKED:\n\n1. Poller 1 locks the first 500 due rows.\n2. Pollers 2 and 3 run the same query, reach row 1, and **block** until poller 1 commits.\n3. Effective parallelism is 1.\n\nWith `FOR UPDATE SKIP LOCKED LIMIT 500`:\n\n1. Poller 1 locks rows 1–500.\n2. Poller 2 skips them and locks 501–1,000.\n3. Poller 3 takes 1,001–1,500.\n\nAll three run in parallel. And because the claim, the run insert and the `next_run_at` advance happen in one transaction, a crash just releases the locks, and another poller picks up the rows on its next pass.",
+    "link": {
+      "title": "Explicit locking (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A customer schedules `30 1 * * *` (01:30 daily) in `Europe/London`. Which situations must your scheduler have an explicit, documented policy for? Select all that apply.",
+    "options": [
+      {
+        "text": "The last Sunday in March, when 01:30 local time doesn't exist",
+        "explanation": "Correct. UK clocks jump from 01:00 GMT straight to 02:00 BST, so local times in [01:00, 02:00) never happen that day. Without a policy (skip, or fire at the first valid instant), the job silently doesn't run, or the library throws."
+      },
+      {
+        "text": "The last Sunday in October, when 01:30 local time occurs twice",
+        "explanation": "Correct. Clocks go back from 02:00 BST to 01:00 GMT, so 01:00–02:00 happens twice. Without a 'first occurrence only' rule, keyed on the UTC instant, the job fires twice."
+      },
+      {
+        "text": "The scheduler was down at the scheduled time: fire late or skip?",
+        "explanation": "Correct. This is the missed-run policy (Kubernetes' `startingDeadlineSeconds`). Without it, an outage either silently drops runs or floods the system with catch-ups."
+      },
+      {
+        "text": "The previous run is still executing when the next is due",
+        "explanation": "Correct. That needs a concurrency policy (Allow, Forbid or Replace, in Kubernetes terms). Long-running daily jobs overlapping themselves is a common source of corruption."
+      },
+      {
+        "text": "Storing the schedule as a fixed UTC offset (+01:00) so DST never matters",
+        "explanation": "Wrong. A fixed offset is *incorrect* for half the year. The customer wants 02:30 London time, which is UTC+0 in winter and UTC+1 in summer. Store the IANA zone name and compute each occurrence."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Treat cron as a function: `next(expr, zone, after) -> instant`.\n\n1. **Gaps** (spring forward): a local time that doesn't exist. Common policies are to skip, or to fire at the first valid instant after the gap.\n2. **Folds** (fall back): a local time that exists twice. Fire on the first occurrence only, which needs the UTC instant stored in the run key.\n3. **Missed runs**: `if now - scheduled > deadline: skip, else fire`, and cap catch-up at one run.\n4. **Overlap**: check for an active run of this job before enqueueing (Forbid), or cancel it (Replace).\n\nAlways keep the **IANA zone** (`Europe/London`) and let a timezone library apply the rules. Offsets change with DST, and occasionally with legislation.",
+    "link": {
+      "title": "CronJob (Kubernetes docs)",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to support one-off jobs delayed anywhere from 1 second to 1 year, at about 50,000 new delayed jobs a second. Which design is most appropriate?",
+    "options": [
+      {
+        "text": "Put every job straight into SQS with its full delay",
+        "explanation": "Wrong. SQS message delays max out at 15 minutes, so anything longer can't be expressed. A year-long delay needs durable storage outside the queue."
+      },
+      {
+        "text": "A single Redis sorted set scored by due time, holding all jobs",
+        "explanation": "Wrong at this scale. 50 k/s x up to a year of delay is about 1.6 trillion entries, far more than RAM. And a single sorted set is a hot key with asynchronous-replication loss risk on failover."
+      },
+      {
+        "text": "A tiered design: store far-future jobs in the sharded job store (indexed by due time, or in time buckets). A mover promotes jobs due within the next few minutes into an in-memory timing wheel or a short-delay queue, which fires them precisely",
+        "explanation": "Correct. Durable storage holds the long tail cheaply, and the near-future window is small enough for O(1) in-memory timers. If a node fails, its window is rebuilt from the store. This is how most large delayed-job systems are built."
+      },
+      {
+        "text": "One sleeping thread per job",
+        "explanation": "Wrong. Millions of sleeping threads exhaust memory, and every job is lost on restart. There's no durability at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Size the problem first: 50,000/s x 86,400 = **4.3 B new jobs a day**. Anything in RAM must be limited to a near-future window.\n\nTiered design:\n\n```\n[job store, by due bucket]\n  (durable, cheap)\n        | mover: every 30 s, load\n        | jobs due in next 5 min\n        v\n[timing wheel per shard]\n  (RAM, O(1))\n        | on tick\n        v\n[work queue] -> workers\n```\n\nWindow size: if 9,000 jobs/s come due on average, 5 min x 9,000 = 2.7 M entries per cluster, about 270 MB at 100 B each. That fits in RAM easily, split across shards.\n\nFailure: a node dies, a new owner takes the shard lease and reloads its 5-minute window from the store. Unique run keys make any reloaded duplicates harmless.",
+    "link": {
+      "title": "Amazon SQS delay queues (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-delay-queues.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your scheduler records a run and enqueues it like this: (1) `INSERT runs ...; UPDATE jobs SET next_run_at ...; COMMIT;` then (2) `kafka.send(run)`. Occasionally a run is recorded as QUEUED but never executes. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Kafka loses messages. Switch to RabbitMQ",
+        "explanation": "Wrong. Kafka with acks=all is durable. The message here was never sent, because the process died between the commit and `send`. A different broker has the same gap."
+      },
+      {
+        "text": "Wrap both in a distributed two-phase commit across Postgres and Kafka",
+        "explanation": "Wrong in practice. Kafka doesn't take part in XA transactions with Postgres, and 2PC adds blocking failure modes. The outbox pattern gets the same effect using only a local transaction."
+      },
+      {
+        "text": "Send to Kafka first, then commit",
+        "explanation": "Wrong. It just flips the failure: a crash after send but before commit leaves a run executing with no record and `next_run_at` not advanced, so it fires again next poll."
+      },
+      {
+        "text": "The process can crash after the commit but before `kafka.send`, a dual-write gap. Use the transactional outbox: insert an outbox row in the same transaction, and have a relay publish outbox rows to Kafka and mark them sent",
+        "explanation": "Correct. The outbox makes 'recorded' and 'will be published' atomic. The relay may publish twice after a crash (at-least-once), which the idempotent run id already handles."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The bug is a **dual write**: two systems updated without a shared transaction.\n\n```\nCOMMIT        <- durable\n   X crash\nkafka.send()  <- never happens\n```\n\nOutbox fix:\n\n```\nBEGIN;\n INSERT runs(...);\n UPDATE jobs SET next_run_at=...;\n INSERT outbox(run_id, payload);\nCOMMIT;\n\n-- relay loop (or Debezium CDC)\nSELECT * FROM outbox WHERE sent=false\n  ORDER BY id LIMIT 1000;\nkafka.send(...)\nUPDATE outbox SET sent=true\n```\n\nIf the relay crashes after send but before marking sent, it re-sends. The consumer sees the same `run_id` twice and dedups it. The end result is at-least-once publication, which is exactly the guarantee you designed for.",
+    "link": {
+      "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
+      "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team wants to send a reminder 3 days after sign-up, and plans to do it by sending an SQS message with `DelaySeconds` set to 259,200. What happens, and what's a better design?",
+    "options": [
+      {
+        "text": "It works. SQS holds the message invisibly for 3 days and then delivers it",
+        "explanation": "Wrong. SQS delay queues and message timers max out at 15 minutes (900 seconds). A 3-day delay is rejected."
+      },
+      {
+        "text": "The call fails because the maximum delay is 15 minutes. Store the reminder in the durable job store (or a managed scheduler such as EventBridge Scheduler) and promote it into a short-delay queue when it's close to due",
+        "explanation": "Correct. The tiered pattern keeps long waits in cheap, durable storage and uses the queue only for the last few minutes. AWS itself recommends EventBridge Scheduler for longer delays."
+      },
+      {
+        "text": "Use the visibility timeout instead, which can hide a message for up to 3 days",
+        "explanation": "Wrong. The visibility timeout applies after a consumer receives a message, and its maximum is 12 hours. It's a processing lease, not a scheduling tool."
+      },
+      {
+        "text": "Chain 288 messages of 15 minutes each, re-enqueuing on every delivery",
+        "explanation": "It can be made to work, but it costs 288 sends and receives per reminder and multiplies the chance of a lost hop. A durable store plus a mover is simpler and cheaper."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Check the limit first:\n\n```\n3 days = 3 x 86,400 = 259,200 s\nSQS max delay      =     900 s\n```\n\nThe request is about 288x over the limit.\n\nThe tiered design:\n\n1. Write `(job_id, due_at)` to the job store, indexed or bucketed by due time.\n2. A mover scans for jobs due in the next few minutes.\n3. It sends each one to SQS with `DelaySeconds = due_at - now` (at most 900).\n4. Workers consume as normal, using the run id as an idempotency key.\n\nThe store holds months of future work cheaply. The queue only ever holds the next few minutes.",
+    "link": {
+      "title": "Amazon SQS visibility timeout (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're running a report every 5 minutes as a Kubernetes CronJob, and runs sometimes take 8 minutes. Which statements about CronJob behaviour are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "The default policy is `Allow`, so overlapping runs execute concurrently unless you change it",
+        "explanation": "Correct. Allow is the default, so an 8-minute job on a 5-minute schedule will overlap with the next run."
+      },
+      {
+        "text": "`startingDeadlineSeconds` sets the maximum time a Job may run before it is killed",
+        "explanation": "Wrong. It's the deadline for *starting* a late run. Past it, that occurrence is skipped. Limiting run time is `activeDeadlineSeconds` on the Job."
+      },
+      {
+        "text": "With `concurrencyPolicy: Replace`, the running Job is replaced by the new one",
+        "explanation": "Correct. The old Job is cancelled, which suits work where only the latest result matters."
+      },
+      {
+        "text": "CronJob guarantees each scheduled time produces exactly one Job",
+        "explanation": "Wrong. The docs warn that a CronJob may occasionally create two Jobs, or none, for one schedule, so Jobs should be idempotent."
+      },
+      {
+        "text": "With `concurrencyPolicy: Forbid`, a run that comes due while the previous one is still going is skipped",
+        "explanation": "Correct. Forbid never runs two Jobs from the same CronJob at once. The overlapping run is skipped, not queued."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Lay the runs on a timeline (each takes 8 min):\n\n```\n:00 run A starts (ends :08)\n:05 run B due -> A still running\n:10 run C due -> A finished\n```\n\nWhat happens at :05 for each policy:\n\n| Policy | At :05 |\n|---|---|\n| Allow (default) | B runs alongside A |\n| Forbid | B skipped |\n| Replace | A cancelled, B starts |\n\nAnd regardless of policy, Kubernetes describes CronJob scheduling as approximate: rarely two Jobs, rarely none. That's the same at-least-once reality as the lesson's own scheduler, and the answer is the same: idempotent jobs.",
+    "link": {
+      "title": "CronJob (Kubernetes docs)",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "2 M hourly jobs opt in to 'any time in the first 5 minutes'. You spread them with `offset = hash(job_id) % 300` seconds. A colleague suggests `offset = random(0, 300)` on each run instead. Why is the hash better?",
+    "options": [
+      {
+        "text": "The hash spreads the jobs more evenly than a random number",
+        "explanation": "Wrong. Both spread about 6,700 jobs per second over the window. The difference is what happens to each job from run to run."
+      },
+      {
+        "text": "The hash gives each job the same offset every hour, so its runs stay exactly an hour apart. A random offset could make two runs 55 or 65 minutes apart",
+        "explanation": "Correct. Deterministic jitter spreads the *fleet* while keeping each *job's* cadence regular, which is what tenants expect from 'hourly'."
+      },
+      {
+        "text": "Random numbers are too slow to generate at 2 M per hour",
+        "explanation": "Wrong. Generating 2 M random numbers is trivial. The concern is behaviour, not cost."
+      },
+      {
+        "text": "The hash avoids the need for a `(job_id, scheduled_at)` run key",
+        "explanation": "Wrong. You still need the run key for dedup. Jitter only changes *when* a run fires."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "First, check the spreading:\n\n```\n2,000,000 jobs / 300 s\n  = ~6,700 runs/s\n```\n\ninstead of 2 M in one second. Either method achieves that.\n\nNow follow one job over two hours:\n\n| Method | 09:xx | 10:xx | Gap |\n|---|---|---|---|\n| hash | 09:03:17 | 10:03:17 | 60 min |\n| random | 09:00:20 | 10:04:50 | 64.5 min |\n\nWith random jitter, a job can run twice in 55 minutes or wait 65, which surprises anyone using 'hourly' for rate limits or billing. A stable hash is predictable for each tenant and still smooth for the fleet.",
+    "link": {
+      "title": "Executing cron scripts reliably at scale (Slack Engineering)",
+      "url": "https://slack.engineering/executing-cron-scripts-reliably-at-scale/"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A tenant's webhook endpoint goes down for 10 minutes. 100,000 runs fail, and each is retried every 30 seconds exactly. When the endpoint recovers, it immediately falls over again. What retry policy fixes this?",
+    "options": [
+      {
+        "text": "Retry every 5 seconds instead, so runs complete sooner after recovery",
+        "explanation": "Wrong. Shorter fixed intervals make the synchronised waves bigger and more frequent."
+      },
+      {
+        "text": "Exponential backoff with random jitter, a cap on the delay, and a dead-letter queue after a maximum number of attempts",
+        "explanation": "Correct. Exponential growth reduces the total retry rate, jitter breaks up the synchronised waves, and the DLQ stops runs retrying forever."
+      },
+      {
+        "text": "Retry with exponential backoff but no jitter",
+        "explanation": "Better than fixed intervals, but runs that failed together still retry together at 1 s, 2 s, 4 s and so on. Recovery still meets synchronised spikes."
+      },
+      {
+        "text": "Disable retries for webhook targets",
+        "explanation": "Wrong. That breaks the at-least-once promise: every run during the outage is silently lost."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Why fixed 30 s retries hurt:\n\n```\n100,000 runs fail within seconds\n-> 100,000 retries at t+30 s\n-> 100,000 retries at t+60 s ...\n```\n\nThe endpoint sees a wall of 100,000 requests every 30 s. When it recovers, the next wall knocks it over again.\n\nWith 'full jitter', each retry waits `random(0, min(cap, base x 2^attempt))`:\n\n| Attempt | Window |\n|---|---|\n| 1 | 0–2 s |\n| 4 | 0–16 s |\n| 8 | 0–256 s |\n| 10+ | 0–600 s (cap) |\n\nBy the time the endpoint recovers, the retries are spread over minutes, so it sees a few hundred a second rather than a wall. After, say, 12 attempts, park the run in the DLQ and alert the tenant.",
+    "link": {
+      "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
+      "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "One tenant schedules 1 M jobs for exactly midnight UTC. Other tenants' midnight jobs now start 20 minutes late. Which changes would stop one tenant starving the others? Select all that apply.",
+    "options": [
+      {
+        "text": "One bigger shared FIFO queue",
+        "explanation": "Wrong. A FIFO queue serves work in arrival order, so the million jobs that arrived first still sit in front of everyone else's."
+      },
+      {
+        "text": "Per-tenant quotas on firings per second and concurrent runs",
+        "explanation": "Correct. Quotas cap how much shared capacity one tenant can claim at once. The excess waits in that tenant's own backlog."
+      },
+      {
+        "text": "Dedicated worker pools for very heavy tenants or job types",
+        "explanation": "Correct. Isolation means the heavy tenant's load lands on capacity it pays for, not on the shared pool."
+      },
+      {
+        "text": "Raise the heavy tenant's priority so its jobs clear faster",
+        "explanation": "Wrong. That makes the starvation of other tenants worse, not better."
+      },
+      {
+        "text": "Per-tenant queues (or priority classes) drained by weighted fair queuing",
+        "explanation": "Correct. Workers take from each tenant's queue in turn, so a million-job backlog for one tenant doesn't sit in front of everyone else's work."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Quantify the queue position of a small tenant's job:\n\n```\nbig tenant: 1,000,000 jobs at 00:00\nworkers drain 50,000 runs/min\nsmall job behind them in FIFO:\n  1,000,000 / 50,000 = 20 min late\n```\n\nWith weighted fair queuing over, say, 100 active tenants, the small tenant gets its share of each scheduling round, so its job starts within seconds. The big tenant's million jobs still finish in about 20 minutes, but now only the tenant who caused the backlog waits for it.\n\nQuotas and dedicated pools are the same idea enforced at different layers: admission and capacity.",
+    "link": {
+      "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
+      "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"
+    }
+  }
+]

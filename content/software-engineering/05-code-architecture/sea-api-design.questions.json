@@ -1,0 +1,340 @@
+[
+  {
+    "id": "sea-api-design-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef tag(item, tags=[]):\n    tags.append(item)\n    return tags\n\ntag(\"a\")\nprint(tag(\"b\"))\n```",
+    "options": [
+      {
+        "text": "`['b']`",
+        "explanation": "That assumes a fresh list per call. Python evaluates default values once, at definition time."
+      },
+      {
+        "text": "`['a', 'b']`",
+        "explanation": "Correct. The default list is created once when `def` runs and shared by every call that omits `tags`. The first call appends `'a'` to it; the second appends `'b'` to the same list."
+      },
+      {
+        "text": "`['b', 'a']`",
+        "explanation": "`append` adds to the end, so order is call order: `'a'` then `'b'`."
+      },
+      {
+        "text": "`TypeError`: mutable defaults are not allowed",
+        "explanation": "Python allows them, which is exactly why this bug is so common."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `def` runs once and evaluates `[]`, storing that single list object as the default.\n2. `tag(\"a\")`: `tags` is the shared list → `['a']`.\n3. `tag(\"b\")`: `tags` is *the same* list → `['a', 'b']`.\n4. Fix: `tags=None`, then `if tags is None: tags = []` inside the function.\n\nFor an API, a shared mutable default is state leaking between unrelated callers, which is a nasty surprise to ship.",
+    "link": {
+      "title": "Default argument values — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+    }
+  },
+  {
+    "id": "sea-api-design-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your library is at version `2.3.1`. You add a new optional keyword argument `retries=0` to `fetch()`; existing calls behave exactly as before. What should the next version be under SemVer?",
+    "options": [
+      {
+        "text": "`2.4.0`",
+        "explanation": "Correct. A backwards-compatible addition bumps MINOR and resets PATCH to 0."
+      },
+      {
+        "text": "`2.3.2`",
+        "explanation": "PATCH is for backwards-compatible bug fixes. New functionality, even optional, is a MINOR bump."
+      },
+      {
+        "text": "`3.0.0`",
+        "explanation": "MAJOR is for incompatible changes. Existing callers are unaffected, so it isn't breaking."
+      },
+      {
+        "text": "`2.4.1`",
+        "explanation": "When MINOR increases, PATCH resets to 0."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "SemVer rules:\n\n| Change | Bump |\n|---|---|\n| Compatible bug fix | PATCH |\n| Compatible new feature | MINOR |\n| Incompatible change | MAJOR |\n\nAn optional keyword argument with a default that preserves existing behaviour is a compatible addition: `2.3.1 → 2.4.0`.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  },
+  {
+    "id": "sea-api-design-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Given `def send(msg, *, urgent=False):`, what happens with `send(\"hi\", True)`?",
+    "options": [
+      {
+        "text": "It sends an urgent message",
+        "explanation": "Parameters after the bare `*` are keyword-only, so `True` can't fill `urgent` positionally."
+      },
+      {
+        "text": "`True` is silently ignored",
+        "explanation": "Python never silently drops extra arguments; it raises `TypeError`."
+      },
+      {
+        "text": "`TypeError`: `send()` takes 1 positional argument but 2 were given",
+        "explanation": "Correct. The `*` makes `urgent` keyword-only. Callers must write `send(\"hi\", urgent=True)`, which is self-documenting at the call site."
+      },
+      {
+        "text": "It sends a non-urgent message, because the default wins",
+        "explanation": "Defaults only apply when the argument isn't supplied. Here an extra positional argument is supplied, which is an error."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `*` in a signature ends the positional parameters (PEP 3102).\n2. `send` accepts exactly one positional argument, `msg`.\n3. `send(\"hi\", True)` passes two → `TypeError`.\n4. Design benefit: no \"boolean trap\" (`send(msg, True, False)`), and reordering keyword parameters preserves ordinary calls; adding required options or changing behavior can still break clients.",
+    "link": {
+      "title": "PEP 3102 — Keyword-Only Arguments",
+      "url": "https://peps.python.org/pep-3102/"
+    }
+  },
+  {
+    "id": "sea-api-design-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your library's `parse()` raises `ValueError(\"bad date: 2024-13-01\")`. A large customer's code does `if \"bad date\" in str(e):` to decide whether to retry. You change the message to `\"invalid date\"`. Which idea best explains what happens next?",
+    "options": [
+      {
+        "text": "SemVer: message changes are PATCH-level, so nothing can break",
+        "explanation": "SemVer describes your *documented* contract. It can't stop people depending on undocumented behaviour, which is exactly what happened."
+      },
+      {
+        "text": "The open–closed principle",
+        "explanation": "OCP is about extending behaviour without modifying code; it doesn't explain why changing a message broke a client."
+      },
+      {
+        "text": "The Liskov substitution principle",
+        "explanation": "LSP concerns subtypes being usable in place of their base types. This is about callers relying on unspecified behaviour."
+      },
+      {
+        "text": "Hyrum's law: with enough users, every observable behaviour, including error text, is depended on by someone",
+        "explanation": "Correct. The message was never a promise, but it was observable, so somebody built on it. The fix is to give callers a proper thing to depend on: a specific exception subclass or an error code attribute."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Contract: `parse()` raises `ValueError` on bad input. The message wording is not documented.\n2. Observable: the message text is visible to callers.\n3. Hyrum's law predicts somebody will depend on observable behaviour, and they did.\n4. Better API: `class InvalidDate(ValueError)` with a `.value` attribute. Callers write `except InvalidDate:` and callers have a stable alternative to parsing messages, though existing text-dependent clients still need migration.",
+    "link": {
+      "title": "Hyrum's Law",
+      "url": "https://www.hyrumslaw.com/"
+    }
+  },
+  {
+    "id": "sea-api-design-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your payments library calls a database and currently lets `psycopg.OperationalError` propagate to callers. Why is this a design problem?",
+    "options": [
+      {
+        "text": "Callers will write `except psycopg.OperationalError`, which makes your choice of database driver part of your public API",
+        "explanation": "Exposing driver-specific errors couples callers to that driver. Translate expected storage failures into your public hierarchy, with distinctions that accurately describe the cause and retryability."
+      },
+      {
+        "text": "Psycopg exceptions can't be caught with `except`",
+        "explanation": "They can be caught like any exception; that's precisely the problem, because callers start catching them."
+      },
+      {
+        "text": "It makes the library slower",
+        "explanation": "Exception propagation cost isn't the concern."
+      },
+      {
+        "text": "Exceptions should never cross library boundaries; return error codes instead",
+        "explanation": "Exceptions are idiomatic in Python. The issue is *which* types cross the boundary, not whether any do."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Anything a caller can observe becomes part of the API, including exception types.\n2. If callers catch `psycopg.OperationalError`, you can't move to another driver without breaking them.\n3. Fix:\n\n```python\ntry:\n    row = cur.fetchone()\nexcept psycopg.OperationalError as e:\n    raise StorageUnavailable() from e\n```\n\n4. `from e` keeps the original traceback for debugging, while callers depend only on your own `PaymentError` hierarchy.\nOperationalError covers multiple failures: this simplified wrapper must not imply that every such error is transient or safe to retry.",
+    "link": {
+      "title": "Published Interface — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PublishedInterface.html"
+    }
+  },
+  {
+    "id": "sea-api-design-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your library is at `1.8.0`. Which of these changes require a MAJOR version bump under SemVer? Select all that apply.",
+    "options": [
+      {
+        "text": "Renaming parameter `ttl` to `max_age` in `cache(key, ttl=60)`",
+        "explanation": "Correct. Anyone calling `cache(k, ttl=30)` gets a `TypeError`. Renaming a parameter that can be passed by keyword is breaking."
+      },
+      {
+        "text": "Changing `timeout`'s default from `None` (wait forever) to `30`",
+        "explanation": "Correct, in most projects' judgement. Callers relying on unlimited waits now get timeouts. Changing a default changes behaviour for every caller who didn't pass the argument."
+      },
+      {
+        "text": "Adding a new function `cache_many()`",
+        "explanation": "A pure addition is MINOR: no existing call changes."
+      },
+      {
+        "text": "Making `get()` return a `tuple` instead of a `list`",
+        "explanation": "Correct. Callers who `.append()` to the result, or compare it with `== [...]`, break."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "For each change, ask: **can existing, correct calling code stop working?**\n\n| Change | Existing code breaks? |\n|---|---|\n| Rename `ttl` | Yes: `ttl=` is rejected |\n| New default | Yes: behaviour changes |\n| New function | No |\n| list → tuple | Yes: `.append` fails |\n\nThree are breaking → MAJOR (`2.0.0`), or do them compatibly: accept both names with a deprecation warning, and change the default only in the next major release.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  },
+  {
+    "id": "sea-api-design-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You deprecate a parameter like this:\n\n```python\ndef fetch(url, **kw):\n    if \"secs\" in kw:\n        warnings.warn(\n            \"use timeout=\",\n            DeprecationWarning,\n            stacklevel=2)\n```\n\nWhat does `stacklevel=2` change?",
+    "options": [
+      {
+        "text": "It shows the warning twice",
+        "explanation": "`stacklevel` doesn't control repetition; the warnings filter does."
+      },
+      {
+        "text": "It upgrades the warning to an error",
+        "explanation": "Turning warnings into errors is done with filters such as `-W error` or `warnings.simplefilter(\"error\")`."
+      },
+      {
+        "text": "The reported file and line become the caller's call to `fetch`, not the `warnings.warn` line inside your library",
+        "explanation": "Correct. Level 1 (the default) points at the `warn` call itself, which is useless to the user. Level 2 points one frame up, at the line they need to change."
+      },
+      {
+        "text": "It makes the warning visible even outside `__main__`",
+        "explanation": "Visibility is decided by the warning filters, not by `stacklevel` directly. `stacklevel` only changes which frame (and so which file and module) the warning is attributed to."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `warnings.warn` attributes the warning to a stack frame.\n2. `stacklevel=1`: the frame calling `warn`, i.e. inside `fetch`. Every user sees your library's file and line.\n3. `stacklevel=2`: the frame that called `fetch`, i.e. the user's code:\n\n```\napp.py:12: DeprecationWarning:\n  use timeout=\n```\n\n4. That tells them exactly which line to update.",
+    "link": {
+      "title": "warnings — Python documentation",
+      "url": "https://docs.python.org/3/library/warnings.html"
+    }
+  },
+  {
+    "id": "sea-api-design-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You maintain a library used mainly by web applications. You add a `DeprecationWarning` for an old function and remove it two releases later. Users complain they never saw any warning. What is the most likely reason?",
+    "options": [
+      {
+        "text": "You should have used `PendingDeprecationWarning`, which is always shown",
+        "explanation": "`PendingDeprecationWarning` is ignored by default too, even more so."
+      },
+      {
+        "text": "Warnings are only shown in debug builds of Python",
+        "explanation": "Warnings work in normal builds; it's the default *filter* that hides this category."
+      },
+      {
+        "text": "`DeprecationWarning` is only shown once per Python process lifetime for the whole library",
+        "explanation": "The default action for shown warnings is once per location, but here the issue is that the category is filtered out entirely in this context."
+      },
+      {
+        "text": "`DeprecationWarning` is ignored by default unless triggered directly by code in `__main__`, so library-level calls in a running app are silent",
+        "explanation": "Correct. Since PEP 565 (Python 3.7), the default filters show `DeprecationWarning` only when attributed to `__main__`. Calls from a web app's modules are hidden unless the app runs with warnings enabled or under a test runner like pytest, which displays them."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Default filter (3.7+): `default::DeprecationWarning:__main__`, and ignore it elsewhere.\n2. In a web app, the call to your deprecated function is in `myapp/views.py`, not `__main__` → ignored.\n3. pytest enables display of `DeprecationWarning`, so users who run tests (and read the warnings summary) would see it.\n4. Lessons:\n   - Announce deprecations in release notes and changelogs, not only in code.\n   - Consider `FutureWarning` for behaviour changes aimed at end users (shown by default).\n   - Give a long enough window; CPython's PEP 387 normally requires at least two years across minor releases and prefers five, with documented exceptions and replacement-support guidance.",
+    "link": {
+      "title": "PEP 387 — Backwards Compatibility Policy",
+      "url": "https://peps.python.org/pep-0387/"
+    }
+  },
+  {
+    "id": "sea-api-design-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A function is defined as `def area(w, h, /):`. Six months later you want to rename the parameters to `width` and `height`. Is that a breaking change? Assume parameter names exposed through introspection are not part of the documented public contract.",
+    "options": [
+      {
+        "text": "Yes; any parameter rename is breaking",
+        "explanation": "That's true for parameters that can be passed by keyword. Positional-only parameters can't be, so callers never use their names."
+      },
+      {
+        "text": "No; parameters before `/` are positional-only, so no caller can have passed them by name",
+        "explanation": "Correct. That's a key benefit of PEP 570: names of positional-only parameters are an implementation detail, so you can rename them freely."
+      },
+      {
+        "text": "Only if the defaults change",
+        "explanation": "There are no defaults here, and defaults don't affect whether a rename breaks keyword callers."
+      },
+      {
+        "text": "Yes, because `inspect.signature` output changes",
+        "explanation": "Introspection changes. Under the stated contract ordinary calls remain compatible; a library that explicitly promises signature metadata would need to consider that promise too."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `/` marks all preceding parameters positional-only (Python 3.8+).\n2. `area(w=2, h=3)` raises `TypeError`; callers must write `area(2, 3)`.\n3. So no valid call site contains the names `w` or `h`.\n4. Renaming them to `width`, `height` changes nothing for callers.\n\nUse positional-only for parameters whose names have no meaning to callers (the built-in `len(obj, /)` is an example) and keep keyword-capable names for options worth naming.",
+    "link": {
+      "title": "PEP 570 — Python Positional-Only Parameters",
+      "url": "https://peps.python.org/pep-0570/"
+    }
+  },
+  {
+    "id": "sea-api-design-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are designing a client library for an internal pricing service, to be used by 30 teams. Which choices reduce the chance of painful breaking changes later? Select all that apply.",
+    "options": [
+      {
+        "text": "Expose a small public surface from `pricing/__init__.py` and underscore-prefix everything else",
+        "explanation": "Correct. Fewer public names means fewer promises. Hyrum's law has less to grab onto."
+      },
+      {
+        "text": "Return the raw `dict` from the service's JSON so callers have every field",
+        "explanation": "Every field in the raw response becomes something someone depends on, so you can't change the wire format without breaking callers. Return a typed object exposing the documented fields."
+      },
+      {
+        "text": "Make options keyword-only, with safe defaults like a finite timeout",
+        "explanation": "Keyword-only options improve call clarity. Optional additions can preserve behavior, but no initial default or signature style guarantees that future changes will be compatible."
+      },
+      {
+        "text": "Define a `PricingError` base class with specific subclasses, wrapping transport exceptions",
+        "explanation": "A stable error hierarchy can decouple callers from transport types, provided the replacement preserves promised error semantics and behavior."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Score each choice by how many promises it creates:\n\n| Choice | Promises |\n|---|---|\n| Small `__init__` API | Few |\n| Raw JSON dict | Every field |\n| Keyword-only options | Few, extensible |\n| Own exception hierarchy | Yours only |\n\nWith 30 consuming teams, each extra promise multiplies the coordination needed for any change.",
+    "link": {
+      "title": "Hyrum's Law",
+      "url": "https://www.hyrumslaw.com/"
+    }
+  },
+  {
+    "id": "sea-api-design-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A popular library has been at `0.27.x` for four years with millions of downloads. A minor release `0.28.0` removes a function. According to SemVer, is this allowed, and what's the practical lesson?",
+    "options": [
+      {
+        "text": "Not allowed; removing a function always requires a MAJOR bump",
+        "explanation": "SemVer explicitly exempts major version zero: \"anything MAY change at any time\"."
+      },
+      {
+        "text": "Allowed only if the function was marked private",
+        "explanation": "Under 0.y.z SemVer makes no promises at all, private or public."
+      },
+      {
+        "text": "Allowed by SemVer's initial-development rule, unless the project promises stricter compatibility; users should lock or constrain versions and inspect changes.",
+        "explanation": "Correct. SemVer's FAQ suggests that if software is used in production or people depend on its API, it should probably already be 1.0.0. Staying at 0.x lets maintainers break things without a major bump, which pushes the risk onto users."
+      },
+      {
+        "text": "Not allowed; SemVer forbids removals in any release",
+        "explanation": "Removals are allowed in MAJOR releases (and anywhere in 0.y.z)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. SemVer item 4: major version zero (`0.y.z`) is for initial development. Anything may change; the public API should not be considered stable.\n2. So `0.27 → 0.28` removing a function is within the rules.\n3. SemVer's FAQ: if your software is being used in production, or users depend on it, you should probably be at 1.0.0 already.\n4. For users of 0.x libraries: use an exact lock for artifact selection; ~=0.27.0 permits later 0.27 patch releases and is a range rather than an exact pin and read changelogs before upgrading.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  }
+]

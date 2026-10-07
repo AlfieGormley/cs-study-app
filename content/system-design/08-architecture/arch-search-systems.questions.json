@@ -1,0 +1,381 @@
+[
+  {
+    "id": "arch-search-systems-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does an **inverted index** map?",
+    "options": [
+      {
+        "text": "Each term to the list of documents (and often positions) that contain it.",
+        "explanation": "Correct. Posting lists per term let the engine jump straight to matching documents and combine terms with fast sorted-list intersection or union."
+      },
+      {
+        "text": "Each document to the list of words it contains.",
+        "explanation": "Wrong. That's a forward index. Answering 'which documents contain X?' with it means scanning every document."
+      },
+      {
+        "text": "Each document ID to its row in the database.",
+        "explanation": "Wrong. That's a primary-key index. It doesn't help find documents by their content."
+      },
+      {
+        "text": "Each query to its cached results.",
+        "explanation": "Wrong. That's a query cache. An inverted index works for any query, including ones never seen before."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Documents: d1 'red wireless headphones', d2 'wireless mouse'.\n2. Invert: `wireless → [d1, d2]`, `mouse → [d2]`, `red → [d1]`, `headphones → [d1]`.\n3. Query 'wireless mouse' with AND: intersect [d1, d2] and [d2] → [d2].\n4. The cost depends on posting list lengths, not the total number of documents, which is why search engines are fast.",
+    "link": {
+      "title": "Wikipedia: Inverted index",
+      "url": "https://en.wikipedia.org/wiki/Inverted_index"
+    }
+  },
+  {
+    "id": "arch-search-systems-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A product search indexes descriptions with an English stemming analyser, but the query uses a plain keyword analyser (no lowercasing or stemming). A user searches `Running`. A document says \"great for running\". What happens?",
+    "options": [
+      {
+        "text": "It matches, because search engines always normalise queries automatically.",
+        "explanation": "Wrong. Query normalisation comes from the query-time analyser. With a keyword analyser, the query stays exactly 'Running'."
+      },
+      {
+        "text": "It doesn't match: the index holds the token `run`, but the query looks for the exact token `Running`.",
+        "explanation": "Correct. Index-time analysis turned 'running' into 'run'. The unanalysed query term 'Running' (capital R, unstemmed) doesn't equal any indexed token."
+      },
+      {
+        "text": "It matches only if the document is short.",
+        "explanation": "Wrong. Length affects scoring (BM25 length normalisation), not whether a term matches at all."
+      },
+      {
+        "text": "It throws an error because the analysers differ.",
+        "explanation": "Wrong. Mismatched analysers fail silently, returning no or poor results, which is what makes this bug easy to miss."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index time: 'great for running' → tokenise → lowercase → stem → [great, run] (the standard English stop list removes for).\n2. Query time with a keyword analyser: 'Running' → ['Running'].\n3. Lookup: is 'Running' in the term dictionary? No, only 'run' is.\n4. Zero results.\n5. Fix: use the same (or compatible) analyser for the field at query time, which Elasticsearch does by default for `match` queries unless you override it.",
+    "link": {
+      "title": "Elasticsearch: Text analysis",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A corpus has 1,000,000 documents. The term `wireless` appears in 100,000 of them and `anc` appears in 1,000. Using IDF = log10(N / df), how much more does a single match on `anc` contribute than a single match on `wireless` (same term frequency)?",
+    "options": [
+      {
+        "text": "The same, because each term appears once in the document.",
+        "explanation": "Wrong. Term frequency is equal, but IDF weights rare terms more heavily, so the contributions differ."
+      },
+      {
+        "text": "About 3×",
+        "explanation": "Correct. IDF(wireless) = log10(10) = 1; IDF(anc) = log10(1,000) = 3. With equal TF, `anc` contributes three times as much."
+      },
+      {
+        "text": "About 100×",
+        "explanation": "Wrong. 100 is the ratio of document frequencies. IDF takes a logarithm, which compresses that ratio to 3 / 1."
+      },
+      {
+        "text": "Less, because rarer terms are less reliable.",
+        "explanation": "Wrong. IDF's premise is the opposite: rare terms are more discriminating, so they get more weight."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. IDF(wireless) = log10(1,000,000 / 100,000) = log10(10) = 1.0.\n2. IDF(anc) = log10(1,000,000 / 1,000) = log10(1,000) = 3.0.\n3. With equal tf, contribution ∝ IDF, so 3.0 / 1.0 = 3×.\n4. Intuition: knowing a document mentions 'wireless' narrows 1M docs to 100k; 'anc' narrows to 1k, which is far more informative.\n5. BM25 uses a smoothed IDF, log(1 + (N − df + 0.5)/(df + 0.5)), but the ordering is the same.",
+    "link": {
+      "title": "Wikipedia: tf–idf",
+      "url": "https://en.wikipedia.org/wiki/Tf%E2%80%93idf"
+    }
+  },
+  {
+    "id": "arch-search-systems-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements correctly describe how **BM25** differs from plain TF-IDF? Select all that apply.",
+    "options": [
+      {
+        "text": "Term frequency saturates: each extra occurrence adds less, controlled by `k1`.",
+        "explanation": "Correct. Under raw TF-IDF, 50 mentions score 50× one mention; under BM25 the TF part tends towards a ceiling, which blunts keyword stuffing."
+      },
+      {
+        "text": "Document length is normalised, controlled by `b`, so matches in short fields count more.",
+        "explanation": "With positive b, equal TF and other factors equal within the same field, a shorter field gets less length penalty. Cross-field scores also use different statistics and boosts."
+      },
+      {
+        "text": "BM25 ignores how rare a term is in the corpus.",
+        "explanation": "Wrong. BM25 keeps an IDF component. Rare terms still contribute more."
+      },
+      {
+        "text": "BM25 understands synonyms and meaning through embeddings.",
+        "explanation": "Wrong. BM25 is purely lexical. Synonyms come from analysis (synonym filters) and semantic matching from vector search, often combined with BM25 in hybrid search."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. BM25 per term ≈ IDF × tf·(k1+1) / (tf + k1·(1 − b + b·len/avglen)).\n2. Saturation: with k1 = 1.2, b = 0 and IDF ignored, tf = 1 gives 1.0, tf = 2 gives about 1.38, tf = 10 gives about 1.96. Going from 1 to 10 occurrences doesn't even double the score.\n3. Length: with b = 0.75, a document twice the average length has a larger denominator, so the same tf scores less.\n4. IDF is still there, and nothing in the formula involves meaning.\n5. Answer: options 0 and 1.\nThese numbers use the classic formula displayed here. Current Lucene omits its constant (k1+1) multiplier, so raw scores differ while this relative saturation behavior remains.",
+    "link": {
+      "title": "Wikipedia: Okapi BM25",
+      "url": "https://en.wikipedia.org/wiki/Okapi_BM25"
+    }
+  },
+  {
+    "id": "arch-search-systems-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An Elasticsearch index has 5 primary shards and 1 replica on a 5-node cluster. p50 search latency is 20 ms, but p99 is 900 ms, and one node shows long garbage-collection pauses. Why does one bad node hurt so many searches? Assume unrestricted searches with no shard pruning and equal placement, giving the slow node two copies of different shards.",
+    "options": [
+      {
+        "text": "Every search scatters to a copy of all 5 shards and must wait for all of them, so any search that touches a shard copy on the slow node is slow.",
+        "explanation": "The query phase can be delayed by any participating slow shard. End-to-end latency also includes coordination, fetch and networking."
+      },
+      {
+        "text": "Elasticsearch routes all searches through the slow node because it holds the master role.",
+        "explanation": "Wrong. The elected master manages cluster state. It doesn't coordinate or execute every search."
+      },
+      {
+        "text": "Replicas must be searched together with primaries, doubling the work.",
+        "explanation": "Wrong. Each search uses *one* copy of each shard, primary or replica. Replicas give choice, not double work."
+      },
+      {
+        "text": "Only searches for documents stored on that node are affected, so the effect must be small.",
+        "explanation": "Wrong. A search doesn't know which shard holds the matches, so it has to query every shard."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Search = query every shard (one copy each) → merge → fetch.\n2. A simplified query-phase model is max(shard response times) + merge; fetch and network work add further cost.\n3. The bad node holds 2 of the 10 shard copies. If copies are picked at random, the chance a search avoids both of its shards is about (1/2) × (1/2) = 25%.\n4. So roughly 75% of searches may touch the slow node. Even if it's only slow during GC pauses, the tail gets very bad.\n5. Mitigations: fix the GC issue (heap sizing), use adaptive replica selection (default in recent versions) to prefer faster copies, and avoid oversharding.",
+    "link": {
+      "title": "Elasticsearch: Scalability and resilience",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your app writes product updates to Postgres and then to Elasticsearch in the same request handler. Occasionally, search shows an old price long after the update. Two updates to the same product can arrive within milliseconds. What's the most robust redesign?",
+    "options": [
+      {
+        "text": "Wrap both writes in a database transaction so they commit together.",
+        "explanation": "Wrong. Elasticsearch doesn't take part in Postgres transactions. The ES write can still fail or be reordered after the DB commits."
+      },
+      {
+        "text": "Retry the Elasticsearch write up to 10 times on failure.",
+        "explanation": "Wrong. Retries help with transient failures but not with reordering: a retried *older* update can still land after a newer one and overwrite it."
+      },
+      {
+        "text": "Use a correctly configured CDC/outbox path with durable retention and per-product ordering, then index complete snapshots using a suitable strictly increasing external version and a safe delete-replay policy.",
+        "explanation": "This avoids independent request-level dual writes. Snapshot handoff, retained logs, ordering, duplicate conflicts and delete tombstones must be handled explicitly."
+      },
+      {
+        "text": "Reduce Elasticsearch's refresh interval to 100 ms.",
+        "explanation": "Wrong. Refresh controls how soon indexed docs become searchable. It doesn't fix lost or out-of-order writes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Commit order and independent Elasticsearch request order can differ, and a second write may fail.\n2. Capture committed changes with a correct snapshot/log handoff and sufficient retained logs.\n3. Preserve per-product ordering through the whole pipeline or version complete snapshots. Matching keys alone do not order independent producers.\n4. Map the source sequence to a supported positive integer. version_type=external rejects equal and lower versions; treat a verified identical duplicate as complete.\n5. Keep durable deletion markers or another replay barrier so an old update cannot resurrect a deleted document after Elasticsearch forgets its delete version.\n6. Measure lag, monitor retention and support a coordinated full rebuild; no fixed sub-second lag is promised.",
+    "link": {
+      "title": "Debezium architecture",
+      "url": "https://debezium.io/documentation/reference/stable/architecture.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to change the index-time analyser on the `title` field of a live 200 GB product index (adding a synonym filter and a different stemmer) without downtime. What's the right approach?",
+    "options": [
+      {
+        "text": "Update the mapping in place; Elasticsearch re-analyses existing documents automatically.",
+        "explanation": "Wrong. Analysis happens at index time and is baked into the stored segments. Changing a field's analyser on an existing index isn't allowed, and even if it were, existing tokens wouldn't change."
+      },
+      {
+        "text": "Delete the index and recreate it, accepting an hour of empty search results.",
+        "explanation": "Wrong. This works technically but causes an outage. The alias approach achieves the same result with no downtime."
+      },
+      {
+        "text": "Create `products_v2` with the new mapping, backfill it (reindex or from the source of truth) while also applying live changes, verify it, then atomically switch the `products` alias to it.",
+        "explanation": "An atomic alias change avoids an intentional search outage, provided live updates were caught up correctly. Rollback also requires that the old index remains current."
+      },
+      {
+        "text": "Add more replicas so the new analyser propagates faster.",
+        "explanation": "Wrong. Replicas are copies of the same segments with the same analysed tokens. They don't re-analyse anything."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Constraint: tokens are produced at index time and stored in immutable segments, so a new analyser needs every document re-indexed.\n2. Steps:\n   - Create `products_v2` with the new analyser (consider higher `refresh_interval` and 0 replicas during backfill for speed).\n   - Backfill from the database or via `_reindex` from v1.\n   - Coordinate snapshot and CDC positions; use versions so older backfill records cannot overwrite newer changes, and apply deletes.\n   - Restore replicas and refresh interval; compare result quality on sample queries.\n   - Atomically move alias `products` from v1 to v2.\n   - Keep v1 updated during the rollback window; an old index that stopped receiving writes is not a safe instant rollback.\n3. Apps never noticed because they always queried `products`.",
+    "link": {
+      "title": "Elasticsearch: Near real-time search",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/near-real-time.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A seller creates a listing; your API indexes it into Elasticsearch and immediately redirects to \"My listings\", which runs a search. About one time in three the new listing is missing, then appears on reload. Nothing is failing. What's going on? Assume an ordinary Elastic Stack index with the default interval and a query that includes the listing regardless of score.",
+    "options": [
+      {
+        "text": "The write went to a replica that hasn't caught up with the primary.",
+        "explanation": "Wrong. Writes use the primary and in-sync replication protocol; failed copies can be removed before acknowledgment. Having an operation does not itself make it searchable: shard-copy refresh timing controls search visibility."
+      },
+      {
+        "text": "The document has been indexed but not yet refreshed into a searchable segment; searches only see it after the next refresh, about 1 second by default.",
+        "explanation": "Correct. Elasticsearch is near-real-time. Until a refresh writes the buffer into a new segment, the document can be fetched by ID but doesn't appear in searches."
+      },
+      {
+        "text": "The translog was lost, so the document had to be re-sent.",
+        "explanation": "Wrong. Losing the translog would lose data, not delay it by a second, and nothing is failing here."
+      },
+      {
+        "text": "BM25 scored the new listing too low to appear on the first page.",
+        "explanation": "Wrong. 'My listings' is a filter on the seller, and the listing appears on reload with the same query, so ranking isn't the issue."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index request → in-memory buffer + translog → acknowledged.\n2. Searchable only after a **refresh** creates a segment: about every 1 s by default.\n3. A redirect that searches within that second can miss the new document.\n4. Options:\n   - Use `refresh=wait_for` on this write, so the API responds only once it's searchable (waits for visibility; excessive wait_for listeners can force a refresh).\n   - Or show the listing from the database/your response on the next page.\n   - Avoid `refresh=true` on every write at volume: it creates lots of tiny segments.\n5. Don't shrink the refresh interval cluster-wide to fix one page.",
+    "link": {
+      "title": "Elasticsearch: Near real-time search",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/near-real-time.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 6-node cluster hosts a write-heavy logging index with 6 primaries and 2 replicas. Indexing throughput is the bottleneck and searches are rare. Which change most directly frees indexing capacity without reindexing?",
+    "options": [
+      {
+        "text": "Increase the number of primary shards on the existing index to 12.",
+        "explanation": "Wrong. The primary count is fixed at creation because routing depends on it. Changing it needs a reindex, split or shrink."
+      },
+      {
+        "text": "Add a third replica so writes are spread over more copies.",
+        "explanation": "Wrong. Every replica indexes every document, so more replicas multiply write work rather than spreading it."
+      },
+      {
+        "text": "Lower `refresh_interval` from 1 s to 100 ms.",
+        "explanation": "Wrong. More frequent refreshes create more small segments and more merging, which costs indexing throughput."
+      },
+      {
+        "text": "Reduce replicas from 2 to 1 (a live setting), and consider a longer `refresh_interval`.",
+        "explanation": "Correct. Each document is currently indexed on 3 copies; with 1 replica it's 2, a third less work. Fewer refreshes also mean fewer segments to create and merge."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Write path: primary indexes the doc, then each replica indexes it too.\n2. 2 replicas → 3 copies → 3× indexing work. 1 replica → 2×.\n3. `number_of_replicas` is a dynamic setting; primaries are not.\n4. Refresh: a 30 s interval for a rarely searched log index cuts segment churn.\n5. Keep at least 1 replica for redundancy, verify it is assigned and in sync, and check acknowledgment/durability settings; merely configuring a replica is not a loss guarantee. Then future daily indexes can get a better primary count via the index template.",
+    "link": {
+      "title": "Elasticsearch: Scalability and resilience",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A product search has 20 primary shards. A scraper requests `from=9990&size=10` (page 1,000). Why is this expensive, and what do you offer instead?",
+    "options": [
+      {
+        "text": "Each shard may return up to 10,000 candidate hits: up to 200,000 across 20 shards. Offer search_after with stable sort values and a point-in-time view for consistent traversal.",
+        "explanation": "Correct. Each shard can't know which of its hits land in the global positions 9,990–9,999, so each returns its top `from + size`. `search_after` pages by the last seen sort values instead."
+      },
+      {
+        "text": "Only one shard holds page 1,000, so the cost is in finding which one.",
+        "explanation": "Wrong. Results are spread across all shards by score, not stored in page order on one shard."
+      },
+      {
+        "text": "Deep pages are cheap; Elasticsearch caches every page of every query.",
+        "explanation": "Wrong. The request cache helps repeated identical requests, but deep pagination still forces every shard to rank and return large top-N lists."
+      },
+      {
+        "text": "The fetch phase loads 10,000 full documents from every shard.",
+        "explanation": "Wrong. The query phase returns only IDs and scores. The fetch phase loads just the 10 documents on the requested page."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Global top 10,000 requires each shard's top 10,000 (any of them could be in it).\n2. Query phase: up to 20 × 10,000 candidates = 200,000 entries, if enough matches exist.\n3. Fetch phase: only 10 documents.\n4. Default guard: `index.max_result_window` = 10,000 (`from + size`).\n5. Alternative: use supported sort fields with a stable tie-breaker and a point-in-time view, then pass the last hit's sort values as search_after. This avoids the growing offset window but does not guarantee identical page latency.\n6. Product decision: choose a navigation or export limit from actual product needs, rather than an unsupported universal user-behavior claim.",
+    "link": {
+      "title": "Elasticsearch: Paginate search results",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You index product `title` (average 8 words) and `description` (average 300 words) as separate fields with BM25 defaults. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A one-word match in a 4-word title tends to score higher than the same match in a 16-word title, because BM25 normalises by field length.",
+        "explanation": "Correct. Shorter-than-average fields get a smaller denominator, so the same tf scores more (with b = 0.75)."
+      },
+      {
+        "text": "Length is compared with the average length of the *same field*, so titles aren't penalised for being shorter than descriptions.",
+        "explanation": "Correct. Lucene keeps length statistics per field, so a title is compared with other titles."
+      },
+      {
+        "text": "A description that repeats \"headphones\" 40 times scores 40× one that mentions it once.",
+        "explanation": "Term frequency saturates rather than scaling linearly. The classic formula has a (k1+1) multiplier that current Lucene omits."
+      },
+      {
+        "text": "Setting `b = 0` on the title field turns off length normalisation for that field.",
+        "explanation": "Correct. With b = 0 the denominator becomes tf + k1, independent of length. Some teams do this for short fields where length carries no signal."
+      },
+      {
+        "text": "BM25 will match \"earphones\" to documents containing only \"headphones\".",
+        "explanation": "Wrong. BM25 is lexical; that needs a synonym filter or semantic (vector) search."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Per-term score ≈ idf × tf(k1+1) / (tf + k1(1 − b + b·len/avg)).\n2. Title, avg 8, tf = 1, k1 = 1.2, b = 0.75:\n   - len 4: 1 + 1.2(0.25 + 0.375) = 1.75 → 2.2/1.75 ≈ 1.26\n   - len 16: 1 + 1.2(0.25 + 1.5) = 3.1 → 2.2/3.1 ≈ 0.71\n3. `avg` is per field, so titles compete with titles.\n4. Cap: as tf → ∞ the fraction → k1 + 1 = 2.2.\n5. No semantics: synonyms need analysis or embeddings.\nThe arithmetic uses the displayed classic BM25 formula, not current Lucene's raw score scale; Lucene omits the constant (k1+1) factor.",
+    "link": {
+      "title": "Wikipedia: Okapi BM25",
+      "url": "https://en.wikipedia.org/wiki/Okapi_BM25"
+    }
+  },
+  {
+    "id": "arch-search-systems-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're adding search-as-you-type for a 50-million-document catalogue so that typing `headp` suggests \"headphones\". Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Indexing edge n-grams (`h`, `he`, `hea`, ...) on the field lets a prefix be a plain term lookup at query time.",
+        "explanation": "Correct. The work moves to index time: prefixes within the configured min_gram/max_gram range become terms; queries outside that range need a defined fallback."
+      },
+      {
+        "text": "Edge n-grams make the index noticeably larger, because each word produces many extra terms.",
+        "explanation": "Correct. A 10-letter word produces up to 10 edge n-grams. You usually apply them to a dedicated short field, such as the title, not to long descriptions."
+      },
+      {
+        "text": "You should apply the edge n-gram filter at query time as well, so the query `headp` is split into n-grams.",
+        "explanation": "Wrong. Splitting the query too would make `h` match almost everything. Use the n-gram analyser at index time and a standard analyser at search time."
+      },
+      {
+        "text": "A `LIKE 'headp%'` query on the database scales just as well for 50 million rows.",
+        "explanation": "An indexed prefix query can scale well for some workloads, but this claim does not establish support for analyzed mid-title tokens and relevance. It need not hit a primary if replicas or caches serve it."
+      },
+      {
+        "text": "Debouncing keystrokes in the client reduces query load without changing the index.",
+        "explanation": "Correct. Sending a request after a short pause (say 100–200 ms) instead of on every keystroke can cut query volume substantially."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Goal: prefix → candidates within a measured latency budget.\n2. Edge n-grams at index time: 'headphones' → h, he, hea, head, headp, ...\n3. Query `headp` (standard analyser) is one term lookup.\n4. Cost: more terms, so a bigger index. Keep it to short fields.\n5. Elasticsearch's search_as_you_type combines shingle subfields and an edge-ngram prefix subfield; it is not just every possible prefix of every token.\n6. Client side: debounce and cancel stale requests.",
+    "link": {
+      "title": "Elasticsearch: Text analysis",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis.html"
+    }
+  }
+]

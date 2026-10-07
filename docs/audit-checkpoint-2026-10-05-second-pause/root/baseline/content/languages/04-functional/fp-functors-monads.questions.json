@@ -1,0 +1,349 @@
+[
+  {
+    "id": "fp-functors-monads-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using the lesson's `Maybe` class, what do these two expressions return?\n\n```python\nSome(3).map(lambda x: x * 2).map(str)\nNothing.map(lambda x: x * 2).map(str)\n```",
+    "options": [
+      {
+        "text": "`Some('6')` and `Nothing`",
+        "explanation": "Correct. The first chain doubles 3 and converts it to a string, keeping the box. The second starts empty, and `map` on an empty box just returns it unchanged."
+      },
+      {
+        "text": "`'6'` and `None`",
+        "explanation": "`map` always returns a box. Getting the plain value out is a separate step; that's what keeps the 'might be missing' information attached."
+      },
+      {
+        "text": "`Some('6')` and an exception",
+        "explanation": "The point of `map` is that the empty case is handled once, inside the class. The lambda is never called on `Nothing`, so nothing can blow up."
+      },
+      {
+        "text": "`Some(Some('6'))` and `Nothing`",
+        "explanation": "Nesting only happens when the function you pass returns a box. `x * 2` and `str` return plain values, so `map` wraps them exactly once."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `Some(3).map(lambda x: x * 2)`: there is a value, so apply the function and wrap: `Some(6)`.\n2. `.map(str)`: again a value, so `Some('6')`.\n3. `Nothing.map(...)`: `ok` is false, so `map` returns `self`, i.e. `Nothing`.\n4. The second `.map(str)` does the same: `Nothing`.\n\nThe caller wrote no `if` statements. That's the whole job of a functor's `map`: transform the contents, keep the shape.",
+    "link": {
+      "title": "Functor (functional programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Functor_(functional_programming)"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this JavaScript return?\n\n```javascript\n[1, 2, 3].flatMap(x => [x, x])\n```",
+    "options": [
+      {
+        "text": "`[[1, 1], [2, 2], [3, 3]]`",
+        "explanation": "That's what `map` returns: one inner array per element. `flatMap` also flattens one level."
+      },
+      {
+        "text": "`[1, 1, 2, 2, 3, 3]`",
+        "explanation": "Correct. Each element produces a two-item array, and `flatMap` joins them into one flat list."
+      },
+      {
+        "text": "`[2, 4, 6]`",
+        "explanation": "The callback returns `[x, x]`, a list of two copies. It doesn't add them together."
+      },
+      {
+        "text": "`[1, 2, 3, 1, 2, 3]`",
+        "explanation": "`flatMap` keeps each element's results together and in order: all of 1's outputs, then 2's, then 3's. It doesn't repeat the whole list."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Do it in two steps:\n\n```\nmap:     [[1,1], [2,2], [3,3]]\nflatten: [1,1,2,2,3,3]\n```\n\n`flatMap` is exactly 'map, then flatten one level'. Returning `[]` from the callback would drop an element; returning `[x]` would keep it unchanged.",
+    "link": {
+      "title": "Array.prototype.flatMap() — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/flatMap"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`find_user` and `find_team` both return a `Maybe`. Why does `find_user(1).map(find_team)` give `Some(Some(team))`?",
+    "options": [
+      {
+        "text": "Because `map` always wraps whatever the function returns, and `find_team` already returns a box",
+        "explanation": "Correct. `map` wraps `f`'s result in a fresh `Some`. When `f` itself returns a `Maybe`, you get a box inside a box. `flat_map` avoids the extra wrap."
+      },
+      {
+        "text": "Because `find_user` found two users",
+        "explanation": "`Maybe` holds at most one value. The nesting comes from wrapping twice, not from multiple results."
+      },
+      {
+        "text": "Because `map` is buggy; a correct `map` would flatten",
+        "explanation": "`map` is behaving correctly: it must not change the shape based on what `f` returns. Flattening is a different operation, `flat_map`."
+      },
+      {
+        "text": "Because Python can't represent an optional value without nesting",
+        "explanation": "The nesting is entirely due to which method was called. `flat_map(find_team)` gives a single `Some(team)`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Look at the last line of each method:\n\n```python\n# map\nreturn Some(f(self.value))\n# flat_map\nreturn f(self.value)\n```\n\n`find_team(user)` returns `Some(team)`. Through `map` that becomes `Some(Some(team))`. Through `flat_map` it stays `Some(team)`.\n\nRule of thumb: if your step returns a plain value, use `map`; if it returns a box, use `flat_map`.",
+    "link": {
+      "title": "Monad (functional programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Monad_(functional_programming)"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `Result` helpers, with `recip = lambda n: Ok(1 / n)`, what does this return?\n\n```python\nparse(\"0\").flat_map(positive) \\\n          .flat_map(recip)\n```",
+    "options": [
+      {
+        "text": "`Ok(inf)`",
+        "explanation": "Python doesn't return infinity for `1 / 0`; it raises. But `recip` isn't even reached here, because `positive` rejects 0."
+      },
+      {
+        "text": "A `ZeroDivisionError` exception",
+        "explanation": "That would happen if `recip` ran with 0. It doesn't: the chain is already on the error track after `positive`."
+      },
+      {
+        "text": "`Err('must be > 0')`",
+        "explanation": "Correct. `parse` succeeds with `Ok(0)`, `positive` returns `Err('must be > 0')`, and `flat_map` on an `Err` skips `recip` entirely."
+      },
+      {
+        "text": "`Err('not a number: 0')`",
+        "explanation": "`\"0\"` is all digits, so `parse` succeeds. The failure comes one step later."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk the railway:\n\n| Step | Input | Output |\n|---|---|---|\n| `parse` | `\"0\"` | `Ok(0)` |\n| `positive` | `0` | `Err('must be > 0')` |\n| `recip` | skipped | `Err(...)` |\n\n`Err.flat_map` returns `self` without calling the function, so once any step fails, the rest are skipped and the first error message is what you get back. That's the same short-circuiting as the nested-`if` staircase, with the reason attached.",
+    "link": {
+      "title": "Railway Oriented Programming — Scott Wlaschin",
+      "url": "https://fsharpforfunandprofit.com/rop/"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A list comprehension with two `for` clauses is chained `flat_map`. What does this return?\n\n```python\n[(x, y) for x in [1, 2, 3]\n        for y in range(x)]\n```",
+    "options": [
+      {
+        "text": "`[(1, 0), (2, 1), (3, 2)]`",
+        "explanation": "That pairs each `x` with only one `y`. The inner loop runs over *all* of `range(x)` for each `x`."
+      },
+      {
+        "text": "`[(1, 0), (2, 0), (2, 1), (3, 0), (3, 1), (3, 2)]`",
+        "explanation": "Correct. For each `x`, the inner part produces `x` pairs (0 to x-1), and they're all collected into one flat list: 1 + 2 + 3 = 6 items."
+      },
+      {
+        "text": "`[[(1, 0)], [(2, 0), (2, 1)], [(3, 0), (3, 1), (3, 2)]]`",
+        "explanation": "That's `map` behaviour: one inner list per `x`. A comprehension with two `for`s flattens them."
+      },
+      {
+        "text": "Nine pairs, every combination of 1-3 with 0-2",
+        "explanation": "The inner range depends on `x`, so it's a different length each time; it isn't a fixed 3 by 3 grid."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Rewrite it as `flat_map`:\n\n```python\nflat_map([1, 2, 3],\n  lambda x: [(x, y)\n    for y in range(x)])\n```\n\n- x = 1: `[(1,0)]`\n- x = 2: `[(2,0), (2,1)]`\n- x = 3: `[(3,0), (3,1), (3,2)]`\n\nFlattened, that's 6 pairs in order. For lists, 'and then' means 'for every possibility, try the next step'.",
+    "link": {
+      "title": "Monad (functional programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Monad_(functional_programming)"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are `flat_map` (bind) in disguise? Select all that apply.",
+    "options": [
+      {
+        "text": "JavaScript's optional chaining `a?.b?.c`",
+        "explanation": "Correct. Each `?.` continues only if the previous value isn't null or undefined, otherwise the whole chain is `undefined`: chaining on a 'might be missing' box."
+      },
+      {
+        "text": "Rust's `?` operator on a `Result`",
+        "explanation": "Correct. `?` unwraps an `Ok` and continues, or returns the `Err` from the function immediately. That's chaining on a 'might have failed' box."
+      },
+      {
+        "text": "`promise.then(f)` where `f` returns another Promise",
+        "explanation": "Correct. `then` waits for the inner Promise and gives back a single flat Promise, not a Promise of a Promise."
+      },
+      {
+        "text": "Python's `sorted(xs)`",
+        "explanation": "`sorted` reorders a whole list. It doesn't run a box-returning function on contents and flatten the result."
+      },
+      {
+        "text": "C# LINQ's `SelectMany`",
+        "explanation": "Correct. `SelectMany` maps each element to a sequence and concatenates them, which is list `flatMap` under another name."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "The test: is there a box, a step that returns another box, and an automatic squash back to one layer?\n\n| Construct | Box | 'And then' means |\n|---|---|---|\n| `?.` | maybe null | stop if missing |\n| Rust `?` | `Result` | return on error |\n| `then` | Promise | wait |\n| `SelectMany` | sequence | all options |\n\n`sorted` has no step function at all, so it doesn't fit the pattern.",
+    "link": {
+      "title": "Monad (functional programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Monad_(functional_programming)"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In this Rust function, `read` succeeds but `parse` returns `Err(e)`. What happens?\n\n```rust\nfn load(p: &str)\n    -> Result<Cfg, Error> {\n  let text = read(p)?;\n  let cfg = parse(&text)?;\n  validate(&cfg)?;\n  Ok(cfg)\n}\n```",
+    "options": [
+      {
+        "text": "The program panics",
+        "explanation": "`?` never panics. Panicking is what `.unwrap()` does on an `Err`; `?` returns the error to the caller instead."
+      },
+      {
+        "text": "`load` returns `Err(e)` immediately; `validate` never runs",
+        "explanation": "Correct. `?` on an `Err` returns it from the enclosing function straight away, so later steps are skipped."
+      },
+      {
+        "text": "`cfg` is set to a default value and `validate` runs",
+        "explanation": "Rust doesn't invent defaults. If you wanted that, you'd write `.unwrap_or_default()` explicitly."
+      },
+      {
+        "text": "`load` returns `Ok(cfg)` with a partially built config",
+        "explanation": "There is no `cfg` to return: the error short-circuits before `cfg` is bound."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Read each `?` as 'unwrap the `Ok` or bail out with the `Err`':\n\n1. `read(p)?` - `Ok(text)`, unwrap, continue.\n2. `parse(&text)?` - `Err(e)`, so `return Err(e)` (converted with `From` if the error types differ).\n3. `validate` and `Ok(cfg)` are never reached.\n\nIt's the `Result` monad's `flat_map` written as straight-line code, the same way `await` is for Promises.",
+    "link": {
+      "title": "Recoverable Errors with Result — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this log?\n\n```javascript\nconst p = Promise.resolve(1)\n  .then(x =>\n    Promise.resolve(x + 1))\n  .then(x => x * 10);\np.then(console.log);\n```",
+    "options": [
+      {
+        "text": "`[object Promise]`",
+        "explanation": "That's what you'd see if the second `then` received the inner Promise itself. `then` waits for a returned Promise and passes on its value."
+      },
+      {
+        "text": "`20`",
+        "explanation": "Correct. The first `then` returns a Promise of 2; `then` flattens it, so the next callback gets 2 and returns 20."
+      },
+      {
+        "text": "`10`",
+        "explanation": "The first callback adds 1 before the second multiplies by 10, so it's (1 + 1) * 10."
+      },
+      {
+        "text": "`NaN`",
+        "explanation": "`NaN` would come from multiplying a Promise object by 10. Because `then` flattens, `x` is the number 2, not a Promise."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `Promise.resolve(1)` - a Promise of 1.\n2. First `then`: callback returns `Promise.resolve(2)`. Because it's a Promise, `then` acts as `flat_map`: the result is a Promise of 2, not a Promise of a Promise.\n3. Second `then`: callback gets 2, returns a plain 20, so `then` acts as `map`: Promise of 20.\n4. `console.log` receives 20.\n\nThe same code with `async`/`await`:\n\n```javascript\nconst a = await Promise.resolve(1);\nconst b = await Promise.resolve(a + 1);\nconsole.log(b * 10);\n```",
+    "link": {
+      "title": "Using promises — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You refactor `m.flat_map(f).flat_map(g)` into `m.flat_map(h)` where `h = lambda x: f(x).flat_map(g)`, pulling two steps into one helper. Which monad law guarantees the result is the same?",
+    "options": [
+      {
+        "text": "Wrapping then chaining does nothing extra (left identity)",
+        "explanation": "That law is about `Some(x).flat_map(f)` equalling `f(x)`. It doesn't say anything about regrouping two steps."
+      },
+      {
+        "text": "Chaining with wrap does nothing (right identity)",
+        "explanation": "That law says `m.flat_map(Some)` is `m`. No wrap function appears in this refactor."
+      },
+      {
+        "text": "Grouping doesn't matter (associativity)",
+        "explanation": "Correct. Associativity says you can bracket a chain of steps however you like, so extracting or inlining a helper is safe."
+      },
+      {
+        "text": "The functor law that mapping identity does nothing",
+        "explanation": "That's a law for `map`, and the refactor is about the nesting of `flat_map`s, not the identity function."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Write both sides with brackets:\n\n```\n(m >>= f) >>= g\nm >>= (\\x -> f x >>= g)\n```\n\nThe first runs `f` on `m`, then `g` on the result. The second packages 'run `f`, then `g`' as one function and runs that on `m`. Associativity says these are always equal.\n\nIn practice, that's the law you rely on every time you split a long `async` function into helpers, or move a few `?` steps into their own Rust function.",
+    "link": {
+      "title": "Monad laws — Haskell Wiki",
+      "url": "https://wiki.haskell.org/Monad_laws"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A teammate writes `flat_map` for `Maybe` as `return Some(f(self.value))` (when a value is present). What does `Some(2).flat_map(lambda x: Some(x + 1))` return, and which law is broken?",
+    "options": [
+      {
+        "text": "`Some(3)`; no law is broken",
+        "explanation": "The extra `Some(...)` wrap means the function's own box gets wrapped again, so you don't get `Some(3)`."
+      },
+      {
+        "text": "`Some(Some(3))`; left identity is broken, since `Some(2).flat_map(f)` should equal `f(2)`, which is `Some(3)`",
+        "explanation": "Correct. This 'flat_map' is really `map`: it doesn't flatten. The left identity law catches it directly."
+      },
+      {
+        "text": "`Some(Some(3))`; associativity is broken but the identities hold",
+        "explanation": "Left identity already fails on this single call: `f(2)` is `Some(3)`, but the result is `Some(Some(3))`."
+      },
+      {
+        "text": "`Nothing`, because the value is double-wrapped",
+        "explanation": "Nothing makes the result empty; `ok` is true at both levels. It's simply nested one level too deep."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `Some(2)` has a value, so the buggy code runs `Some(f(2))`.\n2. `f(2)` = `Some(3)`.\n3. Result: `Some(Some(3))`.\n\nLeft identity says wrapping a value and then chaining `f` must be the same as just calling `f`:\n\n```\nSome(2).flat_map(f) == f(2)\nSome(Some(3))       != Some(3)\n```\n\nThe fix is to return `f(self.value)` unwrapped. Writing the three laws as unit tests is a cheap way to catch this kind of bug in a hand-rolled box type.",
+    "link": {
+      "title": "Monad laws — Haskell Wiki",
+      "url": "https://wiki.haskell.org/Monad_laws"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about JavaScript Promises are true? Select all that apply.",
+    "options": [
+      {
+        "text": "You can't end up with a Promise whose fulfilled value is another Promise",
+        "explanation": "Correct. Promises flatten automatically: resolving with a Promise (or any thenable) adopts its eventual value."
+      },
+      {
+        "text": "`then` behaves like `map` or `flat_map` depending on whether the callback returns a Promise",
+        "explanation": "Correct. A plain return value is wrapped; a returned Promise is waited on and flattened."
+      },
+      {
+        "text": "If `p` is a native Promise, `Promise.resolve(p) === p`",
+        "explanation": "Correct. `Promise.resolve` returns its argument unchanged when it's already a Promise from the same constructor."
+      },
+      {
+        "text": "`await` only works on Promises; `await 5` is a TypeError",
+        "explanation": "`await` accepts any value. A non-Promise is treated as an already-fulfilled Promise, so `await 5` gives 5."
+      },
+      {
+        "text": "A `Promise<Result<T, E>>` lets one `then` chain short-circuit on both rejected Promises and `Err` results",
+        "explanation": "`then` only knows about the Promise layer. An `Err` inside a fulfilled Promise is just a value to it, so you must check it yourself at each step (or use a library that combines them)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each against how Promises flatten:\n\n1. True: there's no way to observe `Promise<Promise<T>>`.\n2. True: one method doing both jobs is why `then` is called 'not quite' monadic.\n3. True, and it's the edge that breaks left identity: `Promise.resolve(x)` unwraps `x` if it's a thenable.\n4. False: `await 5` evaluates to 5.\n5. False: stacking two kinds of box needs extra machinery (monad transformers in Haskell, Effect in TypeScript, or the convention of rejecting on error).",
+    "link": {
+      "title": "Promise.resolve() — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/resolve"
+    }
+  }
+]

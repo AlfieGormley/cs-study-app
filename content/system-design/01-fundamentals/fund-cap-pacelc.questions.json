@@ -1,0 +1,377 @@
+[
+  {
+    "id": "fund-cap-pacelc-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does the CAP theorem actually say?",
+    "options": [
+      {
+        "text": "A distributed system can only ever have two of consistency, availability and partition tolerance",
+        "explanation": "Incorrect. This 'pick two' framing is the common misreading. Partitions aren't something you choose to tolerate; they happen. The trade-off only bites during a partition."
+      },
+      {
+        "text": "Strongly consistent databases are always slower than eventually consistent ones",
+        "explanation": "Incorrect. That's closer to the 'else' half of PACELC (latency vs consistency), and even then it's a tendency, not a theorem. CAP says nothing about latency."
+      },
+      {
+        "text": "During a network partition, a system must choose between linearisable consistency and availability",
+        "explanation": "Correct. Gilbert and Lynch proved that if the network is partitioned, a node can't both answer every request and guarantee it reflects the latest write. Without a partition, both are possible."
+      },
+      {
+        "text": "Relational databases are CA and NoSQL databases are AP",
+        "explanation": "Incorrect. CAP doesn't classify database families. A replicated Postgres cluster faces the same partition trade-off as any NoSQL store, and many NoSQL stores (etcd, HBase) prefer consistency."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk through the two-node proof:\n\n1. Nodes N1 and N2 replicate key `v` (initially 0).\n2. The link between them is cut (partition).\n3. A client writes `v = 1` to N1 and receives success before the following read starts.\n4. Another client reads `v` from N2.\n\nN2 must either answer `0` (available, not consistent) or refuse/wait (consistent, not available). It can't do both. With no partition, N1 would have replicated to N2 first and both properties hold.",
+    "link": {
+      "title": "Brewer's Conjecture and the Feasibility of CAP (Gilbert and Lynch, PDF)",
+      "url": "https://users.ece.cmu.edu/~adrian/731-sp04/readings/GL-cap.pdf"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the CAP theorem, what does **C** (consistency) mean?",
+    "options": [
+      {
+        "text": "Linearisability: every read returns the most recent completed write, as if there were one copy",
+        "explanation": "Correct. Gilbert and Lynch define consistency as atomic (linearisable) consistency. Weaker models such as causal consistency can remain available during partitions."
+      },
+      {
+        "text": "All replicas eventually converge to the same value",
+        "explanation": "Incorrect. That's eventual consistency, a much weaker guarantee. CAP's C is the strongest single-object model."
+      },
+      {
+        "text": "Transactions preserve database constraints such as foreign keys",
+        "explanation": "Incorrect. That's the C in ACID, a completely different property about invariants within transactions."
+      },
+      {
+        "text": "The data format is the same on every node",
+        "explanation": "Incorrect. Schema or format uniformity has nothing to do with CAP, which is about the values reads observe."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the meanings:\n\n| Phrase | Meaning |\n|---|---|\n| ACID consistency | Invariants hold after each transaction |\n| Eventual consistency | Replicas converge if writes stop |\n| CAP consistency | Linearisability |\n\nLinearisability means once a write completes, every subsequent read (from any client, any node) sees it or something newer. That requires coordination between replicas, which is exactly what a partition prevents.",
+    "link": {
+      "title": "CAP theorem (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/CAP_theorem"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 5-node etcd cluster (Raft) is split by a partition into a group of 3 and a group of 2. A client connected to the 2-node side tries to write. What happens, and how does CAP classify this?",
+    "options": [
+      {
+        "text": "The write succeeds on the 2-node side and is merged later: AP behaviour",
+        "explanation": "Incorrect. Raft requires a majority (3 of 5) to commit. The 2-node side can't form a majority, so it can't accept writes."
+      },
+      {
+        "text": "Both sides accept writes and the higher term wins after healing",
+        "explanation": "Incorrect. That would be split-brain. Raft prevents it precisely by requiring a majority for leadership and commits; terms don't resolve conflicting committed writes."
+      },
+      {
+        "text": "The whole cluster stops accepting writes until the partition heals",
+        "explanation": "Incorrect. The 3-node side has a majority, so it can elect a leader and continue committing writes. Only the minority is unavailable."
+      },
+      {
+        "text": "The write fails (or blocks) on the minority side; the majority side keeps working: CP behaviour",
+        "explanation": "Correct. Raft sacrifices CAP-availability on the minority side to keep linearisability. The 3-node side elects a leader and continues, so clients that can reach it still succeed."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Majority of 5 = ⌊5/2⌋ + 1 = **3**.\n2. Partition: side A has 3 nodes, side B has 2.\n3. Side A can elect a leader (3 votes) and commit writes (3 acks).\n4. Side B can't get 3 votes or 3 acks, so writes there fail or time out. Any old leader on side B steps down when it can't reach a majority.\n\nIn CAP terms: non-failing nodes on side B can't serve writes, so it's not CAP-available; but it stays linearisable, so it's CP. In practice, availability is still high, because clients can reconnect to side A.",
+    "link": {
+      "title": "Please stop calling databases CP or AP (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your database runs in a single region with no network problems at all. Why might you still choose eventually consistent reads?",
+    "options": [
+      {
+        "text": "CAP forces you to give up consistency even without partitions",
+        "explanation": "Incorrect. CAP only constrains behaviour during a partition. Without one, you can have both consistency and availability."
+      },
+      {
+        "text": "Eventually consistent reads are more durable",
+        "explanation": "Incorrect. Read consistency doesn't affect durability; durability depends on how writes are persisted and replicated."
+      },
+      {
+        "text": "Eventually consistent reads can offer lower latency or cost, illustrating the else trade-off in PACELC",
+        "explanation": "Correct. Strong reads must go to the leader or a quorum. Eventually consistent reads can be served by any nearby replica. DynamoDB, for example, charges strongly consistent reads at twice the capacity of eventually consistent ones."
+      },
+      {
+        "text": "Strongly consistent reads aren't possible in a single region",
+        "explanation": "Incorrect. Strong reads are perfectly possible in a single region; DynamoDB, Postgres primary reads and etcd all provide them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "PACELC: **E**lse (no partition) → choose **L**atency or **C**onsistency.\n\nIn DynamoDB:\n\n| Read type | Cost (≤4 KB item) | Served by |\n|---|---|---|\n| Eventually consistent | 0.5 RCU | Any replica |\n| Strongly consistent | 1 RCU | Leader replica |\n\nAt 100k reads/s, that's 50k vs 100k RCUs: double the cost, plus potentially more latency. If the data is a product description that changes once a week, eventually consistent reads may be suitable if stale descriptions are acceptable.",
+    "link": {
+      "title": "DynamoDB read consistency (AWS docs)",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about CAP and PACELC are **correct**? Select all that apply.",
+    "options": [
+      {
+        "text": "A correctly implemented single-node database can provide both linearisable operations and responses to every request while the node remains healthy",
+        "explanation": "Correct. There is no inter-replica partition, but the API and concurrency control must still implement linearizability. The node is also a single point of failure."
+      },
+      {
+        "text": "A system choosing consistency during partitions can still achieve 99.99% availability in practice",
+        "explanation": "Correct. CAP availability requires *every* non-failing node to respond. Quorum systems refuse only on the minority side, and partitions are rare, so measured availability can be very high (Spanner targets 99.999%)."
+      },
+      {
+        "text": "PACELC's 'else' branch says that, without partitions, stronger consistency typically costs latency",
+        "explanation": "Correct. Coordinating replicas (quorum writes, leader reads) requires extra round trips, which is the everyday cost of consistency."
+      },
+      {
+        "text": "If a system isn't linearisable, it must be CAP-available",
+        "explanation": "Incorrect. Many systems are neither. For example, a leader-follower database with async replication isn't linearisable (stale follower reads) and also refuses writes when followers can't reach the leader."
+      },
+      {
+        "text": "CAP lets you trade a little consistency for a little availability continuously",
+        "explanation": "Incorrect. CAP is a binary impossibility result about linearisability and total availability. Continuous trade-offs (bounded staleness, quorum sizes) exist, but they're outside what CAP itself describes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Test each claim against the precise definitions:\n\n- C = linearisable; A = every non-failing node responds; P = arbitrary message loss.\n\n1. Single node: C and A can coexist with an appropriate implementation; neither follows solely from having one node. True as qualified.\n2. CP + high availability: CAP-A is all-or-nothing per node; operational availability is measured over requests. True.\n3. PACELC else-branch: true by definition.\n4. Non-linearisable ⇒ available? No; async leader-follower is a counterexample.\n5. CAP is binary, not a dial. False.",
+    "link": {
+      "title": "CAP Twelve Years Later (Eric Brewer, InfoQ)",
+      "url": "https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You deploy a database with replicas in London and Virginia (round trip ~80 ms). Writes must be linearisable, and no acknowledged write may be lost if either region is destroyed. What's the **minimum** write latency you should expect, and which PACELC classification applies?",
+    "options": [
+      {
+        "text": "~1 ms; PA/EL",
+        "explanation": "Incorrect. 1 ms is a local commit. Surviving loss of a whole region means another region must hold the write before it's acknowledged, which needs at least one cross-region round trip."
+      },
+      {
+        "text": "At least ~80 ms (one cross-region round trip); PC/EC",
+        "explanation": "Correct. To survive losing the region that took the write, the write must be durably replicated to another region before the ack: ≥ 1 RTT ≈ 80 ms. Choosing consistency over latency in normal operation is EC; refusing writes without a quorum during partitions is PC."
+      },
+      {
+        "text": "~40 ms (half a round trip); PC/EL",
+        "explanation": "Incorrect. The write must reach the other region *and* the confirmation must come back before acknowledging the client, so you pay a full round trip, not one way. And waiting for it is choosing C over L, i.e. EC."
+      },
+      {
+        "text": "~160 ms (two round trips); PA/EC",
+        "explanation": "Incorrect. A well-designed protocol (e.g. a Paxos/Raft leader in one region, with a quorum including another) needs one round trip in the common case. And a linearisable system can't be PA."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Requirement:** survive losing either region → a write must be stored in ≥2 regions before acknowledging.\n2. **Physics:** the leader in London sends the write to Virginia and waits for the ack:\n   ```\n   London -> Virginia : ~40 ms\n   Virginia -> London : ~40 ms\n   minimum commit    : ~80 ms\n   ```\n   (Practical setups often use 3 regions so a majority survives one region loss.)\n3. **Classification:**\n   - Normal operation: you accept ~80 ms to stay consistent → **EC**.\n   - During a partition: the side without a quorum refuses writes → **PC**.\n\nThis is the Spanner / CockroachDB multi-region trade-off. If 80 ms writes are unacceptable, relax a requirement: async replication (risk losing recent writes on region failure) or partition data by home region.",
+    "link": {
+      "title": "Consistency Tradeoffs in Modern Distributed Database System Design (Abadi, PDF)",
+      "url": "https://www.cs.umd.edu/~abadi/papers/abadi-pacelc.pdf"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An e-commerce shopping cart uses an AP store: during a partition, both sides keep accepting cart updates. When the partition heals, the two versions of a user's cart conflict. Which resolution strategy is most appropriate?",
+    "options": [
+      {
+        "text": "Keep both versions and merge them, e.g. union of items (as Amazon's Dynamo did) or a CRDT",
+        "explanation": "Correct. Detecting concurrent versions (with version vectors) and merging preserves every add. The known side-effect: a deleted item can reappear, which Amazon judged acceptable since it's better than losing an add. An observed-remove set (OR-Set) preserves removal of observed add-tags, but a concurrent new add survives (add-wins semantics)."
+      },
+      {
+        "text": "Last-write-wins by timestamp",
+        "explanation": "Incorrect for a cart. LWW silently discards one side's updates (items the user added would vanish), and clock skew can make the 'wrong' write win. It's acceptable only when losing concurrent updates is harmless."
+      },
+      {
+        "text": "Reject both versions and empty the cart",
+        "explanation": "Incorrect. This destroys the user's data and defeats the purpose of choosing availability."
+      },
+      {
+        "text": "Switch the store to CP so conflicts can't happen",
+        "explanation": "Incorrect as a resolution strategy. A CP store would avoid conflicts but make carts unavailable to users on the minority side during partitions, which is the very trade-off the business rejected by choosing AP."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "During a partition:\n\n```\nA: {book} + pen -> {book, pen}\nB: {book} + mug -> {book, mug}\n```\n\nAfter healing, version vectors show the versions are **concurrent** (neither descends from the other).\n\n- **LWW:** keep {book, mug}, so the pen is lost. Bad.\n- **Union merge:** {book, pen, mug}. Every add preserved.\n\nEdge case: if side A removed `book` while B didn't, a naive union brings `book` back. An OR-Set CRDT tags each add with a unique id so removes of observed adds win, avoiding resurrection.\n\nThe principle: if you choose A, you must also choose a merge strategy that matches the business semantics.",
+    "link": {
+      "title": "Eventually Consistent (Werner Vogels)",
+      "url": "https://www.allthingsdistributed.com/2008/12/eventually_consistent.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A Cassandra table has replication factor **N = 3**. Which (write level, read level) combinations guarantee that a read overlaps with at least one replica holding the latest successful write? Select all that apply.",
+    "options": [
+      {
+        "text": "Write `QUORUM`, read `QUORUM`",
+        "explanation": "Correct. W + R = 2 + 2 = 4 > 3, so every read set shares at least one replica with every write set."
+      },
+      {
+        "text": "Write `ONE`, read `ONE`",
+        "explanation": "Incorrect. 1 + 1 = 2 ≤ 3. The read can land on a replica the write hasn't reached yet. Fast and highly available (PA/EL), but reads can be stale."
+      },
+      {
+        "text": "Write `ALL`, read `ONE`",
+        "explanation": "Correct. 3 + 1 > 3: every replica has the write, so any one replica will do. The cost is availability: a write fails if any single replica is down."
+      },
+      {
+        "text": "Write `ONE`, read `QUORUM`",
+        "explanation": "Incorrect. 1 + 2 = 3, which is not greater than 3. The write may sit on the one replica the quorum read skips."
+      },
+      {
+        "text": "Write `QUORUM`, read `ONE`",
+        "explanation": "Incorrect. 2 + 1 = 3, not greater than 3. The single replica read may be the one that missed the write."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "The overlap rule is **W + R > N**.\n\n| W | R | W+R | Overlap? |\n|---|---|---|---|\n| 2 | 2 | 4 | Yes |\n| 1 | 1 | 2 | No |\n| 3 | 1 | 4 | Yes |\n| 1 | 2 | 3 | No |\n| 2 | 1 | 3 | No |\n\nOverlap is necessary but not sufficient for linearisability: with last-write-wins timestamps and concurrent writes, Cassandra needs lightweight transactions for that. In PACELC terms, higher W and R move you from EL towards EC, paying latency on every request.",
+    "link": {
+      "title": "Dynamo-style replication and tunable consistency (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Service A updates a feature flag in ZooKeeper and then sends Service B a message saying \"flag updated\". Service B, connected to a different ZooKeeper server, reads the flag and sees the **old** value. ZooKeeper is usually called CP. What's going on?",
+    "options": [
+      {
+        "text": "ZooKeeper has lost the write because of a partition",
+        "explanation": "Incorrect. The write was committed by a quorum before A was told it succeeded. It isn't lost; B's server simply hasn't applied it yet."
+      },
+      {
+        "text": "ZooKeeper reads can lag; B should require at least the version A observed, waiting until it is visible",
+        "explanation": "Correct. A follower read can be stale. Passing A's version lets B reject older results. sync() improves freshness but is not a strict guarantee under all failures because it is not a quorum operation."
+      },
+      {
+        "text": "This can't happen in a CP system, so there must be a bug",
+        "explanation": "Incorrect. A 'CP' label says how a system behaves during a partition. It doesn't promise every read is linearisable in normal operation. That's exactly why the lesson says to describe actual guarantees."
+      },
+      {
+        "text": "Service B's clock is behind Service A's",
+        "explanation": "Incorrect. ZooKeeper orders updates with its own transaction IDs, not client wall clocks. The issue is replication lag on B's server."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the events:\n\n```\n1. A -> leader: set flag=on\n2. quorum commits, A gets OK\n3. A -> B: \"flag updated\"\n4. B -> follower F: get flag\n5. F hasn't applied step 2 yet\n   -> returns flag=off\n```\n\nThe message in step 3 travels outside ZooKeeper, so ZooKeeper's per-client ordering doesn't cover it. Fix: A includes the version number so B can wait for at least that version. A preceding `sync()` alone is not a strict linearisability guarantee under all failures.\n\nLesson: two systems both labelled CP can have very different read guarantees. That's the E branch of PACELC at work.",
+    "link": {
+      "title": "ZooKeeper Programmer's Guide",
+      "url": "https://zookeeper.apache.org/doc/current/zookeeperProgrammers.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A global profile service has its primary database in Virginia and an asynchronous read replica in Sydney. Sydney users read locally (~5 ms) instead of from Virginia (~200 ms round trip). Which PACELC choice is this, and what anomaly must you handle?",
+    "options": [
+      {
+        "text": "PC: during partitions the replica refuses reads",
+        "explanation": "Incorrect. The scenario is about normal operation, with no partition, and an async replica would usually keep serving (stale) reads during a partition anyway."
+      },
+      {
+        "text": "EC: users always see their latest update",
+        "explanation": "Incorrect. Reading from an asynchronous replica is the opposite of choosing consistency. Recent writes may not have arrived yet."
+      },
+      {
+        "text": "EL: a user may not see their own edit immediately after saving it, so you need read-your-writes handling",
+        "explanation": "Correct. Choosing local reads trades consistency for latency. The classic fix is to route a user's reads to the primary for a short time after they write, or to read from the replica only once it has caught up to the user's last write position."
+      },
+      {
+        "text": "It's CA, because there's only one primary",
+        "explanation": "Incorrect. There are two nodes connected over a long network link. The system is distributed, so 'CA' doesn't apply."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "No partition is involved, so this is the **E** branch: latency versus consistency.\n\n```\nlocal read:   ~5 ms, maybe stale\nprimary read: ~200 ms, fresh\n```\n\nThe painful anomaly is a user editing their profile, being redirected to the profile page and seeing the old version. Read-your-writes options:\n\n- After a write, pin reads to the primary until the replica has caught up; a fixed 10-second pin is only a heuristic and cannot guarantee read-your-writes.\n- Record the write's log position; read from the replica only once it has replayed past it.\n\nEveryone else's reads can stay local and fast.",
+    "link": {
+      "title": "PACELC theorem (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/PACELC_theorem"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "During a network partition, a bank's ATMs can't reach the central ledger. Each ATM independently keeps dispensing up to an illustrative £200 per card per day, log the withdrawals, and settle them when connectivity returns, charging overdraft fees where needed. How is this best described?",
+    "options": [
+      {
+        "text": "CP: the ATM preserves linearisability of the balance",
+        "explanation": "Incorrect. The ATM approves withdrawals without seeing the latest balance, so two ATMs could both approve against the same funds. That's not linearisable."
+      },
+      {
+        "text": "A violation of CAP, because the bank keeps both consistency and availability",
+        "explanation": "Incorrect. The bank doesn't keep linearisable consistency. It accepts temporary inconsistency, which is allowed."
+      },
+      {
+        "text": "CA, because the ATMs and the ledger are a single system",
+        "explanation": "Incorrect. They communicate over a network that has just partitioned. 'CA' isn't available to a distributed system."
+      },
+      {
+        "text": "Availability-oriented offline operation with local withdrawal limits and later reconciliation; a global per-card exposure cap needs additional coordination or preallocated rights",
+        "explanation": "Correct. Brewer discusses accepting bounded local risk and reconciling later. But independently disconnected ATMs cannot enforce one shared £200/card/day cap without preallocated spending rights or another coordination mechanism."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "An ATM can continue serving within a local limit and later reconcile its withdrawal log. If a card is used at k disconnected ATMs, each allowing £200 independently, total withdrawals can reach £200 × k in a day. That is not a global £200 exposure guarantee. A stricter global bound requires spending rights allocated in advance or a reachable coordinating authority.\n\nThe £200 amount is a hypothetical exercise limit, not a sourced banking policy.",
+    "link": {
+      "title": "CAP Twelve Years Later (Eric Brewer, InfoQ)",
+      "url": "https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "From the point of view of the other nodes in a cluster, which of these is **indistinguishable from a network partition**?",
+    "options": [
+      {
+        "text": "A node is in a 20-second garbage-collection pause",
+        "explanation": "Correct. Peers just see messages go unanswered. They can't tell a paused, slow or crashed node from one cut off by the network, so they must treat it the same way."
+      },
+      {
+        "text": "A node returns a value written a second ago",
+        "explanation": "Incorrect. That's a staleness symptom, not a communication failure. The node is responding."
+      },
+      {
+        "text": "A node's CPU is at 40% utilisation",
+        "explanation": "Incorrect. A moderately loaded node still answers promptly; nothing looks like lost messages."
+      },
+      {
+        "text": "A client sends a malformed request",
+        "explanation": "Incorrect. That's an application error, answered with an error response. Nodes are still communicating."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A partition is defined by what nodes observe: messages between them don't arrive (in time). Ask of each option: *do peers stop hearing from the node?*\n\n| Situation | Peers hear nothing? |\n|---|---|\n| 20 s GC pause | Yes |\n| Stale value | No |\n| 40% CPU | No |\n| Malformed request | No |\n\nThis is why partition handling isn't optional: even inside one datacentre, pauses and overloaded switches produce the same symptoms as a cut cable.",
+    "link": {
+      "title": "Network partition (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Network_partition"
+    }
+  }
+]

@@ -1,0 +1,343 @@
+[
+  {
+    "id": "para-oop-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An `Account` class keeps `balance` private and only allows changes through `deposit()` and `withdraw()`, which reject invalid amounts. What is the main benefit?",
+    "options": [
+      {
+        "text": "The invariant (for example, balance never negative) is enforced in one place, and the internal representation can change without affecting callers",
+        "explanation": "Correct. That is encapsulation: callers can't put the object into an invalid state, and you can change how the balance is stored without touching them."
+      },
+      {
+        "text": "It makes the code run faster",
+        "explanation": "Encapsulation is about correctness and maintainability. Method calls are, if anything, a tiny cost over direct field access (often removed by inlining)."
+      },
+      {
+        "text": "It prevents the class from being subclassed",
+        "explanation": "Private fields don't stop subclassing. Preventing subclassing needs `final` (Java) or similar."
+      },
+      {
+        "text": "It lets two objects share the same balance",
+        "explanation": "Sharing state is unrelated; encapsulation actually makes accidental sharing less likely."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Without encapsulation, any code anywhere could write `acct.balance = -500`. To know the invariant holds, you would have to audit every caller.\n2. With it, only `deposit` and `withdraw` can change the balance, and both validate. Checking two methods proves the invariant for the whole program.\n3. Bonus: switching to storing pence as an integer, or adding an audit log, changes only the class internals.",
+    "link": {
+      "title": "Object-oriented programming — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Object-oriented_programming"
+    }
+  },
+  {
+    "id": "para-oop-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does `new Dog().greet()` return?\n\n```java\nclass Animal {\n  String speak() { return \"...\"; }\n  String greet() {\n    return \"I say \" + speak();\n  }\n}\nclass Dog extends Animal {\n  String speak() { return \"Woof\"; }\n}\n```",
+    "options": [
+      {
+        "text": "`\"I say ...\"`",
+        "explanation": "This assumes `speak()` inside `Animal.greet` is bound to `Animal.speak`. In Java, instance method calls are dynamically dispatched on the runtime object, which is a `Dog`."
+      },
+      {
+        "text": "A compile error, because `Dog` doesn't define `greet`",
+        "explanation": "`Dog` inherits `greet` from `Animal`; it doesn't need to define it."
+      },
+      {
+        "text": "`\"Woof\"`",
+        "explanation": "`greet` prepends `\"I say \"`, and that code still runs; only `speak` is overridden."
+      },
+      {
+        "text": "`\"I say Woof\"`",
+        "explanation": "Correct. `greet` is inherited from `Animal`, but its call to `speak()` is a virtual call on `this`, which is a `Dog`, so `Dog.speak` runs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `new Dog().greet()`: `Dog` has no `greet`, so the inherited `Animal.greet` runs.\n2. Inside it, `speak()` means `this.speak()`. `this` is the `Dog` object.\n3. Dynamic dispatch looks up `speak` in `Dog`'s vtable: `Dog.speak`, returning `\"Woof\"`.\n4. Result: `\"I say \" + \"Woof\"` = `\"I say Woof\"`.\n\nThis self-call through `this` is exactly what makes the fragile base class problem possible: the parent's code calls back into the child.",
+    "link": {
+      "title": "Virtual method table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Virtual_method_table"
+    }
+  },
+  {
+    "id": "para-oop-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "For which of these designs is **composition** (has-a, delegation) the better fit than inheritance? Select all that apply.",
+    "options": [
+      {
+        "text": "A `Car` that needs an `Engine`",
+        "explanation": "Correct. A car *has* an engine; it is not a kind of engine. Holding an `Engine` field also lets you swap petrol for electric."
+      },
+      {
+        "text": "A `Stack` class that wants to reuse `ArrayList`'s storage",
+        "explanation": "Correct. Java's own `java.util.Stack extends Vector` is a famous mistake: it exposes `insertElementAt` and other methods that break stack discipline. Wrapping a list exposes only `push`/`pop`/`peek`."
+      },
+      {
+        "text": "A `SavingsAccount` that must be usable anywhere an `Account` is, and honours all of `Account`'s rules",
+        "explanation": "This is a genuine is-a relationship that honours the parent's contract, which is exactly where inheritance (or implementing an interface) fits."
+      },
+      {
+        "text": "A `Logger` that every service class wants to use",
+        "explanation": "Correct. Services *use* a logger. Inheriting from `Logger` would make every service a logger and block it from inheriting anything else."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Ask two questions for each: *is it really an is-a relationship?* and *would every method of the parent make sense on the child?*\n\n- Car/Engine: has-a. Composition.\n- Stack/ArrayList: a stack is not a list; `list.add(0, x)` would break LIFO. Composition. (`java.util.Stack` got this wrong by extending `Vector`.)\n- SavingsAccount/Account: is-a, contract honoured. Inheritance is reasonable.\n- Service/Logger: uses-a. Composition (inject a logger).",
+    "link": {
+      "title": "Composition over inheritance — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Composition_over_inheritance"
+    }
+  },
+  {
+    "id": "para-oop-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the `CountingSet extends HashSet` from the lesson (which overrides both `add` and `addAll` to increment `added`), what is `added` after `s.addAll(List.of(\"a\", \"b\", \"c\"))` on an empty set?",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That is what the author intended, but it assumes `HashSet.addAll` doesn't call `add`. It does (via `AbstractCollection`), and those calls dispatch to the overridden `add`."
+      },
+      {
+        "text": "0",
+        "explanation": "Both overrides increment `added`, so it can't stay at 0."
+      },
+      {
+        "text": "6",
+        "explanation": "Correct. `addAll` adds 3, then `super.addAll` calls `this.add` three times, each adding 1. The subclass depended on an undocumented implementation detail of its parent."
+      },
+      {
+        "text": "9",
+        "explanation": "Each element is only counted twice: once in bulk by `addAll` and once by the inner `add` call."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Our `addAll` runs: `added += 3`, so `added = 3`.\n2. It calls `super.addAll(c)`. `HashSet` inherits `addAll` from `AbstractCollection`, which loops and calls `add(e)` per element.\n3. `add` is virtual, so each call goes to *our* override: `added++` three times, so `added = 6`.\n4. Lesson: the subclass relied on how the parent was implemented, not on its contract. If a future JDK changed `addAll` not to call `add`, removing the override would be wrong again. Composition (wrapping a `Set`) avoids the whole issue because `inner.addAll` calls `inner.add`, not ours.",
+    "link": {
+      "title": "Fragile base class — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Fragile_base_class"
+    }
+  },
+  {
+    "id": "para-oop-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this Python print?\n\n```python\nclass A:\n    def hi(self): return \"A\"\nclass B(A):\n    def hi(self):\n        return \"B\" + super().hi()\nclass C(A):\n    def hi(self):\n        return \"C\" + super().hi()\nclass D(B, C):\n    def hi(self):\n        return \"D\" + super().hi()\nprint(D().hi())\n```",
+    "options": [
+      {
+        "text": "`DBA`",
+        "explanation": "This assumes `super()` in `B` means `B`'s parent class `A`. In Python, `super()` means *the next class in the instance's MRO*, and for a `D` instance the class after `B` is `C`."
+      },
+      {
+        "text": "`DBACA`",
+        "explanation": "This is what naive depth-first inheritance would do, calling A twice. C3 linearisation guarantees each class appears once in the MRO."
+      },
+      {
+        "text": "`DCBA`",
+        "explanation": "The MRO keeps the base classes in the order listed: `class D(B, C)` puts B before C."
+      },
+      {
+        "text": "`DBCA`",
+        "explanation": "Correct. `D.__mro__` is D, B, C, A, object. Each `super().hi()` moves one step along it, so A's method runs once, at the end."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Compute the MRO with C3: `D, B, C, A, object` (B before C as listed; A after both because both inherit from it).\n2. `D.hi` returns `\"D\" + super().hi()`. The next class after D is B.\n3. `B.hi` returns `\"B\" + super().hi()`. For a `D` instance, the next class after B is **C**, not A.\n4. `C.hi` returns `\"C\" + super().hi()`. Next is A.\n5. `A.hi` returns `\"A\"`.\n\nResult: `\"DBCA\"`. This cooperative behaviour is why `super()` works sensibly in diamonds: A's method runs exactly once.",
+    "link": {
+      "title": "The Python 2.3 Method Resolution Order — Python docs",
+      "url": "https://docs.python.org/3/howto/mro.html"
+    }
+  },
+  {
+    "id": "para-oop-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`Square extends Rectangle` overrides `setWidth` and `setHeight` so both always set both sides. A function does `r.setWidth(5); r.setHeight(2); assert r.area() == 10`. What happens when it is passed a `Square`, and which principle is violated?",
+    "options": [
+      {
+        "text": "The assertion fails (area is 4); this violates the Liskov substitution principle",
+        "explanation": "Correct. The subclass breaks a guarantee callers relied on (width and height are independent), so it can't be safely substituted for its parent."
+      },
+      {
+        "text": "The assertion passes; squares are rectangles",
+        "explanation": "Mathematically yes, but the *mutable* `Square` changes width when you set height. After `setHeight(2)`, both sides are 2, giving area 4."
+      },
+      {
+        "text": "It fails with a compile error; this violates encapsulation",
+        "explanation": "It compiles fine: `Square` is a subtype of `Rectangle`. The failure is a behavioural one at runtime."
+      },
+      {
+        "text": "The assertion fails (area is 25); this violates the open/closed principle",
+        "explanation": "The last call wins: `setHeight(2)` sets both sides to 2, so area is 4, not 25. And the principle at stake is substitutability."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `setWidth(5)` on a `Square` sets width = height = 5.\n2. `setHeight(2)` sets width = height = 2.\n3. `area()` = 2 x 2 = **4**, not 10. Assertion fails.\n4. The caller's code was correct for every real `Rectangle`. The subtype broke an expectation of the parent type: a Liskov violation.\n5. Fixes: make shapes immutable (an immutable square really is a rectangle), or don't relate them by inheritance at all.",
+    "link": {
+      "title": "Liskov substitution principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Liskov_substitution_principle"
+    }
+  },
+  {
+    "id": "para-oop-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this JavaScript print?\n\n```javascript\nclass Animal {\n  speak() { return \"...\"; }\n}\nclass Dog extends Animal {\n  speak() { return \"Woof\"; }\n}\nconst d = new Dog();\nAnimal.prototype.wag =\n  function () {\n    return this.speak() + \"!\";\n  };\nconsole.log(d.wag());\n```",
+    "options": [
+      {
+        "text": "A TypeError, because `d` was created before `wag` was added",
+        "explanation": "Objects don't copy methods at creation time. Property lookup walks the prototype chain *at call time*, so methods added later are found."
+      },
+      {
+        "text": "`\"...!\"`",
+        "explanation": "`wag` is found on `Animal.prototype`, but `this` is still `d`, and `this.speak` is looked up from `d`, finding `Dog.prototype.speak` first."
+      },
+      {
+        "text": "`\"Woof!\"`",
+        "explanation": "Correct. `d.wag` misses on `d` and `Dog.prototype`, then finds `wag` on `Animal.prototype`. Inside it, `this.speak()` starts the lookup again from `d` and finds `Dog`'s version."
+      },
+      {
+        "text": "`undefined`",
+        "explanation": "`wag` returns a string, so the result isn't `undefined`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Lookup of `d.wag`:\n\n```\nd            no 'wag'\nDog.proto    no 'wag'\nAnimal.proto 'wag' found\n```\n\nThe call runs with `this = d`. Lookup of `this.speak`:\n\n```\nd            no 'speak'\nDog.proto    'speak' found -> \"Woof\"\n```\n\nResult `\"Woof!\"`. Two lessons: JavaScript `class` is sugar over prototype chains, and those chains are live, so patching a prototype affects existing objects (which is why modifying built-in prototypes is discouraged).",
+    "link": {
+      "title": "Inheritance and the prototype chain — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Inheritance_and_the_prototype_chain"
+    }
+  },
+  {
+    "id": "para-oop-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about privacy in Python are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A leading underscore (`_balance`) is a convention only; the interpreter doesn't stop outside access",
+        "explanation": "Correct. It signals 'internal, use at your own risk', and tools and readers respect it, but nothing enforces it."
+      },
+      {
+        "text": "Inside class `Account`, `self.__balance` is stored as `_Account__balance`",
+        "explanation": "Correct. That is name mangling. It mainly prevents accidental clashes with attributes of the same name in subclasses."
+      },
+      {
+        "text": "Double-underscore names cannot be accessed from outside the class under any circumstances",
+        "explanation": "They can: `acct._Account__balance` works. Mangling is a renaming, not access control."
+      },
+      {
+        "text": "Names like `__init__`, which start *and* end with two underscores, are mangled",
+        "explanation": "Names with trailing double underscores (dunder names) are not mangled. Mangling applies only to names with at least two leading and at most one trailing underscore."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. `_name`: pure convention.\n2. `__name` inside class `C` becomes `_C__name`. Check: `Account().__dict__` shows `{'_Account__balance': 0}`.\n3. So you can still reach it as `obj._Account__balance`; it is deterrence, not security.\n4. Dunder names such as `__init__` and `__len__` are left alone, otherwise special methods couldn't work.\n\nContrast with Java's compiler-enforced `private` and JavaScript's `#field`, which is enforced by the engine.",
+    "link": {
+      "title": "Private variables — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/classes.html#private-variables"
+    }
+  },
+  {
+    "id": "para-oop-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does `a.m(x)` return?\n\n```java\nclass A {\n  String m(Object o) {\n    return \"A.obj\";\n  }\n  String m(String s) {\n    return \"A.str\";\n  }\n}\nclass B extends A {\n  String m(Object o) {\n    return \"B.obj\";\n  }\n}\n\nA a = new B();\nObject x = \"hi\";\n// a.m(x) ?\n```",
+    "options": [
+      {
+        "text": "`\"A.str\"`",
+        "explanation": "This assumes overload resolution looks at the runtime type of `x` (String). Java chooses among overloads at compile time from the *static* type, which is `Object`."
+      },
+      {
+        "text": "`\"A.obj\"`",
+        "explanation": "The compiler did pick the `m(Object)` signature, but which *implementation* of that signature runs is decided at runtime, and the object is a `B`, which overrides it."
+      },
+      {
+        "text": "`\"B.obj\"`",
+        "explanation": "Correct. Step 1 (compile time): static arg type `Object` selects signature `m(Object)`. Step 2 (runtime): the receiver is a `B`, whose override of `m(Object)` runs."
+      },
+      {
+        "text": "A compile error: the call is ambiguous",
+        "explanation": "With an `Object` argument only `m(Object)` is applicable, so there's no ambiguity."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Java method calls are resolved in two phases.\n\n1. **Compile time, overloads**: the compiler looks at the static type of `a` (`A`) and of `x` (`Object`). Of `A`'s methods, only `m(Object)` accepts an `Object`. The call is bound to the signature `m(Object)`.\n2. **Runtime, overrides**: the JVM dispatches that signature on the actual receiver, a `B`. `B` overrides `m(Object)`, so `\"B.obj\"` runs.\n\nFor comparison, `a.m(\"hi\")` would pick `m(String)` at compile time; `B` doesn't override it, so it returns `\"A.str\"`. Single dispatch on the receiver, static choice on the arguments: that is why the visitor pattern exists.",
+    "link": {
+      "title": "JLS 15.12: Method invocation expressions — Oracle",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-15.html#jls-15.12"
+    }
+  },
+  {
+    "id": "para-oop-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You maintain a widely used library class that clients subclass. Which practices reduce the risk of the fragile base class problem? Select all that apply.",
+    "options": [
+      {
+        "text": "Document which overridable methods your own methods call (self-use), or avoid calling overridable methods internally",
+        "explanation": "Correct. Subclasses break when they don't know that `addAll` calls `add`. Documenting or eliminating self-use removes the hidden coupling. *Effective Java* calls this designing and documenting for inheritance."
+      },
+      {
+        "text": "Mark the class `final` (or classes and methods non-overridable by default) unless designed for extension",
+        "explanation": "Correct. If clients can't subclass, they can't depend on internals. Kotlin makes classes final by default for this reason."
+      },
+      {
+        "text": "Offer an interface plus composition-friendly building blocks, so clients wrap rather than extend",
+        "explanation": "Correct. Clients that delegate depend only on the public contract, so internal changes don't break them."
+      },
+      {
+        "text": "Make all fields `protected` so subclasses have full access",
+        "explanation": "That widens the surface subclasses can depend on, increasing coupling to internals and making the problem worse."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The problem is coupling: a subclass depends on how the parent is implemented. Every fix reduces that coupling.\n\n1. Document or remove self-use: subclasses then know (or needn't care) which methods call which.\n2. Final by default: no subclasses, no dependence. Kotlin requires `open` to allow extension.\n3. Interfaces plus composition: clients wrap and delegate, relying only on the public API.\n4. `protected` fields do the opposite: they expose internal state that you can then never change.",
+    "link": {
+      "title": "Fragile base class — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Fragile_base_class"
+    }
+  },
+  {
+    "id": "para-oop-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A hot loop in a Java service calls `shape.area()` on a `List<Shape>`. In one deployment the list only ever contains `Circle`s; in another it holds 6 different `Shape` subclasses evenly mixed. Why might the first run noticeably faster under HotSpot?",
+    "options": [
+      {
+        "text": "Virtual calls are always resolved at compile time by `javac`",
+        "explanation": "`javac` emits `invokevirtual`/`invokeinterface`; target selection happens in the JVM at runtime."
+      },
+      {
+        "text": "The JVM creates a new vtable on every call when there are many classes",
+        "explanation": "Vtables are built once per class at load time. The cost is the indirect call and the lost inlining, not table creation."
+      },
+      {
+        "text": "Circles are smaller objects, so they fit in cache",
+        "explanation": "Object size isn't the main effect here. The difference comes from what the JIT can do at the call site."
+      },
+      {
+        "text": "With one receiver class the call site is monomorphic, so the JIT can inline `Circle.area` behind a cheap type check; with many classes it is megamorphic and falls back to an indirect call that can't be inlined",
+        "explanation": "Correct. HotSpot profiles receiver types per call site. Monomorphic (and bimorphic) sites are typically inlined with a guard, unlocking further optimisation; megamorphic sites use a vtable or itable lookup."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A virtual call normally costs: load the object's class pointer, load the method from the table, make an indirect call.\n2. HotSpot records which classes actually reach each call site.\n3. Only `Circle` seen (monomorphic): the JIT emits `if (class == Circle) { inlined body } else { deoptimise }`. Inlining then enables constant folding, escape analysis and so on.\n4. Six classes seen (megamorphic): no single target to inline, so it uses the table-based indirect call each time, and the loop body stays opaque to the optimiser.\n\nThe abstraction of dynamic dispatch is cheap, but not always free.",
+    "link": {
+      "title": "Virtual method table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Virtual_method_table"
+    }
+  }
+]

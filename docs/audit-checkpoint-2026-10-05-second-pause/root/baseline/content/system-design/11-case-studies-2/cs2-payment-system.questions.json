@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs2-payment-system-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should a payment system store `amount: 2350, currency: \"GBP\"` rather than `amount: 23.50`?",
+    "options": [
+      {
+        "text": "Binary floating point can't represent most decimal fractions exactly, so sums drift (0.1 + 0.2 = 0.30000000000000004). Integer minor units are exact, and the explicit currency says what a unit means",
+        "explanation": "Correct. Financial arithmetic must be exact and auditable. Integers in minor units (pence, cents), or a fixed-point decimal type, avoid rounding drift. Currency matters because minor units differ: JPY has 0 decimal places and BHD has 3."
+      },
+      {
+        "text": "Integers take less storage than floats",
+        "explanation": "Wrong. Both are typically 8 bytes. Storage isn't the reason. Exactness is."
+      },
+      {
+        "text": "JSON can't encode decimal numbers",
+        "explanation": "Wrong. JSON can encode 23.50, but most parsers turn it into an IEEE 754 double, which reintroduces the precision problem. That's a reason to avoid it, but JSON itself isn't the limitation."
+      },
+      {
+        "text": "PSPs reject decimal amounts for security reasons",
+        "explanation": "Wrong. Many PSP APIs (Stripe, for example) do take integer minor units, but for precision and unambiguity, not security."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Try it in any language using IEEE 754 doubles:\n\n```\n0.1 + 0.2        -> 0.30000000000000004\nsum of 0.01 x 1e6 -> 10000.000000171856\n```\n\nThat's tiny drift, but a ledger must **balance to zero exactly** and reconcile against bank statements to the penny.\n\nWith integers:\n\n```\n10 + 20          -> 30 (pence), exact\n```\n\nAlso, the minor-unit exponent depends on currency:\n\n| Currency | Exponent | 'one unit' |\n|---|---|---|\n| GBP | 2 | 1p |\n| JPY | 0 | 1 yen |\n| BHD | 3 | 1 fils |\n\nSo always store the currency with the amount.",
+    "link": {
+      "title": "The Payment Intents API (Stripe docs)",
+      "url": "https://docs.stripe.com/payments/payment-intents"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client sends `POST /payments` with `Idempotency-Key: K1`. While the first request is still processing (waiting on the PSP), a retry with the same key arrives at another server. What should that server do?",
+    "options": [
+      {
+        "text": "Process it too. Idempotency only matters after the first request finishes",
+        "explanation": "Wrong. Concurrent duplicates are the most dangerous case. Two in-flight requests could each call the PSP and create two charges before either stores a result."
+      },
+      {
+        "text": "Generate a new key K2 and process it as a fresh payment",
+        "explanation": "Wrong. That defeats idempotency entirely and is exactly how double charges happen. The server must never invent keys on the client's behalf."
+      },
+      {
+        "text": "See that K1 exists in state `in_progress` and return 409 Conflict (or block until the first completes), without starting a second execution",
+        "explanation": "Correct. The key row is inserted atomically as `in_progress` before any side effect, so the duplicate can't start a parallel execution. Once the first completes, retries get the stored response."
+      },
+      {
+        "text": "Return the stored response, which will be empty",
+        "explanation": "Wrong. There's no stored response yet. Returning an empty or placeholder success would mislead the client into thinking the payment completed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Lifecycle of an idempotency key:\n\n```\n-- PK on key\nINSERT key K1 (status=in_progress,\n               req_hash=H)\n  success -> process\n  conflict -> read existing row:\n    completed & hash==H -> return stored\n    completed & hash!=H -> 422 (misuse)\n    in_progress         -> 409 / wait\n```\n\nThe atomic INSERT is the lock. Add `locked_until` so a crashed first attempt doesn't block K1 forever. After that time, a retry may take over and resume, using the *same* deterministic PSP idempotency key, so the PSP dedups if the crashed attempt had already called it.",
+    "link": {
+      "title": "Designing robust and predictable APIs with idempotency (Stripe)",
+      "url": "https://stripe.com/blog/idempotency"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your orchestrator calls the PSP to authorise £80. After 30 s, the call times out with no response. What is the correct next step?",
+    "options": [
+      {
+        "text": "Mark the payment FAILED and tell the customer to try again",
+        "explanation": "Wrong. The PSP may have authorised the charge. If the customer retries (with a new payment and new key), they may be charged twice, and the first authorisation goes unaccounted for."
+      },
+      {
+        "text": "Immediately retry the PSP call with a fresh idempotency key",
+        "explanation": "Wrong. A fresh key tells the PSP it's a *new* operation, so if the first succeeded you've now authorised £160. Retries must reuse the same key."
+      },
+      {
+        "text": "Mark it UNKNOWN, then resolve it: retry with the *same* deterministic PSP idempotency key, or query the PSP for the payment by reference, or wait for the webhook. Only then move to AUTHORISED or FAILED",
+        "explanation": "Correct. A timeout is genuinely unknown (the Two Generals problem). The same-key retry is safe because the PSP dedups, and status queries and webhooks give an authoritative answer. A resolver job sweeps any UNKNOWN that's left over."
+      },
+      {
+        "text": "Mark it AUTHORISED optimistically and fix it in reconciliation",
+        "explanation": "Wrong. You might ship goods or start a ride for an unpaid order. Reconciliation is a safety net, not the primary way to learn payment outcomes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Three possible realities behind a timeout:\n\n1. The request never reached the PSP.\n2. The PSP processed it, and the response was lost.\n3. The PSP is still processing.\n\nYou can't tell which from the client side, so represent that honestly:\n\n```\nAUTHORISING --timeout--> UNKNOWN\nUNKNOWN --retry(same key)--> result\nUNKNOWN --status query--> result\nUNKNOWN --webhook--> result\n```\n\nThe same-key retry is the key move. If (1) happened, the PSP processes it now. If (2) happened, it returns the original result. If (3), it reports the call is in progress. Each case converges to one authorisation.",
+    "link": {
+      "title": "Idempotent requests (Stripe API docs)",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A £100 ride is captured. The PSP fee is £1.50, the driver gets £80 and the platform keeps the rest. Using 'debits positive, credits negative' in pence, which set of ledger entries is a valid balanced transaction?",
+    "options": [
+      {
+        "text": "psp_clearing +10000, driver_payable −8000, platform_revenue −2000",
+        "explanation": "Wrong. It balances (10000 − 8000 − 2000 = 0), but it ignores the £1.50 fee. The PSP will only settle £98.50, so psp_clearing would be overstated by 150p and reconciliation would break."
+      },
+      {
+        "text": "driver_payable +8000, platform_revenue +2000",
+        "explanation": "Wrong. It doesn't balance (sum +10000). It creates £100 from nothing and has the signs reversed for liabilities and revenue, which are credits."
+      },
+      {
+        "text": "psp_clearing +9850, driver_payable −8000, platform_revenue −1850",
+        "explanation": "Wrong. It balances (9850 − 8000 − 1850 = 0), but it hides the fee by netting it into revenue. Fees become invisible in reporting, and you can't reconcile PSP fee invoices against an expense account."
+      },
+      {
+        "text": "psp_clearing +9850, psp_fee_expense +150, driver_payable −8000, platform_revenue −2000",
+        "explanation": "Correct. 9850 + 150 − 8000 − 2000 = 0. The asset matches what the PSP will actually pay, the fee is an explicit expense, and the platform's gross revenue is £20 (net £18.50 after the fee expense)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Build it account by account:\n\n1. Money the PSP will send us: 10000 − 150 = **9850**. That's an asset increase, so a debit: **+9850**.\n2. Fee cost: an expense, so a debit: **+150**.\n3. We owe the driver 80%: a liability increase, so a credit: **−8000**.\n4. Our revenue, 20% gross: a credit: **−2000**.\n\nCheck: 9850 + 150 − 8000 − 2000 = **0**.\n\nWhy the explicit fee line matters: the daily PSP settlement report lists gross 10000, fee 150, net 9850. Reconciliation matches each figure to an account, so netting the fee into revenue would make that match impossible.",
+    "link": {
+      "title": "Accounting for developers, part I (Modern Treasury)",
+      "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You process PSP webhooks. Which practices are necessary for correctness? Select all that apply.",
+    "options": [
+      {
+        "text": "Verify the HMAC signature and timestamp on each webhook",
+        "explanation": "Correct. Without verification, anyone who finds the URL can forge 'payment succeeded' events. Timestamp checks block replay of old, captured webhooks."
+      },
+      {
+        "text": "Insert each event id into a table with a unique key, and skip events already processed",
+        "explanation": "Correct. PSPs deliver webhooks at least once, and redelivery after your timeout is routine. Deduplicating on event id makes processing idempotent."
+      },
+      {
+        "text": "Assume events arrive in the order the PSP generated them",
+        "explanation": "Wrong. Delivery order isn't guaranteed. `refund.succeeded` can arrive before `charge.captured`. Apply events via a state machine that rejects or defers invalid transitions, or re-fetch the object's current state."
+      },
+      {
+        "text": "Do all processing (ledger postings, emails) synchronously before returning 200",
+        "explanation": "Wrong. Slow handlers exceed the PSP's delivery timeout, causing redeliveries and retry storms. Durably store the event, return 200 quickly, and process asynchronously."
+      },
+      {
+        "text": "Route state changes through the same conditional state-machine transitions used by the synchronous API path",
+        "explanation": "Correct. Using one transition function for both paths means a webhook and an API response reporting the same outcome converge, rather than double-posting or regressing state."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "A robust webhook handler:\n\n```\n1. verify HMAC(secret, body)\n   and |now - ts| < 5 min\n2. INSERT psp_events(provider,\n     event_id, body)\n     ON CONFLICT DO NOTHING\n   if no row inserted: return 200  (dup)\n3. return 200   (fast)\n--- async worker ---\n4. obj = psp.fetch(object_id)\n   (optional)\n5. transition(payment,\n     to=obj.status)\n     conditional UPDATE\n     + ledger txn (UNIQUE ref_id)\n     in one DB transaction\n```\n\nThe UNIQUE `ref_id` on the ledger transaction is the last guard. Even if the API path and the webhook path both try to post `capture:pay_123`, only one succeeds.",
+    "link": {
+      "title": "Idempotent requests (Stripe API docs)",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During daily reconciliation, the PSP settlement report shows a £45 refund on payment `pay_789` that doesn't appear in your ledger. What is the most likely cause, and the right handling?",
+    "options": [
+      {
+        "text": "The PSP made an error. Ignore it",
+        "explanation": "Wrong. Externally settled money moved: the PSP really paid £45 back to the customer. Ignoring it leaves your ledger wrong and your balances overstated."
+      },
+      {
+        "text": "Delete payment `pay_789` from the ledger so the totals match",
+        "explanation": "Wrong. Ledgers are append-only. Deleting entries destroys the audit trail and misstates history. Corrections are always new transactions."
+      },
+      {
+        "text": "Someone issued a refund directly in the PSP dashboard, or the refund webhook was lost. Raise a break, confirm the refund via the PSP API, and post the missing refund transaction (with a unique ref) to the ledger",
+        "explanation": "Correct. Out-of-band actions and missed webhooks are the classic reasons for breaks. Resolution is to verify against the source of truth and post a correcting, balanced transaction, which can be automated for this known pattern."
+      },
+      {
+        "text": "Update the original capture entry from £100 to £55",
+        "explanation": "Wrong. Changing a posted entry rewrites history, and it misrepresents what happened: a £100 capture, then a £45 refund. Post a separate refund transaction."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Reconciliation flow:\n\n1. **Match**: for each PSP report line, find the ledger txn with the same PSP reference and amount.\n2. **Break**: PSP refund `re_456` (−£45 on `pay_789`) has no match.\n3. **Classify**: confirm it through the API: `GET /refunds/re_456` returns 'succeeded', created by a dashboard user. That's 'out-of-band refund'.\n4. **Resolve** (automatable):\n```\ntxn refund:re_456\n  psp_clearing       -4500\n  driver_payable     +3600  (80%)\n  platform_revenue    +900  (20%)\n                 sum     0\n```\n   With UNIQUE `ref_id = refund:re_456`, a late webhook can't post it again.\n5. **Prevent**: alert on dashboard refunds, or make support use your API so the ledger posts first.",
+    "link": {
+      "title": "Double-entry bookkeeping (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Double-entry_bookkeeping"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At 1,200 payments/s, every ledger transaction updates the materialised balance of `platform_revenue`. p99 latency spikes, and lock waits on that one row dominate. Which fix keeps the ledger correct?",
+    "options": [
+      {
+        "text": "Stop recording platform revenue in the ledger",
+        "explanation": "Wrong. Transactions would no longer balance, and revenue would be unauditable. Every movement must be recorded."
+      },
+      {
+        "text": "Update the balance asynchronously with `balance = balance + x` from a fire-and-forget queue",
+        "explanation": "Wrong as stated. Fire-and-forget can lose or duplicate increments, so the balance drifts from the sum of entries. Asynchronous is fine only if it's idempotent and derived from the entries."
+      },
+      {
+        "text": "Split the hot account into N sub-accounts (`platform_revenue_00` to `_31`), pick one per transaction, and sum them for reporting. Or don't materialise its balance, and derive it from entries plus periodic snapshots",
+        "explanation": "Correct. Both remove the single-row hotspot while keeping every transaction balanced and every balance derivable from immutable entries. Contention per row drops about N times."
+      },
+      {
+        "text": "Lower the isolation level to READ UNCOMMITTED",
+        "explanation": "Wrong. Write-write conflicts on one row still serialise on its lock, and dirty reads of balances risk acting on uncommitted data."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Why it melts: if each transaction holds the `platform_revenue` row lock for about 2 ms, that row's ceiling is about **500 updates/s**, below 1,200.\n\nFix 1, **sharded sub-accounts**:\n- 32 sub-accounts, so each sees about 1,200 / 32 = 38 updates/s.\n- Reporting: `SUM(balance) WHERE parent='platform_revenue'`.\n\nFix 2, **no materialised balance for this account**:\n- The balance is `snapshot_balance + SUM(entries since snapshot)`.\n- Snapshot every minute or hour with a background job.\n\nBoth keep the core invariants: entries are immutable, every transaction sums to zero, and any balance can be recomputed from entries. Purpose-built ledgers (TigerBeetle, for example) are designed around exactly this contention pattern.",
+    "link": {
+      "title": "Accounting for developers, part I (Modern Treasury)",
+      "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The £100 ride from the lesson (driver 80%, platform 20%, PSP fee £1.50) gets a £30 partial refund. Policy: the refund is split pro rata between driver and platform, and the PSP keeps its fee. Using 'debits positive, credits negative' in pence, which transaction records it?",
+    "options": [
+      {
+        "text": "Update the original capture: psp_clearing +6850, driver_payable −5600, platform_revenue −1400",
+        "explanation": "Wrong. Ledger entries are immutable. A refund is a new transaction, and editing history destroys the audit trail."
+      },
+      {
+        "text": "psp_clearing −3000, driver_payable +2400, platform_revenue +600",
+        "explanation": "Correct. £30 leaves via the PSP (a credit to the asset). The amounts owed to the driver and earned by the platform fall by 80% and 20% of £30 (debits). 2400 + 600 − 3000 = 0."
+      },
+      {
+        "text": "psp_clearing +3000, driver_payable −2400, platform_revenue −600",
+        "explanation": "Wrong. These signs record *receiving* another £30, which is the opposite of a refund."
+      },
+      {
+        "text": "psp_clearing −3000, platform_revenue +3000",
+        "explanation": "Balanced, but it breaks the stated policy: the platform absorbs the whole refund and the driver keeps the full £80."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Work out each account's change, then check the sum:\n\n1. Money out through the PSP: £30 leaves the clearing asset, so a credit: **−3000**.\n2. Driver's share: 80% x 3000 = 2400 less owed, so the liability falls with a debit: **+2400**.\n3. Platform's share: 20% x 3000 = 600 less revenue, a debit: **+600**.\n4. PSP fee: unchanged, so no entry.\n\n```\ntxn refund:re_901\n  psp_clearing      -3000\n  driver_payable    +2400\n  platform_revenue   +600\n               sum      0\n```\n\nThe `ref_id` `refund:re_901` is UNIQUE, so a duplicate refund webhook can't post this twice.",
+    "link": {
+      "title": "Accounting for developers, part I (Modern Treasury)",
+      "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A new engineer is building the ledger tables. Which rules must the design enforce? Select all that apply.",
+    "options": [
+      {
+        "text": "Amounts are stored as decimals in major units (23.50) in a float column",
+        "explanation": "Wrong. Floats can't represent most decimal fractions exactly. Use integers in minor units, with the currency alongside."
+      },
+      {
+        "text": "Entries are append-only. A mistake is corrected by posting a reversing transaction",
+        "explanation": "Correct. History is the audit trail. Updates or deletes would make it impossible to explain how a balance came about."
+      },
+      {
+        "text": "Each ledger transaction has a UNIQUE business reference such as `capture:pay_123`",
+        "explanation": "Correct. Re-processing the same event, from a retry or a duplicate webhook, then fails the constraint instead of posting twice."
+      },
+      {
+        "text": "A GBP entry and a EUR entry in one transaction may balance each other",
+        "explanation": "Wrong. Sums are meaningful only within one currency. FX is modelled with conversion accounts, so each currency balances on its own."
+      },
+      {
+        "text": "The entries in each transaction sum to zero, per currency",
+        "explanation": "Correct. That's the core double-entry invariant: money only moves between accounts."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Imagine an auditor asks: 'why is the driver payable £812.40?'\n\n- **Append-only** means you can list every entry that produced that balance.\n- **Zero-sum transactions** mean every penny on the driver's account is matched by a penny somewhere else.\n- **Unique references** mean no event was counted twice.\n- **Integer minor units** mean the sum is exact.\n\nFor FX, record each side separately:\n\n```\ntxn fx:123\n  customer_gbp   +1000 GBP\n  fx_pool_gbp    -1000 GBP\n  fx_pool_eur    +1160 EUR\n  seller_eur     -1160 EUR\n```\n\nThe GBP lines sum to zero and the EUR lines sum to zero.",
+    "link": {
+      "title": "Double-entry bookkeeping (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Double-entry_bookkeeping"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At 10x scale the ledger is sharded by account id. A customer's account is on shard A and the seller's on shard B. You implement a transfer as two local transactions through a `clearing` account on each shard. The process crashes after the shard A transaction commits. What makes this safe?",
+    "options": [
+      {
+        "text": "Nothing. Without two-phase commit, money is lost whenever a crash happens between the steps",
+        "explanation": "Wrong. Money isn't lost: it's sitting visibly in the clearing account. What you need is a guarantee that step 2 eventually runs exactly once."
+      },
+      {
+        "text": "Shard A's transaction also writes an outbox row. A relay retries step 2 on shard B until it succeeds, and a UNIQUE ref_id on B makes repeats no-ops. A non-zero clearing balance shows money in flight",
+        "explanation": "Correct. This is a saga: each step is local and atomic, the outbox guarantees the next step is attempted, and the unique reference makes it effectively-once. Reconciliation alerts if clearing stays non-zero for too long."
+      },
+      {
+        "text": "Run shard B's step first so the seller is credited before the customer is debited",
+        "explanation": "Wrong. Reordering just moves the crash window. A crash after B commits leaves the seller credited with money nobody was debited for."
+      },
+      {
+        "text": "Recompute all balances nightly, which hides the inconsistency",
+        "explanation": "Wrong. Recomputing balances from entries would faithfully reproduce the half-done transfer. The fix is to finish it, not hide it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Lay out the saga:\n\n```\nshard A, one DB txn:\n  customer       +2350\n  clearing_A     -2350\n  outbox: step2(xfer_77)\n\nrelay -> shard B, one DB txn:\n  clearing_B     +2350\n  seller         -2350\n  ref_id xfer_77:B  UNIQUE\n```\n\nCrash after shard A commits:\n\n1. The outbox row is durable, so the relay sends step 2 when it restarts.\n2. If step 2 had already committed before the crash, the UNIQUE ref_id rejects the repeat.\n3. Until step 2 lands, `clearing_A + clearing_B` is non-zero, so in-flight money is visible and reconcilable.\n\nIf step 2 fails for good (seller account closed, say), a **compensating** transaction on shard A reverses step 1.",
+    "link": {
+      "title": "Accounting for developers, part I (Modern Treasury)",
+      "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Payment `pay_555` is AUTHORISED in your database. A `charge.refunded` webhook arrives, but the `charge.captured` webhook hasn't arrived yet. Your state machine only allows `CAPTURED -> REFUNDING/REFUNDED`. What should the handler do?",
+    "options": [
+      {
+        "text": "Force the status to REFUNDED, since the PSP is the source of truth",
+        "explanation": "Wrong. Skipping CAPTURED means the capture's ledger transaction is never posted, so the refund reverses money the ledger never received."
+      },
+      {
+        "text": "Drop the event, since it's an invalid transition",
+        "explanation": "Wrong. The refund really happened. Dropping it guarantees a reconciliation break and money unaccounted for."
+      },
+      {
+        "text": "Return 500 so the PSP keeps retrying the webhook forever",
+        "explanation": "Wrong. Failing the webhook risks redelivery storms and, eventually, the PSP giving up. Acknowledge fast once the event is stored."
+      },
+      {
+        "text": "Store the event and return 200, then either retry it later once the capture has been applied, or fetch the payment's current state from the PSP and apply the missing transitions in order",
+        "explanation": "Correct. Webhooks can arrive out of order. Treat them as hints: persist them, then converge the local state machine through valid transitions, posting each ledger transaction as you go."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "What the PSP actually did:\n\n```\n10:00 captured   (webhook delayed)\n10:05 refunded   (webhook arrives first)\n```\n\nWhat your handler sees: AUTHORISED, then a refund. Converge it:\n\n1. Insert the event into `psp_events` (dedupe on event_id), return 200.\n2. The worker fetches `pay_555` from the PSP API: captured and refunded.\n3. Apply `AUTHORISED -> CAPTURED` (post `capture:pay_555`).\n4. Apply `CAPTURED -> REFUNDED` (post `refund:re_...`).\n5. When the late `charge.captured` webhook arrives, the conditional transition finds the payment already past CAPTURED, and the UNIQUE ref_id stops a second capture posting. It's a no-op.",
+    "link": {
+      "title": "The Payment Intents API (Stripe docs)",
+      "url": "https://docs.stripe.com/payments/payment-intents"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Customers report occasional double charges after flaky mobile connections, even though your API supports `Idempotency-Key`. Reviewing the mobile client, you find it creates the key inside the HTTP retry wrapper. Which practices would fix or prevent this class of bug? Select all that apply.",
+    "options": [
+      {
+        "text": "Use the current timestamp in milliseconds as the key",
+        "explanation": "Wrong. Retries happen at different milliseconds, so each gets a new key, and two users can collide on the same millisecond."
+      },
+      {
+        "text": "Generate the key once per logical operation (one tap of Pay) and persist it on the device before the first attempt",
+        "explanation": "Correct. Retries, including after an app restart, then carry the same key, so the server returns the first result instead of charging again."
+      },
+      {
+        "text": "Generate a fresh key on each retry, so the server can tell attempts apart",
+        "explanation": "Wrong. That's the bug. Each attempt looks like a new payment to the server, so a retry after a lost response charges twice."
+      },
+      {
+        "text": "Have the server store a hash of the request body with the key and reject reuse with a different body",
+        "explanation": "Correct. That doesn't cause double charges, but it catches the opposite bug, one key reused for two different payments, which would otherwise silently return the wrong result."
+      },
+      {
+        "text": "Derive the PSP idempotency key deterministically from your payment id, e.g. `pay_123:authorise`",
+        "explanation": "Correct. Even if your own server retries after a crash, the PSP sees the same key and won't authorise twice. Idempotency has to go all the way down."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Trace the bug:\n\n```\ntap Pay\n  attempt 1: key=A -> charged,\n     response lost\n  attempt 2: key=B -> charged again\n```\n\nThe server did its job: A and B are different keys. The fix is on the client:\n\n```\ntap Pay -> key = uuid4(); save(key)\n  attempt 1: key=K\n  attempt 2: key=K -> stored result\n```\n\nThen layer the other defences:\n\n| Layer | Protects against |\n|---|---|\n| client key per operation | retries |\n| request hash check | key reuse bugs |\n| deterministic PSP key | server-side retries |\n| UNIQUE ledger ref_id | double posting |",
+    "link": {
+      "title": "Idempotent requests (Stripe API docs)",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  }
+]

@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs1-interview-framework-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The interviewer says: \"Design Instagram.\" What should you do in the first five minutes?",
+    "options": [
+      {
+        "text": "Draw the high-level architecture with a CDN, object store and feed service, since those are needed for any photo app.",
+        "explanation": "Wrong. Drawing components before you know the scope and scale is the classic 'jumping to the solution' mistake. You don't yet know whether the feed, stories, DMs or search are in scope, or whether this is 1,000 or 1 billion users."
+      },
+      {
+        "text": "Ask the interviewer which database they would like you to use.",
+        "explanation": "Wrong. Technology choices are yours to make and justify from the access patterns. Asking the interviewer to pick hands away the very decision they want to see you reason about."
+      },
+      {
+        "text": "Compute detailed storage estimates to three significant figures so the interviewer sees your rigour.",
+        "explanation": "Wrong. Estimates come after you know what you are building, and precision beyond an order of magnitude wastes time. Interviewers want rounded numbers that drive decisions, not arithmetic theatre."
+      },
+      {
+        "text": "Clarify functional requirements (upload, feed, follow), agree non-functional requirements (scale, latency, availability) and explicitly scope out features you'll skip.",
+        "explanation": "Correct. Turning a vague prompt into a concrete, agreed problem is the first thing interviewers score ('problem navigation'). It also stops you designing features nobody asked for."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think of the first five minutes as converting the prompt into a spec.\n\n1. **Functional**: list user actions. \"Users upload photos; follow others; see a feed of people they follow.\"\n2. **Non-functional**: ask the questions that change the design. \"How many DAU? Read-heavy? Global?\" Propose defaults: \"Say 500M DAU, feed p99 under 200 ms, availability over consistency for the feed.\"\n3. **Out of scope**: \"I'll skip DMs, stories and ads unless you want them.\"\n\nOnly now do you know enough to estimate and draw.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A service receives **50 million requests per day**. Roughly what is the average request rate per second?",
+    "options": [
+      {
+        "text": "About 500–600 per second",
+        "explanation": "Correct. 50 million / 86,400 s ≈ 580/s. Using the 10^5 shortcut gives 500/s, close enough for design decisions."
+      },
+      {
+        "text": "About 6,000 per second",
+        "explanation": "Wrong. 6,000/s would be about 500 million requests a day. Check the division: 50M / 100k = 500, not 6,000."
+      },
+      {
+        "text": "About 50 per second",
+        "explanation": "Wrong. This is off by an order of magnitude: you would get 50/s from about 4–5 million requests a day."
+      },
+      {
+        "text": "About 50,000 per second",
+        "explanation": "Wrong. That would be about 4.3 billion requests per day. This mistake usually comes from dividing by 1,000 (seconds in ~17 minutes) instead of by 86,400."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Use the shortcut **1 day ≈ 10^5 seconds**.\n\n```\n50,000,000 / 100,000 = 500 req/s\nExact: 50,000,000 / 86,400 ≈ 579 req/s\n```\n\nWith an explicitly assumed 2–3x peak factor and the rounded 500/s baseline, plan for **1,000–1,500 req/s**. Measure the workload before deciding server count; request rate alone does not prove that a particular database or fleet is sufficient.\n\nA handy anchor: **1M/day ≈ 12/s**, so 50M/day ≈ 50 × 12 = 600/s.",
+    "link": {
+      "title": "Latency numbers every programmer should know",
+      "url": "https://gist.github.com/jboner/2841832"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You estimate your system will store **2 KB per record** and receive **20 million new records per day**, kept for **5 years**. What does that imply?",
+    "options": [
+      {
+        "text": "About 730 GB in total, so it fits in memory on a single cache node.",
+        "explanation": "Wrong. This is two orders of magnitude too low. It is a common slip when converting GB/day to a yearly total (multiplying by 36.5 instead of 365) and dropping the 5 years."
+      },
+      {
+        "text": "About 7 TB in total, which fits comfortably on one large Postgres server.",
+        "explanation": "Wrong. This is an order of magnitude too low: it is roughly what you'd store with 2 million records a day. Also forgetting replicas (usually 3x) and index overhead makes the real footprint even larger."
+      },
+      {
+        "text": "About 73 TB in total, which requires an explicit storage, recovery and growth plan; evaluate partitioning, tiering or sharding.",
+        "explanation": "Correct. 20M × 2 KB = 40 GB/day; × 365 ≈ 14.6 TB/year; × 5 ≈ 73 TB, before replication and indexes. It is not a universal single-node limit; feasible storage size and recovery objectives depend on the deployment."
+      },
+      {
+        "text": "Storage isn't worth estimating; you should only estimate QPS.",
+        "explanation": "Wrong. Storage often decides the data layer: whether you need sharding, tiered storage, or an object store. Skipping it means you might design a single-node database for a 73 TB dataset."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Step by step:\n\n```\nPer day:  20M x 2 KB   = 40 GB\nPer year: 40 GB x 365  ≈ 14.6 TB\n5 years:  14.6 x 5     ≈ 73 TB\nWith 3x replication    ≈ 220 TB\n```\n\nThe implication is what you say out loud: \"About 70 TB of raw data, over 200 TB replicated. I would evaluate sharding and backup/recovery costs, and I'd consider moving records older than a year to cheaper object storage.\"",
+    "link": {
+      "title": "System Design Primer: back-of-the-envelope calculations",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are **non-functional** requirements? Select all that apply.",
+    "options": [
+      {
+        "text": "Redirects must complete in under 50 ms at p99.",
+        "explanation": "Correct. Latency is a quality of the system, not a feature a user performs."
+      },
+      {
+        "text": "Users can set a custom alias for a short link.",
+        "explanation": "Incorrect. This is a functional requirement: a specific capability the user invokes."
+      },
+      {
+        "text": "The system must tolerate the loss of one availability zone without downtime.",
+        "explanation": "Correct. Availability and fault tolerance describe how well the system works, not what it does."
+      },
+      {
+        "text": "Once created, a link must never be lost.",
+        "explanation": "Correct. Durability is a non-functional requirement. It pushes you towards replicated, persistent storage rather than cache-only."
+      },
+      {
+        "text": "Users can see how many times their link has been clicked.",
+        "explanation": "Incorrect. Viewing click counts is a feature (functional). How fresh those counts must be would be the non-functional part."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask of each statement: \"Is this something a user *does*, or a property of *how well* the system does it?\"\n\n- Custom alias, view click counts: user actions, so **functional**.\n- p99 latency, AZ failure tolerance, never losing data: properties of the system, so **non-functional**.\n\nNon-functional requirements are usually what make a design hard. Any intern can build a URL shortener; building one that does 100k redirects/s at 50 ms p99 across regions is the interview.",
+    "link": {
+      "title": "Tech Interview Handbook: system design",
+      "url": "https://www.techinterviewhandbook.org/system-design/"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Twenty minutes in, you have a high-level design. The interviewer asks: \"What happens if one of your cache nodes holds a key that gets 200,000 reads a second?\" How should you treat this?",
+    "options": [
+      {
+        "text": "As small talk; acknowledge it and move on to finishing your diagram.",
+        "explanation": "Wrong. Interviewer questions are almost always hints pointing at a weakness they want you to address. Brushing them off loses points on both communication and technical depth."
+      },
+      {
+        "text": "Restart the design using a different database that doesn't need a cache.",
+        "explanation": "Wrong. Throwing away a working design in response to a localised problem wastes time and suggests you can't reason incrementally. Hot keys are solved inside the caching layer."
+      },
+      {
+        "text": "Say that the cache will auto-scale, so this can't be a problem.",
+        "explanation": "Wrong. Adding nodes doesn't help a single hot key: consistent hashing still maps that key to one node. This answer reveals a misunderstanding of how partitioned caches work."
+      },
+      {
+        "text": "As a hint about a hot-key problem: explain the failure (one node saturates) and propose mitigations such as replicating hot keys, a local in-process cache, or key splitting.",
+        "explanation": "Correct. The interviewer is steering you into a deep dive. Name the failure mode, offer options with trade-offs, and choose one."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Recognise the pattern: a pointed \"what happens if...\" question means the interviewer has spotted something.\n\n1. **Name the problem**: a single key hashes to one cache node; 200k reads/s may saturate that node; establish its actual limit using a representative benchmark.\n2. **Options**:\n   - Replicate the key to N nodes and read from a random replica (`key#1`..`key#N`).\n   - Add a small in-process LRU cache on each app server with a short TTL.\n   - Put a CDN in front if the response is cacheable.\n3. **Choose**: \"I'd add a local cache with a 5-second TTL; it absorbs most of the load and the staleness is acceptable here.\"",
+    "link": {
+      "title": "Hello Interview: system design delivery framework",
+      "url": "https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your estimates show **200 writes/s** and **2,000 reads/s** at peak, with 500 GB of data after three years. Assume a benchmark shows this workload meets its latency and recovery targets on one relational primary with a replica and cache. A candidate proposes microservices, Kafka, Cassandra and a Redis cluster. What is the best critique?",
+    "options": [
+      {
+        "text": "It's fine; interviewers reward using as many technologies as possible.",
+        "explanation": "Wrong. Interviewers penalise over-engineering. Every component adds operational cost and failure modes, and adding them without a requirement that demands them shows poor judgement."
+      },
+      {
+        "text": "Cassandra is wrong because it can't handle 200 writes/s.",
+        "explanation": "Wrong. Cassandra handles far more than 200 writes/s; the issue is not capacity but that it's unnecessary at this scale and gives up relational features you might want."
+      },
+      {
+        "text": "The load fits a single relational primary with a read replica and a modest cache; the extra components add cost and failure modes without solving a real problem at these numbers.",
+        "explanation": "Correct. The prompt explicitly supplies a successful benchmark for the simpler design. Scale the design to the numbers and say what would trigger adding more."
+      },
+      {
+        "text": "It needs a second Kafka cluster for redundancy.",
+        "explanation": "Wrong. This doubles down on the problem. Nothing in the requirements needs a log-based message broker at all, let alone two."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the load against what simple components handle:\n\n| Load | Simple capacity |\n|---|---|\n| 200 writes/s | Primary passes stated benchmark |\n| 2,000 reads/s | Replica + cache pass benchmark |\n| 500 GB | Fits on one node's SSD |\n\nNothing here forces sharding or a distributed log. The senior answer is: \"Start with Postgres plus a replica and Redis. If measured write capacity becomes the limit, I would evaluate sharding by user ID; if we need async processing I'd add a queue then.\" Showing the *trigger* for each addition is what separates judgement from buzzwords.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q7",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're interviewing for a **senior** role. Which behaviours most distinguish a senior performance from a mid-level one? Select all that apply.",
+    "options": [
+      {
+        "text": "Identifying the hardest parts of the problem unprompted and proposing to deep-dive on them.",
+        "explanation": "Correct. Driving the conversation towards what matters, rather than waiting to be led, is a core senior signal."
+      },
+      {
+        "text": "Discussing failure modes (node loss, region failure, backlog) and how the design degrades.",
+        "explanation": "Correct. Seniors reason about what breaks and how the system behaves when it does, not just the happy path."
+      },
+      {
+        "text": "Naming more technologies than the other candidates.",
+        "explanation": "Incorrect. Breadth of buzzwords isn't depth. Interviewers look for justified choices, and unexplained technology names count against you."
+      },
+      {
+        "text": "Presenting alternatives and explaining why one was chosen for these requirements.",
+        "explanation": "Correct. Articulating trade-offs is one of the main scored dimensions and is expected far more strongly at senior level."
+      },
+      {
+        "text": "Spending the first 15 minutes on precise capacity calculations.",
+        "explanation": "Incorrect. Over-investing in estimates leaves no time for deep dives, where seniority actually shows. Rounded numbers that drive decisions are enough."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Map each behaviour onto the scoring dimensions:\n\n- **Driving the hard parts** → problem navigation and depth.\n- **Failure modes** → depth and operational maturity.\n- **Trade-offs** → explicitly scored.\n- **More technologies** → no dimension rewards this; it often hurts.\n- **Long precise estimates** → wastes the deep-dive budget.\n\nA practical rule: by minute 20 of 45 you should be in deep dives. If you aren't, you've spent too long on the early steps.",
+    "link": {
+      "title": "Tech Interview Handbook: system design",
+      "url": "https://www.techinterviewhandbook.org/system-design/"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Peak load is **40,000 requests/s**. Each stateless app server handles about **1,000 requests/s** at a safe CPU level, and you run across three availability zones. Roughly how many app servers should you provision?",
+    "options": [
+      {
+        "text": "40, exactly peak divided by per-server capacity.",
+        "explanation": "Wrong. That leaves zero headroom: lose one zone (a third of the fleet) or roll a deploy and the survivors are overloaded at peak."
+      },
+      {
+        "text": "About 60, so that losing any one of three zones still leaves 40 servers.",
+        "explanation": "Correct. With 20 per zone, losing a zone leaves 40 servers, exactly enough for peak. Many teams add a further margin for deploys and traffic growth."
+      },
+      {
+        "text": "About 400, because you should always provision 10x peak.",
+        "explanation": "Wrong. 10x is wasteful and has no basis. Headroom should be sized to a specific failure (a zone loss, a deploy wave) plus expected growth."
+      },
+      {
+        "text": "4, because servers can autoscale during peaks.",
+        "explanation": "Wrong. Autoscaling helps with gradual growth, but it reacts in minutes and still needs the capacity to exist. Four servers would serve a tenth of peak."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Size for peak, then for the failure you must survive.\n\n```\nNeeded at peak: 40,000 / 1,000 = 40\nSurvive 1 of 3 zones down:\n  40 / (2/3) = 60 servers\n  = 20 per zone\n```\n\nSaying this out loud shows the interviewer you think about failure while sizing, not after. You'd then add: \"plus some slack for deploys, so maybe 66–70\".",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a design for a ride-hailing app, the main query is: \"find available drivers within 2 km of this point, many times per second\". A candidate says: \"I'll use Postgres because it's reliable.\" What is missing from the justification?",
+    "options": [
+      {
+        "text": "Nothing; reliability is the most important property of any database.",
+        "explanation": "Wrong. Reliability is necessary but says nothing about whether the store fits the access pattern. Almost every mainstream database is reliable."
+      },
+      {
+        "text": "They should have chosen MongoDB, because NoSQL always scales better.",
+        "explanation": "Wrong. Swapping one unjustified choice for another doesn't fix the reasoning. 'NoSQL scales' is exactly the fashion-driven argument to avoid."
+      },
+      {
+        "text": "The access pattern: a frequently updated geospatial proximity query. The choice should say how that is served, for example a geospatial index (PostGIS, geohash keys) or an in-memory spatial index.",
+        "explanation": "Correct. The data model step is about access patterns. Naming the query shape and how the store serves it (and at what update rate) is what makes the choice defensible."
+      },
+      {
+        "text": "The number of tables the schema will need.",
+        "explanation": "Wrong. Table count isn't a design driver. The shape and frequency of queries and writes are."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work from the access pattern outwards:\n\n1. **Query**: nearby drivers for a point, read-heavy and latency-sensitive.\n2. **Writes**: every active driver sends a location every few seconds, so a high, constantly changing write rate.\n3. **Fit**: a geospatial index (PostGIS, or geohash-prefixed keys in Redis) answers proximity; very frequent location updates may favour an in-memory store over a durable one.\n\nA good answer: \"Driver locations go in an in-memory geo index, since they're ephemeral and updated constantly; trips and payments go in Postgres because they need transactions.\"",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're writing the API for a payments-style endpoint, `POST /v1/transfers`, that mobile clients call over flaky networks, plus `GET /v1/transfers` to list a user's history. Which details are worth stating? Select all that apply.",
+    "options": [
+      {
+        "text": "An idempotency key on the POST, so a retried request after a timeout doesn't create a second transfer.",
+        "explanation": "Correct. On a flaky network the client can't tell whether a timed-out request succeeded. An idempotency key lets the server return the original result instead of executing twice."
+      },
+      {
+        "text": "Cursor-based pagination on the GET, rather than page numbers with offsets.",
+        "explanation": "Correct. Offsets are slow on large tables and skip or repeat items when new rows arrive. Keyset pagination needs a stable total order, matching cursor and suitable index; a cursor alone does not guarantee snapshot consistency."
+      },
+      {
+        "text": "Authentication on both endpoints, for example OAuth bearer tokens.",
+        "explanation": "Correct. The lesson lists authentication as a standard API-step mention, and for money movement it is non-negotiable."
+      },
+      {
+        "text": "The exact JSON field names for every response, written out in full.",
+        "explanation": "Incorrect. Field-level detail eats time and earns little. A sketch of the main fields is enough; spend the minutes on behaviour like idempotency."
+      },
+      {
+        "text": "Making the GET endpoint use POST so it can't be cached.",
+        "explanation": "Incorrect. POST can implement a query and can sometimes be cached; changing the method does not guarantee non-caching. For this simple retrieval use GET with appropriate Cache-Control."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For each API detail ask: \"does this change correctness or scalability?\"\n\n- **Idempotency key**: prevents double transfers on retry, so it's about correctness.\n- **Cursor pagination**: keeps listing fast and stable as the table grows, so it's about scalability and correctness.\n- **Auth**: security baseline.\n- **Exact field names**: no design impact.\n- **Wrong verb**: makes things worse.\n\nA compact way to say it:\n\n```\nPOST /v1/transfers\n  Idempotency-Key: <uuid>\nGET  /v1/transfers?cursor=..&limit=50\n```",
+    "link": {
+      "title": "Tech Interview Handbook: system design",
+      "url": "https://www.techinterviewhandbook.org/system-design/"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "It's minute 30 of 45. You've finished requirements, estimates, API and data model in great detail, but your high-level diagram is half-drawn and you haven't started a deep dive. What's the best recovery?",
+    "options": [
+      {
+        "text": "Keep refining the data model, since a perfect schema is what interviewers value most.",
+        "explanation": "Wrong. Interviewers score whether the design works end to end. A beautiful schema attached to an unfinished design still fails 'solution design'."
+      },
+      {
+        "text": "Say you're conscious of time, quickly complete a simple end-to-end design, walk one request through it, then pick the single hardest problem for a focused deep dive.",
+        "explanation": "Correct. A complete simple design beats a half-finished elaborate one. Naming the time pressure shows self-awareness, and one good deep dive is better than none."
+      },
+      {
+        "text": "Ask the interviewer for an extra 15 minutes.",
+        "explanation": "Wrong. The slot is fixed and the interviewer has to score what they saw. Managing the clock is part of what's being assessed."
+      },
+      {
+        "text": "Skip to wrap-up and list every technology you would have used.",
+        "explanation": "Wrong. A list of technology names without a working design or reasoning is buzzword architecture, the very thing the lesson warns against."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Triage like an engineer under a deadline:\n\n1. **Acknowledge**: \"I've spent too long on the early steps; let me get end to end.\"\n2. **Finish the skeleton** (5 min): client → LB → stateless services → cache → store.\n3. **Walk one request** through it to prove it works.\n4. **One deep dive** (8–10 min) on the hardest part.\n\nThe lesson's rule of thumb: by around minute 20 you should be in deep dives. If you're late, cut breadth, not the end-to-end path.",
+    "link": {
+      "title": "Hello Interview: a delivery framework for system design",
+      "url": "https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In wrap-up for a **staff** role, the interviewer asks: \"This is live and traffic grows 10x over a year. What do you do?\" Assume load tests identify the primary as the first bottleneck at 3x load and projected storage dominates costs. Which answer best addresses the stated evidence?",
+    "options": [
+      {
+        "text": "\"Add more servers.\"",
+        "explanation": "Wrong. Stateless tiers do scale by adding servers, but this ignores the components that don't (the database primary, hot keys) and says nothing about cost or risk."
+      },
+      {
+        "text": "\"Rewrite everything as microservices on Kubernetes.\"",
+        "explanation": "Wrong. A rewrite is a huge organisational risk and doesn't target a specific bottleneck. Staff engineers change the smallest thing that removes the actual constraint."
+      },
+      {
+        "text": "\"The write path on the single primary breaks first, at about 3x. I'd introduce sharding by user ID behind the data-access layer and migrate with a durable change stream or outbox, backfill, reconciliation and controlled cutover. Cache and app tiers scale horizontally. Storage cost grows fastest, so I'd tier cold data to object storage. I'd add load-test and capacity alerts so we see the next limit early.\"",
+        "explanation": "Correct. It names the first bottleneck with a number, gives a migration path rather than a big bang, addresses cost and operations, and plans for finding the next limit."
+      },
+      {
+        "text": "\"10x is too speculative to plan for; I'd wait and see.\"",
+        "explanation": "Wrong. Ignoring the question avoids the evolution discussion that the staff bar specifically looks for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A strong evolution answer has four parts:\n\n1. **First bottleneck, quantified**: which component saturates and at what multiple of today's load.\n2. **Change with a migration plan**: how to get there without downtime (durable change capture, backfill, reconciliation and cutover; naive dual writes can diverge).\n3. **Cost**: what grows fastest on the bill and how to contain it.\n4. **Operability**: how you'll find the next bottleneck before users do.\n\nThe lesson's staff bar adds evolution, operability, cost and organisational trade-offs on top of a working design.",
+    "link": {
+      "title": "Tech Interview Handbook: system design",
+      "url": "https://www.techinterviewhandbook.org/system-design/"
+    }
+  }
+]

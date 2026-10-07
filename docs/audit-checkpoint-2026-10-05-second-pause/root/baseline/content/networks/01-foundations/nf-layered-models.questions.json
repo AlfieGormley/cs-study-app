@@ -1,0 +1,168 @@
+[
+  {
+    "id": "nf-layered-models-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An Ethernet switch receives a frame and decides which port to send it out of. Which header does it base that decision on?",
+    "options": [
+      { "text": "The IP header's destination address", "explanation": "Reading IP addresses is what a router (layer 3) does. A plain switch is a layer 2 device and never needs to look inside the frame's payload." },
+      { "text": "The Ethernet header's destination MAC address", "explanation": "Correct. A switch works at the link layer: it looks up the destination MAC in its forwarding table and sends the frame out of the matching port." },
+      { "text": "The TCP header's destination port", "explanation": "Ports identify processes on the end host. They are a transport-layer concept that switches (and, in principle, routers) never use for forwarding." },
+      { "text": "The HTTP Host header", "explanation": "That is how a layer 7 load balancer or reverse proxy routes requests. A switch does not parse application data at all." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask which layer the device operates at. A switch joins links within one LAN, so it is a link-layer (layer 2) device.\n2. The link layer's addresses are MAC addresses, carried in the Ethernet header.\n3. So the switch reads the destination MAC, looks it up, and forwards. Everything after the Ethernet header (IP, TCP, HTTP) is opaque payload to it.\n\nRule of thumb: a device only needs to understand the layers up to the one it operates at.",
+    "link": { "title": "OSI model — Wikipedia", "url": "https://en.wikipedia.org/wiki/OSI_model" }
+  },
+  {
+    "id": "nf-layered-models-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A host receives an Ethernet frame whose EtherType field is `0x86DD`. Which software should the frame's payload be handed to?",
+    "options": [
+      { "text": "The ARP module", "explanation": "ARP's EtherType is `0x0806`. Mixing these up is a common slip; each protocol carried directly in Ethernet has its own value." },
+      { "text": "The IPv4 stack", "explanation": "IPv4 is `0x0800`. `0x86DD` identifies a different network-layer protocol." },
+      { "text": "The IPv6 stack", "explanation": "Correct. EtherType `0x86DD` means the payload is an IPv6 packet, so the link layer passes it up to IPv6." },
+      { "text": "The TCP stack", "explanation": "Ethernet never hands payload straight to TCP. TCP sits inside an IP packet; the IP header's Protocol / Next Header field (6) selects TCP one layer further up." }
+    ],
+    "answer": 2,
+    "workedExample": "Demultiplexing happens one layer at a time:\n\n| Header | Field | Value | Meaning |\n|---|---|---|---|\n| Ethernet | EtherType | 0x86DD | IPv6 |\n| IPv6 | Next Header | 6 | TCP |\n| TCP | Dest port | 443 | HTTPS server |\n\nEthernet only knows how to pick the next layer up, which is the network layer. So `0x86DD` goes to IPv6, and IPv6 then decides where its own payload goes.",
+    "link": { "title": "EtherType — Wikipedia", "url": "https://en.wikipedia.org/wiki/EtherType" }
+  },
+  {
+    "id": "nf-layered-models-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Where do the OSI session and presentation layers go in the TCP/IP model?",
+    "options": [
+      { "text": "They are folded into the application layer", "explanation": "Correct. TCP/IP has no separate session or presentation layer. Things like encoding, compression and session handling are left to the application (or libraries such as TLS that it uses)." },
+      { "text": "They are folded into the transport layer", "explanation": "TCP provides a byte stream between processes but does not handle data representation or application sessions. Those concerns are above it." },
+      { "text": "They map to the internet layer", "explanation": "The internet layer (IP) only addresses and routes packets between hosts. It has nothing to do with sessions or data formats." },
+      { "text": "TCP/IP has its own separate session and presentation layers", "explanation": "TCP/IP has four layers: link, internet, transport and application. The missing OSI layers are not reproduced." }
+    ],
+    "answer": 0,
+    "workedExample": "Line the models up:\n\n```\nOSI 7 Application  \\\nOSI 6 Presentation  > Application\nOSI 5 Session      /\nOSI 4 Transport      Transport\nOSI 3 Network        Internet\nOSI 2 Data link    \\ Link\nOSI 1 Physical     /\n```\n\n(Right-hand column: TCP/IP layers.)\n\nIn practice, presentation-like work (TLS, character encodings, compression) is done by application-level libraries, which is why engineers rarely talk about layers 5 and 6.",
+    "link": { "title": "Internet protocol suite — Wikipedia", "url": "https://en.wikipedia.org/wiki/Internet_protocol_suite" }
+  },
+  {
+    "id": "nf-layered-models-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client sends a DNS query with a 40-byte payload over UDP and IPv4 (no options) on Ethernet. UDP's header is 8 bytes. How many bytes is the Ethernet frame, counting from the destination MAC to the end of the FCS?",
+    "options": [
+      { "text": "68 bytes", "explanation": "That is the IP packet (40 + 8 + 20). It leaves out the 14-byte Ethernet header and 4-byte FCS that the link layer adds." },
+      { "text": "86 bytes", "explanation": "Correct. 40 + 8 (UDP) + 20 (IPv4) + 14 (Ethernet header) + 4 (FCS) = 86 bytes." },
+      { "text": "98 bytes", "explanation": "This uses a 20-byte TCP header instead of UDP's 8 bytes. UDP's header is just ports, length and checksum." },
+      { "text": "106 bytes", "explanation": "This adds the 8-byte preamble and 12-byte inter-frame gap. Those occupy the wire but are not part of the frame itself." }
+    ],
+    "answer": 1,
+    "workedExample": "Build it from the inside out:\n\n```\nDNS payload        40\n+ UDP header        8   -> 48\n+ IPv4 header      20   -> 68\n+ Ethernet header  14   -> 82\n+ FCS               4   -> 86\n```\n\n86 bytes is above Ethernet's 64-byte minimum, so no padding is needed. On the wire, add 8 bytes of preamble and 12 bytes of gap for 106 byte-times of link occupancy, so the payload efficiency is 40 / 106 ≈ 38%.",
+    "link": { "title": "Ethernet frame — Wikipedia", "url": "https://en.wikipedia.org/wiki/Ethernet_frame" }
+  },
+  {
+    "id": "nf-layered-models-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An IPv4 packet carrying TCP passes through an ordinary router (no NAT, no firewall). Which of these fields are different when the packet leaves the router compared with when it arrived? Select all that apply.",
+    "options": [
+      { "text": "The Ethernet source and destination MAC addresses", "explanation": "Correct. The router strips the incoming frame and builds a new one for the next link, addressed from its own outgoing interface to the next hop's MAC." },
+      { "text": "The IP TTL", "explanation": "Correct. Every router decrements the TTL by one, so that a packet caught in a routing loop eventually dies." },
+      { "text": "The IP header checksum", "explanation": "Correct. Because the TTL changed, the IPv4 header checksum must be recomputed (or incrementally updated). IPv6 dropped the header checksum partly to avoid this per-hop work." },
+      { "text": "The destination IP address", "explanation": "The destination IP is end-to-end: it stays the same across the whole path. Only NAT devices rewrite it." },
+      { "text": "The TCP destination port", "explanation": "Routers do not touch transport headers. Port rewriting is a NAT behaviour, which this question excludes." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "Think about which layers are hop-by-hop and which are end-to-end.\n\n1. **Link layer (hop-by-hop).** Each link gets a brand-new frame. New MACs, new FCS.\n2. **Network layer (inspected at every hop).** Addresses stay fixed, but the router decrements TTL. The IPv4 checksum covers the TTL, so it changes too.\n3. **Transport and up (end-to-end).** Untouched by a plain router.\n\nSo three things change: MACs, TTL and IP checksum. If the router also did NAT, the source IP, source port and TCP checksum would change as well.",
+    "link": { "title": "RFC 1812: Requirements for IP Version 4 Routers", "url": "https://www.rfc-editor.org/rfc/rfc1812" }
+  },
+  {
+    "id": "nf-layered-models-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A home NAT router rewrites a packet's source IP from 192.168.1.20 to its public address, and its source port too. Why must it also update the **TCP** checksum, even though the TCP payload hasn't changed?",
+    "options": [
+      { "text": "Because the TCP checksum covers a pseudo-header that includes the source and destination IP addresses, as well as the TCP header with its ports", "explanation": "Correct. The TCP (and UDP) checksum is computed over a pseudo-header containing the IP addresses plus the TCP header and data. Changing the IP address or port invalidates it." },
+      { "text": "Because the TTL changed and TCP checksums cover the TTL", "explanation": "The TTL is not part of the TCP pseudo-header. The TTL change only affects the IPv4 header checksum." },
+      { "text": "It doesn't need to; TCP checksums only cover TCP data", "explanation": "If that were true, rewriting addresses would be harmless. In reality, without the fix-up the receiver would see a checksum failure and silently drop every segment." },
+      { "text": "Because the Ethernet FCS is copied into the TCP header", "explanation": "The FCS is a link-layer trailer recomputed on every hop. It is never copied into TCP." }
+    ],
+    "answer": 0,
+    "workedExample": "1. TCP's checksum input = pseudo-header (source IP, destination IP, protocol, TCP length) + TCP header + data.\n2. NAT changes the source IP (in the pseudo-header) and the source port (in the TCP header).\n3. Both are inputs to the checksum, so the old checksum is now wrong.\n4. The NAT therefore patches the checksum incrementally (RFC 1624 describes how).\n\nThis is a classic layering leak: a supposedly layer 3 device has to understand and modify layer 4.",
+    "link": { "title": "RFC 9293: Transmission Control Protocol", "url": "https://www.rfc-editor.org/rfc/rfc9293" }
+  },
+  {
+    "id": "nf-layered-models-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Linux enables TCP timestamps by default, adding 12 bytes of options to every TCP header. With a 1500-byte IP MTU on Ethernet, what is the best possible TCP goodput on a 1 Gbit/s link?",
+    "options": [
+      { "text": "About 1000 Mbit/s", "explanation": "That ignores headers entirely. Every frame carries IP, TCP and Ethernet overhead, plus preamble and inter-frame gap." },
+      { "text": "About 975 Mbit/s", "explanation": "This counts only the 20+32 bytes of IP and TCP headers against 1500. It forgets the 38 bytes of Ethernet framing, preamble and gap per frame." },
+      { "text": "About 949 Mbit/s", "explanation": "That is the figure without timestamps (1460 bytes of data). The 12 bytes of options reduce the data per segment further." },
+      { "text": "About 941 Mbit/s", "explanation": "Correct. Data per frame is 1500 − 20 − 32 = 1448 bytes, wire time is 1538 bytes, and 1448 / 1538 × 1000 ≈ 941 Mbit/s." }
+    ],
+    "answer": 3,
+    "workedExample": "1. IP packet = 1500 bytes. Subtract IPv4 header (20) and TCP header with timestamps (20 + 12 = 32): data = 1448 bytes.\n2. Wire time per frame = 1500 + 14 (Ethernet header) + 4 (FCS) + 8 (preamble) + 12 (gap) = 1538 bytes.\n3. Efficiency = 1448 / 1538 = 0.9415.\n4. Goodput = 0.9415 × 1000 Mbit/s ≈ **941 Mbit/s**.\n\nThis is exactly the number iperf typically reports on a clean gigabit link, which surprises people who expect 1000.",
+    "link": { "title": "Ethernet frame — Wikipedia", "url": "https://en.wikipedia.org/wiki/Ethernet_frame" }
+  },
+  {
+    "id": "nf-layered-models-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A packet travels from a laptop to a server, crossing three routers. Every link is Ethernet. How many distinct Ethernet frames (each with its own header) carry this one IP packet?",
+    "options": [
+      { "text": "1", "explanation": "That would be true only if the frame survived end to end. Routers terminate the link layer: they strip the frame and build a new one for the next link." },
+      { "text": "3", "explanation": "This counts routers rather than links. There is one more link than there are routers in the chain." },
+      { "text": "4", "explanation": "Correct. Three routers in a line create four links (laptop–R1, R1–R2, R2–R3, R3–server), and each link gets its own frame." },
+      { "text": "6", "explanation": "This counts each router twice (receive and send). A frame received on one link and a new frame sent on the next are two of the four links' frames, not extra ones." }
+    ],
+    "answer": 2,
+    "workedExample": "```\nlaptop -1- R1 -2- R2 -3- R3 -4- server\n```\n\n1. The link layer is hop-by-hop, so each numbered link has its own frame.\n2. Each frame has the MAC of that link's sender as source and that link's receiver as destination.\n3. The IP packet inside keeps the same source and destination IP throughout.\n\nSo: 3 routers, 4 links, 4 frames, 1 IP packet. (Switches inside a link don't count: they forward the same frame unchanged.)",
+    "link": { "title": "Internet protocol suite — Wikipedia", "url": "https://en.wikipedia.org/wiki/Internet_protocol_suite" }
+  },
+  {
+    "id": "nf-layered-models-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does QUIC run over UDP rather than being a new transport protocol with its own IP protocol number, alongside TCP (6) and UDP (17)?",
+    "options": [
+      { "text": "Because UDP provides the reliability that QUIC needs", "explanation": "UDP provides no reliability at all. QUIC implements its own acknowledgements, retransmission and congestion control on top." },
+      { "text": "Because IP has no spare protocol numbers left", "explanation": "The 8-bit protocol field has plenty of unassigned values. The obstacle is deployability, not number space." },
+      { "text": "Because firewalls, NATs and other middleboxes commonly drop anything that isn't TCP or UDP, so a new protocol number would not get through much of the internet", "explanation": "Correct. Middleboxes that parse layer 4 have ossified the internet around TCP and UDP. QUIC uses UDP as a deployable wrapper and encrypts its own headers so middleboxes cannot ossify it in turn." },
+      { "text": "Because the operating system kernel can only send TCP or UDP", "explanation": "Kernels can send arbitrary IP protocols (SCTP exists, for example). Being in user space is a bonus of UDP, but the main reason is what the network lets through." }
+    ],
+    "answer": 2,
+    "workedExample": "1. In a pure layered world, a new transport would just use a new IP protocol number; routers would forward it without caring.\n2. In reality, NATs need to understand ports to rewrite them, and firewalls default to dropping unfamiliar protocols. SCTP (protocol 132) is a real example that never got wide internet deployment for this reason.\n3. UDP passes nearly everywhere, so QUIC sits on top of it.\n4. QUIC then encrypts almost all of its own header, so middleboxes can't start depending on its fields. This is a deliberate response to ossification.",
+    "link": { "title": "RFC 9000: QUIC", "url": "https://www.rfc-editor.org/rfc/rfc9000" }
+  },
+  {
+    "id": "nf-layered-models-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your data centre uses VXLAN: each tenant's full Ethernet frame (14-byte header, no FCS) is wrapped in an 8-byte VXLAN header, then UDP (8), then an outer IPv4 header (20), then an outer Ethernet frame. The physical network's IP MTU is 1500. What is the largest IP packet a tenant VM can send without fragmentation or drops?",
+    "options": [
+      { "text": "1500 bytes", "explanation": "This ignores the tunnel. The outer packet must fit in 1500 bytes, and the encapsulation headers eat into that." },
+      { "text": "1464 bytes", "explanation": "This subtracts only the outer IP, UDP and VXLAN headers (36 bytes). The tenant's own inner Ethernet header is also inside the outer IP packet." },
+      { "text": "1450 bytes", "explanation": "Correct. Inside the outer 1500-byte IP packet are 20 (IP) + 8 (UDP) + 8 (VXLAN) + 14 (inner Ethernet) = 50 bytes of overhead, leaving 1450 for the tenant's IP packet." },
+      { "text": "1432 bytes", "explanation": "This also subtracts the outer Ethernet header and FCS (18 bytes), but those sit outside the outer IP packet and don't count against the IP MTU." }
+    ],
+    "answer": 2,
+    "workedExample": "Draw the stack, outermost first:\n\n```\n[outer Eth][outer IP 20][UDP 8]\n  [VXLAN 8][inner Eth 14][inner IP]\n```\n\n1. The outer IP packet may be at most 1500 bytes.\n2. That packet contains: outer IP 20 + UDP 8 + VXLAN 8 + inner Ethernet 14 = 50 bytes of overhead.\n3. Inner IP packet ≤ 1500 − 50 = **1450** bytes.\n\nThe usual fixes are to set the tenant MTU to 1450, or raise the underlay MTU (often to 9000 with jumbo frames). Tunnels are the classic case of layers repeating, and of MTU bugs appearing as a result.",
+    "link": { "title": "RFC 7348: Virtual eXtensible Local Area Network (VXLAN)", "url": "https://www.rfc-editor.org/rfc/rfc7348" }
+  },
+  {
+    "id": "nf-layered-models-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these are genuine examples of layers depending on, or reaching into, each other? Select all that apply.",
+    "options": [
+      { "text": "Wi-Fi retransmits lost frames itself, because TCP would otherwise treat radio loss as congestion and slow down", "explanation": "Correct. The link layer hides its loss characteristics because the transport layer above makes assumptions about what loss means." },
+      { "text": "A load balancer reads the HTTP Host header to choose a backend", "explanation": "Correct, in the sense that it's a device in the middle of the path operating at layer 7. Middleboxes that parse higher layers are what create ossification." },
+      { "text": "The IP layer needs to know the link's MTU to size its packets", "explanation": "Correct. The network layer cannot treat the link as a black box: if it sends packets larger than the link can carry, they are fragmented or dropped." },
+      { "text": "HTTP/2 was deployed without any changes to Ethernet", "explanation": "That's the opposite: layering *working* as intended. Ethernet carries whatever payload it is given." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "Ask of each: does one layer need knowledge of, or make assumptions about, another?\n\n1. Wi-Fi link-layer retries exist because of TCP's assumption about loss. Leak.\n2. A layer 7 load balancer sits in the network path but parses application data. Leak (the end-to-end ideal says only end hosts look above layer 3/4).\n3. IP depends on a link-layer property (MTU). Leak.\n4. HTTP/2 changing independently of Ethernet is the success case.\n\nRecognising leaks matters because they are where surprising failures (MTU black holes, blocked protocols, poor TCP over radio) come from.",
+    "link": { "title": "RFC 3439: Some Internet Architectural Guidelines and Philosophy", "url": "https://www.rfc-editor.org/rfc/rfc3439" }
+  }
+]

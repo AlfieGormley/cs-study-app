@@ -1,0 +1,348 @@
+[
+  {
+    "id": "pipe-hazards-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A simple pipelined CPU has a single memory shared by instructions and data. In cycle 4, a load in MEM and a new instruction in IF both need it. What kind of hazard is this, and what is the usual fix?",
+    "options": [
+      {
+        "text": "A data hazard; fix it with forwarding",
+        "explanation": "Data hazards are about one instruction needing another's result. Here the two instructions don't share any data; they want the same hardware."
+      },
+      {
+        "text": "A control hazard; fix it with branch prediction",
+        "explanation": "Control hazards are about not knowing which instruction comes next. Nothing here involves a branch."
+      },
+      {
+        "text": "A structural hazard; fix it with separate instruction and data caches",
+        "explanation": "Correct. Two instructions compete for one resource. Duplicating it (split L1 I-cache and D-cache) removes the conflict, which is what every modern CPU does."
+      },
+      {
+        "text": "Not a hazard; memory is fast enough to serve both",
+        "explanation": "A single-ported memory can serve only one access per cycle, however fast it is."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask what the instructions are competing for: the same memory port in the same cycle.\n2. Competition for hardware = **structural hazard**.\n3. Options: stall one instruction (costs CPI) or duplicate the resource.\n4. CPUs duplicate: separate L1 instruction and data caches, each with its own port.",
+    "link": {
+      "title": "Hazard (computer architecture) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hazard_(computer_architecture)"
+    }
+  },
+  {
+    "id": "pipe-hazards-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On the 5-stage pipeline **with full forwarding**, how many stall cycles does this pair need?\n\n```\nadd x1, x2, x3\nsub x4, x1, x5\n```",
+    "options": [
+      {
+        "text": "0",
+        "explanation": "Correct. `add`'s result is at the end of its EX stage; it is forwarded from the EX/MEM register straight into the ALU for `sub`'s EX in the next cycle."
+      },
+      {
+        "text": "1",
+        "explanation": "One stall is the load-use case. An ALU result is ready a cycle earlier than a load's, so no stall is needed."
+      },
+      {
+        "text": "2",
+        "explanation": "Two stalls is what you get *without* forwarding, waiting for `add` to write back and `sub` to read in the same cycle."
+      },
+      {
+        "text": "3",
+        "explanation": "Three stalls would only happen with no forwarding *and* a register file that cannot be written and read in the same cycle. With forwarding there are none."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\ncycle  1  2  3  4   5\nadd    IF ID EX MEM WB\nsub       IF ID EX  MEM\n              ^ x1 from EX/MEM\n```\n\n1. `add` computes x1 during cycle 3 (EX).\n2. `sub` needs x1 at the start of cycle 4 (its EX).\n3. The forwarding path EX/MEM → ALU delivers it just in time.\n4. Stalls: **0**.",
+    "link": {
+      "title": "Operand forwarding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Operand_forwarding"
+    }
+  },
+  {
+    "id": "pipe-hazards-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "With full forwarding, how many stall cycles does this pair need?\n\n```\nlw  x1, 0(x2)\nadd x3, x1, x4\n```",
+    "options": [
+      {
+        "text": "0",
+        "explanation": "Forwarding can't help here: the loaded value doesn't exist until the end of MEM, which is after `add` would need it."
+      },
+      {
+        "text": "2",
+        "explanation": "Two would be without forwarding. With forwarding, MEM/WB → EX delivers the value after just one bubble."
+      },
+      {
+        "text": "1",
+        "explanation": "Correct. This is the load-use hazard: one bubble, then forward from MEM/WB into `add`'s EX."
+      },
+      {
+        "text": "5",
+        "explanation": "A stall lasts only until the value is available, not until the load has fully left the pipeline."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\ncycle  1  2  3  4   5   6\nlw     IF ID EX MEM WB\nadd       IF ID --  EX  MEM\n                    ^ x1 from MEM/WB\n```\n\n1. `lw` reads memory during cycle 4 (MEM); the value is ready at the end of cycle 4.\n2. Without a stall, `add` would be in EX in cycle 4, needing it at the *start* of cycle 4. Impossible.\n3. Insert one bubble; `add` executes in cycle 5 with x1 forwarded from MEM/WB.\n4. Stalls: **1**.",
+    "link": {
+      "title": "Operand forwarding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Operand_forwarding"
+    }
+  },
+  {
+    "id": "pipe-hazards-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On the 5-stage pipeline with full forwarding, how many cycles does this sequence take from the first IF to the last WB?\n\n```\nlw  x1, 0(x2)\nadd x3, x1, x4\nsub x5, x3, x1\nor  x6, x5, x7\n```",
+    "options": [
+      {
+        "text": "8",
+        "explanation": "8 is the no-hazard count (5 + 3). It misses the load-use stall between `lw` and `add`."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. 4 instructions take 5 + 3 = 8 cycles ideally. The `lw` → `add` pair adds 1 stall. The other dependences are ALU → ALU, covered by forwarding. Total 9."
+      },
+      {
+        "text": "11",
+        "explanation": "This adds a stall for every dependence. Only the load-use one stalls when forwarding is available."
+      },
+      {
+        "text": "14",
+        "explanation": "14 is the count *without* forwarding: 3 dependent pairs × 2 stalls = 6 stalls, plus 8."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Check each dependence:\n\n```\nlw  -> add  (x1)  load-use: 1 stall\nadd -> sub  (x3)  ALU->ALU: 0\nlw  -> sub  (x1)  2+ apart: 0\nsub -> or   (x5)  ALU->ALU: 0\n```\n\n1. Ideal cycles = k + n − 1 = 5 + 3 = 8.\n2. Stalls = 1.\n3. Total = **9**.\n4. Without forwarding, each back-to-back dependence costs 2: 8 + 6 = 14.",
+    "link": {
+      "title": "Operand forwarding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Operand_forwarding"
+    }
+  },
+  {
+    "id": "pipe-hazards-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a program, 30% of instructions are loads and half of them are immediately followed by a dependent instruction. 20% are branches; the pipeline resolves branches in ID with a 1-cycle penalty when taken, and 50% are taken. With full forwarding and no other stalls, what is the CPI?",
+    "options": [
+      {
+        "text": "1.25",
+        "explanation": "Correct. Load-use: 0.3 × 0.5 × 1 = 0.15. Branches: 0.2 × 0.5 × 1 = 0.10. CPI = 1 + 0.15 + 0.10 = 1.25."
+      },
+      {
+        "text": "1.50",
+        "explanation": "This charges every load and every branch a stall (0.3 + 0.2). Only dependent loads and taken branches stall."
+      },
+      {
+        "text": "1.15",
+        "explanation": "This counts the load stalls but forgets the branch penalty."
+      },
+      {
+        "text": "1.35",
+        "explanation": "This uses a 2-cycle branch penalty (as if resolved in EX). The question says branches resolve in ID with a 1-cycle penalty."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "For each hazard: fraction of instructions × probability it bites × penalty.\n\n```\nload-use: 0.30 x 0.5 x 1 = 0.15\nbranch:   0.20 x 0.5 x 1 = 0.10\n                           ----\nextra CPI                  0.25\n```\n\nCPI = 1 + 0.25 = **1.25**.",
+    "link": {
+      "title": "Hazard (computer architecture) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hazard_(computer_architecture)"
+    }
+  },
+  {
+    "id": "pipe-hazards-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With full forwarding, `and` enters EX. Which value of x1 does the forwarding unit supply?\n\n```\nadd x1, x2, x3   # now in MEM/WB\nsub x1, x1, x4   # now in EX/MEM\nand x5, x1, x6   # entering EX\n```",
+    "options": [
+      {
+        "text": "The value from the register file",
+        "explanation": "The register file still holds the stale x1; neither `add` nor `sub` has written back yet."
+      },
+      {
+        "text": "The `add` result from MEM/WB",
+        "explanation": "Both pipeline registers hold a new x1, but `add`'s is older. Using it would ignore `sub`'s update."
+      },
+      {
+        "text": "The `sub` result from EX/MEM",
+        "explanation": "Correct. When both EX/MEM and MEM/WB match, the forwarding unit prefers the most recent result, from EX/MEM, matching program order."
+      },
+      {
+        "text": "It must stall; two matches are a conflict",
+        "explanation": "No stall is needed. The priority rule (most recent wins) resolves it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Program order says `and` must see the x1 written by `sub`, the most recent writer.\n2. `sub` is one instruction ahead, so its result is in EX/MEM.\n3. `add` is two ahead; its x1 is in MEM/WB but has been superseded.\n4. Textbook forwarding logic only uses MEM/WB if EX/MEM does **not** also match. So: EX/MEM wins.",
+    "link": {
+      "title": "Operand forwarding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Operand_forwarding"
+    }
+  },
+  {
+    "id": "pipe-hazards-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select every dependence that exists in this code.\n\n```\ni1: add x1, x2, x3\ni2: sub x4, x1, x5\ni3: mul x2, x6, x7\ni4: add x4, x8, x9\n```",
+    "options": [
+      {
+        "text": "i2 has a RAW (true) dependence on i1 through x1",
+        "explanation": "Correct. i1 writes x1 and i2 reads it: data really flows from i1 to i2."
+      },
+      {
+        "text": "i3 has a RAW dependence on i2",
+        "explanation": "Incorrect. i3 reads x6 and x7, neither of which i2 writes."
+      },
+      {
+        "text": "i3 has a WAR dependence on i1 through x2",
+        "explanation": "Correct. i1 reads x2 and i3 later overwrites it. If i3 wrote first, i1 would read the wrong value. This is a name dependence."
+      },
+      {
+        "text": "i4 has a RAW dependence on i3",
+        "explanation": "Incorrect. i4 reads x8 and x9; i3 writes x2."
+      },
+      {
+        "text": "i4 has a WAW dependence on i2 through x4",
+        "explanation": "Correct. Both write x4, and the final value must be i4's. Another name dependence."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "List each instruction's reads and writes:\n\n| | Writes | Reads |\n|---|---|---|\n| i1 | x1 | x2, x3 |\n| i2 | x4 | x1, x5 |\n| i3 | x2 | x6, x7 |\n| i4 | x4 | x8, x9 |\n\n1. Write then later read: x1 (i1 → i2) is **RAW**.\n2. Read then later write: x2 (i1 → i3) is **WAR**.\n3. Write then later write: x4 (i2 → i4) is **WAW**.\n4. In an in-order 5-stage pipeline only the RAW needs handling; renaming in an out-of-order core removes the WAR and WAW.",
+    "link": {
+      "title": "Hazard (computer architecture) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hazard_(computer_architecture)"
+    }
+  },
+  {
+    "id": "pipe-hazards-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With forwarding, this code has two load-use stalls. Which reordering removes both while computing the same results?\n\n```\nlw  x1, 0(x10)\nadd x2, x1, x3\nlw  x4, 4(x10)\nadd x5, x4, x6\n```",
+    "options": [
+      {
+        "text": "`add x5` first, then the rest in order",
+        "explanation": "Wrong: `add x5` would read x4 before it has been loaded, giving a different result."
+      },
+      {
+        "text": "Swap the two `add`s",
+        "explanation": "Then `add x5` comes before `lw x4`, which reads x4 too early and changes the result."
+      },
+      {
+        "text": "Insert a `nop` after each load",
+        "explanation": "This avoids the hardware stall but takes exactly as many cycles; the bubble just becomes an explicit instruction."
+      },
+      {
+        "text": "`lw x1`, `lw x4`, `add x2`, `add x5`",
+        "explanation": "Correct. Each load is now two instructions ahead of its use, so MEM/WB forwarding delivers in time. No stalls, and no dependence is violated since the two halves are independent."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The two pairs (`lw x1`/`add x2`, `lw x4`/`add x5`) are independent: they touch different registers.\n2. Hoisting `lw x4` above `add x2` is legal: `add x2` neither reads nor writes x4, and `lw x4` doesn't touch x1, x2 or x3.\n3. New distances: `lw x1` → `add x2` is 2; `lw x4` → `add x5` is 2.\n4. Both are covered by MEM/WB → EX forwarding: **0 stalls**, 8 cycles instead of 10.",
+    "link": {
+      "title": "Instruction pipelining — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Instruction_pipelining"
+    }
+  },
+  {
+    "id": "pipe-hazards-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "20% of instructions are branches and 60% of branches are taken. Design A resolves branches in EX (2-cycle taken penalty, predict not-taken). Design B resolves in ID (1-cycle taken penalty), but 30% of branches then stall 1 cycle waiting for an operand from the previous ALU instruction, and the extra comparator lengthens the clock by 3%. Otherwise CPI is 1. Which is faster?",
+    "options": [
+      {
+        "text": "A, because B has a slower clock",
+        "explanation": "B's clock is 3% slower, but its CPI is about 5% lower, which more than compensates."
+      },
+      {
+        "text": "B, by about 5%, from its lower CPI",
+        "explanation": "This compares CPI only (1.24 vs 1.18) and forgets B's 3% longer clock."
+      },
+      {
+        "text": "They are identical",
+        "explanation": "Time per instruction is 1.24 for A and about 1.215 for B (in A's clock units). Close, but not equal."
+      },
+      {
+        "text": "B, by about 2%",
+        "explanation": "Correct. A: CPI 1.24. B: CPI 1.18, times a 1.03 clock = 1.215. 1.24 / 1.215 ≈ 1.02."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Time per instruction = CPI × clock period (take A's clock as 1).\n\n```\nA: 1 + 0.2x0.6x2           = 1.24\nB: 1 + 0.2x0.6x1 + 0.2x0.3 = 1.18\n   1.18 x 1.03              = 1.215\n```\n\n1. B's CPI is lower: smaller penalty, partly offset by new stalls.\n2. B's clock is 3% slower.\n3. Net: 1.24 / 1.215 ≈ **1.02**, B about 2% faster.\n4. Real design decisions often come down to margins this thin, which is why architects simulate rather than guess.",
+    "link": {
+      "title": "Classic RISC pipeline — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Classic_RISC_pipeline"
+    }
+  },
+  {
+    "id": "pipe-hazards-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A student's forwarding unit lacks the \"destination ≠ x0\" check. Before this code runs, x1 + x2 = 7 and x4 = 5. What ends up in x3, and what should?\n\n```\nadd x0, x1, x2\nadd x3, x0, x4\n```",
+    "options": [
+      {
+        "text": "x3 = 12; it should be 5",
+        "explanation": "Correct. The buggy unit sees that the first instruction's destination (x0) matches a source of the second and forwards 7 instead of using the hard-wired zero. Correct result: 0 + 5 = 5."
+      },
+      {
+        "text": "x3 = 5 either way; writes to x0 are discarded",
+        "explanation": "The register file does discard the write, but forwarding bypasses the register file. Without the check, the 7 is forwarded anyway."
+      },
+      {
+        "text": "x3 = 7; it should be 12",
+        "explanation": "Neither number is right. x3 = x0 + x4, so the buggy value is 7 + 5 and the correct value is 0 + 5."
+      },
+      {
+        "text": "The pipeline stalls forever",
+        "explanation": "Forwarding never causes deadlock; it just picks a value from a pipeline register."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. x0 always reads as 0 in RISC-V and MIPS; writes to it are ignored.\n2. Instruction 1 computes 7 and carries 'destination = x0' in EX/MEM.\n3. Instruction 2 has source x0. The buggy unit matches 0 == 0 and forwards 7.\n4. x3 = 7 + 5 = **12** (wrong). Correct: 0 + 5 = **5**.\n5. Fix: forward only if the earlier instruction writes a register **and** its destination is not x0.",
+    "link": {
+      "title": "Operand forwarding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Operand_forwarding"
+    }
+  },
+  {
+    "id": "pipe-hazards-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the load-use hazard in the 5-stage pipeline are true?",
+    "options": [
+      {
+        "text": "Forwarding alone can't remove it, because the loaded value only exists at the end of MEM",
+        "explanation": "True. The consumer's EX would coincide with the load's MEM, so the data arrives too late however you route it."
+      },
+      {
+        "text": "It is detected in ID, by checking whether the instruction in EX is a load whose destination matches a source",
+        "explanation": "True. This is the hazard detection unit's check; spotting it in ID lets the pipeline hold the dependent instruction before it reaches EX."
+      },
+      {
+        "text": "The stall is created by freezing the PC and IF/ID register and inserting a bubble into ID/EX",
+        "explanation": "True. Holding PC and IF/ID repeats the fetch and decode; zeroing the control signals in ID/EX makes EX do nothing for a cycle."
+      },
+      {
+        "text": "A load followed by a store of the loaded register can never avoid the stall, even with forwarding into MEM",
+        "explanation": "False. The store needs the value only as data to write in MEM, so a MEM/WB → MEM forwarding path can avoid the stall. Whether a given design has that path varies."
+      },
+      {
+        "text": "Out-of-order cores eliminate load latency",
+        "explanation": "False. They *hide* it by running independent instructions while the load is in flight. The latency is still there and shows up when there is no independent work."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Timing: `lw` data ready at end of cycle 4; next instruction's EX would be cycle 4. Too late, so a stall is required for ALU consumers.\n2. Detection: in ID, compare the source registers with ID/EX's destination when ID/EX holds a load.\n3. Mechanism: hold PC and IF/ID (fetch and decode repeat), clear ID/EX control bits (a bubble).\n4. Stores of loaded data need the value later (MEM, not EX), so extra forwarding can avoid it.\n5. Out-of-order execution overlaps latency; it can't make a cache access take zero time.",
+    "link": {
+      "title": "Classic RISC pipeline — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Classic_RISC_pipeline"
+    }
+  }
+]

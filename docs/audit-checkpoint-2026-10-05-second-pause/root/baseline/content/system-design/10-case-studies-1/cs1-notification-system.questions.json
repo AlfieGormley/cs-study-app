@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs1-notification-system-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should the notification API return **202 Accepted** rather than **200 OK** when a service submits a notification?",
+    "options": [
+      {
+        "text": "Because the notification has only been queued; delivery happens asynchronously and may still fail or be suppressed by preferences.",
+        "explanation": "Correct. 202 tells the caller 'accepted for processing, not completed'. Returning 200 would wrongly imply the user already has the message, which callers might rely on."
+      },
+      {
+        "text": "Because 202 is faster for the client to parse.",
+        "explanation": "Wrong. Status codes cost the same to parse. The choice is about meaning, not performance."
+      },
+      {
+        "text": "Because 200 is reserved for GET requests.",
+        "explanation": "Wrong. 200 is valid for POST responses. The distinction is whether the action has completed, not the HTTP method."
+      },
+      {
+        "text": "Because 202 makes the client retry automatically.",
+        "explanation": "Wrong. 202 doesn't trigger retries. Clients retry on timeouts and 5xx/429 errors; that's why the API also needs an idempotency key."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace what happens after the API call:\n\n1. API validates and writes a log row: `accepted`.\n2. Message goes onto a Kafka topic.\n3. A worker checks preferences: the user may have opted out, so it's *suppressed*.\n4. A sender calls APNs, which may fail and be retried.\n\nAt the moment the API responds, only step 1 has happened. 202 plus a `notificationId` the caller can use to query status is the honest contract for asynchronous work.",
+    "link": {
+      "title": "Azure Architecture Center: priority queue pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Marketing launches a campaign to **40 million users**. Ten minutes later, users report that login OTP texts are taking 15 minutes to arrive. All messages share one queue and one worker pool. What is the best fix?",
+    "options": [
+      {
+        "text": "Add more workers to the shared pool.",
+        "explanation": "Wrong. More workers drain the backlog faster but OTPs still wait behind campaign messages, and the shared SMS provider's rate limit caps throughput anyway, so extra workers may just generate 429s."
+      },
+      {
+        "text": "Schedule campaigns only at night.",
+        "explanation": "Wrong. It reduces collisions but doesn't fix the design: OTPs are needed at night too, and global users mean it's always daytime somewhere."
+      },
+      {
+        "text": "Separate queues and worker pools per priority, reserve provider capacity for critical traffic, and throttle campaign expansion at the scheduler.",
+        "explanation": "Correct. Isolation means the critical pool never sees the campaign backlog, reserved capacity stops campaigns from consuming the provider's rate limit, and throttling keeps the low-priority queue from ballooning."
+      },
+      {
+        "text": "Switch OTPs from SMS to email.",
+        "explanation": "Wrong. It changes the product rather than fixing the architecture, and if email shared the same queue, the same head-of-line blocking would occur."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Diagnose: this is **head-of-line blocking**. With one FIFO queue, an OTP enqueued after 40M campaign messages waits until they're processed.\n\nQuantify: suppose the SMS provider allows 1,000 msg/s for your account. If 2M of the campaign messages are SMS:\n\n```\n2,000,000 / 1,000 per s\n  = 2,000 s ≈ 33 minutes\n```\n\nAny OTP behind that waits up to 33 minutes. Fix with three layers:\n\n1. `critical` topic + dedicated workers → OTP never queues behind campaigns.\n2. Reserve, say, 20% of provider throughput for critical.\n3. Campaign scheduler emits at a controlled rate so the low queue stays bounded.",
+    "link": {
+      "title": "Azure Architecture Center: priority queue pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The SMS sender calls the provider, the request times out after 10 s, and the sender doesn't know whether the SMS was sent. The notification is an OTP with a 5-minute TTL. What should it do?",
+    "options": [
+      {
+        "text": "Never retry; a timeout means it probably failed.",
+        "explanation": "Wrong. Timeouts are ambiguous: the provider may simply have been slow. Never retrying would drop many messages that a single retry would have delivered."
+      },
+      {
+        "text": "Retry immediately in a tight loop until it gets a definite answer.",
+        "explanation": "Wrong. Tight retries amplify load on a provider that's probably already struggling, and can push you into its rate limit, delaying every other message."
+      },
+      {
+        "text": "Move it straight to the dead-letter queue.",
+        "explanation": "Wrong. A DLQ is for messages that have failed repeatedly or permanently. A single ambiguous timeout is a classic retryable error."
+      },
+      {
+        "text": "Retry with exponential backoff and jitter (possibly via a secondary provider), and stop once the 5-minute TTL has passed.",
+        "explanation": "Correct. An occasional duplicate OTP is acceptable; a missing one locks the user out. Backoff with jitter avoids a retry storm, failover helps if the primary is down, and the TTL stops pointless late deliveries."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Weigh the outcomes:\n\n| Choice | If SMS was sent | If it wasn't |\n|---|---|---|\n| Don't retry | Fine | User locked out |\n| Retry | Duplicate OTP | Fine |\n\nA duplicate OTP is a minor annoyance; a missing one blocks login. So retry, but carefully:\n\n```\nretry 1: wait ~1 s (rand 0.5-1.5 s)\nretry 2: wait ~2 s\nretry 3: wait ~4 s, secondary provider\n...\nstop when now > created_at + 300 s\n```\n\nJitter spreads thousands of concurrent retries so they don't hit the recovering provider at the same instant.",
+    "link": {
+      "title": "AWS Builders' Library: timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You send **1.2 billion** notifications/day: 85% push, 12% email, 3% SMS. SMS costs about **$0.01** each. What is the approximate daily SMS cost, and what does it suggest?",
+    "options": [
+      {
+        "text": "About $3,600/day; SMS cost is negligible.",
+        "explanation": "Wrong. This is 100x too low; it treats 3% as 0.03% (360,000 messages). The real volume is 36 million."
+      },
+      {
+        "text": "About $360,000/day; it's worth using push first and falling back to SMS only when push isn't delivered or opened.",
+        "explanation": "Correct. 1.2B × 3% = 36M SMS; × $0.01 = $360,000/day, over $130M a year. Push-first escalation and strict dedup on SMS save real money."
+      },
+      {
+        "text": "About $12M/day; SMS should be removed entirely.",
+        "explanation": "Wrong. That's the cost if *every* notification were an SMS. And removing SMS entirely would break OTPs for users without the app installed."
+      },
+      {
+        "text": "About $36,000/day; switch everything to SMS for reliability.",
+        "explanation": "Wrong. The arithmetic is 10x too low, and moving everything to SMS would multiply costs about 33x for little gain."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nSMS/day = 1.2B x 0.03  = 36,000,000\nCost    = 36M x $0.01  = $360,000/day\nYearly  = $360k x 365  ≈ $131M\n```\n\nImplications you'd say out loud:\n\n- **Escalation**: send push; if not opened within 5 minutes, send SMS. Even converting a third of SMS to push saves ~$40M a year.\n- **Dedup matters financially**: a 1% duplicate rate on SMS is ~$1.3M a year.\n- **Clean phone numbers**: invalid numbers cost money and hurt sender reputation.",
+    "link": {
+      "title": "Twilio: SMS API documentation",
+      "url": "https://www.twilio.com/docs/sms/api"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Users report getting the same \"Your order has shipped\" push **two or three times**. Which mechanisms would prevent this? Select all that apply.",
+    "options": [
+      {
+        "text": "Require an idempotency key (e.g. `order-8812-shipped`) on the API and reject repeats with a Redis `SET NX` or a unique constraint.",
+        "explanation": "Correct. This stops producer retries (the order service timing out and calling again) from creating new notifications."
+      },
+      {
+        "text": "Record `sent:{notificationId}:{channel}` before or as part of calling the provider, and skip messages already marked sent.",
+        "explanation": "Correct. Kafka and SQS redeliver messages after worker crashes; a per-channel send record makes the sender idempotent against redelivery."
+      },
+      {
+        "text": "Switch the queue to exactly-once delivery, which guarantees the user receives exactly one push.",
+        "explanation": "Incorrect. Kafka's exactly-once semantics cover reads and writes within Kafka, not side effects like calling APNs. A crash after APNs accepts the push but before recording success still causes a resend."
+      },
+      {
+        "text": "Register the same device token only once per user, removing duplicates and stale tokens.",
+        "explanation": "Correct. A user with the same app installed and registered twice (or stale tokens left after reinstalling) can receive one push per registered token. Deduplicating and cleaning tokens fixes this source."
+      },
+      {
+        "text": "Increase the consumer's processing timeout so messages are never redelivered.",
+        "explanation": "Incorrect. Longer timeouts reduce some redeliveries but crashes and rebalances still cause them. You need idempotent processing, not just fewer retries."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "List the duplicate sources and match a defence to each:\n\n| Source | Defence |\n|---|---|\n| Producer retries the API call | Idempotency key |\n| Queue redelivers after crash | Per-channel send record |\n| Multiple tokens per device | Token dedup and cleanup |\n\nThen accept the residual risk: the window between \"APNs accepted\" and \"we recorded it\" can't be closed completely. At-least-once plus idempotency at every hop is the practical guarantee.",
+    "link": {
+      "title": "Firebase: FCM registration token management",
+      "url": "https://firebase.google.com/docs/cloud-messaging/manage-tokens"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user schedules a weekly digest email. On Tuesday they unsubscribe from marketing. The digest, enqueued on Monday for Wednesday delivery, still arrives. Where is the design flaw?",
+    "options": [
+      {
+        "text": "Preferences were checked when the notification was accepted, not when it was sent.",
+        "explanation": "Correct. Preferences can change between acceptance and delivery. Checking (or re-checking) them at send time, against a cache that unsubscribe events invalidate immediately, is the only way to honour the latest choice."
+      },
+      {
+        "text": "The email provider ignored the unsubscribe.",
+        "explanation": "Wrong. Unsubscribe state is yours to enforce; the provider just sends what you give it (though it may track bounces and complaints). Blaming the provider misses the real flaw."
+      },
+      {
+        "text": "The digest should have been sent by SMS.",
+        "explanation": "Wrong. Changing channel doesn't address the stale preference check, and would send marketing via a channel the user might not have consented to either."
+      },
+      {
+        "text": "The queue retention was too long.",
+        "explanation": "Wrong. Retention determines how long Kafka keeps messages, not whether a worker consults current preferences before sending."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nMon  accept digest, prefs OK,\n     scheduled for Wed\nTue  user unsubscribes,\n     prefs updated\nWed  digest sent, no prefs check!\n```\n\nFix:\n\n1. Move the preference check into the processing step that runs at `sendAt`.\n2. Make unsubscribe publish an event that invalidates the user's cached preferences immediately.\n3. As a last line of defence, the email sender checks a suppression list just before calling the provider.\n\nThis matters legally as well as for user trust: continuing to send marketing after consent is withdrawn can breach GDPR and the UK's PECR, and the US CAN-SPAM Act sets a hard deadline (10 business days) for honouring opt-outs.",
+    "link": {
+      "title": "RFC 8058: one-click unsubscribe",
+      "url": "https://www.rfc-editor.org/rfc/rfc8058"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your primary SMS provider starts returning 5xx errors for 40% of requests. What should the SMS sender do?",
+    "options": [
+      {
+        "text": "Keep sending to the primary and rely on retries to get everything through eventually.",
+        "explanation": "Wrong. Retrying against a provider that's failing 40% of the time multiplies its load, worsens its outage, and burns through OTP TTLs."
+      },
+      {
+        "text": "Stop sending SMS until the primary recovers.",
+        "explanation": "Wrong. 60% of requests still succeed, and a secondary provider is available. Stopping all SMS would turn a partial outage into a total one for login codes."
+      },
+      {
+        "text": "Fall back to push notifications for all SMS traffic.",
+        "explanation": "Wrong as a general fix. Many SMS recipients don't have the app (that's often why SMS is used), and some flows like phone-number verification must be SMS."
+      },
+      {
+        "text": "Open a circuit breaker on the primary once the error rate exceeds a threshold, route traffic to a secondary SMS provider, and probe the primary periodically to close the breaker when it recovers.",
+        "explanation": "Correct. The circuit breaker stops wasting time and capacity on a failing dependency, failover keeps OTPs flowing, and half-open probes restore the primary automatically."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The circuit breaker has three states:\n\n```\nCLOSED    normal; track error rate\n  | error rate > 20% over 30 s\n  v\nOPEN      send everything to secondary\n  | after 60 s\n  v\nHALF-OPEN send 1% to primary as a probe\n  | probes succeed -> CLOSED\n  | probes fail    -> OPEN\n```\n\nSMS is a channel where failover is possible (Twilio, Vonage, Sinch and others can all reach the same phone numbers). Push isn't: only APNs delivers to iPhones, so for push you queue and retry with backoff instead.",
+    "link": {
+      "title": "Azure Architecture Center: circuit breaker pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your push sender's metrics show that **25%** of APNs requests return HTTP **410** (device token no longer active), and Apple has started throttling you. What should change?",
+    "options": [
+      {
+        "text": "Retry 410 responses with exponential backoff until they succeed.",
+        "explanation": "Wrong. 410 is permanent: the app was uninstalled or the token rotated. Retrying wastes capacity and makes throttling worse."
+      },
+      {
+        "text": "On a 410, delete or deactivate that token in the devices table so it is never used again; do the same for FCM `UNREGISTERED` errors, and expire tokens from devices not seen for months.",
+        "explanation": "Correct. Token hygiene is a permanent fix. A quarter of your push traffic is going to dead devices; removing them frees capacity and stops providers treating you as a sloppy sender."
+      },
+      {
+        "text": "Fail over push traffic to a secondary push provider.",
+        "explanation": "Wrong. Only Apple can deliver to iPhones; there is no secondary APNs. And the errors aren't an outage, they're your own stale data."
+      },
+      {
+        "text": "Fall back to SMS for every 410.",
+        "explanation": "Wrong. An uninstalled app isn't a reason to text someone, and at around a cent each it would turn stale data into a large bill."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Classify the response before deciding on action:\n\n| Response | Meaning | Action |\n|---|---|---|\n| 200 | accepted | mark sent |\n| 429 / 5xx | transient | backoff |\n| 410 | token dead | delete token |\n\nWith 850M pushes a day, 25% is over 200M wasted requests daily. Firebase's guidance is similar: refresh tokens when the app starts, and treat tokens inactive for a long period (it suggests around a month) as stale.",
+    "link": {
+      "title": "Apple: sending notification requests to APNs",
+      "url": "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Marketing wants a campaign to **24 million users** delivered at **9 am in each user's local time**. Your scheduler can expand segments at **20,000 messages/s**. What design works best?",
+    "options": [
+      {
+        "text": "Create 24 million individual timers, one per user, in a scheduling database.",
+        "explanation": "Wrong. It works in principle but creates a huge burst of timer rows and lots of timers firing at the same instant per time zone. Grouping by time zone gives the same result far more cheaply."
+      },
+      {
+        "text": "Send everything at 9 am UTC.",
+        "explanation": "Wrong. That's 4 am in New York and 6 pm in Tokyo, which breaks the requirement and fires all 24M at once."
+      },
+      {
+        "text": "Group recipients by time zone and release each group as it reaches 9 am locally, expanding it at the throttled rate. A zone with 3M users takes about 2.5 minutes to expand.",
+        "explanation": "Correct. Only a few dozen UTC offsets are in use, so the campaign becomes a few dozen waves across the day. Each wave is within the expansion rate, so queues and provider limits stay predictable."
+      },
+      {
+        "text": "Expand the whole segment at midnight UTC and hold all 24M messages in Kafka until each user's 9 am.",
+        "explanation": "Wrong. You'd hold a giant backlog for up to a day, and preference changes or cancellations made in the meantime would be missed unless every message was re-checked."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work out the wave sizes:\n\n```\n24M users / 20k per s = 1,200 s = 20 min\n  (if everything went at once)\nLargest zone, say 3M: 3M / 20k = 150 s\n```\n\nSo each local-9-am wave lands within about 2.5 minutes, which is close enough to \"9 am\" for marketing. Checking preferences when each wave is expanded (not at midnight) also respects late opt-outs.",
+    "link": {
+      "title": "Azure Architecture Center: priority queue pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which provider responses should the SMS or email sender **retry** (with backoff, within the TTL)? Select all that apply.",
+    "options": [
+      {
+        "text": "HTTP 429 Too Many Requests from the SMS provider.",
+        "explanation": "Correct. You're being throttled; it's transient. Back off (respect `Retry-After` if sent) and try again."
+      },
+      {
+        "text": "A connection timeout with no response.",
+        "explanation": "Correct. Ambiguous but usually transient. Retry with backoff; a rare duplicate is acceptable, and per-channel send records limit repeats."
+      },
+      {
+        "text": "HTTP 503 Service Unavailable.",
+        "explanation": "Correct. A temporary server-side failure. Retry, and if the error rate stays high, open a circuit breaker and fail over."
+      },
+      {
+        "text": "\"Invalid phone number\" or an email hard bounce (mailbox doesn't exist).",
+        "explanation": "Incorrect. Permanent failures won't fix themselves. Mark the number or address invalid instead; retrying costs money and damages sender reputation."
+      },
+      {
+        "text": "\"Recipient has unsubscribed\" or replied STOP.",
+        "explanation": "Incorrect. This is a consent signal. Update preferences and suppress future sends; retrying would be a compliance breach."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask: **will the same request succeed later?**\n\n- 429, 5xx, timeouts: plausibly yes, so retry with exponential backoff and jitter.\n- Invalid destination, hard bounce: no, so clean up the data.\n- Unsubscribe/STOP: no, and legally you mustn't, so update preferences.\n\nAlways cap retries by the notification's TTL and an attempt count, then dead-letter.",
+    "link": {
+      "title": "AWS Builders' Library: timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To save SMS cost, you implement **escalation**: send a push, and send an SMS only if the push isn't opened within 5 minutes. How should the escalation be implemented?",
+    "options": [
+      {
+        "text": "Have the push sender sleep for 5 minutes, then check whether the push was opened.",
+        "explanation": "Wrong. Sleeping workers waste capacity, and if the worker restarts during the wait the escalation is lost entirely."
+      },
+      {
+        "text": "When the push is sent, schedule a delayed job for +5 minutes carrying the notification ID. When it fires, check the open status (and that the TTL hasn't expired) and only then send the SMS, using the same idempotency scheme.",
+        "explanation": "Correct. A durable delayed message survives restarts, the check happens at fire time so opens are respected, and the send record stops a redelivered job from sending two SMSs."
+      },
+      {
+        "text": "Send both push and SMS immediately; cancel the SMS if the push is opened.",
+        "explanation": "Wrong. SMS can't be recalled once the provider sends it, so you'd pay for every SMS and defeat the purpose."
+      },
+      {
+        "text": "Ask the client app to request an SMS if it doesn't receive the push.",
+        "explanation": "Wrong. If the push wasn't delivered, the app may not be running at all, so it can't ask for anything."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Escalation is a durable, conditional, delayed action:\n\n```\nt=0    push sent; enqueue\n       {id, check_at: +5 min}\nt=5m   job fires:\n       if opened(id): stop\n       if expired(id): stop\n       if sent(id, sms): stop\n       else send SMS\n```\n\nThe savings can be large: if 60% of pushes are opened in time, you send 60% fewer SMSs for that flow. Use an `opened` event from the app to set the flag the job checks.",
+    "link": {
+      "title": "Firebase Cloud Messaging documentation",
+      "url": "https://firebase.google.com/docs/cloud-messaging"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A viral post gets **500 likes in two minutes**, and the author receives 500 separate \"X liked your photo\" pushes. Which changes fix the experience? Select all that apply.",
+    "options": [
+      {
+        "text": "Buffer low-priority social events for a short window keyed by user, event type and post, then send one aggregated push (\"Sam and 499 others liked your photo\").",
+        "explanation": "Correct. Content-level aggregation turns a burst into a single meaningful message and cuts volume dramatically."
+      },
+      {
+        "text": "Use a collapse key (`apns-collapse-id` on APNs, `collapse_key` on FCM) so a newer like-count push replaces the older one on the device.",
+        "explanation": "Correct. Collapsing means the device shows only the latest version instead of stacking hundreds of near-identical alerts."
+      },
+      {
+        "text": "Apply a per-user frequency cap for social pushes, with the in-app inbox still recording every event.",
+        "explanation": "Correct. A cap protects against bursts the aggregator misses; users can still see everything in the app."
+      },
+      {
+        "text": "Move likes to the critical priority queue so they're delivered faster.",
+        "explanation": "Incorrect. Speed isn't the problem; volume is. Putting social events in the critical queue would also put them in competition with OTPs."
+      },
+      {
+        "text": "Rely on the idempotency key to drop the duplicates.",
+        "explanation": "Incorrect. These aren't duplicates: each like is a distinct event with its own key. Idempotency prevents the same event being sent twice, not many similar events."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Separate **duplicates** (same event twice) from **noise** (many similar events):\n\n| Problem | Fix |\n|---|---|\n| Same event twice | Idempotency key |\n| Many similar events | Aggregate window |\n| Stale alert on device | Collapse key |\n| Burst gets through | Frequency cap |\n\nA 60-second window turns 500 pushes into about 2, at the cost of a minute's delay, which is fine for social notifications.",
+    "link": {
+      "title": "Apple: sending notification requests to APNs",
+      "url": "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
+    }
+  }
+]

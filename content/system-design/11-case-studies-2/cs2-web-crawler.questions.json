@@ -1,0 +1,385 @@
+[
+  {
+    "id": "cs2-web-crawler-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your crawler must fetch 1,000 pages/s, and an average fetch (DNS + connect + TLS + download) takes about 1 second. What does this imply for the fetcher design?",
+    "options": [
+      {
+        "text": "You need about 1,000 requests in flight at once, so use asynchronous, event-driven I/O rather than a blocking thread per request",
+        "explanation": "Correct. By Little's law, concurrency = throughput x latency = 1,000/s x 1 s = 1,000. Async I/O handles thousands of mostly idle sockets cheaply, while thousands of OS threads waste memory and context switches."
+      },
+      {
+        "text": "You need a single very fast machine, because each request takes only 1 ms of CPU",
+        "explanation": "Wrong. CPU time per request isn't the constraint. Waiting on the network is. One machine *might* sustain it with async I/O, but it's a single point of failure and politeness partitioning favours several nodes."
+      },
+      {
+        "text": "You need 1,000 Gbps of bandwidth",
+        "explanation": "Wrong. 1,000 pages/s x 100 KB = 100 MB/s, which is about 0.8 Gbps. Bandwidth is modest here. Concurrency is what needs care."
+      },
+      {
+        "text": "Nothing special. Sequential fetching at 1 s per page gives 1,000 pages/s",
+        "explanation": "Wrong. Sequential fetching at 1 s per page gives 1 page per second. You need 1,000x more parallelism."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Little’s law gives mean concurrency 1,000/s ×1s=1,000 requests, assuming a stable workload. At 100KB each, payload is 100MB/s=0.8Gbps before protocol overhead. Async I/O can avoid one native thread per blocked request; thread-stack allocation and scheduler cost vary, and lightweight/virtual-thread alternatives exist. Add margin for latency tails and failure recovery.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You expect 10 billion distinct URLs and want a Bloom filter for 'seen URL' checks at a 1% false-positive rate. Using about 9.6 bits per element, how much memory does it need, and what does a false positive mean for the crawler?",
+    "options": [
+      {
+        "text": "About 1.2 GB. A false positive means a URL is fetched twice",
+        "explanation": "Wrong on both counts. 9.6 bits x 10e9 = 9.6e10 bits = 12 GB (the slip is a factor of 10). And a Bloom false positive says 'seen' for an unseen URL, so it causes a *skip*, not a double fetch."
+      },
+      {
+        "text": "About 12 GB. A false positive means a genuinely new URL is wrongly treated as seen and skipped",
+        "explanation": "At the designed load and hash assumptions, about 12GB supports a1% false-positive probability for new membership probes. An insert-only correctly maintained Bloom filter has no false negatives; races, lost state or unsafe deletion violate that assumption."
+      },
+      {
+        "text": "About 96 GB. A false positive means a URL is never added to the filter",
+        "explanation": "Wrong. This forgets to divide bits by 8 to get bytes. And a false positive is about what a lookup *answers*, not about insertion."
+      },
+      {
+        "text": "About 12 GB. A false positive means a seen URL is reported as new, so it's re-fetched",
+        "explanation": "Wrong. The size is right, but that's a false *negative*, which Bloom filters never produce. If all k bits are set, the filter says 'maybe seen'. It never says 'new' for something that was inserted."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Bloom filter sizing: bits per element = -ln(p) / (ln 2)^2.\n\n1. p = 0.01, so -ln(0.01) = 4.605.\n2. (ln 2)^2 = 0.4805.\n3. Bits/element = 4.605 / 0.4805 = **9.59**.\n4. Total bits = 9.59 x 10e9 = 9.59e10, / 8 = **~12 GB**.\n5. Optimal hashes k = (bits/element) x ln 2 = 9.59 x 0.693 = **~7**.\n\nThe error semantics:\n- Lookup says **'not seen'**: definitely new. Add it to the frontier.\n- Lookup says **'maybe seen'**: about 1% of truly new URLs land here and get skipped (unless you double-check an exact store).\n\nGoing to 0.1% needs 14.4 bits/element, which is about 18 GB.",
+    "link": {
+      "title": "Bloom filter (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your crawler requests `https://shop.example/robots.txt` and gets `503 Service Unavailable`. According to RFC 9309, what should it do?",
+    "options": [
+      {
+        "text": "Treat the site as having no restrictions and crawl everything",
+        "explanation": "Wrong. That's the RFC's rule for **4xx** (robots.txt 'unavailable', such as a 404). A 5xx means the server is struggling, and crawling everything would add to its load."
+      },
+      {
+        "text": "Use the last cached robots.txt indefinitely",
+        "explanation": "Partly wrong. A cached copy can be used during a long outage, but by default the RFC says not to rely on cached rules for more than 24 hours when the file is reachable, and a 5xx initially means disallow."
+      },
+      {
+        "text": "Assume complete disallow for the host, and retry robots.txt later",
+        "explanation": "Correct. RFC 9309 says that if robots.txt is unreachable because of server errors (5xx), crawlers must assume complete disallow. If it stays unreachable for a long time (the RFC suggests 30 days), they may fall back to a cached copy or carry on as if there were no rules."
+      },
+      {
+        "text": "Ignore robots.txt for this host from now on",
+        "explanation": "Wrong. One error never releases a crawler from the protocol. It also risks crawling paths the owner explicitly disallowed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "RFC9309 distinguishes unavailable 4xx (the crawler may access resources) from undefined robots due to 5xx/network failure (assume disallow). Retry politely and retain cache state according to the RFC. Its example 30-day long-outage period is not a mandatory threshold. A robots permission is not authentication or a blanket legal permission to access content.",
+    "link": {
+      "title": "RFC 9309: Robots Exclusion Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run 50 crawler nodes. Which partitioning scheme makes per-host politeness easiest to enforce correctly?",
+    "options": [
+      {
+        "text": "Hash the full URL across nodes, so load is perfectly even",
+        "explanation": "Wrong. URLs for one host would spread over all 50 nodes. Each would fetch independently, so the host could get 50 concurrent requests unless you add a distributed rate limiter, which is extra latency and complexity."
+      },
+      {
+        "text": "Assign URLs round-robin as they're discovered",
+        "explanation": "Wrong. Same problem as hashing the full URL: no node owns a host, so politeness needs global coordination. Round-robin also ignores DNS and robots cache locality."
+      },
+      {
+        "text": "Consistent-hash the hostname (or registered domain), so each host is owned by exactly one node, which keeps its back queue and next-allowed time locally",
+        "explanation": "Correct. Ownership makes politeness a local heap operation. robots.txt and DNS caches are local too, and consistent hashing moves only about 1/N of hosts when nodes join or leave."
+      },
+      {
+        "text": "Partition by top-level domain (.com, .org, .uk ...)",
+        "explanation": "Wrong. It's catastrophically skewed: .com alone is a huge share of the web, so one node would get most of the work."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A single fenced owner for each host can serialize its fetches and retain local scheduling/cache state. On failover, recover durable queues and prevent old in-flight ownership from violating the host limit. Shared-IP limits must span different host owners; per-node IP counters alone can multiply the allowed rate. Consistent hashing redistributes approximately a fraction of hosts only under balanced placement assumptions.",
+    "link": {
+      "title": "Consistent hashing (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two pages differ only by a timestamp in the footer and a different ad block. SHA-256 dedup treats them as distinct. Which technique detects them as near-duplicates at web scale, and how?",
+    "options": [
+      {
+        "text": "SimHash: a 64-bit fingerprint where similar feature sets give fingerprints with small Hamming distance, looked up via block-permuted tables to find matches within about 3 bits",
+        "explanation": "SimHash is a candidate signal for similarity of weighted feature vectors. A small textual change does not deterministically flip only a few bits; validate thresholds and compare candidates according to the product’s false-match tolerance."
+      },
+      {
+        "text": "MinHash of the URL string",
+        "explanation": "Wrong. Near-duplicate *content* often lives at completely different URLs (mirrors, printer-friendly versions). Hashing URLs can't see content similarity."
+      },
+      {
+        "text": "A Bloom filter of page bodies",
+        "explanation": "Wrong. A Bloom filter tests *exact* membership. Changing one byte changes every hash, so near duplicates look completely new."
+      },
+      {
+        "text": "Compare every new page byte by byte against all stored pages",
+        "explanation": "Wrong. With billions of pages, pairwise comparison is impossibly expensive (O(N) per page, O(N^2) overall)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Construct a64-bit weighted SimHash by summing signed feature weights per bit and taking each sum’s sign. Split into four 16-bit blocks: at most three differing bits imply at least one exactly matching block by the pigeonhole principle. Use those block matches to retrieve candidates, then check full Hamming distance. Similar-content behavior is probabilistic and feature-dependent; four simple tables may produce too many candidates at billions of pages, so the paper uses more refined indexing.",
+    "link": {
+      "title": "Detecting near-duplicates for web crawling (Google Research)",
+      "url": "https://research.google/pubs/detecting-near-duplicates-for-web-crawling/"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your crawler has spent a day fetching 4 million pages from one small site's event calendar (`/events?month=2087-03`, `/events?month=2087-04`, ...). Which defences would have prevented this? Select all that apply.",
+    "options": [
+      {
+        "text": "A per-host page budget per crawl cycle, scaled by the host's importance",
+        "explanation": "Correct. A small, low-authority host might get a budget of a few thousand pages. Once spent, its remaining URLs wait for the next cycle, which bounds the damage from any trap."
+      },
+      {
+        "text": "Detecting high near-duplicate rates (SimHash) on a host and throttling it",
+        "explanation": "Correct. Generated calendar pages are near-identical templates. A spike in near-duplicate matches is a strong trap signal."
+      },
+      {
+        "text": "A larger Bloom filter",
+        "explanation": "Wrong. Every calendar URL really is distinct, so a perfect seen-set would still let each one through. Dedup of identical URLs doesn't stop *infinite* distinct URLs."
+      },
+      {
+        "text": "Lowering priority for URLs with large depth from the seed or an exploding parameter space",
+        "explanation": "Correct. Each 'next month' click adds depth. Priority decay with depth, plus detecting a parameter that takes unbounded values, pushes these URLs to the back of the frontier."
+      },
+      {
+        "text": "Faster fetchers so the calendar finishes sooner",
+        "explanation": "Wrong. The calendar is infinite, so it never 'finishes'. Speed just wastes resources faster."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Classify the trap: an **infinite space of distinct URLs** with near-identical content.\n\n- Seen-URL dedup can't help, because every URL is new.\n- What *can* help is bounding effort and spotting low value:\n  1. **Budget**: `max_pages(host) = f(importance)`, for example 5,000 for an obscure host.\n  2. **Value signal**: SimHash shows 99% near duplicates on this host, so throttle it.\n  3. **Structure signal**: depth > 15, or one query parameter with 10,000+ distinct values, so demote it.\n\nAdd URL length and path-repetition limits, and spider traps become a bounded, small cost.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You re-crawl 300 M known pages per week, and about 80% of them haven't changed since last time. What's the cheapest way to cut bandwidth substantially?",
+    "options": [
+      {
+        "text": "Send conditional GETs using the stored ETag (`If-None-Match`) or `If-Modified-Since`, so unchanged pages return `304 Not Modified` with no body",
+        "explanation": "Correct. A 304 costs a few hundred bytes instead of about 100 KB. For the 80% of unchanged pages (on servers that support validators), that removes most re-crawl bandwidth."
+      },
+      {
+        "text": "Fetch only the first 1 KB of each page and compare it",
+        "explanation": "Wrong. Changes often happen further down the page, and partial fetches still cost a connection plus TLS. Range requests on HTML are also often unsupported."
+      },
+      {
+        "text": "Compress pages with gzip after downloading them",
+        "explanation": "Wrong. Compressing *after* download saves storage, not transfer. You'd request `Accept-Encoding: gzip` anyway, but that's separate from skipping unchanged pages."
+      },
+      {
+        "text": "Stop re-crawling entirely",
+        "explanation": "Wrong. The 20% of pages that do change matter, and the index goes stale. The goal is to make unchanged checks cheap, not to skip them."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Weekly re-crawl = 300 M pages x 100 KB = **30 TB**.\n2. 80% unchanged = 240 M pages.\n3. With 304s at about 500 B: 240 M x 500 B = **0.12 TB**, against 24 TB for full bodies.\n4. New total is about 6 TB (changed pages) + 0.12 TB, roughly an **80% saving** where servers support validators.\n\nGo further by learning each page's change rate. If a page has changed once in 20 checks, re-crawl it less often. Weight the schedule by importance x change probability.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A site's robots.txt contains:\n\n```\nUser-agent: *\nDisallow: /private\nAllow: /private/press\n```\n\nUnder RFC 9309, may your crawler fetch `/private/press-kit.pdf`?",
+    "options": [
+      {
+        "text": "No. `Disallow` rules always take precedence over `Allow` rules",
+        "explanation": "Wrong. RFC 9309 has no blanket precedence for `Disallow`. The most specific (longest) matching rule decides."
+      },
+      {
+        "text": "No. `/private/press` is a folder, so it doesn't match a file called `press-kit.pdf`",
+        "explanation": "Wrong. Rules match as path *prefixes* of octets, not as folders. `/private/press` is a prefix of `/private/press-kit.pdf`, so the rule matches."
+      },
+      {
+        "text": "Yes. Both rules match, and `Allow: /private/press` is the longer match, so it wins",
+        "explanation": "Correct. `/private/press` is 14 octets against 8 for `/private`. The most specific match must be used, so the fetch is allowed."
+      },
+      {
+        "text": "Yes, but only because `Allow` comes after `Disallow` in the file",
+        "explanation": "Wrong. Order in the file doesn't matter under RFC 9309. Swap the two lines and the answer is the same."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Apply the RFC's rule step by step:\n\n1. Find every rule in the matching group whose path is a prefix of the URL path.\n   - `/private` matches (8 octets).\n   - `/private/press` matches (14 octets).\n2. Use the **most specific** match, the one with the most octets: `Allow: /private/press`.\n3. Only if two matching rules were equally long would the tie-break apply, and then `Allow` should win.\n\nSo `/private/press-kit.pdf` is allowed, while `/private/accounts` (matching only `/private`) is not.\n\nThe prefix behaviour surprises site owners. If they meant only the press folder, they should write `Allow: /private/press/`.",
+    "link": {
+      "title": "RFC 9309: Robots Exclusion Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are reviewing a colleague's robots.txt handling against RFC 9309. Which behaviours are compliant? Select all that apply.",
+    "options": [
+      {
+        "text": "On `503` or a connection timeout, stop crawling the host until robots.txt can be fetched",
+        "explanation": "Correct. An 'unreachable' robots.txt (server or network error) means the crawler must assume complete disallow."
+      },
+      {
+        "text": "Match the `User-agent` line case-insensitively, so `MyBot` matches `mybot`",
+        "explanation": "Correct. The RFC requires case-insensitive matching of the product token."
+      },
+      {
+        "text": "Re-use a successfully fetched robots.txt for a week to save requests",
+        "explanation": "Wrong. Crawlers should not use a cached copy for more than 24 hours unless the file is unreachable."
+      },
+      {
+        "text": "Treat `Crawl-delay` as a mandatory part of the standard",
+        "explanation": "Wrong. `Crawl-delay` isn't defined in RFC 9309. Honouring it is good manners, but it's an extension."
+      },
+      {
+        "text": "On `404 Not Found` for robots.txt, crawl the host without robots restrictions",
+        "explanation": "Correct. A 4xx means the file is 'unavailable', and the RFC says the crawler may then access any resource on the server."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "For robots handling: follow parseable successful rules; a4xx may permit access under the protocol; undefined 5xx/network failure requires disallow; cache guidance is SHOULD NOT exceed 24h unless unreachable; product-token matching is case-insensitive. Crawl-delay is an optional extension. A long undefined period may permit the RFC’s documented fallback. These rules do not make robots.txt an authorization mechanism.",
+    "link": {
+      "title": "RFC 9309: Robots Exclusion Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your crawler enforces a 2-second delay per **host**. A shared-hosting provider serves 2,000 small sites from one IP address, and all 2,000 are in your frontier. The provider complains about overload. What's going on?",
+    "options": [
+      {
+        "text": "Nothing is wrong. 2 s per host is already very polite",
+        "explanation": "Wrong. It's polite to each *site*, but all 2,000 sites share one machine, and the per-host limits add up on that machine."
+      },
+      {
+        "text": "The per-host limits add up to about 1,000 requests a second on one server. Also rate-limit per IP address",
+        "explanation": "Correct. 2,000 hosts / 2 s = 1,000 req/s at a single IP. Adding a per-IP limit (say a few requests a second) protects shared hosting."
+      },
+      {
+        "text": "The DNS cache is stale, so requests are going to the wrong server",
+        "explanation": "Wrong. The requests are reaching the right server. There are simply too many of them."
+      },
+      {
+        "text": "The Bloom filter is producing false positives, causing repeat fetches",
+        "explanation": "Wrong. Bloom false positives make you *skip* URLs, not fetch them again."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "2,000 hosts at 0.5 requests/s each offer 1,000 requests/s to the same IP. Actual server capacity is not known from its label or host count. Enforce a coordinated per-IP budget in addition to host limits, using the resolved address while respecting DNS caching and changes. CDNs/anycast complicate the one-IP/one-machine assumption, so tune policy using evidence.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You model a page's changes as a Poisson process. History says it changes on average once every 10 days. If you re-crawl it every 10 days, what's the probability that it has changed at least once since the last fetch?",
+    "options": [
+      {
+        "text": "100%, because it changes once every 10 days",
+        "explanation": "Wrong. 'Once every 10 days on average' doesn't mean exactly once in every 10-day window. Some windows have no changes and some have several."
+      },
+      {
+        "text": "50%",
+        "explanation": "Wrong. This treats it as a coin flip. The Poisson model gives a specific value: 1 - e^(-1)."
+      },
+      {
+        "text": "About 63%",
+        "explanation": "Correct. With rate lambda = 0.1 per day and t = 10 days, P(no change) = e^(-1) = 0.37, so P(at least one change) is about 0.63."
+      },
+      {
+        "text": "About 10%",
+        "explanation": "Wrong. 10% is the chance per *day* (roughly). Over 10 days the chance is much higher."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "For a Poisson process with rate lambda, the chance of **no** events in time t is e^(-lambda t).\n\n1. lambda = 1 change / 10 days = 0.1 per day.\n2. t = 10 days, so lambda t = 1.\n3. P(no change) = e^(-1) = **0.368**.\n4. P(changed) = 1 - 0.368 = **0.632**.\n\nWhat it means for scheduling:\n\n| Re-crawl every | P(changed) |\n|---|---|\n| 2 days | 1 - e^(-0.2) = 18% |\n| 10 days | 63% |\n| 30 days | 1 - e^(-3) = 95% |\n\nCrawl often and most fetches are wasted 304s. Crawl rarely and the copy is stale most of the time. Weighting the interval by importance is how you pick a point on that curve.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your URL normaliser runs before the seen-URL check. Which of these pairs should it normally map to the **same** URL? Select all that apply.",
+    "options": [
+      {
+        "text": "`https://example.com/p?id=7&utm_source=x` and `https://example.com/p?id=7`",
+        "explanation": "Do not merge these blindly. UTM parameters conventionally carry analytics, but servers can use any query parameter to change the response. Strip them only after establishing site-specific equivalence."
+      },
+      {
+        "text": "`https://example.com/Page` and `https://example.com/page`",
+        "explanation": "Wrong. Paths are case-sensitive in general. Many servers return different pages (or a 404) for the two."
+      },
+      {
+        "text": "`HTTP://Example.com:80/a#top` and `http://example.com/a`",
+        "explanation": "Correct. Scheme and host are case-insensitive, port 80 is the default for http, and fragments are never sent to the server."
+      },
+      {
+        "text": "`http://example.com/x` and `https://example.com/x`",
+        "explanation": "Wrong as a blind rule. They often serve the same content, but not always. Rely on redirects or `rel=canonical` to merge them rather than assuming it."
+      },
+      {
+        "text": "`http://example.com/a/../b` and `http://example.com/b`",
+        "explanation": "Correct. Dot segments are resolved before the request is made, so both fetch `/b`."
+      }
+    ],
+    "answer": [
+      2,
+      4
+    ],
+    "workedExample": "Normalize scheme/host case, the scheme’s default port and dot segments; omit fragments for ordinary server-side HTTP fetch identity. Do not universally lowercase paths, strip tracking-looking query parameters or mergeHTTP withHTTPS. Redirects and canonical tags provide evidence/hints, not proof that all future content is identical. JavaScript fragment-routed applications may need a separate rendering identity policy.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  }
+]

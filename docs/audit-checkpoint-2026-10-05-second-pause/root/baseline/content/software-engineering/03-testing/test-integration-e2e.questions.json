@@ -1,0 +1,348 @@
+[
+  {
+    "id": "test-integration-e2e-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which is a **narrow** integration test?",
+    "options": [
+      {
+        "text": "Deploying the orders, users and payments services together and placing an order through the API",
+        "explanation": "That spans many real services: a broad integration (or E2E) test."
+      },
+      {
+        "text": "Calling `apply_discount` with fixed inputs",
+        "explanation": "No external dependency at all: a unit test."
+      },
+      {
+        "text": "Running your `UserRepo` class against a real Postgres, with nothing else involved",
+        "explanation": "Correct. One piece of your code plus one real external dependency."
+      },
+      {
+        "text": "Clicking through the sign-up page in a browser",
+        "explanation": "That drives the whole system from the outside: an E2E test."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Narrow integration = your code that talks to one external thing, tested against that real thing, with everything else absent or doubled.\n\n- Three services deployed together: broad.\n- `UserRepo` against real Postgres: one class, one real DB. Narrow.\n- `apply_discount` with fixed inputs: no external thing. Unit.\n- Browser sign-up: whole system. E2E.",
+    "link": {
+      "title": "Integration Test — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/IntegrationTest.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do E2E tests use `expect(...).to_be_visible()` (which retries until a timeout) rather than `time.sleep(2)` followed by a check?",
+    "options": [
+      {
+        "text": "Waiting on the condition finishes as soon as it is true and still copes when the page is slower than usual; a fixed sleep is both slower and flakier",
+        "explanation": "Correct. A fixed sleep wastes time when the page is fast and fails when it takes 2.1 s."
+      },
+      {
+        "text": "`sleep` is not allowed in pytest",
+        "explanation": "pytest allows `sleep`; it is just a bad way to wait."
+      },
+      {
+        "text": "`expect` makes the page load faster",
+        "explanation": "It does not change the app's speed, only how the test waits."
+      },
+      {
+        "text": "`sleep` blocks the browser from rendering",
+        "explanation": "The browser runs in a separate process; `sleep` only pauses the test."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the two waits for a page that usually takes 0.5 s but sometimes 2.5 s:\n\n| | sleep(2) | wait on condition |\n|---|---|---|\n| 0.5 s page | waits 2 s | waits 0.5 s |\n| 2.5 s page | **fails** | waits 2.5 s |\n\nCondition-based waiting is faster on average and deterministic as long as the timeout is generous.",
+    "link": {
+      "title": "Playwright for Python",
+      "url": "https://playwright.dev/python/docs/intro"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In consumer-driven contract testing, who runs the verification that the provider honours the contract?",
+    "options": [
+      {
+        "text": "The consumer, in its own CI, against a mock provider",
+        "explanation": "The consumer's run *produces* the contract; it never touches the real provider."
+      },
+      {
+        "text": "A shared staging environment, nightly",
+        "explanation": "Avoiding dependence on shared environments is a main motivation for contract tests."
+      },
+      {
+        "text": "Nobody; the contract is documentation only",
+        "explanation": "A contract that isn't verified is just a hope. Verification is the point."
+      },
+      {
+        "text": "The provider, in its CI, replaying the contract against the real provider code",
+        "explanation": "Correct. That is what catches a provider change that would break a consumer, before the provider deploys."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "There are two halves:\n\n1. **Consumer CI**: tests run against a mock provider and record what they need: the contract.\n2. **Provider CI**: replays each contract's requests against the real provider and checks the responses.\n\nStep 2 is where a renamed field or a changed status code fails, in the build of the team who made the change.",
+    "link": {
+      "title": "Pact documentation",
+      "url": "https://docs.pact.io/"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With the module-scoped `conn` and the `repo` fixture from the lesson, a teammate deletes the `conn.rollback()` line. Tests run in order: `test_add_then_find`, `test_unique_email`, `test_isolated`. What happens?",
+    "options": [
+      {
+        "text": "All three still pass",
+        "explanation": "Without the rollback, the row inserted by the first test is still there for the next two."
+      },
+      {
+        "text": "`test_add_then_find` passes; `test_unique_email` fails on its first insert with IntegrityError; `test_isolated` fails because the user exists",
+        "explanation": "Correct. The leftover `a@x.io` row makes the first `add` in test 2 violate UNIQUE outside the `raises` block, and test 3 finds it."
+      },
+      {
+        "text": "Only `test_isolated` fails",
+        "explanation": "`test_unique_email` also fails: its *first* `add` raises, before the `pytest.raises` block is entered."
+      },
+      {
+        "text": "All three fail",
+        "explanation": "The first test runs on an empty table and passes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the shared table:\n\n```\ntest 1: insert a@x.io -> ok, pass\n        (row stays)\ntest 2: insert a@x.io -> IntegrityError\n        outside raises -> FAIL\ntest 3: by_email -> 1, not None -> FAIL\n```\n\nThe failure in test 2 is subtle: the error the test *expects* happens one line too early, which pytest reports as an unexpected exception. Shared state without cleanup makes later tests depend on earlier ones.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your repository tests run on SQLite for speed; production is Postgres. A migration declares `code VARCHAR(3)`, and the app writes `'GBPX'`. What do the tests and production do?",
+    "options": [
+      {
+        "text": "Tests pass (SQLite stores the 4-character string); production raises 'value too long'",
+        "explanation": "Correct. SQLite treats `VARCHAR(3)` as TEXT affinity with no length limit, while Postgres enforces it. Test against the production engine, e.g. with Testcontainers."
+      },
+      {
+        "text": "Both reject the value",
+        "explanation": "SQLite does not enforce `VARCHAR(n)` lengths."
+      },
+      {
+        "text": "Tests fail; production truncates to 'GBP'",
+        "explanation": "It is the other way round, and Postgres raises an error rather than truncating silently."
+      },
+      {
+        "text": "Both store 'GBP'",
+        "explanation": "Neither silently truncates."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. SQLite uses type *affinity*: `VARCHAR(3)` maps to TEXT and the length is ignored, so `'GBPX'` is stored.\n2. Postgres enforces `varchar(3)` and raises `value too long for type character varying(3)`.\n3. So the bug passes every test and fails in production.\n\nThe fix is not 'more tests', it is a test environment closer to production: a real Postgres in a container, started once per session.",
+    "link": {
+      "title": "Datatypes in SQLite",
+      "url": "https://www.sqlite.org/datatype3.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Orders' unit tests stub the Users API with `{\"id\": 42, \"email\": \"a@x.io\"}`. The Users team renames `email` to `primary_email` and all of their own tests pass. What catches the break **before** deployment?",
+    "options": [
+      {
+        "text": "Orders' unit tests",
+        "explanation": "They still use the old stub, which nobody has changed. They stay green."
+      },
+      {
+        "text": "Users' unit tests",
+        "explanation": "Users' tests were updated with the rename; they know nothing about what Orders reads."
+      },
+      {
+        "text": "A consumer-driven contract test: Orders' contract says it reads `email`, and Users' CI verifies that contract against the new code",
+        "explanation": "Correct. The provider build fails because the response no longer contains `email`, before Users deploys."
+      },
+      {
+        "text": "Nothing can, short of production monitoring",
+        "explanation": "This is exactly the problem contract tests solve, without needing both services deployed together."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each team's tests check only their side:\n\n- Orders' stub: an old belief about Users.\n- Users' tests: Users' new behaviour.\n\nNothing connects them. The contract does: it is Orders' belief written down as data and run against Users' real code. With the rename, the provider check fails on the missing `email` field (in the lesson's example, `KeyError: 'email'`).",
+    "link": {
+      "title": "Consumer-Driven Contracts — martinfowler.com",
+      "url": "https://martinfowler.com/articles/consumerDrivenContracts.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The provider's response is `{\"id\": 42, \"email\": \"a@x.io\", \"created\": \"2026-01-01\"}`, and the consumer's contract requires only `id` (int) and `email` (str). Using the lesson's contract test, what happens?",
+    "options": [
+      {
+        "text": "It fails because `created` is not in the contract",
+        "explanation": "The test only checks the fields listed in the contract. Extra fields are ignored."
+      },
+      {
+        "text": "It fails because `created` is a string date, not a datetime",
+        "explanation": "The contract says nothing about `created`, so its type isn't checked."
+      },
+      {
+        "text": "It errors because the contract has no `created` type",
+        "explanation": "The loop iterates over the contract's fields only."
+      },
+      {
+        "text": "It passes: extra fields don't matter to a consumer that ignores them",
+        "explanation": "Correct. Consumer-driven contracts list only what the consumer uses, so the provider may add fields freely."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The verification loop:\n\n```\nfor f, typ in fields.items():\n  # id:int, email:str\n  assert isinstance(body[f], typ)\n```\n\n`body['id']` is 42 (int), `body['email']` is a str: pass. `created` is never examined. This is the core freedom of consumer-driven contracts: the provider may add or change anything no consumer depends on.",
+    "link": {
+      "title": "Consumer-Driven Contracts — martinfowler.com",
+      "url": "https://martinfowler.com/articles/consumerDrivenContracts.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which practices make E2E tests more reliable? Select all that apply.",
+    "options": [
+      {
+        "text": "Each test creates its own uniquely named user and data",
+        "explanation": "Correct. Tests that share records interfere with each other, especially when run in parallel."
+      },
+      {
+        "text": "Selecting elements by role or a dedicated test id",
+        "explanation": "Correct. Those survive styling changes that break long CSS or XPath selectors."
+      },
+      {
+        "text": "Adding `time.sleep(5)` before every click",
+        "explanation": "Fixed sleeps make tests slow and are still flaky when the system is slower than 5 s."
+      },
+      {
+        "text": "Wrapping each page in a page object",
+        "explanation": "Correct. A UI change is fixed in one place, which keeps the suite maintainable as well as consistent."
+      },
+      {
+        "text": "Covering every validation error message through the browser",
+        "explanation": "Validation edge cases belong in unit tests. Many slow E2E tests increase total flakiness and runtime."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Reliable E2E tests share some habits:\n\n- Independent data (A).\n- Stable selectors (B).\n- Condition-based waits, not sleeps (so C is wrong).\n- Encapsulated page interactions (D).\n- Few tests, focused on critical journeys (so E is wrong).\n\nEach extra E2E test adds its own chance of a flaky failure, so cutting their number improves reliability too.",
+    "link": {
+      "title": "Larger Testing — Software Engineering at Google, ch. 14",
+      "url": "https://abseil.io/resources/swe-book/html/ch14.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A test suite uses per-test transaction rollback for isolation. A new test checks `OrderService.place()`, which internally calls `conn.commit()`. What is the risk?",
+    "options": [
+      {
+        "text": "None; the fixture's rollback undoes everything",
+        "explanation": "A rollback can only undo uncommitted work. After `commit()`, the rows are permanent."
+      },
+      {
+        "text": "The rollback raises because there is no transaction",
+        "explanation": "Rolling back with no open transaction is harmless in most drivers; the problem is silent data leakage."
+      },
+      {
+        "text": "The committed order rows survive the rollback and leak into later tests",
+        "explanation": "Correct. Code that commits its own transactions defeats rollback isolation. Use explicit cleanup (truncate tables) or savepoints for such tests."
+      },
+      {
+        "text": "`commit()` is ignored inside a pytest fixture",
+        "explanation": "pytest has no influence over your database driver."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Sequence:\n\n```\nfixture: (implicit) BEGIN\ntest:    INSERT order\nservice: COMMIT        <- permanent\nfixture: ROLLBACK      <- nothing left\n```\n\nThe next test that counts orders sees an extra one, and it fails or passes depending on order: a flaky, order-dependent suite. Options: truncate affected tables after the test, run the code against a nested transaction (savepoint) if your framework supports it, or give the test its own database.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your team keeps an `InMemoryUsers` fake used by 400 unit tests and a real `PostgresUsers`. How do you stop the fake drifting from the real behaviour?",
+    "options": [
+      {
+        "text": "Run one shared suite of behavioural tests against both implementations, e.g. a parametrised fixture",
+        "explanation": "Correct. If either implementation diverges from the agreed behaviour, its run fails. The fake stays trustworthy, so the 400 fast tests stay meaningful."
+      },
+      {
+        "text": "Code-review every fake change carefully",
+        "explanation": "Reviews help but don't reliably catch behaviour differences such as uniqueness or ordering rules."
+      },
+      {
+        "text": "Replace the fake with `Mock()` so there is nothing to drift",
+        "explanation": "A bare Mock has no behaviour at all, so it 'drifts' completely and silently."
+      },
+      {
+        "text": "Delete the unit tests and rely on E2E tests",
+        "explanation": "That throws away fast feedback and moves towards the ice-cream cone."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The fake is a promise: 'behaves like the real thing for what tests need'. Make the promise executable:\n\n```\n@pytest.fixture(params=[\n    InMemoryUsers, PostgresUsers])\ndef users(request): ...\n```\n\nEach behavioural test now runs twice. If someone adds a case-insensitive email rule to Postgres but not the fake, the fake's run of `test_duplicate_case_insensitive` fails. This is a contract test for an internal interface.",
+    "link": {
+      "title": "Contract Test — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/ContractTest.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your organisation has 30 services and a shared staging environment where E2E tests fail about one run in four, usually because another team's service is mid-deploy. Which changes are likely to help? Select all that apply.",
+    "options": [
+      {
+        "text": "Move most cross-service checks to consumer-driven contract tests run in each service's CI",
+        "explanation": "Correct. They check each seam without needing other services up, so another team's deploy can't break them."
+      },
+      {
+        "text": "Add automatic retries until the E2E suite passes, and treat that as green",
+        "explanation": "Retries hide real failures and do nothing about the cause; teams soon stop trusting the suite."
+      },
+      {
+        "text": "Reduce the E2E suite to a handful of critical journeys",
+        "explanation": "Correct. Fewer tests that depend on the whole system means fewer chances to hit environmental failures."
+      },
+      {
+        "text": "Use ephemeral per-branch environments, or stub other services, for most higher-level tests",
+        "explanation": "Correct. Tests stop depending on other teams' half-finished deploys."
+      },
+      {
+        "text": "Add more E2E tests to improve coverage of the shared environment",
+        "explanation": "More tests against an unstable environment mean more spurious failures, not more confidence."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The cause is coupling to an environment nobody controls. Attack the coupling:\n\n- Check seams with contracts in each service's own pipeline (A).\n- Keep only the few E2E journeys that really need the whole system (C).\n- Give tests environments they own (D).\n\nRetries (B) and more E2E tests (E) leave the cause alone and make the signal noisier.",
+    "link": {
+      "title": "Consumer-Driven Contracts — martinfowler.com",
+      "url": "https://martinfowler.com/articles/consumerDrivenContracts.html"
+    }
+  }
+]

@@ -1,0 +1,378 @@
+[
+  {
+    "id": "rep-memory-layout-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On an x86-64 machine, the `uint32_t` value `0xDEADBEEF` is stored at address `0x1000`. Which byte is at address `0x1000`?",
+    "options": [
+      {
+        "text": "`0xDE`",
+        "explanation": "`0xDE` is the most significant byte. It comes first only on a big-endian machine; x86-64 is little-endian."
+      },
+      {
+        "text": "`0xEF`",
+        "explanation": "Correct. Little-endian puts the least significant byte at the lowest address: EF BE AD DE."
+      },
+      {
+        "text": "`0xBE`",
+        "explanation": "`0xBE` is at 0x1001. Little-endian reverses the byte order, not the order within pairs."
+      },
+      {
+        "text": "`0xFE`",
+        "explanation": "Endianness reorders whole bytes; it never reverses the hex digits inside a byte."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Split the value into bytes, most significant first: `DE AD BE EF`.\n\n```\naddress  0x1000 0x1001 0x1002 0x1003\nlittle     EF     BE     AD     DE\nbig        DE     AD     BE     EF\n```\n\nx86-64 is little-endian, so 0x1000 holds `EF`. A debugger's byte dump (`x/4xb`) shows `ef be ad de`, while `x/1xw` shows the word as `0xdeadbeef`.",
+    "link": {
+      "title": "Endianness — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Endianness"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Under the ordinary x86-64 Linux System V ABI without packing options, what is `sizeof` this struct?\n\n```c\nstruct A {\n    char a;\n    int  b;\n    char c;\n};\n```",
+    "options": [
+      {
+        "text": "6",
+        "explanation": "6 is the sum of the members. That is the packed size; by default the compiler pads `b` to a 4-byte boundary."
+      },
+      {
+        "text": "9",
+        "explanation": "This includes the 3 bytes of padding before `b` but forgets tail padding. The size must be a multiple of the struct's alignment (4)."
+      },
+      {
+        "text": "12",
+        "explanation": "Correct. a at 0, 3 bytes padding, b at 4–7, c at 8, then 3 bytes of tail padding to reach a multiple of 4."
+      },
+      {
+        "text": "16",
+        "explanation": "That would require 8-byte alignment, but the largest member is a 4-byte `int`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\noffset 0     a\noffset 1-3   pad   (b needs 4)\noffset 4-7   b\noffset 8     c\noffset 9-11  tail pad\n```\n\nAlignment of the struct = max member alignment = 4. 9 bytes rounds up to **12**. Tail padding exists so that in `struct A arr[2]`, `arr[1].b` is still 4-byte aligned. Reordering to `{int b; char a; char c;}` gives 8.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these addresses is naturally aligned for an 8-byte `double`?",
+    "options": [
+      {
+        "text": "`0x1004`",
+        "explanation": "0x1004 is 4 more than a multiple of 8: aligned for an `int`, not for a `double`."
+      },
+      {
+        "text": "`0x100C`",
+        "explanation": "0x100C = 4108, and 4108 mod 8 = 4. Again only 4-byte aligned."
+      },
+      {
+        "text": "`0x1002`",
+        "explanation": "The address is divisible by 2 but not by 8. It is not naturally aligned for an 8-byte value; at this particular address it does not cross a conventional 64-byte line."
+      },
+      {
+        "text": "`0x1018`",
+        "explanation": "Correct. 0x1018 = 4120 = 8 × 515. The low three bits are 000."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "An address is aligned to 8 if it is a multiple of 8, which in binary means its **low 3 bits are 0**, so its last hex digit is 0 or 8.\n\n| Address | Last digit | mod 8 |\n|---|---|---|\n| 0x1004 | 4 | 4 |\n| 0x100C | C | 4 |\n| 0x1002 | 2 | 2 |\n| 0x1018 | 8 | 0 |\n\nIn code: `((uintptr_t)p & 7) == 0`.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C server on x86-64 sets `addr.sin_port = 8080;` (forgetting `htons`) and successfully binds and listens, with the other socket fields correctly set. Which port does it actually listen on?",
+    "options": [
+      {
+        "text": "8080",
+        "explanation": "The kernel reads `sin_port` as big-endian. On a little-endian host the value 8080 is stored as bytes `90 1F`, which the kernel reads as 0x901F."
+      },
+      {
+        "text": "36,895",
+        "explanation": "Correct. 8080 = 0x1F90, stored little-endian as `90 1F`. Read in network (big-endian) order, that is 0x901F = 36,895."
+      },
+      {
+        "text": "0",
+        "explanation": "Nothing is truncated or zeroed. Both bytes survive; only their order is wrong."
+      },
+      {
+        "text": "`bind` fails with an error",
+        "explanation": "An unconverted port does not inherently make bind fail. The question stipulates that binding and listening succeed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 8080 in hex: 8080 = 31 × 256 + 144 = 0x1F90.\n2. On little-endian x86, the 16-bit field holds bytes `90 1F` (low byte first).\n3. `sin_port` is defined to be in network byte order (big-endian), so the kernel reads `90 1F` as 0x901F.\n4. 0x901F = 144 × 256 + 31 = **36,895**.\n\n`ss -ltn` would show the server on :36895. Fix: `addr.sin_port = htons(8080);`.",
+    "link": {
+      "title": "byteorder(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/byteorder.3.html"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Under the ordinary x86-64 Linux System V ABI without packing options, what is `sizeof` this struct as declared, and what is the smallest size you can get by reordering its members?\n\n```c\nstruct G {\n    uint8_t  t;\n    uint64_t x;\n    uint16_t y;\n    uint32_t z;\n};\n```",
+    "options": [
+      {
+        "text": "15 as declared, 15 reordered",
+        "explanation": "15 is the sum of the member sizes. Padding is added both between members and at the tail, and the size must be a multiple of 8."
+      },
+      {
+        "text": "24 as declared, 16 reordered",
+        "explanation": "Correct. As declared: t 0, pad to 8, x 8–15, y 16–17, pad, z 20–23 → 24. Largest first (x, z, y, t): 15 bytes rounded up to 16."
+      },
+      {
+        "text": "32 as declared, 16 reordered",
+        "explanation": "y and z can share the third 8-byte slot: y at 16, z at 20. The declared size is 24, not 32."
+      },
+      {
+        "text": "24 as declared, 15 reordered",
+        "explanation": "The struct's alignment is 8 (from `uint64_t`), so its size must be a multiple of 8. 15 rounds up to 16."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "As declared:\n\n```\n0      t\n1-7    pad   (x needs 8)\n8-15   x\n16-17  y\n18-19  pad   (z needs 4)\n20-23  z\nsize 24 (multiple of 8)\n```\n\nReordered largest first:\n\n```\n0-7    x\n8-11   z\n12-13  y\n14     t\n15     tail pad\nsize 16\n```\n\nA third smaller. In an array of 10 million that is 240 MB vs 160 MB.",
+    "link": {
+      "title": "The Lost Art of Structure Packing — Eric S. Raymond",
+      "url": "http://www.catb.org/esr/structure-packing/"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On an x86-64 or AArch64 Linux/macOS ABI with four-byte int size and alignment, what does `struct.calcsize('@cic')` return in Python?",
+    "options": [
+      {
+        "text": "6",
+        "explanation": "6 is the unaligned size, which you get with a byte-order prefix such as `<cic` or `=cic`. `@` uses native alignment."
+      },
+      {
+        "text": "12",
+        "explanation": "12 is the C `sizeof`, but Python's `struct` does not add tail padding. Append `0i` to get 12."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. `c` at 0, 3 bytes padding, `i` at 4–7, `c` at 8: 9 bytes, with no tail padding."
+      },
+      {
+        "text": "16",
+        "explanation": "Nothing here needs 8-byte alignment; the widest item is a 4-byte `int`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "With `@` (the default), `struct` aligns each item as the platform's C compiler would, but stops after the last item:\n\n```\n0     c\n1-3   pad\n4-7   i\n8     c      -> 9 bytes\n```\n\n- `'@cic0i'` → 12 (`0i` adds alignment padding but no data).\n- `'<cic'` → 6 (explicit byte order turns padding off).\n\nFor exact C struct mirrors, use `ctypes.Structure`, whose `sizeof` here is 12.",
+    "link": {
+      "title": "struct — Python docs",
+      "url": "https://docs.python.org/3/library/struct.html"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For uint32_t x = 0x12345678 on hosts with eight-bit bytes and 32-bit int, which operations expose different byte orders between little- and big-endian systems? Select all that apply.",
+    "options": [
+      {
+        "text": "`(x >> 24) & 0xFF`",
+        "explanation": "Shifts are defined on values, not memory, so this is always the most significant byte."
+      },
+      {
+        "text": "`((unsigned char *)&x)[0]`",
+        "explanation": "Correct. This reads whichever byte sits at the lowest address: the LSB on little-endian, the MSB on big-endian."
+      },
+      {
+        "text": "`memcpy(buf, &x, 4)` then sending `buf` over a socket",
+        "explanation": "Correct. The raw buffers have different byte sequences; what a receiver makes of them depends on its decoder."
+      },
+      {
+        "text": "`x * 256`",
+        "explanation": "Arithmetic works on values. The product is the same everywhere (mod 2³²)."
+      },
+      {
+        "text": "Writing an array of `x` with `fwrite` and reading it with `fread` on the other kind of machine",
+        "explanation": "Correct. The file stores raw memory bytes, so a big-endian reader sees every value byte-swapped."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Endianness only shows when you look at the **bytes in memory**:\n\n| Expression | Touches memory bytes? |\n|---|---|\n| `(x >> 24) & 0xFF` | no |\n| `((uchar*)&x)[0]` | yes |\n| `memcpy` + send | yes |\n| `x * 256` | no |\n| `fwrite`/`fread` | yes |\n\nPortable code converts at the boundary with `htonl`/`ntohl`, or builds bytes with shifts, so the in-program arithmetic never needs to care.",
+    "link": {
+      "title": "Endianness — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Endianness"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Under the usual x86-64 ABI without packing options, at what offset does `i` sit in this struct?\n\n```c\nstruct E {\n    char  a;\n    short s;\n    char  c;\n    int   i;\n};\n```",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "This forgets the padding before `s`. `s` needs 2-byte alignment, so it starts at 2, and `c` is at 4."
+      },
+      {
+        "text": "5",
+        "explanation": "Offset 5 is where `c` ends. `i` needs a multiple of 4, so it moves to 8."
+      },
+      {
+        "text": "6",
+        "explanation": "6 is 2-byte aligned but not 4-byte aligned. An `int` must start at a multiple of 4."
+      },
+      {
+        "text": "8",
+        "explanation": "Correct. a 0, pad 1, s 2–3, c 4, pad 5–7, i 8–11. Total size 12."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Place each member at the next multiple of its alignment:\n\n```\na  char   align 1 -> 0\ns  short  align 2 -> 2   (pad 1)\nc  char   align 1 -> 4\ni  int    align 4 -> 8   (pad 5-7)\n```\n\nSize = 12, already a multiple of 4. Reordering to `{char a; char c; short s; int i;}` packs into offsets 0, 1, 2, 4 and size 8.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An x86-64 Linux kernel driver fills a `struct info { char flags; long id; }` on the stack, sets both fields, and copies the whole struct to user space with `copy_to_user`. A security review flags it as an information leak. Why?",
+    "options": [
+      {
+        "text": "`long` has a different size in user space",
+        "explanation": "On a given 64-bit Linux ABI, kernel and user `long` are both 8 bytes. Compat layers aside, that is not the leak."
+      },
+      {
+        "text": "Seven bytes of padding can retain or acquire unspecified data; copying the entire object can disclose it",
+        "explanation": "Correct. Field assignments do not guarantee padding bytes. Explicitly encode fields in a defined output layout; a source-level memset followed by stores is not a universal portable-C padding guarantee."
+      },
+      {
+        "text": "`copy_to_user` copies the struct in big-endian order",
+        "explanation": "`copy_to_user` copies raw bytes in order; it does no byte swapping, and byte order is not a confidentiality issue."
+      },
+      {
+        "text": "Stack memory is always readable from user space",
+        "explanation": "Kernel stack memory is not mapped into user space. The leak happens only because the driver explicitly copies uninitialised bytes out."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Under the stated ABI, flags is at offset 0 and id at 8, leaving seven padding bytes.\n2. Assigning fields does not specify their values.\n3. Copying the whole representation can leak stale information.\n4. Encode the intended fields into a fully initialised output buffer; do not rely on portable C to preserve zero padding after subsequent member stores. Implementation-specific zeroing fixes require checking the compiler and generated code.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Firmware for a strict-alignment microcontroller uses this fragment, with h pointing to a valid hdr at a four-byte-aligned address:\n\n```c\nstruct __attribute__((packed)) hdr {\n  uint8_t  type;\n  uint32_t len;\n};\nuint32_t *p = &h->len;\nuse(*p);\n```\n\nIt crashes with an alignment fault, although `h->len` read directly works. Why?",
+    "options": [
+      {
+        "text": "`len` is at offset 1, so `p` is a misaligned `uint32_t *`; the compiler emits a normal 4-byte load through it, which faults",
+        "explanation": "Correct. Direct `h->len` access is compiled with byte-safe loads because the compiler knows the member is packed. Through a plain pointer that knowledge is lost."
+      },
+      {
+        "text": "Packed structs are stored big-endian",
+        "explanation": "Packing changes padding, not byte order. Endianness would give a wrong value, not a fault."
+      },
+      {
+        "text": "`h` itself must be on the heap",
+        "explanation": "Where the struct lives does not matter. The problem is the alignment of the address being loaded from."
+      },
+      {
+        "text": "`uint32_t` cannot be packed",
+        "explanation": "The compiler extension allows this integer member in a packed struct. A plain pointer can lose the compiler's knowledge of reduced member alignment."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With eight-bit bytes and the stated compiler extension, packed layout: `type` at 0, `len` at 1–4. sizeof = 5.\n2. If `h` is 4-byte aligned, the member address is `(unsigned char *)h + 1`, not a multiple of 4. Plain h + 1 advances by sizeof *h, not one byte.\n3. `h->len`: the compiler knows the field may be misaligned and emits byte loads plus shifts.\n4. `*p`: `p` is an ordinary `uint32_t *`, assumed aligned, so the compiler may emit an alignment-requiring load. That explains the stipulated fault; the exact instruction sequence depends on compilation.\n\nGCC warns with `-Waddress-of-packed-member`. Safer: `uint32_t v; memcpy(&v, (const unsigned char *)h + 1, sizeof v);`.",
+    "link": {
+      "title": "The Lost Art of Structure Packing — Eric S. Raymond",
+      "url": "http://www.catb.org/esr/structure-packing/"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about alignment are true? Select all that apply.",
+    "options": [
+      {
+        "text": "On x86, a `lock`-prefixed atomic on data that spans two cache lines (a split lock) is far slower than an aligned one and can stall other cores",
+        "explanation": "Correct. The CPU has to lock the bus or equivalent to keep the operation atomic across two lines."
+      },
+      {
+        "text": "A suitably aligned ordinary 8-byte hardware load/store to normal memory on x86-64 is non-tearing; C data-race rules still apply",
+        "explanation": "Correct. Hardware atomicity of this access does not make unsynchronised conflicting accesses to a plain C object valid."
+      },
+      {
+        "text": "In C, dereferencing a misaligned `int *` is undefined behaviour even on x86",
+        "explanation": "Correct. The hardware may tolerate it, but the language does not, and the optimiser (for example, the vectoriser) may assume alignment."
+      },
+      {
+        "text": "x86 raises a fault on every misaligned load",
+        "explanation": "x86 handles misaligned ordinary loads in hardware, usually with little or no penalty within a cache line. Strict-alignment CPUs are the ones that fault."
+      },
+      {
+        "text": "`memcmp` on two structs reliably tells you whether all their members are equal",
+        "explanation": "Padding bytes are unspecified, so two structs with equal members can differ in their padding and compare unequal."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Split locks: true. Linux on recent Intel CPUs can detect them and warn about or slow down the offending process.\n2. Aligned 8-byte atomicity on x86-64: true; this is why aligned `uint64_t` loads and stores need no lock to avoid tearing (though C atomics or other synchronisation are needed to avoid data races, not merely to request ordering).\n3. UB in C: true; use `memcpy` for unaligned reads.\n4. x86 faults: false; it tolerates misalignment (some instruction forms require alignment, and alignment-checking modes can also fault).\n5. `memcmp` on structs: false because of padding.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A protocol sends a 32-bit length field in network byte order. The bytes on the wire are `00 00 01 F4`. A C program on x86-64 reads them with `uint32_t len; memcpy(&len, buf, 4);` and forgets `ntohl`. What value does `len` hold?",
+    "options": [
+      {
+        "text": "500",
+        "explanation": "500 (0x000001F4) is the intended value, which you only get after `ntohl` converts from big-endian."
+      },
+      {
+        "text": "62,465",
+        "explanation": "That is 0xF401, swapping only the last two bytes. All four bytes are reversed."
+      },
+      {
+        "text": "4,093,706,240",
+        "explanation": "Correct. Little-endian reads the first byte as least significant: 0xF4010000 = 4,093,706,240."
+      },
+      {
+        "text": "0",
+        "explanation": "The first two bytes being 00 doesn't make the value 0; on a little-endian host those zeros become the **low** bytes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Big-endian meaning: `00 00 01 F4` = 0x000001F4 = 256 + 244 = **500**.\n2. `memcpy` copies the bytes unchanged into `len`'s memory.\n3. x86-64 reads memory little-endian, so the byte at the lowest address is least significant:\n\n```\nbytes: 00 00 01 F4\nvalue: 0xF4010000\n```\n\n4. 0xF4010000 = 244 × 2²⁴ + 1 × 2¹⁶ = **4,093,706,240**.\n\nA program then tries to allocate 4 GB for a 500-byte message. Unchecked length fields like this are a common source of crashes and memory-safety bugs; always convert and validate.",
+    "link": {
+      "title": "byteorder(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/byteorder.3.html"
+    }
+  }
+]

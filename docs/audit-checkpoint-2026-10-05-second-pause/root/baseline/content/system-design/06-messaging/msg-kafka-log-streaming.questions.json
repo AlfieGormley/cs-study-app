@@ -1,0 +1,377 @@
+[
+  {
+    "id": "msg-kafka-log-streaming-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A topic has 6 partitions. You scale the `billing` consumer group to 8 instances to handle a backlog. What happens?",
+    "options": [
+      {
+        "text": "Throughput rises by about a third, because work is spread over 8 consumers instead of 6",
+        "explanation": "Wrong. Kafka assigns each partition to only one consumer in a group, so at most 6 consumers can be active. The extra two receive no partitions."
+      },
+      {
+        "text": "Two partitions are shared by two consumers each, so some records are processed twice",
+        "explanation": "Wrong. Partitions are never shared within one group. Duplicates in Kafka come from reprocessing after a crash or rebalance, not from shared ownership."
+      },
+      {
+        "text": "Kafka automatically splits partitions so each consumer gets one",
+        "explanation": "Wrong. Kafka never changes a topic's partition count automatically. An operator must add partitions, and doing so remaps keys."
+      },
+      {
+        "text": "6 consumers each own one partition and 2 sit idle",
+        "explanation": "Correct. Within a group, a partition has exactly one owner. Parallelism is capped at the partition count; idle consumers act only as hot standbys for a rebalance."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rule: in one consumer group, each partition → exactly one consumer.\n2. 6 partitions can be spread over at most 6 consumers.\n3. 8 − 6 = **2 idle** consumers.\n4. To use 8 (or more) consumers, the topic needs at least 8 partitions, or each consumer must process its partition with internal parallelism (for example, a per-key worker pool as in Confluent's parallel consumer).\n\nThis is why partition count is chosen with future consumer parallelism in mind.",
+    "link": {
+      "title": "Kafka consumer design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bank publishes account events (`Deposited`, `Withdrew`) to Kafka and needs each account's events processed in order. What should the producer do?",
+    "options": [
+      {
+        "text": "Use a single-partition topic so everything is ordered",
+        "explanation": "Wrong. This works for ordering, but it caps the whole system at one consumer and one partition's throughput. You only need ordering per account, not globally."
+      },
+      {
+        "text": "Use the account ID as the record key",
+        "explanation": "Correct. The default partitioner hashes the key, so all events for one account land in one partition, which Kafka keeps in order. Different accounts spread across partitions for parallelism."
+      },
+      {
+        "text": "Leave the key empty and rely on timestamps to reorder on the consumer",
+        "explanation": "Wrong. Unkeyed records are spread across partitions, and consumers would have to buffer and sort, which never quite works because they cannot know when a late record has stopped arriving."
+      },
+      {
+        "text": "Set the topic's retention to infinite",
+        "explanation": "Wrong. Retention controls how long data is kept, not the order it is delivered in."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Requirement: **per-account** order, not global order.\n2. Kafka guarantees order **within a partition**.\n3. So route every event for an account to the same partition: `key = accountId` → `murmur2(accountId) % N`.\n4. With 24 partitions, up to 24 consumers process accounts in parallel, each seeing its accounts' events in order.\n5. Keep idempotence on (the default) so producer retries cannot reorder records within the partition.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A producer uses `acks=1`. It sends a record; the leader writes it to its log and acknowledges. Before any follower fetches the record, the leader's machine dies and a follower becomes leader. What happens to the record?",
+    "options": [
+      {
+        "text": "The producer automatically resends it, because the follower never acknowledged",
+        "explanation": "Wrong. The producer already got a success response, so it has no reason to retry. That is exactly what makes acks=1 dangerous."
+      },
+      {
+        "text": "It is safe, because the old leader will replay it when it restarts",
+        "explanation": "Wrong. When the old broker rejoins as a follower, it truncates its log back to the new leader's state. The record is discarded, not replayed."
+      },
+      {
+        "text": "It is lost, even though the producer was told it succeeded",
+        "explanation": "Correct. With acks=1 only the leader had the record. The new leader never received it, and when the old leader returns it truncates its log to match, so the acknowledged write disappears."
+      },
+      {
+        "text": "Kafka blocks the leader election until a replica with the record returns",
+        "explanation": "Wrong. The follower was in the ISR, so its election is a normal clean election. The record was never committed (never reached the high watermark), so Kafka does not wait for it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\n1. P → leader b1: write r (offset 100)\n2. b1 → P: ack   (acks=1)\n3. b1 crashes; b2 has up to 99\n4. b2 elected leader (clean)\n5. b1 returns, truncates to 99\n```\n\n1. The record was **acknowledged** but never **committed** (not on all ISR replicas).\n2. Committed data survives leader failover; uncommitted data may not.\n3. Fix: `acks=all` with `min.insync.replicas=2`, so the ack implies at least two copies.\n4. Cost: produce latency rises by roughly one replication round trip, typically a few milliseconds within a region.",
+    "link": {
+      "title": "Kafka replication design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/replication.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A topic has `replication.factor=3` and `min.insync.replicas=2`. Producers use `acks=all`. Two of the three brokers hosting a partition fail. What do producers and consumers of that partition experience?",
+    "options": [
+      {
+        "text": "Producers get NotEnoughReplicas errors; consumers can still read committed records from the surviving leader",
+        "explanation": "Correct. min.insync.replicas enforces durability on writes: with ISR size 1 < 2, acks=all writes are refused. Reads are unaffected, so consumers keep reading data that was already committed."
+      },
+      {
+        "text": "Both producers and consumers carry on normally using the surviving replica",
+        "explanation": "Wrong. The surviving leader would be the only ISR member, which is below min.insync.replicas=2, so it rejects acks=all writes."
+      },
+      {
+        "text": "Kafka elects an out-of-sync replica so writes can continue",
+        "explanation": "Wrong. That is unclean leader election, which is disabled by default. In any case one replica survives and is already in the ISR, so no unclean election is needed; the issue is ISR size, not leadership."
+      },
+      {
+        "text": "Producers succeed but their writes are silently stored on only one broker",
+        "explanation": "Wrong. That would happen with acks=1. With acks=all and min.insync.replicas=2, Kafka refuses rather than silently weakening durability."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Start: ISR = {b1, b2, b3}. Writes need ≥ 2 in ISR.\n2. b2 and b3 fail and drop out of the ISR → ISR = {b1}.\n3. A producer sends with `acks=all`. Leader checks `|ISR| = 1 < 2` → error `NOT_ENOUGH_REPLICAS`.\n4. Consumers fetch from b1 up to the high watermark, which is unaffected.\n\n**Trade-off**: you chose consistency (no acknowledged write on a single disk) over write availability. With RF=3 and min ISR=2 you tolerate **one** failure with no impact; a second failure blocks writes but loses nothing.",
+    "link": {
+      "title": "Kafka replication design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/replication.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A `customer-profiles` topic uses `cleanup.policy=compact` and is keyed by customer ID. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "After compaction, at least the latest record for each customer ID is retained",
+        "explanation": "Correct. That is compaction's guarantee: a consumer reading from the beginning ends with the latest state of every key."
+      },
+      {
+        "text": "Compaction renumbers offsets so the log has no gaps",
+        "explanation": "Wrong. Offsets are permanent identifiers; compaction removes records but keeps the remaining ones' offsets, so a compacted log has gaps."
+      },
+      {
+        "text": "Producing a record with a null value for a customer eventually removes that customer from the topic",
+        "explanation": "Correct. A null-value record is a tombstone. Compaction removes earlier values for the key and, after delete.retention.ms, the tombstone itself."
+      },
+      {
+        "text": "Records in the active (currently written) segment can be compacted immediately",
+        "explanation": "Wrong. The active segment is never compacted. Only closed segments are cleaned, so recent duplicates of a key coexist until the segment rolls."
+      },
+      {
+        "text": "A new consumer can rebuild a complete table of all current profiles by reading from offset 0",
+        "explanation": "Correct. This is the main use of compacted topics: a durable, replayable 'latest value per key' snapshot, which is how Kafka Streams restores state stores."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Picture the log before and after compaction:\n\n```\nbefore: 0:k1=a 1:k2=b 2:k1=c 3:k2=null\nafter:  2:k1=c 3:k2=null\nlater:  2:k1=c   (tombstone removed)\n```\n\n1. k1 keeps only its latest value `c` → statement 1 true.\n2. Offsets 2 and 3 keep their numbers → statement 2 false.\n3. k2's tombstone removes it, then itself → statement 3 true.\n4. The active segment is left alone → statement 4 false.\n5. Reading from 0 yields every live key → statement 5 true.",
+    "link": {
+      "title": "Kafka log compaction (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/log_compaction.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An `orders` topic keyed by order ID has 8 partitions. To add consumers, an operator increases it to 12 partitions during peak. Shortly afterwards, a consumer processes `OrderShipped` for an order before `OrderPlaced`. Why?",
+    "options": [
+      {
+        "text": "Adding partitions triggers unclean leader election, which reorders records",
+        "explanation": "Wrong. Adding partitions does not change leadership of existing partitions, and unclean election is about data loss, not reordering."
+      },
+      {
+        "text": "Consumers always reprocess from the earliest offset after a rebalance",
+        "explanation": "Wrong. After a rebalance consumers resume from the last committed offset, not the beginning. The ordering problem is about which partition each record went to."
+      },
+      {
+        "text": "Idempotent producers stop guaranteeing order when partitions are added",
+        "explanation": "Wrong. Idempotence guarantees in-order, de-duplicated writes per partition. It knows nothing about key placement across partitions."
+      },
+      {
+        "text": "The new partitions changed `hash(key) % N`, so later events for in-flight orders went to different partitions from their earlier events",
+        "explanation": "Correct. With 8 partitions an order might map to P3; with 12 it may map to P7. OrderPlaced sits in P3 and OrderShipped in P7, and since there is no ordering across partitions, a different consumer can process P7 first."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Before: `partition = murmur2(\"order-917\") % 8`, say **3**. `OrderPlaced` goes to P3.\n2. Operator changes N to 12.\n3. After: `murmur2(\"order-917\") % 12` is (in general) a different value, say **7**. `OrderShipped` goes to P7.\n4. P3's consumer is behind at peak; P7's consumer (new, empty partition) is not. P7 is read first.\n5. Mitigations:\n   - Over-provision partitions up front for keyed topics.\n   - If you must grow, create a new topic with more partitions and migrate consumers after draining the old one.\n   - Make consumers tolerate out-of-order events (for example, a state machine that parks early events).",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You expect a peak of 90,000 records per second on a new topic. Load tests show one consumer instance can process 4,000 records per second (it calls a database). You want 50% headroom for growth. Roughly how many partitions should you create?",
+    "options": [
+      {
+        "text": "23",
+        "explanation": "Wrong. 90,000 ÷ 4,000 = 22.5, rounded up to 23, is the bare minimum with no headroom. Any growth or a slow consumer would leave you unable to scale out without repartitioning."
+      },
+      {
+        "text": "About 34–36",
+        "explanation": "Correct. You need ≥ 22.5 consumers at peak; with 50% headroom that is about 34. Rounding up to a number like 36 (divisible by many consumer counts) keeps assignment even."
+      },
+      {
+        "text": "3, one per broker",
+        "explanation": "Wrong. Partition count is driven by consumer parallelism and throughput, not broker count. Three partitions would cap you at 3 consumers, or 12,000 records per second."
+      },
+      {
+        "text": "1,000, to be safe",
+        "explanation": "Wrong. Far too many partitions add broker memory, file handles, longer failovers and slower rebalances, and most partitions would be nearly empty. Headroom should be proportionate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Consumers needed at peak**: 90,000 ÷ 4,000 = 22.5 → 23.\n2. **Add headroom**: 22.5 × 1.5 = 33.75 → 34.\n3. **Round to something convenient**: 36 divides evenly by 2, 3, 4, 6, 9, 12 and 18 consumers, so partitions spread evenly as you scale.\n4. **Check the broker side**: 36 partitions × RF 3 = 108 replicas, trivial for any cluster.\n\nPartitions are cheap to over-provision a little and expensive to add later on keyed topics.",
+    "link": {
+      "title": "Kafka consumer design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A consumer uses `enable.auto.commit=true`. Its poll loop hands each record to a thread pool and immediately polls again. After a crash, the team discovers some records were **never processed**. What happened?",
+    "options": [
+      {
+        "text": "Auto-commit committed offsets for records that had been polled but were still queued in the thread pool, so the restart resumed past them",
+        "explanation": "Correct. Auto-commit commits the latest polled offsets during poll(), roughly every 5 seconds. Polling does not mean processed, so the commit can run ahead of the actual work and a crash loses the in-flight records."
+      },
+      {
+        "text": "Kafka deleted the records because retention expired during the crash",
+        "explanation": "Wrong. A short crash is nowhere near the 7-day default retention. And expired records would affect every group, not just skip a few in the middle."
+      },
+      {
+        "text": "A rebalance assigned those partitions to two consumers, each of which skipped half",
+        "explanation": "Wrong. A partition has one owner per group. Rebalances cause duplicates (reprocessing from the last commit), not skipped records."
+      },
+      {
+        "text": "The broker's high watermark moved backwards",
+        "explanation": "Wrong. The high watermark only advances for committed data. Consumers never see records beyond it, and it would not cause skipping of records already read."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline for partition 0:\n\n```\npoll() → offsets 100–599\nhand to pool; pool done up to 250\npoll() → auto-commit 600\ncrash\nrestart: resume at 600\n251–599 never processed\n```\n\n1. Kafka's committed offset is a promise: \"everything before this is done\".\n2. Auto-commit makes that promise based on what was **polled**, not what was **processed**.\n3. With synchronous processing inside the poll loop, auto-commit is effectively at-least-once. With asynchronous hand-off it becomes at-most-once.\n4. Fix: disable auto-commit and commit only the highest **contiguous** processed offset per partition (track completions, commit with `commitSync`/`commitAsync`).",
+    "link": {
+      "title": "Kafka consumer design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A topic has `replication.factor=3`, and nobody changed `min.insync.replicas` from the broker default. Producers use a recent client with default settings. During a network problem both followers fall out of the ISR for several minutes, and the leader keeps acknowledging writes. Then the leader's disk fails. What happens to the writes acknowledged during those minutes?",
+    "options": [
+      {
+        "text": "They are safe: the default `acks=all` means all three replicas had them",
+        "explanation": "Wrong. `acks=all` waits for every replica **currently in the ISR**, not every replica that exists. With both followers out, the ISR was just the leader."
+      },
+      {
+        "text": "They never happened: the leader rejected them with NotEnoughReplicas",
+        "explanation": "Wrong. That needs `min.insync.replicas=2`. The broker default is 1, and an ISR of one leader satisfies it, so the writes were accepted."
+      },
+      {
+        "text": "They can be lost: with `min.insync.replicas=1`, the leader alone satisfied `acks=all`, so those writes existed only on the failed disk",
+        "explanation": "Correct. This is the trap in Kafka's defaults: the producer is safe by default since 3.0, but the broker's min ISR is not. Setting `min.insync.replicas=2` would have refused the writes instead, so producers would have retried rather than lost data."
+      },
+      {
+        "text": "They are lost only if unclean leader election is enabled",
+        "explanation": "Wrong. Unclean election only decides what happens next: promote an out-of-sync follower (available, missing those writes) or stay offline until the old leader returns (which it cannot, its disk is gone). Either way, the writes existed nowhere else."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Defaults in play:\n   - producer `acks=all` (default since 3.0)\n   - broker `min.insync.replicas=1` (default)\n2. Followers drop out → ISR = {leader}.\n3. Each write: leader appends, checks `|ISR| = 1 ≥ 1` ✓, all ISR members have it ✓ → **ack**.\n4. Leader's disk dies. Followers never fetched those records.\n5. Result: acknowledged writes are gone, whatever happens to leadership.\n\n**Fix**: set `min.insync.replicas=2` on important topics (or as the broker default). Now step 3 fails with `NOT_ENOUGH_REPLICAS`, the producer retries, and no write is acknowledged on a single disk.",
+    "link": {
+      "title": "Kafka replication design (Confluent docs)",
+      "url": "https://docs.confluent.io/kafka/design/replication.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q10",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these are true of a **Kafka 4.x** cluster with default broker and client settings? Select all that apply.",
+    "options": [
+      {
+        "text": "Producers default to `acks=1`",
+        "explanation": "Wrong. `acks=1` was the default before Kafka 3.0. Since 3.0 the producer defaults to `acks=all`."
+      },
+      {
+        "text": "Producers default to `enable.idempotence=true`",
+        "explanation": "Correct. Since 3.0 the idempotent producer is on by default (as long as no conflicting setting such as `acks=1` is configured), so retries do not create duplicates or reorder records within a partition."
+      },
+      {
+        "text": "Producers default to `acks=all`",
+        "explanation": "Correct. The leader waits for every in-sync replica before acknowledging."
+      },
+      {
+        "text": "Brokers default to `min.insync.replicas=2`",
+        "explanation": "Wrong. The broker default is 1, which is why you must set it explicitly for durable topics. Otherwise `acks=all` can be satisfied by the leader alone."
+      },
+      {
+        "text": "Partition leadership is stored in a ZooKeeper ensemble",
+        "explanation": "Wrong. Kafka 4.0 removed ZooKeeper. Metadata, including partition leaders and ISRs, lives in the KRaft controller quorum's metadata log."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "Sort the settings by **where** they live and **when** they changed:\n\n| Setting | Default | Since |\n|---|---|---|\n| producer `acks` | all | 3.0 |\n| producer idempotence | true | 3.0 |\n| broker min ISR | 1 | unchanged |\n| metadata store | KRaft | ZK gone in 4.0 |\n\n1. The producer side became safe by default in 3.0.\n2. The broker side did not: `min.insync.replicas` still needs setting.\n3. ZooKeeper was removed in 4.0, so a 4.x cluster always runs KRaft controllers.",
+    "link": {
+      "title": "Kafka producer configuration reference (Confluent docs)",
+      "url": "https://docs.confluent.io/platform/current/installation/configuration/producer-configs.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A consumer group of 30 instances uses the classic protocol with the eager `RangeAssignor`. Every rolling deploy causes several minutes during which the **whole group** processes nothing, and lag spikes on every partition. Which change helps most directly?",
+    "options": [
+      {
+        "text": "Move to incremental rebalancing (the KIP-848 protocol with `group.protocol=consumer` on Kafka 4.0+, or the `CooperativeStickyAssignor`) and add static membership with `group.instance.id`",
+        "explanation": "Correct. Eager rebalancing revokes every partition from every consumer on each membership change, and a rolling deploy triggers dozens of them. Incremental protocols pause only the partitions that move, and static membership lets a restarted instance reclaim its partitions without triggering a rebalance at all."
+      },
+      {
+        "text": "Add partitions so each rebalance has less work per consumer",
+        "explanation": "Wrong. The pause comes from every consumer stopping during each rebalance, not from the amount of work per partition. More partitions can make rebalances slower, and they remap keys."
+      },
+      {
+        "text": "Raise `max.poll.interval.ms` to 30 minutes",
+        "explanation": "Wrong. That setting controls how long a consumer may go between polls before it is considered stuck. It does not change the stop-the-world behaviour of eager rebalancing, and a large value delays detection of genuinely stuck consumers."
+      },
+      {
+        "text": "Enable auto-commit so offsets are saved during rebalances",
+        "explanation": "Wrong. Commit strategy affects how much work is repeated after a rebalance, not how long the group stops for. Auto-commit can also skip records with asynchronous processing."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A rolling deploy of 30 instances = 30 departures + 30 arrivals = up to **60 membership changes**.\n2. **Eager**: each change makes every consumer revoke everything → 60 group-wide pauses.\n3. **Cooperative / KIP-848**: only partitions that actually move are paused; the other 29 consumers keep processing.\n4. **Static membership**: an instance restarting within the session timeout with the same `group.instance.id` gets its old assignment back, so most deploy restarts cause **no** rebalance.\n5. On Kafka 4.0+ the new protocol is enabled on brokers by default; clients opt in with `group.protocol=consumer`.",
+    "link": {
+      "title": "KIP-848: the next generation of the consumer rebalance protocol",
+      "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 6-partition topic carries **independent** thumbnail jobs that take 2–30 seconds each. You want 60 workers, per-job retries and delivery counts, and you do not care about order. You run Kafka 4.2. What is the best fit?",
+    "options": [
+      {
+        "text": "A consumer group with 60 instances",
+        "explanation": "Wrong. A consumer group assigns each partition to one consumer, so 54 of the 60 instances would sit idle. And one 30-second job would still block everything behind it in its partition."
+      },
+      {
+        "text": "Give each worker its own consumer group",
+        "explanation": "Wrong. Every group receives every record, so all 60 workers would generate every thumbnail. That is pub/sub, not work sharing."
+      },
+      {
+        "text": "Increase the topic to 60 partitions and keep a consumer group",
+        "explanation": "Wrong. This makes 60 consumers possible, but each slow job still blocks its partition, retries remain do-it-yourself, and you have created many partitions just to work around the consumption model."
+      },
+      {
+        "text": "A share group, in which consumers acquire and acknowledge individual records and can outnumber the partitions",
+        "explanation": "Correct. Share groups (KIP-932, production-ready in Kafka 4.2) give queue semantics on a Kafka topic: records are locked to one consumer at a time, acknowledged or released individually, and delivery attempts are counted. Ordering is given up, which this workload does not need."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. List the requirements: more workers than partitions, per-record ack and retry, no ordering.\n2. **Consumer groups** are built for ordered streams: one owner per partition and one committed offset per partition. They meet none of the requirements.\n3. **Share groups** are built for job queues:\n   - many consumers per partition\n   - each record acquired with a time-limited lock\n   - acknowledge, release or reject per record\n   - delivery count per record, so poison records can be capped\n4. Before Kafka 4.x the usual answers were more partitions plus an in-consumer worker pool, or a separate queue such as SQS or RabbitMQ.",
+    "link": {
+      "title": "KIP-932: Queues for Kafka",
+      "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka"
+    }
+  }
+]

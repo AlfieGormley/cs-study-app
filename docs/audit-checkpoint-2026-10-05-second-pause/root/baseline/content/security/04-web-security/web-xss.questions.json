@@ -1,0 +1,349 @@
+[
+  {
+    "id": "web-xss-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A forum saves each post's body to the database and shows it to everyone who opens the thread, without encoding. A user's post contains script that runs for every reader. What type of XSS is this?",
+    "options": [
+      {
+        "text": "Reflected XSS",
+        "explanation": "Reflected XSS echoes input from the *current request*. Here the payload was saved and served later to other users."
+      },
+      {
+        "text": "DOM-based XSS",
+        "explanation": "DOM XSS happens when client-side JS writes data into a sink. Here the server inserts the stored post into the HTML."
+      },
+      {
+        "text": "Stored XSS",
+        "explanation": "Correct. The payload is persisted on the server and delivered to every viewer, with no crafted link needed."
+      },
+      {
+        "text": "Not XSS, because the attacker didn't send anything to the victim",
+        "explanation": "XSS needs only that attacker-controlled data executes in the victim's browser in your origin. Stored XSS needs no direct contact with the victim."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask two questions:\n\n1. Where does the payload live? In the database (persisted).\n2. Who inserts it into the page? The server, when rendering the thread.\n\nPersisted + server-inserted = **stored**. If it lived only in the URL it would be reflected; if client JS inserted it, DOM-based.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does `markupsafe.escape(\"<b>Tom & Jerry</b>\")` produce?",
+    "options": [
+      {
+        "text": "`<b>Tom & Jerry</b>` unchanged, as it contains no script",
+        "explanation": "Escaping is not script detection. It encodes every special HTML character regardless of whether the content looks dangerous."
+      },
+      {
+        "text": "`Tom & Jerry`, with the tags stripped",
+        "explanation": "Stripping tags is what a sanitiser might do. Escaping keeps every character but makes it display as text."
+      },
+      {
+        "text": "`&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;`",
+        "explanation": "Correct. `<`, `>` and `&` become entities, so the browser shows the literal tags as text instead of making the text bold."
+      },
+      {
+        "text": "`%3Cb%3ETom%20%26%20Jerry%3C%2Fb%3E`",
+        "explanation": "That is URL percent-encoding, which is for query strings, not HTML output. Using the wrong encoding for the context is a classic mistake."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Go character by character:\n\n```\n<   -> &lt;\nb   -> b\n>   -> &gt;\nTom -> Tom\n&   -> &amp;\n...\n```\n\nResult: `&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;`. The browser renders it as the visible text `<b>Tom & Jerry</b>`, not bold. That's the whole point: data stays data.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your session cookie is `HttpOnly`. A colleague says this means XSS on your site is no longer a serious risk. Why are they wrong?",
+    "options": [
+      {
+        "text": "`HttpOnly` cookies can still be read by `document.cookie` in older browsers only",
+        "explanation": "All modern browsers enforce `HttpOnly`. The real issue is that the attacker doesn't need to read the cookie."
+      },
+      {
+        "text": "The injected script can still act as the user, sending requests from the page with the cookie attached automatically",
+        "explanation": "Correct. `HttpOnly` stops theft of the cookie value, but script running in your origin can call your APIs, read responses and change account settings directly."
+      },
+      {
+        "text": "`HttpOnly` only applies to HTTP, not HTTPS",
+        "explanation": "That confuses `HttpOnly` (no script access) with `Secure` (HTTPS only). `HttpOnly` works on HTTPS too."
+      },
+      {
+        "text": "XSS can rewrite the cookie's flags",
+        "explanation": "Script cannot read or change an `HttpOnly` cookie. It doesn't need to, though."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With `HttpOnly`, `document.cookie` omits the session cookie: the attacker can't copy it to their server.\n2. But the injected script runs *in your origin*. It can `fetch(\"/api/account\")` and the browser attaches the cookie itself.\n3. Same-origin, so the script can also read the response.\n4. So the attacker can read data, change the email address, and so on, during the victim's visit.\n\n`HttpOnly` is worth having (it prevents long-lived session theft) but it only shrinks the blast radius.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This SPA code is vulnerable to DOM XSS:\n\n```javascript\nconst t = decodeURIComponent(\n  location.hash.slice(1));\nbox.innerHTML = t;\n```\n\nThe team adds HTML escaping to every server response. Does that fix it?",
+    "options": [
+      {
+        "text": "Yes, because all output is now escaped",
+        "explanation": "The vulnerable output is produced by client JS, not the server. Server-side escaping never touches this value."
+      },
+      {
+        "text": "No: the fragment after `#` is never sent to the server, so the fix must be in client code, e.g. using `textContent`",
+        "explanation": "Correct. Browsers don't include the fragment in HTTP requests, so the server can neither see nor escape it. Use a text sink or sanitise before using an HTML sink."
+      },
+      {
+        "text": "Yes, if they also add a WAF rule blocking `<script>` in URLs",
+        "explanation": "A WAF never sees the fragment either, and `innerHTML` payloads don't need a `<script>` tag (event-handler attributes work)."
+      },
+      {
+        "text": "No, because `decodeURIComponent` itself executes code",
+        "explanation": "`decodeURIComponent` only decodes percent-escapes into a string. The sink, `innerHTML`, is the problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the data flow:\n\n```\nURL  /page#<payload>\n      |  fragment stays in browser\n      v\nlocation.hash (source)\n      |\n      v\nbox.innerHTML (sink) -> parsed as HTML\n```\n\nNo server is on the path, so server-side fixes miss it. Replace the sink:\n\n```javascript\nbox.textContent = t;\n```\n\nOr, if HTML is genuinely needed, `box.innerHTML = DOMPurify.sanitize(t)`.",
+    "link": {
+      "title": "DOM based XSS Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A profile page renders a user-supplied website in a Jinja2 template with autoescaping on:\n\n```\n<a href=\"{{ user.website }}\">site</a>\n```\n\nWhat is still a risk?",
+    "options": [
+      {
+        "text": "None: autoescaping covers attributes",
+        "explanation": "Escaping stops breaking *out of* the attribute, but the value itself can be a dangerous URL. Escaping doesn't change `javascript:`."
+      },
+      {
+        "text": "A value like `javascript:...` runs script when clicked, because it contains no characters that escaping changes",
+        "explanation": "Correct. URL attributes need scheme validation. Parse the URL and allow only `https:` (and perhaps `http:`/`mailto:`)."
+      },
+      {
+        "text": "The double quotes in the template are unsafe; it should be unquoted",
+        "explanation": "The opposite: quoted attributes are safer. Unquoted ones can be broken with a space."
+      },
+      {
+        "text": "Jinja2 doesn't escape inside tags",
+        "explanation": "Jinja2's autoescape applies to every `{{ }}` expression, including inside attribute values; it escapes quotes so you can't break out."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Autoescape turns `\"` into `&#34;`, `<` into `&lt;`, etc. An attacker can't close the attribute.\n2. But `javascript:` is plain letters and a colon. Escaped, it's identical.\n3. The browser treats `href=\"javascript:...\"` as a script URL and runs it on click.\n4. Fix at input or render time:\n\n```python\nfrom urllib.parse import urlparse\nok = urlparse(url).scheme in (\n    \"https\", \"http\")\n```\n\nThis is why encoding must match the *context*: a URL context needs URL validation as well.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are reviewing a pull request in a React + Django codebase for XSS. Which of these deserve close scrutiny? Select all that apply.",
+    "options": [
+      {
+        "text": "`<div dangerouslySetInnerHTML={{__html: bio}} />`",
+        "explanation": "Correct. This bypasses JSX's automatic escaping; `bio` must be sanitised or provably trusted."
+      },
+      {
+        "text": "`<p>{bio}</p>` in JSX",
+        "explanation": "JSX escapes interpolated strings, so this renders as text. It's the safe default."
+      },
+      {
+        "text": "`{{ bio|safe }}` in a Django template",
+        "explanation": "Correct. `|safe` tells Django the value is already safe HTML and disables autoescaping for it."
+      },
+      {
+        "text": "`mark_safe(f\"<b>{name}</b>\")` in a Django view",
+        "explanation": "Correct. `name` is interpolated without escaping and then marked safe, so any HTML in it is rendered. Use `format_html` instead, which escapes the arguments."
+      },
+      {
+        "text": "`<a href={url}>` in JSX where `url` comes from the user",
+        "explanation": "Correct. JSX escapes the value but doesn't stop a `javascript:` scheme. Validate the scheme."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3,
+      4
+    ],
+    "workedExample": "Look for places where escaping is switched off, or where escaping is the wrong tool:\n\n| Code | Why |\n|---|---|\n| dangerouslySetInnerHTML | escape hatch |\n| `{bio}` | auto-escaped, safe |\n| `\\|safe` | escape hatch |\n| mark_safe(f-string) | unescaped input |\n| href={url} | URL context |\n\nDjango's `format_html(\"<b>{}</b>\", name)` is the safe way to build small HTML fragments: it escapes each argument before marking the result safe.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A site sends `Content-Security-Policy: script-src 'nonce-abc123'` with the **same nonce on every response**. Why is this weak?",
+    "options": [
+      {
+        "text": "Nonces must be at least 32 characters, so the browser ignores it",
+        "explanation": "Browsers don't enforce a nonce length. The weakness is predictability, not format."
+      },
+      {
+        "text": "An attacker can read the nonce from any page and add it to their injected script tag",
+        "explanation": "Correct. A nonce only works if the attacker can't know it in advance. A fixed value is visible in every page's source, so injected markup can include it."
+      },
+      {
+        "text": "It's fine: nonces are designed to be static per site",
+        "explanation": "That describes an allowlist, not a nonce. A nonce (\"number used once\") must be fresh and unpredictable per response."
+      },
+      {
+        "text": "Static nonces disable `'strict-dynamic'`",
+        "explanation": "The policy doesn't use `'strict-dynamic'`; and the issue is that the attacker can reuse the nonce, not a directive interaction."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The point of a nonce: only scripts the *server* placed in this response know the value.\n2. With a fixed nonce, the attacker loads any page, sees `nonce=\"abc123\"` and puts it on the script element they inject.\n3. The browser sees a matching nonce and runs it.\n4. Fix: generate a new value per response, e.g. `secrets.token_urlsafe(16)` (128 bits), and make sure CDNs don't cache the HTML containing it.",
+    "link": {
+      "title": "Mitigate XSS with a strict CSP — web.dev",
+      "url": "https://web.dev/articles/strict-csp"
+    }
+  },
+  {
+    "id": "web-xss-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to embed a server-side dictionary in a page for client JS. Which is the safest approach in Jinja2?",
+    "options": [
+      {
+        "text": "`<script>var cfg = {{ cfg }};</script>` relying on autoescape",
+        "explanation": "Autoescape applies *HTML* encoding, which is wrong inside a script: it may corrupt the data and doesn't produce valid, safe JS."
+      },
+      {
+        "text": "`<script>var cfg = {{ cfg|safe }};</script>`",
+        "explanation": "This inserts raw Python repr into JS with no encoding at all. A value containing `</script>` would end the block."
+      },
+      {
+        "text": "`<script>var cfg = {{ cfg|tojson }};</script>`",
+        "explanation": "Correct. `tojson` produces valid JSON and escapes `<`, `>`, `&` and `'` so the value can't close the script tag."
+      },
+      {
+        "text": "`<script>var cfg = \"{{ cfg }}\";</script>` with quotes added",
+        "explanation": "Wrapping in quotes doesn't make HTML escaping correct for JS, and you'd get a string rather than an object."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The context is **inside a `<script>` element**, which has its own rules:\n\n1. The HTML parser ends the script at the first `</script>`, whatever JS state it's in.\n2. So the encoding must (a) produce a valid JS value and (b) never emit `</`.\n3. `tojson` does both: JSON is valid JS, and `<` becomes `\\u003c`.\n\nAn even cleaner pattern is `<div id=cfg data-cfg='{{ cfg|tojson }}'>` and `JSON.parse(el.dataset.cfg)`, which also works with a strict CSP.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Under the policy below, which would the browser **block**? Select all that apply.\n\n```\nscript-src 'nonce-R4nd'\n  'strict-dynamic';\nobject-src 'none'; base-uri 'none'\n```",
+    "options": [
+      {
+        "text": "`<script nonce=\"R4nd\" src=\"/app.js\">`",
+        "explanation": "This carries the correct nonce, so it runs."
+      },
+      {
+        "text": "An inline `onclick=\"...\"` attribute injected into a comment",
+        "explanation": "Correct. Inline event handlers have no nonce and are blocked under a nonce-based policy."
+      },
+      {
+        "text": "A script that `/app.js` creates with `document.createElement(\"script\")`",
+        "explanation": "`'strict-dynamic'` extends trust to scripts created by an already-trusted script, so this is allowed."
+      },
+      {
+        "text": "An injected `<script src=\"https://cdn.example/x.js\">` without a nonce",
+        "explanation": "Correct. With `'strict-dynamic'`, host allowlists are ignored; only nonced scripts (and those they load) run."
+      },
+      {
+        "text": "An injected `<base href=\"https://evil.example/\">`",
+        "explanation": "Correct. `base-uri 'none'` forbids `<base>` elements, which would otherwise re-point relative script URLs to the attacker's host."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Check each against the policy's rules:\n\n1. Nonce matches → allowed.\n2. Inline handler: no way to attach a nonce → blocked.\n3. Created by trusted script → `'strict-dynamic'` → allowed.\n4. Parser-inserted, no nonce → blocked, even if the host looks fine.\n5. `<base>` → `base-uri 'none'` → blocked.\n\nThis is why strict CSP is effective: the attacker needs the per-response nonce or control over an already-trusted script.",
+    "link": {
+      "title": "Mitigate XSS with a strict CSP — web.dev",
+      "url": "https://web.dev/articles/strict-csp"
+    }
+  },
+  {
+    "id": "web-xss-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A site uses `script-src 'self' https://cdn.big-provider.com` (an allowlist). The CDN also hosts an old version of a popular framework with known script-gadget behaviour, and a JSONP endpoint. An attacker finds an HTML injection that can't run inline script. Why is the CSP likely ineffective?",
+    "options": [
+      {
+        "text": "Allowlists only apply to images",
+        "explanation": "`script-src` governs scripts. The problem is what the allowed host serves."
+      },
+      {
+        "text": "The attacker can inject a `<script src>` pointing at something on the allowed CDN (a JSONP callback or a gadget-rich library) and turn it into code execution",
+        "explanation": "Correct. Any allowed host that serves attacker-steerable script effectively allowlists the attacker. Google's 2016 study found most allowlist policies bypassable this way."
+      },
+      {
+        "text": "CSP is ignored on HTTPS sites",
+        "explanation": "CSP works on HTTPS (that's the norm). Nothing about HTTPS disables it."
+      },
+      {
+        "text": "The attacker can override the CSP with a `<meta>` tag",
+        "explanation": "A meta CSP can only add restrictions (policies combine by intersection); it cannot loosen the header policy."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The injection can add markup but can't run inline JS (CSP blocks it).\n2. It *can* add `<script src=\"https://cdn.big-provider.com/...\">` because that host is allowed.\n3. A JSONP endpoint executes whatever callback name is in the URL, and old frameworks evaluate expressions in the DOM.\n4. So the attacker's logic runs, all from an allowed host.\n\nMoving to `'nonce-...' 'strict-dynamic'` closes this: an injected tag has no nonce regardless of host.",
+    "link": {
+      "title": "CSP Is Dead, Long Live CSP! (Google research)",
+      "url": "https://research.google/pubs/csp-is-dead-long-live-csp-on-the-insecurity-of-whitelists-and-the-future-of-content-security-policy/"
+    }
+  },
+  {
+    "id": "web-xss-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A large SPA has hundreds of `innerHTML` assignments. What does enabling `require-trusted-types-for 'script'` change?",
+    "options": [
+      {
+        "text": "It automatically sanitises every string assigned to `innerHTML`",
+        "explanation": "Trusted Types doesn't sanitise anything itself; your policy decides what happens (often by calling DOMPurify)."
+      },
+      {
+        "text": "Assigning a plain string to sinks like `innerHTML` throws; code must pass a `TrustedHTML` object created by a named policy",
+        "explanation": "Correct. Only policies (a few auditable functions) can produce trusted values, so security review concentrates there instead of at every sink."
+      },
+      {
+        "text": "It disables `innerHTML` entirely",
+        "explanation": "`innerHTML` still works with `TrustedHTML` values. Only raw strings are rejected."
+      },
+      {
+        "text": "It blocks all third-party scripts",
+        "explanation": "That is `script-src`'s job. Trusted Types governs DOM injection sinks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Without Trusted Types: every `innerHTML = s` is a potential DOM XSS; you must audit hundreds of sites.\n2. With enforcement: `el.innerHTML = \"<b>x</b>\"` throws a TypeError.\n3. You create a policy:\n\n```javascript\nconst p = trustedTypes.createPolicy(\n  \"app\", {createHTML: s =>\n    DOMPurify.sanitize(s)});\nel.innerHTML = p.createHTML(s);\n```\n\n4. Now the only code that can turn a string into HTML is the policy, so that's what you audit. Roll out in report-only mode first to find the violations.",
+    "link": {
+      "title": "Trusted Types API — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API"
+    }
+  }
+]

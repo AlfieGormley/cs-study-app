@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs1-typeahead-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a plain trie (no precomputation), why is finding the top 10 completions for the prefix `s` slow?",
+    "options": [
+      {
+        "text": "Walking from the root to the node for `s` takes time proportional to the number of stored queries.",
+        "explanation": "Wrong. Reaching the prefix node takes one step per character of the prefix, here a single step. The walk is cheap; what follows isn't."
+      },
+      {
+        "text": "Tries can't store popularity scores, so you must query a database for each candidate.",
+        "explanation": "Wrong. Nodes can store any payload, including a score on terminal nodes or a precomputed top-k list. The slowness comes from the traversal, not from missing data."
+      },
+      {
+        "text": "The lookup must traverse the whole subtree under `s`, potentially millions of queries, to find the 10 most popular.",
+        "explanation": "Correct. Every query starting with `s` lives below that node. Without precomputed results you have to visit them all (or a large part) and pick the top 10, which is far too slow for a 10–20 ms budget."
+      },
+      {
+        "text": "Single-character prefixes cause hash collisions in the trie.",
+        "explanation": "Wrong. Tries aren't hash tables; each character selects a child edge. There's no collision concept here."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Split the lookup into two phases:\n\n1. **Find the prefix node**: `O(p)` where p = prefix length. For `s`, p = 1.\n2. **Collect completions**: visit every terminal node in the subtree and keep the best 10. For `s`, that's millions of nodes.\n\nPhase 2 dominates. The fix is to **precompute** the top-10 list at every node during the offline build, so phase 2 becomes \"return the stored list\" and the whole lookup is `O(p)`.",
+    "link": {
+      "title": "Trie (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Trie"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You get **2 billion searches/day**. With debouncing, each search generates about **5** suggestion requests. What is the approximate **peak** suggestion request rate, assuming peak is 3x average?",
+    "options": [
+      {
+        "text": "About 35,000/s",
+        "explanation": "Wrong. 35,000/s is the average rate for about 3 billion requests a day. You've likely missed the peak factor and part of the requests-per-search multiplier."
+      },
+      {
+        "text": "About 100,000/s",
+        "explanation": "Wrong. That's the average rate. You must size the serving fleet for peak traffic, about 3x higher."
+      },
+      {
+        "text": "About 3,000,000/s",
+        "explanation": "Wrong. This is 10x too high: a 3M/s peak implies a 1M/s average, or about 86 billion requests a day, perhaps from counting a request for every keystroke of ~20-character queries and then applying the peak factor twice."
+      },
+      {
+        "text": "About 300,000/s",
+        "explanation": "Correct. 2B × 5 = 10B requests/day; 10B / 10^5 s ≈ 100,000/s average (115k exactly); × 3 ≈ 300,000–350,000/s at peak."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nRequests/day = 2B searches x 5    = 10B\nAverage   = 10B / 86,400 s ≈ 115,700/s\n          (10B / 10^5    ≈ 100,000/s)\nPeak (x3) ≈ 300,000-350,000/s\n```\n\nWhat it implies: with a ~1 ms in-memory lookup, one core handles ~1,000 req/s, so ~350 cores at peak, i.e. a few dozen servers before caching. A CDN serving short prefixes typically absorbs a large share of this, so the origin fleet can be much smaller.",
+    "link": {
+      "title": "Meta engineering: the life of a typeahead query",
+      "url": "https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your offline-built trie, with top-10 precomputed at each node, is **40 GB**. You serve 300k req/s across three regions. How should you deploy it?",
+    "options": [
+      {
+        "text": "Replicate the full trie in memory on every serving node, in every region, and scale by adding replicas.",
+        "explanation": "Correct. 40 GB fits comfortably in RAM on a standard large instance. Full replication means any node can answer any prefix, there's no cross-shard routing, and you scale throughput linearly by adding nodes."
+      },
+      {
+        "text": "Store it in a relational database and query it with `LIKE 'prefix%'`.",
+        "explanation": "Wrong. A B-tree index can find matching rows for a prefix, but ranking millions of matches per request is far too slow, and it ignores the precomputed top-k entirely."
+      },
+      {
+        "text": "Shard it alphabetically across 26 servers, one per first letter.",
+        "explanation": "Wrong. Alphabetical sharding is badly skewed (far more queries begin with 's' or 'c' than 'x' or 'q'), and it's unnecessary because 40 GB fits on one machine."
+      },
+      {
+        "text": "Keep it in object storage and read the relevant node on each request.",
+        "explanation": "Wrong. Object storage reads take tens of milliseconds each, consuming the whole latency budget for a single lookup. Object storage is where snapshots are published, not served from."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Decision process:\n\n1. **Does it fit in RAM?** 40 GB on a 128 GB machine: yes, with room for two versions during a swap (80 GB).\n2. **If it fits, replicate.** Sharding adds routing, skew and partial-failure modes; it's only worth it when data doesn't fit.\n3. **Size the fleet**: 300k req/s at ~1,000 req/s per core ≈ 300 cores. With 32-core nodes that's ~10 nodes, so put 4–5 per region for redundancy.\n\nShard (by locale first, then by hashed prefix) only when the index outgrows a single machine.",
+    "link": {
+      "title": "Elasticsearch: completion suggester",
+      "url": "https://www.elastic.co/docs/reference/elasticsearch/rest-apis/search-suggesters"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which client-side behaviours reduce load or improve perceived latency for typeahead? Select all that apply.",
+    "options": [
+      {
+        "text": "Debounce keystrokes, sending a request only after ~100 ms of no typing.",
+        "explanation": "Correct. Fast typists produce several keystrokes within 100 ms; debouncing collapses them into one request, cutting load substantially."
+      },
+      {
+        "text": "Cache responses by prefix in memory so backspacing reuses earlier results.",
+        "explanation": "Correct. Deleting a character returns to a prefix that was just fetched, so a local cache answers instantly with no network call."
+      },
+      {
+        "text": "Ignore responses for prefixes older than the current input.",
+        "explanation": "Correct. Responses can arrive out of order; rendering a stale one makes suggestions flicker to an older prefix. Dropping them (or cancelling the request) keeps the UI correct."
+      },
+      {
+        "text": "Retry failed suggestion requests three times with exponential backoff.",
+        "explanation": "Incorrect. By the time a retry succeeds, the user has typed more characters, so the result is useless. For typeahead, a failed request should simply be dropped."
+      },
+      {
+        "text": "Send a request for every keystroke so suggestions are always current.",
+        "explanation": "Incorrect. This multiplies load for almost no benefit, since intermediate prefixes are usually never seen by the user."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think about a user typing \"pancakes\" quickly (8 characters in ~800 ms):\n\n- **No debounce**: 8 requests.\n- **100 ms debounce**: perhaps 2–3 requests (the user pauses after \"pan\" and at the end).\n- **Backspace** from \"pancakes\" to \"pancake\": local cache hit, 0 requests.\n- **Out-of-order arrival**: \"pan\" results arrive after \"pancak\" results; ignoring them avoids a visible flicker.\n\nRetries make no sense for data with a lifespan of a few hundred milliseconds.",
+    "link": {
+      "title": "Autocomplete (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Autocomplete"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your trie rebuilds once a day. Product wants breaking-news queries (e.g. a major earthquake) to appear in suggestions **within 10 minutes**. What's the most practical design?",
+    "options": [
+      {
+        "text": "Add a small real-time trending layer: a stream job detects queries spiking above their baseline and publishes a small trending list that the suggest service merges into results.",
+        "explanation": "Correct. Only a few thousand queries are trending at once, so the real-time layer is tiny and cheap to update every minute. The big trie stays a daily batch artefact, and the merge at serving time costs microseconds."
+      },
+      {
+        "text": "Update trie nodes in place on the serving nodes on every search.",
+        "explanation": "Wrong. Updating top-k lists along every prefix path on every search means ~20 writes per search at 1B+ searches a day, with locking on hot nodes like 's'. It destroys the read-only simplicity that makes serving fast."
+      },
+      {
+        "text": "Rebuild the full trie every 10 minutes.",
+        "explanation": "Wrong. A full rebuild aggregates weeks of logs and processes hundreds of millions of queries; running it every 10 minutes is enormously expensive, and each rebuild plus rollout might not even finish in 10 minutes."
+      },
+      {
+        "text": "Lower the CDN TTL to zero.",
+        "explanation": "Wrong. Edge caching isn't the bottleneck; even with no caching, the underlying trie wouldn't contain the new query until the next daily build."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "This is the lambda-architecture pattern: a large, slow, accurate batch view plus a small, fast speed layer.\n\n1. Stream job (Flink) counts queries in 1-minute tumbling windows.\n2. Flag a query as trending if `count_last_10min > 20 × baseline` and distinct users exceed a threshold (to resist manipulation).\n3. Publish the trending set (a few thousand entries) to the suggest service every minute.\n4. At request time, take the trie's top-10 for the prefix, merge any trending queries matching that prefix with a boosted score, and return the top 10.\n\nCost: a tiny in-memory list per node; latency impact: negligible.",
+    "link": {
+      "title": "Count–min sketch (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A privacy review finds that a user's unusual search, including their full home address, appeared as a suggestion for others. Which pipeline change fixes the root cause?",
+    "options": [
+      {
+        "text": "Add the user's address to the blocklist.",
+        "explanation": "Wrong as a fix. It removes this one case but not the class of problem; every other user's private query can still leak. Blocklists are for known bad terms, not for unpredictable personal data."
+      },
+      {
+        "text": "Encrypt the search logs at rest.",
+        "explanation": "Wrong. Encryption protects logs from unauthorised access, but the pipeline still decrypts and counts them. The query would still become a suggestion."
+      },
+      {
+        "text": "Shorten the CDN TTL so the suggestion disappears faster.",
+        "explanation": "Wrong. This only changes how long cached copies live; the next trie build would still include the query."
+      },
+      {
+        "text": "Only suggest queries that were searched by at least N distinct users in the aggregation window.",
+        "explanation": "Correct. Unique, personal queries are by definition searched by very few people. A distinct-user threshold (a k-anonymity-style rule) removes them while keeping popular queries, which are the useful suggestions anyway."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Find where private data enters the suggestions: the aggregator counts raw searches, and a single user searching the same thing repeatedly can push it high enough for a narrow prefix.\n\nFix it at aggregation:\n\n```\nfor each (query, locale):\n  distinct_users = HLL_count(user_ids)\n  if distinct_users < 50: drop\n```\n\n(A HyperLogLog sketch estimates distinct users in a few KB per query.) Counting distinct users also resists manipulation, since a bot repeating a phrase from one account gains nothing. Then add a blocklist and PII detectors (addresses, phone numbers) as defence in depth.",
+    "link": {
+      "title": "Autocomplete (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Autocomplete"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You add personalised re-ranking based on each user's recent searches. Your CDN previously served 60% of suggestion traffic. What's the best way to keep most of that offload?",
+    "options": [
+      {
+        "text": "Include the user ID in the cache key so each user's results are cached at the edge.",
+        "explanation": "Wrong. Per-user cache keys destroy hit rates: each user's prefixes are requested only a few times, so almost every request misses and goes to the origin."
+      },
+      {
+        "text": "Disable the CDN; personalisation requires every request to reach the origin.",
+        "explanation": "Wrong. It would roughly 2.5x the origin's load (from 40% to 100% of traffic). Personalisation doesn't require giving up shared caching if you split the work."
+      },
+      {
+        "text": "Keep caching the global top-N per prefix at the edge, and apply personal re-ranking or blending on the client (or a thin per-user service) on top of those candidates.",
+        "explanation": "Correct. The expensive, shared part (candidate generation) stays cacheable. The personal part is small: re-order 50 candidates and mix in a handful of the user's recent queries, which the client already knows."
+      },
+      {
+        "text": "Precompute a personalised trie per user.",
+        "explanation": "Wrong. With hundreds of millions of users, a 40 GB trie per user is absurd. Even small per-user tries would be a massive storage and rebuild cost for little benefit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Split the response into **shared** and **personal** parts:\n\n| Part | Varies by | Cacheable at edge? |\n|---|---|---|\n| Global top-50 for prefix | prefix, locale | Yes |\n| Recent searches, re-rank | user | No (but tiny) |\n\nThe client fetches the global list (CDN hit), then merges in the user's recent searches it stores locally and applies a lightweight re-ranker. The origin still sees ~40% of traffic, as before. This is the general pattern: cache what's common, compute what's personal as late and as close to the user as possible.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Ranking uses `score = Σ count_d × 0.9^(age in days)`. Query A had **10,000** searches exactly **14 days ago** and none since. Query B has **2,000** searches **today** and none before. Which ranks higher today?",
+    "options": [
+      {
+        "text": "B, because recent searches always outrank older ones.",
+        "explanation": "Wrong. Decay reduces old counts gradually; it doesn't zero them. Whether recent beats old depends on the numbers."
+      },
+      {
+        "text": "A, with a score of about 2,290 versus B's 2,000.",
+        "explanation": "Correct. 0.9^14 ≈ 0.229, so A keeps about 23% of its 10,000. That's still more than B's undecayed 2,000, though B will overtake A within a day or two of steady traffic."
+      },
+      {
+        "text": "A, with a score of 10,000, because decay only applies after 30 days.",
+        "explanation": "Wrong. The formula decays every day's count by its age; nothing in it waits 30 days."
+      },
+      {
+        "text": "They tie, because 0.9 × 14 ≈ 12.6 and 10,000 / 12.6 ≈ 800.",
+        "explanation": "Wrong. The decay is exponential (0.9 raised to the 14th power), not multiplied by the age."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the decay factor:\n\n```\n0.9^7  ≈ 0.478\n0.9^14 ≈ 0.478^2 ≈ 0.229\nA = 10,000 x 0.229 ≈ 2,290\nB =  2,000 x 1     = 2,000\n```\n\nA factor of 0.9/day means a half-life of about 6.6 days. If you want trending queries to win faster, lower the factor (e.g. 0.7/day gives a half-life of ~2 days) or add the real-time trending layer, which is designed for minutes-scale freshness.",
+    "link": {
+      "title": "Exponential decay (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Exponential_decay"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Legal asks you to remove a defamatory suggestion **immediately**. Suggestions are cached at the CDN for 10 minutes and the trie rebuilds nightly. Which steps belong in your answer? Select all that apply.",
+    "options": [
+      {
+        "text": "Push the phrase to a serve-time blocklist that every suggest node checks before responding.",
+        "explanation": "Correct. A small blocklist distributed like config takes effect in seconds on the origin, without waiting for a rebuild."
+      },
+      {
+        "text": "Purge the affected prefixes from the CDN.",
+        "explanation": "Correct. Otherwise the edge keeps serving the cached response for up to 10 minutes after the origin is fixed."
+      },
+      {
+        "text": "Add the phrase to the pipeline's blocklist so tonight's build drops it at source.",
+        "explanation": "Correct. The serve-time list is a stopgap; fixing the source stops it reappearing in the next snapshot."
+      },
+      {
+        "text": "Trigger an immediate full rebuild and wait for it to roll out.",
+        "explanation": "Incorrect as the main action. A full rebuild takes hours and still leaves the CDN stale. It's far slower than the blocklist plus purge."
+      },
+      {
+        "text": "Set the CDN TTL to zero permanently.",
+        "explanation": "Incorrect. It sacrifices most of your offload to handle a rare event that purging handles well."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Trace every layer where the bad suggestion lives:\n\n| Layer | Lifetime | Fix |\n|---|---|---|\n| Trie snapshot | until rebuild | pipeline blocklist |\n| Suggest node | until rebuild | serve-time blocklist |\n| CDN | 10 min | purge |\n| Browser | its cache TTL | accept, or keep short |\n\nA strong answer names each layer and the fastest lever for it.",
+    "link": {
+      "title": "Elasticsearch: search suggesters",
+      "url": "https://www.elastic.co/docs/reference/elasticsearch/rest-apis/search-suggesters"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With 50 locales and personal history, the index grows to **400 GB**, too big for one machine. English is 40% of traffic. What sharding scheme is most sensible?",
+    "options": [
+      {
+        "text": "Shard by locale first; split large locales like English further by a hash of the prefix (or traffic-sized prefix ranges), and replicate each shard.",
+        "explanation": "Correct. Locale is a natural boundary (no request crosses it). Hashing within a big locale spreads hot prefixes evenly, and replicas give throughput and redundancy."
+      },
+      {
+        "text": "Shard by first letter across 26 machines for all locales together.",
+        "explanation": "Wrong. Letter distribution is heavily skewed (many more queries begin with 's' than 'x'), and non-Latin scripts don't map onto 26 letters at all."
+      },
+      {
+        "text": "Shard by user ID so personal history stays together.",
+        "explanation": "Wrong. Most of the index is global, so every request would have to fan out to every shard to find completions for a prefix."
+      },
+      {
+        "text": "Store it in one 400 GB process with swap enabled.",
+        "explanation": "Wrong. Paging trie nodes to disk turns microsecond lookups into millisecond ones and wrecks tail latency."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Pick the shard key from the request: every request carries a locale and a prefix.\n\n1. **Locale**: no cross-locale requests, so locale shards are independent.\n2. **Within English** (the largest): hash the full prefix (with a flattened `prefix → list` store) or use ranges sized by measured traffic.\n3. **Replicate** each shard for throughput.\n\nAvoid raw alphabetical ranges: the busiest letters get many times the load of the quietest.",
+    "link": {
+      "title": "Trie (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Trie"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A new nightly snapshot is ready. Which practices make the swap safe on serving nodes? Select all that apply.",
+    "options": [
+      {
+        "text": "Load the new snapshot alongside the old one and swap a pointer atomically, so requests never see a half-loaded trie.",
+        "explanation": "Correct. Readers keep using the old version until the new one is fully built in memory; the swap itself is a single pointer write."
+      },
+      {
+        "text": "Provision RAM for two snapshots, since both are resident during the swap.",
+        "explanation": "Correct. A 50 GB index needs ~100 GB during the swap. Forgetting this leads to out-of-memory kills exactly at deploy time."
+      },
+      {
+        "text": "Validate the snapshot (size, sample lookups, blocklist check) and roll it to a few canary nodes first.",
+        "explanation": "Correct. A pipeline bug can produce an empty or offensive trie. Validation and a canary stop it reaching everyone."
+      },
+      {
+        "text": "Delete the previous snapshot from object storage as soon as the new one is published.",
+        "explanation": "Incorrect. Keeping the previous version allows instant rollback if the canary or metrics look wrong."
+      },
+      {
+        "text": "Restart all serving nodes at once so they pick up the new file together.",
+        "explanation": "Incorrect. A simultaneous restart drops capacity to zero and a bad snapshot would hit every user at once."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Treat a data snapshot like a code deploy:\n\n```\n1. build -> validate -> publish v42\n2. canary: 2 nodes load v42\n3. compare metrics vs v41\n4. roll out region by region\n5. keep v41 for rollback\n```\n\nIn memory, each node does: load v42 → build structures → atomic pointer swap → free v41. Peak RAM is both versions at once.",
+    "link": {
+      "title": "Andrew Gallant: index 1,600,000,000 keys with automata and Rust",
+      "url": "https://burntsushi.net/transducers/"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Bots search \"cheap pills brand-x\" 500,000 times in a day from 300 accounts so it becomes a top suggestion for \"cheap\". Your pipeline already has a 50-distinct-user threshold. What's the best additional defence?",
+    "options": [
+      {
+        "text": "Rank by distinct users (or cap each user's contribution), and flag queries whose growth is concentrated in a few accounts or IPs.",
+        "explanation": "Correct. 300 accounts doing 500k searches is ~1,700 each, nothing like organic behaviour. Counting each user at most a few times strips most of the inflated count, and concentration anomalies flag the campaign."
+      },
+      {
+        "text": "Raise the distinct-user threshold to 1,000.",
+        "explanation": "Partly helps, but attackers can create more accounts, and a high threshold hides genuine niche queries for smaller locales. It's a blunt tool on its own."
+      },
+      {
+        "text": "Sample logs 1 in 100 so the bot's searches mostly get dropped.",
+        "explanation": "Wrong. Sampling drops bot and human searches equally, so the ranking stays the same."
+      },
+      {
+        "text": "Turn off suggestions for the prefix \"cheap\".",
+        "explanation": "Wrong. It removes a useful prefix for everyone and the bots simply move to another prefix."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare organic and bot patterns:\n\n```\nBot: 500,000 / 300 ≈ 1,700 per account\nOrganic: typically 1-3 per user\n```\n\nIf each user's contribution is capped at, say, 3 per day, the bot query's count falls to ~900, far below genuinely popular queries. Add anomaly detection on concentration (share of volume from the top 1% of users or IPs) to catch it outright.",
+    "link": {
+      "title": "Meta engineering: the life of a typeahead query",
+      "url": "https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/"
+    }
+  }
+]

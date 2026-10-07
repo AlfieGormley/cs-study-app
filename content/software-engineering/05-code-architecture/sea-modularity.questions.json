@@ -1,0 +1,339 @@
+[
+  {
+    "id": "sea-modularity-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "According to Parnas's information-hiding criterion, how should you decide where module boundaries go?",
+    "options": [
+      {
+        "text": "One module per step in the processing pipeline (read, parse, sort, print)",
+        "explanation": "That's the decomposition Parnas argued *against*: every step ends up knowing shared data formats, so one format change touches every module."
+      },
+      {
+        "text": "Around design decisions likely to change, with each module hiding one such decision behind its interface",
+        "explanation": "Correct. If the storage format may change, one module owns it and others use its interface; the change then stays in one place."
+      },
+      {
+        "text": "By file size, splitting any file over 500 lines",
+        "explanation": "Size limits say nothing about which changes stay local. Arbitrary splits can make coupling worse."
+      },
+      {
+        "text": "One module per developer, so people don't conflict",
+        "explanation": "Ownership matters, but boundaries chosen around people rather than design decisions don't localise change."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Parnas's 1972 paper compared two designs of a KWIC index program:\n\n1. **By processing step**: Input, Circular Shift, Alphabetise, Output. All shared the line storage format.\n2. **By hidden decision**: a Line Storage module hides the format, a Shifter hides how shifts are computed, and so on.\n\nThen he asked: what happens if the storage format changes? Design 1: every module changes. Design 2: only Line Storage changes.\n\nSo: list the decisions most likely to change, give each one a home, and expose only what others need.",
+    "link": {
+      "title": "Information hiding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Information_hiding"
+    }
+  },
+  {
+    "id": "sea-modularity-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You have `billing/__init__.py` that re-exports `create_invoice` from `billing/_invoices.py`. A colleague writes `from billing._tax import vat_rate` in the `orders` package. What happens when it runs?",
+    "options": [
+      {
+        "text": "It works, but it breaks the convention that `_tax` is internal to `billing`, so `billing` can no longer change it freely",
+        "explanation": "Correct. The underscore is a signal, not a lock. Now a refactor of `billing._tax` can break `orders`. Tools like import-linter can turn the convention into a failing check."
+      },
+      {
+        "text": "It raises `ImportError` because underscore modules are private",
+        "explanation": "Python doesn't enforce privacy for underscore names or modules. The import succeeds."
+      },
+      {
+        "text": "It works, and `vat_rate` is now part of `billing`'s public API",
+        "explanation": "Reachability is not public-API status. Documentation may designate public submodules as well as names re-exported from __init__.py."
+      },
+      {
+        "text": "It raises `AttributeError` because `__all__` doesn't list `_tax`",
+        "explanation": "`__all__` only affects `from billing import *`. It doesn't block explicit imports."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Python's underscore convention means \"internal\". The interpreter doesn't enforce it.\n2. `__all__` controls only star imports.\n3. So the import works, but `orders` now depends on an internal detail.\n4. When `billing` moves `vat_rate` or changes its meaning, `orders` breaks, even though `billing`'s public API didn't change.\n5. Fix: expose what's needed through `billing`'s public interface, or add a `forbidden` import contract.",
+    "link": {
+      "title": "Modules — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/modules.html"
+    }
+  },
+  {
+    "id": "sea-modularity-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why is a dependency cycle between packages (`orders → billing → customers → orders`) a problem even if the code runs?",
+    "options": [
+      {
+        "text": "Python cannot run code with circular imports",
+        "explanation": "Python often can, depending on import order and style. The deeper problem is architectural."
+      },
+      {
+        "text": "It makes each import slower by a factor of three",
+        "explanation": "Import time isn't the issue; modules are cached in `sys.modules` after the first import."
+      },
+      {
+        "text": "The cycle increases coupling and makes independent reasoning, testing, reuse or extraction harder, even though some isolated tests remain possible.",
+        "explanation": "Correct. That's the point of the Acyclic Dependencies Principle. A cycle merges the packages' change and release cycles."
+      },
+      {
+        "text": "It is only a problem in compiled languages",
+        "explanation": "Cycles hurt understanding, testing and extraction in any language."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Follow a change in `customers`:\n\n1. `orders` depends on `customers` (via `billing`) → may need to change.\n2. `customers` depends on `orders` → may be affected by that change in turn.\n3. To test `orders` you need `billing` and `customers`, which need `orders`.\n\nEverything in the cycle depends on everything else, so for practical purposes it's one big module with three names.",
+    "link": {
+      "title": "Package principles — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Package_principles"
+    }
+  },
+  {
+    "id": "sea-modularity-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using Martin's instability metric `I = Ce / (Ca + Ce)`, package `pricing` is imported by `orders`, `checkout` and `quotes`, and itself imports only `money`. What is its instability?",
+    "options": [
+      {
+        "text": "0.75",
+        "explanation": "That inverts the formula: it uses incoming dependencies (3) as the numerator instead of outgoing (1)."
+      },
+      {
+        "text": "4",
+        "explanation": "Four is the denominator alone. The defined ratio lies in [0,1] when Ca+Ce is positive; the isolated-package 0/0 case needs a chosen convention."
+      },
+      {
+        "text": "0.33",
+        "explanation": "That's Ce / Ca = 1/3. The denominator is Ca + Ce, not Ca alone."
+      },
+      {
+        "text": "0.25",
+        "explanation": "Correct. Ce (outgoing) = 1, Ca (incoming) = 3. I = 1 / (3 + 1) = 0.25: fairly stable, since many depend on it and it depends on little."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Ca** (afferent, incoming): packages depending on `pricing`: `orders`, `checkout`, `quotes` → 3.\n2. **Ce** (efferent, outgoing): packages `pricing` depends on: `money` → 1.\n3. `I = Ce / (Ca + Ce) = 1 / 4 = 0.25`.\n4. Interpretation: close to 0 means *stable*, costly to change because three packages rely on it. By the Stable Abstractions Principle, `pricing` should be fairly abstract and should not import volatile packages.",
+    "link": {
+      "title": "Package principles — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Package_principles"
+    }
+  },
+  {
+    "id": "sea-modularity-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Given these files, what happens when you run `python main.py`?\n\n```python\n# main.py\nimport orders\n\n# orders.py\nfrom billing import invoice_for\nclass Order: ...\n\n# billing.py\nfrom orders import Order\ndef invoice_for(o): ...\n```",
+    "options": [
+      {
+        "text": "`ImportError`: `Order` can't be imported from the partially initialised `orders` module",
+        "explanation": "Correct. `orders` starts running, imports `billing`, which asks for `orders.Order`. `orders` is in `sys.modules` but stopped at its first line, so `Order` doesn't exist yet."
+      },
+      {
+        "text": "It runs fine; Python resolves circular imports automatically",
+        "explanation": "Python can handle some cycles, but not a `from X import Y` where Y hasn't been defined yet."
+      },
+      {
+        "text": "Infinite recursion until `RecursionError`",
+        "explanation": "Python doesn't re-execute a module that's already in `sys.modules`, so there's no infinite loop; it finds the half-built module instead."
+      },
+      {
+        "text": "`NameError: name 'Order' is not defined` inside `orders.py`",
+        "explanation": "The failure occurs inside `billing.py`'s import statement, and it's an `ImportError`, not a `NameError`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace it:\n\n```\nmain: import orders\n orders put in sys.modules\n orders L1: from billing import ..\n  billing put in sys.modules\n  billing L1: from orders import\n              Order\n   orders is in sys.modules but\n   has no Order yet: ImportError\n```\n\nSwitching `billing` to `import orders` and using `orders.Order` lazily would make it run, but the design cycle remains. A better fix: move `Order` to a module both can import, or have `billing` depend on a `Billable` Protocol.",
+    "link": {
+      "title": "Circular dependency — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_dependency"
+    }
+  },
+  {
+    "id": "sea-modularity-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`notifications` imports `orders` to format order emails, and `orders` imports `notifications` to send them. Which changes genuinely remove the design cycle? Select all that apply.",
+    "options": [
+      {
+        "text": "Move `import notifications` inside the `orders` function that uses it",
+        "explanation": "This dodges the import-time error but the dependency still exists at runtime. The packages remain mutually dependent."
+      },
+      {
+        "text": "`orders` publishes an `OrderPlaced` event; `notifications` subscribes and formats the email",
+        "explanation": "Correct. `orders` no longer knows `notifications` exists. Dependencies now run one way: `notifications → orders` (for the event type)."
+      },
+      {
+        "text": "`orders` defines a `Notifier` Protocol and receives an implementation via its constructor; `notifications` implements it",
+        "explanation": "Correct. Dependency inversion: `orders` owns the abstraction, `notifications` depends on `orders`. The composition root wires them."
+      },
+      {
+        "text": "Add `if TYPE_CHECKING:` around the imports in both modules",
+        "explanation": "That only skips the imports at runtime for type hints. If the code actually calls across, the cycle is still there in practice."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "A design cycle is removed only if one of the two arrows disappears.\n\n| Change | orders → notif | notif → orders |\n|---|---|---|\n| Local import | still there | still there |\n| Events | gone | stays |\n| Protocol + DI | gone | stays |\n| TYPE_CHECKING | still used | still used |\n\nEvents and dependency inversion both delete the `orders → notifications` arrow, leaving an acyclic graph.",
+    "link": {
+      "title": "Package principles — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Package_principles"
+    }
+  },
+  {
+    "id": "sea-modularity-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An import-linter `independence` contract lists `shop.orders`, `shop.billing` and `shop.catalogue`. `shop.orders` imports `shop.utils`, and `shop.utils` imports `shop.billing`. Does the contract pass?",
+    "options": [
+      {
+        "text": "Yes; `orders` never imports `billing` directly",
+        "explanation": "Independence contracts check indirect imports too, so a chain through an unlisted module still counts."
+      },
+      {
+        "text": "Yes; `utils` isn't listed, so it is ignored",
+        "explanation": "Unlisted modules can still be part of a chain that links two listed ones, and the contract follows those chains."
+      },
+      {
+        "text": "No; there's an indirect dependency `orders → utils → billing`",
+        "explanation": "Correct. Independence means no imports in any direction between the listed modules, even indirectly. `shop.utils` makes `orders` depend on `billing`."
+      },
+      {
+        "text": "It depends on whether `billing` imports `orders` back",
+        "explanation": "Independence forbids dependencies in *either* direction; one direction is enough to fail."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The contract: `orders`, `billing`, `catalogue` must not depend on each other, directly or indirectly.\n2. Build the graph: `orders → utils → billing`.\n3. There's a path from `orders` to `billing`, so `orders` depends on `billing`. Contract broken.\n4. Fix: split `shop.utils` so the piece `orders` uses doesn't import `billing`, or move what both need into a lower shared module that imports neither.\n\nThis is also why grab-bag `utils` modules are dangerous: they quietly connect things.",
+    "link": {
+      "title": "Import Linter: contract types",
+      "url": "https://import-linter.readthedocs.io/en/stable/contract_types/"
+    }
+  },
+  {
+    "id": "sea-modularity-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team's class has methods `get_rate()`, `set_rate()`, `get_currency()`, `set_currency()`, `get_amount()`, `set_amount()`, and callers do the conversion arithmetic themselves. In Ousterhout's terms, what's wrong?",
+    "options": [
+      {
+        "text": "It's a deep module: too much functionality is hidden",
+        "explanation": "It hides almost nothing. Callers still know every field and do the work."
+      },
+      {
+        "text": "Nothing; getters and setters are the correct way to achieve information hiding",
+        "explanation": "Accessors for every field preserve the *letter* of encapsulation but leak every design decision through the interface."
+      },
+      {
+        "text": "It violates the Acyclic Dependencies Principle",
+        "explanation": "Nothing here involves a dependency cycle."
+      },
+      {
+        "text": "It's a shallow module: the interface is as big as the implementation, so it adds cost without hiding complexity",
+        "explanation": "Correct. Six accessors expose the entire internal state. A deep alternative would offer `convert(amount, to=\"EUR\")` and hide rates, rounding and caching."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Compare interface size with what's hidden:\n\n| | Interface | Hidden |\n|---|---|---|\n| Accessor class | 6 methods | nothing |\n| `convert(...)` | 1 function | rates, rounding, caching |\n\nThe deep version means that changing where rates come from, or how rounding works, touches one module instead of every caller.",
+    "link": {
+      "title": "Information hiding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Information_hiding"
+    }
+  },
+  {
+    "id": "sea-modularity-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 600,000-line Django monolith has hundreds of cross-module imports violating newly agreed boundaries. Leadership wants boundaries enforced \"starting this sprint\". What's the most effective approach?",
+    "options": [
+      {
+        "text": "Turn on strict boundary checks in CI immediately, failing every build until all violations are fixed",
+        "explanation": "That blocks all work for weeks and encourages people to disable the checks. Shopify and Packwerk use a recorded baseline precisely to avoid this."
+      },
+      {
+        "text": "Record existing violations as a baseline (an ignore or to-do list), fail CI only on new ones, and burn the baseline down over time",
+        "explanation": "Correct. This \"stops the bleeding\" right away while letting teams pay down existing violations incrementally. Packwerk's `package_todo.yml` and import-linter's `ignore_imports` both support this."
+      },
+      {
+        "text": "Split the monolith into microservices so boundaries are enforced by the network",
+        "explanation": "A network boundary is very expensive and doesn't fix tangled code; it turns in-process calls into distributed ones. Clean the module boundaries first."
+      },
+      {
+        "text": "Document the boundaries on the wiki and ask people to follow them",
+        "explanation": "Without automated checks, boundaries erode one convenient import at a time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Goal: no *new* violations from today, and fewer existing ones over time.\n2. Mechanism:\n   - Declare modules and contracts.\n   - Run the checker; write current violations to a baseline file.\n   - CI fails if a violation isn't in the baseline.\n3. Each team picks off baseline entries in normal work; the file shrinks.\n4. This is how Shopify's Packwerk works (`bin/packwerk update-todo` records existing violations; strict enforcement rejects violations even when recorded; ordinary checking can permit recorded debt while failing unrecorded violations).",
+    "link": {
+      "title": "Packwerk — Shopify on GitHub",
+      "url": "https://github.com/Shopify/packwerk"
+    }
+  },
+  {
+    "id": "sea-modularity-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You maintain a Python **web application** (not a library). Which dependency practices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Lock exact versions of all direct and transitive dependencies, with hashes",
+        "explanation": "Locks plus hash-checking constrain selected artifacts, but do not prove safety or reproduce an entire environment. Toolchain, OS dependencies and build behavior also matter."
+      },
+      {
+        "text": "Declare only loose ranges like `django>=4` and install the newest each deploy",
+        "explanation": "Every deploy could pull different transitive versions, so a working build can break without any code change. Ranges suit libraries; applications should lock."
+      },
+      {
+        "text": "Use a bot (Dependabot, Renovate) to propose small, frequent upgrades that run through CI",
+        "explanation": "Correct. Small upgrades are easy to review and bisect. Big-bang upgrades after years of drift are risky and slow."
+      },
+      {
+        "text": "Call a volatile third-party SDK through one adapter module rather than from 200 files",
+        "explanation": "An adapter can limit affected call sites, but a provider's changed semantics may still require changes to its port or callers."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Separate the two roles:\n\n- **Libraries** declare ranges so they can be installed alongside other libraries.\n- **Applications** pin everything with a lock file (`uv lock`, `poetry.lock`, `pip-compile --generate-hashes`) and upgrade deliberately.\n\nThen keep the lock fresh with automated PRs, and isolate fast-changing third-party APIs behind adapters so upgrades stay local.",
+    "link": {
+      "title": "install_requires vs requirements files — Python Packaging User Guide",
+      "url": "https://packaging.python.org/en/latest/discussions/install-requires-vs-requirements/"
+    }
+  },
+  {
+    "id": "sea-modularity-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Package A requires `protobuf<4` and package B requires `protobuf>=4`. You need both in one Python application. Why can't pip just install both versions, and what are realistic options?",
+    "options": [
+      {
+        "text": "pip can install both; Python picks the right version per importing package",
+        "explanation": "Python has one module namespace per interpreter: `import google.protobuf` resolves to exactly one installed copy."
+      },
+      {
+        "text": "Rename one copy to `protobuf3` and edit imports",
+        "explanation": "Vendoring a renamed copy is technically possible but fragile, especially for packages with C extensions and global registries; it's a last resort, not the usual answer."
+      },
+      {
+        "text": "Python environments hold one version of each distribution, so the constraints conflict; options include upgrading A, finding a compatible version range, forking/patching, or isolating one side in a separate process",
+        "explanation": "Correct. Unlike npm's nested `node_modules`, a Python environment has one copy per package. You resolve the conflict by changing a constraint, or by putting the conflicting part in its own process or service with its own environment."
+      },
+      {
+        "text": "Use `pip install --force-reinstall` for both",
+        "explanation": "Force-reinstalling just replaces one version with the other; the environment still ends up with one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In Python, `sys.modules` maps one name to one module, and site-packages holds one installed version of each distribution.\n2. A needs < 4, B needs ≥ 4: no single version satisfies both. pip's resolver reports a conflict.\n3. Options, cheapest first:\n   - Check whether newer A supports protobuf 4.\n   - Find an older B that works with protobuf 3.\n   - Patch or fork A.\n   - Run A in a separate process (worker, sidecar) with its own environment.\n4. Prevention: fewer and better-maintained dependencies, regular upgrades so you don't fall several majors behind.",
+    "link": {
+      "title": "Dependency resolution — pip documentation",
+      "url": "https://pip.pypa.io/en/stable/topics/dependency-resolution/"
+    }
+  }
+]

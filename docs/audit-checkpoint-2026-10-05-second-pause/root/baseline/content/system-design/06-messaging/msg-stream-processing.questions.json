@@ -1,0 +1,378 @@
+[
+  {
+    "id": "msg-stream-processing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need to bill API customers per **calendar hour**, with every request counted in exactly one hour. Which window type fits?",
+    "options": [
+      {
+        "text": "Session windows with a 1-hour gap",
+        "explanation": "Wrong. Session windows are bounded by inactivity, not the clock. A busy customer's session could run for days, and window boundaries would not line up with calendar hours."
+      },
+      {
+        "text": "Tumbling windows of 1 hour",
+        "explanation": "Correct. Tumbling windows are fixed-size, aligned and non-overlapping, so each request falls into exactly one hourly window."
+      },
+      {
+        "text": "Hopping windows of 1 hour advancing every 5 minutes",
+        "explanation": "Wrong. Hopping windows overlap, so each request would appear in 12 windows and be billed 12 times."
+      },
+      {
+        "text": "A global window with no trigger",
+        "explanation": "Wrong. A global window spans all time and, without a trigger, never emits a result, so you would never produce an hourly bill."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Requirements: (a) fixed 1-hour buckets aligned to the clock, (b) each event in exactly one bucket.\n2. Tumbling: size = 1 h, no overlap → (a) ✓ (b) ✓.\n3. Hopping: overlap → (b) ✗.\n4. Session: gap-based → (a) ✗.\n5. Also choose **event time** so a request made at 09:59:58 but processed at 10:00:03 is billed in the 09:00 hour.",
+    "link": {
+      "title": "Windows (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A job counts orders per minute using **processing time**. After a 20-minute outage, it restarts and works through the backlog in 2 minutes. What do the per-minute charts show?",
+    "options": [
+      {
+        "text": "Zero for the outage minutes, then a huge spike in the 2 minutes of catch-up",
+        "explanation": "Correct. Nothing was processed during the outage, so those windows are empty; then 20 minutes of orders land in the 2 processing-time minutes of catch-up. Event-time windows would put each order in the minute it occurred."
+      },
+      {
+        "text": "Accurate counts, because every order is eventually counted",
+        "explanation": "Wrong. Every order is counted, but in the wrong minute. Processing-time windows assign records by when the job read them, not when the orders happened."
+      },
+      {
+        "text": "The same chart as event time, just delayed by 20 minutes",
+        "explanation": "Wrong. Processing time does not just shift results; it compresses the 20-minute backlog into 2 minutes, which distorts the shape."
+      },
+      {
+        "text": "Missing orders, because processing-time windows drop late data",
+        "explanation": "Wrong. Processing-time windows have no notion of 'late': everything belongs to the window in which it is read. The problem is misattribution, not loss."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Orders arrive steadily at ~100/minute in event time.\n2. Outage 10:00–10:20: job reads nothing → processing-time windows 10:00–10:19 show **0**.\n3. 10:20–10:22: job reads 20 × 100 = 2,000 backlog orders plus new ones → ~1,100 per minute in each catch-up window.\n4. With event time: each order carries its timestamp, so 10:07's orders go into the 10:07 window when processed. The chart shows a flat ~100/minute.\n5. This is why event time is the default for anything business-facing.",
+    "link": {
+      "title": "Timely stream processing (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Flink job uses 1-minute tumbling event-time windows with `forBoundedOutOfOrderness(10 s)` on a single source. The largest event time seen so far is **10:05:07**. An event with timestamp **10:04:58** now arrives. What happens?",
+    "options": [
+      {
+        "text": "It is late and dropped, because 10:04:58 is before the latest event",
+        "explanation": "Wrong. Being older than the latest event is normal out-of-orderness. An event is only late if its timestamp is at or before the watermark, and the watermark is 10:04:57."
+      },
+      {
+        "text": "It is added to the 10:05–10:06 window",
+        "explanation": "Wrong. Event-time windows assign records by their own timestamp. 10:04:58 belongs to 10:04–10:05, whenever it arrives."
+      },
+      {
+        "text": "It is added to the 10:04–10:05 window, which has not fired yet",
+        "explanation": "Correct. Watermark = 10:05:07 − 10 s = 10:04:57. The 10:04–10:05 window fires only when the watermark reaches its end, 10:05:00, so it is still open and the event is included."
+      },
+      {
+        "text": "The 10:04–10:05 window has fired, so the event creates a duplicate window",
+        "explanation": "Wrong. The window has not fired: the watermark (10:04:57) is still below the window end (10:05:00)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Watermark** = max event time − bound = 10:05:07 − 0:00:10 = **10:04:57**.\n2. **Target window** for 10:04:58 = [10:04:00, 10:05:00).\n3. **Has it fired?** It fires when watermark ≥ 10:05:00 (strictly, ≥ 10:04:59.999). 10:04:57 < 10:05:00 → not yet.\n4. **Is the event late?** Late means timestamp ≤ watermark. 10:04:58 > 10:04:57 → on time.\n5. So it joins the open window. The window will fire once an event at 10:05:10 or later has been seen.",
+    "link": {
+      "title": "Timely stream processing (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Flink job reads a 12-partition Kafka topic and emits per-minute event-time aggregates. After a producer change, partition 11 stops receiving data. Soon **no windows fire at all**, although 11 partitions still have plenty of traffic. Why, and what fixes it?",
+    "options": [
+      {
+        "text": "The operator's watermark is the minimum across its inputs, and the idle partition's watermark is stuck; configure idleness detection (withIdleness) so idle inputs are excluded",
+        "explanation": "Correct. Watermarks combine by taking the minimum. Partition 11 has no new events, so its watermark never advances and holds the overall watermark back. Marking it idle after, say, 1 minute lets the watermark follow the active partitions."
+      },
+      {
+        "text": "Flink crashed on partition 11; restart the job",
+        "explanation": "Wrong. The job is running and consuming; restarting would not change the watermark logic, so windows would stall again immediately."
+      },
+      {
+        "text": "Increase the out-of-orderness bound so windows close sooner",
+        "explanation": "Wrong. A larger bound delays windows further. And no bound helps when one input's watermark is not moving at all."
+      },
+      {
+        "text": "Switch to processing-time windows permanently",
+        "explanation": "Wrong. That would make windows fire, but it gives up correct, reproducible event-time results, which is a big price for an idle partition that idleness detection handles."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\npartition wm:  P0 10:31  P1 10:31\n               ...       P11 09:58\noperator wm = min(...) = 09:58\n```\n\n1. Each source split (partition) generates its own watermark from the events it sees.\n2. Downstream operators take the **minimum**, because they can only claim completeness up to the least advanced input.\n3. P11's last event put its watermark at 09:58, and with no new events it never advances.\n4. Windows ending after 09:58 never fire.\n5. Fix: `WatermarkStrategy...withIdleness(Duration.ofMinutes(1))`. After a minute without events, P11 is marked idle and excluded from the minimum until data returns.\n6. Alerting idea: monitor the watermark lag (`currentInputWatermark` vs wall clock) per operator.",
+    "link": {
+      "title": "Timely stream processing (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A product team uses **session windows with a 30-minute gap** per user. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A session can last much longer than 30 minutes if the user keeps acting",
+        "explanation": "Correct. The gap bounds inactivity, not duration. A user active every 10 minutes for 4 hours forms one 4-hour session."
+      },
+      {
+        "text": "All users' sessions start and end at the same clock times",
+        "explanation": "Wrong. Session windows are per key and data-driven; each user's sessions have their own boundaries, unlike aligned tumbling windows."
+      },
+      {
+        "text": "A late event can merge two previously separate sessions into one",
+        "explanation": "Correct. If events at 10:00 and 10:40 formed two sessions, a late event at 10:20 falls within 30 minutes of both and bridges them, so the processor merges the windows and their state."
+      },
+      {
+        "text": "A session result is emitted only once the watermark passes the last event time plus the gap",
+        "explanation": "Correct. In event time, a session is complete when no event can extend it: watermark ≥ last event + 30 minutes. That is when it fires (subject to allowed lateness)."
+      },
+      {
+        "text": "Each event belongs to several overlapping sessions for the same user",
+        "explanation": "Wrong. For one key, sessions do not overlap; overlapping candidates are merged. Overlap within a key is a property of hopping windows."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Model one user's events: 10:00, 10:10, 10:35, then 11:30.\n\n1. 10:00 → 10:10 (gap 10 m) → 10:35 (gap 25 m): all within 30 minutes, so they form **session A**, spanning 10:00–10:35.\n2. 11:30 is 55 minutes after 10:35 → a new **session B**.\n3. Session A fires when the watermark passes 10:35 + 30 m = **11:05**, because only then can no event extend it.\n4. Now suppose the events were 10:00 and 10:40 (two sessions, since the gap is 40 m) and a late 10:20 arrives. It is within 30 minutes of both → the sessions **merge** into one.\n5. Different users' sessions are entirely independent, so their boundaries never line up.",
+    "link": {
+      "title": "Windows (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You compute \"distinct users in the last hour, updated every 5 minutes\" using hopping windows of size 60 minutes and slide 5 minutes. Compared with a 60-minute tumbling window, roughly how much window state does this hold?",
+    "options": [
+      {
+        "text": "The same, because the window size is the same",
+        "explanation": "Wrong. With overlap, many windows are open at once and each holds its own state for the same events."
+      },
+      {
+        "text": "About 5 times as much, because of the 5-minute slide",
+        "explanation": "Wrong. The multiplier is size ÷ slide, not the slide itself. 60 ÷ 5 = 12."
+      },
+      {
+        "text": "About 12 times as much, because each event belongs to 60 ÷ 5 = 12 windows",
+        "explanation": "Correct. At any moment 12 overlapping windows are open, and each event is added to all 12. Naive implementations store 12 copies of state; smarter ones use panes or pre-aggregation to share work."
+      },
+      {
+        "text": "About one-twelfth as much, because each window is updated more often",
+        "explanation": "Wrong. Update frequency does not shrink state. More frequent, overlapping windows mean more concurrent state, not less."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Windows open at 10:00, 10:05, 10:10, …, each lasting 60 minutes.\n2. An event at 10:32 belongs to windows starting 09:35, 09:40, …, 10:30: that is **12** windows.\n3. Multiplier = size ÷ slide = 60 ÷ 5 = **12**.\n4. For distinct users, each window keeps a set (or a HyperLogLog sketch). 12 exact sets of 2 million user IDs at 8 bytes each ≈ 12 × 16 MB = 192 MB per key group; 12 HLL sketches at ~12 KB each are trivial.\n5. Optimisations: compute per 5-minute **panes** (tumbling) and merge 12 panes on output; or use sketches that merge cheaply.",
+    "link": {
+      "title": "Windows (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka Streams service holds a 40 GB RocksDB state store. When an instance dies, the partition moves to another instance, and processing for those keys stalls for **12 minutes** while state is restored. What is the most direct fix?",
+    "options": [
+      {
+        "text": "Disable the changelog topic so there is nothing to restore",
+        "explanation": "Wrong. Without the changelog the state is lost on failure, so restarted tasks would produce wrong results. The changelog is what makes the state fault-tolerant."
+      },
+      {
+        "text": "Increase the topic's retention.ms",
+        "explanation": "Wrong. Changelog topics are compacted, and input retention does not affect how quickly a new instance rebuilds the store."
+      },
+      {
+        "text": "Switch processing.guarantee to at_least_once",
+        "explanation": "Wrong. The guarantee affects transactions and duplicates, not how much state must be rebuilt. Restoration would still take 12 minutes."
+      },
+      {
+        "text": "Configure num.standby.replicas ≥ 1 so another instance keeps a warm copy of the store",
+        "explanation": "Correct. Standby replicas continuously apply the changelog on another instance. On failover, the task moves to an instance that is already (nearly) up to date and resumes in seconds instead of replaying 40 GB."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Restore rate: 40 GB in 12 minutes ≈ 55 MB/s, limited by fetching and writing to RocksDB.\n2. Without standbys, the new owner starts from empty (or a stale local copy) and replays the compacted changelog.\n3. With `num.standby.replicas=1`, a second instance has been applying the changelog all along. Its lag is seconds.\n4. On failover, the assignor prefers the instance with the standby → it catches up on a few seconds of changelog and resumes.\n5. Cost: double the state storage and some extra network to replicate the changelog.\n\n(Flink's equivalent concern is checkpoint restore time; local recovery and incremental checkpoints address it.)",
+    "link": {
+      "title": "Kafka Streams documentation",
+      "url": "https://kafka.apache.org/documentation/streams/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Flink job uses allowed lateness of 5 minutes on 1-minute event-time windows, so a late event re-fires its window with an **updated** count. The sink **appends** every result to a warehouse table, and analysts see revenue slightly higher than the true total. What is the fix?",
+    "options": [
+      {
+        "text": "Remove allowed lateness so late events are dropped",
+        "explanation": "Wrong. This stops duplicate rows, but at the cost of undercounting: the late events' revenue would be lost. It trades one inaccuracy for another."
+      },
+      {
+        "text": "Make the sink upsert by (window start, key) so each re-firing replaces the earlier result",
+        "explanation": "Correct. With accumulating updates, each firing is the complete current value for that window. Appending adds the early and the updated values together; upserting keeps only the latest, which is correct."
+      },
+      {
+        "text": "Increase the watermark bound to 5 minutes and keep appending",
+        "explanation": "Wrong. A bigger bound reduces late updates but never eliminates them, and it adds 5 minutes of latency to every result. Any remaining late update still double-counts with an append sink."
+      },
+      {
+        "text": "Deduplicate events at the source",
+        "explanation": "Wrong. The events are not duplicated; the window's result is emitted more than once by design. Dedup at the source does nothing about multiple firings."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Window 10:00–10:01 fires at watermark 10:01 with revenue **£900**. Sink appends row A.\n2. A late £100 order arrives at 10:03 (within allowed lateness). The window re-fires with **£1,000** (accumulating mode). Sink appends row B.\n3. Analysts `SUM` → £1,900 instead of £1,000: overcount.\n4. Fix: `MERGE`/upsert keyed by `(window_start, key)`. Row A is replaced by row B → £1,000. ✓\n5. Alternative: emit **deltas** (+£100, a retraction style) and append, but that requires consistent delta semantics end to end. The Dataflow model calls this choice 'how do refinements relate': discarding, accumulating, or accumulating and retracting.",
+    "link": {
+      "title": "The Dataflow Model (Google Research)",
+      "url": "https://research.google/pubs/the-dataflow-model-a-practical-approach-to-balancing-correctness-latency-and-cost-in-massive-scale-unbounded-out-of-order-data-processing/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q9",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A job enriches **50,000 orders per second** with the customer's loyalty tier by calling the customer service's API for each order (about 20 ms per call). Throughput collapses and the customer service struggles. What is the standard stream-processing fix?",
+    "options": [
+      {
+        "text": "Increase the job's thread pool so more API calls run in parallel",
+        "explanation": "Wrong. Even if the job could hold about 1,000 calls in flight (50,000/s × 20 ms), the customer service now takes 50,000 requests per second, and the job's speed is tied to its availability."
+      },
+      {
+        "text": "Materialise customers as a table from a changelog or CDC topic and do a local stream–table join",
+        "explanation": "Correct. The customer data is streamed into the processor's own state (a KTable in Kafka Streams, keyed state in Flink), so each lookup is a local read, with no remote call per event."
+      },
+      {
+        "text": "Cache API responses in the job for 24 hours",
+        "explanation": "Wrong. A cache reduces calls, but tier changes are missed for up to a day, and a cold start or many unique customers still floods the API. Streaming the table keeps it both local and fresh."
+      },
+      {
+        "text": "Use a 30-minute windowed stream–stream join between orders and API responses",
+        "explanation": "Wrong. Stream–stream joins match two event streams within a time window. The customer record is reference data, so it belongs on the table side of a stream–table join."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Calls needed: 50,000 per second against a 20 ms dependency. By Little's Law that is 50,000 × 0.02 = **1,000** requests in flight at all times.\n2. The job is now coupled to the customer service's latency and availability.\n3. Stream–table join:\n   - The customer service (or CDC from its database) publishes changes to a compacted `customers` topic.\n   - The processor materialises it into local state, keyed by `customerId`.\n   - Orders, keyed by `customerId`, look up the tier locally in microseconds.\n4. Co-partitioning: both topics must be keyed the same way (and, in Kafka Streams, have the same partition count) so each task holds the customers its orders need.",
+    "link": {
+      "title": "Kafka Streams documentation",
+      "url": "https://kafka.apache.org/documentation/streams/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A Flink job reads Kafka, aggregates per key, and writes results to another Kafka topic. You need **end-to-end exactly-once** results. Which of these are required? Select all that apply.",
+    "options": [
+      {
+        "text": "A transactional sink, such as Flink's Kafka sink in exactly-once mode, which commits its writes when a checkpoint completes",
+        "explanation": "Correct. Without it, output written after the last checkpoint is emitted again when the job restores and replays, producing duplicates downstream."
+      },
+      {
+        "text": "Processing-time windows",
+        "explanation": "Wrong. The time domain is about what results mean, not about fault tolerance. Event-time windows work with exactly-once just as well."
+      },
+      {
+        "text": "Checkpointing enabled, with a replayable source whose offsets are stored in the checkpoint",
+        "explanation": "Correct. Restoring state and rewinding the source to the matching offsets is what makes each input affect state exactly once."
+      },
+      {
+        "text": "Downstream consumers reading with `isolation.level=read_committed`",
+        "explanation": "Correct. Flink's transactional Kafka writes are visible to read_uncommitted readers before commit, including data from transactions later aborted. Readers must wait for committed data."
+      },
+      {
+        "text": "Committing Kafka consumer-group offsets after every record",
+        "explanation": "Wrong. Flink's correctness comes from offsets stored in its checkpoints, not from the consumer group's committed offsets, which it commits only for monitoring. Per-record commits would just add load."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Follow a record through failure and recovery:\n\n1. **Source**: offsets live in the checkpoint → on restore, rewind exactly to the matching position. ✓ required.\n2. **State**: restored from the same checkpoint → consistent with the offsets. ✓ (comes with checkpointing).\n3. **Sink**: output since the last checkpoint must not be visible yet → a transaction committed on checkpoint completion (two-phase commit). ✓ required.\n4. **Readers**: must ignore uncommitted or aborted transactions → `read_committed`. ✓ required.\n5. Window type and group-offset commits are irrelevant to the guarantee.\n\nCost: results become visible only at each checkpoint, so latency is at least the checkpoint interval.",
+    "link": {
+      "title": "Apache Kafka connector (Apache Flink docs)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/connectors/datastream/kafka/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Card payment events: 99% arrive within 5 seconds of their event time, but about 0.5% come from offline terminals up to **10 minutes** late. A live dashboard needs per-minute totals within about 10 seconds, and finance needs the final per-minute totals to be exact. What configuration fits both?",
+    "options": [
+      {
+        "text": "A 10-minute out-of-orderness bound, so no events are late",
+        "explanation": "Wrong. Every window would then fire about 10 minutes after it ends, far too slow for a dashboard that needs results within seconds."
+      },
+      {
+        "text": "A 5-second bound, dropping late events",
+        "explanation": "Wrong. The dashboard is fast, but the 0.5% of offline payments would be missing from finance's totals for good."
+      },
+      {
+        "text": "A 5-second bound with 10 minutes of allowed lateness, emitting updated results to an upsert sink keyed by window and key",
+        "explanation": "Correct. Windows fire quickly for the dashboard, then re-fire when late events arrive, and the upsert sink replaces each window's row with its latest total. Finance reads the converged figures once the lateness period has passed."
+      },
+      {
+        "text": "Processing-time windows, which never have late data",
+        "explanation": "Wrong. There is no late data only because events are counted in whichever minute they are read. Offline payments would land in the wrong minute, so finance's totals would be wrong."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Watermark bound** sets when a window first fires: window end + 5 s → dashboard latency ✓.\n2. **Allowed lateness** (10 min) keeps window state so late events produce **updated** results.\n3. **Sink** must upsert by `(window_start, key)`; an append sink would add every re-fired total on top of the earlier ones and double-count.\n4. **Finance** reads a window once it is more than 10 minutes old, when it can no longer change.\n5. Alternative: route late events to a **side output** and have a correction job adjust finance's figures. Fine, but more moving parts.\n\nCost check: allowed lateness keeps each window's state 10 minutes longer, so state grows by roughly 10 windows per key.",
+    "link": {
+      "title": "Timely stream processing: event time and watermarks (Apache Flink docs)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A job converts EUR payments to GBP with a regular stream–table join against `fx-rates`, a compacted topic holding the latest rate per currency. After fixing a bug, the team reprocesses last month's payments, and **every** converted amount differs from the original output. Why, and what is the right fix?",
+    "options": [
+      {
+        "text": "The watermark bound was too small, so payments were dropped",
+        "explanation": "Wrong. Dropped payments would cause missing rows, not different amounts on every row."
+      },
+      {
+        "text": "Compaction deleted some payments from the input topic",
+        "explanation": "Wrong. Compaction applies to `fx-rates`, keeping the latest rate per currency. The payments topic is unaffected, and the symptom is changed amounts, not missing payments."
+      },
+      {
+        "text": "Parallel processing is non-deterministic",
+        "explanation": "Wrong. The per-key computation is deterministic. The difference comes from what the table contained at lookup time."
+      },
+      {
+        "text": "A regular join uses the table's current value, so the replay used today's rates; use a temporal join against a versioned table to get the rate as of each payment's event time",
+        "explanation": "Correct. A regular stream–table join looks up whatever value the table holds when the event is processed. On replay that is the latest rate. A temporal join looks up the version valid at the event's timestamp, so results are reproducible."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Original run (live): payment at 10:00 on 3 March joined with the rate current at **10:00 on 3 March**.\n2. Replay (today): the compacted table holds only **today's** rate, so the same payment gets a different rate.\n3. Lesson rule: results that must mean something real, and be reproducible on replay, need **event time**, and that applies to joins too.\n4. Temporal join (Flink SQL):\n\n```sql\nSELECT p.id, p.eur * r.rate\nFROM payments AS p\nJOIN fx FOR SYSTEM_TIME AS OF\n  p.ts AS r\n  ON p.cur = r.cur;\n```\n\n5. The rates stream must keep **history** (not just compacted latest values), so the versioned table can answer \"what was the rate at time t?\".",
+    "link": {
+      "title": "Joins (Apache Flink SQL docs)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/sql/queries/joins/"
+    }
+  }
+]

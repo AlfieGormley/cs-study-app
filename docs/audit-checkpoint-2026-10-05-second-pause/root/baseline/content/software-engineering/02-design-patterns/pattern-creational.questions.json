@@ -1,0 +1,340 @@
+[
+  {
+    "id": "pattern-creational-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport copy\nbase = {\"tags\": [\"a\"]}\nc = copy.copy(base)\nc[\"tags\"].append(\"b\")\nprint(base[\"tags\"])\n```",
+    "options": [
+      {
+        "text": "`['a']`",
+        "explanation": "That would be true for `copy.deepcopy`. A shallow copy creates a new outer dict but both dicts point at the same inner list."
+      },
+      {
+        "text": "`['a', 'b']`",
+        "explanation": "Correct. `copy.copy` copies only the top level. `c[\"tags\"]` and `base[\"tags\"]` are the same list object, so appending through one is visible through the other."
+      },
+      {
+        "text": "`['b']`",
+        "explanation": "`append` adds to the end of the existing list; it doesn't replace its contents."
+      },
+      {
+        "text": "A `TypeError`, because dicts can't be copied",
+        "explanation": "Dicts can be copied with `copy.copy`, `dict.copy()` or `dict(base)`. All three are shallow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Draw the references:\n\n```\nbase --> {tags: ---+\n                   |\nc    --> {tags: ---+--> ['a']\n```\n\n1. `copy.copy` makes a **new** outer dict `c`.\n2. Its values are the **same** objects as in `base`.\n3. `c[\"tags\"].append(\"b\")` mutates the shared list.\n4. `base[\"tags\"]` is that list: `['a', 'b']`.\n\nThe prototype pattern in Python is the `copy` module, and this shared-nested-state trap is its main pitfall.",
+    "link": {
+      "title": "copy — Shallow and deep copy operations — Python docs",
+      "url": "https://docs.python.org/3/library/copy.html"
+    }
+  },
+  {
+    "id": "pattern-creational-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the most idiomatic way to get a single shared configuration object in Python?",
+    "options": [
+      {
+        "text": "Override `__new__` so the class always returns the same instance",
+        "explanation": "This works, but it is more machinery than needed and still surprises readers (`Config()` looks like it makes a new object)."
+      },
+      {
+        "text": "Use a metaclass that caches instances",
+        "explanation": "Metaclass singletons work but are the heaviest option, and they make the class harder to subclass and test. Python has a simpler built-in mechanism."
+      },
+      {
+        "text": "Create the instance at module level and import it",
+        "explanation": "Correct. Modules are imported once and cached in `sys.modules`, so every importer gets the same object. Better still, create it once at start-up and pass it to whatever needs it."
+      },
+      {
+        "text": "Store it in an environment variable",
+        "explanation": "Environment variables hold strings, not objects. You might *read* configuration from them, but that doesn't give you a shared Python object."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The singleton problem: one instance, shared access.\n2. Python already guarantees one copy of each **module**: the first `import settings` runs the file; later imports reuse `sys.modules['settings']`.\n3. So `settings = _Settings()` at module level is created once.\n4. `from settings import settings` anywhere returns that same object.\n5. No `__new__` tricks, no metaclass. This is why many say Python doesn't need the GoF singleton.",
+    "link": {
+      "title": "The Global Object pattern — Python Design Patterns guide",
+      "url": "https://python-patterns.guide/python/module-globals/"
+    }
+  },
+  {
+    "id": "pattern-creational-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`collections.defaultdict(list)` calls `list()` to create a value whenever a missing key is accessed. Which creational idea is this?",
+    "options": [
+      {
+        "text": "Passing a factory callable, the lightweight Python form of factory method",
+        "explanation": "Correct. `defaultdict` knows *when* it needs a new value but not *what* kind; the caller supplies the factory. Any zero-argument callable works: `int`, `set`, `lambda: 0`."
+      },
+      {
+        "text": "Singleton, because each key gets one list",
+        "explanation": "Each missing key gets a *new* list, so there are many instances. Singleton is about there being exactly one."
+      },
+      {
+        "text": "Prototype, because the list is copied from a template",
+        "explanation": "Nothing is copied. `list()` builds a fresh, empty list each time."
+      },
+      {
+        "text": "Builder, because the list is built step by step",
+        "explanation": "You might append to the list later, but the pattern at work in `defaultdict` is choosing what to create, not assembling it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```python\nfrom collections import defaultdict\nd = defaultdict(list)\nd[\"x\"].append(1)\nd[\"y\"].append(2)\nprint(d[\"x\"] is d[\"y\"])  # False\n```\n\n1. `defaultdict` has a fixed algorithm: on a missing key, create a value and store it.\n2. The *kind* of value is deferred to the `default_factory` you pass.\n3. That's factory method's intent (defer which class to instantiate), achieved by passing a callable instead of subclassing.",
+    "link": {
+      "title": "The Factory Method pattern in Python — Python Design Patterns guide",
+      "url": "https://python-patterns.guide/gang-of-four/factory-method/"
+    }
+  },
+  {
+    "id": "pattern-creational-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A UI toolkit supports a dark and a light theme. Each theme has a button, a text field and a scrollbar, and mixing parts from different themes looks broken. Which pattern fits best?",
+    "options": [
+      {
+        "text": "Builder",
+        "explanation": "Builder helps assemble one complex object step by step. The problem here is guaranteeing that several separate objects come from the same family."
+      },
+      {
+        "text": "Prototype",
+        "explanation": "Prototype clones configured examples. It doesn't by itself stop a client mixing a dark button with a light scrollbar."
+      },
+      {
+        "text": "Abstract factory",
+        "explanation": "Correct. One factory per theme creates every part, and the client only holds one factory at a time, so it can't mix families."
+      },
+      {
+        "text": "Singleton",
+        "explanation": "Singleton limits a class to one instance. You need many buttons and scrollbars; what matters is that they match."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Identify the forces: several kinds of part (button, field, scrollbar) and several families (dark, light) that must not be mixed.\n2. Abstract factory gives one object per family:\n\n```\ntheme = DarkTheme()\ntheme.button()\ntheme.field()\ntheme.scrollbar()\n```\n\n3. Switching theme means swapping one object.\n4. The cost: adding a new *kind* of part (a slider) means editing every theme class.",
+    "link": {
+      "title": "Abstract factory pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Abstract_factory_pattern"
+    }
+  },
+  {
+    "id": "pattern-creational-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Java colleague suggests a `UserBuilder` for a Python class with five optional fields and no validation between them. What's the best response?",
+    "options": [
+      {
+        "text": "Agree: builders are the standard fix for many optional parameters in every language",
+        "explanation": "Builders exist in Java largely because Java lacks keyword arguments and default values. Python has both, which removes that motivation."
+      },
+      {
+        "text": "Use a singleton so there's only one user object to configure",
+        "explanation": "There are many users, so singleton is the wrong tool, and it wouldn't help with optional parameters."
+      },
+      {
+        "text": "Use positional arguments with `None` for unused fields",
+        "explanation": "`User(\"Ann\", None, None, True, None)` is the telescoping-constructor problem builders were invented to fix. It's the worst option."
+      },
+      {
+        "text": "Use a `dataclass` or `__init__` with keyword arguments and defaults instead",
+        "explanation": "Correct. `User(name=\"Ann\", email=..., admin=False)` is as readable as a builder, with no extra class. Reserve builders for incremental construction or validation at the end."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Why do Java builders exist? Java has no named or default arguments, so `new User(\"Ann\", null, null, true)` is unreadable.\n2. Python has both:\n\n```python\n@dataclass\nclass User:\n    name: str\n    email: str = \"\"\n    admin: bool = False\n\nUser(name=\"Ann\", admin=True)\n```\n\n3. Readable, no extra class, and type checkers understand it.\n4. A builder only adds value if fields must be set in stages or validated together at the end.",
+    "link": {
+      "title": "The Builder pattern in Python — Python Design Patterns guide",
+      "url": "https://python-patterns.guide/gang-of-four/builder/"
+    }
+  },
+  {
+    "id": "pattern-creational-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `QueryBuilder`, what does this print?\n\n```python\nq = (QueryBuilder(\"orders\")\n     .limit(5)\n     .where(\"paid\")\n     .build())\nprint(q)\n```",
+    "options": [
+      {
+        "text": "`SELECT * FROM orders LIMIT 5 WHERE paid`",
+        "explanation": "The builder records settings and assembles the SQL in `build()` in a fixed order, so call order doesn't decide clause order."
+      },
+      {
+        "text": "`SELECT * FROM orders WHERE paid LIMIT 5`",
+        "explanation": "Correct. `where` and `limit` only store values and return `self`. `build()` always emits WHERE before LIMIT, whatever order the calls came in."
+      },
+      {
+        "text": "`SELECT * FROM orders WHERE paid`",
+        "explanation": "`limit(5)` sets `limit_n = 5`, which isn't `None`, so `build()` adds the LIMIT clause."
+      },
+      {
+        "text": "An `AttributeError`, because `limit` returns `None`",
+        "explanation": "Both `where` and `limit` end with `return self`, which is what makes the chained calls work."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `QueryBuilder(\"orders\")`: table set, no conditions, no limit.\n2. `.limit(5)`: stores `limit_n = 5`, returns the builder.\n3. `.where(\"paid\")`: appends `\"paid\"`, returns the builder.\n4. `.build()` assembles in its own order:\n\n```\nSELECT * FROM orders\n+ WHERE paid\n+ LIMIT 5\n```\n\nThis is a real benefit of builders: the final step can enforce ordering and validation that callers would otherwise get wrong.",
+    "link": {
+      "title": "Builder pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Builder_pattern"
+    }
+  },
+  {
+    "id": "pattern-creational-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A service calls `Database.instance()` (a classic singleton) from deep inside its business logic. Which problems does this cause? Select all that apply.",
+    "options": [
+      {
+        "text": "Tests can share state through the singleton and affect each other",
+        "explanation": "Correct. One test's writes or configuration changes persist into the next unless every test remembers to reset the instance."
+      },
+      {
+        "text": "The function's signature hides that it depends on a database",
+        "explanation": "Correct. Callers can't see the dependency, and can't pass a fake without patching globals."
+      },
+      {
+        "text": "Supporting a second database (a read replica, a second tenant) becomes hard",
+        "explanation": "Correct. 'There's only one' is baked into every call site. When that stops being true, every call needs changing."
+      },
+      {
+        "text": "Python can't import the module more than once, so it will crash",
+        "explanation": "Incorrect. Importing again just reuses the cached module; nothing crashes. Being cached is what makes module-level singletons work."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Compare the two shapes:\n\n```python\n# hidden dependency\ndef close_order(id):\n    db = Database.instance()\n    ...\n\n# explicit dependency\ndef close_order(id, db):\n    ...\n```\n\n1. **Testing:** the second version takes a fake `db`; the first needs patching and reset.\n2. **Visibility:** the second says what it needs.\n3. **Multiplicity:** the second works with any number of databases.\n4. Imports are cached, so there's no crash. The problems are design problems, not runtime errors.",
+    "link": {
+      "title": "Singleton pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Singleton_pattern"
+    }
+  },
+  {
+    "id": "pattern-creational-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Django `ListView` subclass overrides `get_queryset()` to return only the current user's orders. The base class's `get()` method calls `self.get_queryset()`. Which pattern is this?",
+    "options": [
+      {
+        "text": "Factory method",
+        "explanation": "Correct. The base class defines when the object is needed and calls an overridable method to create it; the subclass decides what is created."
+      },
+      {
+        "text": "Abstract factory",
+        "explanation": "Abstract factory is a separate object that creates a family of related products. Here one method on the class itself creates one product."
+      },
+      {
+        "text": "Prototype",
+        "explanation": "Nothing is being cloned. A new queryset is built by the subclass's method."
+      },
+      {
+        "text": "Builder",
+        "explanation": "QuerySets are built by chaining, but the pattern in question is the overridable hook that decides which object the framework works with."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```python\nclass MyOrders(ListView):\n    def get_queryset(self):\n        u = self.request.user\n        return Order.objects.filter(\n            owner=u)\n```\n\n1. The framework's `get()` is fixed: fetch objects, paginate, render.\n2. The *which objects* step is a method call on `self`.\n3. The subclass overrides that one method.\n4. A base-class algorithm deferring object creation to a subclass method is the GoF factory method.",
+    "link": {
+      "title": "Built-in class-based views API — Django docs",
+      "url": "https://docs.djangoproject.com/en/stable/ref/class-based-views/base/"
+    }
+  },
+  {
+    "id": "pattern-creational-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You keep a prototype `Session` object with default headers and an open connection pool, and create per-request sessions with `copy.deepcopy(prototype)`. What is the most likely problem?",
+    "options": [
+      {
+        "text": "Nothing: deep copy duplicates everything correctly",
+        "explanation": "Deep copy recursively copies Python objects, but OS resources such as sockets and locks can't be meaningfully duplicated."
+      },
+      {
+        "text": "The copies will share the same headers dict",
+        "explanation": "That's the shallow-copy problem. `deepcopy` copies the nested dict too."
+      },
+      {
+        "text": "`deepcopy` is only defined for built-in types",
+        "explanation": "`deepcopy` works on arbitrary objects, and classes can customise it with `__deepcopy__`. The problem is specifically resources that can't be duplicated."
+      },
+      {
+        "text": "Deep-copying the pool's sockets or locks will raise an error or produce broken objects",
+        "explanation": "Correct. Sockets, locks and file handles can't be pickled or copied, so `deepcopy` typically raises `TypeError`. Copy only the configuration, and share or recreate the resources."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `deepcopy` walks every reachable attribute and copies it, falling back on the pickle protocol (`__reduce_ex__`) for objects it doesn't know.\n2. `threading.Lock`, sockets and similar objects refuse to be pickled, so you get `TypeError: cannot pickle '_thread.lock' object` or similar.\n3. Even if it worked, two pools sharing one OS socket would be broken.\n4. Fix: make the prototype hold only plain configuration, or implement `__deepcopy__` to copy settings and share or recreate the pool.",
+    "link": {
+      "title": "copy — Shallow and deep copy operations — Python docs",
+      "url": "https://docs.python.org/3/library/copy.html"
+    }
+  },
+  {
+    "id": "pattern-creational-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your abstract factory has `button()`, `menu()` and `text()` for 4 themes. Product asks for a `slider()` in every theme. How many classes must change, and what does this say about the pattern?",
+    "options": [
+      {
+        "text": "1: only the base factory interface",
+        "explanation": "Adding a method to the interface is only the start: every concrete factory must implement it, or clients will fail when they call `slider()`."
+      },
+      {
+        "text": "5: the interface plus all 4 concrete factories; abstract factory makes new families cheap but new kinds of product expensive",
+        "explanation": "Correct. Adding a fifth theme is one new class; adding a new product kind touches every factory. That asymmetry is the pattern's main consequence."
+      },
+      {
+        "text": "4: one per theme, and adding a theme would cost the same",
+        "explanation": "Adding a theme is one class. Adding a product kind is one method in every class. Those costs differ, which is the point."
+      },
+      {
+        "text": "0: Python's duck typing adds the method automatically",
+        "explanation": "Duck typing means you don't need a shared base class, but someone still has to write `slider()` for every theme."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Think of a grid:\n\n```\n        button menu text slider\nDark      x     x    x    ?\nLight     x     x    x    ?\nMono      x     x    x    ?\nHigh-con  x     x    x    ?\n```\n\n1. A new **row** (theme) = one new class. Cheap.\n2. A new **column** (product) = a method in every row, plus the interface: 4 + 1 = **5**.\n3. Choose abstract factory when families change more often than the set of products.",
+    "link": {
+      "title": "Abstract factory pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Abstract_factory_pattern"
+    }
+  },
+  {
+    "id": "pattern-creational-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these correctly match a real library to the creational pattern it uses? Select all that apply.",
+    "options": [
+      {
+        "text": "SQLAlchemy's `select(User).where(...).order_by(...)`: builder",
+        "explanation": "Correct. Each call returns a new statement with one more clause, and the SQL is compiled at the end. The immutable steps mean partial queries can be reused safely."
+      },
+      {
+        "text": "`logging.getLogger(\"app\")`: returns the same object for the same name, a singleton-style registry",
+        "explanation": "Correct. Loggers are cached by name in the logging manager, so every module asking for `\"app\"` shares one logger."
+      },
+      {
+        "text": "`copy.deepcopy()` with `__deepcopy__`: prototype",
+        "explanation": "Correct. Creating a new object by cloning an existing one, with a hook for classes to control how, is the prototype pattern."
+      },
+      {
+        "text": "Java's `BufferedInputStream(new FileInputStream(f))`: abstract factory",
+        "explanation": "Incorrect. Wrapping a stream to add buffering behind the same interface is the decorator pattern, a structural pattern."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Match each by intent:\n\n1. **SQLAlchemy select:** assembling a complex object step by step → builder.\n2. **getLogger:** one shared instance per key → singleton-like registry (sometimes called a multiton).\n3. **deepcopy:** new object from an existing one → prototype.\n4. **BufferedInputStream:** same interface, added behaviour, wrapping an inner object → decorator, not creational at all.",
+    "link": {
+      "title": "logging — Python docs",
+      "url": "https://docs.python.org/3/library/logging.html"
+    }
+  }
+]

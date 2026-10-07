@@ -1,0 +1,378 @@
+[
+  {
+    "id": "dist-consensus-raft-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A **5-node** Raft cluster loses 2 nodes (crashed). What happens?",
+    "options": [
+      {
+        "text": "It keeps committing writes: the 3 survivors are a majority and can elect a leader if needed.",
+        "explanation": "Correct. Majority of 5 is 3. If the leader was among the crashed nodes, the survivors time out, elect a new one, and continue."
+      },
+      {
+        "text": "The cluster stops accepting writes until all 5 are back.",
+        "explanation": "Wrong. Raft needs a majority, not all nodes. 3 of 5 is a majority, so it keeps working."
+      },
+      {
+        "text": "It splits into two clusters that both accept writes.",
+        "explanation": "Wrong. Crashed nodes don't form a cluster, and even in a partition only the side with a majority can elect a leader and commit."
+      },
+      {
+        "text": "It continues, but in read-only mode.",
+        "explanation": "Wrong. Raft has no automatic read-only mode; with a majority available, writes commit normally."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Majority of N = 5 is ⌊5/2⌋ + 1 = **3**.\n2. Live nodes = 5 − 2 = 3 ≥ 3. ✓\n3. If the leader crashed: followers' election timeouts fire, one becomes candidate in term t+1, gets votes from itself + 2 others = 3, wins.\n4. Writes commit once on 3 nodes, i.e. all survivors. Lose one more and it stalls (2 < 3).",
+    "link": {
+      "title": "Raft paper",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 5-node cluster partitions: the leader n1 (term 3) and n2 on one side; n3, n4, n5 on the other. A client sends a write to n1. What happens to it, and what happens when the partition heals?",
+    "options": [
+      {
+        "text": "n1 commits it with n2; on healing, the logs are merged.",
+        "explanation": "Wrong. 2 of 5 is not a majority, so n1 can't commit. Raft never merges divergent logs; the leader's log overwrites conflicts."
+      },
+      {
+        "text": "n1 immediately steps down because it can't see a majority.",
+        "explanation": "Wrong. Basic Raft doesn't force a leader to step down just because followers are unreachable (some implementations add 'check quorum'). It stays leader but can't commit."
+      },
+      {
+        "text": "n1 appends it but can't commit; n3–n5 elect a leader in term 4; on healing n1 steps down and the entry is discarded if it conflicts.",
+        "explanation": "Correct. The minority can't reach a majority. The majority elects a new leader with a higher term. When n1 sees term 4 it becomes a follower and its uncommitted entry is overwritten by the new leader's log."
+      },
+      {
+        "text": "Both sides elect leaders and both commit writes.",
+        "explanation": "Wrong. Only the majority side can win an election. The minority can't commit, so there's no split brain at the commit level."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Majority = 3.\n\n1. **Minority side** {n1, n2}: n1 appends entry at index 10, term 3, replicates to n2. 2 acks < 3 → **not committed**. Client times out.\n2. **Majority side** {n3, n4, n5}: no heartbeats → n4 times out, term 4, gets 3 votes, leader. Commits new entries at index 10 onwards in term 4.\n3. **Heal**: n4's AppendEntries carries term 4. n1 sees 4 > 3 → follower. Consistency check fails at index 10 (term 3 vs 4) → n1's entry overwritten.\n\nThe client must retry, ideally with an idempotency key, because it never got a success.",
+    "link": {
+      "title": "The Secret Lives of Data: Raft",
+      "url": "https://thesecretlivesofdata.com/raft/"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During an election, node A's last log entry is (index 7, term 4). Candidate B's last entry is (index 9, term 3). B asks A for its vote in term 6. Does A grant it?",
+    "options": [
+      {
+        "text": "Yes, because B's log is longer.",
+        "explanation": "Wrong. Length only matters when the last terms are equal. Here A's last term (4) is higher, so A's log is more up to date."
+      },
+      {
+        "text": "Yes, because B's term (6) is higher than A's.",
+        "explanation": "Wrong. A higher election term makes A update its own term, but the vote still depends on the log comparison."
+      },
+      {
+        "text": "No, because A always votes for itself.",
+        "explanation": "Wrong. A only votes for itself if it became a candidate. As a follower it can vote for any candidate that passes the up-to-date check, once per term."
+      },
+      {
+        "text": "No, because A's last entry has a higher term.",
+        "explanation": "Correct. Raft compares the last entry's term first: 4 > 3, so B's log is less up to date, and A refuses even though B's log is longer."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Raft's up-to-date rule:\n\n1. Compare last terms: A = 4, B = 3. Higher wins → A is more up to date.\n2. (Only if equal would you compare lengths.)\n3. A rejects B's vote request.\n\nWhy this matters: entries from term 4 may be committed. B's log stops at term 3 entries, so it might be missing committed data. Refusing it preserves Leader Completeness.",
+    "link": {
+      "title": "Raft paper",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q4",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do Raft clusters usually have an **odd** number of nodes?",
+    "options": [
+      {
+        "text": "Raft's protocol only works with odd numbers.",
+        "explanation": "Wrong. Raft works with any size; even sizes are legal but wasteful."
+      },
+      {
+        "text": "Adding a node to make it even doesn't increase the failures tolerated, but does slow commits.",
+        "explanation": "Correct. 4 nodes need a majority of 3 and tolerate 1 failure, the same as 3 nodes, but every write must reach one more node."
+      },
+      {
+        "text": "Odd numbers prevent network partitions.",
+        "explanation": "Wrong. Nothing prevents partitions. Odd sizes mean one side of a partition is more likely to hold a majority, but that's a consequence of the arithmetic, not prevention."
+      },
+      {
+        "text": "To make leader election deterministic.",
+        "explanation": "Wrong. Elections are randomised by timeouts regardless of cluster size."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "| N | Majority | Tolerates |\n|---|---|---|\n| 3 | 2 | 1 |\n| 4 | 3 | 1 |\n| 5 | 3 | 2 |\n| 6 | 4 | 2 |\n\nTolerance = N − majority = ⌊(N − 1)/2⌋. Going 3 → 4 adds a node without improving tolerance, while raising the replication requirement from 2 to 3.",
+    "link": {
+      "title": "Raft (algorithm) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Raft_%28algorithm%29"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does FLP impossibility actually prove?",
+    "options": [
+      {
+        "text": "Consensus is impossible in any real network.",
+        "explanation": "Wrong. Raft, Paxos and Zab achieve consensus daily. FLP is about guaranteed termination in a fully asynchronous model only."
+      },
+      {
+        "text": "Consensus needs 3f + 1 nodes to tolerate f faults.",
+        "explanation": "Wrong. That's the Byzantine bound. FLP holds with only crash faults and even one faulty node."
+      },
+      {
+        "text": "No deterministic algorithm can guarantee termination in a fully asynchronous system if one process may crash.",
+        "explanation": "Correct. Safety is achievable; what can't be guaranteed is that the algorithm always decides, because a slow node is indistinguishable from a crashed one."
+      },
+      {
+        "text": "Consensus is impossible without synchronised clocks.",
+        "explanation": "Wrong. FLP says nothing about clocks; Raft uses only local timeouts, not synchronised time, and works fine."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Unpack the conditions:\n\n- **Fully asynchronous**: no bound on message delay.\n- **Deterministic**: no randomness.\n- **One crash**: even a single failure.\n\nResult: there's always an execution (an adversarial message schedule) where the algorithm never decides.\n\nEscapes: add partial synchrony (timeouts, as Raft does) or randomisation. Raft remains safe always and terminates when the network behaves.",
+    "link": {
+      "title": "A Brief Tour of FLP Impossibility",
+      "url": "https://www.the-paper-trail.org/post/2008-08-13-a-brief-tour-of-flp-impossibility/"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Raft leader in term 5 wants to serve a **linearizable read** from its local state. Which approaches are safe? Select all that apply.",
+    "options": [
+      {
+        "text": "Read immediately from local state, since it's the leader.",
+        "explanation": "Wrong. A partitioned leader may have been replaced in term 6 without knowing; its local state could be stale."
+      },
+      {
+        "text": "ReadIndex: record the commit index, confirm leadership with a majority heartbeat, wait to apply up to that index, then read.",
+        "explanation": "Correct. The heartbeat round proves no newer leader existed at that moment, and applying up to the commit index guarantees the read reflects every committed write."
+      },
+      {
+        "text": "Append the read as a log entry and answer once it commits.",
+        "explanation": "Correct. Slow (a full replication round and disk write), but committing proves leadership and orders the read with writes."
+      },
+      {
+        "text": "Leader lease: serve reads while within a lease shorter than the election timeout, assuming bounded clock drift.",
+        "explanation": "Correct, with a caveat. It's safe only if clock drift stays within the assumed bound; a long pause or fast clock breaks it."
+      },
+      {
+        "text": "Read from any follower's local state.",
+        "explanation": "Wrong. Followers may lag behind the commit index; without a ReadIndex-style check against the leader, reads can be stale."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "The danger: a deposed leader answering from old state.\n\n1. **Local read**: no proof of leadership. ✗\n2. **ReadIndex** (etcd default): one heartbeat round trip to a majority, no disk write. ✓\n3. **Log read**: proves everything but costs a log write. ✓\n4. **Lease read**: no round trip; trusts that no one can be elected before the lease expires, which relies on clocks. ✓ (with timing assumptions)\n5. **Follower read**: only safe if the follower first asks the leader for the commit index and waits to catch up (follower ReadIndex). ✗ as stated.",
+    "link": {
+      "title": "etcd API guarantees",
+      "url": "https://etcd.io/docs/v3.6/learning/api_guarantees/"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Paxos, a proposer sends Prepare(n = 10). Two acceptors of a majority reply: one says it accepted (n = 7, value \"A\"), the other says (n = 9, value \"B\"). The proposer wants to propose \"C\". What must it send?",
+    "options": [
+      {
+        "text": "Accept(10, \"B\")",
+        "explanation": "Correct. Paxos requires adopting the value from the highest-numbered accepted proposal reported in the promises: n = 9, \"B\". That preserves any value that may already be chosen."
+      },
+      {
+        "text": "Accept(10, \"C\")",
+        "explanation": "Wrong. Proposing its own value would ignore previously accepted values, which might already be chosen. That breaks agreement."
+      },
+      {
+        "text": "Accept(10, \"A\")",
+        "explanation": "Wrong. It must pick the value with the **highest** accepted proposal number, which is 9, not 7."
+      },
+      {
+        "text": "Restart with Prepare(11), because acceptors disagree.",
+        "explanation": "Wrong. Disagreement among acceptors is expected; the rule resolves it without restarting."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Paxos phase 2 rule:\n\n1. Collect promises from a majority.\n2. If any report an accepted (n, v), choose v with the largest n.\n3. Only if none report a value may the proposer use its own.\n\nHere: max(7, 9) = 9 → value \"B\". Send **Accept(10, \"B\")**.\n\nWhy: if \"B\" was chosen in round 9 by some majority, that majority overlaps this one, so at least one promise reports n ≥ 9. Picking the highest ensures the chosen value is re-proposed.",
+    "link": {
+      "title": "Paxos Made Simple (Lamport)",
+      "url": "https://lamport.azurewebsites.net/pubs/paxos-simple.pdf"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need leader election for a fleet of workers. You already run ZooKeeper. Which recipe is standard?",
+    "options": [
+      {
+        "text": "Each worker writes its hostname to /leader; last writer wins.",
+        "explanation": "Wrong. Last-writer-wins races and gives no notification when the leader dies; two workers may each think they won."
+      },
+      {
+        "text": "Each worker creates a persistent znode and the oldest one leads.",
+        "explanation": "Wrong. Persistent znodes survive their creator's death, so a dead leader would hold leadership forever."
+      },
+      {
+        "text": "Workers poll /election every second and pick a random leader.",
+        "explanation": "Wrong. Random selection on each worker gives different answers; there's no agreement."
+      },
+      {
+        "text": "Each worker creates an ephemeral sequential znode under /election; the lowest sequence number is leader; others watch the next-lower node.",
+        "explanation": "Correct. Ephemeral nodes vanish when a session dies, sequence numbers give a total order, and watching only the predecessor avoids a herd of notifications."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Worker creates `/election/n_` with EPHEMERAL | SEQUENTIAL → `/election/n_0000000042`.\n2. Lists children; if its node is the lowest, it's leader.\n3. Otherwise it watches the node just below it (e.g. `n_0000000041`).\n4. If that node is deleted (session expired), it re-checks; if now lowest, it leads.\n\nWatching only the predecessor avoids the **herd effect** where every worker wakes on each change. Still pair it with fencing (the znode's zxid or sequence number) because a paused ex-leader may not know its session expired.",
+    "link": {
+      "title": "ZooKeeper recipes",
+      "url": "https://zookeeper.apache.org/doc/current/recipes.html"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a 5-node Raft cluster, S1 becomes leader in **term 4**. Its log has an entry at index 2 from **term 2** that it wrote as leader long ago. S1 copies it to S3, so it is now on S1, S2 and S3, a majority. S1 has not yet replicated any term-4 entry. May S1 mark index 2 committed?",
+    "options": [
+      {
+        "text": "Yes: it is on a majority, and that is the definition of committed.",
+        "explanation": "Wrong. That rule applies only to entries from the leader's current term. Counting replicas of an old-term entry is exactly the mistake Figure 8 in the Raft paper shows."
+      },
+      {
+        "text": "Yes, but only after the client that sent it retries.",
+        "explanation": "Wrong. Client retries have nothing to do with commitment, and could even create a duplicate entry."
+      },
+      {
+        "text": "No: a node whose last entry has term 3 could still win an election and overwrite it. S1 must first get a term-4 entry (e.g. a no-op) onto a majority.",
+        "explanation": "Correct. If S1 crashed now, S5 (last entry term 3) could gather votes from S2, S3 and S4, whose last entries are older, and overwrite index 2. Once a term-4 entry is on a majority, no such candidate can win, and index 2 commits along with it."
+      },
+      {
+        "text": "No: entries from old terms can never be committed and must be discarded.",
+        "explanation": "Wrong. Old-term entries are not discarded; they become committed indirectly as soon as a later current-term entry commits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask \"could any future leader lack this entry?\"\n\n1. Suppose S5 holds a different index-2 entry from **term 3**.\n2. S2, S3 and S4 have last-entry terms of 2 or less.\n3. Election restriction: a voter grants if the candidate's last term is higher. 3 > 2, so S5 can collect 4 votes.\n4. S5 then overwrites index 2 everywhere. Had S1 reported it committed, a committed entry would be lost.\n\nFix: S1 appends a no-op in term 4 and replicates it to a majority. Now a majority has a term-4 last entry, which beats S5's term 3, so S5 can't win. Committing the no-op commits index 2 as well.",
+    "link": {
+      "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the **FLP** impossibility result are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It holds even if every message is eventually delivered.",
+        "explanation": "True. FLP assumes a reliable network with unbounded delay. Loss isn't needed; unbounded delay alone makes a slow process indistinguishable from a crashed one."
+      },
+      {
+        "text": "It shows that every consensus algorithm will sometimes let two nodes decide differently.",
+        "explanation": "False. FLP is about termination. Algorithms like Raft and Paxos never violate agreement; what FLP rules out is guaranteeing that they always decide."
+      },
+      {
+        "text": "Randomised algorithms can sidestep it, terminating with probability 1.",
+        "explanation": "True. FLP applies to deterministic algorithms. Ben-Or's randomised protocol terminates with probability 1 in the same model."
+      },
+      {
+        "text": "It needs at least one Byzantine (lying) process.",
+        "explanation": "False. A single process that may simply crash is enough."
+      },
+      {
+        "text": "It doesn't apply if you assume bounds on message delay hold eventually (partial synchrony).",
+        "explanation": "True. With partial synchrony, timeout-based algorithms such as Raft and Paxos are always safe and terminate once delays stay within bounds."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "FLP's exact assumptions:\n\n- **Asynchronous**: no bound on delay (but delivery is reliable).\n- **Deterministic** algorithm.\n- **One crash** fault possible.\n\nConclusion: no algorithm guarantees agreement, validity *and* termination in every execution.\n\nChange any assumption and consensus becomes solvable: add randomness (Ben-Or), or add timing assumptions (partial synchrony, as Raft and Paxos do). Safety was never the impossible part.",
+    "link": {
+      "title": "A Brief Tour of FLP Impossibility (Paper Trail)",
+      "url": "https://www.the-paper-trail.org/post/2008-08-13-a-brief-tour-of-flp-impossibility/"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A follower was cut off from a healthy 5-node etcd cluster for ten minutes. During that time it timed out repeatedly and its term climbed from 8 to **40**. When the link comes back, the stable leader (term 8) steps down and the cluster holds an election. Which Raft extension prevents this?",
+    "options": [
+      {
+        "text": "Joint consensus",
+        "explanation": "Wrong. Joint consensus is for changing cluster membership safely. It doesn't stop a member inflating its term."
+      },
+      {
+        "text": "Pre-Vote",
+        "explanation": "Correct. With Pre-Vote, a node first asks whether peers would vote for it, without incrementing its term. While isolated it can't get a majority of pre-votes, so its term stays at 8 and it rejoins quietly as a follower."
+      },
+      {
+        "text": "ReadIndex",
+        "explanation": "Wrong. ReadIndex is for linearizable reads; it doesn't affect elections or terms."
+      },
+      {
+        "text": "Log compaction with snapshots",
+        "explanation": "Wrong. Snapshots bound log size and speed up catch-up; they don't stop term inflation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Without Pre-Vote:\n\n1. Isolated node times out, increments term, asks for votes, gets none. Repeat: term reaches 40.\n2. On reconnect, its messages carry term 40.\n3. The leader sees 40 > 8 and steps down. An election follows, which the rejoiner can't even win because its log is behind.\n\nWith Pre-Vote:\n\n1. Isolated node sends PreVote(term 9). No majority replies, so it **does not** increment.\n2. On reconnect it hears the leader's heartbeats at term 8 and becomes a follower. No disruption.",
+    "link": {
+      "title": "etcd's Raft library",
+      "url": "https://github.com/etcd-io/raft"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 5-node Raft cluster has its leader in London, one follower in London (1 ms round trip), two in Frankfurt (15 ms) and one in Virginia (75 ms). Ignoring disk time, roughly what is the commit latency for a write?",
+    "options": [
+      {
+        "text": "About 1 ms",
+        "explanation": "Wrong. The leader plus the London follower is only 2 of 5. A commit needs 3, so it must also wait for a Frankfurt follower."
+      },
+      {
+        "text": "About 75 ms",
+        "explanation": "Wrong. The leader doesn't wait for every follower, only a majority. Virginia's ack isn't needed while the closer nodes are healthy."
+      },
+      {
+        "text": "About 106 ms, the sum of all round trips",
+        "explanation": "Wrong. The leader sends to all followers in parallel, so latencies don't add up."
+      },
+      {
+        "text": "About 15 ms",
+        "explanation": "Correct. The leader counts itself, so it needs 2 follower acks. The two fastest come from London (1 ms) and Frankfurt (15 ms), so the commit waits about 15 ms."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Majority of 5 = 3, including the leader, so it needs **2 follower acks**.\n2. Sort follower round trips: 1, 15, 15, 75.\n3. The 2nd fastest = **15 ms**.\n\nFailure cases:\n\n- London follower down: acks at 15, 15 → still ~15 ms.\n- Both Frankfurt followers down: acks at 1, 75 → ~75 ms.\n\nPlacement rule: commit latency is the k-th fastest follower, where k = majority − 1. Put enough nodes close to the leader to form a majority, and spread the rest for survival.",
+    "link": {
+      "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  }
+]

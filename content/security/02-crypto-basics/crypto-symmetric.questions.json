@@ -1,0 +1,347 @@
+[
+  {
+    "id": "crypto-symmetric-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A legacy service encrypts customer records with AES in **ECB** mode under one key. Two customers' records both begin with the same 16 bytes, `country=GB;tier=`. What can an eavesdropper who never learns the key tell from the ciphertexts?",
+    "options": [
+      {
+        "text": "Nothing: AES is secure, so the ciphertexts reveal nothing at all",
+        "explanation": "This confuses the block cipher with the mode. AES itself is strong, but ECB applies it deterministically block by block, so the mode leaks equality."
+      },
+      {
+        "text": "That the first block of both records is identical, because ECB encrypts equal blocks to equal ciphertext",
+        "explanation": "Correct. ECB has no IV or chaining, so identical 16-byte plaintext blocks always produce identical ciphertext blocks under the same key."
+      },
+      {
+        "text": "The full plaintext of both records, because ECB is reversible without the key",
+        "explanation": "ECB still needs the key to decrypt. Its weakness is leaking patterns and allowing block cut-and-paste, not handing over the plaintext."
+      },
+      {
+        "text": "Only the length of the records, which every cipher leaks",
+        "explanation": "Length does leak with most ciphers, but ECB leaks more: which blocks are equal, within and across messages."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. ECB splits the data into 16-byte blocks and computes `C_i = AES_k(P_i)` independently.\n2. Both records start with the same 16-byte block `country=GB;tier=`.\n3. Same key, same input block, so `AES_k` gives the same output: the first ciphertext blocks match.\n4. The eavesdropper can't read the block, but learns *these two records share a prefix*. With enough records they can map out common values, just like the ECB penguin image.\n\nA mode with a random IV or nonce (CBC, CTR, GCM) makes the two ciphertexts look unrelated.",
+    "link": {
+      "title": "Block cipher mode of operation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A vendor says their product is secure because it uses a secret, in-house encryption algorithm that nobody outside the company has seen. Which principle does this violate?",
+    "options": [
+      {
+        "text": "Kerckhoffs's principle: a system should stay secure even if everything except the key is public",
+        "explanation": "Correct. Security should rest on the key alone. A secret algorithm can be reverse-engineered from the product, and it has not had public scrutiny."
+      },
+      {
+        "text": "The principle of least privilege",
+        "explanation": "Least privilege is about giving each user or process only the access it needs. It isn't about whether an algorithm is public."
+      },
+      {
+        "text": "Defence in depth, which forbids relying on one algorithm",
+        "explanation": "Defence in depth means layering controls, but it doesn't say algorithms must be public. The specific principle here is Kerckhoffs's."
+      },
+      {
+        "text": "Forward secrecy",
+        "explanation": "Forward secrecy is about past sessions staying safe when long-term keys leak. It says nothing about keeping the algorithm secret."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The vendor relies on keeping its algorithm secret.\n2. A design should retain its security when the algorithm becomes known and only the key remains secret.\n3. Disclosure does not automatically break every private cipher, but secrecy alone is no evidence of robustness.\n4. Public scrutiny can expose weaknesses; this prompt supplies no independent evaluation of the private design.",
+    "link": {
+      "title": "Cryptographic Right Answers — Latacora",
+      "url": "https://www.latacora.com/blog/2018/04/03/cryptographic-right-answers/"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You encrypt messages with AES-CBC using a random IV each time, but no MAC. Which property are you still missing?",
+    "options": [
+      {
+        "text": "Confidentiality: CBC doesn't hide the content",
+        "explanation": "CBC with a random IV does provide confidentiality against passive attackers. What it lacks is protection against changes."
+      },
+      {
+        "text": "Availability: CBC messages can be lost",
+        "explanation": "Availability is about the system being usable; no cipher mode provides or removes it."
+      },
+      {
+        "text": "Integrity: an attacker can modify the ciphertext and you won't detect it",
+        "explanation": "Correct. Without a MAC, flipped bits decrypt to altered plaintext (or a padding error that becomes an oracle). An AEAD like AES-GCM adds the missing tag."
+      },
+      {
+        "text": "Key secrecy: CBC leaks the key through the IV",
+        "explanation": "The IV is public by design and reveals nothing about the key. The missing property is integrity."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Encryption alone answers \"can an attacker read it?\" Properly used CBC with unpredictable IVs is intended to protect against passive observers.\n2. It does not answer \"can an attacker change it?\" Flipping bit `j` of ciphertext block `C1` flips bit `j` of plaintext block `P2` (and scrambles `P1`).\n3. Worse, if your server reacts differently to bad padding, the attacker gets a padding oracle and may recover plaintext through repeated adaptive queries.\n4. The fix is authenticated encryption: AES-GCM or ChaCha20-Poly1305, which rejects any modified ciphertext before returning plaintext.",
+    "link": {
+      "title": "Authenticated encryption (AEAD) — cryptography.io",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A device reuses the same AES-CTR key **and nonce** for two messages. You capture the first ciphertext byte of each: `C1 = 0x5A`, `C2 = 0x4F`. You know the first message starts with `A` (`0x41`). What is the first byte of the second message?",
+    "options": [
+      {
+        "text": "`0x15`",
+        "explanation": "That is `C1 XOR C2`, which equals `P1 XOR P2`. You still need to XOR in the known `P1` to isolate `P2`."
+      },
+      {
+        "text": "`A` (`0x41`)",
+        "explanation": "Reusing a nonce doesn't make the plaintexts equal; it makes their XOR computable. P2 differs from P1 here."
+      },
+      {
+        "text": "`T` (`0x54`)",
+        "explanation": "Correct. The keystream cancels: `P2 = C1 XOR C2 XOR P1 = 0x5A XOR 0x4F XOR 0x41 = 0x54`, which is `T`."
+      },
+      {
+        "text": "It can't be found without the key",
+        "explanation": "The whole point of the two-time pad problem is that the key cancels out. Known plaintext in one message reveals the other."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "In CTR mode `C = P XOR K`, where `K` is the keystream from `AES_k(nonce||counter)`. Same key and nonce means the same `K`.\n\n```\nK  = C1 XOR P1\n   = 0x5A XOR 0x41 = 0x1B\nP2 = C2 XOR K\n   = 0x4F XOR 0x1B = 0x54\n   = 'T'\n```\n\nEquivalently `C1 XOR C2 = P1 XOR P2 = 0x15`, then `0x15 XOR 0x41 = 0x54`. With more known or guessable text (headers, JSON keys) the attacker may recover additional corresponding bytes; the XOR alone does not uniquely determine both complete messages.",
+    "link": {
+      "title": "Block cipher mode of operation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server encrypts `amount=100` with AES-CTR and no MAC. An attacker who knows the format wants the server to decrypt `amount=700`. What should they XOR into the ciphertext byte that sits under the `1`?",
+    "options": [
+      {
+        "text": "`0x37`, the ASCII code of `7`",
+        "explanation": "XORing with `0x37` would turn `'1'` (`0x31`) into `0x06`, a control character. You need the difference between old and new bytes."
+      },
+      {
+        "text": "`0x06`, which is `'1' XOR '7'`",
+        "explanation": "Correct. Ciphertext bit flips pass straight through to the plaintext in CTR mode, so XORing with `0x31 XOR 0x37 = 0x06` turns `1` into `7`."
+      },
+      {
+        "text": "Nothing works: they need the key to change any byte",
+        "explanation": "Stream-style modes are malleable: the attacker can make targeted changes without the key. Only a MAC or AEAD tag stops this."
+      },
+      {
+        "text": "`0x06` in every byte of the ciphertext",
+        "explanation": "That would change every character. The attack is precise: only the byte under the `1` needs to change."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. CTR decryption is `P = C XOR K`. If the attacker replaces `C` with `C XOR D`, decryption gives `P XOR D`.\n2. They want `P XOR D = '7'` where `P = '1'`.\n3. So `D = '1' XOR '7'`:\n\n```\n'1' = 0x31 = 0011 0001\n'7' = 0x37 = 0011 0111\nXOR = 0x06 = 0000 0110\n```\n\n4. XOR byte 7 of the ciphertext (0-based, `amount=` is 7 chars) with `0x06`. The server decrypts `amount=700`.\n\nWith AES-GCM, the tag check fails and decryption raises an error instead.",
+    "link": {
+      "title": "Authenticated encryption (AEAD) — cryptography.io",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Python cryptography AESGCM with a 128-bit tag are true? Output means its encrypt() result, excluding separately stored nonce and AAD. Select all that apply.",
+    "options": [
+      {
+        "text": "The nonce must never repeat under the same key",
+        "explanation": "Correct. Repetition reuses the CTR keystream and can enable authentication-key attacks and forgeries."
+      },
+      {
+        "text": "Associated data (AAD) is encrypted along with the plaintext",
+        "explanation": "AAD is authenticated but not encrypted by this operation; it need not be transmitted if both parties already know it."
+      },
+      {
+        "text": "Changing one bit of the ciphertext makes decryption fail with an error",
+        "explanation": "Correct. The 128-bit tag covers the ciphertext and AAD, so tampering is detected and no plaintext is returned."
+      },
+      {
+        "text": "The nonce must be kept secret like the key",
+        "explanation": "The nonce only has to be unique. It is usually stored or sent alongside the ciphertext in plain view."
+      },
+      {
+        "text": "The output is 16 bytes longer than the plaintext",
+        "explanation": "Correct. GCM adds no padding; the ciphertext is the same length as the plaintext plus a 16-byte tag."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Go through each claim against how GCM is built (CTR encryption plus a GHASH tag):\n\n1. Nonce uniqueness: CTR keystream depends on key and nonce, so repeating it repeats the keystream. **True.**\n2. AAD: it feeds into the tag only. **False**: it's authenticated, not secret.\n3. Tampering: decryption recomputes the tag; any mismatch raises `InvalidTag`. **True.**\n4. Nonce secrecy: not required, it travels with the message. **False.**\n5. Length: `len(ct) = len(pt) + 16`. **True.** For example `pay Bob 10` (10 bytes) gives 26 bytes.",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport os\nfrom cryptography.hazmat.primitives\\\n  .ciphers.aead import AESGCM\n\nk = AESGCM.generate_key(\n    bit_length=128)\nn = os.urandom(12)\nct = AESGCM(k).encrypt(\n    n, b\"x\" * 100, None)\nprint(len(n + ct))\n```",
+    "options": [
+      {
+        "text": "`100`",
+        "explanation": "This ignores both the 16-byte tag and the 12-byte nonce being concatenated in front."
+      },
+      {
+        "text": "`116`",
+        "explanation": "That's `len(ct)` alone (100 + 16-byte tag). The print also includes the 12-byte nonce."
+      },
+      {
+        "text": "`128`",
+        "explanation": "Correct. 12 bytes of nonce + 100 bytes of ciphertext + 16 bytes of tag = 128."
+      },
+      {
+        "text": "`144`",
+        "explanation": "144 is incorrect. Even an imagined padding to 112 bytes plus a 16-byte tag and 12-byte nonce totals 140, not 144. AESGCM does not pad."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `n` is 12 bytes (the standard 96-bit GCM nonce).\n2. GCM is a stream-style mode, so the ciphertext is exactly as long as the plaintext: 100 bytes.\n3. `encrypt` appends a 16-byte tag: `len(ct) = 116`.\n4. The key size (128 vs 256 bits) doesn't change the output length.\n5. `len(n + ct) = 12 + 116 = 128`.\n\nPrepending the nonce is a common way to store it, since it only has to be unique, not secret.",
+    "link": {
+      "title": "Authenticated encryption (AEAD) — cryptography.io",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API decrypts AES-CBC tokens. On a bad token it returns HTTP 400 with `invalid padding` or HTTP 401 with `invalid token`, depending on where decoding failed. A pentester says they can decrypt any token. What is the best fix?",
+    "options": [
+      {
+        "text": "Make both errors return the same message and status code",
+        "explanation": "That narrows the leak but timing differences can still reveal the padding result, as Lucky Thirteen showed. It treats the symptom of an unauthenticated design."
+      },
+      {
+        "text": "Switch to a random IV for every token",
+        "explanation": "A random IV is already needed for CBC confidentiality but does nothing against a padding oracle, which works on any IV."
+      },
+      {
+        "text": "Use AES-256 instead of AES-128",
+        "explanation": "Key length is irrelevant: the attack never touches the key. It exploits the server's padding feedback."
+      },
+      {
+        "text": "Replace the scheme with a vetted AEAD API such as AESGCM, and reject authentication failures without processing plaintext",
+        "explanation": "Correct. AESGCM needs no CBC padding, and its high-level decrypt API raises an error instead of returning unauthenticated plaintext."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Distinguishable padding outcomes can form an oracle.\n2. Adaptive ciphertext changes and repeated queries can reveal plaintext relationships.\n3. Query cost depends on the oracle, noise and handling of ambiguous padding; no measured request bound is supplied here.\n4. Uniform error messages alone can leave timing differences.\n5. Use a vetted authenticated scheme and consume plaintext only after verification. AEAD does not universally verify before performing internal decryption, and does not eliminate every side channel.",
+    "link": {
+      "title": "Padding oracle attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Padding_oracle_attack"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A telemetry pipeline encrypts about 20 million small messages per day per key with AES-GCM, using a random 96-bit nonce each time. It never rotates keys. A reviewer flags a problem. What is it, and what is the best fix?",
+    "options": [
+      {
+        "text": "96-bit nonces are too short to be random, so each one must be a timestamp",
+        "explanation": "Timestamps can repeat (clock skew, parallel workers). The issue is the total number of random nonces per key, not randomness itself."
+      },
+      {
+        "text": "After a few hundred days the key passes NIST's 2^32 message limit for random nonces; rotate keys regularly or use a counter nonce or XChaCha20-Poly1305/AES-GCM-SIV",
+        "explanation": "Correct. 2^32 / 20,000,000 is about 215 days. Continuing exceeds this invocation limit. Collision risk grows continuously; crossing the limit is not an abrupt threshold at which collision probability jumps above 2^-32."
+      },
+      {
+        "text": "GCM can't encrypt small messages securely; use CBC instead",
+        "explanation": "Message size isn't the issue, and CBC brings back padding oracles and no integrity."
+      },
+      {
+        "text": "The tag is only 128 bits, so it should be lengthened to 256 bits",
+        "explanation": "GCM's tag is at most 128 bits, which is plenty. The risk is nonce reuse."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With random `b`-bit nonces, the birthday bound means collisions become likely around `2^(b/2)` messages: `2^48` for 96 bits.\n2. NIST SP 800-38D is more conservative and limits random-nonce GCM to `2^32` invocations per key, keeping the collision chance below about `2^-32`.\n3. `2^32 ≈ 4.29 × 10^9`. At `2 × 10^7` per day:\n\n```\n4.29e9 / 2e7 ≈ 215 days\n```\n\n4. A repeated nonce leaks the overlapping plaintext XOR and may enable GHASH-key recovery and forgeries.\n5. Fixes: rotate keys well before the limit, use a coordinated per-key counter that cannot repeat across restarts or workers, or use XChaCha20-Poly1305 (192-bit random nonces, still no nonce reuse) or AES-GCM-SIV (nonce-misuse resistant).",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An IoT firmware bug repeats a GCM nonce under one key for distinct messages. Which information is revealed or attacks can become possible? Select all that apply.",
+    "options": [
+      {
+        "text": "The XOR of the two plaintexts is revealed",
+        "explanation": "Correct. GCM encrypts with CTR mode, so the same keystream is applied to both messages and cancels out in `C1 XOR C2`."
+      },
+      {
+        "text": "The attacker may recover GHASH-key candidates and forge valid tags",
+        "explanation": "Correct. Repeated-nonce tag equations can constrain H. Whether they uniquely recover it depends on the messages, tag length and observations; the integrity risk is severe."
+      },
+      {
+        "text": "The AES key itself is directly recovered",
+        "explanation": "Nonce reuse does not directly recover the AES key. It exposes repeated keystream relationships and may reveal the derived GHASH key."
+      },
+      {
+        "text": "Nothing happens as long as the messages are different",
+        "explanation": "Different messages are exactly the case that leaks: their XOR is revealed. Identical messages would only leak that they're identical."
+      },
+      {
+        "text": "Other messages encrypted under different nonces become decryptable",
+        "explanation": "Their keystreams are different, so they don't leak directly. But forged messages could now be injected, so you should rotate the key."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. The repeated CTR keystream cancels: C1 XOR C2 = P1 XOR P2 over the overlap. This reveals a relationship, not necessarily both plaintexts.\n2. With full tags, XORing repeated-nonce tag equations cancels their common mask and gives an equation in H. It may have multiple candidates; identical authenticated inputs add no new equation.\n3. Suitable observations can enable recovery and forgery. Knowing H and one valid record also exposes that nonce's tag mask.\n4. This does not directly recover the AES key or decrypt records under other nonces.\n5. Replace the compromised key and fix nonce allocation; using AES-GCM-SIV still requires observing its limits.",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer writes:\n\n```python\nkey = hashlib.sha256(\n    user_password.encode()\n).digest()\naead = AESGCM(key)\n```\n\nThe 32-byte key has the right length for AES-256. What is the main weakness?",
+    "options": [
+      {
+        "text": "SHA-256 output isn't random enough to be an AES key",
+        "explanation": "A 32-byte hash has the right format, but hashing a small password candidate set does not create a uniform secret chosen from all 2^256 keys."
+      },
+      {
+        "text": "The key is too long; AESGCM needs 16 bytes",
+        "explanation": "AESGCM accepts 16, 24 or 32-byte keys, so 32 bytes is valid."
+      },
+      {
+        "text": "A hash isn't reversible, so decryption will fail",
+        "explanation": "Decryption uses the same derived key, so it works. The issue is attackers deriving it too."
+      },
+      {
+        "text": "Its strength is limited by the password, and plain SHA-256 adds little cost to offline password guessing",
+        "explanation": "Correct. Use a salted, slow, memory-hard password KDF such as Argon2id or scrypt to derive the key, or better, a random key protected by a key-management service."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A deterministic hash cannot add secret entropy to its password input.\n2. Password uncertainty depends on how it was chosen; no universal entropy estimate applies.\n3. Given nonce, ciphertext and tag, an attacker can hash a candidate and attempt AESGCM decryption offline.\n4. This costs both derivation and verification. No reproducible hardware or end-to-end guess-rate record was supplied, so the former billions-per-second estimate is omitted.\n5. A salted Argon2id or scrypt derivation increases each guess's cost; store its salt and parameters. A random key managed separately can avoid password-derived-key weaknesses.",
+    "link": {
+      "title": "Cryptographic Right Answers — Latacora",
+      "url": "https://www.latacora.com/blog/2018/04/03/cryptographic-right-answers/"
+    }
+  }
+]

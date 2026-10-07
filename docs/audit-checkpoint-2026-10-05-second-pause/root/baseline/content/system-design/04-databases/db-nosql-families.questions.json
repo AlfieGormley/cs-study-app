@@ -1,0 +1,374 @@
+[
+  {
+    "id": "db-nosql-families-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need to store user sessions: look up a session by its random token on every request, expire it after 30 minutes, and nothing else. Which family fits best?",
+    "options": [
+      {
+        "text": "Key-value store such as Redis or DynamoDB with TTL",
+        "explanation": "Correct. The only access pattern is exact-key lookup with expiry, which is precisely what key-value stores make cheap. Both Redis (`EXPIRE`) and DynamoDB (TTL attribute) support expiry natively."
+      },
+      {
+        "text": "Graph database",
+        "explanation": "Wrong. There are no relationships to traverse; a graph database adds complexity and gives you nothing for single-key lookups."
+      },
+      {
+        "text": "Time-series database",
+        "explanation": "Wrong. Sessions aren't append-only measurements queried by time range; they are looked up by token and mutated or deleted."
+      },
+      {
+        "text": "Search engine",
+        "explanation": "Wrong. Inverted indexes are for matching terms in text. A search engine is also near-real-time (refresh delays), which is bad for a value you just wrote and need to read immediately."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. List the access patterns: `GET token`, `PUT token`, expire after 30 minutes.\n2. No queries on the value's contents, no relationships, no ranges.\n3. A key-value store makes exactly this cheap: O(1) lookup, typically under 1 ms for Redis in the same region.\n4. Built-in expiry means you don't need a cleanup job.\n5. Choose Redis for lowest latency (keep in mind persistence settings) or DynamoDB for fully managed durability.",
+    "link": {
+      "title": "Amazon DynamoDB Developer Guide: What is DynamoDB?",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html"
+    }
+  },
+  {
+    "id": "db-nosql-families-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In MongoDB you're modelling blog posts and their comments. Posts typically have 0–50 comments, always displayed with the post. Following the rule 'embed what you read together, reference what you share', what should you do?",
+    "options": [
+      {
+        "text": "Store comments in a separate collection and use `$lookup` on every page view",
+        "explanation": "Wrong for this workload. It reintroduces a join on the hottest read path even though comments are always read with their post and aren't shared."
+      },
+      {
+        "text": "Store each comment as its own top-level document with the post's full content copied into it",
+        "explanation": "Wrong. That copies the post into every comment, so editing the post means updating every comment: the worst of both worlds."
+      },
+      {
+        "text": "Embed the comments array inside the post document",
+        "explanation": "Correct. Comments belong to exactly one post, are read with it, and the count is bounded, so embedding gives one read per page with no join."
+      },
+      {
+        "text": "Use a graph database instead, since comments relate to posts",
+        "explanation": "Wrong. A one-to-few parent/child relationship is not a graph problem. Graph databases are justified by multi-hop traversals."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask how comments are read: always with their post. So they're *read together*.\n2. Ask whether they are shared: no, each comment belongs to one post.\n3. Ask whether the array is bounded: 0–50 comments is small, far below MongoDB's 16 MB document limit.\n4. All three point to embedding: one document read renders the page.\n5. When would you switch? If a post could get 100,000 comments (unbounded growth) you'd store comments separately, perhaps bucketed in pages of 100, and reference the post id.",
+    "link": {
+      "title": "MongoDB: Data modeling",
+      "url": "https://www.mongodb.com/docs/manual/data-modeling/"
+    }
+  },
+  {
+    "id": "db-nosql-families-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Cassandra table has `PRIMARY KEY ((sensor_id, day), ts)`. A developer runs `SELECT * FROM readings WHERE ts > '2026-09-01'` (no sensor or day). What happens?",
+    "options": [
+      {
+        "text": "It runs quickly using the clustering order on `ts`",
+        "explanation": "Wrong. Clustering order only sorts rows *within* a partition. Without the partition key, Cassandra doesn't know which partitions (and hence nodes) to read."
+      },
+      {
+        "text": "Cassandra rejects it unless you add `ALLOW FILTERING`, and with that it scans every partition on every node",
+        "explanation": "Correct. Queries must restrict the partition key so they can be routed. `ALLOW FILTERING` forces a full cluster scan, which is unusable on a large table."
+      },
+      {
+        "text": "Cassandra builds a temporary secondary index automatically",
+        "explanation": "Wrong. Cassandra never creates indexes implicitly; you'd have to create a secondary index or, more commonly, a second table keyed for this query."
+      },
+      {
+        "text": "It returns only rows from the coordinator node's local data",
+        "explanation": "Wrong. Cassandra doesn't silently return partial results; it either rejects the query or, with `ALLOW FILTERING`, scans across the cluster."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In Cassandra, the partition key `(sensor_id, day)` is hashed to choose which nodes hold the data.\n2. A query without it can't be routed to a specific node: the data could be anywhere.\n3. Cassandra refuses rather than quietly running a cluster-wide scan, unless you opt in with `ALLOW FILTERING`.\n4. The idiomatic fix is *query-first modelling*: create another table, e.g. `PRIMARY KEY ((day), ts, sensor_id)`, and write each reading to both tables.\n5. Watch partition size there: one partition per day holding every sensor might get too big, so you might use `(day, hour)` buckets.",
+    "link": {
+      "title": "Apache Cassandra: Data modeling",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/index.html"
+    }
+  },
+  {
+    "id": "db-nosql-families-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A fraud team wants to find accounts within 4 hops of a known fraudster via shared phone numbers, devices or cards. In Postgres this is a recursive CTE that takes minutes. Why would a graph database like Neo4j typically do better?",
+    "options": [
+      {
+        "text": "Graph databases store everything in memory, unlike Postgres",
+        "explanation": "Wrong. Neo4j persists to disk like Postgres. Memory helps both; it isn't the structural difference."
+      },
+      {
+        "text": "Graph databases use SQL more efficiently",
+        "explanation": "Wrong. Neo4j uses Cypher, not SQL. The advantage comes from storage layout, not the query language."
+      },
+      {
+        "text": "Graph databases shard more easily across many machines",
+        "explanation": "Wrong; it's the opposite. Graphs are notoriously hard to shard because traversals cross partition boundaries."
+      },
+      {
+        "text": "Each node stores direct pointers to its edges, so each hop costs roughly proportional to the neighbours visited, rather than an index lookup over a huge join table",
+        "explanation": "Correct. Index-free adjacency makes a hop cost O(neighbours), independent of total graph size. In SQL each hop is a join with B-tree probes over the whole edge table, and the intermediate result sets grow at each level."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. In SQL, edges live in a table like `links(a, b)`. Each hop joins the frontier set against `links`, probing a B-tree index with O(log E) cost per row.\n2. With an average fan-out of 20, the frontier grows 20 → 400 → 8,000 → 160,000 rows by hop 4, and every step is a join plus de-duplication.\n3. In a graph database, each node record links directly to its relationship records, so following edges is pointer-chasing with no global index.\n4. The visited set is just as large, but each step is cheaper and the engine's traversal is optimised for it (and can prune early).\n5. That's why multi-hop pattern queries are the strongest case for a graph database.",
+    "link": {
+      "title": "Wikipedia: NoSQL",
+      "url": "https://en.wikipedia.org/wiki/NoSQL"
+    }
+  },
+  {
+    "id": "db-nosql-families-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're storing CPU metrics from 10,000 servers every 10 seconds in InfluxDB. Which of these design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Make `host` a tag, so it's indexed for filtering",
+        "explanation": "Correct. `host` has 10,000 values, which is manageable cardinality, and you'll filter and group by it constantly."
+      },
+      {
+        "text": "Make `request_id` a tag, so you can look up individual requests",
+        "explanation": "Wrong. A unique-per-point tag explodes series cardinality (one series per request), which bloats the index and memory. High-cardinality identifiers should be fields, or live in a different system such as a log store or tracing backend."
+      },
+      {
+        "text": "Set a retention policy, and downsample to 1-minute averages for data older than 7 days",
+        "explanation": "Correct. Time-series data loses detail value with age; downsampling plus retention keeps storage bounded. That's 8,640 raw points per server per day, reduced 6× by 1-minute averages."
+      },
+      {
+        "text": "Store the CPU percentage as a field",
+        "explanation": "Correct. Measured values are fields: not indexed, but compressed efficiently and aggregated by queries."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Rate: 10,000 servers ÷ 10 s = 1,000 points per second, about 86 million per day. Well within a time-series database's range.\n2. Tags are indexed metadata, and each unique combination of tags is a *series*. Keep tag cardinality bounded: `host` (10k) is fine.\n3. A `request_id` tag would create a new series per point, roughly 86 million a day, which destroys the index.\n4. Values like CPU % are fields.\n5. Retention: raw 10-second data for a week, then 1-minute rollups for a year, keeps storage bounded while preserving trends.",
+    "link": {
+      "title": "Wikipedia: NoSQL",
+      "url": "https://en.wikipedia.org/wiki/NoSQL"
+    }
+  },
+  {
+    "id": "db-nosql-families-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A DynamoDB single-table design must serve: (a) get a customer's profile, (b) list a customer's orders newest first, (c) get one order by id. Which key design serves all three with `GetItem`/`Query` and no scans?",
+    "options": [
+      {
+        "text": "PK = `ORDER#<orderId>` for orders and PK = `CUST#<id>` for profiles, no sort key",
+        "explanation": "Wrong. Pattern (b) needs all of a customer's orders together; with orders keyed only by order id you'd need a scan or an extra index to find them."
+      },
+      {
+        "text": "PK = `CUST#<id>`; SK = `PROFILE` for the profile and `ORDER#<ISO date>#<orderId>` for orders; plus a GSI keyed on `orderId`",
+        "explanation": "Correct. (a) is `GetItem(PK, SK=PROFILE)`. (b) is `Query(PK, SK begins_with ORDER#, ScanIndexForward=false)`, newest first because ISO dates sort lexicographically. (c) uses a GSI on orderId to find the order without knowing the customer."
+      },
+      {
+        "text": "PK = `<ISO date>`, SK = `CUST#<id>`",
+        "explanation": "Wrong. All of a day's writes hit a single partition key (a hot partition), and listing one customer's orders would require querying every date."
+      },
+      {
+        "text": "Put the whole customer, including every order, into one item",
+        "explanation": "Wrong. DynamoDB items are limited to 400 KB, and every order write would rewrite the whole item, consuming write capacity proportional to its size."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Work through each access pattern against the proposed keys:\n\n| Pattern | Operation |\n|---|---|\n| Profile | `GetItem PK=CUST#42, SK=PROFILE` |\n| Orders newest first | `Query PK=CUST#42, SK begins_with ORDER#`, descending |\n| Order by id | `Query` the GSI where `orderId = 981` |\n\n1. Items sharing PK `CUST#42` live together, sorted by SK, so one `Query` reads a contiguous range.\n2. ISO-8601 dates (`2026-09-14`) sort correctly as strings, so the SK order is chronological.\n3. For (c), callers often have only the order id, so add a global secondary index whose partition key is the order id attribute.\n4. Every pattern is a single-partition read: predictable millisecond latency at any scale.",
+    "link": {
+      "title": "DynamoDB: NoSQL design best practices",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-general-nosql-design.html"
+    }
+  },
+  {
+    "id": "db-nosql-families-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A start-up keeps its product catalogue in MongoDB. A new requirement arrives: reports joining products, suppliers, warehouses and orders in arbitrary ways, and multi-entity updates that must be atomic. What's the strongest argument here?",
+    "options": [
+      {
+        "text": "Stay on MongoDB: `$lookup` and multi-document transactions make it equivalent to a relational database",
+        "explanation": "Wrong. MongoDB can do both, but they are not what it's optimised for; heavy ad-hoc joins across many collections are slower and harder to write than in SQL, and the planner is far less mature for them."
+      },
+      {
+        "text": "Move everything to Cassandra for scale",
+        "explanation": "Wrong. Cassandra is *worse* at ad-hoc joins and multi-entity transactions; it's optimised for known, partition-keyed queries at high write volume."
+      },
+      {
+        "text": "The data has become highly relational with ad-hoc queries and cross-entity invariants, which is the relational model's home ground, so a relational database (possibly using `jsonb` for flexible attributes) is the better fit",
+        "explanation": "Correct. Many-to-many relationships, ad-hoc joins and multi-row transactions are exactly what relational databases make cheap; `jsonb` keeps the flexible-attribute benefit for product specs."
+      },
+      {
+        "text": "Use a graph database, because there are relationships",
+        "explanation": "Wrong. Having relationships isn't the same as needing multi-hop traversals. Reporting with joins and aggregates is a relational workload."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. List the new requirements: ad-hoc joins across 4 entity types, aggregates, atomic multi-entity updates.\n2. Map each to the families:\n   - Ad-hoc joins: relational planners excel; document stores make you pre-shape data.\n   - Atomic cross-entity updates: native in relational databases; possible but costlier in MongoDB.\n3. The original reason for MongoDB (flexible product attributes) survives in Postgres via `jsonb` with GIN indexes.\n4. Conclusion: the workload has moved into relational territory. Migrating early is cheaper than later.",
+    "link": {
+      "title": "MongoDB: Data modeling",
+      "url": "https://www.mongodb.com/docs/manual/data-modeling/"
+    }
+  },
+  {
+    "id": "db-nosql-families-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A DynamoDB table stores one item per celebrity profile. One profile goes viral and receives 10,000 strongly consistent reads per second of a 1 KB item, and requests start being throttled although the table's total capacity is nowhere near used. The team switches the table to on-demand mode. What happens, and what actually fixes it?",
+    "options": [
+      {
+        "text": "Throttling continues: one item can't exceed about 3,000 read units per second, so put a cache (such as DAX or Redis) in front of it, or switch these reads to eventually consistent",
+        "explanation": "Correct. 10,000 strongly consistent 1 KB reads need 10,000 RCU from one partition. Eventually consistent reads cost half as much (5,000 RCU), still too many alone, so a cache that absorbs repeated reads of the same item is the real fix."
+      },
+      {
+        "text": "Throttling stops, because on-demand mode has no limits",
+        "explanation": "Wrong. On-demand removes the need to provision table capacity, but the per-partition limit of about 3,000 read units per second still applies, and a single item lives in a single partition."
+      },
+      {
+        "text": "DynamoDB splits the item across several partitions automatically, so throttling stops within minutes",
+        "explanation": "Wrong. DynamoDB can split a busy partition between different keys, but it can't split one item. All 10,000 reads still target the same partition."
+      },
+      {
+        "text": "Throttling stops if you add a GSI on the profile id, because reads spread across the index",
+        "explanation": "Wrong. You'd have to change the application to read from the index, the GSI would face the same per-partition limit on that one key, and its reads are only eventually consistent."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Read units: one RCU is one strongly consistent read per second of up to 4 KB, or two eventually consistent ones.\n2. Demand: 10,000 strongly consistent reads/s × 1 RCU = 10,000 RCU.\n3. Limit: one partition serves about 3,000 RCU/s. One item is always in one partition.\n4. On-demand changes billing, not the per-partition ceiling. Automatic splitting separates *different* keys, not one item.\n5. Options:\n   - Eventually consistent reads: 5,000 RCU. Better, still over.\n   - Cache in front (DAX, Redis, CDN for public profiles): the item is read from DynamoDB perhaps once a second.\n   - For write-hot keys, *write sharding*: spread one logical key over `PROFILE#7#0` … `#9`.",
+    "link": {
+      "title": "DynamoDB: Partition key design",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    }
+  },
+  {
+    "id": "db-nosql-families-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An IoT platform stores one MongoDB document per device and `$push`es every reading (one every 5 seconds, about 60 bytes each) into a `readings` array in that document. After a few months, writes slow down and some devices start failing to save. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The array is unbounded, so active devices eventually approach MongoDB's 16 MB document limit and further pushes fail",
+        "explanation": "Correct. 17,280 readings a day at ~60 bytes is about 1 MB a day, so a device hits 16 MB in a few weeks, after which updates to that document are rejected."
+      },
+      {
+        "text": "Each update has to work with an ever larger document, so writes get slower as the array grows",
+        "explanation": "Correct. Large documents are costlier to update, replicate and cache. Growing one document forever is the textbook anti-pattern the bucket pattern exists to fix."
+      },
+      {
+        "text": "Using the bucket pattern, with one document per device per hour holding that hour's readings, keeps documents bounded",
+        "explanation": "Correct. Each bucket holds at most 720 readings (an hour at 5-second intervals), roughly 43 KB, so documents stay small and old buckets can be expired or archived as a unit."
+      },
+      {
+        "text": "Embedding is always correct here, because the readings are read together with the device",
+        "explanation": "Wrong. \"Embed what you read together\" assumes the embedded set is bounded. Nobody reads months of readings with every device lookup, and the array never stops growing."
+      },
+      {
+        "text": "The fix is to switch to a graph database, because devices relate to readings",
+        "explanation": "Wrong. A device and its readings are a one-to-many time series, not a multi-hop graph. A time-series store, or bucketed documents, fits."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Growth: one reading per 5 s = 17,280 per day.\n2. Size: 17,280 × ~60 B ≈ 1 MB per day per device.\n3. Limit: 16 MB per document, so roughly 2–3 weeks for an active device, after which pushes fail.\n4. Before that, every push modifies a big, growing document: slower writes and more replication traffic.\n5. Bucket pattern:\n```\n{ device: 7,\n  hour: \"2026-09-14T10\",\n  n: 720,\n  readings: [ ... ] }\n```\n   720 readings × 60 B ≈ 43 KB per document.\n6. Queries for \"device 7 between 10:00 and 12:00\" read two or three buckets.",
+    "link": {
+      "title": "MongoDB: Bucket pattern",
+      "url": "https://www.mongodb.com/docs/manual/data-modeling/design-patterns/group-data/bucket-pattern/"
+    }
+  },
+  {
+    "id": "db-nosql-families-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer simplifies the lesson's Cassandra table to `PRIMARY KEY ((sensor_id), ts)`, dropping `day` from the partition key. Sensors report once a second and data is kept for 3 years. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing; Cassandra partitions have no practical size limit",
+        "explanation": "Wrong. There's no hard cap that bites early, but very large partitions live on just the few replicas that own them and make reads, compaction and repair slow. Guidance is to keep them to around 100 MB or less."
+      },
+      {
+        "text": "Queries for one sensor's latest readings become impossible",
+        "explanation": "Wrong. They still work, because `sensor_id` is the partition key and `ts` the clustering column. The problem is the partition's size over time, not whether it can be queried."
+      },
+      {
+        "text": "Writes are rejected after 86,400 rows per partition",
+        "explanation": "Wrong. There's no per-day row limit. 86,400 is simply how many rows a once-a-second sensor adds each day."
+      },
+      {
+        "text": "Each sensor's partition grows without bound (about 95 million rows over 3 years), creating huge partitions that overload their replicas; a time bucket in the partition key keeps them bounded",
+        "explanation": "Correct. With `(sensor_id, day)`, each partition holds at most 86,400 rows, a few MB. Without the bucket, one partition holds every reading the sensor ever sent."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rows per sensor per day: 1 per second × 86,400 s = 86,400.\n2. Over 3 years: 86,400 × 365 × 3 ≈ 95 million rows in one partition.\n3. At ~40 bytes a row that's several GB in one partition, held by just the replica nodes that own that key.\n4. Effects: slow reads of the partition, heavy compaction and repair, uneven disk use across nodes.\n5. With `((sensor_id, day), ts)`:\n   - 86,400 rows × ~40 B ≈ 3.5 MB per partition.\n   - \"Latest 100 readings today\" is still one partition read.\n   - A multi-day query reads one partition per day.\n6. Choose the bucket size (hour, day, week) from the write rate so partitions stay well under ~100 MB.",
+    "link": {
+      "title": "Apache Cassandra: Data modeling",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/index.html"
+    }
+  },
+  {
+    "id": "db-nosql-families-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shop writes each new product to Elasticsearch and then immediately redirects the seller to a search results page that queries for it. About half the time the new product is missing, but it appears if they reload a second later. What's going on?",
+    "options": [
+      {
+        "text": "Elasticsearch lost the write and the client retried it",
+        "explanation": "Wrong. The document appears a moment later without any retry, so it was accepted. Something is delaying its visibility to search, not losing it."
+      },
+      {
+        "text": "The cluster's replicas are out of sync, so searches sometimes hit a stale replica",
+        "explanation": "Unlikely as the explanation. Replica lag can exist, but the systematic \"missing for about a second\" behaviour matches the refresh interval, which affects every copy."
+      },
+      {
+        "text": "Search is near-real-time: new documents become searchable only after the next refresh, about once a second by default",
+        "explanation": "Correct. Indexing writes to an in-memory buffer; a periodic refresh makes it searchable. Use the id returned by the write to fetch the document directly (GET by id is real-time), or set `refresh=wait_for` on that write if you must."
+      },
+      {
+        "text": "The inverted index can only be rebuilt nightly",
+        "explanation": "Wrong. Lucene indexes incrementally by creating new segments at each refresh; there's no nightly rebuild."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symptom: missing immediately, present a second later. That's a visibility delay, not data loss.\n2. Elasticsearch buffers new documents and makes them searchable at each **refresh**, by default every 1 s (for indexes that are actively searched).\n3. A search issued within that window misses the document.\n4. Fixes, from best:\n   - Show the product from the write response or a GET by id, which is real-time.\n   - `?refresh=wait_for` on that one write: the call returns once it's searchable.\n   - Never force a refresh on every write; it creates tiny segments and hurts throughput.\n5. Broader lesson: search engines are derived views, usually fed from a primary database, and they lag it slightly.",
+    "link": {
+      "title": "Elasticsearch: Near real-time search",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/near-real-time.html"
+    }
+  },
+  {
+    "id": "db-nosql-families-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team stores shopping baskets *only* in a single Redis instance running the default persistence settings (RDB snapshots, no append-only file). The server is killed by the OS out-of-memory killer and restarts. What should they expect, and what's a reasonable change?",
+    "options": [
+      {
+        "text": "No data loss, because Redis writes every command to disk before replying",
+        "explanation": "Wrong. That describes the append-only file with `appendfsync always`, which isn't the default. By default Redis replies from memory and only snapshots periodically."
+      },
+      {
+        "text": "Total loss of all baskets, because Redis is purely in-memory",
+        "explanation": "Too pessimistic. With RDB on, Redis reloads its last snapshot at startup. Only changes since that snapshot are lost."
+      },
+      {
+        "text": "Redis replays its replication log to recover every write",
+        "explanation": "Wrong. There's no replica here, and replication doesn't give a single instance durability. A replica would also be asynchronous, so it can lag."
+      },
+      {
+        "text": "Baskets changed since the last snapshot are lost, potentially minutes of writes; enabling AOF with `appendfsync everysec` narrows that to about a second",
+        "explanation": "Correct. RDB snapshots run at intervals, so everything after the last one is gone. AOF logs every write and fsyncs once a second, a common balance of durability and speed."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Default Redis persistence: RDB snapshots are taken when a configured number of changes occurs within a time window (minutes, for low write rates). AOF is off.\n2. Crash at time *t*: Redis restarts and loads the last snapshot, taken at *t − Δ*.\n3. Lost: every basket change in Δ, which can be minutes.\n4. Options:\n\n| Setting | Typical loss |\n|---|---|\n| RDB only | Since last snapshot |\n| AOF `everysec` | About 1 s |\n| AOF `always` | ~None, slower |\n\n5. Also ask whether Redis should be the system of record at all. For baskets, losing a second is usually acceptable; for orders, write to a durable database.",
+    "link": {
+      "title": "Redis: Persistence",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
+    }
+  }
+]

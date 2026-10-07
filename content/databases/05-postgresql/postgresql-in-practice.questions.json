@@ -1,0 +1,371 @@
+[
+  {
+    "id": "postgresql-in-practice-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your web app uses an ORM, a driver and PostgreSQL. Where are foreign keys and concurrent row updates enforced?",
+    "options": [
+      {
+        "text": "In the ORM only",
+        "explanation": "Another client can bypass the ORM, so database invariants cannot depend on it alone."
+      },
+      {
+        "text": "In the PostgreSQL server",
+        "explanation": "The server applies constraints and concurrency rules to operations from all clients."
+      },
+      {
+        "text": "In psql",
+        "explanation": "psql is a client, not the storage and concurrency engine."
+      },
+      {
+        "text": "In the connection pool",
+        "explanation": "A pool reuses connections; it does not enforce relational constraints."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The ORM produces operations and the driver sends them.\n2. The pool provides a connection.\n3. The server executes the SQL, checks constraints and coordinates conflicting writes.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/tutorial-arch.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A required seats_left column must never be negative or unknown. Which definition enforces both requirements?",
+    "options": [
+      {
+        "text": "integer CHECK (seats_left >= 0)",
+        "explanation": "CHECK alone accepts a NULL result, so NULL can still be stored."
+      },
+      {
+        "text": "integer DEFAULT 0",
+        "explanation": "A default supplies an omitted value but does not reject explicit NULL or negative input."
+      },
+      {
+        "text": "integer UNIQUE",
+        "explanation": "Uniqueness does not enforce the allowed range or reject NULL."
+      },
+      {
+        "text": "integer NOT NULL CHECK (seats_left >= 0)",
+        "explanation": "NOT NULL rejects unknown values and CHECK rejects negative values."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Test -1: the check is false, so insertion fails.\n2. Test NULL: NOT NULL rejects it.\n3. Test 0: both constraints pass. Each constraint contributes a distinct rule.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "You store an event instant as timestamptz. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Its displayed time can change with the session time zone",
+        "explanation": "Postgres renders the stored instant in the session time zone."
+      },
+      {
+        "text": "It preserves the original named time zone automatically",
+        "explanation": "It preserves an instant, not the input zone name."
+      },
+      {
+        "text": "A recurring 9am London schedule needs additional zone and recurrence information",
+        "explanation": "One instant does not encode future occurrences or daylight-saving rules."
+      },
+      {
+        "text": "It is an appropriate exact decimal type for a ticket price",
+        "explanation": "Use a numeric decimal type or a deliberate minor-unit representation for amounts, not a timestamp."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "1. Separate an instant from a local clock reading.\n2. The same instant can display differently in London and Tokyo.\n3. Future 9am London occurrences require a named zone and recurrence rules, not merely the first occurrence.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/datatype-datetime.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "One seat remains. Two Read Committed transactions run a conditional UPDATE that subtracts 1 only where seats_left > 0. Both eventually commit. What happens?",
+    "options": [
+      {
+        "text": "Both succeed because both initially saw 1",
+        "explanation": "A conflicting updater waits and rechecks the row condition after the other commits."
+      },
+      {
+        "text": "The count becomes -1 unless isolation is Serializable",
+        "explanation": "The condition and same-row write coordination prevent the second decrement here."
+      },
+      {
+        "text": "One update returns a row; the other returns no row",
+        "explanation": "After the first changes 1 to 0, the second rechecks seats_left > 0 and finds it false."
+      },
+      {
+        "text": "Ordinary SELECT statements must be blocked until both finish",
+        "explanation": "MVCC allows ordinary reads of visible row versions; it does not require this blanket blocking."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Transaction A updates the row from 1 to 0 and holds the write lock.\n2. B waits for A.\n3. After A commits, B rechecks the condition against 0.\n4. The condition fails, so B cannot claim a seat. The application must inspect the returned row count.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A retry decrements a seat, then INSERT ... ON CONFLICT DO NOTHING skips an existing booking request key. The application commits. What is the bug?",
+    "options": [
+      {
+        "text": "The extra decrement can commit without a new booking",
+        "explanation": "DO NOTHING affects the conflicting insert, not the earlier successful UPDATE."
+      },
+      {
+        "text": "Postgres automatically rolls back every statement when DO NOTHING skips a row",
+        "explanation": "Skipping a conflicting insert is not a transaction error."
+      },
+      {
+        "text": "The unique constraint has stopped working",
+        "explanation": "The constraint prevented a duplicate booking exactly as intended."
+      },
+      {
+        "text": "RETURNING would itself undo the decrement",
+        "explanation": "RETURNING reports affected rows; it does not reverse earlier writes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Suppose seats_left starts at 5.\n2. The retry changes it to 4.\n3. The insert skips the duplicate key.\n4. COMMIT keeps 4 even though no booking was added. Roll back the duplicate attempt and retrieve the existing booking, checking request identity.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-insert.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An admin page filters bookings by event_id and orders them by created_at DESC with LIMIT 20. Which index best matches that access pattern?",
+    "options": [
+      {
+        "text": "A GIN index on events.details",
+        "explanation": "That serves document queries on another table, not the booking filter and order."
+      },
+      {
+        "text": "A B-tree on (event_id, created_at DESC)",
+        "explanation": "Equality on the first column restricts the range, and the next column supplies the requested order."
+      },
+      {
+        "text": "A unique index on created_at",
+        "explanation": "It adds an unjustified uniqueness rule and does not group entries by event."
+      },
+      {
+        "text": "An index on every column independently",
+        "explanation": "Separate indexes are not equivalent to a composite index supplying this filter and ordering."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Find one event rather than searching every booking.\n2. Within that event, read entries from newest to oldest.\n3. Stop after 20. The composite B-tree matches those steps, although a tiny table may still favour a sequential scan.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/indexes-types.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are investigating a slow SELECT. Which statements about PostgreSQL diagnostics are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "EXPLAIN costs are elapsed milliseconds",
+        "explanation": "Costs are planner units, separate from actual execution timing."
+      },
+      {
+        "text": "EXPLAIN ANALYZE only estimates and never executes",
+        "explanation": "ANALYZE in EXPLAIN executes the statement, including its write effects if it modifies data."
+      },
+      {
+        "text": "Compare estimated and actual row counts to look for estimation errors",
+        "explanation": "Large discrepancies can explain a poor plan choice."
+      },
+      {
+        "text": "ANALYZE bookings refreshes planner statistics",
+        "explanation": "This standalone command collects statistics; it is distinct from EXPLAIN ANALYZE."
+      }
+    ],
+    "answer": [
+      2,
+      3
+    ],
+    "workedExample": "1. Use plain EXPLAIN for estimates.\n2. Add ANALYZE only when executing the query is appropriate.\n3. Compare estimates with observed rows.\n4. Standalone ANALYZE updates the statistics used for future estimates.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Events have variable presentation attributes in JSONB. Queries use details @> a small JSON object. Which approach is sensible?",
+    "options": [
+      {
+        "text": "Move all keys and foreign-key relationships into JSONB",
+        "explanation": "That makes important relational invariants harder to express and enforce."
+      },
+      {
+        "text": "Expect JSONB to preserve original whitespace and key order",
+        "explanation": "JSONB stores a processed representation, not the original input text."
+      },
+      {
+        "text": "Keep core invariants in typed columns and consider a GIN index for selective containment queries",
+        "explanation": "This combines explicit schema rules with JSONB flexibility and an index suited to containment."
+      },
+      {
+        "text": "Add a B-tree and assume it accelerates every JSON operator",
+        "explanation": "Index support depends on the operator and index method."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Event identity and seat availability have stable meanings and constraints.\n2. Optional presentation attributes can vary in JSONB.\n3. For selective containment searches, evaluate a GIN index on representative data; it adds write and storage cost.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/datatype-json.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two Repeatable Read transactions each see two on-call staff, then each marks a different person inactive. Both commit. Which explanation and remedy fit?",
+    "options": [
+      {
+        "text": "Repeatable Read permits write skew; use Serializable with whole-transaction retries or a suitable shared locking protocol",
+        "explanation": "Stable snapshots alone do not prevent conflicting decisions that write different rows."
+      },
+      {
+        "text": "This is a dirty read; Repeatable Read allows uncommitted data",
+        "explanation": "Repeatable Read does not allow dirty reads."
+      },
+      {
+        "text": "A separate index on each name makes the invariant serializable",
+        "explanation": "An access-path index does not enforce the cross-row on-call rule."
+      },
+      {
+        "text": "Retry only COMMIT after a serialization failure",
+        "explanation": "The transaction must restart and reconsider its reads and decisions."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Both snapshots show a second active person.\n2. The transactions modify different rows, so no same-row conflict stops them.\n3. Together they violate the invariant.\n4. Coordinate the shared rule, or use Serializable for its participants and retry any rejected transaction from the beginning.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An update-heavy table keeps growing while an old transaction retains a snapshot. Which actions or explanations are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Disable autovacuum to stop it competing with writes",
+        "explanation": "That can worsen dead-version accumulation and wraparound risk."
+      },
+      {
+        "text": "Investigate the old transaction because it may hold back removal of row versions",
+        "explanation": "Versions still needed by a snapshot cannot yet be reclaimed."
+      },
+      {
+        "text": "Monitor autovacuum and distinguish reusable table space from space returned to the OS",
+        "explanation": "Plain vacuum usually makes space reusable within the table."
+      },
+      {
+        "text": "Run VACUUM FULL routinely because it never blocks normal access",
+        "explanation": "VACUUM FULL rewrites the table and requires a strong lock."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "1. Updates leave old versions.\n2. An old snapshot may still need them.\n3. Investigate why that transaction remains open and whether maintenance is keeping up.\n4. Even after cleanup, reusable pages do not imply the table file immediately shrinks.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/routine-vacuuming.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user writes on the primary, then immediately reads from an asynchronous standby and sees the old value. What follows?",
+    "options": [
+      {
+        "text": "The primary violated transaction atomicity",
+        "explanation": "Replica replay lag does not show that the primary committed a partial transaction."
+      },
+      {
+        "text": "Every acknowledged commit is already durable on every standby",
+        "explanation": "Asynchronous replication does not provide that guarantee."
+      },
+      {
+        "text": "Adding a unique index to the standby removes replication lag",
+        "explanation": "Indexes do not make asynchronous WAL delivery and replay instantaneous."
+      },
+      {
+        "text": "The standby can lag; route a freshness-sensitive read appropriately and account for failover data loss",
+        "explanation": "A primary read after confirmed commit can avoid this replica-lag case; asynchronous failover can lose unreplicated commits."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The primary acknowledges the commit.\n2. The standby has not yet replayed the relevant WAL.\n3. Its query therefore sees older state.\n4. Define the read-after-write policy and failover durability requirements explicitly.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/warm-standby.html"
+    }
+  },
+  {
+    "id": "postgresql-in-practice-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An accidental DELETE has already reached the standby. You need the database as it was just before deletion. What is the appropriate recovery foundation?",
+    "options": [
+      {
+        "text": "Promote the standby and assume the deleted rows reappear",
+        "explanation": "The standby has already replayed the deletion."
+      },
+      {
+        "text": "Restore a suitable base backup and replay an unbroken archived WAL sequence to a target before the deletion",
+        "explanation": "Point-in-time recovery reconstructs an earlier state; verify it in a separate environment before replacing live data."
+      },
+      {
+        "text": "Run VACUUM to roll back the committed DELETE",
+        "explanation": "Vacuum reclaims obsolete versions; it is not a committed-transaction undo command."
+      },
+      {
+        "text": "Restart the primary so crash recovery skips the DELETE",
+        "explanation": "Recovery preserves committed work, including a valid but mistaken deletion."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Replication copied the mistake, so it cannot supply the earlier state by itself.\n2. Restore a base backup taken before the desired recovery point.\n3. Replay the required archived WAL up to a target before the deletion.\n4. Validate the restored state and plan how to handle legitimate changes made afterwards.",
+    "link": {
+      "title": "PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/backup.html"
+    }
+  }
+]

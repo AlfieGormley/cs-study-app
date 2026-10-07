@@ -1,0 +1,339 @@
+[
+  {
+    "id": "git-workflows-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Strip away the branch names. What is the single variable that most distinguishes branching workflows from each other in practice?",
+    "options": [
+      {
+        "text": "How often each developer's work is integrated with everyone else's",
+        "explanation": "Correct. Integration frequency drives conflict size, semantic clashes and feedback speed. Workflows are largely different answers to \"how long may work stay apart?\""
+      },
+      {
+        "text": "Whether the team uses merge commits or rebases",
+        "explanation": "That is an integration *mechanism*. Any workflow can use either; it changes history shape, not how long work stays apart."
+      },
+      {
+        "text": "How many reviewers each change needs",
+        "explanation": "Review policy matters, but it is orthogonal to branching: GitFlow and trunk-based teams can both require one or two approvals."
+      },
+      {
+        "text": "Which hosting platform is used",
+        "explanation": "GitHub, GitLab and Bitbucket all support every common workflow; the platform does not dictate the strategy."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Two developers diverge for time T.\n2. The amount each changes grows with T, and the number of possible interactions between their changes grows faster still (every change on one side can interact with every change on the other).\n3. So the expected integration pain rises sharply with T.\n4. GitFlow tolerates long-lived feature and release branches; GitHub flow uses short branches by convention; trunk-based development caps divergence at about a day.\n5. That is why Fowler's advice is: if integrating hurts, do it more often.",
+    "link": {
+      "title": "Patterns for Managing Source Code Branches — Martin Fowler",
+      "url": "https://martinfowler.com/articles/branching-patterns.html"
+    }
+  },
+  {
+    "id": "git-workflows-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is **not** part of GitHub flow?",
+    "options": [
+      {
+        "text": "Keeping `main` deployable at all times",
+        "explanation": "This is GitHub flow's core rule, and it is what allows deploying straight after merge."
+      },
+      {
+        "text": "Branching from `main` for each change",
+        "explanation": "This is step one of GitHub flow: every change starts from the current `main`."
+      },
+      {
+        "text": "Opening a pull request for review and CI before merging",
+        "explanation": "Pull requests are central to GitHub flow; they are where review and automated checks happen."
+      },
+      {
+        "text": "A long-lived `develop` branch where features are integrated before release",
+        "explanation": "Correct, this is not part of GitHub flow. A separate `develop` integration branch is GitFlow's idea; GitHub flow has only `main` plus short-lived branches."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "GitHub flow in five steps:\n\n1. Branch from `main`.\n2. Commit and push.\n3. Open a pull request; CI and review run.\n4. Merge into `main`.\n5. Deploy `main`.\n\nThere is exactly one long-lived branch. Anything with `develop`, `release/*` and `hotfix/*` is GitFlow.",
+    "link": {
+      "title": "GitHub flow — GitHub Docs",
+      "url": "https://docs.github.com/en/get-started/using-github/github-flow"
+    }
+  },
+  {
+    "id": "git-workflows-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In GitFlow, production is on tag `v3.2.0` and `develop` has unreleased work. A critical bug is found in production. Where does the hotfix branch start, and where must it be merged?",
+    "options": [
+      {
+        "text": "From `develop`; merged into `main` only",
+        "explanation": "Branching from `develop` would drag unreleased features into the hotfix release. And merging only into `main` would leave `develop` without the fix."
+      },
+      {
+        "text": "From `main`; merged into `develop` only, which is released next sprint",
+        "explanation": "That defeats the purpose of a hotfix: production would wait for the next full release to get an urgent fix."
+      },
+      {
+        "text": "From `main` (the `v3.2.0` tag); merged into both `main` and `develop`",
+        "explanation": "Correct. The fix starts from exactly what is in production, is released as `v3.2.1` from `main`, and is merged back into `develop` so the next release includes it."
+      },
+      {
+        "text": "From a `feature/*` branch; merged into `release/*`",
+        "explanation": "Feature branches hold new work, and release branches stabilise upcoming releases. Neither represents what is running in production."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\ngit switch -c hotfix/3.2.1 v3.2.0\n# fix and commit\ngit switch main\ngit merge --no-ff hotfix/3.2.1\ngit tag -a v3.2.1 -m \"3.2.1\"\ngit switch develop\ngit merge --no-ff hotfix/3.2.1\n```\n\nIf a `release/*` branch is currently open, the model says to merge the hotfix into that instead of `develop`, since the release branch will itself be merged back into `develop`.",
+    "link": {
+      "title": "A successful Git branching model — Vincent Driessen",
+      "url": "https://nvie.com/posts/a-successful-git-branching-model/"
+    }
+  },
+  {
+    "id": "git-workflows-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Alice's branch changes `price()` to return pence instead of pounds and updates every existing caller. Bob's branch, started the same day, adds a new call `if price(item) > 100:` meaning £100. Both merge cleanly without conflicts two weeks later. What has happened?",
+    "options": [
+      {
+        "text": "Nothing; Git would have reported a conflict if the changes were incompatible",
+        "explanation": "Git detects only overlapping textual edits. Bob's new line and Alice's change touch different lines, so Git merges them without complaint."
+      },
+      {
+        "text": "A semantic conflict: the merge is textually clean but Bob's new call is now wrong by a factor of 100",
+        "explanation": "Correct. Only building and testing the combined code (or reviewing them together) would catch it. Integrating more often shrinks the window in which such clashes can arise unnoticed."
+      },
+      {
+        "text": "A textual conflict that Git resolved automatically with `ort`",
+        "explanation": "Git does not resolve real textual conflicts silently; it stops and marks them. There simply was no textual overlap here."
+      },
+      {
+        "text": "A rebase error, because they should have rebased instead of merging",
+        "explanation": "Rebasing would produce the same final code. The problem is the meaning of the code, not how histories were combined."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Base: `price()` returns pounds.\n2. Alice: returns pence, updates the 12 callers she can see.\n3. Bob: adds caller 13 assuming pounds.\n4. Merge: no lines overlap, so it succeeds. Now `price(item) > 100` means more than £1.\n5. Prevention:\n   - Integrate daily: Bob would have seen Alice's change within a day.\n   - CI on the merged result, with a test on Bob's new behaviour.\n   - Use types (a `Money` type) so the change breaks compilation rather than meaning.",
+    "link": {
+      "title": "Patterns for Managing Source Code Branches — Martin Fowler",
+      "url": "https://martinfowler.com/articles/branching-patterns.html"
+    }
+  },
+  {
+    "id": "git-workflows-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your team practises trunk-based development (merge at least daily). You need to build a new recommendations engine that will take three weeks before it is usable. What is the standard approach?",
+    "options": [
+      {
+        "text": "Make an exception: keep a three-week branch and merge it at the end",
+        "explanation": "That reintroduces exactly the late, large integration TBD is designed to avoid, with three weeks of drift from everyone else's changes."
+      },
+      {
+        "text": "Develop in a fork and copy the files across when done",
+        "explanation": "A fork is just a long-lived branch in another repository, with all the same integration costs and less visibility."
+      },
+      {
+        "text": "Freeze trunk for three weeks while the feature is built",
+        "explanation": "A code freeze blocks everyone else's work and is a symptom TBD tries to eliminate, not a tool it uses."
+      },
+      {
+        "text": "Merge small slices to trunk daily, with the feature hidden behind a flag that stays off until it is ready",
+        "explanation": "Correct. The code integrates continuously and is exercised by CI, while users never see it until the flag is turned on."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Day 1: add the flag `recs_v2` (default off) and a stub behind it. Merge.\n2. Days 2-14: build the engine in small PRs. Each merges to trunk; CI runs the new code's tests; production behaviour is unchanged because the flag is off.\n3. Day 15: enable for internal staff, then 1% of users, then everyone.\n4. Day 20: delete the flag and the old code path.\n\nIf the new engine replaces an existing component, use branch by abstraction: put an interface in front of the old one, migrate callers, then swap implementations behind it.",
+    "link": {
+      "title": "Feature Toggles — Pete Hodgson on martinfowler.com",
+      "url": "https://martinfowler.com/articles/feature-toggles.html"
+    }
+  },
+  {
+    "id": "git-workflows-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "According to DORA's analysis of its 2016 and 2017 data, which practices were associated with higher software delivery performance? Select all that apply.",
+    "options": [
+      {
+        "text": "Three or fewer active branches in the application's repository",
+        "explanation": "Correct. Fewer long-lived branches means less divergence to reconcile."
+      },
+      {
+        "text": "Merging branches to trunk at least once a day",
+        "explanation": "Correct. Daily integration is the defining habit of trunk-based development."
+      },
+      {
+        "text": "A code freeze before each release",
+        "explanation": "Incorrect. DORA lists having no code freezes and no integration phases as part of the high-performing pattern."
+      },
+      {
+        "text": "Keeping a separate long-lived integration branch apart from trunk",
+        "explanation": "Incorrect. An extra integration branch (like GitFlow's `develop`) is a second place to integrate, which works against daily merging to trunk."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "DORA's trunk-based development capability page lists three practices linked to better delivery speed, stability and availability:\n\n1. Three or fewer active branches.\n2. Merge to trunk at least daily.\n3. No code freezes and no integration phases.\n\nThe last two options are the opposite of point 3 and point 1 respectively.",
+    "link": {
+      "title": "Trunk-based development — DORA capabilities",
+      "url": "https://dora.dev/capabilities/trunk-based-development/"
+    }
+  },
+  {
+    "id": "git-workflows-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A trunk-based team supports mobile release `release/5.1` while trunk heads for 5.2. QA finds a crash in 5.1 that also exists on trunk. What is the recommended order of operations?",
+    "options": [
+      {
+        "text": "Fix it on trunk first, then `git cherry-pick -x` the commit onto `release/5.1`",
+        "explanation": "Correct. Trunk always gets the fix, so it cannot regress in the next release, and `-x` records where the backport came from."
+      },
+      {
+        "text": "Fix it on `release/5.1`, ship 5.1.1, then remember to port it to trunk later",
+        "explanation": "\"Remember later\" is how fixes get lost. If the port is forgotten, the crash returns in 5.2."
+      },
+      {
+        "text": "Merge trunk into `release/5.1` to pick up the fix",
+        "explanation": "That would pull every unreleased 5.2 feature into the 5.1 release branch."
+      },
+      {
+        "text": "Delete `release/5.1` and ship trunk as 5.1.1",
+        "explanation": "Trunk contains 5.2 features that have not been stabilised. A patch release should contain only the fix."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\ngit switch main\n# write fix + test, commit -> abc123\ngit switch release/5.1\ngit cherry-pick -x abc123\n# tag v5.1.1 and ship\n```\n\n1. The fix exists on trunk, so 5.2 and later include it automatically.\n2. Cherry-pick copies just that change.\n3. `-x` adds \"(cherry picked from commit abc123...)\" to the message for traceability.\n\nOnly fixes flow to release branches, never features.",
+    "link": {
+      "title": "Branch for release — Trunk Based Development",
+      "url": "https://trunkbaseddevelopment.com/branch-for-release/"
+    }
+  },
+  {
+    "id": "git-workflows-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team has `dev`, `staging` and `prod` branches. Code is promoted by merging `dev` into `staging`, then `staging` into `prod`, and each branch auto-deploys. After a few months, `prod` behaves differently from what was tested on `staging`. What is the underlying problem?",
+    "options": [
+      {
+        "text": "Merges between environment branches are slow",
+        "explanation": "Speed isn't the issue. The problem is that what gets deployed to production is not what was tested."
+      },
+      {
+        "text": "They should rebase instead of merge between environments",
+        "explanation": "Rebasing still produces per-environment code states and adds rewritten history; it doesn't fix the drift."
+      },
+      {
+        "text": "Each branch drifts (hotfixes, cherry-picks, merge results), so `prod` deploys a code state that was never built and tested as such; promote one build artefact instead",
+        "explanation": "Correct. Build once from `main`, then promote the same immutable artefact through staging to production with environment-specific config."
+      },
+      {
+        "text": "They need a fourth `pre-prod` branch",
+        "explanation": "Another environment branch adds another place to drift. The design itself is the problem."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A hotfix goes straight to `prod`; someone forgets to bring it back to `staging` and `dev`.\n2. A cherry-pick lands on `staging` only.\n3. Now merging `staging` into `prod` produces a combination that has never existed on `staging`.\n4. Every deploy rebuilds from a different branch, possibly with different dependency versions.\n5. Fix: one branch (`main`), one build per commit, producing an artefact (container image `app:sha-abc123`). Deploy that exact artefact to staging, test, then to prod.",
+    "link": {
+      "title": "Patterns for Managing Source Code Branches — Martin Fowler",
+      "url": "https://martinfowler.com/articles/branching-patterns.html"
+    }
+  },
+  {
+    "id": "git-workflows-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A GitFlow team shipped hotfix `v4.0.1` from `main` to stop a data-corruption bug. Six weeks later `v4.1.0` is released from a `release/4.1` branch cut from `develop`, and the corruption returns. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Tags in Git are mutable, so `v4.0.1` was overwritten",
+        "explanation": "Tags can be moved with force, but that would not reintroduce a bug in a release built from `develop`."
+      },
+      {
+        "text": "The hotfix was merged into `main` but never into `develop`, so `release/4.1` (cut from `develop`) never contained the fix",
+        "explanation": "Correct. This is GitFlow's characteristic failure: two integration branches, and a hotfix that only reached one of them."
+      },
+      {
+        "text": "Merging `release/4.1` into `main` deleted the hotfix commits",
+        "explanation": "Merges never delete commits. However, if `develop` lacked the fix, the release merge could cleanly carry the old code back into `main`."
+      },
+      {
+        "text": "The release branch was rebased, changing the fix's hash",
+        "explanation": "A changed hash does not remove a change. The fix was never there in the first place."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `hotfix/4.0.1` branched from `main` and merged into `main` only.\n2. `develop` continued without the fix.\n3. `release/4.1` was cut from `develop`, so it also lacks the fix.\n4. When `release/4.1` is merged into `main`, any conflict around the fixed lines may be resolved in favour of the release, or the old code path may simply be reused; either way, 4.1.0 ships without it.\n5. Prevention: automate the back-merge (for example a CI check that the hotfix commit, the second parent of the tagged merge on `main`, is in `develop`: `git merge-base --is-ancestor 'v4.0.1^2' develop` exits 0 only if it is), or adopt a trunk-first fixing model.",
+    "link": {
+      "title": "A successful Git branching model — Vincent Driessen",
+      "url": "https://nvie.com/posts/a-successful-git-branching-model/"
+    }
+  },
+  {
+    "id": "git-workflows-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You lead 40 engineers on a SaaS web product deployed to one production environment several times a day. A new manager proposes adopting full GitFlow \"for safety\". What is the strongest argument against it here?",
+    "options": [
+      {
+        "text": "GitFlow is built for discrete, versioned releases and multiple supported versions; with one version deployed continuously it adds a second integration branch and slower, larger integrations without a matching benefit",
+        "explanation": "Correct. Even GitFlow's author recommends simpler flows such as GitHub flow for continuously delivered web apps."
+      },
+      {
+        "text": "GitFlow requires a monorepo",
+        "explanation": "GitFlow is independent of repository layout; it can be used in any repository."
+      },
+      {
+        "text": "GitFlow cannot be used with pull requests",
+        "explanation": "GitFlow works with pull requests; feature branches can be reviewed via PRs into `develop`."
+      },
+      {
+        "text": "Git's merge algorithm performs badly on more than two branches",
+        "explanation": "Git handles thousands of branches easily; the cost of GitFlow is human and process overhead, not tooling performance."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Weigh what GitFlow buys against the context:\n\n| GitFlow offers | Needed here? |\n|---|---|\n| Release branches | No, one version |\n| `main` = last release | No, `main` deploys |\n| Hotfix lane | Trunk is already prod |\n\nCosts: two-way merges, longer branches, a `develop` that differs from production. A better fit is trunk-based development or GitHub flow with short-lived branches, CI and feature flags. \"Safety\" comes from automated tests, small changes and fast rollback, not extra branches.",
+    "link": {
+      "title": "A successful Git branching model — Vincent Driessen",
+      "url": "https://nvie.com/posts/a-successful-git-branching-model/"
+    }
+  },
+  {
+    "id": "git-workflows-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team has used feature flags with trunk-based development for two years and now has 300 flags. Which concerns are well founded? Select all that apply.",
+    "options": [
+      {
+        "text": "Each boolean flag in a code path doubles the possible combinations of behaviour, so many combinations are never tested",
+        "explanation": "Correct. 10 independent flags on one path give 2^10 = 1,024 combinations; nobody tests them all."
+      },
+      {
+        "text": "Old flags that are always on still carry dead code paths that can be reactivated by accident",
+        "explanation": "Correct. Knight Capital's 2012 loss of roughly $440 million involved a repurposed flag reactivating old code on one server."
+      },
+      {
+        "text": "Flags make continuous integration impossible",
+        "explanation": "Incorrect. Flags are what make daily integration of unfinished work possible; the issue is cleaning them up afterwards."
+      },
+      {
+        "text": "Each release flag should have an owner and an expiry, and be removed once the feature is fully rolled out",
+        "explanation": "Correct. Treat release flags as short-lived debt. Long-lived operational or permission flags are a separate category and should be managed deliberately."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Combinatorics: n independent on/off flags affecting the same flow give 2^n states. With n = 10 that is 1,024.\n2. Dead paths: a flag left on for a year means the `else` branch is untested, yet still deployed and switchable.\n3. Flags do not block CI: they enable it.\n4. Hygiene: inventory flags, tag them by type (release, experiment, ops, permission), set expiry dates, and add a lint or dashboard that flags stale ones.",
+    "link": {
+      "title": "Feature Toggles — Pete Hodgson on martinfowler.com",
+      "url": "https://martinfowler.com/articles/feature-toggles.html"
+    }
+  }
+]

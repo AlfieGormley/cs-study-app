@@ -1,0 +1,348 @@
+[
+  {
+    "id": "dl-debugging-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Java service has stopped responding. Its CPU use is near 0%. What's the most useful first step?",
+    "options": [
+      {
+        "text": "Restart it immediately and look at the logs afterwards",
+        "explanation": "Restarting loses the live state, so collect evidence first when operationally feasible. Existing dumps, core files and detailed logs may preserve useful evidence after restart."
+      },
+      {
+        "text": "Take two or three thread dumps a few seconds apart and compare them",
+        "explanation": "Correct. Threads stuck at the same lock call in every dump are genuinely blocked, and `jstack` will also print any Java-level deadlock it finds."
+      },
+      {
+        "text": "Attach a CPU profiler to find the hot loop",
+        "explanation": "With near-zero CPU there's no hot loop to find. A profiler suits livelock or busy loops, where CPU is high."
+      },
+      {
+        "text": "Increase the thread pool size so new requests can be served",
+        "explanation": "If the threads are deadlocked, new threads will soon hit the same locks and join the cycle's waiters. It hides the symptom for minutes, not the cause."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Near-zero CPU suggests waiting, which may be deadlock, a lost wake-up or a slow dependency. Capture several thread dumps and inspect current wait/ownership relations. Repeated stacks alone do not prove deadlock; changing stacks do not prove useful progress. Java can identify supported platform-thread monitor/synchronizer cycles. Preserve evidence before restarting when feasible.",
+    "link": {
+      "title": "jstack — Java SE 21 tool reference",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/specs/man/jstack.html"
+    }
+  },
+  {
+    "id": "dl-debugging-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Go service crashes with `fatal error: all goroutines are asleep - deadlock!`. A different Go service has two goroutines deadlocked on two mutexes, but keeps serving HTTP requests and never crashes. Why the difference?",
+    "options": [
+      {
+        "text": "The scheduler detects some global no-progress states; active HTTP/network work can keep a partial deadlock from triggering that check",
+        "explanation": "Correct. The check is global: if anything could still run (here, the network poller and HTTP handlers), the runtime can't prove the program is stuck."
+      },
+      {
+        "text": "The second service must use `sync.RWMutex`, which the runtime doesn't track",
+        "explanation": "Lock type alone does not determine detection. The scheduler considers runnable work and possible wakeups; some runtime modes also change its checks."
+      },
+      {
+        "text": "The runtime detects cycles between mutexes, but only for channels in the first service",
+        "explanation": "Go's runtime doesn't build a lock-order or wait-for graph at all. It only notices the all-blocked case."
+      },
+      {
+        "text": "The second service has the race detector enabled, which suppresses the crash",
+        "explanation": "The race detector finds data races; it neither suppresses this error nor detects lock-order inversions."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Go's scheduler can report a global deadlock when no work can run and no relevant timer, network or other wakeup can make progress. A partial mutex cycle in a working HTTP server does not meet that condition. Runtime/cgo modes also affect detection. Inspect goroutine dumps or a configured pprof endpoint; SIGQUIT normally terminates the process after printing stacks.",
+    "link": {
+      "title": "net/http/pprof — Go packages",
+      "url": "https://pkg.go.dev/net/http/pprof"
+    }
+  },
+  {
+    "id": "dl-debugging-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You dump a hung Python process with `py-spy dump`. Two threads are blocked in `lock.acquire()`. Why can't the dump tell you directly which thread holds each lock?",
+    "options": [
+      {
+        "text": "py-spy only shows the main thread",
+        "explanation": "py-spy shows every thread's stack. The missing piece is ownership, not visibility."
+      },
+      {
+        "text": "The locks must have been released before the dump was taken",
+        "explanation": "A snapshot at acquire does not prove the lock remains held: a released waiter may not yet have run, or another thread may have reacquired it. Multiple observations help establish the dependency."
+      },
+      {
+        "text": "`threading.Lock` doesn't record an owner; you infer the holder from which thread's stack is inside the matching `with` block",
+        "explanation": "Correct. A plain Lock is just a flag; any thread may release it. So you match each waiting thread's lock against the code other threads are executing."
+      },
+      {
+        "text": "Python's GIL hides lock ownership from external tools",
+        "explanation": "The GIL is a separate interpreter lock. The reason is that `threading.Lock` itself has no owner field."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Python Lock has no specified owner and allows release by another thread. Stacks can help infer which code acquired it, especially disciplined with-blocks, but that is not an authoritative owner table. Inspect object identity and control flow, or add lock instrumentation. The glibc internal owner field is an implementation-specific aid, not a portable guarantee for every mutex kind.",
+    "link": {
+      "title": "faulthandler — Python docs",
+      "url": "https://docs.python.org/3/library/faulthandler.html"
+    }
+  },
+  {
+    "id": "dl-debugging-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In gdb, all four threads of a hung C program are inside `pthread_mutex_lock`. Assume ordinary glibc mutexes and a stable snapshot whose internal owner fields correctly give:\n\n```\nTID   waits for   owner of it\n4244  mutex Y     4246\n4245  mutex X     4244\n4246  mutex Z     4245\n4247  mutex X     4244\n```\n\nWhich threads form the deadlock cycle?",
+    "options": [
+      {
+        "text": "All four threads",
+        "explanation": "4247 waits for X, but nobody waits for anything 4247 holds. It's blocked behind the cycle, not part of it."
+      },
+      {
+        "text": "4244 and 4245 only",
+        "explanation": "4244 waits for Y, owned by 4246, not 4245. Follow every edge before closing the cycle."
+      },
+      {
+        "text": "4244, 4245 and 4246",
+        "explanation": "Correct. 4244 → 4246 (Y), 4246 → 4245 (Z), 4245 → 4244 (X): a three-thread cycle. 4247 waits on it."
+      },
+      {
+        "text": "None: a cycle needs two threads waiting on the same mutex",
+        "explanation": "Waiting on the same mutex (4245 and 4247 both on X) isn't what makes a cycle. A cycle is a chain of waits-for edges that returns to its start."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Turn each row into a wait-for edge, waiter → owner:\n\n```\n4244 -> 4246\n4245 -> 4244\n4246 -> 4245\n4247 -> 4244\n```\n\n2. Follow from 4244: 4244 → 4246 → 4245 → 4244. Cycle.\n3. 4247 has an edge into the cycle, but no edge leads out of the cycle to 4247.\n4. So the deadlock is {4244, 4245, 4246}. Fixing their lock order fixes 4247 too.\n5. Next step: look at the backtraces to see which code paths take X, Y and Z in which orders.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-debugging-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A kernel driver takes lock A then lock B in its probe function, which runs once at boot. Hours later, a sysfs write handler takes B then A. The two paths never run at the same time. With lockdep enabled, what happens?",
+    "options": [
+      {
+        "text": "Nothing, because the two paths never overlapped and no deadlock occurred",
+        "explanation": "Lockdep doesn't need an actual collision. It remembers the A → B dependency from boot and checks every new edge against it."
+      },
+      {
+        "text": "Lockdep reports a possible circular locking dependency when the handler takes A while holding B",
+        "explanation": "Correct. Adding the edge B → A would close the cycle A → B → A in its graph, so it reports immediately, with both call chains."
+      },
+      {
+        "text": "The kernel deadlocks, and lockdep reports it afterwards",
+        "explanation": "No deadlock happens here, since the paths don't overlap. Lockdep's value is that it reports the *possible* deadlock without one occurring."
+      },
+      {
+        "text": "Lockdep reports it only if both paths run on the same CPU",
+        "explanation": "Lockdep's dependency graph is global, across CPUs and time. The scenario it prints even shows the two paths on different CPUs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. At boot, while holding A, the probe takes B. Lockdep records the edge A → B (between lock *classes*).\n2. Hours later the handler holds B and takes A. Before adding B → A, lockdep checks whether A can already reach B. It can.\n3. The new edge would complete a cycle, so lockdep prints *possible circular locking dependency detected*, plus the *unsafe locking scenario* showing CPU0 and CPU1 interleaving into a deadlock.\n4. This is the whole point: the bug is found the first time both orders are *observed*, not the first time the unlucky interleaving happens in production.",
+    "link": {
+      "title": "Lockdep design — Linux kernel docs",
+      "url": "https://docs.kernel.org/locking/lockdep-design.html"
+    }
+  },
+  {
+    "id": "dl-debugging-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which tools can report a lock-order inversion (a **potential** deadlock) in a run where the threads never actually deadlocked? Select all that apply.",
+    "options": [
+      {
+        "text": "Linux lockdep",
+        "explanation": "Correct. It records every lock-class dependency and reports when a new one closes a cycle."
+      },
+      {
+        "text": "A ThreadSanitizer runtime with its supported pthread lock-order detector enabled",
+        "explanation": "Correct. Supported instrumented pthread lock operations can populate the detector's graph; check runtime support and configuration rather than relying on a universal default."
+      },
+      {
+        "text": "Helgrind",
+        "explanation": "Correct. Valgrind's Helgrind tracks the order in which locks are taken and reports violations of a consistent order."
+      },
+      {
+        "text": "The Go race detector",
+        "explanation": "It uses TSan's runtime for data-race detection, but Go doesn't enable its lock-order checking. It won't report this."
+      },
+      {
+        "text": "`jstack`'s deadlock report",
+        "explanation": "`jstack` reports deadlocks that exist *right now* in the dumped process. If the threads finished without colliding, there's nothing to report."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Two kinds of tool exist:\n   - **Snapshot** tools look at the current state: `jstack`, gdb, `py-spy`, Go's goroutine dump. They see a deadlock only if one is happening.\n   - **Order checkers** record which locks are taken while which others are held, and flag a cycle in that history: lockdep, supported/enabled TSan lock-order detection, Helgrind, Abseil's debug `Mutex`.\n2. Order checkers find the bug from two executions of different paths within the same instrumented process, even without overlap.\n3. The Go race detector is a data-race tool only; Go has no built-in lock-order checker.\n4. Use snapshot tools for incidents and order checkers in CI.",
+    "link": {
+      "title": "ThreadSanitizer — Clang documentation",
+      "url": "https://clang.llvm.org/docs/ThreadSanitizer.html"
+    }
+  },
+  {
+    "id": "dl-debugging-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does lockdep track dependencies between lock **classes** (for example, all `inode->i_lock`s together) rather than between individual lock instances?",
+    "options": [
+      {
+        "text": "Instances are allocated on the stack, so their addresses are meaningless",
+        "explanation": "Most kernel locks live inside heap objects (inodes, sockets). The reason is about generalising what's observed, not addresses."
+      },
+      {
+        "text": "Class tracking is needed to detect data races",
+        "explanation": "Lockdep doesn't detect data races. Class tracking is about lock ordering."
+      },
+      {
+        "text": "Classes make it faster at the cost of missing real deadlocks",
+        "explanation": "Classes generalize observed dependencies across instances. Correct class/subclass annotations and coverage matter; wrong annotations or unobserved paths can still hide real deadlocks."
+      },
+      {
+        "text": "Class tracking generalizes observed order constraints across instances and keeps the graph manageable",
+        "explanation": "Correct. There might be millions of inodes. With classes, lockdep learns the order once, and a reversed order on *any* other inode is flagged."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Suppose path 1 locks inode #17 then a page lock; path 2 locks a page lock then inode #9052.\n2. By instance, those are different locks, and no cycle appears, even though the code clearly takes the two kinds in opposite orders.\n3. By class, both are `i_lock` and `page lock`, so the edges are `i_lock → page` and `page → i_lock`: a cycle.\n4. The graph has one node per class (thousands), not per instance (millions).\n5. The trade-off: nesting two locks of the same class (parent and child inode) looks like a self-deadlock. The kernel annotates those with `mutex_lock_nested()` and subclasses.",
+    "link": {
+      "title": "Lockdep design — Linux kernel docs",
+      "url": "https://docs.kernel.org/locking/lockdep-design.html"
+    }
+  },
+  {
+    "id": "dl-debugging-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What's the main deadlock risk in this code, and the standard fix?\n\n```python\nclass Cache:\n    def evict(self, key):\n        with self._lock:\n            val = self._d.pop(key)\n            for cb in self._listeners:\n                cb(key, val)\n```",
+    "options": [
+      {
+        "text": "`pop` can raise `KeyError` while the lock is held, leaving it locked",
+        "explanation": "`with` releases the lock even when an exception escapes. The risk is in what runs while it's held."
+      },
+      {
+        "text": "Listener callbacks run with `_lock` held and may take other locks, creating unknown lock orders; release the lock first, then call them",
+        "explanation": "Correct. That's an alien-method call. Collect what you need under the lock, release it, then run callbacks (an \"open call\")."
+      },
+      {
+        "text": "Iterating a list inside a lock is slow; use a set",
+        "explanation": "Data-structure choice affects speed, not deadlock. The callbacks are the danger."
+      },
+      {
+        "text": "`_lock` should be an `RLock` so callbacks can call back into the cache",
+        "explanation": "An `RLock` allows the *same* thread to re-enter. It doesn't help when a callback takes a different lock that another thread holds while waiting for the cache lock."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. While holding `_lock`, the cache runs arbitrary code it doesn't control.\n2. If a listener takes lock M, the program now has the order `cache → M`.\n3. If any other code takes M and then calls into the cache (`M → cache`), you have a cycle that neither author can see from their own code.\n4. Fix (an *open call*):\n\n```python\ndef evict(self, key):\n    with self._lock:\n        val = self._d.pop(key)\n        cbs = list(self._listeners)\n    for cb in cbs:\n        cb(key, val)\n```\n\n5. Copying under the same lock used for listener changes gives a stable callback list. Callbacks run after unlock, so design their semantics for concurrent cache changes; this removes the shown lock edge, not every possible callback hazard.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-debugging-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A `ThreadPoolExecutor(max_workers=4)` runs request handlers. Each handler submits two sub-tasks to the **same** executor and blocks on both results. Assume the sub-tasks finish without waiting for handlers or other sub-tasks. Ignoring other work, which number of concurrent requests is the smallest that can make the service hang?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "With one handler there are 3 idle workers; both sub-tasks run and the handler finishes."
+      },
+      {
+        "text": "2",
+        "explanation": "Two handlers occupy 2 workers, leaving 2 free for sub-tasks. Sub-tasks run and the handlers finish."
+      },
+      {
+        "text": "3",
+        "explanation": "Three handlers leave one free worker. It runs the queued sub-tasks one at a time, so everyone finishes, just slowly."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Four handlers occupy all four workers, all blocked waiting for sub-tasks that sit in the queue with no worker to run them. Nothing can ever progress."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A handler occupies a worker for as long as it waits.\n2. Sub-tasks need a free worker to run.\n\n```\nreqs  busy  free  sub-tasks run?\n1     1     3     yes\n2     2     2     yes\n3     3     1     yes, one at a time\n4     4     0     never -> hang\n```\n\n3. With 4 or more concurrent requests, every worker can be a blocked parent: a deadlock with no locks at all. The resource is *pool slots*, and hold-and-wait plus circular dependency apply.\n4. Fixes: separate pools for handlers and sub-tasks; run sub-tasks inline; or use non-blocking composition (`asyncio.gather`, futures callbacks) so parents don't hold a worker while waiting.\n5. A bigger pool only raises the threshold; it doesn't remove the hang.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-debugging-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On a non-PREEMPT_RT Linux kernel, a driver takes spinlock `s` in its interrupt handler. Its `ioctl` path takes `s` with plain `spin_lock(&s)`, interrupts enabled. Lockdep reports an *inconsistent lock state*. What deadlock is it warning about, and what's the fix?",
+    "options": [
+      {
+        "text": "The interrupt handler and ioctl run on different CPUs and take `s` in opposite orders; fix with a lock order",
+        "explanation": "Only one lock is involved, and the danger is on the *same* CPU, not across CPUs."
+      },
+      {
+        "text": "Spinlocks can't be used in interrupt handlers; use a mutex there",
+        "explanation": "A hard interrupt handler cannot use a sleeping mutex. In the stated non-RT setting, this shared state requires an appropriate spinlock protocol. PREEMPT_RT changes spinlock_t semantics and distinguishes raw locks/threaded handlers."
+      },
+      {
+        "text": "While ioctl holds `s`, an interrupt arrives on the same CPU, and the handler spins on `s` forever because the holder can't run until the handler returns; take it with `spin_lock_irqsave`",
+        "explanation": "Correct. Disabling local interrupts while holding a lock the handler also takes stops the handler from interrupting its own holder."
+      },
+      {
+        "text": "Nothing serious; lockdep is over-cautious about interrupt state",
+        "explanation": "This is a real, easily triggered deadlock: one interrupt at the wrong moment hangs that CPU."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. ioctl on CPU 0 takes `s` with interrupts enabled.\n2. The device raises an interrupt on CPU 0. The handler preempts ioctl and calls `spin_lock(&s)`.\n3. `s` is held by ioctl, which can't run again until the handler returns. The handler spins forever: a single-CPU deadlock.\n4. Lockdep catches this without it happening: it noticed `s` is *hardirq-safe* (taken in a hardirq) and also taken with hardirqs *enabled*, which its rules forbid.\n5. Fix: in process context use `spin_lock_irqsave(&s, flags)` / `spin_unlock_irqrestore(&s, flags)`, which disables local interrupts while `s` is held.",
+    "link": {
+      "title": "Lockdep design — Linux kernel docs",
+      "url": "https://docs.kernel.org/locking/lockdep-design.html"
+    }
+  },
+  {
+    "id": "dl-debugging-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "From the lesson's illustrative failure pattern: the cache calls `on_evict` callbacks while holding the cache lock, a callback takes the metrics registry lock, and the metrics exporter reads cache stats (taking the cache lock) while holding the registry lock. Which changes **remove** the deadlock? Select all that apply.",
+    "options": [
+      {
+        "text": "Run eviction callbacks after releasing the cache lock",
+        "explanation": "Correct. The cache → registry edge disappears, so the cycle can't form."
+      },
+      {
+        "text": "Have the exporter copy the list of metric sources under the registry lock, release it, then read cache stats",
+        "explanation": "Correct. The registry → cache edge disappears. Either edge's removal breaks the cycle."
+      },
+      {
+        "text": "Make both locks `RLock`s",
+        "explanation": "Re-entrant locks only let the *same* thread re-acquire. The cycle here involves two threads, so it remains."
+      },
+      {
+        "text": "Give both acquisitions a 5-second timeout",
+        "explanation": "A timeout turns the hang into an error after 5 seconds, but the deadlock still forms; it's a backstop, not a removal."
+      },
+      {
+        "text": "Declare and enforce the order cache before registry, and restructure the exporter to read cache stats before taking the registry lock",
+        "explanation": "Correct. With every thread taking cache before registry, a cycle is impossible. A debug-mode order check would catch future violations."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Draw the lock-order graph: eviction thread `cache → registry`; exporter thread `registry → cache`. A two-edge cycle.\n2. Removing any one edge, or making both edges point the same way, removes the deadlock:\n   - A removes `cache → registry` (open call).\n   - B removes `registry → cache` (copy, release, then act).\n   - E makes everyone follow `cache → registry`.\n3. C fails: re-entrancy is per thread; the problem is between threads.\n4. D fails: the threads still deadlock; they just give up after 5 s, with failed requests to show for it.\n5. In practice, do A or B *and* add an order check in tests so the next callback doesn't reintroduce it.",
+    "link": {
+      "title": "Helgrind — Valgrind manual",
+      "url": "https://valgrind.org/docs/manual/hg-manual.html"
+    }
+  }
+]

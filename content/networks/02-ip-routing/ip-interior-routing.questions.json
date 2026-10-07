@@ -1,0 +1,379 @@
+[
+  {
+    "id": "ip-interior-routing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In which kind of routing protocol does every router hold a map of the whole topology (within its area) and compute paths itself? Assume databases have converged.",
+    "options": [
+      {
+        "text": "Distance vector, like RIP",
+        "explanation": "Distance-vector routers only know what their neighbours report: a distance and a next hop per destination. They never see the topology."
+      },
+      {
+        "text": "Link state, like OSPF",
+        "explanation": "Correct. Each router floods LSAs describing its own links, every router collects them into an identical database, and each runs Dijkstra on that map."
+      },
+      {
+        "text": "Static routing",
+        "explanation": "Static routes are typed in by people. No protocol builds a map."
+      },
+      {
+        "text": "Both; RIP and OSPF exchange the same information, only the timers differ",
+        "explanation": "They exchange fundamentally different things: RIP sends distance tables, OSPF floods raw link-state facts."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask what each router sends.\n2. RIP: \"I can reach N in 3 hops\" to neighbours only. A router's view is a list of rumours.\n3. OSPF: \"I am R5; I have a link to R2 cost 10 and to R7 cost 1\" flooded to everyone in the area.\n4. Only the second gives every router the full graph, so **link state** is the answer.",
+    "link": {
+      "title": "Link-state routing protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Link-state_routing_protocol"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A RIP router receives an update listing a route with metric 16. What does it mean?",
+    "options": [
+      {
+        "text": "The destination is 16 hops away, the furthest RIP allows",
+        "explanation": "The furthest *usable* distance is 15. 16 is reserved as infinity."
+      },
+      {
+        "text": "The route goes over a 16 Mbit/s link",
+        "explanation": "The metric is an additive routing cost, normally hop count when each network costs 1; it is not a measured bandwidth in Mbit/s."
+      },
+      {
+        "text": "The route is the 16th entry in the table",
+        "explanation": "Metrics are distances, not positions."
+      },
+      {
+        "text": "The destination is unreachable",
+        "explanation": "Correct. Metric 16 marks the route unreachable for forwarding. It may remain temporarily for garbage collection and unreachable advertisements, rather than disappearing immediately."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. RIP normally uses cost 1 per network, giving hop count; larger configured costs are permitted.\n2. Valid distances are 1 to 15.\n3. **16 = infinity = unreachable.**\n4. That small infinity bounds how long count to infinity can run, at the cost of limiting usable routes to metric 15 (at most 15 unit-cost hops).",
+    "link": {
+      "title": "RFC 2453: RIP Version 2",
+      "url": "https://www.rfc-editor.org/rfc/rfc2453"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "With the specified Cisco-style OSPF reference of 100 Mbit/s and minimum cost 1, with no manual overrides, what is the total cost of a path crossing a 10 Mbit/s link, a 100 Mbit/s link and a 1 Gbit/s link?",
+    "options": [
+      {
+        "text": "12",
+        "explanation": "Correct. 100/10 = 10, 100/100 = 1, and 100/1000 = 0.1, which is raised to the minimum cost of 1. Total 10 + 1 + 1 = 12."
+      },
+      {
+        "text": "11.1",
+        "explanation": "OSPF costs are integers and can't be below 1, so the gigabit link costs 1, not 0.1."
+      },
+      {
+        "text": "3",
+        "explanation": "Three is the link count. Under the specified rule, the 10 Mbit/s interface costs 10 while the others cost 1 each."
+      },
+      {
+        "text": "1,110",
+        "explanation": "This treats cost as bandwidth divided by reference, the wrong way round, and mixes units."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "cost = reference / bandwidth, minimum 1.\n\n| Link | 100M / bw | Cost |\n|---|---|---|\n| 10 Mbit/s | 10 | 10 |\n| 100 Mbit/s | 1 | 1 |\n| 1 Gbit/s | 0.1 | 1 |\n\nPath cost = 10 + 1 + 1 = **12**. Notice the gigabit link costs the same as the 100 Mbit/s one: the reference bandwidth is too low.",
+    "link": {
+      "title": "Open Shortest Path First — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Open_Shortest_Path_First"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A distance-vector router X has two neighbours: Y (link cost 2) and Z (link cost 5). Y advertises destination D at distance 7; Z advertises D at distance 3. What does X install for D?",
+    "options": [
+      {
+        "text": "Distance 3 via Z",
+        "explanation": "That's Z's distance. X must add the cost of reaching Z (5)."
+      },
+      {
+        "text": "Distance 9 via Y",
+        "explanation": "2 + 7 = 9 is X's cost via Y, but via Z is cheaper."
+      },
+      {
+        "text": "Distance 8 via Z",
+        "explanation": "Correct. Bellman–Ford: min(2 + 7, 5 + 3) = min(9, 8) = 8, through Z."
+      },
+      {
+        "text": "Distance 7 via Y, because Y has the cheaper link",
+        "explanation": "Choosing the cheapest first link ignores what lies beyond it. Distance vector minimises the total."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Apply D(X, D) = min over neighbours n of cost(X, n) + D(n, D):\n\n| Via | Link | Advertised | Total |\n|---|---|---|---|\n| Y | 2 | 7 | 9 |\n| Z | 5 | 3 | **8** |\n\nInstall **8 via Z**. X can advertise its selected distance according to the protocol's update and split-horizon policy.",
+    "link": {
+      "title": "Bellman–Ford algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bellman%E2%80%93Ford_algorithm"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's topology, router E runs SPF.\n\n```\n A --1-- B\n |       |\n 5       2\n |       |\n C --1-- D\n |       |\n 3       5\n |       |\n +-- E --+\n```\n\nWhat is E's distance to D, and which first hop does E use?",
+    "options": [
+      {
+        "text": "5, via the direct link to D",
+        "explanation": "The direct link costs 5, but E–C–D costs 3 + 1 = 4, which is cheaper. Being directly connected doesn't mean shortest."
+      },
+      {
+        "text": "4, via C",
+        "explanation": "Correct. E settles C at 3, then relaxes C–D: 3 + 1 = 4, beating the direct 5."
+      },
+      {
+        "text": "6, via C then B",
+        "explanation": "E–C–A–B–D or similar paths are longer. D is reached directly from C."
+      },
+      {
+        "text": "3, via C",
+        "explanation": "3 is E's distance to C. Add the C–D link (1) to reach D."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Dijkstra from E:\n\n| Settle | Dist | Updates |\n|---|---|---|\n| E | 0 | C=3, D=5 |\n| C | 3 | A=8, D=4 |\n| D | 4 | B=6 |\n| B | 6 | A=7 |\n| A | 7 | none |\n\nD is settled at **4**, reached via C, so E's first hop for D is **C**. (Running the lesson's `spf` on this graph from E gives exactly this.)",
+    "link": {
+      "title": "Dijkstra's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dijkstra%27s_algorithm"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Routers in a line, `N -- C -- B -- A`, run RIP **without** split horizon. B reaches N at 2 via C; A at 3 via B. The B–C link fails. A's next update says \"N: 3\". What does B do? Assume no hold-down or alternative route, and A's stale update arrives before it processes any failure information.",
+    "options": [
+      {
+        "text": "Ignores it, because A is further from N than B used to be",
+        "explanation": "Plain distance vector accepts any route better than what it has. B has nothing now, so 3 + 1 looks like an improvement."
+      },
+      {
+        "text": "Installs N at 3 via A",
+        "explanation": "B must add its link cost to A (1 hop). A's 3 becomes B's 4."
+      },
+      {
+        "text": "Marks N unreachable and tells A immediately",
+        "explanation": "That's what triggered updates plus poisoning would aim for, but in this scenario A's update arrives first and B believes it."
+      },
+      {
+        "text": "Installs N at 4 via A, creating a loop between A and B",
+        "explanation": "Correct. B can't know A's route goes through B. Packets for N now bounce A to B to A, and the two routers count up by 2 per exchange until 16."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. B loses its route via C.\n2. A advertises N at 3 (its route via B, but B can't tell).\n3. B computes 1 + 3 = **4 via A** and installs it.\n4. A's route is via B, so A updates to 4 + 1 = 5; then B to 6, and so on.\n5. At 16 both declare N unreachable. Until then packets for N loop until TTL expiry.\n\nSplit horizon would stop step 2: A wouldn't advertise N to B, the neighbour it learnt it from.",
+    "link": {
+      "title": "Distance-vector routing protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Distance-vector_routing_protocol"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are mechanisms distance-vector protocols use to reduce count-to-infinity problems? Select all that apply.",
+    "options": [
+      {
+        "text": "Split horizon",
+        "explanation": "Correct. Suppress reverse advertisements on the incoming interface. This prevents the lesson's two-router feedback example; an existing two-router loop can still require timeout with simple split horizon."
+      },
+      {
+        "text": "Poison reverse",
+        "explanation": "Correct. Advertise the route back to where you learnt it with metric infinity, explicitly telling the neighbour not to use you."
+      },
+      {
+        "text": "Raising infinity from 16 to 255 for larger networks",
+        "explanation": "A bigger infinity makes counting to it take *longer*. RIP's tiny infinity is a deliberate trade-off."
+      },
+      {
+        "text": "Triggered updates",
+        "explanation": "Correct. Triggered updates do not wait for the next periodic update; small randomised delays rate-limit repeated triggers."
+      },
+      {
+        "text": "Implementation-specific hold-down policies",
+        "explanation": "Correct as a possible mitigation. Acceptance rules differ and can delay valid alternatives; RFC 2453 does not prescribe one universal hold-down algorithm."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Count to infinity happens because stale good news (\"I can reach N\") keeps circulating after a failure.\n\n- Split horizon and poison reverse stop the news going back where it came from.\n- Triggered updates spread the bad news faster.\n- Hold-down stops a router believing stale good news straight after a failure.\n- A bigger infinity only lengthens the count. That's the odd one out.",
+    "link": {
+      "title": "Split horizon route advertisement — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Split_horizon_route_advertisement"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "R1 and R2 are joined directly by a 100 Mbit/s link, and also via R3 over two 10 Gbit/s links. OSPF uses a 100 Mbit/s reference bandwidth with minimum cost 1 and no manual overrides. Which path does R1 use to R2, and what changes if every router's reference is set to 100 Gbit/s?",
+    "options": [
+      {
+        "text": "Via R3 now (cost 2 beats nothing); unchanged at 100 Gbit/s",
+        "explanation": "The direct link has cost 1, which beats the cost-2 path via R3. The default makes the slow link look best."
+      },
+      {
+        "text": "The direct 100 Mbit/s link now (cost 1 vs 2); via R3 after the change (cost 20 vs 1,000)",
+        "explanation": "Correct. With ref 100M, every link of 100 Mbit/s or faster costs 1, so the single hop wins. With ref 100G the costs reflect bandwidth: 1,000 direct vs 10 + 10 = 20 via R3."
+      },
+      {
+        "text": "Both paths with ECMP, before and after",
+        "explanation": "ECMP needs equal costs. 1 vs 2 isn't equal, and 1,000 vs 20 certainly isn't."
+      },
+      {
+        "text": "The direct link in both cases, because OSPF prefers fewer hops",
+        "explanation": "OSPF minimises total cost, not hops. With a sensible reference, two fast links beat one slow one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "**Reference 100 Mbit/s**\n- Direct: 100/100 = 1.\n- Via R3: 100/10,000 = 0.01, clamped up to the minimum of 1, twice: 2.\n- 1 < 2: the slow direct link wins.\n\n**Reference 100 Gbit/s**\n- Direct: 100,000/100 = 1,000.\n- Via R3: 100,000/10,000 = 10, twice: 20.\n- 20 < 1,000: the fast path wins.\n\nChange the reference on **every** router, or costs are inconsistent.",
+    "link": {
+      "title": "RFC 2328: OSPF Version 2",
+      "url": "https://www.rfc-editor.org/rfc/rfc2328"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Six OSPF routers share one Ethernet segment. How many full adjacencies form with a DR and BDR, compared with a full mesh? Assume broadcast OSPF network type, compatible configuration and fully converged adjacencies.",
+    "options": [
+      {
+        "text": "9 instead of 15",
+        "explanation": "Correct. Four non-DR routers each form 2 (DR and BDR): 8. Plus DR–BDR: 9. A full mesh would be 6 × 5 / 2 = 15."
+      },
+      {
+        "text": "5 instead of 30",
+        "explanation": "5 would be a star to the DR only, forgetting the BDR. And 30 counts each pair twice; the mesh is n(n−1)/2 = 15."
+      },
+      {
+        "text": "2 instead of 15",
+        "explanation": "Every router still needs an adjacency to the DR and BDR; two adjacencies total would leave most routers out of sync."
+      },
+      {
+        "text": "15 either way; the DR only reduces LSA size",
+        "explanation": "Reducing adjacencies is the main purpose of the DR. Non-DR routers stay at the two-way state with each other."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Full mesh: n(n−1)/2 = 6 × 5 / 2 = **15**.\n2. With DR and BDR, 6 − 2 = 4 other routers.\n3. Each forms full adjacency with DR and BDR: 4 × 2 = 8.\n4. DR and BDR are adjacent to each other: +1.\n5. Total **9**. The saving grows quickly: 20 routers gives 37 instead of 190.",
+    "link": {
+      "title": "Open Shortest Path First — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Open_Shortest_Path_First"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A RIP network uses split horizon on every router. In which situation can count to infinity still happen?",
+    "options": [
+      {
+        "text": "Never; split horizon eliminates count to infinity",
+        "explanation": "Split horizon does not prevent every loop through three or more routers. Simple split horizon also need not immediately clear an already existing two-router loop."
+      },
+      {
+        "text": "Only when links have different bandwidths",
+        "explanation": "RIP ignores bandwidth. The problem is about topology, not link speed."
+      },
+      {
+        "text": "When the failure is inside a loop of three or more routers, so a stale route can travel round the ring and come back via a different neighbour",
+        "explanation": "Correct. Split horizon stops a route going back the way it came, but in a ring it can go A to B to C and back to A through a different interface, which split horizon allows."
+      },
+      {
+        "text": "Only when hold-down timers are also enabled",
+        "explanation": "Hold-down is a mitigation, not a cause."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Consider a ring A–B–C with the only route to N originally through C. C loses N; A learns the failure but B still has stale reachability via C. B can advertise that stale route to A (a different interface from C). A can then advertise its newly selected route via B to C. C can select A, forming a three-router loop under suitable update ordering. Split horizon alone cannot detect the whole path. Additional controls and eventual unreachable information are required; link-state designs can also have transient forwarding loops during convergence.",
+    "link": {
+      "title": "Split horizon route advertisement — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Split_horizon_route_advertisement"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Two OSPFv2 routers are intended to become fully adjacent on a broadcast Ethernet LAN (at least one is DR or BDR). Which differences can prevent that with ordinary checks enabled? Select all that apply.",
+    "options": [
+      {
+        "text": "Different Hello or dead intervals",
+        "explanation": "Correct. Hello packets carry these timers and neighbours must agree, or they ignore each other's Hellos."
+      },
+      {
+        "text": "Different area IDs on the link",
+        "explanation": "Correct. Both ends of a link must be in the same area."
+      },
+      {
+        "text": "Different interface MTUs",
+        "explanation": "Correct. A database-description packet advertising an MTU larger than the receiver accepts is rejected, commonly preventing database exchange. Configured MTU-ignore behaviour can change this."
+      },
+      {
+        "text": "Different OSPF costs on each end",
+        "explanation": "Cost is per interface and per direction. Different costs can affect path choices but do not inherently prevent adjacency or force asymmetric paths."
+      },
+      {
+        "text": "Different router priorities",
+        "explanation": "Priority only affects DR/BDR election and is expected to differ between routers."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Hello/dead interval and area compatibility are checked in neighbour establishment. MTU is checked during database-description exchange unless overridden. Costs and priorities may differ without inherently blocking adjacency. INIT means bidirectional Hello visibility has not been established; it is not a unique diagnostic for a timer mismatch. On a broadcast LAN two DROther routers normally stay Two-Way, so the question specifies that a full adjacency should exist.",
+    "link": {
+      "title": "RFC 2328: OSPF Version 2",
+      "url": "https://www.rfc-editor.org/rfc/rfc2328"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An internal link in OSPF area 3 changes, altering a router LSA for that area. In which area's topology database is that LSA flooded and used for the area shortest-path calculation?",
+    "options": [
+      {
+        "text": "Every router in the whole OSPF domain",
+        "explanation": "Router LSAs are area-scoped; the changed area-3 topology is not directly flooded throughout the entire domain."
+      },
+      {
+        "text": "Area 3, including the area-3 database of its ABRs",
+        "explanation": "Correct. Other areas may receive inter-area reachability/cost changes, but do not receive area 3's internal router LSA as their own topology."
+      },
+      {
+        "text": "Only the two routers at the ends of the link",
+        "explanation": "The changed topology LSA is flooded throughout its area, not just to the link endpoints."
+      },
+      {
+        "text": "Only area 0 routers, because the backbone computes routes for all areas",
+        "explanation": "There's no central computation in OSPF. Each router runs SPF on its own areas' databases."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The area-3 router LSA remains in area 3. Routers attached to area 3, including ABRs, use that area database to compute topology paths. Changed costs or reachability can affect inter-area advertisements and calculations elsewhere. Implementations may batch, throttle or incrementally calculate routes, so this does not require one full SPF execution for every individual flap or guarantee all impact remains inside the area. Configured aggregation can hide some changes, not every possible failure.",
+    "link": {
+      "title": "Open Shortest Path First — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Open_Shortest_Path_First"
+    }
+  }
+]

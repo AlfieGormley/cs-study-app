@@ -1,0 +1,347 @@
+[
+  {
+    "id": "conc-async-await-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Python, what happens when this line runs inside a normal (non-async) function?\n\n```python\nasync def fetch():\n    print(\"fetching\")\n    return 1\n\nx = fetch()\n```",
+    "options": [
+      {
+        "text": "It prints `fetching` and `x` is 1",
+        "explanation": "This treats `async def` like a normal function. Calling a coroutine function only creates a coroutine object; the body does not run."
+      },
+      {
+        "text": "It prints `fetching` and `x` is a Future",
+        "explanation": "This is closer to JavaScript, where calling an async function runs it eagerly up to its first `await`. Python coroutines start lazily."
+      },
+      {
+        "text": "Nothing is printed and `x` is a coroutine object",
+        "explanation": "Correct. The body only runs when the coroutine is awaited or scheduled as a task. If it never is, Python warns that it was never awaited."
+      },
+      {
+        "text": "It raises `SyntaxError` because `fetch` is called outside an `async` function",
+        "explanation": "Calling a coroutine function is legal anywhere. Only `await` is restricted to async functions."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `async def` defines a *coroutine function*.\n2. Calling it builds a coroutine object, like calling a generator function builds a generator. No body code runs.\n3. So nothing prints, and `x` is `<coroutine object fetch ...>`.\n4. To run it from sync code you would write `asyncio.run(fetch())`, which prints `fetching` and returns 1.\n5. If `x` is garbage-collected without being awaited, you see `RuntimeWarning: coroutine 'fetch' was never awaited`.",
+    "link": {
+      "title": "Coroutines and Tasks — Python asyncio docs",
+      "url": "https://docs.python.org/3/library/asyncio-task.html"
+    }
+  },
+  {
+    "id": "conc-async-await-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`fetch(url)` is an async function that takes about 1 second of network wait and almost no CPU. Roughly how long does this take?\n\n```python\nasync def main():\n    a = await fetch(u1)\n    b = await fetch(u2)\n    c = await fetch(u3)\n```",
+    "options": [
+      {
+        "text": "About 1 second, because async code runs concurrently",
+        "explanation": "`async` alone does not make anything concurrent. Each `await` pauses `main` until that fetch finishes before the next one starts."
+      },
+      {
+        "text": "About 3 seconds",
+        "explanation": "Correct. The three awaits are sequential. To overlap them you must start all three first, e.g. with `asyncio.gather`."
+      },
+      {
+        "text": "About 0 seconds, because the event loop does the waiting",
+        "explanation": "The loop lets *other* tasks run while `main` waits, but `main` itself still waits for each result."
+      },
+      {
+        "text": "It depends on how many CPU cores the machine has",
+        "explanation": "asyncio runs on one thread, and this work is I/O-bound anyway. Core count does not change the sequential awaits."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `await fetch(u1)` suspends `main` until the first response arrives: ~1 s.\n2. Only then does line 2 run and start the second fetch: another ~1 s.\n3. Same for the third: total ~3 s.\n4. The concurrent version:\n\n```python\na, b, c = await asyncio.gather(\n    fetch(u1), fetch(u2), fetch(u3))\n```\n\nAll three are in flight together, so it takes ~1 s.",
+    "link": {
+      "title": "Coroutines and Tasks — Python asyncio docs",
+      "url": "https://docs.python.org/3/library/asyncio-task.html"
+    }
+  },
+  {
+    "id": "conc-async-await-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these would block a Python asyncio event loop, stalling every other task? Select all that apply.",
+    "options": [
+      {
+        "text": "`time.sleep(2)` inside a coroutine",
+        "explanation": "Correct. `time.sleep` blocks the thread, and asyncio has only one. Use `await asyncio.sleep(2)` instead."
+      },
+      {
+        "text": "`await asyncio.sleep(2)`",
+        "explanation": "This suspends only the current coroutine and hands the thread back to the loop, which runs other tasks for those 2 seconds."
+      },
+      {
+        "text": "`requests.get(url)` inside a coroutine",
+        "explanation": "Correct. `requests` is a synchronous library: the thread waits on the socket. Use an async client such as `httpx.AsyncClient` or `aiohttp`."
+      },
+      {
+        "text": "A pure-Python loop computing a million SHA-256 hashes with no `await`",
+        "explanation": "Correct. CPU-bound code never yields. Push it to a process pool (or a thread, if the work releases the GIL)."
+      },
+      {
+        "text": "`await asyncio.to_thread(requests.get, url)`",
+        "explanation": "This runs the blocking call on a worker thread and awaits its result, so the loop stays free."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask one question of each line: *does the event loop's thread get handed back while this waits?*\n\n| Call | Yields? |\n|---|---|\n| `time.sleep` | No |\n| `asyncio.sleep` | Yes |\n| `requests.get` | No |\n| CPU loop | No |\n| `to_thread(...)` | Yes |\n\nOnly `await` on an awaitable that actually suspends gives the thread back. Anything else holds it.",
+    "link": {
+      "title": "Developing with asyncio — Python docs",
+      "url": "https://docs.python.org/3/library/asyncio-dev.html"
+    }
+  },
+  {
+    "id": "conc-async-await-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this JavaScript print, in order?\n\n```js\nconsole.log(1);\nsetTimeout(() => console.log(2), 0);\nPromise.resolve()\n  .then(() => console.log(3));\nconsole.log(4);\n```",
+    "options": [
+      {
+        "text": "1 2 3 4",
+        "explanation": "This assumes callbacks run as soon as they are scheduled. Both callbacks wait until the current script (one task) has finished."
+      },
+      {
+        "text": "1 4 2 3",
+        "explanation": "This puts the timer first because it was scheduled first. Microtasks (promise reactions) are drained before the next task, so 3 beats 2."
+      },
+      {
+        "text": "1 3 4 2",
+        "explanation": "A `.then` callback never runs synchronously, even on an already-resolved promise. It is queued as a microtask, so 4 prints first."
+      },
+      {
+        "text": "1 4 3 2",
+        "explanation": "Correct. Synchronous code first (1, 4), then all microtasks (3), then the next task: the timer (2)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The script is one task. It logs `1`.\n2. `setTimeout(..., 0)` queues a **task** for later.\n3. `.then` on a resolved promise queues a **microtask**.\n4. The script logs `4` and finishes.\n5. The runtime drains microtasks: logs `3`.\n6. Next task: the timer logs `2`.\n\nResult: `1 4 3 2`.",
+    "link": {
+      "title": "Using microtasks in JavaScript — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/HTML_DOM_API/Microtask_guide"
+    }
+  },
+  {
+    "id": "conc-async-await-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With CPython's default asyncio loop and task factory, what does this program print?\n\n```python\nimport asyncio\n\nasync def w(name):\n    for i in range(2):\n        print(name, i)\n        await asyncio.sleep(0)\n\nasync def main():\n    await asyncio.gather(\n        w(\"A\"), w(\"B\"))\n\nasyncio.run(main())\n```",
+    "options": [
+      {
+        "text": "A 0, A 1, B 0, B 1",
+        "explanation": "This would happen with no `await` in the loop. `asyncio.sleep(0)` yields to the loop, letting B run between A's iterations."
+      },
+      {
+        "text": "A 0, B 0, A 1, B 1",
+        "explanation": "Correct. Each task prints once, then yields; the loop runs the other ready task, and they alternate."
+      },
+      {
+        "text": "B 0, A 0, B 1, A 1",
+        "explanation": "`gather` wraps its arguments into tasks in order, and the ready queue is FIFO, so A starts first."
+      },
+      {
+        "text": "The order is unpredictable, as with threads",
+        "explanation": "With one thread and cooperative switching only at `await`, the schedule here is deterministic. External I/O and custom scheduling can change other async schedules; this closed example uses the default FIFO-ready behavior."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the ready queue:\n\n1. `gather` schedules A, then B. Queue: `[A, B]`.\n2. Run A: prints `A 0`, hits `sleep(0)`, goes to the back. Queue: `[B, A]`.\n3. Run B: prints `B 0`, yields. Queue: `[A, B]`.\n4. Run A: prints `A 1`, yields; then B prints `B 1`.\n5. Both loops finish; `gather` returns.\n\nOutput: `A 0, B 0, A 1, B 1`.",
+    "link": {
+      "title": "Coroutines and Tasks — Python asyncio docs",
+      "url": "https://docs.python.org/3/library/asyncio-task.html"
+    }
+  },
+  {
+    "id": "conc-async-await-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A FastAPI endpoint is declared `async def` and calls a synchronous database driver that takes 200 ms per query. Under load, p99 latency for *every* endpoint on that worker climbs to several seconds, even cheap ones. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The GIL prevents the async endpoints from running in parallel",
+        "explanation": "The GIL is not the issue: asyncio runs on one thread by design. The problem is that the one thread is being held by a blocking call."
+      },
+      {
+        "text": "The event loop's ready queue is too small",
+        "explanation": "Queue capacity is not indicated as the cause; they just cannot run while the thread is blocked."
+      },
+      {
+        "text": "Each synchronous query blocks the event loop for 200 ms, so all other requests on the worker queue up behind it",
+        "explanation": "Correct. A blocking call inside `async def` holds the only thread. Use an async driver, run the call via `asyncio.to_thread`, or declare the endpoint as plain `def` so the framework runs it on a thread pool."
+      },
+      {
+        "text": "async functions add a lot of per-call overhead compared with threads",
+        "explanation": "The explicit blocking calls explain the stalls without an unsupported universal per-coroutine timing claim."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. One worker = one event loop = one thread.\n2. Each request calls a 200 ms blocking query. During it, the loop cannot run anything else.\n3. If 20 requests arrive together, they run one after another: the last completes after about 20 × 200 ms = 4 s, including its own query; queue waiting alone is about 3.8 s.\n4. Cheap endpoints on the same worker sit in the same queue, so they suffer too.\n5. Fix: make the wait yield (async driver), or move it off the loop thread (`to_thread`, a thread pool, or a sync endpoint, which FastAPI runs in a threadpool).",
+    "link": {
+      "title": "Developing with asyncio — Python docs",
+      "url": "https://docs.python.org/3/library/asyncio-dev.html"
+    }
+  },
+  {
+    "id": "conc-async-await-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two coroutines run `withdraw(80)` concurrently on one asyncio loop, with `balance = 100`:\n\n```python\nasync def withdraw(amt):\n    global balance\n    if balance >= amt:\n        await audit_log(amt)\n        balance -= amt\n```\n\nAssume both audit_log calls suspend before either finishes, and both complete successfully. What is the final balance?",
+    "options": [
+      {
+        "text": "20, because asyncio is single-threaded so there are no races",
+        "explanation": "Single-threaded removes interleaving *between* awaits, not *across* one. Both checks can run before either subtraction."
+      },
+      {
+        "text": "-60",
+        "explanation": "Correct. Task 1 checks, then yields at `await`; task 2 checks (still 100), yields; both then subtract 80."
+      },
+      {
+        "text": "Either 20 or -60, chosen at random",
+        "explanation": "Under the explicit overlap assumption, both checks happen before either subtraction."
+      },
+      {
+        "text": "It raises an error because `balance` is shared between tasks",
+        "explanation": "asyncio has no such check. Sharing module-level state between tasks is allowed; keeping it consistent is your job."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Task 1: `100 >= 80` true. `await audit_log` suspends it.\n2. Task 2: `100 >= 80` true (nothing has subtracted yet). Suspends.\n3. Task 1 resumes: `balance = 20`.\n4. Task 2 resumes: `balance = -60`.\n\nThe check and the act are separated by an `await`, so they are not atomic. Fixes: hold an `asyncio.Lock` across check and act, or keep check-and-update together and separately define failure/retry behavior for logging.",
+    "link": {
+      "title": "Synchronization Primitives — Python asyncio docs",
+      "url": "https://docs.python.org/3/library/asyncio-sync.html"
+    }
+  },
+  {
+    "id": "conc-async-await-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Compared with giving each connection its own OS thread, which are genuine advantages of an async/await event loop for a server holding 50,000 mostly-idle connections? Select all that apply.",
+    "options": [
+      {
+        "text": "Much lower memory per connection, because a suspended task is a small heap object rather than a full thread stack",
+        "explanation": "Correct. Coroutine state can avoid a separate OS-thread stack, but retained objects and buffers may dominate memory."
+      },
+      {
+        "text": "Automatic use of all CPU cores for parallel computation",
+        "explanation": "A single event loop runs on one thread. To use more cores you run several processes or loops."
+      },
+      {
+        "text": "Code between two awaits cannot be interrupted by another task, so many locks become unnecessary",
+        "explanation": "Correct. Switching is cooperative, so ordinary tasks on the same loop do not pre-empt one another there; this assumes no other threads or synchronous re-entrancy access the state."
+      },
+      {
+        "text": "Blocking library calls become safe to use anywhere",
+        "explanation": "The opposite: a blocking call stalls every task. Async makes blocking calls more dangerous, not less."
+      },
+      {
+        "text": "No function colouring: async and sync functions call each other freely",
+        "explanation": "Async/await *introduces* colouring. Sync code cannot simply call an async function and get its result."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Go through the costs and guarantees:\n\n1. **Memory**: Avoiding one OS-thread stack per connection can reduce reservations; exact totals are omitted because no stated runtime/workload measurement supports them. Advantage.\n2. **Parallelism**: one loop, one thread. Not an advantage.\n3. **Fewer locks**: cooperative switching. Advantage.\n4. **Blocking calls**: worse, not better.\n5. **Colouring**: a known *drawback* of async/await.",
+    "link": {
+      "title": "What Color is Your Function? — Bob Nystrom",
+      "url": "https://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/"
+    }
+  },
+  {
+    "id": "conc-async-await-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this JavaScript print?\n\n```js\nasync function f() {\n  console.log('f1');\n  await null;\n  console.log('f2');\n}\nconsole.log('s');\nf();\nPromise.resolve()\n  .then(() => console.log('p'));\nconsole.log('e');\n```",
+    "options": [
+      {
+        "text": "s f1 e f2 p",
+        "explanation": "Correct. `f` runs synchronously to its `await`, queuing its continuation as a microtask *before* the `.then` is queued. Microtasks run in FIFO order."
+      },
+      {
+        "text": "s e f1 f2 p",
+        "explanation": "This treats `f()` as lazy, like a Python coroutine. JavaScript async functions run eagerly up to the first `await`."
+      },
+      {
+        "text": "s f1 e p f2",
+        "explanation": "This assumes `await` costs extra ticks. For a non-promise value (or a native promise, since ES2019's await optimisation) the continuation is queued in one step, ahead of the later `.then`."
+      },
+      {
+        "text": "s f1 f2 e p",
+        "explanation": "`await` always suspends, even on `null`. The rest of `f` cannot run until the current task finishes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Log `s`.\n2. Call `f()`: logs `f1` immediately. `await null` wraps `null` in a resolved promise and queues the continuation. Microtasks: `[f-rest]`.\n3. `.then` queues its callback. Microtasks: `[f-rest, p]`.\n4. Log `e`. The script task ends.\n5. Drain microtasks in order: `f2`, then `p`.\n\nOutput: `s f1 e f2 p`.",
+    "link": {
+      "title": "JavaScript execution model — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Execution_model"
+    }
+  },
+  {
+    "id": "conc-async-await-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service occasionally loses background work. The code is:\n\n```python\nasync def handle(req):\n    asyncio.create_task(\n        send_email(req.user))\n    return ok()\n```\n\nThere are no error logs. Which missing lifetime-management safeguard should be investigated?",
+    "options": [
+      {
+        "text": "`create_task` does not start the coroutine until it is awaited",
+        "explanation": "Unlike a bare coroutine, `create_task` schedules it on the loop straight away. With the default non-eager task factory it starts on a later loop turn; eager task factories can start it immediately."
+      },
+      {
+        "text": "The event loop holds only a weak reference to tasks, so an unreferenced task can be garbage-collected before it finishes, and failures are not propagated to the request unless explicitly observed",
+        "explanation": "Correct. The docs say to keep a reference (for example in a set, discarded in a done-callback), or better, use a TaskGroup so nothing is fire-and-forget."
+      },
+      {
+        "text": "`send_email` runs on a different thread and is killed when `handle` returns",
+        "explanation": "Tasks run on the same loop thread as `handle`. Returning from `handle` does not cancel the tasks it created."
+      },
+      {
+        "text": "Python limits each request to one concurrent task",
+        "explanation": "There is no such limit. A coroutine can create as many tasks as it likes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `create_task` returns a `Task`; the code drops it.\n2. asyncio's internal set of tasks uses weak references, so the loop alone does not guarantee ownership; other awaited resources may still retain it.\n3. An otherwise unreferenced suspended task can be collected; shutdown or failures are other possible explanations, so investigate rather than infer one cause from this snippet.\n4. Even when it runs, an exception inside it is only logged when the task object is destroyed, with \"Task exception was never retrieved\", which is easy to miss.\n5. Fix:\n\n```python\nbg = set()\nt = asyncio.create_task(job())\nbg.add(t)\nt.add_done_callback(bg.discard)\n```\n\nFor durable work like email, a real job queue is better still.",
+    "link": {
+      "title": "Coroutines and Tasks — Python asyncio docs",
+      "url": "https://docs.python.org/3/library/asyncio-task.html"
+    }
+  },
+  {
+    "id": "conc-async-await-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An endpoint runs:\n\n```python\nawait asyncio.gather(\n    *(fetch(u) for u in urls))\n```\n\n`urls` has 20,000 entries. What problem is this most likely to cause, and what is the usual fix?",
+    "options": [
+      {
+        "text": "Python cannot create 20,000 coroutines; split the list into threads",
+        "explanation": "20,000 coroutines is not a hard language limit; actual memory depends on retained state. The issue is the 20,000 simultaneous connections they open, not the coroutines themselves."
+      },
+      {
+        "text": "`gather` runs them one at a time, so it is slow; use `create_task` instead",
+        "explanation": "`gather` schedules all of them concurrently. Concurrency here is too much, not too little."
+      },
+      {
+        "text": "No problem: the event loop automatically limits concurrency to the number of CPU cores",
+        "explanation": "asyncio applies no automatic limit. All fetch coroutines are scheduled, although a client connection pool may limit actual connections."
+      },
+      {
+        "text": "Without limits in fetch or its client pool, it can create excessive simultaneous requests, exhausting resources or overwhelming the server; bound concurrency with an `asyncio.Semaphore` or a worker pool",
+        "explanation": "Correct. Async makes starting work so cheap that you must add backpressure yourself. A semaphore of, say, 100 caps in-flight requests."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `gather` wraps all 20,000 coroutines in tasks and starts them.\n2. If each fetch opens a separate socket without pooling, resource limits may cause `Too many open files`, or the remote API rate-limits you.\n3. Bound it:\n\n```python\nsem = asyncio.Semaphore(100)\n\nasync def limited(u):\n    async with sem:\n        return await fetch(u)\n\nawait asyncio.gather(\n    *(limited(u) for u in urls))\n```\n\nAt most 100 fetches are in flight; the rest still retain task state while waiting. A bounded worker queue can also bound the number of scheduled tasks.",
+    "link": {
+      "title": "Synchronization Primitives — Python asyncio docs",
+      "url": "https://docs.python.org/3/library/asyncio-sync.html"
+    }
+  }
+]

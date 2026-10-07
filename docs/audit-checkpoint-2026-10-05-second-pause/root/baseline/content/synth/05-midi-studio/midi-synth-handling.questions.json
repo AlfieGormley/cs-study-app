@@ -1,0 +1,378 @@
+[
+  {
+    "id": "midi-synth-handling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In your synth's firmware, which part must **never** wait for MIDI data to arrive?",
+    "options": [
+      {
+        "text": "The UART receive interrupt",
+        "explanation": "The interrupt runs because a byte has arrived; it pushes it into a buffer and returns. It doesn't wait either, but it isn't the component the question is about."
+      },
+      {
+        "text": "The parser in the main loop",
+        "explanation": "The main loop polls the ring buffer and processes whatever is there, but it isn't the one with the hard audio deadline."
+      },
+      {
+        "text": "None: all parts may block briefly because MIDI is slow",
+        "explanation": "Slowness is the reason not to block: a byte arrives at most every 320 µs, far longer than an audio block can wait."
+      },
+      {
+        "text": "The audio callback",
+        "explanation": "Correct. It has a hard deadline every block. If it blocks waiting for MIDI (or allocates, or logs), the output glitches. It should only read the latest note and parameter values."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Bytes arrive asynchronously, at most one per 320 µs on DIN MIDI.\n2. The audio callback must deliver a full block of samples before its deadline (for example 48 samples at 48 kHz = 1 ms).\n3. If it waited for a byte, it would miss that deadline and you would hear a click or dropout.\n4. So: interrupt → ring buffer → parse outside the callback → publish values → callback reads them without waiting.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A mono synth uses **last-note** priority. The player presses 60, then presses 64, then releases 64 while still holding 60. What sounds after the release?",
+    "options": [
+      {
+        "text": "Nothing: the gate closes",
+        "explanation": "Key 60 is still held, so the voice should fall back to it rather than go silent."
+      },
+      {
+        "text": "Key 64 keeps sounding until 60 is released",
+        "explanation": "64 was released; continuing to play it would be a stuck note."
+      },
+      {
+        "text": "Key 60",
+        "explanation": "Correct. The note stack is [60, 64]. Removing 64 leaves [60], and the last held key is 60."
+      },
+      {
+        "text": "Both 60 and 64",
+        "explanation": "A mono synth has one voice. Note priority picks one key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\non 60   stack [60]      -> 60\non 64   stack [60, 64]  -> 64\noff 64  stack [60]      -> 60\n```\n\nBecause the synth tracks every held key, releasing the newest one falls back to the previous one. A synth that only remembered the current note would go silent here.",
+    "link": {
+      "title": "Polyphony and monophony in instruments: note priority — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Polyphony_and_monophony_in_instruments"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Notes from your sequencer occasionally hang until you power-cycle the synth. Which bug would most directly cause this?",
+    "options": [
+      {
+        "text": "The parser treats Note On with velocity 0 as a new note",
+        "explanation": "Correct. Any transmitter that ends notes with `9n kk 00` will then never end a note, which is a stuck note every time."
+      },
+      {
+        "text": "The synth maps CC 74 linearly instead of exponentially",
+        "explanation": "A poor curve affects how the cutoff knob feels; it doesn't stop notes ending."
+      },
+      {
+        "text": "The synth ignores Program Change",
+        "explanation": "Ignoring a message type silently is allowed and harmless for note endings."
+      },
+      {
+        "text": "The UART is set to 31,250 baud",
+        "explanation": "31,250 baud is the correct MIDI rate. A wrong rate would garble everything, not just note offs."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A stuck note is a voice whose note off is never recognised.\n2. Transmitters can end notes with `8n kk vv` or `9n kk 00`, and the spec requires receivers to accept both.\n3. If velocity 0 is handled as a note on, every note ended that way will hang.\n4. Fix it in the parser's normalisation step, then test with both styles.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A mono synth in **low-note** priority receives: on 48, on 55, on 43, off 43, off 48. Which key sounds after each event?",
+    "options": [
+      {
+        "text": "48, 48, 43, 48, 55",
+        "explanation": "Correct. The lowest held key after each event: {48}, {48,55}, {43,48,55}, {48,55}, {55}."
+      },
+      {
+        "text": "48, 55, 43, 55, 55",
+        "explanation": "That is last-note priority. Low-note picks the minimum of the held keys."
+      },
+      {
+        "text": "48, 48, 43, 43, 55",
+        "explanation": "After off 43, key 43 is no longer held, so it can't be the target."
+      },
+      {
+        "text": "48, 55, 55, 55, 55",
+        "explanation": "That is high-note priority."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track the set of held keys and take the minimum:\n\n```\non 48   {48}         -> 48\non 55   {48,55}      -> 48\non 43   {43,48,55}   -> 43\noff 43  {48,55}      -> 48\noff 48  {55}         -> 55\n```\n\nNote that pressing 55 doesn't change the pitch at all in low-note mode: 48 is still lower.",
+    "link": {
+      "title": "Polyphony and monophony in instruments: note priority — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Polyphony_and_monophony_in_instruments"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The parser receives `C0 05 07`. What should it emit?",
+    "options": [
+      {
+        "text": "Program Change 5, then ignore `07` as an orphan",
+        "explanation": "Running status applies to all channel voice messages, including Program Change. `07` reuses `C0`."
+      },
+      {
+        "text": "A single Program Change with data 5 and 7",
+        "explanation": "Program Change has exactly one data byte, so `05` completes the first message."
+      },
+      {
+        "text": "Program Change 5, then Program Change 7",
+        "explanation": "Correct. `C0 05` is complete after one data byte; `07` then uses running status `C0`."
+      },
+      {
+        "text": "Nothing until a second data byte for `07` arrives",
+        "explanation": "That would be true only if Program Change had two data bytes. It has one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `C0`: Program Change, channel 1. It needs **one** data byte.\n2. `05`: message complete: program 5.\n3. `07`: a data byte with running status `C0` still set, so it forms a new Program Change: program 7.\n\nThis is why the parser looks up the data length per status. Assuming two bytes for everything would mis-parse this stream.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A buggy parser assumes **every** channel message has two data bytes. What happens when it receives `C0 05 90 3C 64`?",
+    "options": [
+      {
+        "text": "Both messages are applied correctly",
+        "explanation": "The bug changes how `C0 05` is handled: the parser keeps waiting for a second data byte that never arrives."
+      },
+      {
+        "text": "It emits Program Change 5 with second byte `90`",
+        "explanation": "`90` is a status byte (bit 7 set), so it can never be used as data."
+      },
+      {
+        "text": "The Note On is lost and the program changes to 60",
+        "explanation": "The new status byte resets the parser, so the Note On is intact."
+      },
+      {
+        "text": "The Program Change is lost, then the Note On is parsed correctly",
+        "explanation": "Correct. After `05` the parser waits for one more byte; `90` is a status byte that discards the incomplete message, then `90 3C 64` parses normally."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `C0 05`: the buggy parser wants two data bytes, so it waits.\n2. `90`: a status byte. The spec says a new status byte always makes the receiver adopt the new status, even if the last message wasn't completed. The half-built Program Change is dropped.\n3. `3C 64`: completes Note On key 60.\n\nThe symptom (\"program changes from the Digitakt sometimes don't work\") would be easy to misdiagnose without a unit test for one-data-byte messages.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You map CC 74 (0–127) to filter cutoff between 20 Hz and 20 kHz. Why is an exponential mapping usually better than a linear one?",
+    "options": [
+      {
+        "text": "Linear mapping cannot reach 20 kHz",
+        "explanation": "Both mappings reach 20 kHz at 127. The difference is how the values are distributed."
+      },
+      {
+        "text": "Pitch perception is roughly logarithmic, so equal knob steps should give equal frequency ratios",
+        "explanation": "Correct. Exponential mapping spreads the roughly 10 octaves evenly, at about 0.94 semitones per step. Linear mapping jumps over three octaves in its first step and spends half its range above 10 kHz."
+      },
+      {
+        "text": "Exponential mapping removes the need for smoothing",
+        "explanation": "Each step is still a jump of nearly a semitone; smoothing is still needed to avoid zipper noise."
+      },
+      {
+        "text": "The MIDI spec requires CC 74 to be exponential",
+        "explanation": "The spec defines CC 74 as Sound Controller 5 (default: brightness). The curve is the receiver's choice."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare the low end of each mapping:\n\n```\nlinear: 20 + 19980 * v/127\n  v=0  -> 20 Hz\n  v=1  -> 177 Hz (3+ octaves)\n  v=64 -> 10,089 Hz\nexp:   20 * 1000 ** (v/127)\n  v=64 -> 650 Hz\n```\n\nThe exponential curve covers log2(1000) ≈ 9.97 octaves in 127 steps, about 0.94 semitones each, so the whole knob is musically useful.",
+    "link": {
+      "title": "MIDI 1.0 Control Change Messages — MIDI Association",
+      "url": "https://midi.org/midi-1-0-control-change-messages"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The synth receives, in order: `B0 40 7F`, `90 3C 64`, `90 3C 00`, `B0 7B 00`, `B0 40 00`. Following the MIDI specification, when should key 60 enter its release stage?",
+    "options": [
+      {
+        "text": "At `90 3C 00`",
+        "explanation": "The sustain pedal (CC 64) is on at this point, so the note off is remembered but not acted on."
+      },
+      {
+        "text": "At `B0 7B 00` (All Notes Off)",
+        "explanation": "The spec says sustain also takes priority over All Notes Off until the pedal is released."
+      },
+      {
+        "text": "At `B0 40 00` (sustain released)",
+        "explanation": "Correct. With the pedal down, both the note off and All Notes Off are deferred. When the pedal is released, the note is released."
+      },
+      {
+        "text": "Never: the note off was lost",
+        "explanation": "It wasn't lost. It is held pending because of the sustain pedal."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nB0 40 7F  sustain on\n90 3C 64  key 60 on\n90 3C 00  key 60 off -> deferred\nB0 7B 00  All Notes Off -> deferred\nB0 40 00  sustain off -> release\n```\n\nThe spec's appendix states that a sustain-on takes priority over Note Off and All Notes Off until it is released, and that All Notes Off should send voices into their release stage rather than cutting them.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which design choices reduce the risk of stuck notes in a MIDI-driven mono synth? Select all that apply.",
+    "options": [
+      {
+        "text": "Keeping a stack of held keys per channel instead of only the current note",
+        "explanation": "Correct. Note offs for earlier keys are then applied correctly and duplicates are handled."
+      },
+      {
+        "text": "Releasing all notes when the receive channel is changed in the menu",
+        "explanation": "Correct. Otherwise the matching note offs arrive on the old channel and are ignored."
+      },
+      {
+        "text": "Implementing All Notes Off (CC 123) and a panic button",
+        "explanation": "Correct. These are safety nets for when note offs really are lost."
+      },
+      {
+        "text": "Ignoring Note Off messages and relying on All Notes Off",
+        "explanation": "Receivers aren't required to recognise All Notes Off, and transmitters only send it occasionally. Note offs are the primary mechanism."
+      },
+      {
+        "text": "Counting receive-buffer overflows",
+        "explanation": "Correct. A dropped note-off byte is a future stuck note. The counter shows whether the buffer is too small."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Work through each failure path:\n\n1. Misapplied offs → track held keys (note stack).\n2. Offs on the wrong channel → release everything when the channel changes.\n3. Offs never received (unplugged cable, overflow) → All Notes Off, Active Sensing, a panic action, and an overflow counter to find the cause.\n4. Relying on All Notes Off instead of note offs is backwards: the spec says it should not be used in lieu of note offs.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The parser receives `F0 7D 01 90 3C 64 F7`. Following the specification, what happens?",
+    "options": [
+      {
+        "text": "The SysEx is ended by `90`, Note On key 60 plays, and the stray `F7` is ignored",
+        "explanation": "Correct. `90` is a non-real-time status byte, so it terminates the exclusive message. `3C 64` completes the Note On. `F7` then has nothing to end."
+      },
+      {
+        "text": "Everything up to `F7` is SysEx data, so no note plays",
+        "explanation": "A SysEx message can be terminated by any status byte except real-time. `90` ends the SysEx."
+      },
+      {
+        "text": "The parser should crash or reset because SysEx was malformed",
+        "explanation": "Robust receivers never fail on bad input. The spec explicitly defines how SysEx can be terminated."
+      },
+      {
+        "text": "`90` is stored as SysEx data because it follows F0",
+        "explanation": "SysEx data bytes must be 0–127. `90` has bit 7 set, so it is a status byte."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `F0`: SysEx starts; running status cleared.\n2. `7D 01`: SysEx data (non-commercial ID, then payload).\n3. `90`: a status byte. The spec says exclusive messages are terminated by EOX *or any other status byte except real-time*. Note On begins.\n4. `3C 64`: Note On key 60, velocity 100.\n5. `F7`: End of Exclusive with no open SysEx; ignore it (it also leaves running status cleared).",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Turning the Digitakt knob mapped to your filter cutoff produces audible stepping (zipper noise). Which changes help? Select all that apply.",
+    "options": [
+      {
+        "text": "Send the same 7-bit CC more often",
+        "explanation": "More messages carrying the same 128 possible values add no resolution; each change is still a jump."
+      },
+      {
+        "text": "Set a target in the control code and smooth towards it in the audio callback",
+        "explanation": "Correct. The real parameter then moves continuously, sample by sample, which also hides MIDI timing jitter."
+      },
+      {
+        "text": "Accept 14-bit CC pairs (CC n with CC n+32) where the controller can send them",
+        "explanation": "Correct. 16,384 steps instead of 128 makes each jump far smaller, though smoothing is still advisable."
+      },
+      {
+        "text": "Apply the CC value directly inside the UART interrupt",
+        "explanation": "This makes the jump happen sooner, not more smoothly, and risks races with the audio code."
+      },
+      {
+        "text": "Switch from an exponential to a linear cutoff mapping",
+        "explanation": "That makes the low-frequency jumps larger (over three octaves for the first step), not smaller."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "1. A 7-bit CC gives 128 discrete values. Each change makes the cutoff jump instantly; those discontinuities are the zipper noise.\n2. Smoothing removes the discontinuity: the control code sets `cutoff_target`, and the audio code moves towards it each sample: `cutoff += k * (target - cutoff)`.\n3. More resolution (14-bit pairs) shrinks the jumps at the source.\n4. Sending more often, applying sooner, or using a worse curve don't address the cause.",
+    "link": {
+      "title": "MIDI 1.0 Control Change Messages — MIDI Association",
+      "url": "https://midi.org/midi-1-0-control-change-messages"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "DIN MIDI can deliver at most one byte every 320 µs. Your control loop sometimes runs only every 10 ms. What is the minimum ring-buffer size to avoid overflow, and a sensible choice?",
+    "options": [
+      {
+        "text": "4 bytes, because MIDI messages are at most 3 bytes",
+        "explanation": "Between two runs of the control loop many messages can arrive, not just one."
+      },
+      {
+        "text": "31,250 bytes, one second of data",
+        "explanation": "Far more than needed. The buffer only has to cover the longest gap between drains."
+      },
+      {
+        "text": "No buffer is needed if the UART has a hardware FIFO",
+        "explanation": "Typical UART hardware FIFOs hold only a few bytes, much less than 10 ms of data."
+      },
+      {
+        "text": "About 32 bytes minimum; choose 64 or more",
+        "explanation": "Correct. 10 ms ÷ 0.32 ms ≈ 31.25 bytes can arrive between runs. Round up and add margin: a power of two like 64 or 128 makes index wrap cheap."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nmax rate = 31250 / 10 = 3125 B/s\nper byte = 1 / 3125   = 0.32 ms\ngap      = 10 ms\nbytes    = 10 / 0.32  = 31.25\n```\n\nSo at least 32 bytes. Add margin for occasional longer gaps (and SysEx bursts), and pick a power of two: 64 or 128 bytes costs almost nothing. Keep counting overflows to confirm it is enough.",
+    "link": {
+      "title": "MIDI 1.0 Electrical Specification Update CA-033 — MIDI Association",
+      "url": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
+    }
+  }
+]

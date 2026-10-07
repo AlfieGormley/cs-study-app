@@ -1,0 +1,374 @@
+[
+  {
+    "id": "rel-overload-protection-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A circuit breaker protecting calls to an inventory service is **open**. Its cool-down period expires. What happens next?",
+    "options": [
+      {
+        "text": "It closes and all traffic resumes immediately",
+        "explanation": "Jumping straight to closed would send full load to a dependency that may still be broken, possibly knocking it over again. That's what half-open exists to avoid."
+      },
+      {
+        "text": "It moves to half-open and lets a small number of trial requests through",
+        "explanation": "Correct. Half-open probes the dependency with limited traffic. If the trials succeed the breaker closes; if they fail it reopens for another cool-down."
+      },
+      {
+        "text": "It stays open until an operator resets it manually",
+        "explanation": "Some systems allow manual overrides, but the standard pattern recovers automatically via the half-open state, so no human has to intervene."
+      },
+      {
+        "text": "It starts retrying every request that failed while it was open",
+        "explanation": "Requests rejected while open have already failed back to the caller. Replaying them would create a burst of stale load, which breakers are designed to prevent."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Walk the state machine:\n\n1. **Closed**: inventory calls start failing; failure rate exceeds 50% over 10 s → trip.\n2. **Open** for 30 s: every call returns a fallback instantly; the inventory service receives no traffic and can recover.\n3. Timer expires → **half-open**: allow e.g. 5 trial calls.\n4. If 5/5 succeed → **closed**, normal traffic resumes. If they fail → back to **open** for another 30 s.\n\nThe half-open state is a controlled experiment that avoids slamming a recovering service with full load.",
+    "link": {
+      "title": "Circuit breaker (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/CircuitBreaker.html"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A product page service has one shared 200-thread pool for calls to pricing, reviews and recommendations. Recommendations starts hanging for 30 s per call. Within a minute, product pages fail completely, even though pricing and reviews are healthy. Which pattern most directly prevents this?",
+    "options": [
+      {
+        "text": "Exponential backoff on recommendation calls",
+        "explanation": "Backoff spaces out retries, but the problem is the *first* attempts holding threads for 30 s. Fewer retries still leave the pool filling with hung calls."
+      },
+      {
+        "text": "A larger thread pool of 2,000 threads",
+        "explanation": "A bigger shared pool only delays exhaustion; hung recommendation calls will eventually consume all 2,000 threads too, plus extra memory."
+      },
+      {
+        "text": "Bulkheads: a separate, bounded pool per dependency",
+        "explanation": "Correct. Giving recommendations its own pool (say 40 threads) means only that pool fills with hung calls. Pricing and reviews keep their own threads and the page still renders, just without recommendations."
+      },
+      {
+        "text": "Moving recommendations to a different programming language",
+        "explanation": "The language is irrelevant; the problem is shared resource exhaustion, which happens in any runtime that shares a pool."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Estimate exhaustion: if recommendations get 10 calls/s and each hangs 30 s, at steady state `10 × 30 = 300` threads are needed, more than the whole pool.\n2. With a shared pool, all 200 threads end up stuck on recommendations; pricing and reviews calls queue and time out.\n3. With bulkheads, e.g. pricing 80, reviews 80, recommendations 40:\n   - Recommendations' 40 fill up; further calls are rejected immediately (fallback: hide the panel).\n   - Pricing and reviews are unaffected.\n4. Add a short timeout (say 300 ms) and a circuit breaker on recommendations as well, and its pool won't even fill.",
+    "link": {
+      "title": "Bulkhead pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server's mean service time is 10 ms. Modelled as an M/M/1 queue, what is the mean time in system at **90%** utilisation, and at **95%**?",
+    "options": [
+      {
+        "text": "11 ms and 10.5 ms",
+        "explanation": "This treats utilisation as a small additive overhead. Queueing delay is hyperbolic in utilisation, not linear, so it grows rather than shrinks as utilisation rises."
+      },
+      {
+        "text": "19 ms and 19.5 ms",
+        "explanation": "This adds 90% or 95% of the service time, a linear model that badly underestimates queueing near saturation."
+      },
+      {
+        "text": "100 ms and 200 ms",
+        "explanation": "Correct. Time in system = S / (1 − ρ). At ρ = 0.9: 10 / 0.1 = 100 ms. At ρ = 0.95: 10 / 0.05 = 200 ms. A 5-point rise in utilisation doubles latency."
+      },
+      {
+        "text": "90 ms and 95 ms",
+        "explanation": "This scales latency linearly with utilisation (10 ms × 9 and × 9.5). Queueing delay is hyperbolic: going from 90% to 95% doubles the time in system rather than adding 5%."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "M/M/1 mean time in system: `W = S / (1 − ρ)`.\n\n| ρ | 1 − ρ | W |\n|---|---|---|\n| 0.50 | 0.50 | 20 ms |\n| 0.80 | 0.20 | 50 ms |\n| 0.90 | 0.10 | 100 ms |\n| 0.95 | 0.05 | 200 ms |\n| 0.99 | 0.01 | 1000 ms |\n\nLesson: if clients time out at 150 ms, a server at 95% has a mean of 200 ms. M/M/1 time in system is exponential, so the share slower than 150 ms is `e^(−150/200) ≈ 47%`: nearly half of requests time out even though the server is \"only\" 5% short of full. At 90% it's `e^(−1.5) ≈ 22%`. That's why load shedding aims to keep the server below the knee of this curve.",
+    "link": {
+      "title": "Using load shedding to avoid overload (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A server is receiving 150% of its capacity. Which of these are good load-shedding practices? Select all that apply.",
+    "options": [
+      {
+        "text": "Drop requests that have already waited in the queue longer than the client's timeout",
+        "explanation": "Correct. The client has already given up, so processing them is pure waste. Dropping them frees capacity for requests that can still succeed."
+      },
+      {
+        "text": "Reject before doing expensive work such as parsing the body or querying the database",
+        "explanation": "Correct. Shedding only protects capacity if rejecting is much cheaper than serving. Rejecting after the expensive part saves almost nothing."
+      },
+      {
+        "text": "Shed lower-priority traffic (e.g. batch, prefetch) before user-facing critical traffic",
+        "explanation": "Correct. Criticality-based shedding, as Google uses, preserves the most important work when you can't serve everything."
+      },
+      {
+        "text": "Queue all excess requests in an unbounded in-memory queue so none are lost",
+        "explanation": "Incorrect. An unbounded queue turns overload into ever-growing latency (every request now times out) and eventually out-of-memory. It defeats the purpose of shedding."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think in terms of **goodput**: completed requests that the client still wanted.\n\n1. At 150% load, the server can serve only 2/3 of requests. The question is *which* 2/3.\n2. Serving requests whose clients have timed out produces zero goodput; drop them.\n3. Rejecting late (after DB work) burns the capacity you're trying to save; reject early.\n4. If you must reject 1/3 of traffic, make it the 1/3 that matters least.\n5. An unbounded queue serves everyone, all late, so goodput heads to zero: congestive collapse.",
+    "link": {
+      "title": "Using load shedding to avoid overload (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Clients use Google's adaptive throttling: they reject locally with probability `max(0, (requests − K × accepts) / (requests + 1))` with `K = 2`. Over the last 2 minutes a client sent 1,000 requests and the backend accepted 300. Roughly what fraction of new requests will the client reject locally?",
+    "options": [
+      {
+        "text": "0%, because the backend accepted some requests",
+        "explanation": "Throttling begins once requests exceed K × accepts, not only when accepts reach zero. Here 1,000 > 600, so the formula is positive."
+      },
+      {
+        "text": "70%, matching the backend's rejection rate",
+        "explanation": "70% is the backend rejection rate (700/1,000). The formula deliberately lets through more than the backend accepts (by factor K) so the client can detect recovery."
+      },
+      {
+        "text": "About 40%",
+        "explanation": "Correct. (1,000 − 2 × 300) / (1,000 + 1) = 400 / 1,001 ≈ 0.40. The client drops ~40% locally, so the backend no longer spends effort rejecting them."
+      },
+      {
+        "text": "About 60%",
+        "explanation": "60% is K × accepts / requests (600/1,000), the fraction the formula allows *through*, not the fraction it rejects."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Plug in: `requests = 1000`, `accepts = 300`, `K = 2`.\n2. Numerator: `1000 − 2 × 300 = 400`.\n3. Denominator: `1000 + 1 = 1001`.\n4. Probability ≈ `0.40`, so 40% are rejected client-side; 60% are sent.\n5. Of those sent, the backend will still reject some, but it no longer pays to receive and reject the 40%.\n\nWhy K = 2? It lets twice as many requests through as are being accepted, so if the backend recovers, accepts rise and throttling eases quickly. Lower K is more aggressive; higher K is more lenient.",
+    "link": {
+      "title": "Handling overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "When the primary product database is slow, a team's fallback is to read from a rarely-used secondary search cluster. During the next database incident, the search cluster collapses under the sudden load and search breaks too. What design principle would have avoided this?",
+    "options": [
+      {
+        "text": "Prefer static or always-exercised fallbacks over ones that shift load onto rarely used systems",
+        "explanation": "Correct. The AWS Builders' Library warns that fallbacks which only run during outages are untested and can move a surge onto another system that isn't sized for it. A static fallback (precomputed data) or a path used all the time avoids the surprise."
+      },
+      {
+        "text": "Add more retries to the fallback path",
+        "explanation": "More retries multiply load on the overloaded search cluster, accelerating the collapse rather than preventing it."
+      },
+      {
+        "text": "Remove the circuit breaker so the primary database keeps receiving traffic",
+        "explanation": "Without a breaker the slow database gets hammered and callers hang; you trade one failure for a worse, slower one."
+      },
+      {
+        "text": "Make the fallback chain longer, adding a third and fourth backup",
+        "explanation": "Each additional rarely-used fallback has the same problems: untested code and unsized capacity. Longer chains increase complexity and surprise."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Normal state: search cluster handles 500 req/s of search traffic.\n2. Database incident: product reads (say 5,000 req/s) fall back to search.\n3. Search now gets ~5,500 req/s, 11× its usual load, and falls over. Two features are down instead of one.\n4. The fallback was effectively a new dependency that had never been load-tested in this mode.\n\nBetter options:\n- **Static fallback**: serve a cached snapshot from local memory or a CDN.\n- **Always-on path**: if search must be a source of product data, use it in normal operation too, so it's sized and tested.\n- **Fail fast** with a clear error if neither is possible.",
+    "link": {
+      "title": "Avoiding fallback in distributed systems (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/avoiding-fallback-in-distributed-systems/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An event pipeline: an API writes to an in-memory queue, and workers write the events to a database. During a traffic spike the database slows, the queue grows to 40 GB and the API process is OOM-killed, losing all queued events. Which redesign applies backpressure correctly?",
+    "options": [
+      {
+        "text": "Increase the API's memory to 128 GB",
+        "explanation": "This only raises the ceiling. A sustained imbalance between input and output rates fills any finite buffer; you've postponed the crash and increased the data lost when it happens."
+      },
+      {
+        "text": "Bound the queue; when full, return 429/503 with Retry-After to producers (or use a durable log like Kafka with lag alerts)",
+        "explanation": "Correct. A bounded buffer forces the overload signal back to something that can slow down: the producer. A durable, disk-backed log is a deliberate large buffer that doesn't lose data on crash and whose lag is monitored."
+      },
+      {
+        "text": "Have workers drop events silently when the database is slow",
+        "explanation": "Silent drops lose data without anyone knowing. Backpressure is about *signalling* upstream, not discarding quietly downstream."
+      },
+      {
+        "text": "Add a circuit breaker between the workers and the database and keep the unbounded queue",
+        "explanation": "With the breaker open, workers stop writing and the unbounded queue grows even faster, so the OOM arrives sooner."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Rates: suppose the API receives 20k events/s and the slowed DB absorbs 5k/s. The queue grows at 15k/s.\n2. At ~1 KB/event that's 15 MB/s, so 40 GB fills in about 45 minutes, then the process dies with everything in it.\n3. Backpressure options:\n   - **Bounded queue** (e.g. 100k events). When full, the API returns `429` with `Retry-After`; clients back off.\n   - **Durable log** (Kafka): producers write to disk-backed partitions, consumers pull at their own pace, and consumer lag is alerted on. Capacity is bounded by disk and retention, and a crash loses nothing.\n4. Either way the overload becomes visible and controllable, rather than a silent build-up ending in a crash.",
+    "link": {
+      "title": "Handling overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A service calls a pricing dependency at 200 req/s, normally taking 50 ms. The calls run in a dedicated bulkhead pool of **20** threads. Pricing degrades and every call now takes 5 s. Roughly what happens to pricing calls?",
+    "options": [
+      {
+        "text": "All 200 req/s still complete, just slower",
+        "explanation": "Little's law says 200 req/s at 5 s needs 1,000 concurrent calls. A 20-thread pool can't hold that, so most calls can't even start."
+      },
+      {
+        "text": "The pool grows automatically to 1,000 threads to absorb the slowness",
+        "explanation": "A bulkhead is deliberately bounded. Growing it to match a slow dependency would just move the exhaustion to the whole process."
+      },
+      {
+        "text": "The whole service runs out of threads and stops",
+        "explanation": "That's what happens with a shared pool. The bulkhead caps pricing at 20 threads, so the rest of the service keeps its own."
+      },
+      {
+        "text": "The pool fills; about 4 calls/s get through and the rest are rejected immediately, while the service's other work is unaffected",
+        "explanation": "Correct. 20 threads ÷ 5 s per call = 4 calls/s of throughput. The remaining ~196 req/s are rejected (or served a fallback) at once, and the other pools keep working. That containment is the bulkhead's job."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use **Little's law**: `in-flight = rate × latency`.\n\n```\nhealthy: 200 × 0.05 s =     10\ndegraded: 200 × 5 s   =  1,000\n```\n\n1. Healthy: 10 threads busy, so 20 is double the need, a sensible margin.\n2. Degraded: 1,000 would be needed, but only 20 exist.\n3. Throughput through the pool: `20 / 5 s = 4 calls/s`.\n4. Everything else is rejected quickly; show list prices or hide the panel.\n\nAdd a timeout (say 200 ms) and a circuit breaker, and the pool wouldn't even fill.",
+    "link": {
+      "title": "Bulkhead pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server has a 20 ms mean service time and runs at **80%** utilisation. Model it as an M/M/1 queue, where time in system is exponentially distributed. Roughly what are the mean and p99 time in system?",
+    "options": [
+      {
+        "text": "Mean 25 ms, p99 about 50 ms",
+        "explanation": "25 ms is `S / ρ`, not `S / (1 − ρ)`. Queueing delay depends on the idle fraction, 1 − ρ = 0.2."
+      },
+      {
+        "text": "Mean 100 ms, p99 about 200 ms",
+        "explanation": "The mean is right, but an exponential distribution has a long tail: p99 is ln(100) ≈ 4.6 times the mean, not 2."
+      },
+      {
+        "text": "Mean 100 ms, p99 about 460 ms",
+        "explanation": "Correct. Mean W = 20 / (1 − 0.8) = 100 ms. For an exponential distribution, p99 = W × ln(100) ≈ 4.6 × 100 ≈ 460 ms."
+      },
+      {
+        "text": "Mean 20 ms, p99 about 92 ms",
+        "explanation": "20 ms is the bare service time with no queueing. At 80% busy, most requests wait behind others."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Mean time in system: `W = S / (1 − ρ) = 20 / 0.2 = 100 ms`.\n2. M/M/1 time in system is exponential with mean W, so:\n\n```\nP(T > t) = e^(−t / W)\np99: e^(−t/W) = 0.01\nt = W × ln(100) ≈ 4.6 W\n  ≈ 460 ms\n```\n\n3. Compare with the 20 ms service time: the p99 is 23× slower at 80% busy.\n\nReal servers with many workers (M/M/c) queue much less at 80%, but every queueing system has the same knee. If your SLO is on p99, the headroom you need is larger than the mean suggests.",
+    "link": {
+      "title": "M/M/1 queue (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/M/M/1_queue"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q10",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "You're configuring a circuit breaker for calls to a payments provider. Which settings are sensible? Select all that apply.",
+    "options": [
+      {
+        "text": "When half-open, immediately send all queued traffic to test recovery",
+        "explanation": "Incorrect. Half-open sends a few trial calls. Full load on a recovering dependency can knock it straight over again."
+      },
+      {
+        "text": "Use per-host breakers or proxy outlier ejection if the provider is reached via several hosts",
+        "explanation": "Correct. A single breaker might open for every host because one is bad; per-host control removes only the sick one."
+      },
+      {
+        "text": "A minimum number of calls in the window (e.g. 20) before the failure rate is evaluated",
+        "explanation": "Correct. Without it, one failure out of one call is a 100% failure rate and trips the breaker on noise."
+      },
+      {
+        "text": "Count calls slower than a threshold (e.g. 2 s) as failures",
+        "explanation": "Correct. Slow-call counting lets the breaker react to gray failure, where the provider is up but painfully slow."
+      },
+      {
+        "text": "Count `400 Bad Request` responses as failures",
+        "explanation": "Incorrect. A 400 means the caller sent a bad request; the provider is healthy. Counting client errors could open the breaker because of one buggy caller."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Check each setting against what the breaker is for, *detecting an unhealthy dependency*:\n\n| Setting | Detects dependency health? |\n|---|---|\n| min_requests | ✓ avoids noise |\n| slow-call threshold | ✓ catches gray failure |\n| count 4xx | ✗ measures caller bugs |\n| full-load half-open | ✗ risks relapse |\n| per-host breakers | ✓ finer blast radius |\n\nTypical starting point: 10 s rolling window, at least 20 calls, open at 50% failures or slow calls, 30 s open, 5 trial calls.",
+    "link": {
+      "title": "Circuit Breaker pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After a traffic spike, a server's request queue holds about **2 seconds** of work, and clients time out after **1 second**. The server processes the queue first-in, first-out. Arrivals have just returned to normal. What is the server's goodput, and what's the best fix?",
+    "options": [
+      {
+        "text": "Near zero until the backlog clears; drop requests older than the client timeout (or serve newest-first) so fresh requests succeed",
+        "explanation": "Correct. FIFO serves the oldest requests first, all of whose clients have given up, and new arrivals join the back to wait 2 s too. Dropping expired requests, or adaptive LIFO, spends capacity only on requests that can still succeed."
+      },
+      {
+        "text": "Normal goodput, because arrivals are back to normal",
+        "explanation": "The backlog is still there. Every request now waits about 2 s, longer than the 1 s timeout, so its client has gone by the time it's served."
+      },
+      {
+        "text": "Near zero; the fix is a longer queue so no request is ever rejected",
+        "explanation": "A longer queue means longer waits, so even more requests outlive their timeouts. Unbounded queueing is what caused this."
+      },
+      {
+        "text": "Half of normal, because half the queue is within the timeout",
+        "explanation": "With FIFO, a new request waits behind the full 2 s backlog. None of them is within the timeout until the backlog shrinks below 1 s."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Backlog = 2 s of work; a new arrival waits ~2 s before service.\n2. Client timeout = 1 s, so every request served is already abandoned. Goodput ≈ 0, even though the server is 100% busy.\n3. The backlog only drains at the rate spare capacity allows, so this can last a long time.\n4. Fixes:\n   - Check `enqueued_at + timeout < now` and drop stale requests without processing them.\n   - **Adaptive LIFO**: when the queue is long, serve newest first; those clients are still waiting.\n   - Bound the queue to well under one timeout's worth of work.\n\nThis is the \"server does 100% work for 0% useful output\" collapse from the lesson.",
+    "link": {
+      "title": "Using load shedding to avoid overload (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A backend can serve **1,000 req/s**. During a surge it receives 1,500 req/s: 600 req/s tagged `CRITICAL` (user checkouts) and 900 req/s tagged `SHEDDABLE` (prefetch and batch). With criticality-based shedding, what share of each class is served?",
+    "options": [
+      {
+        "text": "Both classes get 67%, since 1,000 / 1,500 = 67%",
+        "explanation": "That's uniform shedding, which drops a third of checkouts. Criticality exists precisely so the important class is protected first."
+      },
+      {
+        "text": "CRITICAL about 83%; SHEDDABLE about 56%",
+        "explanation": "This splits the shortfall by some proportional rule. With strict criticality, lower classes are shed completely before any critical request is rejected."
+      },
+      {
+        "text": "CRITICAL 100%; SHEDDABLE 0%",
+        "explanation": "Shedding removes only what's necessary. There are 400 req/s of spare capacity after critical traffic, which sheddable requests can use."
+      },
+      {
+        "text": "CRITICAL 100%; SHEDDABLE about 44%",
+        "explanation": "Correct. All 600 critical requests are served. The remaining 400 req/s of capacity goes to sheddable traffic: 400 / 900 ≈ 44%. All 500 rejections fall on the sheddable class."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Excess: `1,500 − 1,000 = 500 req/s` must be rejected.\n2. Shed from the lowest criticality first: sheddable has 900 req/s, enough to absorb all 500.\n3. Served:\n\n```\nCRITICAL:  600 / 600 = 100%\nSHEDDABLE: 400 / 900 ≈  44%\n```\n\n4. Make each rejection cheap (before parsing and DB work), and return `503` with `Retry-After` so batch clients back off.\n\nIf critical traffic alone exceeded 1,000 req/s, you'd shed it too, but only after every sheddable request was gone.",
+    "link": {
+      "title": "Handling overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  }
+]

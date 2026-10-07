@@ -1,0 +1,339 @@
+[
+  {
+    "id": "sea-hexagonal-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In ports and adapters terms, what is a Flask view that parses an HTTP request and calls `PlaceOrder(oid)`?",
+    "options": [
+      {
+        "text": "A driven (secondary) port",
+        "explanation": "A port is an interface defined by the core, not a concrete piece of framework code. And driven ports are the ones the core *calls out through*."
+      },
+      {
+        "text": "Part of the application core",
+        "explanation": "The core must not know about HTTP. A view importing Flask belongs outside it."
+      },
+      {
+        "text": "A driven (secondary) adapter",
+        "explanation": "Driven adapters are called *by* the core, like a repository or mailer. The view calls the core, not the other way round."
+      },
+      {
+        "text": "A driving (primary) adapter",
+        "explanation": "Correct. It sits outside the core, translates a specific technology (HTTP) and calls *into* the core's use case. It drives the application."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask two questions:\n\n1. **Is it an interface or an implementation?** It's concrete Flask code, so it's an *adapter*.\n2. **Who starts the conversation?** The view receives a request and calls the core, so it *drives* the application.\n\n| | Port (interface) | Adapter (tech) |\n|---|---|---|\n| Driving | use-case API | Flask view, CLI |\n| Driven | `OrderRepository` | `SqlOrderRepository` |",
+    "link": {
+      "title": "Hexagonal Architecture — Alistair Cockburn",
+      "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In clean architecture, which statement follows the Dependency Rule?",
+    "options": [
+      {
+        "text": "A use case imports `sqlalchemy` to load entities",
+        "explanation": "The use case circle is inside the frameworks circle, so naming SQLAlchemy points outwards and breaks the rule."
+      },
+      {
+        "text": "A SQL gateway in the interface-adapters ring implements a repository interface defined by the use cases",
+        "explanation": "Correct. The gateway (outer) names the interface (inner), so the source dependency points inwards, even though at runtime the use case calls the gateway."
+      },
+      {
+        "text": "An entity class formats itself as JSON for the web API",
+        "explanation": "JSON for the web API is a concern of an outer circle. An entity that knows the response format depends on it."
+      },
+      {
+        "text": "A use case reads `flask.request` to get the current user",
+        "explanation": "Flask is in the outermost ring. The current user should be passed into the use case as a plain value."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The Dependency Rule: **source code dependencies point only inwards**. Inner circles must not mention anything from outer circles.\n\n- Use case → sqlalchemy: inner naming outer. Broken.\n- Entity → web JSON format: inner naming outer. Broken.\n- Use case → `flask.request`: inner naming outer. Broken.\n- SQL gateway → repository interface: outer naming inner. Fine.\n\nThe gateway case is dependency inversion in action: control flows out to the database, but the code dependency flows in.",
+    "link": {
+      "title": "The Clean Architecture — Robert C. Martin",
+      "url": "https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does hexagonal architecture make business rules easy to unit-test?",
+    "options": [
+      {
+        "text": "Because the core depends only on ports, so tests can plug in fast in-memory adapters instead of a database or network",
+        "explanation": "A fake can exercise domain behavior without external I/O. Its latency is not a fixed guarantee, and separate checks must verify real adapter semantics."
+      },
+      {
+        "text": "Because adapters are automatically mocked by the framework",
+        "explanation": "There's no framework doing this. You write fake adapters yourself, which is simple precisely because the ports are small and owned by the core."
+      },
+      {
+        "text": "Because the core contains no logic, so there is nothing to test",
+        "explanation": "The core is where the logic lives. The aim is to make that logic testable in isolation."
+      },
+      {
+        "text": "Because hexagonal architecture requires 100% test coverage",
+        "explanation": "It requires nothing of the sort; it only makes isolated tests cheap to write."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `PlaceOrder` is constructed with a repository and a notifier, typed against `Protocol` ports.\n2. In production the composition root passes `SqlOrderRepository` and `SmtpNotifier`.\n3. In a test you pass `FakeRepo` (a dict) and `FakeNotifier` (a list).\n4. The same port-shaped interaction can be used, so the test exercises the real rules with none of the slow or flaky I/O.",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this test print?\n\n```python\nclass FakeRepo:\n    def __init__(self):\n        self.d = {}\n    def add(self, o):\n        self.d[o.id] = o\n    def get(self, i):\n        return self.d[i]\n\nclass Order:\n    def __init__(self, i):\n        self.id = i\n        self.status = \"draft\"\n    def place(self):\n        self.status = \"placed\"\n\nrepo = FakeRepo()\nrepo.add(Order(7))\no = repo.get(7)\no.place()\nprint(repo.get(7).status)\n```",
+    "options": [
+      {
+        "text": "`draft`",
+        "explanation": "That would be true if `get` returned a copy, or if changes needed a `save` call. This fake stores and returns the same object."
+      },
+      {
+        "text": "`KeyError: 7`",
+        "explanation": "Order 7 was added before being fetched, so the key exists."
+      },
+      {
+        "text": "`placed`",
+        "explanation": "Correct. The dict stores a reference to the `Order`. `get(7)` returns that same object, `place()` mutates it, and the next `get(7)` returns the mutated object."
+      },
+      {
+        "text": "`None`",
+        "explanation": "`status` is set in `__init__` and then changed by `place()`; it's never `None`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `repo.add(Order(7))` stores the object under key 7.\n2. `o = repo.get(7)` returns a reference to that same object.\n3. `o.place()` sets `status = \"placed\"` on it.\n4. `repo.get(7)` returns the same object again, so it prints `placed`.\n\n**Fakes vs reality:** a real SQL repository may return a *new* object each time, so a forgotten `add`/`commit` loses the change. Fakes that silently share references can hide that bug. Cosmic Python's unit of work adds an explicit `commit()` and a `committed` flag on the fake for this reason.",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team defines this port:\n\n```python\nclass OrderRepo(Protocol):\n    def query(self) -> sa.orm.Query:\n        ...\n```\n\nUse cases then call `repo.query().filter(...)`. What is wrong?",
+    "options": [
+      {
+        "text": "Nothing; a `Protocol` makes it an abstraction, so the core is decoupled",
+        "explanation": "Being declared as a `Protocol` doesn't help if its signature exposes SQLAlchemy. The core still has to import and understand SQLAlchemy queries."
+      },
+      {
+        "text": "Repositories should only ever have `get` and `add`",
+        "explanation": "Specific query methods like `list_overdue()` are fine, as long as they're expressed in domain terms."
+      },
+      {
+        "text": "Protocols can't have return type annotations",
+        "explanation": "They can; return annotations are normal in Protocol methods."
+      },
+      {
+        "text": "The port leaks the database technology into the core, so swapping storage or faking it means emulating SQLAlchemy's query API",
+        "explanation": "Correct. A port should speak the core's language (`get(order_id)`, `pending_since(date)`). Returning an ORM `Query` makes every use case depend on SQLAlchemy."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A port's job is to describe what the core **needs**, in the core's vocabulary.\n2. `-> sa.orm.Query` is a SQLAlchemy type. Any code using it calls `.filter`, `.join`, `.all()`, all SQLAlchemy API.\n3. To test with a fake you'd now have to reimplement a query builder. To move to another store you'd rewrite every use case.\n4. Better:\n\n```python\nclass OrderRepo(Protocol):\n    def get(self, oid: int) -> Order:\n        ...\n    def overdue(self, d) -> list[Order]:\n        ...\n```",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which of these does *not* need a port (an abstraction owned by the core) in a hexagonal Python service?",
+    "options": [
+      {
+        "text": "A `Money` value class used by `Order` to add prices",
+        "explanation": "No external adapter boundary is needed for this pure collaboration. Internal abstractions can still serve other design goals; they are not universally useless."
+      },
+      {
+        "text": "Charging cards through Stripe",
+        "explanation": "A third-party API with network calls and side effects is a textbook driven port."
+      },
+      {
+        "text": "Reading the current time, so rules like \"expires in 30 days\" can be tested",
+        "explanation": "Time is an external dependency. Injecting a clock (or passing `now` in) lets tests control it, so it's a good candidate for a port."
+      },
+      {
+        "text": "Publishing an `OrderPlaced` event to Kafka",
+        "explanation": "Messaging is I/O to the outside world, so it belongs behind a port such as `EventPublisher`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ports go at the boundary between the core and things that are **slow, non-deterministic or replaceable**:\n\n| Dependency | I/O? | Port? |\n|---|---|---|\n| Clock | Non-deterministic | Yes |\n| Stripe | Network | Yes |\n| Kafka | Network | Yes |\n| `Money` | Pure | No |\n\nDomain objects collaborating inside the core should just call each other directly.",
+    "link": {
+      "title": "Hexagonal Architecture — Alistair Cockburn",
+      "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which are genuine costs of hexagonal / clean architecture? Select all that apply.",
+    "options": [
+      {
+        "text": "Mapping code between ORM rows and domain objects",
+        "explanation": "Correct. Keeping domain classes free of the ORM means writing and maintaining the translation in adapters (or using imperative mapping, which has its own complexity)."
+      },
+      {
+        "text": "More indirection: you follow a port to find which adapter actually runs",
+        "explanation": "Correct. The composition root decides the wiring, so reading a use case doesn't tell you the concrete implementation."
+      },
+      {
+        "text": "Business rules can no longer be unit-tested without a database",
+        "explanation": "That's the opposite of true. Isolated, fast testing of rules is a main *benefit*."
+      },
+      {
+        "text": "Additional integration work for framework features built around ORM models, such as Django admin and ModelForm",
+        "explanation": "Separate domain classes need mapping or other integration with ORM-based features; those features are not inherently lost."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Weigh the trade explicitly:\n\n- **Pay**: mapping layers, indirection, fewer framework shortcuts.\n- **Get**: fast tests, swappable infrastructure, a core that reads as business logic.\n\nBoth costs and benefits depend on mapping complexity, integration needs, testing and expected changes; there is no fixed per-entity cost law. That's why the advice is to adopt it where rules are rich, and stay with framework defaults for thin CRUD.",
+    "link": {
+      "title": "Hexagonal architecture (software) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Where should the code that decides \"in production use `SqlOrderRepository` and `SmtpNotifier`; in tests use fakes\" live?",
+    "options": [
+      {
+        "text": "Inside `PlaceOrder.__init__`, which creates its own dependencies",
+        "explanation": "Constructing an adapter directly couples the use case to it and makes ordinary injection harder; patching remains possible but does not remove that dependency."
+      },
+      {
+        "text": "In the domain model, using `if settings.TESTING:` branches",
+        "explanation": "Test switches in the domain couple it to configuration and leave production code paths that only tests exercise."
+      },
+      {
+        "text": "In a composition root such as `bootstrap.py` or the app factory",
+        "explanation": "The entry-point composition code chooses concrete adapters and supplies them to the core."
+      },
+      {
+        "text": "In each adapter, which registers itself in a global variable",
+        "explanation": "Global registration hides the wiring and makes test isolation harder; tests can leak state into each other."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Dependency injection means objects *receive* collaborators rather than building them.\n2. Somebody still has to build them: that's the **composition root**, as close to `main` as possible.\n3. Production: `bootstrap.build_app(settings)` creates the session, adapters and use cases.\n4. Tests: construct `PlaceOrder(FakeRepo(), FakeNotifier())` directly, or call a `bootstrap` variant with fakes.\n5. Composition code coordinates concrete wiring; the core imports nothing from adapters.",
+    "link": {
+      "title": "Architecture Patterns with Python: Dependency Injection",
+      "url": "https://www.cosmicpython.com/book/chapter_13_dependency_injection.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Does this code satisfy the `OrderRepository` Protocol for a static type checker such as mypy?\n\n```python\nclass OrderRepository(Protocol):\n    def get(self, oid: int) -> Order:\n        ...\n\nclass MemRepo:\n    def __init__(self) -> None:\n        self.d: dict[int, Order] = {}\n    def get(self, oid: int) -> Order:\n        return self.d[oid]\n\ndef run(repo: OrderRepository): ...\n\nrun(MemRepo())\n```",
+    "options": [
+      {
+        "text": "No: `MemRepo` must inherit from `OrderRepository`",
+        "explanation": "Protocols use *structural* subtyping. Explicit inheritance is optional; matching method signatures is enough."
+      },
+      {
+        "text": "No: Protocols only work with `abc.ABC` subclasses",
+        "explanation": "Protocols and abstract base classes are different mechanisms. ABC runtime checks can use inheritance, virtual registration or subclass hooks; registration alone does not establish static structural typing."
+      },
+      {
+        "text": "Only at runtime if the Protocol is decorated with `@runtime_checkable`",
+        "explanation": "`@runtime_checkable` only enables `isinstance` checks at runtime. Static checking of the call works without it."
+      },
+      {
+        "text": "Yes: `MemRepo` has a compatible `get` method, so it structurally matches the Protocol",
+        "explanation": "Correct. PEP 544 protocols check the shape of the class. The adapter doesn't even need to import the port, which keeps it loosely coupled."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `OrderRepository` is a `Protocol` with one method, `get(int) -> Order`.\n2. `MemRepo.get` has the same signature.\n3. Under PEP 544, a class is compatible with a protocol if it has all the protocol's members with compatible types. No inheritance is needed.\n4. mypy accepts `run(MemRepo())`.\n\nContrast with `abc.ABC`: runtime membership can come from inheritance, registration or a subclass hook; static type-checker acceptance is a separate question. Protocols suit ports well because adapters can satisfy them without depending on the core's module.",
+    "link": {
+      "title": "PEP 544 — Protocols: structural subtyping",
+      "url": "https://peps.python.org/pep-0544/"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're reviewing a hexagonal codebase. Which findings indicate business policy has leaked out of the core? Select all that apply.",
+    "options": [
+      {
+        "text": "`SqlOrderRepository.list()` adds `WHERE status != 'cancelled'` because \"nobody wants cancelled orders\"",
+        "explanation": "Correct. Deciding which orders count is policy. Hidden in the adapter, it's invisible to the core, untested by fake-based tests, and different from what an in-memory fake does."
+      },
+      {
+        "text": "The Flask view rejects an order if `total > 10_000` before calling the use case",
+        "explanation": "Correct. A limit on order size is a business rule. In the view, the CLI and batch adapters bypass it."
+      },
+      {
+        "text": "The Flask view returns 400 if the JSON body is missing the `quantity` field",
+        "explanation": "Not a leak. Validating the *shape* of input is the adapter's job; the core should receive well-formed values. Whether quantity 0 is allowed would be policy."
+      },
+      {
+        "text": "`StripeAdapter` retries a timed-out charge twice with backoff",
+        "explanation": "Transport retry mechanics can belong in an adapter, but charging retries must preserve the payment provider's idempotency contract and overall budget. Retrying a timeout blindly can duplicate effects."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "A useful test: *would a business person have an opinion on this?*\n\n| Finding | Business opinion? | Where |\n|---|---|---|\n| Exclude cancelled | Yes | Core |\n| Max order size | Yes | Core |\n| JSON field present | No | Adapter |\n| HTTP retries | No | Adapter |\n\nThe danger with leaked policy is that each adapter grows its own version. The fake repository doesn't filter cancelled orders, so tests pass while production behaves differently.",
+    "link": {
+      "title": "Hexagonal Architecture — Alistair Cockburn",
+      "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A five-person team is building an internal admin tool in Django: forms to create, edit and list suppliers, with almost no business rules. A senior engineer proposes full clean architecture: entities, use-case interactors, repository ports and presenters. What's the best judgement?",
+    "options": [
+      {
+        "text": "Adopt it; every serious application needs clean architecture from day one",
+        "explanation": "Architecture is a trade-off. Applying the heaviest structure to the thinnest logic maximises cost and minimises benefit."
+      },
+      {
+        "text": "Use Django's defaults (models, forms, admin) and extract a framework-free core later if real business rules emerge",
+        "explanation": "Given these requirements, framework defaults may be proportionate. Separate domain classes add work but do not inherently prohibit using Django admin or model forms on ORM models."
+      },
+      {
+        "text": "Use clean architecture but skip tests, to save the time the extra layers cost",
+        "explanation": "That keeps the costs and throws away the main benefit, which is cheap isolated testing."
+      },
+      {
+        "text": "Write everything in views to avoid any layering",
+        "explanation": "Throwing away even the framework's model/view split goes too far. Django's defaults already give a reasonable structure for CRUD."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Estimate what the architecture protects: business rules. Here there are almost none.\n2. Estimate its cost: a domain class, an ORM model, a mapper, a port, an adapter, a use case and a presenter per entity, plus integration with Django admin and ModelForm if separate domain classes are introduced.\n3. Given the stated simple requirements, the proposed structure may cost more than it helps; evaluate actual future needs.\n4. Keep the door open: if rules such as supplier approval workflows appear, put them in plain modules, and introduce ports at the boundary then. Architecture can evolve (see the last lesson of this module).",
+    "link": {
+      "title": "Hexagonal architecture (software) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)"
+    }
+  }
+]

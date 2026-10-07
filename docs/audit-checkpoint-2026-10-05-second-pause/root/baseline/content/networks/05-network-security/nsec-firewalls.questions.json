@@ -1,0 +1,348 @@
+[
+  {
+    "id": "nsec-firewalls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A first-match firewall has these rules, then a default policy of deny:\n\n```\n1 allow tcp 443 from any\n2 deny  tcp any from 198.51.100.0/24\n3 allow tcp 22  from any\n```\n\nWhat happens to SSH (TCP 22) from 198.51.100.7, and to HTTPS from the same address?",
+    "options": [
+      {
+        "text": "SSH denied, HTTPS allowed",
+        "explanation": "Correct. HTTPS matches rule 1 first and is allowed before rule 2 is reached. SSH skips rule 1, matches rule 2 and is denied."
+      },
+      {
+        "text": "Both denied",
+        "explanation": "This assumes the deny for that subnet applies to everything, but rule 1 matches HTTPS first and first match wins."
+      },
+      {
+        "text": "Both allowed",
+        "explanation": "SSH does not match rule 1 (wrong port), so rule 2 is reached and denies it before rule 3."
+      },
+      {
+        "text": "SSH allowed, HTTPS denied",
+        "explanation": "This reads the rules bottom-up. First-match evaluation goes top to bottom."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk each packet down the list and stop at the first match.\n\n**HTTPS from 198.51.100.7:**\n1. Rule 1: tcp 443 from any. Match. **Allow.** Stop.\n\n**SSH from 198.51.100.7:**\n1. Rule 1: port 443? No.\n2. Rule 2: tcp any from 198.51.100.0/24? Yes. **Deny.** Stop.\n3. Rule 3 is never reached.\n\nIf the intent was to block that subnet entirely, rule 2 must move above rule 1.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does a stateful firewall track that a stateless packet filter does not?",
+    "options": [
+      {
+        "text": "The application data inside each packet",
+        "explanation": "Inspecting content is what application-layer firewalls and WAFs do. Stateful tracking is about connections, not payloads."
+      },
+      {
+        "text": "The user who sent each packet",
+        "explanation": "User identity is a feature of NGFWs and identity-aware proxies, not of basic stateful filtering."
+      },
+      {
+        "text": "Which connections are in progress, so packets belonging to an allowed flow are accepted automatically",
+        "explanation": "Correct. It keeps a connection table (5-tuple plus state). Replies to an allowed request match the table without needing their own rule."
+      },
+      {
+        "text": "The physical port each packet arrived on",
+        "explanation": "Even stateless filters can match on the interface; that is not what state means."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Stateless: each packet is judged in isolation against the rules.\n2. Stateful: on the first allowed packet (say an outbound SYN), the firewall records the flow: protocol, addresses, ports, state.\n3. Later packets that match a recorded flow, in either direction, are accepted as `established`.\n4. That is why the nftables ruleset starts with `ct state established,related accept`.",
+    "link": {
+      "title": "Simple ruleset for a workstation — nftables wiki",
+      "url": "https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement best describes the zero trust model?",
+    "options": [
+      {
+        "text": "Remove firewalls and rely entirely on encryption",
+        "explanation": "Zero trust keeps network controls; it adds identity checks rather than replacing segmentation."
+      },
+      {
+        "text": "Trust nothing from the internet, but trust everything on the internal network",
+        "explanation": "That is the castle-and-moat model zero trust rejects."
+      },
+      {
+        "text": "Require a VPN for every connection",
+        "explanation": "A VPN grants network access based on being connected, which is still location-based trust."
+      },
+      {
+        "text": "Never grant access because of network location; authenticate and authorise each request based on user, service and device",
+        "explanation": "Correct. NIST SP 800-207 defines zero trust as removing implicit trust in network location and evaluating every access request."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Old model: inside = trusted. One foothold inside unlocks everything.\n2. Zero trust: being on the office LAN or VPN grants nothing by itself.\n3. Each request is checked: who is the user, which service, is the device managed and patched, is this access needed?\n4. Access is granted to an application, not to a network.\n5. Network segmentation still exists, to limit blast radius if an identity is stolen.",
+    "link": {
+      "title": "NIST SP 800-207: Zero Trust Architecture",
+      "url": "https://csrc.nist.gov/pubs/sp/800/207/final"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An EC2 web server's security group allows inbound TCP 443 from anywhere. Its subnet's custom network ACL allows inbound TCP 443 and outbound TCP 443, and nothing else (the final rule denies everything). Clients cannot load the site. Why?",
+    "options": [
+      {
+        "text": "Security groups are stateless, so replies need their own rule",
+        "explanation": "Security groups are stateful; replies to allowed inbound traffic are automatic at that layer."
+      },
+      {
+        "text": "The NACL is stateless, and replies go to clients' ephemeral ports, not to 443, so they are denied outbound",
+        "explanation": "Correct. The server replies from 443 to ports such as 51,812. The NACL has no outbound rule for those ports. Add an outbound allow for TCP 1024–65535."
+      },
+      {
+        "text": "NACL rules are ignored when a security group exists",
+        "explanation": "Both apply: traffic must pass the subnet's NACL and the interface's security group."
+      },
+      {
+        "text": "The NACL must also allow inbound ephemeral ports for the requests to arrive",
+        "explanation": "The requests arrive on port 443, which is allowed. It is the outbound replies to ephemeral ports that fail."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace one connection from client port 51812:\n\n```\nin : client:51812 -> srv:443\n     NACL in 443   allow\n     SG   in 443   allow\nout: srv:443 -> client:51812\n     SG   stateful, allow\n     NACL out 51812? no rule\n     -> DENY\n```\n\nThe NACL judges the reply as a fresh packet with destination port 51,812. Fix: outbound NACL rule allowing TCP 1024–65535 to 0.0.0.0/0.",
+    "link": {
+      "title": "Control subnet traffic with network ACLs — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about AWS security groups and network ACLs are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Security groups support only allow rules",
+        "explanation": "Correct. You cannot write a deny in a security group; anything not allowed is denied."
+      },
+      {
+        "text": "Network ACL rules are evaluated in number order, and the first match applies",
+        "explanation": "Correct. That is why rule numbering (100, 200, ...) leaves gaps for inserting rules later."
+      },
+      {
+        "text": "Security group rules are evaluated in the order they were created",
+        "explanation": "Incorrect. All security group rules are evaluated together; since they are all allows, order cannot matter."
+      },
+      {
+        "text": "A security group rule can allow traffic from members of another security group",
+        "explanation": "Correct. Referencing `sg-web` as a source works regardless of instances' IP addresses."
+      },
+      {
+        "text": "Network ACLs apply to individual network interfaces",
+        "explanation": "Incorrect. NACLs apply at the subnet boundary; security groups apply to interfaces."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "| | SG | NACL |\n|---|---|---|\n| Scope | Interface | Subnet |\n| State | Stateful | Stateless |\n| Deny rules | No | Yes |\n| Order | All together | Lowest number first |\n\nA practical pattern: use security groups for almost everything (with group references for app-to-DB paths), and NACLs for coarse subnet-wide denies such as blocking a known-bad range.",
+    "link": {
+      "title": "Control traffic to resources using security groups — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker phishes one employee's laptop on a flat corporate network. Which control most directly limits how far they can go from there?",
+    "options": [
+      {
+        "text": "A stronger edge firewall at the internet boundary",
+        "explanation": "The attacker is already inside; the edge firewall is behind them."
+      },
+      {
+        "text": "Internal segmentation, so the laptop's network can reach only the services it needs",
+        "explanation": "Correct. Segmentation shrinks the blast radius: the laptop cannot probe database servers or management interfaces it has no business reaching."
+      },
+      {
+        "text": "A DDoS scrubbing service",
+        "explanation": "Scrubbing protects availability against floods; it does nothing about an intruder moving laterally."
+      },
+      {
+        "text": "Longer passwords for the Wi-Fi network",
+        "explanation": "The laptop is already connected; Wi-Fi authentication strength does not limit what it can reach."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. On a flat network the laptop can reach every host: file servers, databases, domain controllers.\n2. The attacker's next step is **lateral movement**: scan, find a weak service, pivot.\n3. Segmentation puts a policy point between the user zone and the server zones, allowing only, say, HTTPS to the intranet.\n4. Most scans and pivots now hit a deny rule (which also generates alerts).\n5. Zero trust goes further by requiring identity per request, but segmentation is the direct network control.",
+    "link": {
+      "title": "NIST SP 800-207: Zero Trust Architecture",
+      "url": "https://csrc.nist.gov/pubs/sp/800/207/final"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During an attack, a stateful firewall in front of a busy service starts dropping new legitimate connections even though its CPU and links are fine. Its logs show the connection table at its maximum size. What attack is most likely, and what is a sensible mitigation?",
+    "options": [
+      {
+        "text": "A Slowloris attack; add more worker threads to the firewall",
+        "explanation": "Slowloris targets application workers on the server. And firewalls do not have HTTP worker threads to add."
+      },
+      {
+        "text": "A volumetric attack; buy more bandwidth",
+        "explanation": "The links are fine, so bandwidth is not the exhausted resource."
+      },
+      {
+        "text": "A state-exhaustion flood such as a SYN flood; enable SYN cookies or SYN proxying, raise the table limit and shorten timeouts for half-open entries",
+        "explanation": "Correct. The resource exhausted is state. Proxying the handshake means only completed connections create entries, and shorter timeouts clear junk faster."
+      },
+      {
+        "text": "DNS spoofing; enable DNSSEC",
+        "explanation": "DNS spoofing redirects clients; it does not fill a firewall's table."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symptoms: table full, links and CPU fine. The scarce resource is **memory for connection state**.\n2. This is a **protocol** attack (lesson 1). Spoofed SYNs or many short UDP flows each create an entry.\n3. Mitigations:\n   - SYN cookies / SYN proxy on the firewall: no entry until the handshake completes.\n   - Lower timeouts for unestablished entries.\n   - Raise the table maximum if memory allows.\n   - For stateless public services (DNS), bypass connection tracking entirely.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A host's nftables input chain has `policy drop`, a rule `tcp dport 22 ip saddr 10.0.0.0/8 accept`, and an accept for TCP 80 and 443. The host also has a global IPv6 address. Using the `inet` family, what happens to SSH from an internet IPv6 address?",
+    "options": [
+      {
+        "text": "It is accepted, because the SSH rule only mentions IPv4",
+        "explanation": "Rules that do not match fall through; they do not accept. The SSH rule fails to match IPv6, so the packet continues to the default."
+      },
+      {
+        "text": "It is dropped, because no rule matches and the chain policy is drop",
+        "explanation": "Correct. `ip saddr` matches only IPv4 packets, so IPv6 SSH matches no accept rule and gets the drop policy. Note that with an `ip`-only table and no IPv6 filtering at all, it would have been reachable."
+      },
+      {
+        "text": "It is rejected with an ICMP error",
+        "explanation": "`policy drop` silently drops; sending an error needs an explicit `reject` rule."
+      },
+      {
+        "text": "It is accepted as `ct state established`",
+        "explanation": "A new SSH connection is not yet established; the first SYN is state `new`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `table inet` handles both IPv4 and IPv6 packets.\n2. Packet: TCP SYN to port 22, IPv6 source.\n3. `ct state established,related`: no, it is new.\n4. `tcp dport 22 ip saddr 10.0.0.0/8`: `ip saddr` only matches IPv4, so no.\n5. `tcp dport {80,443}`: no.\n6. End of chain: `policy drop`.\n\nThe pitfall the lesson warns about is the other configuration: rules written only for IPv4 (old `iptables` without `ip6tables`) leave the IPv6 address completely unfiltered.",
+    "link": {
+      "title": "Simple ruleset for a workstation — nftables wiki",
+      "url": "https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are moving an internal admin dashboard from \"VPN only\" to a zero trust design. Which changes are consistent with zero trust? Select all that apply.",
+    "options": [
+      {
+        "text": "Put the dashboard behind an identity-aware proxy that checks the user's SSO login and MFA on each request",
+        "explanation": "Correct. Access is decided per request by identity, not by having a tunnel into the network."
+      },
+      {
+        "text": "Require the device to be company-managed and patched before access is granted",
+        "explanation": "Correct. Device posture is a core zero trust signal alongside user identity."
+      },
+      {
+        "text": "Allow anyone whose source IP is in the office range without login",
+        "explanation": "Incorrect. That is location-based trust, the exact thing zero trust removes."
+      },
+      {
+        "text": "Keep the dashboard's servers in a segment that only the proxy can reach",
+        "explanation": "Correct. Zero trust complements segmentation; the proxy is the single enforced path, which limits blast radius."
+      },
+      {
+        "text": "Remove logging, since every request is now authenticated",
+        "explanation": "Incorrect. \"Assume breach\" means logging and monitoring every access, because credentials can still be stolen."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each option against the principles:\n\n| Option | Principle | OK? |\n|---|---|---|\n| Identity proxy, MFA | Per-request auth | Yes |\n| Managed device | Device posture | Yes |\n| Office IP bypass | Location trust | No |\n| Segment behind proxy | Least privilege | Yes |\n| Remove logging | Assume breach | No |\n\nThe result looks like BeyondCorp: the proxy is reachable from anywhere, but what it lets through depends on who and what is asking.",
+    "link": {
+      "title": "BeyondCorp: A New Approach to Enterprise Security — Google Research",
+      "url": "https://research.google/pubs/beyondcorp-a-new-approach-to-enterprise-security/"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your firewall review tool flags rule 3 below as **shadowed**. Why?\n\n```\n1 allow tcp 80,443 from any\n2 deny  tcp any    from 0.0.0.0/0\n3 allow tcp 8443   from 10.0.0.0/8\n```",
+    "options": [
+      {
+        "text": "Rule 3 is too narrow to ever be useful",
+        "explanation": "Narrow rules are good. The issue is that it can never be reached."
+      },
+      {
+        "text": "Rule 3 is redundant because rule 1 already allows port 8443",
+        "explanation": "Rule 1 covers only 80 and 443, not 8443."
+      },
+      {
+        "text": "Every packet rule 3 would match has already matched rule 2, so rule 3 can never take effect",
+        "explanation": "Correct. TCP to 8443 from 10.0.0.0/8 is a subset of \"TCP to any port from anywhere\", which rule 2 denies first. The intended internal access is silently blocked."
+      },
+      {
+        "text": "Rule 3 conflicts with the default policy",
+        "explanation": "The default policy only applies when no rule matches; here rule 2 matches first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A rule is **shadowed** when an earlier rule matches every packet it could match.\n2. Rule 3 matches: TCP, port 8443, source in 10.0.0.0/8.\n3. Rule 2 matches: TCP, any port, any source. That is a superset.\n4. So any packet that could reach rule 3 is denied by rule 2 first.\n5. Fix: move rule 3 above rule 2. With first-match semantics, put specific rules above broad ones.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A long-lived database connection through a cloud NAT gateway sits idle for 10 minutes, then the next query hangs and eventually fails. The database never closed the connection. What is the most likely explanation and fix?",
+    "options": [
+      {
+        "text": "The database ran out of connections; raise `max_connections`",
+        "explanation": "The database still considers the connection open; it was not refused."
+      },
+      {
+        "text": "The TCP initial sequence number expired; reconnect every 5 minutes",
+        "explanation": "ISNs do not expire. This invents a mechanism."
+      },
+      {
+        "text": "TLS session keys expire after 10 minutes",
+        "explanation": "TLS sessions do not silently die after idle periods like this; the symptom is a dropped flow, not a crypto error."
+      },
+      {
+        "text": "The NAT or firewall dropped the idle flow from its state table; enable TCP keepalives with an interval shorter than the idle timeout",
+        "explanation": "Correct. Stateful devices expire idle entries (AWS NAT Gateway uses 350 seconds). Later packets match no entry and are dropped. Keepalives refresh the entry."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Middleboxes with connection tables must eventually forget idle flows, or the table fills.\n2. Each has an idle timeout. AWS NAT Gateway: 350 s. Linux conntrack: 5 days by default. Different devices, very different numbers.\n3. After 10 idle minutes the NAT's entry is gone.\n4. The next query's packets match no entry and are dropped (or answered with a RST), so the client hangs then fails.\n5. Fix: TCP keepalives (or application pings) every, say, 60 s, and connection pools that validate connections before use.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  }
+]

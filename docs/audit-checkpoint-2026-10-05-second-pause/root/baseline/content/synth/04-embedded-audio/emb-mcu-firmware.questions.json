@@ -1,0 +1,340 @@
+[
+  {
+    "id": "emb-mcu-firmware-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which part of a microcontroller keeps your synth's program when the power is switched off?",
+    "options": [
+      {
+        "text": "RAM",
+        "explanation": "RAM is volatile: its contents vanish at power-off. It holds the stack, variables and audio buffers while running, not the stored program."
+      },
+      {
+        "text": "Flash",
+        "explanation": "Correct. Flash is non-volatile memory; the firmware image is written there and survives power cycles."
+      },
+      {
+        "text": "The CPU's registers",
+        "explanation": "Registers are a handful of words of working storage inside the core; they are volatile and far too small to hold a program."
+      },
+      {
+        "text": "The DMA controller",
+        "explanation": "DMA is a peripheral that copies data between memory and peripherals. It stores nothing permanently."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Sort the memories by whether they survive power-off:\n\n- Flash: non-volatile, holds code and constants.\n- RAM (SRAM, DTCM, SDRAM): volatile, holds runtime data.\n- Registers: volatile, inside the CPU.\n\nFlashing a board means writing the firmware image into flash, which is why the instrument still works after you unplug it.",
+    "link": {
+      "title": "Microcontroller — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Microcontroller"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A developer new to embedded work writes a firmware `main` that sets up the codec, starts audio and then returns. What is wrong with this design?",
+    "options": [
+      {
+        "text": "Nothing; the audio callback keeps running after main returns on every platform",
+        "explanation": "There is no OS to return to. What happens after main returns depends on the startup code (often an infinite loop or a reset), and it is not a design you should rely on."
+      },
+      {
+        "text": "Returning is fine, but only if the program is compiled in debug mode",
+        "explanation": "Build mode does not change the fact that firmware has nowhere to return to."
+      },
+      {
+        "text": "Firmware should never return: it should finish setup and then loop forever running foreground tasks",
+        "explanation": "Correct. Firmware runs from reset and has no OS to hand control back to, so the normal shape is setup followed by an endless main loop that reads controls, handles MIDI and so on."
+      },
+      {
+        "text": "main must return 0 so the bootloader knows the program succeeded",
+        "explanation": "That is the desktop convention, where the OS reads an exit status. Bootloaders do not wait for the application to report success."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. On a desktop, the OS starts your program and receives its exit code.\n2. On an MCU, reset jumps into startup code, which calls main. Nothing above it is waiting.\n3. So firmware is structured as:\n\n```\nsetup clocks, pins, codec\nstart audio callback\nloop forever:\n  read controls\n  handle MIDI\n```\n\nThe loop is the foreground; audio runs from interrupts.",
+    "link": {
+      "title": "Daisy C++ development environment — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/cpp-dev-env/"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You compile firmware on a macOS laptop for an Arm Cortex-M7 board. What is this kind of compilation called?",
+    "options": [
+      {
+        "text": "Just-in-time compilation",
+        "explanation": "JIT compiles code at runtime on the machine that runs it. Firmware is compiled ahead of time on another machine."
+      },
+      {
+        "text": "Interpretation",
+        "explanation": "Nothing is interpreted: the toolchain produces native Arm machine code."
+      },
+      {
+        "text": "Native compilation",
+        "explanation": "Native compilation targets the same CPU the compiler runs on. Your laptop's CPU is not the board's Cortex-M7."
+      },
+      {
+        "text": "Cross-compilation",
+        "explanation": "Correct. The compiler runs on one architecture (the laptop) and emits code for another (the MCU), for example with a GNU Arm embedded toolchain."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask two questions: where does the compiler run, and where will the code run?\n\n- Compiler runs on: laptop (x86-64 or Apple silicon).\n- Code runs on: Cortex-M7.\n\nDifferent targets means cross-compilation. The output (.bin, .hex or .elf) is then flashed to the board.",
+    "link": {
+      "title": "Daisy C++ development environment — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/cpp-dev-env/"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You flash a Daisy Seed with firmware that crashes before USB is initialised. `make program-dfu` now cannot find the board. What is the documented way back?",
+    "options": [
+      {
+        "text": "Hold BOOT, press and release RESET, then release BOOT, and flash again over DFU",
+        "explanation": "Correct. This starts the STM32's factory system bootloader from read-only memory, which your broken firmware cannot have overwritten, and it enumerates as a USB DFU device."
+      },
+      {
+        "text": "Nothing; the board is permanently bricked because flash now holds bad code",
+        "explanation": "The ST system bootloader lives in ROM outside the region you flash, so bad application code cannot remove the recovery path."
+      },
+      {
+        "text": "Unplug it for 24 hours so flash forgets the program",
+        "explanation": "Flash is non-volatile; it keeps data for years without power. Waiting changes nothing."
+      },
+      {
+        "text": "Send a MIDI reset message to the board",
+        "explanation": "Your crashed firmware is not running a MIDI handler, and MIDI has no special power to reflash an MCU."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Why can't the computer see it? USB is handled by *your* firmware, which crashes first.\n2. What runs independently of your firmware? The ST system bootloader in ROM.\n3. How do you select it? Hold BOOT while resetting.\n4. Then flash a known-good image over DFU. A debug probe over SWD is a second route.",
+    "link": {
+      "title": "Daisy C++ development environment — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/cpp-dev-env/"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can you typically do with an SWD debug probe (such as an ST-Link) attached to a Cortex-M board, that you cannot do with a USB DFU bootloader alone? Select all that apply.",
+    "options": [
+      {
+        "text": "Halt the CPU at a breakpoint and inspect variables",
+        "explanation": "Correct. Run control and memory inspection are what a debug probe adds; a bootloader only writes firmware."
+      },
+      {
+        "text": "Find the code location of a hard fault",
+        "explanation": "Correct. With the CPU halted after a fault, the debugger can read the stacked registers and show where it happened."
+      },
+      {
+        "text": "Write a new firmware image into flash",
+        "explanation": "Both a probe and a DFU bootloader can do this, so it is not something only the probe offers."
+      },
+      {
+        "text": "Single-step through code while it runs on the real hardware",
+        "explanation": "Correct. Stepping requires the debug port's run control, which DFU does not provide."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Separate the two jobs:\n\n| Job | DFU | Probe |\n|---|---|---|\n| Flash firmware | Yes | Yes |\n| Breakpoints | No | Yes |\n| Step | No | Yes |\n| Fault location | No | Yes |\n\nFlashing is shared, so only the run-control and inspection options are unique to the probe.",
+    "link": {
+      "title": "JTAG — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/JTAG"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Daisy Seed's product page says \"8MB of flash\". The bootloader guide's build output shows `FLASH: 128 KB` and `QSPIFLASH: 7936 KB`. Your first program builds to 150 KB with the default settings. What is the most likely result?",
+    "options": [
+      {
+        "text": "It fits easily because the board has 8 MB of flash",
+        "explanation": "The 8 MB is mostly an external QSPI chip. A default build targets the 128 KB internal flash, so the size check is against that."
+      },
+      {
+        "text": "It fails to link because the code overflows the 128 KB internal flash; you need the Daisy bootloader to run from SRAM or QSPI",
+        "explanation": "Correct. The ROM DFU route programs only internal flash. Larger programs need APP_TYPE BOOT_SRAM or BOOT_QSPI with the Daisy bootloader, each with speed trade-offs."
+      },
+      {
+        "text": "It runs but at half speed",
+        "explanation": "An oversized image is caught at link time; the build would not produce a runnable image for internal flash."
+      },
+      {
+        "text": "It fits because code is compressed when flashed",
+        "explanation": "Firmware images are not compressed into flash in this workflow; the linker checks the real size against each region."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Default build target: internal flash, 128 KB.\n2. Program size: 150 KB, which is greater than 128 KB, so the linker reports an overflow.\n3. Options from the libDaisy guide:\n   - `APP_TYPE = BOOT_SRAM`: run from SRAM (fast).\n   - `APP_TYPE = BOOT_QSPI`: run from external flash (slower).\n4. Lesson: read the build's memory report, not the headline figure.",
+    "link": {
+      "title": "Getting started: Daisy bootloader — libDaisy",
+      "url": "https://github.com/electro-smith/libDaisy/blob/master/doc/md/_a7_Getting-Started-Daisy-Bootloader.md"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does PJRC put the Teensy 4.x bootloader on a separate chip rather than in the main processor's flash?",
+    "options": [
+      {
+        "text": "So the bootloader can run audio DSP in parallel",
+        "explanation": "The bootloader chip handles programming, not audio processing."
+      },
+      {
+        "text": "Because the board has no flash memory in which a bootloader could live",
+        "explanation": "Teensy 4.1 has an 8 MB flash chip (the i.MX RT1062 itself has no internal flash, so programs live in that chip). A bootloader could have shared it; PJRC keeps it separate for protection, not for lack of space."
+      },
+      {
+        "text": "So it runs at every power-up and delays your program by a few seconds",
+        "explanation": "PJRC states the opposite: your program runs immediately at power-up and the bootloader does not run automatically."
+      },
+      {
+        "text": "So writing your program cannot damage or erase the bootloader, keeping recovery always possible",
+        "explanation": "Correct. PJRC says the physically separate chip prevents flash programming from damaging the bootloader, and all the main chip's memory is available to your program."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask what a bootloader must survive: your mistakes. If it shared flash with your program, a bad erase or write could destroy it. Putting it on its own chip means:\n\n1. Your program can use all the main memory.\n2. The Program button always reaches a working bootloader.\n3. Holding it 13–17 s can wipe flash and restore a blink program.",
+    "link": {
+      "title": "Teensy 4.1 — PJRC",
+      "url": "https://www.pjrc.com/store/teensy41.html"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You set a breakpoint inside the audio callback and the debugger stops there. Your headphones are connected through the codec. What should you expect to hear?",
+    "options": [
+      {
+        "text": "Silence, because the codec switches itself off when the CPU halts",
+        "explanation": "The codec does not know the CPU halted. Its clocks and the DMA may keep replaying the last buffer contents."
+      },
+      {
+        "text": "Audio continuing normally, because DMA does all the work",
+        "explanation": "DMA moves samples, but the callback that computes new samples has stopped, so the buffers are no longer refreshed."
+      },
+      {
+        "text": "Likely a repeating buzz or a stuck tone from stale buffer data, so turn the level down first",
+        "explanation": "Correct. With the callback halted, the same buffer of samples may be played repeatedly, often producing a loud periodic buzz."
+      },
+      {
+        "text": "A clean 1 kHz test tone generated by the debugger",
+        "explanation": "Debuggers do not generate audio."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace what keeps running when the CPU halts:\n\n1. The CPU stops, so the callback stops writing new samples.\n2. The serial audio clocks may keep running, and circular DMA keeps feeding the codec from the same memory.\n3. The codec converts that stale buffer over and over. The whole circular buffer (both halves, so two blocks) repeats, giving a buzz around fs / (2 × block): about 500 Hz for 48-sample blocks at 48 kHz.\n\nPractical rule: lower monitoring volume before debugging audio code.",
+    "link": {
+      "title": "Daisy C++ development environment — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/cpp-dev-env/"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The diy-synth plan values deterministic audio timing, instant start-up and simple power-off. Which approach most naturally gives all three, and what does it cost you?",
+    "options": [
+      {
+        "text": "Raspberry Pi with an audio HAT; it costs nothing extra",
+        "explanation": "A Linux computer boots in seconds, schedules audio through the OS, and should be shut down cleanly to protect its SD card, so it does not naturally give these three properties."
+      },
+      {
+        "text": "A bare-metal MCU platform (audio MCU board or MCU plus codec); you give up a full OS, filesystem tools and rich debugging conveniences",
+        "explanation": "Correct. Firmware runs from reset in milliseconds, has no scheduler competing with the audio interrupt, and tolerates power being cut. The price is doing without Linux's tools and libraries."
+      },
+      {
+        "text": "Any approach, because block size alone determines determinism",
+        "explanation": "Block size sets the deadline, but whether that deadline is met reliably depends on what else can preempt the audio code, which differs between bare metal and a general-purpose OS."
+      },
+      {
+        "text": "An analogue synth, because it has no firmware",
+        "explanation": "The project's goals include learning C++ and DSP, and the question concerns the digital approaches. An analogue path changes the project rather than answering it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Score each approach on the three properties:\n\n| | Determinism | Start | Power-off |\n|---|---|---|---|\n| MCU | High | Instant | Safe |\n| Linux | OS-dependent | Seconds | Shutdown |\n\nThe MCU wins these three criteria. The cost is losing what an OS provides. Real choices weigh many more criteria (lesson 8).",
+    "link": {
+      "title": "Microcontroller — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Microcontroller"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are writing the \"recover a board\" exercise for your project log. Which statements are accurate for the boards named (as documented, checked 2026-10-04)? Select all that apply.",
+    "options": [
+      {
+        "text": "Daisy Seed: the STM32 ROM bootloader is entered by holding BOOT while pressing RESET",
+        "explanation": "Correct. Electro-Smith documents exactly this sequence for DFU flashing."
+      },
+      {
+        "text": "Teensy 4.1: the Program button is a reset button that restarts your program",
+        "explanation": "PJRC says explicitly that it is not a reset button: it puts Teensy into programming mode to recover from bad code."
+      },
+      {
+        "text": "Teensy 4.1: holding Program for 13–17 seconds erases flash and restores an LED-blink program",
+        "explanation": "Correct. PJRC documents this memory wipe and blink restore."
+      },
+      {
+        "text": "Daisy bootloader: after reset it waits a grace period for DFU or a binary on SD/USB before launching the program",
+        "explanation": "Correct. The libDaisy guide describes a 2.5-second grace period, extendable by pressing BOOT."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each against the source:\n\n1. Daisy BOOT + RESET: in the Daisy dev-environment guide. True.\n2. Teensy Program button: PJRC calls it 'dedicated to recovery', not a reset. False.\n3. 13–17 s wipe: on the Teensy 4.1 page. True.\n4. Daisy bootloader grace period: libDaisy bootloader guide, 2.5 s. True.\n\nRe-check these pages when you write the log, since revisions change.",
+    "link": {
+      "title": "Teensy 4.1 — PJRC",
+      "url": "https://www.pjrc.com/store/teensy41.html"
+    }
+  },
+  {
+    "id": "emb-mcu-firmware-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The libDaisy guide notes that `BOOT_SRAM` programs run at speed comparable to internal flash, while `BOOT_QSPI` programs run \"a fair bit slower\". Why might you still choose QSPI for a synth?",
+    "options": [
+      {
+        "text": "QSPI is faster for DSP because it is external",
+        "explanation": "External QSPI flash is slower to fetch from than internal memory; that is the trade-off the guide describes."
+      },
+      {
+        "text": "SRAM programs cannot use the audio callback",
+        "explanation": "Execution location does not prevent using the audio callback."
+      },
+      {
+        "text": "QSPI programs do not need the bootloader",
+        "explanation": "The guide says BOOT_QSPI programs run via the Daisy bootloader."
+      },
+      {
+        "text": "The program (for example with large wavetables or many features) is too big for the SRAM region, and QSPI offers almost 8 MB",
+        "explanation": "Correct. SRAM-hosted programs are limited to roughly the 480 KB the guide quotes; QSPI holds far more. You can keep time-critical code or data in faster memory with a custom linker script."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Compare capacity and speed:\n\n| Location | Capacity | Speed |\n|---|---|---|\n| Internal flash | 128 KB | Fast |\n| SRAM (bootloader) | ~480 KB | Fast |\n| QSPI | ~8 MB | Slower |\n\nIf the image does not fit in SRAM, QSPI is the option left, and you then measure whether the callback still meets its deadline.",
+    "link": {
+      "title": "Getting started: Daisy bootloader — libDaisy",
+      "url": "https://github.com/electro-smith/libDaisy/blob/master/doc/md/_a7_Getting-Started-Daisy-Bootloader.md"
+    }
+  }
+]

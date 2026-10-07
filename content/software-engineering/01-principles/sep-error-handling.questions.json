@@ -1,0 +1,374 @@
+[
+  {
+    "id": "sep-error-handling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the most serious problem with this code?\n\n```python\ntry:\n    order = parse(request.body)\n    save(order)\nexcept:\n    pass\n```",
+    "options": [
+      {
+        "text": "It should use `finally` instead of `except`",
+        "explanation": "`finally` is for cleanup that always runs; it doesn't handle errors. Swapping would let errors propagate but wouldn't explain the intent."
+      },
+      {
+        "text": "It silently swallows every failure, including bugs and Ctrl+C, so problems vanish without trace",
+        "explanation": "Correct. A bare `except:` catches `BaseException`, so typos, `AttributeError`s, database outages and even `KeyboardInterrupt` are all discarded. The order may not be saved and nobody will ever know."
+      },
+      {
+        "text": "`pass` is slower than `return`",
+        "explanation": "Performance is irrelevant here; the problem is what happens to the errors."
+      },
+      {
+        "text": "It should catch `Exception` and then `pass`",
+        "explanation": "Slightly better (Ctrl+C would work again), but it still swallows every bug and failure. The fix is to catch what you expect and can handle."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask what can go wrong inside the `try`: malformed input, a bug in `parse`, a database outage in `save`.\n2. Ask what the `except` does with each: nothing. The caller believes the order was saved.\n3. A bare `except:` matches `BaseException`, which includes `KeyboardInterrupt` and `SystemExit`.\n4. Better:\n\n```python\ntry:\n    order = parse(request.body)\nexcept ParseError as e:\n    return bad_request(str(e))\nsave(order)  # failures propagate\n```\n\n5. Unexpected failures should reach a top-level handler that logs them and returns a 500.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A payment provider responds \"card declined: insufficient funds\". How should your checkout code treat this?",
+    "options": [
+      {
+        "text": "As a bug: crash the process so it gets fixed",
+        "explanation": "Nothing is wrong with the code. Declined cards happen every day; crashing would take down checkout for everyone."
+      },
+      {
+        "text": "As a transient failure: retry automatically until it succeeds",
+        "explanation": "Retrying won't add funds to the card, and repeated charge attempts can trigger fraud checks. It isn't transient."
+      },
+      {
+        "text": "As an expected domain outcome: model it explicitly (for example a `CardDeclined` exception or result) and show the customer a clear message",
+        "explanation": "Correct. It's part of the normal business flow. Give it an explicit type so callers handle it on purpose, and tell the user what to do next."
+      },
+      {
+        "text": "Ignore it and mark the order as paid",
+        "explanation": "That ships goods without payment. Swallowing expected failures is as bad as swallowing bugs."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Classify the failure:\n   - Bug? No, the code did what it should.\n   - Environmental/transient? No, retrying won't change the outcome.\n   - **Expected domain outcome**? Yes: cards are declined routinely.\n2. Expected outcomes deserve explicit modelling:\n\n```python\nclass CardDeclined(PaymentError):\n    def __init__(self, reason):\n        self.reason = reason\n        self.retryable = False\n```\n\n3. Checkout catches `CardDeclined` and asks for another card. Everything else (timeouts, bugs) is handled elsewhere, differently.",
+    "link": {
+      "title": "Built-in Exceptions — Python docs",
+      "url": "https://docs.python.org/3/library/exceptions.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ntry:\n    x = int(\"42\")\nexcept ValueError:\n    print(\"bad\")\nelse:\n    print(\"ok\")\nfinally:\n    print(\"done\")\n```",
+    "options": [
+      {
+        "text": "`ok` then `done`",
+        "explanation": "Correct. `int(\"42\")` succeeds, so `except` is skipped, `else` runs (no exception), and `finally` always runs last."
+      },
+      {
+        "text": "`done` only",
+        "explanation": "Here the try block completes normally, so else runs. A return, break or continue exiting try would skip else even without an exception."
+      },
+      {
+        "text": "`bad` then `done`",
+        "explanation": "`except ValueError` only runs if a `ValueError` is raised. `\"42\"` parses fine."
+      },
+      {
+        "text": "`ok` only",
+        "explanation": "`finally` always runs, whether or not an exception occurred."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk through it:\n\n1. `try`: `int(\"42\")` returns 42. No exception.\n2. `except ValueError`: skipped (nothing raised).\n3. `else`: runs because `try` completed normally. Prints `ok`.\n4. `finally`: always runs. Prints `done`.\n\nOutput:\n\n```\nok\ndone\n```\n\nWith `int(\"x\")` instead you'd get `bad` then `done`.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Under CPython 3.14 with default warning handling, what does `fetch()` return?\n\n```python\ndef fetch():\n    try:\n        raise TimeoutError(\"db\")\n    finally:\n        return \"cached\"\n```",
+    "options": [
+      {
+        "text": "It raises `TimeoutError`",
+        "explanation": "You'd expect that, but a `return` in `finally` overrides the in-flight exception, which is discarded."
+      },
+      {
+        "text": "`None`",
+        "explanation": "The `return \"cached\"` statement runs, so the function returns that string."
+      },
+      {
+        "text": "It raises `SyntaxError`",
+        "explanation": "Python 3.14 emits a `SyntaxWarning` for this (PEP 765), not an error. The code still runs."
+      },
+      {
+        "text": "`\"cached\"`, and the `TimeoutError` is silently lost",
+        "explanation": "Correct. `finally` runs on the way out, and its `return` replaces the pending exception. The timeout leaves no trace, which is why you should never return from `finally`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `try` raises `TimeoutError`. Python starts unwinding.\n2. Before leaving, it must run `finally`.\n3. `finally` executes `return \"cached\"`. A return from `finally` replaces whatever the function was doing, including propagating an exception.\n4. The exception is discarded; the caller sees `\"cached\"` and thinks all is well.\n5. Python 3.14 warns about this at compile time (`SyntaxWarning: 'return' in a 'finally' block`).\n6. If you want a fallback, say so explicitly:\n\n```python\ntry:\n    return query()\nexcept TimeoutError:\n    log.warning(\"db timeout\")\n    return \"cached\"\n```",
+    "link": {
+      "title": "PEP 765: Disallow return/break/continue that exit a finally block",
+      "url": "https://peps.python.org/pep-0765/"
+    }
+  },
+  {
+    "id": "sep-error-handling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why is the second version better?\n\n```python\n# A\nif os.path.exists(path):\n    with open(path) as f:\n        return f.read()\nreturn None\n\n# B\ntry:\n    with open(path) as f:\n        return f.read()\nexcept FileNotFoundError:\n    return None\n```",
+    "options": [
+      {
+        "text": "B is faster because exceptions are cheap in Python",
+        "explanation": "Raising is relatively costly in Python, and in any case speed isn't the main point."
+      },
+      {
+        "text": "A has a time-of-check to time-of-use race: the file can be deleted between `exists()` and `open()`; B handles the failure at the moment it happens",
+        "explanation": "Correct. A's check can be stale by the time `open` runs, so A can still crash. B (EAFP) asks the only question that matters: did opening work?"
+      },
+      {
+        "text": "A doesn't work on Windows",
+        "explanation": "`os.path.exists` works on all platforms."
+      },
+      {
+        "text": "B catches every possible error",
+        "explanation": "B catches only `FileNotFoundError`. Permission errors would still propagate, which is right."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In A, two separate system calls happen: `exists()` and later `open()`.\n2. Another process can delete or rename the file in between. Then `open()` raises `FileNotFoundError` anyway, which A doesn't handle.\n3. That's a **TOCTOU** (time-of-check to time-of-use) race. It's also a classic security bug class (an attacker swaps a file between check and use).\n4. B is **EAFP**: attempt the operation and handle the specific failure. This removes the separate existence-check race; it does not by itself prevent malicious path/symlink substitution or all filesystem races.\n5. Note B also still checks only for 'missing', so other failures (permission denied) surface, as they should.",
+    "link": {
+      "title": "Glossary: EAFP — Python docs",
+      "url": "https://docs.python.org/3/glossary.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You translate a database error into a domain error. Which version gives the on-call engineer the clearest traceback?\n\n```python\n# A\nexcept OperationalError:\n    raise LookupFailed(uid)\n\n# B\nexcept OperationalError as e:\n    raise LookupFailed(uid) from e\n\n# C\nexcept OperationalError:\n    raise LookupFailed(uid) from None\n```",
+    "options": [
+      {
+        "text": "A, because it's shortest",
+        "explanation": "A still records the database error as `__context__`, but the traceback says 'During handling of the above exception, another exception occurred', which reads like a second, accidental bug."
+      },
+      {
+        "text": "C, because it hides irrelevant database detail",
+        "explanation": "`from None` hides the original in the default traceback display; it remains available in `__context__` for inspection."
+      },
+      {
+        "text": "B, because `from e` marks the database error as the explicit cause and shows both tracebacks",
+        "explanation": "Correct. `__cause__` is set and the traceback says 'The above exception was the direct cause of the following exception', so the reader sees the domain error and the underlying reason."
+      },
+      {
+        "text": "They all produce identical tracebacks",
+        "explanation": "They differ in exactly how (and whether) the original exception is shown."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "| Form | `__cause__` | Traceback link |\n|---|---|---|\n| A | None | \"During handling...\" |\n| B | e | \"direct cause of...\" |\n| C | None (suppressed) | original hidden |\n\n1. A: Python implicitly chains via `__context__`. Both are shown, but the wording suggests the `raise` was an accident.\n2. B: explicit chaining. The intent ('this failed *because of* that') is clear, and both stacks are shown.\n3. C: `from None` sets `__suppress_context__`, so the database error isn't displayed. Use only when the original adds nothing.\n4. For translating errors at a boundary, B is the default.",
+    "link": {
+      "title": "PEP 3134: Exception Chaining and Embedded Tracebacks",
+      "url": "https://peps.python.org/pep-3134/"
+    }
+  },
+  {
+    "id": "sep-error-handling-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which problems does this code have? Select **all** that apply.\n\n```python\ndef get_user(uid):\n    try:\n        return repo.load(uid)\n    except Exception as e:\n        log.error(f\"load failed: {e}\")\n        return None\n\ndef handler(uid):\n    try:\n        u = get_user(uid)\n        return u.name\n    except Exception as e:\n        log.error(f\"handler: {e}\")\n        raise\n```",
+    "options": [
+      {
+        "text": "Returning `None` on failure means `u.name` later fails with a confusing `AttributeError` far from the real cause",
+        "explanation": "Correct. The database error is turned into `None`, and the caller hits `'NoneType' object has no attribute 'name'`, which hides what really happened."
+      },
+      {
+        "text": "`except Exception` in `get_user` also hides bugs inside `repo.load`, not just 'user not found'",
+        "explanation": "Correct. A typo or a schema bug would be logged and turned into `None`, exactly like a missing user."
+      },
+      {
+        "text": "The failure is logged at more than one layer, cluttering logs with partial reports of one problem",
+        "explanation": "Correct. `get_user` logs, then `handler` logs the resulting `AttributeError`, then a top-level handler probably logs again. Log once, where the error is handled."
+      },
+      {
+        "text": "Using an f-string inside `log.error` is a syntax error",
+        "explanation": "It's valid Python. (Passing arguments as `log.error(\"x %s\", e)` defers formatting, but that's a minor optimisation.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Follow a database outage through the code:\n\n1. `repo.load` raises `OperationalError`.\n2. `get_user` catches *every* exception, logs \"load failed\", returns `None`.\n3. `handler` does `None.name`, which raises `AttributeError`.\n4. `handler` logs \"handler: 'NoneType' object has no attribute 'name'\" and re-raises.\n5. The client sees an `AttributeError`, and the logs show two messages, neither with the full original traceback.\n\nBetter:\n\n```python\nclass UserNotFound(Exception): ...\n\ndef get_user(uid):\n    user = repo.load(uid)\n    if user is None:\n        raise UserNotFound(uid)\n    return user\n```\n\nLet unexpected errors propagate to one top-level handler that logs them with `log.exception` (which includes the traceback).",
+    "link": {
+      "title": "logging — Python docs",
+      "url": "https://docs.python.org/3/library/logging.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your service calls a payment API to charge a card. The call times out after 10 seconds. A colleague proposes wrapping it in `retry(times=3)`. What is the main risk?",
+    "options": [
+      {
+        "text": "Three retries will take too long",
+        "explanation": "Latency matters, but the bigger risk is financial."
+      },
+      {
+        "text": "There is no risk: a timeout means the request failed",
+        "explanation": "A timeout only means *you* stopped waiting. The provider may have processed the charge."
+      },
+      {
+        "text": "The first request may still succeed after timeout, so blind retries can charge twice. Reuse a provider-supported idempotency key for the same logical charge",
+        "explanation": "Correct. Only idempotent operations are safe to retry blindly. Payment APIs such as Stripe accept an idempotency key so a retried request returns the original result instead of charging again."
+      },
+      {
+        "text": "Retries break the single responsibility principle",
+        "explanation": "SRP is about design, not retry safety."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A timeout is ambiguous. Three possibilities:\n   - The request never arrived.\n   - It arrived and failed.\n   - It arrived, **succeeded**, and the response was lost.\n2. In case 3, a retry charges the customer again.\n3. Safe approaches:\n   - Send an **idempotency key** (a unique ID per logical charge). The provider deduplicates retries within its documented retention and request-matching rules; do not assume an expired key still protects a charge.\n   - Reconcile an authoritative terminal status if needed. A single not-found or pending status check does not prove the original request cannot still complete; do not replace deduplication with a racy check.\n4. Also add **exponential backoff with jitter**, so that thousands of clients don't hammer a recovering provider at once.",
+    "link": {
+      "title": "Idempotence — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Idempotence"
+    }
+  },
+  {
+    "id": "sep-error-handling-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`user` comes from a cache and may lack an `\"email\"` key. What goes wrong here?\n\n```python\ntry:\n    user = cache[uid]\n    send(user[\"email\"])\nexcept KeyError:\n    user = db.load(uid)\n    cache[uid] = user\n```",
+    "options": [
+      {
+        "text": "Nothing: both `KeyError`s mean the user should be reloaded",
+        "explanation": "They mean different things. One is a cache miss; the other is a malformed record, which reloading from the cache-filling path may not fix."
+      },
+      {
+        "text": "The `except` should catch `Exception`",
+        "explanation": "That widens the problem: even more unrelated failures would be treated as cache misses."
+      },
+      {
+        "text": "`cache[uid]` can't raise `KeyError`",
+        "explanation": "Dictionary-style lookup of a missing key raises `KeyError`; that's the cache miss this code expects."
+      },
+      {
+        "text": "The try block confuses a missing email field with a cache miss. Guard only cache[uid], then send after the try/except so both hit and loaded-miss paths send",
+        "explanation": "Correct. Moving send after the handler preserves sending after a successful reload. An else-only send would still skip the cache-miss path."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Two different lines can raise `KeyError`:\n   - `cache[uid]` (expected: cache miss)\n   - `user[\"email\"]` (unexpected: bad record)\n2. The single `except KeyError` can't tell them apart, so a bad record is handled as a miss: reload, re-cache and silently skip `send`.\n3. Shrink the guarded region:\n\n```python\ntry:\n    user = cache[uid]\nexcept KeyError:\n    user = db.load(uid)\n    cache[uid] = user\nsend(user[\"email\"])\n```\n\n4. (An `else:` clause achieves the same when the follow-up should only run on the success path.)\n5. Rule: a `try` block should contain only the operation whose failure the `except` is written for.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef f(x):\n    try:\n        print(\"a\")\n        r = 10 / x\n    except ZeroDivisionError:\n        print(\"b\")\n        return -1\n    else:\n        print(\"c\")\n        return r\n    finally:\n        print(\"d\")\n\nprint(f(0))\n```",
+    "options": [
+      {
+        "text": "`a`, `b`, `-1`, `d`",
+        "explanation": "`finally` runs *before* the function actually returns, so `d` is printed before the caller prints the return value."
+      },
+      {
+        "text": "`a`, `b`, `d`, `-1`",
+        "explanation": "Correct. Division by zero jumps to `except` (prints `b`) and schedules `return -1`; `finally` runs on the way out (prints `d`); then the caller prints `-1`."
+      },
+      {
+        "text": "`a`, `b`, `c`, `d`, `-1`",
+        "explanation": "`else` only runs if the `try` block raised nothing. Here it raised `ZeroDivisionError`."
+      },
+      {
+        "text": "`a`, `d`, then a `ZeroDivisionError` traceback",
+        "explanation": "The exception is caught by the matching `except` clause, so it doesn't propagate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace `f(0)`:\n\n1. `print(\"a\")`\n2. `10 / 0` raises `ZeroDivisionError`. Skip the rest of `try`.\n3. Matching `except`: `print(\"b\")`, then `return -1` is *pending*.\n4. `else` is skipped (an exception occurred).\n5. Before returning, `finally`: `print(\"d\")`.\n6. The function returns `-1`; the caller prints it.\n\n```\na\nb\nd\n-1\n```\n\nFor `f(5)` the output would be `a`, `c`, `d`, `2.0`.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're writing a Java library method that reads a configuration file. Following the guideline in Oracle's Java tutorial, how should it signal (1) the file not existing and (2) a caller passing a `null` path?",
+    "options": [
+      {
+        "text": "Both as checked exceptions, so every failure is visible in the signature",
+        "explanation": "A `null` argument is a programming error the caller can't sensibly recover from at runtime; forcing every caller to catch it adds noise."
+      },
+      {
+        "text": "Both as unchecked exceptions, because checked exceptions are always bad",
+        "explanation": "The tutorial's guideline keeps checked exceptions for recoverable conditions. A missing file is one a caller can reasonably handle (use defaults, prompt the user)."
+      },
+      {
+        "text": "(1) return `null`; (2) ignore it",
+        "explanation": "Returning `null` pushes the failure somewhere else as a `NullPointerException`; ignoring a `null` argument just delays the crash."
+      },
+      {
+        "text": "(1) a checked exception such as `IOException`/`FileNotFoundException`; (2) an unchecked one such as `NullPointerException` or `IllegalArgumentException`",
+        "explanation": "Correct. Oracle's rule of thumb: if a client can reasonably be expected to recover, use a checked exception; if it can't (a programming error), use an unchecked one."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Classify each failure:\n   - Missing file: environmental or expected. A caller can recover (fall back to defaults, ask for another path).\n   - `null` path: a bug in the caller. The fix is to change the calling code.\n2. Oracle's guideline maps these directly:\n   - recoverable → checked (`throws IOException`)\n   - programming error → unchecked (`RuntimeException` subclasses)\n3. Java's own APIs follow this: `Files.readString` declares `IOException`, while `Objects.requireNonNull` throws `NullPointerException`.\n4. Many later JVM languages (Kotlin, Scala) dropped checked exceptions entirely, which shows how contested the idea is. The *classification* still holds.",
+    "link": {
+      "title": "Unchecked Exceptions: The Controversy — Oracle",
+      "url": "https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You maintain a Python payments library used by other teams. Which exception-design choices are sound? Select **all** that apply.",
+    "options": [
+      {
+        "text": "Define a base `PaymentError` with subclasses like `CardDeclined` and `ProviderUnavailable`",
+        "explanation": "Correct. A small hierarchy lets callers catch all payment failures with one clause, or handle specific ones differently."
+      },
+      {
+        "text": "Let `stripe.error.CardError` propagate unchanged so callers get maximum detail",
+        "explanation": "That leaks your implementation: callers must import Stripe and break if you switch provider. Wrap it in your own type (chained with `from e`)."
+      },
+      {
+        "text": "Give exceptions structured attributes such as `reason` and `retryable`",
+        "explanation": "Correct. Callers can decide what to do without parsing message strings, which break whenever wording changes."
+      },
+      {
+        "text": "Raise `Exception(\"payment failed\")` for everything, to keep the API small",
+        "explanation": "A single generic type forces callers to catch everything (including bugs) and to parse messages to tell failures apart."
+      },
+      {
+        "text": "Translate provider errors at the library boundary using `raise CardDeclined(...) from e`",
+        "explanation": "Correct. Callers see your stable types, and the original Stripe error remains in the traceback as `__cause__` for debugging."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Exceptions are part of a library's API, just like return types. Design them.\n2. Hierarchy: `except PaymentError` for 'anything payments' and `except CardDeclined` for the user-facing path.\n3. Structured data:\n\n```python\nclass CardDeclined(PaymentError):\n    def __init__(self, reason):\n        super().__init__(reason)\n        self.reason = reason\n        self.retryable = False\n```\n\n4. Boundary translation with chaining keeps callers decoupled from the provider while preserving debug detail.\n5. Leaking vendor exceptions, or collapsing everything into one generic `Exception`, both push complexity onto every caller.",
+    "link": {
+      "title": "Best practices for exceptions — Microsoft Learn",
+      "url": "https://learn.microsoft.com/en-us/dotnet/standard/exceptions/best-practices-for-exceptions"
+    }
+  }
+]

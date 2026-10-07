@@ -1,0 +1,378 @@
+[
+  {
+    "id": "msg-message-queues-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Three workers consume from the same SQS standard queue. A producer sends one message. In normal operation, how many workers process it?",
+    "options": [
+      {
+        "text": "All three, because each worker is subscribed to the queue",
+        "explanation": "Wrong. That is publish/subscribe behaviour. A point-to-point queue hands each message to one consumer; to get a copy per consumer you would need a topic (such as SNS) feeding a queue each."
+      },
+      {
+        "text": "Exactly one, and it is guaranteed never to be delivered again",
+        "explanation": "Wrong. Normally one worker gets it, but SQS standard queues are at-least-once: a visibility timeout expiring or a rare duplicate means the message can be delivered again. 'Never again' is too strong."
+      },
+      {
+        "text": "One of them, usually exactly once, with occasional redelivery possible",
+        "explanation": "Correct. Workers compete for messages and SQS hides a received message from the others. Under failures or timeouts it can be redelivered, which is why consumers should be idempotent."
+      },
+      {
+        "text": "None until all three acknowledge readiness",
+        "explanation": "Wrong. There is no group readiness handshake in a queue. Any worker that calls ReceiveMessage can take the next available message."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A queue is a **point-to-point** channel: one message, one consumer.\n2. When worker A calls `ReceiveMessage`, SQS returns the message and makes it **invisible** to B and C.\n3. A processes it and calls `DeleteMessage`. Done; B and C never see it.\n4. Edge case: if A does not delete it before the visibility timeout ends, it becomes visible and B or C may receive it.\n5. Separately, standard queues may occasionally deliver a duplicate even without a timeout.\n\nSo the honest answer is \"one, at least once\".",
+    "link": {
+      "title": "Competing Consumers pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/competing-consumers"
+    }
+  },
+  {
+    "id": "msg-message-queues-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A RabbitMQ consumer receives a message with **manual acknowledgements** enabled, starts processing, and its process is killed before it sends `basic.ack`. Assume it has not expired or reached a delivery limit. What happens to the message?",
+    "options": [
+      {
+        "text": "It is requeued when the channel closes and delivered to another consumer",
+        "explanation": "Correct. RabbitMQ tracks unacknowledged deliveries per channel. When the connection drops, those messages go back to the queue and are redelivered with the `redelivered` flag set."
+      },
+      {
+        "text": "It is lost, because it was already delivered",
+        "explanation": "Wrong. That would happen with auto-ack, where the broker considers the message done as soon as it is sent. With manual acks the broker keeps it until it is acknowledged."
+      },
+      {
+        "text": "It moves straight to the dead-letter exchange",
+        "explanation": "Wrong. Dead-lettering happens on reject/nack without requeue, TTL expiry, length limits or exceeding a quorum queue's delivery limit. A single consumer crash simply requeues the message."
+      },
+      {
+        "text": "It stays invisible until a 30-second visibility timeout expires",
+        "explanation": "Wrong. Visibility timeouts are how SQS works, because SQS has no persistent connection. RabbitMQ detects the dead consumer directly through the closed connection."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With manual acks, RabbitMQ marks the delivery as **unacked** and keeps the message.\n2. The process dies, so its TCP connection closes (or, if the machine vanished without closing it, the heartbeat times out, typically within a minute or two with the default 60-second heartbeat timeout).\n3. RabbitMQ sees the channel close and returns every unacked message on it to the queue.\n4. Another consumer gets it with `redelivered=true`. A careful consumer can use that flag as a hint to check for duplicate work.\n\nContrast: in SQS the equivalent safety net is the visibility timeout.",
+    "link": {
+      "title": "RabbitMQ tutorial: work queues, acks and fair dispatch",
+      "url": "https://www.rabbitmq.com/tutorials/tutorial-two-python"
+    }
+  },
+  {
+    "id": "msg-message-queues-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your SQS consumer resizes videos. The queue's visibility timeout is the default 30 seconds, and jobs take between 20 and 90 seconds. Users complain about receiving some processed videos twice and the worker fleet seems busier than expected. What is going on, and what is the best fix?",
+    "options": [
+      {
+        "text": "SQS standard queues randomly duplicate messages; switch to a FIFO queue",
+        "explanation": "Wrong. Standard queues can occasionally duplicate, but that is rare. Here the cause is systematic: every job longer than 30 seconds reappears. FIFO deduplication only covers producer-side duplicates within 5 minutes and would not stop visibility-timeout redelivery."
+      },
+      {
+        "text": "Workers are deleting messages too early; they should delete before starting work",
+        "explanation": "Wrong. Deleting before processing would stop duplicates but lose the job whenever a worker crashes mid-way. That swaps at-least-once for at-most-once, which is a bad trade for paid video processing."
+      },
+      {
+        "text": "Jobs longer than 30 seconds become visible again and are picked up by a second worker; raise the timeout above the worst case or extend it with ChangeMessageVisibility while working",
+        "explanation": "Correct. A job over 30 seconds can be redelivered while the first worker is still running, so two workers do the same work and both publish a result. A timeout of several minutes, or a heartbeat that extends the lease, reduces timeout-driven duplicates, but does not eliminate all redelivery."
+      },
+      {
+        "text": "Long polling is causing workers to receive the same message",
+        "explanation": "Wrong. Long polling only controls how long ReceiveMessage waits for a message to arrive. It does not make an invisible message visible to other consumers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace a 60-second job:\n\n```\nt=0   worker A receives m (hidden)\nt=30  timeout expires, m visible\nt=31  worker B receives m\nt=60  A finishes, tries delete with old\n      handle (deletion not guaranteed)\nt=91  B finishes: second result\n```\n\n1. Every job over 30 s becomes eligible for redelivery, and some 90 s jobs could even be picked up three times.\n2. Fleet utilisation rises because the same work is done repeatedly.\n3. Fix options:\n   - Set the timeout to comfortably exceed the worst case, for example 5 minutes.\n   - Or keep it short and have the worker call `ChangeMessageVisibility` every ~20 s as a heartbeat. This keeps fast failover if a worker dies.\n4. Still make the consumer idempotent (for example, key the output on the job ID), because at-least-once delivery remains.",
+    "link": {
+      "title": "Amazon SQS visibility timeout",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A RabbitMQ classic queue using manual acknowledgements holds 50,000 messages. You start one consumer with **no prefetch limit**, then 30 seconds later start nine more. The nine new consumers sit idle while the first one is overwhelmed. Why?",
+    "options": [
+      {
+        "text": "RabbitMQ only allows one consumer per queue at a time",
+        "explanation": "Wrong. RabbitMQ supports many consumers per queue and round-robins deliveries among them. (Single active consumer is an opt-in feature, not the default.)"
+      },
+      {
+        "text": "The queue is a FIFO queue, so ordering forces a single consumer",
+        "explanation": "Wrong. RabbitMQ queues are FIFO by nature but still distribute messages to multiple consumers. Ordering across consumers is lost, but distribution still happens."
+      },
+      {
+        "text": "The new consumers need to use basic.get polling instead",
+        "explanation": "Wrong. Polling with basic.get is less efficient and would not reclaim the messages already pushed to the first consumer. The fix is to limit unacked messages per consumer."
+      },
+      {
+        "text": "The first consumer was pushed almost every message as unacked deliveries, so there is little left in the queue for the others",
+        "explanation": "Correct. With unlimited prefetch, RabbitMQ pushes messages as fast as the network allows. The first consumer buffers tens of thousands of unacked messages, and the new consumers only get what arrives afterwards."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. RabbitMQ pushes messages to consumers. In this explicitly unlimited classic-queue configuration, there is no prefetch cap. Broker default prefetch settings and quorum-queue limits can differ.\n2. In 30 seconds, the first consumer can be sent most of the 50,000 messages, which sit in its client buffer.\n3. Those messages remain retained as unacknowledged deliveries but are not ready for assignment to other consumers, so new consumers see an almost empty queue.\n4. Fix: set prefetch, for example `basic.qos(prefetch_count=50)`. Now each consumer holds at most 50 unacked messages and the rest stay in the queue to be shared.\n5. Choosing the value: if processing takes 20 ms and the network round trip is 2 ms, even a prefetch of 10 keeps a consumer busy; larger values may add buffering with little benefit in this example; measure with the actual workload.",
+    "link": {
+      "title": "RabbitMQ tutorial: work queues, acks and fair dispatch",
+      "url": "https://www.rabbitmq.com/tutorials/tutorial-two-python"
+    }
+  },
+  {
+    "id": "msg-message-queues-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are adding a dead-letter queue to an SQS-based order pipeline. Which practices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Alarm whenever the DLQ's visible message count is above zero",
+        "explanation": "Correct. Every message in the DLQ needs investigation; an effect may already have committed before its acknowledgement was lost. A non-zero count needs a human, so it should page or at least notify someone."
+      },
+      {
+        "text": "Give the DLQ a longer retention period than the source queue",
+        "explanation": "Correct. In SQS standard queues, a message's age is counted from when it was originally enqueued, so a short DLQ retention can delete it soon after it arrives. AWS recommends a longer DLQ retention."
+      },
+      {
+        "text": "Set maxReceiveCount to 1 so failures are surfaced immediately",
+        "explanation": "Wrong. One failure is often a transient error such as a database failover or throttling. Dead-lettering on the first attempt sends recoverable messages aside and creates manual work."
+      },
+      {
+        "text": "Record the failure reason (error and stack trace) alongside the message ID in logs",
+        "explanation": "Correct. When someone inspects the DLQ, knowing why each message failed is what lets them fix the bug and redrive confidently rather than guessing."
+      },
+      {
+        "text": "Automatically redrive DLQ messages back to the source queue every minute",
+        "explanation": "Wrong. That recreates the infinite retry loop the DLQ was meant to break. Redrive deliberately, after fixing the cause."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Think about what a DLQ is for: it is a **holding area for messages that need human attention**.\n\n1. Humans must find out: alarm on depth > 0.\n2. Messages must still be there when they look: longer retention (SQS allows up to 14 days).\n3. Humans need context: log the error with the message ID.\n4. Transient failures should not land there: use a `maxReceiveCount` of roughly 3–10 with backoff.\n5. Redrive is a deliberate act after a fix, using the SQS redrive feature, not a timer.",
+    "link": {
+      "title": "Using dead-letter queues in Amazon SQS",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An SQS consumer writes orders to Postgres. The queue has a 30-second visibility timeout and `maxReceiveCount = 3`. On failure the consumer does nothing; assume prompt polling as each timeout ends and ignore duplicate receives. A database failover makes every write fail for **2 minutes**. What happens to messages received at the start of the outage, and what is the best improvement?",
+    "options": [
+      {
+        "text": "They are retried until the database returns, then succeed; no change needed",
+        "explanation": "Wrong. With a 30-second timeout and 3 receives, the attempts happen at about 0, 30 and 60 seconds. All three fail inside the 2-minute outage and the message is moved to the DLQ before the database returns."
+      },
+      {
+        "text": "They are dead-lettered after about 90 seconds; add increasing backoff using ChangeMessageVisibility so retries span the outage",
+        "explanation": "Correct. Receives at 0 s, 30 s and 60 s all fail; on the next receive (about 90 s) SQS moves the message to the DLQ. Backing off to, say, 30 s, 2 min and 8 min means the third attempt lands after the database is back."
+      },
+      {
+        "text": "They are lost, because SQS deletes messages that fail three times",
+        "explanation": "Wrong. With a redrive policy, SQS moves messages to the DLQ, it does not delete them. Without one, they would keep retrying until the retention period expired."
+      },
+      {
+        "text": "They are dead-lettered; the fix is to set the visibility timeout to 12 hours",
+        "explanation": "Wrong. A 12-hour timeout would survive the outage, but it also means any message whose worker crashes is stuck for 12 hours. Backoff that grows only on failure gives patience without hurting normal failover."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "**Current behaviour** (receive count shown in brackets):\n\n```\nt=0    receive (1) fail\nt=30   receive (2) fail\nt=60   receive (3) fail\nt=90   count would be 4 > 3: DLQ\nt=120  database back. Too late.\n```\n\n**With backoff** on failure, set visibility to `30 s × 4^(count−1)`:\n\n```\nt=0    receive (1) fail, hide 30 s\nt=30   receive (2) fail, hide 120 s\nt=150  receive (3) succeeds\n```\n\n1. Total patience is now 2.5 minutes before the third try instead of 1 minute, and still fast for the first retry.\n2. Add jitter (randomise each delay by ±20%) so thousands of messages do not retry in lockstep when the database returns.\n3. Note the cap: visibility can be extended to at most 12 hours from the start of the current ReceiveMessage attempt; extending visibility does not reset that attempt's 12-hour limit.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "msg-message-queues-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Twenty idle SQS consumers each loop on `ReceiveMessage` with short polling and a 100 ms sleep between calls. Ignoring the free tier and request/network duration, and assuming an illustrative $0.40 per million requests and a 30-day month, roughly how much do the **empty** receives cost per month, and what would long polling with `WaitTimeSeconds=20` cost instead?",
+    "options": [
+      {
+        "text": "Nothing, because empty receives are free",
+        "explanation": "Wrong. SQS bills every API request, including ReceiveMessage calls that return no messages. That is exactly why AWS recommends long polling."
+      },
+      {
+        "text": "About $21 per month versus about $10 per month",
+        "explanation": "Wrong. This undercounts short polling by a factor of ten (perhaps using 1 request/s per consumer) and overstates long polling. Long polling reduces empty requests by roughly 200×, not 2×, in this setup."
+      },
+      {
+        "text": "About $207 per month versus about $1 per month",
+        "explanation": "Correct. 20 consumers × 10 requests/s = 200 requests/s, about 518 million a month, which is about $207. With 20-second long polls each consumer makes 1 request per 20 s, so 1 request/s in total, about 2.6 million a month, about $1."
+      },
+      {
+        "text": "About $207 per month either way, because long polling makes the same number of calls",
+        "explanation": "Wrong. A long poll holds the request open for up to 20 seconds waiting for a message, so an idle consumer makes 1 call every 20 seconds instead of 10 per second."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "**Short polling**\n1. Each consumer: one call per ~100 ms = 10 calls/s.\n2. Fleet: 20 × 10 = 200 calls/s.\n3. Month: 200 × 86,400 × 30 = 518,400,000 calls.\n4. Cost: 518.4 × $0.40 ≈ **$207**.\n\n**Long polling (20 s)**\n1. Each idle consumer: 1 call per 20 s = 0.05 calls/s.\n2. Fleet: 20 × 0.05 = 1 call/s.\n3. Month: 1 × 86,400 × 30 = 2,592,000 calls.\n4. Cost: 2.592 × $0.40 ≈ **$1.04**.\n\nLong polling also reduces false-empty responses, because short polling queries only a subset of SQS servers.",
+    "link": {
+      "title": "Amazon SQS short and long polling",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users upload scanned contracts of up to 20 MB. The API base64-encodes each PDF and sends it in an SQS message to an OCR worker. Sends for larger files fail. What is the best design?",
+    "options": [
+      {
+        "text": "Split each PDF into 1 MiB chunks across several messages and reassemble them in the worker",
+        "explanation": "Wrong. Competing consumers would receive chunks of the same file on different workers, in any order, and a single lost or dead-lettered chunk breaks the whole file. You would be rebuilding a file transfer protocol on top of a queue."
+      },
+      {
+        "text": "Compress the PDF before base64-encoding it",
+        "explanation": "Wrong. Many scanned PDFs already contain compressed image data, and base64 adds about a third. Compression cannot reliably guarantee every allowed 20 MB file fits under the 1 MiB message limit."
+      },
+      {
+        "text": "Upload the PDF to S3 and send a small message containing the bucket and key",
+        "explanation": "Correct. This is the claim check pattern. The queue carries a small reference and the large payload lives in object storage. AWS's extended client libraries for SQS automate it."
+      },
+      {
+        "text": "Switch to an SQS FIFO queue, which allows larger messages",
+        "explanation": "Wrong. FIFO queues have the same maximum message size as standard queues. FIFO changes ordering and deduplication, not payload limits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check the limit: an SQS message can be at most **1 MiB** (it was 256 KB until 2025).\n2. Estimate the payload: 20 MB × 4/3 for base64 ≈ **27 MB**. Far over.\n3. Claim check:\n   - `PUT s3://contracts/in/abc.pdf`\n   - send `{\"bucket\":\"contracts\", \"key\":\"in/abc.pdf\"}`\n   - the worker downloads and processes an immutable object version; retain it until retries and DLQ redrive can no longer need it.\n4. Bonus: messages stay small, so receives are cheap and fast, and the S3 object can have its own lifecycle and encryption policy.\n5. Make the worker idempotent on a unique job ID and immutable object version (a reused object key alone is insufficient), since the message is still delivered at least once.",
+    "link": {
+      "title": "Amazon SQS message quotas (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are moving a RabbitMQ 3.x cluster that uses classic mirrored queues to **RabbitMQ 4.x**. Assume default quorum delivery-limit settings. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Classic mirrored queues remain a supported option for high availability on 4.x",
+        "explanation": "Wrong. Classic queue mirroring was deprecated for years and removed in RabbitMQ 4.0. Replicated queues on 4.x are quorum queues (or streams), so the migration must happen before or during the upgrade."
+      },
+      {
+        "text": "A quorum queue confirms a publish only once a majority of its replicas have written it",
+        "explanation": "Correct. Quorum queues use Raft. A message is committed when a majority of members have it, which is what lets the queue survive a minority of node failures without losing confirmed messages."
+      },
+      {
+        "text": "With no dead-letter exchange configured, a message that keeps crashing its consumers is eventually dropped",
+        "explanation": "Correct. Since 4.0, quorum queues have a default delivery limit of 20. A message redelivered more than that is dead-lettered if a dead-letter exchange is configured and otherwise removed, so set up a DLX for anything you cannot afford to lose."
+      },
+      {
+        "text": "A 3-replica quorum queue keeps accepting publishes with two of its three nodes down",
+        "explanation": "Wrong. With one of three members left there is no majority, so the queue cannot commit new messages. Three replicas tolerate one failure; tolerating two needs five."
+      },
+      {
+        "text": "Quorum queues are always durable and cannot be exclusive, so a temporary per-connection reply queue should stay a classic queue",
+        "explanation": "Correct. Quorum queues are designed for data that must survive failures. Short-lived, exclusive queues, such as RPC reply queues, are a job for classic queues."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "1. **Mirroring is gone**: 4.0 removed classic queue mirroring. Quorum queues replace it.\n2. **Raft majority**: with *n* replicas a quorum queue tolerates ⌊(n − 1)/2⌋ failures.\n\n| Replicas | Failures tolerated |\n|---|---|\n| 3 | 1 |\n| 5 | 2 |\n\n3. **Poison messages**: the default `delivery-limit` of 20 means repeated failures counted by that RabbitMQ version eventually remove the message; explicit requeue counting differs across 4.x releases. Without a DLX, removed means gone.\n4. **Durability by design**: quorum queues cannot be exclusive or transient, so keep throwaway reply queues classic.",
+    "link": {
+      "title": "Quorum queues (RabbitMQ docs)",
+      "url": "https://www.rabbitmq.com/docs/quorum-queues"
+    }
+  },
+  {
+    "id": "msg-message-queues-q10",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An SQS queue triggers a Lambda function whose timeout is **2 minutes**, with no batching window. Following AWS's guidance, what is the minimum visibility timeout you should give the queue?",
+    "options": [
+      {
+        "text": "The default 30 seconds",
+        "explanation": "Wrong. Lambda would not even accept this: the function timeout must not exceed the queue's visibility timeout. Any batch taking longer than 30 seconds would also reappear while still being processed."
+      },
+      {
+        "text": "2 minutes, the same as the function timeout",
+        "explanation": "Wrong. This is the bare minimum Lambda allows, but it leaves no time for Lambda to retry a batch if the function is throttled, so messages can reappear and be processed twice."
+      },
+      {
+        "text": "4 minutes, double the function timeout",
+        "explanation": "Wrong. Better than equal, but AWS's guidance is larger still, to cover throttling retries inside the event source mapping."
+      },
+      {
+        "text": "12 minutes, six times the function timeout",
+        "explanation": "Correct. AWS recommends a visibility timeout of at least six times the function timeout (plus any batching window), which gives Lambda room to retry a throttled batch before the messages become visible again."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rule from the AWS docs: visibility timeout ≥ **6 × function timeout** (+ `MaximumBatchingWindowInSeconds` if set).\n2. `6 × 2 min = 12 min`.\n3. Why so much? The event source mapping receives a batch, which starts the visibility clock. If the function is throttled, Lambda retries the invocation; all of that must fit before the messages reappear.\n4. Also set `maxReceiveCount` on the redrive policy to at least 5, so throttling alone does not push messages into the DLQ.",
+    "link": {
+      "title": "Configuring an SQS event source for Lambda (AWS docs)",
+      "url": "https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An order pipeline in eu-west-1 must sustain **6,000 messages per second** through an SQS FIFO queue, ordered per customer. Producers send batches of 10 with `MessageGroupId = \"orders\"` on every message, using default queue settings. Sends throttle at about 3,000 messages per second. What change is needed?",
+    "options": [
+      {
+        "text": "Switch to a standard queue, which has nearly unlimited throughput",
+        "explanation": "Wrong. A standard queue would meet the throughput but gives only best-effort ordering, breaking the per-customer ordering requirement."
+      },
+      {
+        "text": "Enable high-throughput mode and set `MessageGroupId` to the customer ID",
+        "explanation": "Correct. High-throughput mode raises the per-action limit, but SQS scales it by spreading message groups across partitions. With a single group everything stays on one partition; with one group per customer the load spreads and per-customer order is kept."
+      },
+      {
+        "text": "Increase the batch size to 20 messages per call",
+        "explanation": "Wrong. SQS batch calls are capped at 10 messages. The 3,000 figure is exactly 300 calls per second × 10 messages."
+      },
+      {
+        "text": "Enable high-throughput mode and keep the single message group",
+        "explanation": "Wrong. Messages in one group must be kept in order, so they map to one partition and are limited to that partition's throughput. SQS may return several group messages in one batch; the application must apply their effects in the required order."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Diagnose the 3,000 ceiling: default FIFO = **300 calls/s per action**, × 10 messages per batch = **3,000 messages/s**.\n2. High-throughput mode raises the limit (up to tens of thousands of calls per second in the largest regions), but only by spreading **message groups** across partitions.\n3. A constant group ID means one group mapped to one partition; batch delivery remains possible, with ordered application processing required. That is a global ordering requirement nobody actually has.\n4. The real requirement is **per customer**, so `MessageGroupId = customerId`.\n5. Now thousands of groups spread across partitions, and many consumers can work in parallel on different customers.",
+    "link": {
+      "title": "High throughput for FIFO queues (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/high-throughput-fifo.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SQS FIFO queue uses `MessageGroupId = accountId`. A malformed message for account 77 makes the consumer throw every time it is received. The queue has **no redrive policy**. Assume single-message receives and an order-preserving consumer. What do you observe?",
+    "options": [
+      {
+        "text": "Account 77's later messages are stuck behind it while other accounts flow normally, until the bad message expires at the end of the retention period",
+        "explanation": "Correct. An in-flight message blocks additional receives for its group until deletion or visibility expiry. On retry the consumer must handle the failed head before later effects. The bad message keeps reappearing after each visibility timeout, blocking account 77 for up to the retention period (4 days by default). Add a redrive policy so it moves to a DLQ after a few attempts."
+      },
+      {
+        "text": "The entire queue stops, because FIFO queues deliver strictly one message at a time",
+        "explanation": "Wrong. FIFO ordering is per message group. Messages for other accounts are in other groups and continue to be delivered."
+      },
+      {
+        "text": "SQS skips the bad message after the visibility timeout and delivers account 77's next message",
+        "explanation": "Wrong. Skipping would break the per-group ordering guarantee. SQS redelivers the same message until it is deleted or expires."
+      },
+      {
+        "text": "SQS moves it to a DLQ automatically after 10 attempts",
+        "explanation": "Wrong. SQS has no default DLQ. Dead-lettering happens only when you configure a redrive policy with a `maxReceiveCount`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FIFO semantics: multiple same-group messages can be returned in one batch. Further receives wait while the batch is in flight; application processing must preserve order and stop at failures.\n2. The consumer throws, never deletes, so after each visibility timeout the **same** message reappears.\n3. Account 77 is stuck. Other groups are independent, so they flow.\n4. Without a redrive policy this continues until the message passes the queue's retention period (default 4 days, up to 14) and is deleted. Lost **and** blocking.\n5. Fix: add a DLQ with `maxReceiveCount` of, say, 5. After five failures the message moves aside and account 77's queue unblocks. Alarm on DLQ depth.\n\nNote that skipping the message unblocks the group but means account 77's later messages are processed without it; the consumer should be able to cope, or the key should be parked as described in the ordering lesson.",
+    "link": {
+      "title": "Using dead-letter queues in Amazon SQS (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+    }
+  }
+]

@@ -1,0 +1,340 @@
+[
+  {
+    "id": "sep-coupling-cohesion-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team says their `billing` module has **high cohesion**. What should that mean?",
+    "options": [
+      {
+        "text": "It is imported by many other modules",
+        "explanation": "That describes how many modules depend on it (afferent coupling), not how well its contents belong together."
+      },
+      {
+        "text": "Its contents all serve one clear purpose, so changes to billing rules happen inside it",
+        "explanation": "Correct. Cohesion is about the inside of a module. High cohesion means the functions and data in it are related and change for the same reasons."
+      },
+      {
+        "text": "It has very few dependencies on other modules",
+        "explanation": "That's low (efferent) coupling. A module can depend on little and still be a grab-bag of unrelated functions."
+      },
+      {
+        "text": "Its functions are short",
+        "explanation": "Function length is a separate concern. A module of short, unrelated functions has low cohesion."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Separate the two ideas:\n   - **Coupling** looks *between* modules: how much they depend on each other.\n   - **Cohesion** looks *inside* a module: how well its parts belong together.\n2. \"High cohesion\" is therefore a claim about the contents of `billing`.\n3. A good test: when a billing rule changes, do you edit only `billing`? And does `billing` change only for billing reasons? If yes, it is cohesive.",
+    "link": {
+      "title": "Cohesion (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cohesion_(computer_science)"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which kind of coupling does this line show?\n\n```python\ncart._items.append(item)\n```",
+    "options": [
+      {
+        "text": "Data coupling",
+        "explanation": "Data coupling means passing only the values a module needs through its interface. Here the caller bypasses the interface altogether."
+      },
+      {
+        "text": "Control coupling",
+        "explanation": "Control coupling is passing a flag that steers another module's logic, like `mode=\"summary\"`."
+      },
+      {
+        "text": "Stamp coupling",
+        "explanation": "Stamp coupling is passing a whole structure when only part is needed. This line isn't passing anything to an interface."
+      },
+      {
+        "text": "Content coupling: the caller reaches into another object's internals",
+        "explanation": "Correct. `_items` is private by convention. The caller now depends on the cart storing items in a list called `_items`, and any internal change breaks it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The leading underscore marks `_items` as an internal detail of the cart.\n2. Code outside the class is relying on that detail: its name, that it is a list, that appending is a valid way to add.\n3. That is **content coupling**, the tightest kind: one module depends on how another is implemented.\n4. Fix: give the cart a method and use it.\n\n```python\ncart.add(item)\n```\n\nNow the cart can switch to a dict, add validation or recalculate totals without breaking callers.",
+    "link": {
+      "title": "Coupling (computer programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Coupling_(computer_programming)"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A project has a `helpers.py` containing `slugify()`, `retry()`, `parse_vat_number()` and `send_slack_alert()`. Which type of cohesion does it have?",
+    "options": [
+      {
+        "text": "Functional",
+        "explanation": "Functional cohesion means everything works together on one task. These four functions have nothing in common."
+      },
+      {
+        "text": "Coincidental",
+        "explanation": "Correct. The only reason they're together is that nobody knew where else to put them. It is the weakest form of cohesion."
+      },
+      {
+        "text": "Temporal",
+        "explanation": "Temporal cohesion groups things because they run at the same time, like start-up steps. These functions run at unrelated times."
+      },
+      {
+        "text": "Sequential",
+        "explanation": "Sequential cohesion means one part's output feeds the next. None of these functions feeds another."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask what single purpose links the four functions. There isn't one: text formatting, retry logic, tax parsing and alerting.\n2. Grouping without a reason is **coincidental cohesion**.\n3. Why it hurts: anything importing `helpers` depends on all four and their imports (an HTTP client for Slack, perhaps), and ownership may become unclear.\n4. Fix by moving each function next to the code it serves (`text.slugify`, `tax.parse_vat_number`).",
+    "link": {
+      "title": "Cohesion (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cohesion_(computer_science)"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is the main design problem here, and what is the usual fix?\n\n```python\ndef label(order):\n    a = order.customer.address\n    return f\"{a.line1}\\n{a.city}\"\n```",
+    "options": [
+      {
+        "text": "It breaks the Law of Demeter; ask `order` for what you need, such as `order.shipping_label()`",
+        "explanation": "Correct. `label` knows that orders have customers, customers have addresses, and addresses have lines. Restructuring any of those classes breaks it. Asking the nearest object hides the chain."
+      },
+      {
+        "text": "It has control coupling, so add a flag",
+        "explanation": "There's no flag here, and adding one would make coupling worse, not better."
+      },
+      {
+        "text": "It violates command-query separation",
+        "explanation": "The function only reads and returns; it has no side effects."
+      },
+      {
+        "text": "It should catch `AttributeError` in case `customer` is `None`",
+        "explanation": "That might be needed for robustness, but it doesn't address the design problem: knowing the internal structure of three classes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Count the classes `label` must understand: `Order`, `Customer`, `Address`. It talks to \"strangers\" (objects returned by other objects).\n2. That's what the Law of Demeter warns about: a change to how customers store addresses ripples into code that only wanted a shipping label.\n3. Move the knowledge to the nearest object:\n\n```python\nclass Order:\n    def shipping_label(self):\n        return self.customer.label()\n```\n\n4. Each class now knows only its immediate neighbour.\n5. Caveat: chaining on plain data (dicts, fluent builders) is not the same problem; the law is about reaching through other objects' internals.",
+    "link": {
+      "title": "Law of Demeter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Law_of_Demeter"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Module `pricing` is imported by 6 other modules (Ca = 6) and itself imports 2 modules (Ce = 2). What is its instability `I`, and what does it suggest?",
+    "options": [
+      {
+        "text": "0.75: it is fairly unstable and safe to change freely",
+        "explanation": "That's `Ca / (Ca + Ce)`, the inverse of the formula. Instability counts *outgoing* dependencies on top."
+      },
+      {
+        "text": "0.33: moderately stable",
+        "explanation": "That's `Ce / Ca` = 2/6, not `Ce / (Ca + Ce)`. The denominator is the total of both directions."
+      },
+      {
+        "text": "0.25: fairly stable, so changes to it ripple widely and its interface should change slowly",
+        "explanation": "Correct. I = 2 / (6 + 2) = 0.25. Six modules depend on it, so it is costly to change; it should be well-designed and kept stable."
+      },
+      {
+        "text": "4: it has four more dependents than dependencies",
+        "explanation": "Instability is a ratio between 0 and 1, not a difference."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Formula: `I = Ce / (Ca + Ce)`.\n2. Plug in: `2 / (6 + 2) = 2 / 8 = 0.25`.\n3. Interpret the scale:\n   - `I = 0`: at least one module depends on it and it depends on no modules. Maximally stable (hard to change).\n   - `I = 1`: no modules depend on it, and it has at least one dependency. This does not guarantee safe or cost-free changes.\n4. At 0.25, `pricing` is towards the stable end: a breaking change to its interface can affect its six dependent modules.\n5. Design advice: modules like this should be the most carefully designed and, ideally, the most abstract.",
+    "link": {
+      "title": "Software package metrics — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Software_package_metrics"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this class most clearly suggest?\n\n```python\nclass Employee:\n    name: str\n    email: str\n    tax_code: str\n    salary: int\n\n    def send_welcome(self):\n        ...  # uses name, email\n    def payslip(self):\n        ...  # uses tax_code, salary\n```",
+    "options": [
+      {
+        "text": "It has low cohesion: two groups of methods use disjoint fields, so it is likely two concepts (contact details and payroll)",
+        "explanation": "Correct. When methods split cleanly into groups that never touch each other's fields, the class is doing two jobs. Payroll rules and contact rules will change for different reasons and different people."
+      },
+      {
+        "text": "It has tight coupling to the email service",
+        "explanation": "We can't see any coupling to an email service. The visible issue is how the fields and methods inside the class relate."
+      },
+      {
+        "text": "It violates the Law of Demeter",
+        "explanation": "No method reaches through another object; they only use their own fields."
+      },
+      {
+        "text": "It is fine: all the fields describe an employee",
+        "explanation": "They do all relate to an employee in the business sense, but that's logical grouping. Cohesion asks whether the parts work together, and these groups don't."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Draw a grid of methods against fields:\n\n```\n            name email tax salary\nwelcome      x    x\npayslip                x    x\n```\n\n2. The grid splits into two blocks with no overlap. That's the signature of low cohesion (what LCOM metrics measure).\n3. Consequences: a payroll change means editing a class also used for welcome emails, and tests for one concern have to build the other's data.\n4. A typical refactor: `Employee` holds a `Contact` and a `PayrollRecord`, each cohesive.",
+    "link": {
+      "title": "Cohesion (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cohesion_(computer_science)"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** the changes that weaken the connascence between caller and callee.",
+    "options": [
+      {
+        "text": "Replacing `create(\"Ada\", 36, True)` with `create(name=\"Ada\", age=36, admin=True)`",
+        "explanation": "Correct. This turns connascence of position (caller must know the order) into connascence of name, which is weaker and survives reordering."
+      },
+      {
+        "text": "Replacing `if status == 3` with `if status == Status.CANCELLED`",
+        "explanation": "Correct. Connascence of meaning (both sides must know 3 means cancelled) becomes connascence of name."
+      },
+      {
+        "text": "Replacing a named tuple `(id, total)` with a plain tuple",
+        "explanation": "This goes the wrong way: callers now rely on position (`t[1]`) instead of names (`t.total`)."
+      },
+      {
+        "text": "Having both client and server import one shared `checksum()` function instead of each implementing the algorithm",
+        "explanation": "Correct. A shared implementation removes duplicated algorithm definitions. Independently deployed client/server versions must still agree on the checksum algorithm and encoding."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Connascence strength (weakest to strongest): name, type, meaning, position, algorithm.\n\n1. Positional arguments → keyword arguments: **position → name**. Weaker.\n2. Magic number → enum: **meaning → name**. Weaker.\n3. Named tuple → plain tuple: **name → position**. Stronger. Wrong direction.\n4. Two copies of a checksum → one shared function: **algorithm → name**. Weaker at the source-code level. Deployed client/server versions must still use compatible algorithms and encodings.\n\nRule of thumb: the further apart two pieces of code are (different modules, teams, services), the weaker their connascence should be.",
+    "link": {
+      "title": "Connascence.io",
+      "url": "https://connascence.io/"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which smell does this code show?\n\n```python\ndef can_ship(order):\n    c = order.customer\n    return (c.verified\n            and not c.blocked\n            and c.country in SHIP_TO)\n```",
+    "options": [
+      {
+        "text": "Primitive obsession",
+        "explanation": "Primitive obsession is using raw strings and numbers where a small type would help. The code here uses rich objects."
+      },
+      {
+        "text": "Feature envy: the function is more interested in `Customer`'s data than its own",
+        "explanation": "Correct. Every condition is about the customer. That logic probably belongs on `Customer` (say `c.can_receive_shipments()`), next to the data it interrogates."
+      },
+      {
+        "text": "Coincidental cohesion",
+        "explanation": "That applies to a module that groups unrelated things. This is one focused function."
+      },
+      {
+        "text": "Temporal coupling",
+        "explanation": "Temporal coupling means things must happen in a specific order. Nothing here depends on call order."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Look at what the function touches: `verified`, `blocked`, `country`, all on `customer`.\n2. It asks the customer three questions, then makes a decision about the customer. That's **feature envy** and a breach of \"tell, don't ask\".\n3. Move the rule to where the data lives:\n\n```python\nclass Customer:\n    def can_receive(self):\n        return (\n            self.verified\n            and not self.blocked\n            and self.country in SHIP_TO\n        )\n\ndef can_ship(order):\n    return order.customer.can_receive()\n```\n\n4. Now if the shipping rules for customers change, there's one place to look, and other callers can reuse it.",
+    "link": {
+      "title": "Feature Envy — Refactoring.Guru",
+      "url": "https://refactoring.guru/smells/feature-envy"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An orders service publishes events with `\"status\": 3`. Three consumer services, owned by other teams, each hard-code `3 == cancelled`. The orders team wants to insert a new status and renumber. What is the best description and remedy?",
+    "options": [
+      {
+        "text": "Content coupling; give consumers direct database access so they can read the status table",
+        "explanation": "That would make coupling far worse: consumers would depend on the orders service's internal schema."
+      },
+      {
+        "text": "Connascence of meaning across team boundaries; publish names like `\"CANCELLED\"` in a documented, versioned event schema and never renumber existing values",
+        "explanation": "Correct. Every consumer must share the knowledge that 3 means cancelled. Converting to a named value in an explicit contract weakens it to connascence of name, and an explicit compatibility policy can require additive changes; versioning alone does not make changes compatible."
+      },
+      {
+        "text": "Control coupling; remove the status field from events",
+        "explanation": "The status isn't steering the consumers' control flow from outside, and consumers genuinely need it. Removing it just moves the problem."
+      },
+      {
+        "text": "No problem: renumber and tell the other teams",
+        "explanation": "Coordinated changes across teams and deploys are exactly what loose coupling is meant to avoid. Any consumer that misses the memo silently misreads events."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify what the services must agree on: the *meaning* of the integer 3. That's **connascence of meaning**.\n2. Assess locality: it spans three services and four teams, the worst place for strong connascence.\n3. Renumbering breaks every consumer silently (no compile error; a cancelled order might be read as shipped).\n4. Remedy:\n   - Use self-describing values: `\"status\": \"CANCELLED\"`.\n   - Put them in a published schema (JSON Schema, Avro, Protobuf enums).\n   - Make changes **additive**: add new values, never reuse or renumber old ones.\n5. Consumers must also tolerate unknown values, so adding a status doesn't crash them.",
+    "link": {
+      "title": "Connascence.io",
+      "url": "https://connascence.io/"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Adding support for a new currency requires small edits in nine files across five modules. Which statements are reasonable? Select **all** that apply.",
+    "options": [
+      {
+        "text": "This is shotgun surgery: knowledge about currencies is scattered rather than kept in one cohesive place",
+        "explanation": "Correct. One logical change touching many places is the defining symptom of shotgun surgery."
+      },
+      {
+        "text": "Gathering currency rules (symbols, decimal places, rounding) into one `money`/`currency` module would likely reduce the edits",
+        "explanation": "Correct. Moving related knowledge together raises cohesion and means the next currency is mostly a one-module change."
+      },
+      {
+        "text": "Splitting each of the nine files into smaller files would fix it",
+        "explanation": "Smaller files don't help if currency knowledge is still spread across them. You'd likely have more files to edit, not fewer."
+      },
+      {
+        "text": "Some files may be duplicating currency knowledge, such as decimal places hard-coded in several formatters",
+        "explanation": "Correct. Duplicated knowledge (a DRY problem) is a common cause of shotgun surgery: each copy must be updated."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Name the symptom: one change, many places. That's **shotgun surgery**, the mirror image of divergent change (one module changing for many reasons).\n2. Find the root cause: currency knowledge isn't owned by one module. Often it's duplicated (`round(x, 2)` in nine places).\n3. The fix is to **raise cohesion**: create a `Money` type or `currency` module that owns symbols, minor units and rounding.\n\n```python\nclass Currency:\n    code: str\n    minor_units: int  # GBP 2, JPY 0\n```\n\n4. Splitting files only changes the layout; the knowledge would still be scattered.",
+    "link": {
+      "title": "Shotgun Surgery — Refactoring.Guru",
+      "url": "https://refactoring.guru/smells/shotgun-surgery"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your core `domain` package (I = 0.1, used by almost everything) imports a `reporting` package (I = 0.9) to format one value. What principle does this break, and why does it matter?",
+    "options": [
+      {
+        "text": "The Law of Demeter; `domain` talks to a stranger",
+        "explanation": "Demeter is about method calls through object chains. This is a package-level dependency direction issue."
+      },
+      {
+        "text": "Nothing; any dependency is fine if there are no cycles",
+        "explanation": "Even without cycles, direction matters. A stable package depending on an unstable one inherits its churn."
+      },
+      {
+        "text": "The stable dependencies principle: a structurally stable package depends on a structurally less stable one, potentially propagating incompatible changes into widely used code",
+        "explanation": "Correct. Dependencies should point towards stability. Here, the most widely used package is at the mercy of one of the least stable."
+      },
+      {
+        "text": "Interface segregation; `domain` should import a smaller part of `reporting`",
+        "explanation": "Importing less of `reporting` still leaves the dependency pointing the wrong way."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Read the numbers: `domain` I = 0.1 (many dependents, very costly to change); `reporting` I = 0.9 (more outgoing than incoming dependencies; no measured change rate is given).\n2. A dependency means \"when the target changes, I might have to change\". So an incompatible change in the part of `reporting` used by `domain` may force a domain change, and every module that uses `domain` may have to be retested or rebuilt.\n3. The **stable dependencies principle** says to depend in the direction of stability.\n4. Fixes:\n   - Move the formatting into `domain` if it's genuinely domain logic.\n   - Or invert it: `domain` defines what it needs (an interface), and `reporting` depends on `domain` to provide it.",
+    "link": {
+      "title": "Software package metrics — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Software_package_metrics"
+    }
+  }
+]

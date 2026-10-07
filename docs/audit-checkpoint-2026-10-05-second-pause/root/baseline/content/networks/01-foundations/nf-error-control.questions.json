@@ -1,0 +1,184 @@
+[
+  {
+    "id": "nf-error-control-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A serial link sends each byte with one even-parity bit. Noise flips **two** bits of the same byte. What happens at the receiver?",
+    "options": [
+      { "text": "It detects the error and corrects both bits", "explanation": "A single parity bit can't correct anything: it doesn't say *which* bit is wrong, only whether the count of 1s is odd." },
+      { "text": "It detects the error but can't correct it", "explanation": "That's what happens with one flipped bit. With two, the count of 1s changes by 0 or ±2, so it stays even and parity still looks right." },
+      { "text": "It doesn't notice: two flips leave the parity even, so the byte is accepted", "explanation": "Correct. Parity has Hamming distance 2, so it detects only odd numbers of bit errors. Any even number cancels out." },
+      { "text": "It notices only if the two flipped bits are adjacent", "explanation": "Parity doesn't care where the flips are. Any two flips, adjacent or not, preserve the parity." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Even parity means the total number of 1s (data plus parity bit) is even.\n2. Each flip changes the count by ±1.\n3. Two flips change it by −2, 0 or +2, so it stays even.\n4. The receiver's check passes and the corrupted byte is accepted.\n\nThis is why networks, where noise often hits several consecutive bits, use CRCs rather than parity.",
+    "link": { "title": "Parity bit — Wikipedia", "url": "https://en.wikipedia.org/wiki/Parity_bit" }
+  },
+  {
+    "id": "nf-error-control-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A code has a minimum Hamming distance of 3 between any two valid codewords. What can it do?",
+    "options": [
+      { "text": "Detect up to 3 bit errors, or correct up to 3", "explanation": "With distance 3, three flips can turn one valid codeword into another, which looks perfectly valid. Detection tops out at d − 1." },
+      { "text": "Detect up to 2 bit errors, or correct 1", "explanation": "Correct. It detects d − 1 = 2 errors. For correction, a received word with 1 error is still closer to its original than to any other codeword: ⌊(3 − 1)/2⌋ = 1." },
+      { "text": "Detect 1 bit error but correct none", "explanation": "That describes distance 2, such as parity. Distance 3 is the smallest that allows any correction." },
+      { "text": "Correct up to 2 bit errors", "explanation": "Correcting t errors needs distance at least 2t + 1. Two errors would need distance 5." }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Detection**: an error is missed only if it turns one valid codeword into another, which takes at least d flips. So any d − 1 = **2** flips are detected.\n2. **Correction**: decode to the nearest valid codeword. With t flips, the received word is t away from the original and at least d − t from any other. Correct decoding needs t < d − t, i.e. t ≤ ⌊(d − 1)/2⌋ = **1**.\n\nThe classic Hamming(7,4) code has distance 3 and is used exactly this way: single-error correction.",
+    "link": { "title": "Hamming distance — Wikipedia", "url": "https://en.wikipedia.org/wiki/Hamming_distance" }
+  },
+  {
+    "id": "nf-error-control-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A stop-and-wait protocol sends 1250-byte frames over a 100 Mbit/s link with a 10 ms RTT. Ignoring ACK transmission time, what is its link utilisation?",
+    "options": [
+      { "text": "About 99%", "explanation": "That would be true if the RTT were tiny compared with the frame time. Here the sender spends 0.1 ms sending and 10 ms waiting." },
+      { "text": "About 50%", "explanation": "This assumes sending and waiting take the same time. The wait (10 ms) is 100 times the frame time (0.1 ms)." },
+      { "text": "About 10%", "explanation": "This is off by a factor of ten. Check L/R: 10,000 bits at 10⁸ bit/s is 0.1 ms, not 1 ms." },
+      { "text": "About 1%", "explanation": "Correct. L/R = 0.1 ms, so U = 0.1 / (0.1 + 10) ≈ 0.0099." }
+    ],
+    "answer": 3,
+    "workedExample": "1. Frame size: 1250 × 8 = 10,000 bits.\n2. L/R = 10,000 / 10⁸ = 0.0001 s = 0.1 ms.\n3. Each cycle: send for 0.1 ms, then wait 10 ms for the ACK.\n4. U = 0.1 / 10.1 ≈ **0.99%**.\n\nThroughput is about 10,000 bits / 10.1 ms ≈ 1 Mbit/s on a 100 Mbit/s link. Pipelining, with many frames in flight, is the fix.",
+    "link": { "title": "Stop-and-wait ARQ — Wikipedia", "url": "https://en.wikipedia.org/wiki/Stop-and-wait_ARQ" }
+  },
+  {
+    "id": "nf-error-control-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Compute the CRC for data `1101` with generator `1011` (x³ + x + 1). What is the 3-bit remainder that the sender appends?",
+    "options": [
+      { "text": "`001`", "explanation": "Correct. Dividing 1101000 by 1011 with XOR long division leaves 001, so the sender transmits 1101001." },
+      { "text": "`011`", "explanation": "This often comes from making an arithmetic slip, such as subtracting with borrows instead of XOR. In GF(2) every column is independent: 1 − 1 = 0, 0 − 1 = 1, no borrows." },
+      { "text": "`110`", "explanation": "This is the data's first three bits, not a remainder. The remainder comes from dividing the data with three zeros appended." },
+      { "text": "`000`", "explanation": "A zero remainder is what the *receiver* expects when checking data plus CRC. The sender's remainder for this data isn't zero." }
+    ],
+    "answer": 0,
+    "workedExample": "Append r = 3 zeros, then XOR the generator in under every leading 1:\n\n```\n 1101000\n^1011\n 0110000\n^ 1011\n 0011100\n^  1011\n 0001010\n^   1011\n 0000001  -> R = 001\n```\n\nThe sender transmits `1101 001`. Check: dividing `1101001` by `1011` gives remainder `000`, so a receiver accepts it.",
+    "link": { "title": "Computation of cyclic redundancy checks — Wikipedia", "url": "https://en.wikipedia.org/wiki/Computation_of_cyclic_redundancy_checks" }
+  },
+  {
+    "id": "nf-error-control-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A buggy NIC driver sometimes swaps two adjacent 16-bit words inside a UDP payload before the checksum is verified. Which check would miss this corruption?",
+    "options": [
+      { "text": "A CRC-32 over the payload", "explanation": "CRCs are position-sensitive: each bit's contribution depends on where it is, so swapping words changes the remainder (except with negligible probability)." },
+      { "text": "The UDP (Internet) checksum", "explanation": "Correct. The one's complement sum adds 16-bit words, and addition is commutative, so reordering words gives exactly the same checksum." },
+      { "text": "A cryptographic hash such as SHA-256", "explanation": "Any change to the input, including reordering, changes a cryptographic hash unpredictably. It would catch the swap." },
+      { "text": "None of them: no check can detect reordering", "explanation": "Most checks can. It's a specific weakness of plain sums, and the reason CRCs and stronger checksums like Fletcher's add position-dependent weighting." }
+    ],
+    "answer": 1,
+    "workedExample": "1. The Internet checksum is Σ words (mod 2¹⁶ − 1, one's complement), then inverted.\n2. Swapping words A and B changes the order of the terms, not the sum: A + B = B + A.\n3. So the receiver computes the same value and accepts the corrupted data.\n\n```\n4500 0073 0000 4000 -> 0x7a8c\n0000 4500 4000 0073 -> 0x7a8c\n```\n\nA CRC multiplies each bit by its position's power of x, so moving bits around changes the result.",
+    "link": { "title": "RFC 1071: Computing the Internet Checksum", "url": "https://www.rfc-editor.org/rfc/rfc1071" }
+  },
+  {
+    "id": "nf-error-control-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A sliding-window protocol sends 1250-byte frames over a 1 Gbit/s link with a 10 ms RTT. Roughly how many frames must the window allow in flight to keep the link fully busy?",
+    "options": [
+      { "text": "About 10", "explanation": "This uses 1 ms instead of 10 ms, or 100 Mbit/s. Recheck L/R: 10,000 bits at 10⁹ bit/s is 10 µs." },
+      { "text": "About 100", "explanation": "That would fill a 1 ms RTT. A 10 ms RTT needs ten times as many frames." },
+      { "text": "About 1,000", "explanation": "Correct. L/R = 10 µs, and the cycle is RTT + L/R = 10.01 ms, so N = 10.01 / 0.01 ≈ 1,001 frames." },
+      { "text": "About 10,000", "explanation": "This is the frame size in bits, not the number of frames. Divide the cycle time by the per-frame time." }
+    ],
+    "answer": 2,
+    "workedExample": "1. L = 1250 × 8 = 10,000 bits. L/R = 10,000 / 10⁹ = 10 µs.\n2. The first ACK returns after L/R + RTT = 10.01 ms.\n3. To be sending continuously until then: N = 10.01 ms / 10 µs ≈ **1,001 frames**.\n\nCross-check with the bandwidth-delay product: 10⁹ × 0.01 = 10⁷ bits = 1.25 MB, which is 1,000 frames of 1250 bytes.",
+    "link": { "title": "Sliding window protocol — Wikipedia", "url": "https://en.wikipedia.org/wiki/Sliding_window_protocol" }
+  },
+  {
+    "id": "nf-error-control-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Ethernet's CRC-32 are true? Select all that apply.",
+    "options": [
+      { "text": "It detects every burst error of 32 bits or fewer", "explanation": "Correct. A CRC of degree r catches every burst of length up to r, and CRC-32 has r = 32." },
+      { "text": "It detects every error of 1, 2 or 3 bits in a standard Ethernet frame", "explanation": "Correct. CRC-32 has Hamming distance 4 for messages up to about 91,000 bits, well beyond a 1518-byte frame." },
+      { "text": "It detects every possible error, however many bits are flipped", "explanation": "No fixed-size check can. Some errors map one valid frame to another; for random large corruptions about 1 in 2³² slips through." },
+      { "text": "It stops an attacker from modifying frames undetected", "explanation": "A CRC is linear and keyless. An attacker can change the data and recompute or patch the CRC. That's how WEP's CRC-based integrity check was defeated." },
+      { "text": "It can be computed at line rate in hardware with a shift register", "explanation": "Correct. CRC division is shifts and XORs, which is why every NIC does it for free." }
+    ],
+    "answer": [0, 1, 4],
+    "workedExample": "Go through what a CRC guarantees, and what it doesn't:\n\n1. **Bursts ≤ r bits**: always caught. r = 32. True.\n2. **Hamming distance 4** up to about 91,000 bits: any 3 or fewer flips caught in any Ethernet frame. True.\n3. **Every error**: impossible for a 32-bit check. False.\n4. **Tampering**: no key, linear maths, trivially forged. False; use a MAC.\n5. **Hardware**: shift register with XOR taps. True.",
+    "link": { "title": "Cyclic redundancy check — Wikipedia", "url": "https://en.wikipedia.org/wiki/Cyclic_redundancy_check" }
+  },
+  {
+    "id": "nf-error-control-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Go-Back-N sender with a window of 6 sends frames 0, 1, 2, 3, 4, 5. Frame 2 is lost; everything else arrives. What happens next?",
+    "options": [
+      { "text": "The receiver buffers 3, 4, 5; the sender resends only 2", "explanation": "That's Selective Repeat. A Go-Back-N receiver keeps no buffer: it only accepts the next frame in order." },
+      { "text": "The receiver discards 3, 4, 5 and keeps ACKing 1; on timeout the sender resends 2, 3, 4 and 5", "explanation": "Correct. Frames after the gap are thrown away, so the sender must 'go back' to 2 and resend everything from there." },
+      { "text": "The receiver delivers 0, 1, 3, 4, 5 to the application and skips 2", "explanation": "ARQ protocols deliver data in order without gaps. Skipping 2 would hand the application corrupt, incomplete data." },
+      { "text": "The sender resends all six frames, 0 to 5", "explanation": "Frames 0 and 1 were acknowledged (cumulative ACK 1), so the sender's window has already slid past them." }
+    ],
+    "answer": 1,
+    "workedExample": "Trace it:\n\n```\nsent:  0  1  2  3  4  5\nrecv:  0  1  x  3  4  5\naction ok ok - drop drop drop\nACK:   0  1     1  1  1\n```\n\n1. The receiver expects 2 next. When 3, 4 and 5 arrive out of order, it discards them and repeats ACK 1.\n2. The sender's timer for frame 2 expires.\n3. It resends **2, 3, 4, 5**: four frames to fix one loss.\n\nThat waste grows with the window, which is why Go-Back-N struggles on lossy, high-BDP paths.",
+    "link": { "title": "Go-Back-N ARQ — Wikipedia", "url": "https://en.wikipedia.org/wiki/Go-Back-N_ARQ" }
+  },
+  {
+    "id": "nf-error-control-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Selective Repeat protocol uses **3-bit** sequence numbers (0–7). What is the largest window size that is guaranteed to work correctly?",
+    "options": [
+      { "text": "8", "explanation": "With 8, a retransmitted old frame always carries a number the receiver is expecting anew. Even Go-Back-N can't use the full sequence space." },
+      { "text": "7", "explanation": "2ᵏ − 1 = 7 is the Go-Back-N limit. Selective Repeat's receiver accepts a whole window of numbers, so it needs the old and new windows not to overlap at all." },
+      { "text": "4", "explanation": "Correct. For Selective Repeat the window must be at most 2ᵏ⁻¹ = 4, half the sequence space." },
+      { "text": "2", "explanation": "2 works, but it isn't the largest. Window 4 already ensures the sender's old window and the receiver's new one never share a number." }
+    ],
+    "answer": 2,
+    "workedExample": "Test window 5 to see why it fails:\n\n1. The sender sends 0–4. All arrive; the receiver's window slides to {5, 6, 7, 0, 1}.\n2. All ACKs are lost. The sender times out and resends the old frame 0.\n3. 0 is inside the receiver's new window, so it's accepted as new data. Wrong.\n\nWith window 4: after receiving 0–3, the receiver expects {4, 5, 6, 7}. Any retransmission (0–3) is outside it, recognised as a duplicate, and re-ACKed. So the maximum is 2³⁻¹ = **4**.",
+    "link": { "title": "Selective Repeat ARQ — Wikipedia", "url": "https://en.wikipedia.org/wiki/Selective_Repeat_ARQ" }
+  },
+  {
+    "id": "nf-error-control-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A link needs a 1,000-frame window to stay busy. Each frame is independently lost with probability 1%. Using the approximation from the lesson, roughly what utilisation does Go-Back-N achieve, compared with Selective Repeat's ≈ 99%?",
+    "options": [
+      { "text": "About 99%, the same as Selective Repeat", "explanation": "That ignores the cost of each loss. Go-Back-N resends roughly a whole window every time a frame is lost." },
+      { "text": "About 90%", "explanation": "That's what you'd get if each loss cost about 10 frames. Here each loss costs about 1,000." },
+      { "text": "About 50%", "explanation": "This underestimates the damage. With 1% loss and 1,000-frame windows, there are about 10 losses per window, each forcing a resend of hundreds of frames." },
+      { "text": "About 9%", "explanation": "Correct. U ≈ (1 − p) / (1 + (N − 1)p) = 0.99 / (1 + 999 × 0.01) = 0.99 / 10.99 ≈ 9%." }
+    ],
+    "answer": 3,
+    "workedExample": "1. Selective Repeat resends only lost frames: U ≈ 1 − p = **99%**.\n2. Go-Back-N: each loss wastes roughly the N − 1 frames sent after it.\n3. U ≈ (1 − p) / (1 + (N − 1)p)\n   - (N − 1)p = 999 × 0.01 = 9.99\n   - U ≈ 0.99 / 10.99 ≈ **0.090**\n\nSo Go-Back-N delivers about a tenth of what Selective Repeat does here. That is why TCP added SACK, and why every modern transport retransmits selectively on long, fast paths.",
+    "link": { "title": "Go-Back-N ARQ — Wikipedia", "url": "https://en.wikipedia.org/wiki/Go-Back-N_ARQ" }
+  },
+  {
+    "id": "nf-error-control-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A backup service copies files over TCP across several data centres. Every link has an Ethernet CRC, and TCP has its checksum. Even so, a few files a month arrive with corrupted blocks. What is the best explanation and fix?",
+    "options": [
+      { "text": "Bit errors on the links beat the CRC; use jumbo frames so fewer frames are sent", "explanation": "Link errors that slip past CRC-32 are vanishingly rare, and jumbo frames don't make the CRC stronger. The corruption is likely happening where no link check applies." },
+      { "text": "Data is corrupted inside hosts or routers, between link checks, and the weak TCP checksum misses some of it; add an end-to-end hash of each file or block and verify it on arrival", "explanation": "Correct. Each link's CRC is checked and regenerated per hop, so memory or software faults in a device are covered only by TCP's 16-bit sum. A strong end-to-end check (for example SHA-256 or CRC-32C per block) catches it." },
+      { "text": "TCP doesn't retransmit corrupted segments; switch to UDP", "explanation": "TCP does discard segments that fail its checksum and retransmits them. UDP has the same weak checksum and no retransmission, so it would be worse." },
+      { "text": "The disks are faulty; the network can't be the cause", "explanation": "Disks can corrupt data too, but the scenario gives no reason to rule out the network path. Either way, an end-to-end hash catches both." }
+    ],
+    "answer": 1,
+    "workedExample": "1. A frame's CRC protects it only on one link. Each router checks it, processes the packet in memory, and computes a fresh CRC for the next link.\n2. If a router's memory or a NIC bug flips a bit in between, the new CRC is computed over the corrupted data, so it looks valid.\n3. Only TCP's 16-bit checksum covers the whole path, and it misses roughly 1 in 65,536 random corruptions (and all word reorderings).\n4. Over billions of packets, some get through.\n5. The fix is the **end-to-end argument**: verify a strong hash of the data at the final destination. Systems like ZFS, S3 and rsync do exactly this.",
+    "link": { "title": "End-to-end principle — Wikipedia", "url": "https://en.wikipedia.org/wiki/End-to-end_principle" }
+  },
+  {
+    "id": "nf-error-control-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're designing the link protocol for a 50 Mbit/s satellite link with a 600 ms RTT and a raw bit error rate of about 10⁻⁵. Which design choices are sensible? Select all that apply.",
+    "options": [
+      { "text": "Use forward error correction so most errors are fixed without waiting a round trip", "explanation": "Correct. Every retransmission costs at least 600 ms. FEC fixes most errors immediately, at the cost of some extra bits on every frame." },
+      { "text": "Avoid stop-and-wait ARQ, because the sender would sit idle almost all the time", "explanation": "Correct. With 1500-byte frames, L/R = 0.24 ms against a 600 ms RTT: utilisation about 0.04%." },
+      { "text": "Prefer Selective Repeat over Go-Back-N for the frames that FEC can't fix", "explanation": "Correct. The window here is thousands of frames, so Go-Back-N would resend thousands of frames for each loss." },
+      { "text": "Use the largest possible frames, since bigger frames always mean less overhead", "explanation": "At a BER of 10⁻⁵, a 1500-byte frame is lost about 11% of the time without FEC, and bigger frames are lost more often. There is an optimum frame size; bigger isn't always better." },
+      { "text": "Use 3-bit sequence numbers to keep the header small", "explanation": "3 bits allow a window of at most 4 frames with Selective Repeat, far below the thousands needed to fill a 600 ms, 50 Mbit/s path." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. **BDP**: 50 × 10⁶ × 0.6 = 3 × 10⁷ bits = 3.75 MB, about 2,500 frames of 1500 bytes. You need a big window and enough sequence bits (Selective Repeat: 2ᵏ⁻¹ ≥ 2,500, so k ≥ 13).\n2. **Stop-and-wait**: L/R = 12,000 / (5 × 10⁷) = 0.24 ms; U ≈ 0.24 / 600 ≈ 0.04%. Hopeless.\n3. **Frame loss without FEC**: p = 1 − (1 − 10⁻⁵)¹²⁰⁰⁰ ≈ 11%. Larger frames make this worse.\n4. **Go-Back-N** at 11% loss with a 2,500-frame window would spend nearly all its time retransmitting. Selective Repeat resends only what's lost.\n5. **FEC** brings the residual loss down so ARQ is rarely needed, avoiding 600 ms stalls. This is how real satellite and deep-space links are built.",
+    "link": { "title": "Error detection and correction — Wikipedia", "url": "https://en.wikipedia.org/wiki/Error_detection_and_correction" }
+  }
+]

@@ -1,0 +1,343 @@
+[
+  {
+    "id": "sched-linux-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On one Linux CPU, X is SCHED_FIFO priority 1 and busy-loops. Y is SCHED_NORMAL at nice −20. Ignoring RT throttling, fair-server service and other tasks, which runs?",
+    "options": [
+      {
+        "text": "Y, because nice −20 is the highest possible priority",
+        "explanation": "Nice −20 is the heaviest weight *within the fair class*. It doesn't let a normal thread compete with the real-time class at all."
+      },
+      {
+        "text": "They share the CPU in proportion to their weights",
+        "explanation": "Proportional sharing only happens within the fair class. Classes are checked in strict order, so there's no sharing between X and Y."
+      },
+      {
+        "text": "X, because any runnable real-time thread beats every fair-class thread",
+        "explanation": "Correct. The rt class sits above the fair class. Even RT priority 1 beats nice −20; Y only runs if X blocks (or throttling/the fair server steps in)."
+      },
+      {
+        "text": "Y, because FIFO priority 1 is the lowest real-time priority and gets demoted",
+        "explanation": "Linux never demotes RT threads into the fair class. Priority 1 is low only relative to other RT threads."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "X belongs to the real-time class and outranks Y in the fair class. Under the stated exclusions, X remains runnable and Y receives no CPU. On a real system, RT bandwidth limits and fair-server service can change this outcome.",
+    "link": {
+      "title": "sched(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    }
+  },
+  {
+    "id": "sched-linux-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A CFS run queue holds four runnable tasks with vruntimes A = 25 ms, B = 40 ms, C = 10 ms, D = 70 ms. Which runs next, and why?",
+    "options": [
+      {
+        "text": "D, because it has run the most and has proved it's important",
+        "explanation": "CFS is about fairness, not rewarding heavy users. The largest vruntime means the task has had the *most* weighted CPU."
+      },
+      {
+        "text": "C, because it has the smallest vruntime, so it has had the least weighted CPU",
+        "explanation": "Correct. CFS always runs the leftmost task in the red-black tree, the one with the smallest vruntime."
+      },
+      {
+        "text": "B, because it is the root of the red-black tree",
+        "explanation": "The root is just where the tree happens to balance. CFS picks the leftmost node, which it caches."
+      },
+      {
+        "text": "A, because it was enqueued first",
+        "explanation": "CFS doesn't use arrival order; it orders tasks by vruntime."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. CFS's rule: run the task with the **smallest vruntime**.\n2. Sort: C (10) < A (25) < B (40) < D (70).\n3. C is leftmost, so C runs.\n\n```\n        [B 40]\n       /      \\\n   [A 25]    [D 70]\n   /\n[C 10]  <- leftmost\n```\n\nAs C runs, its vruntime grows. Once it passes A's (plus a small granularity), A becomes leftmost and preempts it.",
+    "link": {
+      "title": "CFS Scheduler — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
+    }
+  },
+  {
+    "id": "sched-linux-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two CPU-bound tasks compete alone in the same fair group on one CPU: a nice 19 backup and a nice 0 service, with no quota or higher-class interference. What share does the backup receive?",
+    "options": [
+      {
+        "text": "The backup never runs while the service is busy",
+        "explanation": "That's strict-priority thinking. Nice is a weight, so the backup still gets a small proportional share."
+      },
+      {
+        "text": "The backup gets about half the CPU",
+        "explanation": "Half would mean equal weights. Nice 19's weight (15) is far smaller than nice 0's (1024)."
+      },
+      {
+        "text": "Roughly 1–2% of the CPU",
+        "explanation": "Correct: 15 / (1024 + 15) is about 1.44%. SCHED_IDLE offers still lower-weight background scheduling, not strict idle-only execution."
+      },
+      {
+        "text": "The backup is moved into the idle scheduling class",
+        "explanation": "Nice never changes a task's class. The idle class only holds the per-CPU idle task."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Nice 0 has weight 1024 and nice 19 has weight 15. The backup share is 15/1039 ≈ 1.44%; the service receives about 98.56%. These are long-run proportions under the stated assumptions. SCHED_IDLE remains in the fair class and does not guarantee execution only when all normal tasks are absent.",
+    "link": {
+      "title": "sched(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    }
+  },
+  {
+    "id": "sched-linux-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two CPU-bound tasks share one CPU at nice 0, so each gets 50%. You `renice` one of them to **nice 1** (weight 820). Roughly what shares do they now get?",
+    "options": [
+      {
+        "text": "50% / 50%; one nice step is too small to matter",
+        "explanation": "A nice step changes the weight by about 1.25×, which noticeably shifts the split."
+      },
+      {
+        "text": "About 55.5% / 44.5%",
+        "explanation": "Correct: 1024/1844 ≈ 55.5% and 820/1844 ≈ 44.5%, a gap of about 11.1 percentage points. Each share changes about 5.5 points from 50%."
+      },
+      {
+        "text": "About 80% / 20%",
+        "explanation": "That would be a weight ratio of 4:1, roughly six nice steps, not one."
+      },
+      {
+        "text": "100% / 0%, because the higher-priority task always runs",
+        "explanation": "That's strict priority. CFS shares in proportion to weight."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Within one fair group, weights 1024 and 820 give shares 1024/1844 ≈ 55.53% and 820/1844 ≈ 44.47%. The gap is about 11.06 percentage points. Each share moved about 5.53 percentage points from 50%; this is not a fixed share change for every possible workload.",
+    "link": {
+      "title": "CFS Scheduler — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
+    }
+  },
+  {
+    "id": "sched-linux-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A task at **nice 5** (weight 335) runs for **6 ms** of real CPU time. By how much does its vruntime increase?",
+    "options": [
+      {
+        "text": "6 ms",
+        "explanation": "That's the increase for a nice 0 task, whose weight is exactly 1024. Lighter tasks' vruntime grows faster."
+      },
+      {
+        "text": "About 2 ms",
+        "explanation": "That divides instead of multiplying: it would be the increase for a task *heavier* than nice 0 (weight ≈ 3072)."
+      },
+      {
+        "text": "About 18.3 ms",
+        "explanation": "Correct. 6 × 1024 / 335 ≈ 18.3 ms. The light task 'ages' about three times as fast in virtual time, so it gets picked about a third as often."
+      },
+      {
+        "text": "335 ms",
+        "explanation": "The weight is a scaling factor, not a time. vruntime = Δ × 1024 / weight."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Formula: vruntime += Δ × 1024 / weight.\n2. Plug in: 6 × 1024 / 335 = 6144 / 335 ≈ **18.3 ms**.\n3. Compare a nice 0 task: 6 × 1024 / 1024 = 6 ms.\n\nSince CFS runs whichever task has the smallest vruntime, the nice 5 task drifts rightwards in the tree ~3× faster and gets roughly a third the CPU of a nice 0 task.",
+    "link": {
+      "title": "CFS Scheduler — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
+    }
+  },
+  {
+    "id": "sched-linux-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On one CPU, process P has **16** CPU-bound threads and process Q has **1**. All are nice 0. First they're in the **same** cgroup; then each process is moved into its **own** cgroup with equal `cpu.weight`. What share does Q get in each case?",
+    "options": [
+      {
+        "text": "About 6% (1/17), then 50%",
+        "explanation": "Correct. Linux schedules threads, so in one group Q gets 1 of 17 equal shares. With separate equal-weight groups, CPU is split 50/50 between groups first."
+      },
+      {
+        "text": "50%, then 50%",
+        "explanation": "Process-level fairness only happens when processes are in separate groups. Within one group, each thread is an equal competitor."
+      },
+      {
+        "text": "About 6% (1/17) in both cases",
+        "explanation": "Separate groups change the first level of division: groups share by weight before threads share within a group."
+      },
+      {
+        "text": "Nearly 0%, then about 6%",
+        "explanation": "Fair scheduling never starves a nice 0 thread. And with equal-weight groups Q gets half, not 1/17."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Same group**: the fair scheduler sees 17 equal-weight threads.\n\n- Q's share = 1 / 17 ≈ **5.9%**; P gets ≈ 94%.\n\n**Separate groups, equal weight**: CPU is first divided between groups, then within each.\n\n- Group P: 50%, split among 16 threads (≈ 3.1% each).\n- Group Q: 50%, all to its one thread.\n\nThis is why systemd puts services in their own cgroups and why autogroup exists: so that thread count doesn't decide who gets the CPU.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "sched-linux-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Linux's `SCHED_FIFO` and `SCHED_RR` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Real-time priorities run from 1 to 99, and a higher number wins",
+        "explanation": "Correct. Unlike nice, RT priorities are 'higher is higher'."
+      },
+      {
+        "text": "Ignoring throttling and higher scheduling classes, FIFO has no time slice and runs until blocking, yielding or higher RT priority preemption",
+        "explanation": "Correct. FIFO has no time slice at all."
+      },
+      {
+        "text": "SCHED_RR threads rotate with a time slice only among threads of the same priority",
+        "explanation": "Correct. A higher-priority RR thread still preempts immediately; the slice (100 ms by default) only matters for ties."
+      },
+      {
+        "text": "A SCHED_RR thread that uses its slice drops to the fair class",
+        "explanation": "RR threads are never demoted out of the rt class. They go to the back of the queue for their own priority."
+      },
+      {
+        "text": "Any user can set SCHED_FIFO on their own processes",
+        "explanation": "It needs root, CAP_SYS_NICE, or a suitable RLIMIT_RTPRIO, because an RT thread can starve the whole system."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Options 1, 2 and 3 are true under the stated exclusions. RT priority is 1–99; FIFO has no quantum; RR rotates equals. RR does not demote into fair scheduling. Option 5 is false: setting FIFO requires CAP_SYS_NICE or suitable RLIMIT_RTPRIO permissions, not merely ownership.",
+    "link": {
+      "title": "sched(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    }
+  },
+  {
+    "id": "sched-linux-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a desktop with autogroup enabled, a `make -j32` runs in terminal 1. In terminal 2 you start a video encoder and run `renice -n -10` on it, hoping to give it most of the CPU over the build. It barely makes a difference. Why?",
+    "options": [
+      {
+        "text": "renice only takes effect after the process restarts",
+        "explanation": "Nice changes apply immediately to running threads."
+      },
+      {
+        "text": "Negative nice values are ignored for non-root users",
+        "explanation": "Without sufficient RLIMIT_NICE or privilege, lowering the numeric nice value fails rather than silently succeeding. Assume the requested change succeeds here."
+      },
+      {
+        "text": "The encoder is I/O-bound, so CPU weight doesn't matter",
+        "explanation": "The question assumes CPU-bound encoding and build work. Group scheduling explains why changing an individual thread weight may not change the group share."
+      },
+      {
+        "text": "Each terminal session is its own group; nice only competes with threads in the same group, so the two groups still split the CPU by group weight",
+        "explanation": "Correct. Under group scheduling, the CPU is shared between the session groups first. Nice only reorders threads inside the encoder's own group."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Autogroup puts each session (terminal) in its own task group.\n2. The fair scheduler first divides CPU between groups by group weight. The two groups get roughly equal shares.\n3. Inside each group, threads share by their nice weights.\n4. The encoder is alone in its group, so changing its nice changes its share **within that group**, i.e. not at all relative to the build.\n\nFix: raise the group's weight instead (`/proc/<pid>/autogroup` accepts a nice value for the whole autogroup, or use cgroup `cpu.weight`).",
+    "link": {
+      "title": "sched(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    }
+  },
+  {
+    "id": "sched-linux-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An EEVDF run queue has three nice 0 tasks (equal weight), so the average vruntime is *V* = 10:\n\n| Task | vruntime | slice |\n|---|---|---|\n| A | 8 | 3 |\n| B | 12 | 0.5 |\n| C | 10 | 0.5 |\n\nWhich task does EEVDF pick? (Classic CFS would have picked A.)",
+    "options": [
+      {
+        "text": "A, because it has the smallest vruntime",
+        "explanation": "That's CFS's rule. EEVDF picks by earliest virtual deadline among eligible tasks, and A's deadline (11) is later than C's."
+      },
+      {
+        "text": "B, because it has the earliest deadline overall",
+        "explanation": "B's deadline (12.5) isn't the earliest, and in any case B is not eligible: its vruntime 12 > V, so it has had more than its share."
+      },
+      {
+        "text": "C, because it is eligible (10 ≤ V) and has the earliest virtual deadline (10.5)",
+        "explanation": "Correct. Eligible tasks are A (deadline 11) and C (deadline 10.5). C's short slice gives it the earlier deadline."
+      },
+      {
+        "text": "Whichever task woke most recently",
+        "explanation": "Wake-up order isn't the selection criterion. Wake-ups trigger a preemption check, but the pick is by eligibility and deadline."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Eligibility**: vruntime ≤ V (= 10).\n   - A: 8 ≤ 10 ✓\n   - B: 12 > 10 ✗ (ahead of its share)\n   - C: 10 ≤ 10 ✓\n2. **Deadlines** (equal weights, so deadline = vruntime + slice):\n   - A: 8 + 3 = 11\n   - C: 10 + 0.5 = 10.5\n3. Earliest eligible deadline: **C**.\n\nC hasn't had less CPU than A, but by asking for short slices it gets served sooner. It will just get its share in smaller pieces, so fairness is preserved.",
+    "link": {
+      "title": "An EEVDF CPU scheduler for Linux — LWN",
+      "url": "https://lwn.net/Articles/925371/"
+    }
+  },
+  {
+    "id": "sched-linux-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A single-CPU system allows deadline tasks up to **95%** of the CPU. Two `SCHED_DEADLINE` tasks already run: 30 ms per 100 ms, and 40 ms per 100 ms. A third asks for **runtime 12 ms, period 40 ms**. What happens?",
+    "options": [
+      {
+        "text": "It's accepted and all three tasks will occasionally miss deadlines",
+        "explanation": "SCHED_DEADLINE's point is that it doesn't overcommit. It checks before accepting."
+      },
+      {
+        "text": "sched_setattr() fails with EBUSY because total utilisation would be 100%, over the 95% limit",
+        "explanation": "Correct. 0.30 + 0.40 + 0.30 = 1.00 > 0.95, so admission control rejects the new task up front."
+      },
+      {
+        "text": "It's accepted at a lower real-time priority",
+        "explanation": "Deadline tasks don't have priorities to fall back on. Either the reservation fits or it is refused."
+      },
+      {
+        "text": "It's accepted, and the kernel shortens its runtime to fit",
+        "explanation": "The kernel doesn't silently change a task's parameters. It returns an error so the caller can decide."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The requested total utilization is 30/100 + 40/100 + 12/40 = 1.00, above the configured 0.95 admission limit, so the request is rejected with EBUSY, assuming otherwise valid parameters and permissions. A request of 10/40 makes utilization 0.95 and passes this bandwidth check. Passing admission does not alone prove all application deadlines will be met.",
+    "link": {
+      "title": "Deadline Task Scheduling — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-deadline.html"
+    }
+  },
+  {
+    "id": "sched-linux-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "On Linux 6.12+, a latency-sensitive nice 0 audio thread uses `sched_setattr()` to request a **1 ms** slice instead of the default (about 3 ms on this machine). A CPU-bound nice 0 thread shares its CPU. Which effects should you expect? Select all that apply.",
+    "options": [
+      {
+        "text": "The audio thread's virtual deadlines are earlier, so it tends to be picked sooner when it becomes eligible",
+        "explanation": "Correct. deadline = vruntime + slice × 1024 / weight, so a smaller slice gives an earlier deadline."
+      },
+      {
+        "text": "The audio thread now gets a larger long-run share of the CPU",
+        "explanation": "Share is set by weight, and both are nice 0. A short slice changes *when* and *in what size pieces* it runs, not how much in total."
+      },
+      {
+        "text": "The audio thread runs in smaller pieces, so there may be more context switches",
+        "explanation": "Correct. Shorter slices mean more frequent switching, the usual latency-versus-overhead trade-off."
+      },
+      {
+        "text": "The audio thread moves into the real-time class",
+        "explanation": "A custom slice keeps the task in the fair class. Only an RT or deadline policy moves it to a higher class."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Separate the two levers EEVDF gives you:\n\n1. **Weight (nice)** sets the long-run share. Both threads are nice 0, so each gets ~50% when both are busy. A custom slice doesn't change this.\n2. **Slice** sets the virtual deadline: deadline = vruntime + slice × 1024 / weight.\n   - Audio: vruntime + 1\n   - CPU hog: vruntime + 3\n\nSo when both are eligible, audio usually has the earlier deadline and is picked first, but it then runs for only ~1 ms before its deadline moves on. Lower latency, more switches, same share. And it stays a `SCHED_NORMAL` task throughout.",
+    "link": {
+      "title": "Completing the EEVDF scheduler — LWN",
+      "url": "https://lwn.net/Articles/969062/"
+    }
+  }
+]

@@ -1,0 +1,1954 @@
+{
+  "status": "complete",
+  "date": "2026-10-05",
+  "reviewer": "/root/audit_system_design",
+  "scope": "security/05-systems-security",
+  "reviewed_files": [
+    "content/security/05-systems-security/sys-memory-bugs.md",
+    "content/security/05-systems-security/sys-memory-bugs.questions.json",
+    "content/security/05-systems-security/sys-mitigations.md",
+    "content/security/05-systems-security/sys-mitigations.questions.json"
+  ],
+  "metadata_reviewed": [
+    "content/security/05-systems-security/module.json"
+  ],
+  "coverage": {
+    "lessons": 2,
+    "questions": 23,
+    "full_semantic_read": true,
+    "per_file": [
+      {
+        "file": "content/security/05-systems-security/sys-memory-bugs.md",
+        "full_read": true,
+        "questions": null
+      },
+      {
+        "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+        "full_read": true,
+        "questions": 11
+      },
+      {
+        "file": "content/security/05-systems-security/sys-mitigations.md",
+        "full_read": true,
+        "questions": null
+      },
+      {
+        "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+        "full_read": true,
+        "questions": 12
+      }
+    ]
+  },
+  "findings": [
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "C and C++ let a program read and write any address it can compute. The language trusts you to stay inside the objects you allocated and to stop using them once they are freed. When code breaks that trust, it has a **memory-safety bug**.",
+      "correction": "C and C++ provide pointer operations without universal run-time bounds or lifetime checks. Accessing an object outside its bounds or lifetime can cause **undefined behaviour**: the language does not promise a clean crash, a particular overwrite, or access to arbitrary addresses. Operating-system mappings and permissions still constrain hardware accesses. The C examples below use the C11/C17 model.",
+      "reason": "Distinguish unchecked operations from language permission.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "These bugs matter far beyond crashes. Microsoft has reported that around 70% of the vulnerabilities it assigns CVEs to each year are memory-safety issues, and the Chromium project reports a similar share of its serious security bugs. They are the single largest class of critical vulnerability in systems software.",
+      "correction": "These bugs can expose secrets or alter decisions as well as crash programs. Chromium reports that memory unsafety accounted for around 70% of a sample of 912 high/critical Stable-channel security bugs since 2015. This is a historical, project-specific sample, not a current universal percentage.",
+      "reason": "Scope vendor statistic to actual sample.",
+      "sources": [
+        "https://www.chromium.org/Home/chromium-security/memory-safety/"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "A C program's memory is laid out roughly like this (addresses grow upwards):",
+      "correction": "The diagram is an illustrative conventional process layout, not a C requirement (addresses increase upwards). Real systems may use multiple heap mappings; stack direction, saved registers and return-address storage depend on the architecture and compiler.",
+      "reason": "Label layout assumptions.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "The crucial fact: **data and control information sit side by side**. A local array on the stack is next to the saved return address that says where the function goes back to. A heap object sits next to the allocator's bookkeeping and next to other objects, some of which hold function pointers.",
+      "correction": "The security concern is proximity: a buffer can share an allocation or stack frame with sensitive data. Depending on the implementation, nearby data can include control pointers or allocator metadata. Corrupting an authorization flag can also compromise a program without hijacking control flow.",
+      "reason": "Remove universal adjacency guarantee.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "It helps to split memory-safety bugs into two families:",
+      "correction": "Two important families are spatial and temporal errors. This classification does not describe every issue below; uninitialised-value use also needs separate attention.",
+      "reason": "Do not present taxonomy as exhaustive.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "`strcpy` copies until it finds a NUL byte. It has no idea `buf` holds 16 bytes. A 40-character name writes 41 bytes (including the terminator), and the extra 25 spill over whatever lies beyond `buf` in the stack frame, which can include the saved return address.",
+      "correction": "`strcpy` requires enough destination space for all source bytes and the terminating NUL. A valid 40-byte name needs 41 bytes, exceeding `buf` by 25. Calling it here violates that requirement; a neighbouring-data overwrite is one possible outcome, not a guaranteed execution trace. Include `<string.h>` and `<stdio.h>` when compiling these function fragments.",
+      "reason": "Correct undefined-behaviour framing.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "`snprintf` never writes more than `sizeof buf` bytes and always NUL-terminates (when the size is non-zero). Its return value is the length it *would* have written, which lets you detect truncation.",
+      "correction": "With valid, non-overlapping arguments, `snprintf` bounds output by the supplied capacity and terminates it when that capacity is non-zero. Its non-negative return reports the required length excluding NUL; a negative return reports an error. The example rejects both errors and truncation. The source must itself be a valid NUL-terminated string.",
+      "reason": "State API preconditions and negative return.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "`<=` makes the loop run nine times, for indices 0 to 8. Index 8 is one past the end. Valid indices for an array of `N` are `0` to `N-1`, so the condition should be `i < 8`. Off-by-ones often appear when room for the NUL terminator is forgotten.",
+      "correction": "With a source of at least nine bytes, the faulty loop attempts indices 0 through 8. For an eight-byte raw copy, use `i < 8` and a source of at least eight bytes. That correction does not create a NUL-terminated string: reserve and write a terminator if string APIs will consume the result.",
+      "reason": "Distinguish bounded byte copy from C string.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "Reading past a buffer is also dangerous, because it **leaks** memory: keys, passwords, other users' data, or addresses that help an attacker defeat ASLR.",
+      "correction": "Reading beyond an object can disclose memory if the result becomes observable. It may instead fault or have other undefined behaviour. Potential disclosures include secrets and addresses that weaken ASLR.",
+      "reason": "Disclosure is conditional.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "Send 1 byte but claim 65,535, and the server copied back up to 64 KB of whatever followed in its heap, including private keys and session cookies. The fix was one bounds check:",
+      "correction": "A malformed request could make vulnerable OpenSSL disclose up to 64 KB of process memory, potentially including secrets. A crash or other outcome was also possible. For a TLS heartbeat model, first ensure the three-byte header exists before parsing its length; reserve the required minimum 16-byte padding too. With non-negative `size_t` lengths and a sufficiently large reply buffer, the following guard prevents subtraction underflow:",
+      "reason": "Original guard underflowed on short records.",
+      "sources": [
+        "https://www.rfc-editor.org/rfc/rfc6520.html",
+        "https://openssl-library.org/news/secadv/20140407.txt"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "if (len > record_len - HDR_SIZE)\n    return 0;  /* discard bad message */",
+      "correction": "if (record_len < 3 + 16)\n    return 0;\nif (len > record_len - 3 - 16)\n    return 0;  /* discard bad message */",
+      "reason": "Account for header/padding without unsigned underflow.",
+      "sources": [
+        "https://www.rfc-editor.org/rfc/rfc6520.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "The lesson generalises: **any length, index or count that comes from outside is attacker-controlled** and must be validated against the real size of the buffer.",
+      "correction": "Treat externally supplied lengths, indices and counts as untrusted. Validate both the arithmetic and the resulting range against actual available storage before parsing or copying.",
+      "reason": "Avoid asserting every input is controlled by an adversary.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "On a 32-bit system with a 16-byte `item`, `count = 0x10000001` gives `0x10000001 * 16 = 0x100000010`, which wraps to `0x10` in 32 bits. `malloc` returns a 16-byte buffer, and the loop then writes hundreds of millions of items into it: a heap overflow caused by arithmetic.",
+      "correction": "Assume both `count` and `size_t` are 32-bit unsigned types, and `sizeof(item)` is 16. Then `0x10000001 * 16 = 0x100000010` wraps to `0x10`: only 16 bytes are requested. Allocation may fail; if it succeeds, attempting all those item writes exceeds the allocation and invokes undefined behaviour.",
+      "reason": "State arithmetic types and allocation failure.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "- Use `calloc(count, sizeof(item))`, which performs the overflow check for you in mainstream C libraries, or `reallocarray`.",
+      "correction": "- On documented implementations such as glibc, `calloc(count, sizeof(item))` and `reallocarray` reject size overflow. `reallocarray` is POSIX, not ISO C. Check allocation failure before dereferencing; define a policy for zero counts.",
+      "reason": "Allocation overflow handling does not remove NULL checks.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/malloc.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "Why is this worse than reading garbage? Allocators **reuse** freed memory quickly, often handing the same chunk to the next allocation of a similar size. If attacker-influenced data (say, a string from a request) lands in that chunk, then `s->is_admin`, or a function pointer inside `s`, now holds a value the attacker chose. UAFs are among the most exploited bug classes in browsers, where JavaScript can trigger frees and allocations at will.",
+      "correction": "An allocator may reuse freed storage for a later allocation. If request-controlled bytes occupy that storage, a dangling access can influence an authorization decision or a control pointer. Reuse timing is allocator-dependent, and undefined behaviour means no particular result is guaranteed. The fragment assumes `load_session` succeeded; real code must also handle failure.",
+      "reason": "Remove guaranteed/immediate reuse and broad browser ranking.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "- Set pointers to `NULL` after `free`, so a later use crashes cleanly instead of reading reused memory. This only helps the one pointer you nulled; other copies still dangle.",
+      "correction": "- After `free`, setting an owning pointer to `NULL` can support later explicit null checks and makes `free(NULL)` harmless. Dereferencing NULL is still undefined behaviour, not a guaranteed clean crash; other aliases still dangle.",
+      "reason": "Null dereference is not a safe failure mode.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "- In C++, use `std::unique_ptr` and `std::shared_ptr` instead of raw owning pointers.",
+      "correction": "- In C++, prefer `std::unique_ptr` for exclusive ownership, using `std::shared_ptr` when ownership really is shared. Raw borrowed aliases and unsynchronised access still require lifetime discipline.",
+      "reason": "Smart pointers do not solve every lifetime issue.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "Calling `free` twice on the same pointer corrupts the allocator's internal lists, since the chunk ends up recorded as free twice and may be handed out to two different callers. Modern glibc detects many simple cases and aborts with a message such as `free(): double free detected in tcache 2`, but it cannot catch them all. The same ownership discipline prevents it.",
+      "correction": "Freeing the same allocation twice is undefined behaviour; `free(NULL)` is exempt. Outcomes can include allocator corruption or a diagnostic abort. Detection is implementation-dependent and does not make double free safe. Clear ownership and avoiding stale aliases prevent the underlying error.",
+      "reason": "Do not promise specific allocator list mutation.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/malloc.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "If the user's input is treated as the format string, directives like `%x` make `printf` read values it was never given (leaking stack contents), and `%n` makes it **write** to memory. The fix is trivial: never pass untrusted data as a format string. Compilers warn about this with `-Wformat -Wformat-security`; treat the warning as an error.",
+      "correction": "An untrusted format can request conversions such as `%x` or `%n`. Missing or incorrectly typed arguments invoke undefined behaviour; depending on the calling convention and program, this can expose values or attempt a memory write. `%n` stores a character count through its supplied pointer. Use a fixed format and valid string argument. GCC/Clang warnings such as `-Wformat -Wformat-security -Werror=format-security` reject the illustrated no-extra-arguments mistake.",
+      "reason": "Do not assume all variadic arguments live on stack.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "Reading a variable or buffer before writing it returns whatever was there before, possibly a previous user's data. Sending an uninitialised struct over the network (including padding bytes) has leaked kernel memory many times. Initialise structures (`= {0}` or `memset`) before filling and sending them.",
+      "correction": "An uninitialised automatic value is indeterminate in C11/C17, and many uses have undefined behaviour. Do not assume it reliably returns old bytes. Separately, copying a raw structure across a trust boundary can disclose padding. Initialising members with `{0}` is not a portable guarantee that padding remains zero after member stores. Encode named fields into an explicitly defined byte representation instead of transmitting `sizeof(struct)` bytes.",
+      "reason": "Fix unsafe raw-structure serialization advice.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "| AddressSanitizer | Compiler adds checks against shadow memory | ~2x slower |\n| Valgrind memcheck | Runs binary on a synthetic CPU | ~10-50x slower |\n| Fuzzing | Feeds millions of mutated inputs | CPU time |",
+      "correction": "| AddressSanitizer | Instrumented accesses checked against shadow memory | Workload-dependent |\n| Valgrind Memcheck | Dynamic binary instrumentation | Workload-dependent |\n| Fuzzing | Generates varied test inputs | Depends on budget |",
+      "reason": "Remove unqualified benchmark and workload quantities.",
+      "sources": [
+        "https://clang.llvm.org/docs/AddressSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "**AddressSanitizer** (`-fsanitize=address` in Clang and GCC) puts poisoned \"redzones\" around every object and quarantines freed memory, so overflows and use-after-free are caught at the faulting instruction with a precise report such as `heap-use-after-free` or `stack-buffer-overflow`. It is cheap enough to run your whole test suite under it.",
+      "correction": "**AddressSanitizer** (`-fsanitize=address` in Clang/GCC) uses poisoned regions and delayed reuse to detect many invalid accesses. It can report errors such as `heap-use-after-free`. Coverage depends on instrumentation, allocation layout and execution: it does not check every object boundary, every uninitialised value or every possible input. Intra-object overwrites and accesses after storage is reused may escape detection.",
+      "reason": "Detection is not guaranteed at every access.",
+      "sources": [
+        "https://clang.llvm.org/docs/AddressSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "**Fuzzers** such as libFuzzer and AFL++ generate inputs guided by code coverage. Combined with ASan, they are the most productive bug-finding technique in practice. Google's OSS-Fuzz runs them continuously on over a thousand open-source projects and has found tens of thousands of bugs.",
+      "correction": "**Fuzzers** such as libFuzzer and AFL++ use feedback to explore inputs. Combining fuzzing with sanitizers helps expose faults on executed paths; neither proves absence of bugs. OSS-Fuzz provides continuous fuzzing for eligible open-source projects. Valid regression tests remain useful alongside malformed-input tests.",
+      "reason": "Remove unsupported universal productivity ranking and deployment totals.",
+      "sources": [
+        "https://google.github.io/oss-fuzz/"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "> [!tip] A good C/C++ hygiene baseline\n> Compile with `-Wall -Wextra -Werror`, run tests under ASan and UndefinedBehaviorSanitizer, fuzz every parser that touches untrusted input, and ban `strcpy`, `strcat`, `sprintf` and `gets` in code review.",
+      "correction": "> [!tip] A C/C++ testing baseline\n> Enable useful warnings, test with ASan/UBSan where supported, and fuzz untrusted-input parsers. Review unbounded string operations; `gets` was removed from C11. A clean sanitizer run is evidence about those executions, not proof of memory safety.\n\n> [!note] Content omitted after review\n> A universal current vulnerability percentage, a ranking of the most productive testing technique, and fixed sanitizer costs are omitted because this review did not establish representative measurements. Historical Chromium figures describe only its stated sample.",
+      "reason": "Explicitly record removed unsupported empirical claims.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf",
+        "https://clang.llvm.org/docs/AddressSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "- Memory-safety bugs are either spatial (outside the object) or temporal (after the object died).",
+      "correction": "- Spatial and temporal errors are important families; uninitialised-value bugs also need attention.",
+      "reason": "Align summary with taxonomy scope.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "- Out-of-bounds reads leak secrets (Heartbleed); writes corrupt state; use-after-free lets attackers control reused memory.",
+      "correction": "- Invalid reads can disclose secrets, invalid writes can corrupt state, and stale aliases can expose reused storage; outcomes are not guaranteed.",
+      "reason": "Qualify outcome claims.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "The previous lesson showed that memory-safety bugs are common and that C code will keep having them. Since we cannot remove every bug, operating systems, compilers and CPUs add **mitigations**: features that make a bug much harder to turn into control of the program.",
+      "correction": "Memory-unsafe operations can leave exploitable bugs in a program. Compilers, operating systems and CPUs provide **mitigations** that restrict particular ways of exploiting them. Their effectiveness depends on the enabled features and the program.",
+      "reason": "Remove inevitability and unconditional effectiveness claims.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "A mitigation does not fix the bug. It **raises the cost** of exploitation, often turning \"attacker runs code\" into \"program crashes\". That is a big win: a crash is a denial of service, not a breach. Modern exploits typically need several bugs chained together precisely because each mitigation removes an easy path.",
+      "correction": "A mitigation does not repair the faulty source operation. It may prevent exploitation or terminate the process, but a crash is still an availability/security failure. A program may also leak information or corrupt sensitive data before a check fires. Some attacks need several vulnerabilities; there is no universal minimum chain length.",
+      "reason": "A crash is not categorically harmless; checks may be late.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "To hijack a program through memory corruption, an attacker classically needs to:",
+      "correction": "A classic control-flow attack may corrupt a return address or function pointer, determine a useful destination and redirect execution there. Other attacks change data, such as an authorization flag, without these steps.",
+      "reason": "Scope checklist to control flow.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "1. **Corrupt** something that controls execution (a return address, function pointer or vtable pointer).\n2. **Know where** useful code or data lives in memory.\n3. **Run** code of their choosing at that location.",
+      "correction": "The mitigations below address different parts of that process. None covers every possible memory-safety failure.",
+      "reason": "Avoid universal prerequisites.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "A **stack canary** (or stack protector) is a random value the compiler places between a function's local buffers and its saved return address. Just before returning, the function checks that the canary is unchanged.",
+      "correction": "A **stack canary** is a guard value checked by compiler-generated code on protected function exits. A common downward-growing stack layout places it between buffers and the saved return address, as illustrated below; exact layout and coverage depend on the ABI, compiler and optimisation.",
+      "reason": "Scope stack layout and instrumentation.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- The canary is chosen randomly at process start. On x86-64 Linux, glibc keeps it in thread-local storage and makes its **lowest byte zero**. Most string functions stop at a NUL, so a string-based overflow can neither copy past nor print out the full canary.\n- GCC's `-fstack-protector-strong` instruments every function with a local array or a local whose address is taken. Most Linux distributions enable it by default.\n- The compiler also **reorders locals** so that arrays sit nearest the canary, keeping overflows away from scalar variables like flags and pointers.",
+      "correction": "- In the inspected glibc implementation, startup randomness initializes the guard and its first byte in memory is cleared. On little-endian x86-64 this is the lowest byte. A NUL-terminated copy cannot both preserve that byte and continue past it; the destination NUL does **not** itself stop an overflowing copy.\n- GCC `-fstack-protector-strong` covers local arrays and references to local frame addresses, considering variables that actually remain on the stack after optimisation.\n- Do not rely on a universal ordering of other locals or assume every function is protected.",
+      "reason": "Correct NUL-copy misconception and compiler coverage.",
+      "sources": [
+        "https://codebrowser.dev/glibc/glibc/sysdeps/generic/dl-osinfo.h.html",
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Early exploits wrote machine code into a buffer and redirected execution to it. **Data Execution Prevention** (Windows' name) or the **NX bit** (No-eXecute, called XD by Intel) marks memory pages as either writable *or* executable, never both. This policy is often called **W^X** (write xor execute).",
+      "correction": "**DEP/NX** prevents instruction execution from pages marked non-executable. Write and execute permissions are separate: NX alone does not enforce **W^X**, the stronger policy that a page must not be writable and executable simultaneously. The table illustrates common permissions, not a guarantee for every mapping.",
+      "reason": "NX is not equivalent to W^X.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "With NX, injected bytes on the stack or heap simply cannot run; the CPU raises a fault. Hardware support arrived in AMD64 and later Intel CPUs in the mid-2000s, and Windows XP SP2 (2004) turned DEP on for system components.",
+      "correction": "An attempt to fetch instructions from a non-executable stack or heap page faults. Whether the process then terminates depends on OS handling. A process can have executable mappings, including generated code; enabling DEP does not mean every data allocation is necessarily non-executable.",
+      "reason": "Require actual page permissions.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Just-in-time compilers (JavaScript engines, the JVM) complicate W^X because they generate code at run time. They flip pages between writable and executable, or map the same memory twice with different permissions, and that transition is a frequent target.",
+      "correction": "JIT compilers generate executable code at run time. Their permission transitions and aliases need careful protection; a writable alias of executable storage can undermine the intended restriction. The exact mechanism is platform-specific.",
+      "reason": "Remove unsupported universal transition attack frequency.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "**Address space layout randomisation** loads the stack, heap, shared libraries and (for position-independent executables) the program itself at random addresses each time it runs. Code reuse and pointer overwrites need real addresses; if the attacker guesses wrong, the program crashes.",
+      "correction": "**Address space layout randomisation** varies placement of selected mappings, such as libraries and stacks, when a process image is loaded. Support and configuration determine which mappings vary. A fork normally inherits the existing address space. Wrong target guesses can fail or crash; neither outcome is guaranteed for every corruption.",
+      "reason": "Randomization is configurable and not per every fork.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- On x86-64 Linux, library (mmap) bases get 28 random bits by default: about 268 million possibilities.\n- On 32-bit x86 Linux the default is only 8 bits: 256 possibilities, which an attacker can brute-force against a service that restarts after each crash.",
+      "correction": "- With eight independent uniformly random bits, there are `2^8 = 256` possibilities.\n- With 28 such bits, there are `2^28 = 268,435,456` possibilities.\n\nThese are teaching examples, not asserted Linux defaults. Architecture, kernel settings and distribution policy affect actual entropy. On supported Linux systems, `vm.mmap_rnd_bits` controls randomisation for relevant mappings.",
+      "reason": "Remove stale universal ASLR defaults.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "1. **Information leaks defeat it.** One leaked pointer reveals where a whole library is, because everything inside it keeps the same relative offsets. This is why out-of-bounds reads and uninitialised-memory bugs (previous lesson) are treated as serious.\n2. **Coverage must be complete.** A program not built as a **PIE** (`-fPIE -pie`) has its main code at a fixed address, giving attackers a known foothold. Most major distributions now build PIE by default.",
+      "correction": "1. **Leaks can weaken ASLR.** A pointer into a known library build at a known offset reveals that mapping base. It does not automatically reveal unrelated mappings or unknown builds.\n2. **Coverage matters.** Conventional non-PIE ELF executables have fixed main-code addresses. PIE permits random placement when the loader and OS enable it; compiler flags alone are not proof of effective randomisation.",
+      "reason": "State library-build knowledge and deployment conditions.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- **RELRO** (relocation read-only). Dynamically linked programs call library functions through a table of pointers, the GOT. If the GOT stays writable, one arbitrary write can redirect a library call. *Partial* RELRO protects some sections; **full RELRO** (`-Wl,-z,relro,-z,now`) resolves every symbol at start-up and then makes the whole GOT read-only.\n- **`_FORTIFY_SOURCE`**. When the compiler can work out the size of a destination buffer, it swaps calls such as `memcpy` and `strcpy` for checked versions (`__memcpy_chk`) that abort on overflow. Level 3 (GCC 12 and later with glibc 2.34) also handles many sizes known only at run time. It only works with optimisation enabled (`-O1` or higher).",
+      "correction": "- **RELRO** makes a designated ELF relocation region read-only after relocation. In a conventional supported ELF toolchain, full RELRO (`-Wl,-z,relro,-z,now`) also resolves lazy function bindings at load time so the GOT can be protected. Later `dlopen` loads have their own relocations. This does not protect every function pointer in a program.\n- **`_FORTIFY_SOURCE`** adds compile-time diagnostics and run-time checks to supported library calls where object-size information is available. Level 3 uses dynamic object-size information and requires a compatible compiler/libc; glibc enables these wrappers only with optimisation. Unknown sizes and unsupported operations can remain unchecked.",
+      "reason": "Scope binding and fortification coverage, remove suspect version pair.",
+      "sources": [
+        "https://sourceware.org/binutils/docs/ld/Options.html",
+        "https://sourceware.org/glibc/manual/latest/html_node/Source-Fortification.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "A typical hardened build line:",
+      "correction": "An illustrative GNU/Linux ELF build fragment follows. It requires toolchain support for level-3 fortification; the CET-related flag is for supported x86 targets. Check platform documentation and the resulting binary/runtime configuration. Accepting a flag does not prove that hardware enforcement is active.",
+      "reason": "Avoid portable one-size-fits-all command claim.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Code-reuse attacks work by sending execution somewhere the programmer never intended. **Control-flow integrity** (CFI) checks, at run time, that each indirect jump goes to a legitimate destination. It comes in two halves.",
+      "correction": "**Control-flow integrity** constrains allowed control transfers. Different schemes cover different indirect calls, jumps or returns; they do not all check every transfer or enforce the same policy.",
+      "reason": "Differentiate CFI schemes.",
+      "sources": [
+        "https://clang.llvm.org/docs/ControlFlowIntegrity.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- **Clang CFI** (`-fsanitize=cfi`) checks that the target has the right type signature.\n- **Microsoft Control Flow Guard** (CFG) checks targets against a bitmap of valid function entry points.\n- **Intel IBT** and **Arm BTI** are hardware versions: valid targets must begin with a special landing-pad instruction (`ENDBR64` on x86, `BTI` on Arm), and an indirect jump anywhere else faults.",
+      "correction": "- **Clang CFI** includes type-based indirect-call and virtual-call checks. Its `-fsanitize=cfi` family requires the documented LTO/visibility setup; a flag alone is not a complete build recipe.\n- **Microsoft CFG** validates instrumented indirect calls against allowed targets; it is not a complete type-based policy.\n- **Intel IBT** and **Arm BTI** constrain relevant indirect branches to suitable landing pads when enforcement is enabled. Landing-pad validation is coarser than checking the intended function type.",
+      "reason": "Correct blanket type/signature and hardware equivalence.",
+      "sources": [
+        "https://clang.llvm.org/docs/ControlFlowIntegrity.html",
+        "https://learn.microsoft.com/en-us/windows/win32/secbp/control-flow-guard",
+        "https://docs.kernel.org/arch/x86/shstk.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Return addresses are protected by a **shadow stack**: a second, hardware-protected stack that holds only return addresses. On `call`, the CPU pushes the return address to both stacks; on `ret`, it compares them and faults if they differ. Intel CET shadow stacks shipped in CPUs from around 2020 and are used by Windows and, since kernel 6.6, by Linux user space.",
+      "correction": "A **shadow stack** keeps protected return-address copies. With x86 CET shadow-stack enforcement, calls update the two stacks and returns check agreement. Linux user-space use requires supporting CPU, kernel, runtime and enablement; kernel availability alone does not protect every application.",
+      "reason": "Do not equate kernel support with universal deployment.",
+      "sources": [
+        "https://docs.kernel.org/arch/x86/shstk.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Arm takes a different route with **pointer authentication** (PAC): a cryptographic signature is stored in the unused upper bits of a pointer and checked before use. Apple has used PAC on its iPhone chips since the A12.",
+      "correction": "**Pointer authentication** can protect selected Arm pointers with a keyed authentication code, incorporating contextual information. It authenticates rather than encrypts the pointer, and is not a general memory-safety check. Code generation, authentication policy and hardware support determine coverage.",
+      "reason": "Remove unverified device chronology and separate PAC from shadow stack.",
+      "sources": [
+        "https://clang.llvm.org/docs/PointerAuthentication.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "CFI is coarse-grained: a function pointer can still be redirected to *another* function with a compatible type. It shrinks the attacker's options rather than eliminating them.",
+      "correction": "The permitted-target set depends on the CFI policy. Type-based schemes may still permit an unintended same-type target; landing-pad schemes can permit a broader set. Shadow stacks protect returns by a different check, so a same-type target is not itself a shadow-stack bypass.",
+      "reason": "Do not label all CFI coarse or same-type bypass all mechanisms.",
+      "sources": [
+        "https://clang.llvm.org/docs/ControlFlowIntegrity.html",
+        "https://docs.kernel.org/arch/x86/shstk.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "The newest mitigations attack the bugs themselves. **Arm MTE** (Memory Tagging Extension) assigns a 4-bit tag to every 16-byte granule of memory and stores a matching tag in the pointer's top bits. When an object is freed and reallocated, it gets a new tag, so a stale pointer's tag no longer matches and the access faults. With 16 possible tags, a randomly tagged bad access goes undetected about 1 time in 16, which is enough to make exploits unreliable. Google has made MTE available on recent Pixel phones.",
+      "correction": "**Arm MTE** associates four-bit allocation tags with 16-byte granules of suitably configured memory and compares them with pointer tags on checked accesses. Software must arrange tagging and retagging; hardware does not infer every object lifetime. Under an explicitly uniform independent choice among all 16 tags, a stale tag matches with probability `1/16`. Actual allocator policies, unchecked accesses and same-granule overflows change coverage. In synchronous mode a mismatch is reported at the access; asynchronous mode can allow execution to continue before reporting.",
+      "reason": "Tag collision arithmetic is not universal exploit-failure probability.",
+      "sources": [
+        "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html",
+        "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Hardened allocators help with temporal bugs too: glibc's **safe-linking** mangles free-list pointers, and Chrome's **MiraclePtr** keeps freed memory quarantined while dangling pointers to it still exist.",
+      "correction": "Allocator hardening also narrows some failure modes. glibc safe-linking encodes selected singly linked free-list pointers; it does not prevent all heap corruption. Chrome BackupRefPtr, one MiraclePtr implementation, quarantines eligible allocations while tracked `raw_ptr` references remain. Untracked raw aliases and unsupported allocations are outside that guarantee.",
+      "reason": "Scope allocator mechanisms to actual coverage.",
+      "sources": [
+        "https://codebrowser.dev/glibc/glibc/malloc/malloc.c.html",
+        "https://security.googleblog.com/2022/09/use-after-freedom-miracleptr.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "| CFI / shadow stack | Code reuse | Same-type targets |\n| MTE | UAF, overflows | 1-in-16 tag guess |",
+      "correction": "| Type-based forward CFI | Invalid indirect-call targets | Unintended allowed target |\n| Shadow stack | Forged returns | Outside coverage or disabled enforcement |\n| MTE | Some invalid tagged accesses | Tag match or unchecked boundary |",
+      "reason": "Do not conflate different bypass mechanisms.",
+      "sources": [
+        "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html",
+        "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "> [!note] Defence in depth\n> No single row stops everything. Each forces the attacker to find another bug: a leak for ASLR, a write that avoids the canary, a target that passes CFI. That is why real exploit chains against browsers and phones now need several bugs and are expensive to build.",
+      "correction": "> [!note] Defence in depth\n> Combine protections and fix the source bug. Data-only corruption, information disclosure and failures outside enabled coverage remain possible. Extra vulnerabilities are sometimes needed for exploitation, but a mitigation does not force every attacker to find another bug.\n\n> [!note] Content omitted after review\n> Universal ASLR defaults, platform-wide deployment rates, fixed exploit costs and guaranteed crash or prevention rates are omitted because this review did not establish the necessary versioned measurements. MTE and CET hardware enforcement were not exercised in this review.",
+      "reason": "State omitted unsupported empirical guarantees.",
+      "sources": [
+        "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html",
+        "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- Mitigations don't fix bugs; they turn exploitation into a crash or force the attacker to find more bugs.",
+      "correction": "- Mitigations restrict specific exploitation paths; they do not fix bugs or guarantee a safe outcome.",
+      "reason": "Align summary with conditional protection.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- Code reuse defeats NX, and information leaks defeat ASLR, which is why leaks are serious bugs.",
+      "correction": "- Existing executable code can evade NX; a known-offset pointer leak can weaken ASLR for that mapping.",
+      "reason": "Do not imply universal defeats.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- Build with the standard hardening flags (stack protector, FORTIFY, PIE, full RELRO, CET) and check binaries for them.",
+      "correction": "- Use hardening supported by the target platform and verify both binary properties and runtime enablement.",
+      "reason": "Platform-dependent flags.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "prompt",
+      "original": "How many bytes does this `strcpy` write, and how many of them land outside `buf`?\n\n```c\nchar buf[8];\nstrcpy(buf, \"ABCDEFGHIJ\");\n```",
+      "correction": "How much destination space does this copy require, and by how many bytes does that exceed `buf`? Executing the overflowing call has undefined behaviour.\n\n```c\nchar buf[8];\nstrcpy(buf, \"ABCDEFGHIJ\");\n```",
+      "reason": "Ask deterministic capacity arithmetic, not UB outcome.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "options.2.text",
+      "original": "11 bytes written, 3 outside",
+      "correction": "11 bytes required, exceeding capacity by 3",
+      "reason": "Align correct option with deterministic question.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "options.2.explanation",
+      "original": "Correct. 10 letters plus the `\\0` terminator is 11 bytes; `buf` holds 8, so 3 bytes overflow into whatever follows it.",
+      "correction": "Ten single-byte letters plus NUL require 11 bytes; capacity is 8. This does not guarantee any particular overwrite when the invalid call executes.",
+      "reason": "UB is not guaranteed trace.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "options.3.explanation",
+      "original": "C compilers accept this; at most they may warn. The overflow happens at run time, which is exactly why it is dangerous.",
+      "correction": "A diagnostic may be issued or treated as a build error. The C language does not require a compiler to reject this library-precondition violation.",
+      "reason": "Compilers may reject under warnings-as-errors.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "workedExample",
+      "original": "1. Count the source: `A` to `J` is 10 characters.\n2. `strcpy` also copies the terminating NUL, so it writes 10 + 1 = 11 bytes.\n3. `buf` has room for 8 (indices 0 to 7).\n4. Bytes 8, 9 and 10 (the `I`, `J` and `\\0`) are written past the end: 11 - 8 = 3 bytes of overflow.\n\nOn the stack, those bytes overwrite neighbouring locals or saved control data. The fix is a bounded copy such as `snprintf(buf, sizeof buf, \"%s\", src)` plus a truncation check.",
+      "correction": "The required capacity is 10 + 1 = 11 bytes, exceeding 8 by 3. The call is invalid; it might corrupt neighbouring state, abort or behave otherwise. Use a bounded API with valid arguments and check truncation/errors.",
+      "reason": "Remove deterministic overwrite.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q2",
+      "field": "workedExample",
+      "original": "An array of N elements has indices 0 to N-1.\n\n| Condition | Last i | Writes |\n|---|---|---|\n| `i < 8` | 7 | 8 (ok) |\n| `i <= 8` | 8 | 9 (1 over) |\n\nThe idiom is always `for (i = 0; i < N; i++)`. Off-by-ones are especially common when someone remembers the data but forgets the extra byte for a string's NUL terminator.",
+      "correction": "For an eight-byte raw copy with at least eight readable source bytes, `i < 8` visits indices 0 through 7. Conditions allowing index 8 overrun the destination. This raw copy does not guarantee a NUL terminator; a string needs room for one and an explicit termination policy.",
+      "reason": "Bounded raw copy is not necessarily string.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q3",
+      "field": "workedExample",
+      "original": "Ask two questions about every memory access:\n\n1. **Spatial**: is the address inside the object? Overflows, OOB reads and off-by-ones fail this.\n2. **Temporal**: is the object still alive? Use-after-free, double free and returning a pointer to a local fail this.\n\nIn option C the pointer arithmetic is fine (`name` is inside the struct) but the struct no longer exists. Only option C fails question 2.",
+      "correction": "Spatial checks concern object boundaries; temporal checks concern lifetime. In the selected option the session has been freed, so accessing its former member is invalid even though that member belonged to the original layout. A wrapped allocation can lead to spatial errors when code later exceeds the actual allocation.",
+      "reason": "Do not claim stale pointer arithmetic is valid.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q4",
+      "field": "workedExample",
+      "original": "1. `\"hello world\"` is 11 characters.\n2. `d` holds 8 bytes; `snprintf` reserves one for the terminator, so it stores `hello w` (7 chars) + `\\0`.\n3. The return value is the length the output *would* have been: 11.\n4. So the output is `11 [hello w]`.\n\nThe safe pattern:\n\n```c\nif (n < 0 || (size_t)n >= sizeof d)\n    /* truncated or error */\n```",
+      "correction": "The required formatted length is 11. Eight output bytes hold seven characters, `hello w`, followed by NUL. Therefore the result is `11 [hello w]`. Check errors before converting the return value to an unsigned type:\n\n```c\nif (n < 0 || (size_t)n >= sizeof d) {\n    /* Handle error or truncation. */\n}\n```",
+      "reason": "Original conditional had no statement and did not compile.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q6",
+      "field": "prompt",
+      "original": "On a 32-bit system (`size_t` is 32 bits), a file parser does this with `count` read from the file and `sizeof(item) == 16`:\n\n```c\nitem *a = malloc(count * 16);\n```\n\nThe file sets `count = 0x10000001`. How many bytes does `malloc` allocate?",
+      "correction": "Assume `size_t` and `count` are 32-bit unsigned types, `count = 0x10000001`, and an item needs 16 bytes. What byte count is passed to `malloc`? Allocation success is not assumed.\n\n```c\nitem *a = malloc(count * 16);\n```",
+      "reason": "Original omitted count type and promised allocation.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q6",
+      "field": "options.0.text",
+      "original": "16 bytes",
+      "correction": "16 bytes requested",
+      "reason": "Allocation may fail.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q6",
+      "field": "options.0.explanation",
+      "original": "Correct. 0x10000001 x 16 = 0x100000010, which needs 33 bits; truncated to 32 bits it is 0x10 = 16. The loop that follows then writes far past those 16 bytes.",
+      "correction": "The mathematical product is 0x100000010. Reduced modulo 2^32 it is 0x10, or 16; attempting all intended item writes would exceed a successful allocation.",
+      "reason": "No guaranteed actual writes.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q6",
+      "field": "workedExample",
+      "original": "1. Multiply in hex: 0x10000001 x 0x10 = shift left by 4 bits = 0x100000010.\n2. That value has a 1 in bit 32. A 32-bit unsigned value keeps bits 0 to 31 only.\n3. 0x100000010 mod 2^32 = 0x10 = 16.\n4. `malloc(16)` succeeds, and the parser loops `count` (about 268 million) times writing items: a heap overflow.\n\nFix:\n\n```c\nif (count > SIZE_MAX / sizeof(item))\n    return ERR;\n```\n\nor use `calloc(count, sizeof(item))`, which checks the multiplication.",
+      "correction": "0x10000001 * 16 = 0x100000010; modulo 2^32 gives 16. Check `count > SIZE_MAX / sizeof(item)` before multiplication, apply an application limit, and handle allocation failure. On implementations such as glibc, `calloc(count, sizeof(item))` rejects multiplication overflow, but its return must still be checked.",
+      "reason": "Remove guaranteed malloc success and massive UB loop trace.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/malloc.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q7",
+      "field": "prompt",
+      "original": "Which of these changes fix, or reliably prevent, the format-string bug in `printf(msg);` where `msg` comes from a user? Select all that apply.",
+      "correction": "For valid NUL-terminated `msg`, which changes fix the illustrated format-string flaw in `printf(msg);`, or reject it at build time with GCC/Clang? Select all that apply.",
+      "reason": "Scope compiler and input validity.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q7",
+      "field": "workedExample",
+      "original": "1. The bug: `printf` treats its first argument as a program. `%x` reads values that were never passed (leaking stack data); `%n` writes a count to an address taken from the stack.\n2. Fix by never letting untrusted data be the format: `printf(\"%s\", msg)` or a non-formatting function like `fputs`.\n3. Prevent recurrence with compiler warnings promoted to errors.\n4. Size and newline filtering do not touch the cause.",
+      "correction": "Untrusted text controls the conversion directives. Missing or wrongly typed arguments cause undefined behaviour and can expose data or attempt writes; their locations depend on the calling convention. A fixed `%s` format or `fputs` treats the valid string as data. The listed warning/error flags reject this specific no-extra-arguments pattern, not every possible misuse.",
+      "reason": "Remove stack-only variadic model.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q8",
+      "field": "prompt",
+      "original": "In Heartbleed, the attacker sent a heartbeat with a 1-byte payload but a length field of 65,535. What did the vulnerable server do?",
+      "correction": "A malformed Heartbleed request supplied fewer payload bytes than its length field claimed. Which behaviour made the vulnerable OpenSSL implementation an information-disclosure vulnerability?",
+      "reason": "Do not guarantee exact reply for maximum-length malformed record.",
+      "sources": [
+        "https://openssl-library.org/news/secadv/20140407.txt"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q8",
+      "field": "options.0.explanation",
+      "original": "It did not crash; reading heap memory beyond the payload usually succeeds silently, which is why the bug went unnoticed for about two years.",
+      "correction": "A crash was possible, but was not a reliable protection. The vulnerability could disclose process memory rather than rejecting every malformed request.",
+      "reason": "Original false guaranteed no-crash cause for delayed discovery.",
+      "sources": [
+        "https://openssl-library.org/news/secadv/20140407.txt"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q8",
+      "field": "options.1.text",
+      "original": "Copied about 64 KB from its heap, starting at the payload, into the reply",
+      "correction": "It could copy beyond the supplied payload into a response, disclosing up to about 64 KB",
+      "reason": "Scope actual vulnerability.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q8",
+      "field": "workedExample",
+      "original": "1. The message format was: type, payload length, payload, padding.\n2. OpenSSL allocated a reply and did `memcpy(reply, payload, len)` using the length from the message.\n3. Actual payload: 1 byte. Claimed: 65,535.\n4. So it copied 1 real byte plus 65,534 bytes of whatever followed in memory, and sent it back.\n5. Repeat thousands of times and you sample a lot of server memory.\n\nThe patch discards the message if `1 + 2 + len + 16` exceeds the record length.",
+      "correction": "The request contains a type, two-byte payload length, payload and at least 16 padding bytes. Vulnerable code trusted the claimed length in a copy. A robust parser first checks that the header is present, parses the length, and then checks payload plus minimum padding against the remaining record. The review does not assume every malformed maximum-length request yields an identical complete reply.",
+      "reason": "Avoid exact unsafe trace; validate before parsing.",
+      "sources": [
+        "https://www.rfc-editor.org/rfc/rfc6520.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q9",
+      "field": "options.0.explanation",
+      "original": "Typical allocators do not zero freed memory, and a lock-out would be a reliability bug, not a security one.",
+      "correction": "Freeing storage does not promise that a later invalid access reads zero. Denying legitimate access can itself be a security/availability problem.",
+      "reason": "Do not dismiss availability as nonsecurity.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q9",
+      "field": "options.1.text",
+      "original": "Because the allocator likely reused that chunk for the new buffer, so `is_admin` now reads bytes the requester supplied",
+      "correction": "The allocator may reuse that storage for request data, allowing a stale access to influence authorization",
+      "reason": "Reuse is possible, not guaranteed.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q9",
+      "field": "options.1.explanation",
+      "original": "Correct. Same-size allocations are often served from the just-freed chunk. The stale pointer now aliases attacker-controlled data, so the attacker effectively chooses `is_admin` (or any function pointer in the struct).",
+      "correction": "If reuse occurs, the stale access can observe storage occupied by request-controlled bytes. The access is undefined behaviour, so this is a threat scenario rather than a promised C execution trace.",
+      "reason": "Correct UB and allocation policy.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q9",
+      "field": "options.2.explanation",
+      "original": "Small chunks stay in the allocator's free lists; the page stays mapped, so the access usually succeeds silently.",
+      "correction": "The allocator may retain the mapping or release it; neither behaviour makes stale access valid or guarantees a segmentation fault.",
+      "reason": "Avoid universal allocator assumption.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q9",
+      "field": "options.3.explanation",
+      "original": "The danger here comes from allocator reuse at run time, not from optimisation.",
+      "correction": "The compiler has no obligation to preserve a meaningful check after undefined behaviour. Optimisation is another reason the result cannot be predicted; allocation reuse explains the illustrated security risk.",
+      "reason": "Optimization can indeed affect UB.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q9",
+      "field": "workedExample",
+      "original": "Trace the memory:\n\n```\n1. sess = malloc(64)  -> chunk X\n2. free(sess)         X on free list\n3. buf = malloc(64)   -> chunk X again\n4. copy request -> buf (fills X)\n5. sess->is_admin     reads X\n```\n\nStep 5 reads a field from bytes the requester wrote in step 4. Defences: one clear owner per object, null pointers after free, smart pointers in C++, and hardened allocators that delay reuse. Detect it with ASan (`heap-use-after-free`).",
+      "correction": "A possible sequence is allocate X, free X, reuse X for request bytes, then access X through a stale alias. Prevent it through ownership and lifetime discipline. Nulling one pointer does not invalidate all aliases. ASan can detect accesses while freed storage remains poisoned, but may miss accesses after that address has been reused for a live allocation.",
+      "reason": "ASan is not guaranteed to catch stale pointer after reuse.",
+      "sources": [
+        "https://clang.llvm.org/docs/AddressSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q10",
+      "field": "options.0.explanation",
+      "original": "Correct. Fuzzers explore millions of malformed inputs and are the most productive way to find parser bugs.",
+      "correction": "Coverage-guided fuzzing explores varied inputs and paths within the available budget; it has no universal minimum input count or productivity ranking.",
+      "reason": "Remove unsupported empirical ranking.",
+      "sources": [
+        "https://www.llvm.org/docs/LibFuzzer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q10",
+      "field": "options.1.explanation",
+      "original": "Correct. Many overflows and UAFs don't crash on their own; ASan's redzones and quarantine turn silent corruption into an immediate, precise report.",
+      "correction": "ASan detects many invalid accesses on executed instrumented paths. Instrumentation gaps, same-object overwrites and reused live storage can escape detection.",
+      "reason": "Bound detector coverage.",
+      "sources": [
+        "https://clang.llvm.org/docs/AddressSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q10",
+      "field": "options.2.explanation",
+      "original": "Valid images exercise the happy path. The bugs live in the handling of malformed lengths and counts, which valid files never contain.",
+      "correction": "Valid-image tests are useful, and valid inputs can reveal bugs too. Using only them leaves important malformed-input and error-handling paths untested.",
+      "reason": "Valid inputs can trigger bugs.",
+      "sources": [
+        "https://clang.llvm.org/docs/AddressSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q10",
+      "field": "workedExample",
+      "original": "1. Bugs in parsers are triggered by unusual inputs, so you need a generator of unusual inputs: a fuzzer.\n2. Corruption often does not crash, so pair the fuzzer with a detector: ASan (about 2x slowdown, fine for testing).\n3. Code changes, so run it continuously.\n4. Valid-only test sets and compiler optimisation do not look for bugs at all.",
+      "correction": "Combine valid regression cases, malformed-input fuzzing, sanitizer-enabled runs and continuous retesting. Results depend on exercised paths and detector coverage. Optimisation alone is not a bug-finding strategy, and a clean run does not prove safety.",
+      "reason": "Remove false claim valid tests find no bugs.",
+      "sources": [
+        "https://clang.llvm.org/docs/AddressSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q11",
+      "field": "prompt",
+      "original": "A kernel driver returns this struct to user space with `copy_to_user` after setting both fields:\n\n```c\nstruct info {\n    uint8_t  flag;\n    uint64_t value;\n};\nstruct info r;\nr.flag = 1;\nr.value = v;\ncopy_to_user(u, &r, sizeof r);\n```\n\nWhat is the security problem?",
+      "correction": "A driver copies this raw struct across a trust boundary. Assume an ABI where `value` is at offset 8 and the struct occupies 16 bytes. What risk remains after assigning both fields?\n\n```c\nstruct info {\n    uint8_t  flag;\n    uint64_t value;\n};\nstruct info r;\nr.flag = 1;\nr.value = v;\ncopy_to_user(u, &r, sizeof r);\n```",
+      "reason": "Make padding layout assumption explicit.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q11",
+      "field": "options.2.text",
+      "original": "The 7 padding bytes after `flag` are uninitialised stack memory and leak to user space",
+      "correction": "Seven padding bytes may contain unspecified data and disclose information",
+      "reason": "Do not guarantee leaked bytes always contain stack secret.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q11",
+      "field": "options.2.explanation",
+      "original": "Correct. `value` must be 8-byte aligned, so the compiler inserts 7 bytes of padding after `flag`. They hold old stack contents, which may include kernel pointers that weaken KASLR.",
+      "correction": "Under the stated ABI offsets 1 through 7 are padding. Assigning members does not establish portable padding contents, so serializing the raw object can disclose unintended bytes.",
+      "reason": "C permits unspecified padding after stores.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q11",
+      "field": "workedExample",
+      "original": "1. Layout on a typical 64-bit ABI:\n\n```\noffset 0      flag (1 byte)\noffset 1..7   padding (7 bytes)\noffset 8..15  value (8 bytes)\nsizeof = 16\n```\n\n2. Assigning the two fields writes bytes 0 and 8 to 15. Bytes 1 to 7 keep whatever was on the kernel stack.\n3. `copy_to_user` copies all 16, leaking 7 bytes per call.\n4. Fix: `struct info r = {0};` or `memset(&r, 0, sizeof r)` first.",
+      "correction": "Given the stated layout, flag uses byte 0, padding occupies bytes 1–7, and value uses bytes 8–15. Do not transmit the padding. Encode the two named fields into an explicit wire format with defined endianness. `{0}` or an earlier `memset` is not a portable guarantee that padding stays zero after later member stores.",
+      "reason": "Fix unsafe recommended padding leak remedy.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q1",
+      "field": "prompt",
+      "original": "An attacker overflows a stack buffer with bytes that are valid machine instructions and points the return address at them. The process has DEP/NX enabled. What happens when the function returns?",
+      "correction": "Assume a corrupted return transfers execution to injected bytes on a stack page explicitly marked non-executable, and no earlier protection stops it. What does DEP/NX enforce?",
+      "reason": "Require page property and isolate mitigation.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q1",
+      "field": "options.1.text",
+      "original": "The CPU raises a fault because the stack page is marked non-executable, and the process crashes",
+      "correction": "Instruction fetch from that page faults; normal OS handling may terminate the process",
+      "reason": "Fault not unconditional kill.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q1",
+      "field": "options.1.explanation",
+      "original": "Correct. W^X means writable pages such as the stack cannot be executed. The injected bytes are data, and the attempt to run them faults.",
+      "correction": "NX rejects instruction fetch from a non-executable page. W^X is a separate stronger policy forbidding simultaneous write and execute permissions.",
+      "reason": "Correct NX/W^X conflation.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q1",
+      "field": "options.3.explanation",
+      "original": "A canary would catch this if one is present, but the question is about what NX does; NX acts when execution jumps into the stack.",
+      "correction": "A canary might stop some overwrites earlier, but the scenario explicitly assumes the transfer reaches the non-executable page.",
+      "reason": "A canary is not guaranteed to catch all overwrites.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q1",
+      "field": "workedExample",
+      "original": "1. NX/DEP gives each page either write or execute permission (W^X).\n2. The stack is writable data, so it is non-executable.\n3. On `ret`, the CPU jumps to the overwritten address inside the stack and tries to fetch an instruction.\n4. The page's NX bit triggers a fault; the OS kills the process.\n\nThis is why attackers moved to code reuse, which only jumps to code that is already executable.",
+      "correction": "The page is explicitly non-executable. Fetching an instruction there faults even though it contains valid machine-code bytes. NX does not forbid ordinary writes, and it alone does not forbid writable/executable mappings elsewhere. Existing executable code is outside this particular prohibition.",
+      "reason": "Separate permissions.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q2",
+      "field": "prompt",
+      "original": "Where does the compiler place a stack canary, and when is it checked?",
+      "correction": "In the conventional protected stack-frame layout shown in the lesson, where is the canary and when is it checked?",
+      "reason": "Do not universalize ABI layout.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q3",
+      "field": "options.1.explanation",
+      "original": "Correct. Code reuse and pointer overwrites need real addresses; with random base addresses, a guess usually crashes the program.",
+      "correction": "Random placement makes a useful target harder to predict. Effectiveness depends on entropy, leaks and other context; failure or a crash is possible rather than guaranteed.",
+      "reason": "Remove guaranteed attack behavior.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q3",
+      "field": "workedExample",
+      "original": "Exploits need to aim. To redirect execution you must write an *address* (of a library function, a code snippet, a buffer). ASLR picks random base addresses for the stack, heap, libraries and PIE executables at each run. Without knowing them, the attacker's written address points to unmapped or wrong memory, and the process crashes instead of being taken over.",
+      "correction": "ASLR varies selected mapping bases under the OS policy. A known-offset leak can reveal a mapping base; a fork may inherit it. With no useful disclosure, an attacker may need to guess. Incorrect guesses can fail or crash, but ASLR does not stop all pointer corruption or data-only attacks.",
+      "reason": "Do not claim every wrong address crashes.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q4",
+      "field": "prompt",
+      "original": "A function compiled with `-fstack-protector-strong` contains:\n\n```c\nstruct user {\n    char name[16];\n    int  is_admin;\n} u;\nu.is_admin = 0;\nstrcpy(u.name, input);\nif (u.is_admin) grant();\n```\n\nAn input of 20 bytes with non-zero bytes at positions 16 to 19 is passed. What happens?",
+      "correction": "Consider this deliberately invalid copy in a function using stack protection. Assume a conventional ABI with `is_admin` at offset 16 and a four-byte int. Why is a canary not enough to guarantee the authorization decision is safe? The C overflow has undefined behaviour; no outcome is guaranteed.\n\n```c\nstruct user {\n    char name[16];\n    int  is_admin;\n} u;\nu.is_admin = 0;\nstrcpy(u.name, input);\nif (u.is_admin) grant();\n```",
+      "reason": "Original UB predicted deterministic exploitation/layout.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q4",
+      "field": "options.0.explanation",
+      "original": "The canary sits above the whole struct and is only checked at return. This overflow stays inside the struct and is used before the function returns.",
+      "correction": "A canary may be checked only at a protected exit, after the authorization decision. It does not bounds-check the member copy.",
+      "reason": "Remove contradictory original claim 21bytes stays inside20byte struct.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q4",
+      "field": "options.2.text",
+      "original": "`is_admin` is overwritten, `grant()` runs, and the canary (if reached at all) is only checked later",
+      "correction": "The overflow can corrupt `is_admin`, which is used before an exit-time canary check",
+      "reason": "Use possibility not guarantee.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q4",
+      "field": "options.2.explanation",
+      "original": "Correct. The overflow corrupts adjacent non-control data inside the struct. Canaries only guard the return address, and only at function exit.",
+      "correction": "A neighbouring data field can affect authorization before the function exits. The exact outcome is undefined, and a canary is not a general check of every local value.",
+      "reason": "Scope canary purpose.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q4",
+      "field": "workedExample",
+      "original": "1. Struct layout: `name` at offsets 0 to 15, `is_admin` at 16 to 19.\n2. Copying 20 characters plus the NUL writes offsets 0 to 20 of the struct: 4 bytes into `is_admin`, plus 1 byte past the struct.\n3. `is_admin` is now non-zero; the `if` runs `grant()` immediately.\n4. The canary check happens at the epilogue; whether or not it later fires, the damage is done.\n\nLesson: canaries protect control data at return time, not adjacent program data. The fix is a bounded copy.",
+      "correction": "Under the stated ABI the flag follows the 16-byte name array. An overlong copy can affect the flag, and the decision occurs before the normal exit check. This is a possible data-corruption risk, not a guaranteed C execution. Fix the invalid copy and validate truncation/errors rather than relying on a guard.",
+      "reason": "Remove deterministic grant and exact overflow trace.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q5",
+      "field": "options.1.explanation",
+      "original": "Correct. 8 bits give 2^8 = 256 possible bases. Trying each candidate once, the right one turns up on average halfway through: about 128 attempts, which takes minutes.",
+      "correction": "For 256 equally likely fixed bases, trying each candidate once gives expected position (256 + 1)/2 = 128.5, approximately 128. Elapsed time is not specified.",
+      "reason": "Correct exact expectation/remove unsupported timing.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q5",
+      "field": "options.2.explanation",
+      "original": "That is 2^28, the 64-bit Linux figure, not the 32-bit one.",
+      "correction": "That is about 2^28, the size of a hypothetical 28-bit search space, not this eight-bit model.",
+      "reason": "Do not assert universal Linux entropy.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q5",
+      "field": "options.3.explanation",
+      "original": "Here the base does not change (forked workers inherit it). Even with rerandomisation, each guess is a 1-in-256 chance, so about 256 tries: still trivially small.",
+      "correction": "The prompt fixes the base. With independent uniform rerandomisation each time, success probability would instead be 1/256 per trial, with expectation 256; neither model supplies a duration.",
+      "reason": "Remove unmeasured trivial brute force claim.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q5",
+      "field": "workedExample",
+      "original": "1. 8 bits of entropy = 2^8 = 256 possible bases.\n2. If the base stays fixed across restarts (forked workers often share it), trying each value once finds it in 128 attempts on average.\n3. If it rerandomises on each restart, each try succeeds with probability 1/256, so the expected number is 256.\n4. Either way it is hundreds of attempts, minutes of work.\n\nCompare 64-bit Linux: 2^28 = 268,435,456 possibilities, where brute force would be noisy and slow. This is one reason 32-bit ASLR is considered weak.",
+      "correction": "There are 2^8 = 256 equiprobable candidates. For a fixed base and distinct guesses, the successful position is uniform from 1 to 256; its mean is 128.5. Independent uniform rerandomisation instead gives a geometric mean of 256 attempts. Request rate, restart costs and defences determine elapsed time, which is not given.",
+      "reason": "Correct mean and distinguish models.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q6",
+      "field": "prompt",
+      "original": "A program has NX, ASLR and canaries. An out-of-bounds read bug lets the attacker read one pointer into `libc`. Why do security teams treat this read bug as much more severe than it looks?",
+      "correction": "A process has NX, ASLR and canaries. An out-of-bounds read reveals a pointer at a known offset in a known libc build. Why can that make another memory-corruption flaw more exploitable?",
+      "reason": "Known build/offset needed.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q6",
+      "field": "options.1.explanation",
+      "original": "Correct. ASLR shifts each library as a unit. Subtract the pointer's known offset to get the base, and every function in libc is then at a known address.",
+      "correction": "For that ordinary mapping, subtract the known offset to recover its base and locate other known offsets. This does not reveal every other mapping or disable NX/canaries.",
+      "reason": "Scope leaked-base inference.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q6",
+      "field": "workedExample",
+      "original": "1. ASLR picks one random base per library; internal offsets never change.\n2. The attacker knows from the libc build that, say, the leaked function pointer sits at offset `0x2a1b0`.\n3. `base = leaked - 0x2a1b0`.\n4. Every other address in libc is `base + known offset`.\n\nSo a 'mere' information leak plus a separate corruption bug often makes a full exploit. That is why leaks are fixed urgently.",
+      "correction": "For the known build and offset, `base = leaked_pointer - offset`. Other locations in that same mapping follow from their known offsets. A separate corruption flaw may make use of those addresses. The leak does not itself provide a write or guarantee a complete exploit.",
+      "reason": "Remove whole-library universal/function-resolver ambiguity.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q7",
+      "field": "options.2.explanation",
+      "original": "Level 3 exists in GCC 12 and later with glibc 2.34, and it extends checking to many run-time-sized objects.",
+      "correction": "Level 3 is supported by compatible modern compiler/glibc combinations and uses dynamic object-size information. Support must be checked for the actual toolchain.",
+      "reason": "Remove incorrect glibc2.34/GCC12 version pairing.",
+      "sources": [
+        "https://sourceware.org/glibc/manual/latest/html_node/Source-Fortification.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q8",
+      "field": "prompt",
+      "original": "Which statements about **full RELRO** (`-Wl,-z,relro,-z,now`) are correct? Select all that apply.",
+      "correction": "For a conventional supported ELF toolchain using full RELRO (`-Wl,-z,relro,-z,now`), which statements are correct? Select all that apply.",
+      "reason": "State toolchain context.",
+      "sources": [
+        "https://sourceware.org/binutils/docs/ld/Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q8",
+      "field": "options.0.text",
+      "original": "All dynamic symbols are resolved at start-up rather than lazily on first call",
+      "correction": "Required dynamic function bindings are resolved when the object is loaded instead of lazily on first call",
+      "reason": "Later dlopen libraries bind at own load.",
+      "sources": [
+        "https://sourceware.org/binutils/docs/ld/Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q8",
+      "field": "options.0.explanation",
+      "original": "Correct. `-z now` disables lazy binding, so the GOT is fully filled in before `main` runs.",
+      "correction": "`-z now` requests eager binding at program or shared-object load; it does not resolve every symbol in every future library before main.",
+      "reason": "Correct all symbols beforemain claim.",
+      "sources": [
+        "https://sourceware.org/binutils/docs/ld/Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q8",
+      "field": "options.2.text",
+      "original": "It makes start-up slightly slower for programs with many imports",
+      "correction": "Eager binding can increase work at load time relative to lazy binding",
+      "reason": "No guaranteed slightly slower benchmark.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q8",
+      "field": "options.2.explanation",
+      "original": "Correct. Resolving every symbol eagerly costs some time at load, the main trade-off.",
+      "correction": "Work that lazy binding would defer is done earlier. Actual timing depends on the program and workload.",
+      "reason": "Scope performance claim.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q8",
+      "field": "workedExample",
+      "original": "1. Calls into shared libraries go through the GOT, a table of function pointers.\n2. With lazy binding, entries are filled on first use, so the GOT must stay writable: an attractive target for an arbitrary write.\n3. Full RELRO resolves all entries up front (`-z now`), then marks the region read-only (`-z relro`).\n4. Cost: slower start-up for big programs. Benefit: one fewer writable function-pointer table.",
+      "correction": "Lazy function bindings need writable entries until resolution. Eager binding allows the loader to protect the designated relocation region, including the GOT in the conventional full-RELRO layout. Later object loads have their own relocation processing. This protects those entries, not every function pointer or buffer in the program.",
+      "reason": "Avoid all library calls/all symbols simplification.",
+      "sources": [
+        "https://sourceware.org/binutils/docs/ld/Options.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q10",
+      "field": "prompt",
+      "original": "With Arm MTE, each 16-byte granule has a 4-bit tag. An exploit relies on a use-after-free where the freed chunk has been retagged randomly. Roughly what fraction of attempts go undetected by MTE?",
+      "correction": "In a simplified MTE model, an eligible freed granule is retagged independently and uniformly over all 16 four-bit values. A stale pointer retains its old tag. What is the probability that this one tag comparison matches? Do not infer a real exploit success rate.",
+      "reason": "Make model assumptions explicit.",
+      "sources": [
+        "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html",
+        "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q10",
+      "field": "options.2.explanation",
+      "original": "Correct. A random 4-bit tag matches the stale pointer's tag with probability 1/16, so roughly 94% of attempts fault, which makes an exploit very unreliable and noisy.",
+      "correction": "Exactly one of 16 equally likely tags matches the old tag: 1/16 = 6.25%. This arithmetic does not establish how many real attempts crash or succeed.",
+      "reason": "Avoid claiming94%fault/noisyexploit.",
+      "sources": [
+        "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html",
+        "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q10",
+      "field": "workedExample",
+      "original": "1. 4 bits -> 2^4 = 16 possible tags.\n2. On reallocation the chunk gets a new random tag; the stale pointer keeps the old one.\n3. Chance they match by accident = 1/16 = 6.25%.\n4. So about 15 in 16 attempts crash with a tag-check fault, which can be reported.\n\nAllocators can do better than random (for example guaranteeing adjacent chunks differ), and repeated crashes are themselves a detection signal.",
+      "correction": "Four bits represent 16 tags. Under the specified independent uniform model, one matches the stale tag, so P(match) = 1/16. Real allocator policies can exclude values or retag differently; unchecked accesses and same-granule overflows also affect protection. A mismatch report is immediate only in synchronous mode; asynchronous mode may report later.",
+      "reason": "Probabilistic match is not universal crash guarantee.",
+      "sources": [
+        "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html",
+        "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q11",
+      "field": "options.4.explanation",
+      "original": "Canaries detect stack corruption at return time; they are a backward-edge integrity check, not a forward-edge CFI scheme.",
+      "correction": "Canaries are stack-corruption guards, not a general forward-edge CFI mechanism. They do not verify that each indirect call reaches a permitted target.",
+      "reason": "Canary not general backwardedgeintegrity.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q11",
+      "field": "workedExample",
+      "original": "Sort by which transfer is checked:\n\n| Mechanism | Edge |\n|---|---|\n| CFG | forward |\n| IBT / BTI | forward |\n| Clang CFI | forward |\n| Shadow stack | backward |\n| Canary | backward-ish |\n\nForward edges are calls through pointers; backward edges are returns. A complete scheme needs both.",
+      "correction": "CFG, IBT/BTI and Clang forward-edge CFI constrain covered indirect transfers. A shadow stack checks returns against protected copies. A canary detects some stack corruption on protected exits and should not be treated as a complete return-integrity scheme. Enforcement and coverage must be enabled.",
+      "reason": "Do not present canary as equivalent backward CFI.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q12",
+      "field": "prompt",
+      "original": "Why does glibc's stack canary on x86-64 always have a zero lowest byte?",
+      "correction": "The inspected glibc guard-initialization code clears the first byte in memory, which is the lowest byte on little-endian x86-64. How can this NUL byte hinder a conventional string-based overwrite or read?",
+      "reason": "Scope to actual inspected implementation.",
+      "sources": [
+        "https://codebrowser.dev/glibc/glibc/sysdeps/generic/dl-osinfo.h.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q12",
+      "field": "options.1.text",
+      "original": "Because string functions stop at NUL, so an overflow or leak via a C string can't copy past, or print out, the whole canary",
+      "correction": "A NUL-terminated copy cannot preserve that byte and continue past it, and a string read beginning before it stops there",
+      "reason": "DestinationNULdoesnotstopcopy.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q12",
+      "field": "options.1.explanation",
+      "original": "Correct. A `strcpy` overflow cannot write a NUL in the middle of its data and keep going, and a `%s` leak stops at the zero, hiding the rest of the canary.",
+      "correction": "An overflowing strcpy can overwrite the destination NUL, but cannot include that NUL in the source and then keep copying later bytes. A read starting after the zero can still disclose other guard bytes.",
+      "reason": "Correct categorical immunity to string overwrite/leak.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q12",
+      "field": "workedExample",
+      "original": "1. Many overflows come from string functions, which stop at the first `\\0`.\n2. On little-endian x86-64, the canary's lowest byte is at its lowest address, the first byte an upward overflow reaches.\n3. To restore the canary the attacker must write a `\\0` there, but a string copy ends at that NUL and cannot also reach the return address beyond it.\n4. Similarly, a string-based read stops at the zero byte, so it cannot reveal the canary.\n\nThis is called a terminator canary. It does not help against `memcpy`-style overflows with explicit lengths.",
+      "correction": "For a conventional forward copy, preserving the canary’s first zero byte requires a source NUL there, which ends the copy. The destination zero itself does not stop strcpy. A string read that reaches the intact zero stops, but a read starting after it can reveal remaining bytes. Length-based copying and other leaks remain relevant.",
+      "reason": "Correct universal no-copy/no-leak guarantee.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Each mitigation below breaks one or more of these steps.\n\n",
+      "correction": "",
+      "reason": "Remove leftover universal claim.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "Linux also randomises the kernel's own base (**KASLR**), with the same weakness to kernel pointer leaks.",
+      "correction": "Linux can randomise its kernel base when **KASLR** is supported and enabled. A known-offset kernel pointer leak can weaken that protection.",
+      "reason": "Kernel ASLR is configurable.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- Canaries protect return addresses from linear stack overflows; NX stops injected code; ASLR hides addresses.",
+      "correction": "- Enabled canary checks detect some return-address overwrites; NX blocks execution from non-executable pages; ASLR varies selected mapping bases.",
+      "reason": "Summary must preserve coverage scope.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- [Buffer overflow protection — Wikipedia](https://en.wikipedia.org/wiki/Buffer_overflow_protection)",
+      "correction": "- [Stack protection and instrumentation — GCC](https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html)",
+      "reason": "Primary source for compiler mechanisms.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- [Address space layout randomization — Wikipedia](https://en.wikipedia.org/wiki/Address_space_layout_randomization)",
+      "correction": "- [Linux virtual-memory sysctls](https://docs.kernel.org/admin-guide/sysctl/vm.html)",
+      "reason": "Primary source for configurable entropy.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "original": "- [Return-oriented programming — Wikipedia](https://en.wikipedia.org/wiki/Return-oriented_programming)",
+      "correction": "- [CET shadow-stack requirements — Linux](https://docs.kernel.org/arch/x86/shstk.html)\n- [DEP — Microsoft](https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention)\n- [Source fortification — glibc](https://sourceware.org/glibc/manual/latest/html_node/Source-Fortification.html)",
+      "reason": "Direct primary sources for actual scope.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "- [Buffer overflow — Wikipedia](https://en.wikipedia.org/wiki/Buffer_overflow)",
+      "correction": "- [C11 committee draft, object/lifetime and library rules](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf)\n- [Heartbleed advisory — OpenSSL](https://openssl-library.org/news/secadv/20140407.txt)\n- [TLS heartbeat format — RFC 6520](https://www.rfc-editor.org/rfc/rfc6520.html)",
+      "reason": "Add primary sources for corrections.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "original": "The next `printf` or `strlen` then reads off the end.",
+      "correction": "An unbounded string operation on that unterminated destination violates its input requirements and can read past the end.",
+      "reason": "Do not guarantee a specific UB trace.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "options.0.text",
+      "original": "10 bytes written, 2 outside",
+      "correction": "10 bytes required, exceeding capacity by 2",
+      "reason": "Match revised capacity question.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "options.1.text",
+      "original": "8 bytes written, none outside",
+      "correction": "8 bytes required, fitting exactly",
+      "reason": "Match revised capacity question.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q1",
+      "field": "options.1.explanation",
+      "original": "`strcpy` does not know the size of `buf`; it never stops at the destination's capacity, only at the source's NUL.",
+      "correction": "The required destination capacity includes the entire source and its NUL. The API has no destination-capacity argument.",
+      "reason": "Avoid promising no runtime abort.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q3",
+      "field": "options.3.explanation",
+      "original": "The integer overflow causes a too-small buffer; the resulting writes are out of bounds, so it is a spatial bug.",
+      "correction": "Wrapping can produce an undersized request; later accesses beyond the actual allocation are spatial errors. The arithmetic alone is not a temporal error.",
+      "reason": "Allocation arithmetic alone not OOB.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q5",
+      "field": "options.2.text",
+      "original": "`dst` is left without a NUL terminator, so later string functions read past its end",
+      "correction": "`dst` has no NUL terminator, so unbounded string operations on it are invalid",
+      "reason": "Match UB framing.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q5",
+      "field": "options.2.explanation",
+      "original": "Correct. The source is longer than 4, so `strncpy` copies `abcd` and stops, with no `\\0`. A later `printf(\"%s\")` or `strlen` over-reads.",
+      "correction": "The four bytes are `abcd`, with no terminator. Passing that array to an unbounded string operation violates its input requirements and can over-read.",
+      "reason": "Invalid string need not specifictrace.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q5",
+      "field": "workedExample",
+      "original": "1. `n = sizeof dst = 4`.\n2. `strncpy` copies up to 4 bytes: `a b c d`. It has not reached the source's NUL, so it writes no terminator.\n3. `dst` now holds 4 non-NUL bytes. Anything that treats it as a string keeps reading the following memory: an out-of-bounds read.\n\nFixes: `snprintf(dst, sizeof dst, \"%s\", src)`, `strlcpy`, or set `dst[sizeof dst - 1] = '\\0'` after `strncpy` and check for truncation.",
+      "correction": "Four source bytes fill `dst` as `abcd`; no NUL fits. An unbounded string operation is invalid on this result. Use a bounded formatting/copy API with error and truncation checks, or explicitly terminate within the destination while treating lost data as truncation. `strlcpy` is an option only where provided.",
+      "reason": "Do not promise everystringfunctionkeepsreading.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q10",
+      "field": "options.3.explanation",
+      "original": "Optimisation level does nothing to find bugs and can make undefined behaviour harder to reason about.",
+      "correction": "Higher optimisation is not a replacement for tests or detectors; it can change how undefined behaviour manifests.",
+      "reason": "Some diagnostics depend on optimisation; avoid categorical none.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q10",
+      "field": "options.4.explanation",
+      "original": "Correct. Bugs keep being introduced; continuous fuzzing catches regressions as code changes.",
+      "correction": "Continuous fuzzing can expose newly introduced failures within its input and instrumentation coverage. OSS-Fuzz has project eligibility requirements.",
+      "reason": "No guaranteed regression detection.",
+      "sources": [
+        "https://google.github.io/oss-fuzz/"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.questions.json",
+      "question_id": "sys-memory-bugs-q11",
+      "field": "options.0.explanation",
+      "original": "Both *fields* are, but the struct also contains padding bytes that nobody wrote.",
+      "correction": "The members are assigned, but that does not establish safe portable contents for the padding bytes.",
+      "reason": "Compiler could storepadding too.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q3",
+      "field": "options.1.text",
+      "original": "It makes the addresses of code and data unpredictable, so an attacker who overwrites a pointer doesn't know what value to write",
+      "correction": "It makes selected mapping addresses harder to predict without additional information",
+      "reason": "Avoid universal unpredictable target.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q5",
+      "field": "prompt",
+      "original": "A 32-bit network daemon has 8 bits of ASLR entropy for its library base and its workers are re-forked from the same parent after each crash, so the base stays the same. Each wrong guess crashes a worker. On average, about how many attempts does an attacker need to guess the base?",
+      "correction": "A teaching model has 256 equally likely library bases (eight bits of entropy). Forked workers keep the same unknown base after crashes. Each wrong guess crashes a worker. Trying each candidate at most once, approximately how many attempts are needed on average?",
+      "reason": "State uniform distinctguess assumptions.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q6",
+      "field": "options.1.text",
+      "original": "Because knowing one libc address reveals the whole library's layout, defeating ASLR for libc",
+      "correction": "It reveals the base and known offsets in that libc mapping",
+      "reason": "Doesnotnecessarilyrevealalllibrarymappinglocations.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q7",
+      "field": "prompt",
+      "original": "A team adds `-D_FORTIFY_SOURCE=3` to their debug build, which uses `-O0`. An obvious `memcpy` overflow into a fixed-size local array is not caught. Why?",
+      "correction": "With a compatible GCC/glibc toolchain, a team adds `-D_FORTIFY_SOURCE=3` to a debug build using `-O0`. Why are glibc’s fortified wrappers not enabled?",
+      "reason": "Originaldiagnosiscompatiblecompilerunspecified.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q11",
+      "field": "options.1.explanation",
+      "original": "Correct. Indirect branches must land on an `ENDBR64` instruction; returns are handled by the shadow stack half of CET.",
+      "correction": "With x86-64 IBT enabled, covered indirect branches must reach suitable ENDBR64 targets. Shadow stacks separately protect returns.",
+      "reason": "Scopearchitectureandcoverage.",
+      "sources": [],
+      "confidence": "high"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.questions.json",
+      "question_id": "sys-mitigations-q11",
+      "field": "options.2.explanation",
+      "original": "Correct. It checks indirect calls and virtual calls against their expected type.",
+      "correction": "Clang provides indirect-call and virtual-call CFI schemes with type-based policies; their documented build requirements must be satisfied.",
+      "reason": "Flagalone notcoverageguarantee.",
+      "sources": [],
+      "confidence": "high"
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf",
+      "checked": "C object lifetime/bounds, unsigned arithmetic, padding 6.2.6.1, printf/snprintf/strcpy/strncpy library preconditions; relevant clauses, not whole701-page draft",
+      "confidence": "high"
+    },
+    {
+      "url": "https://openssl-library.org/news/secadv/20140407.txt",
+      "checked": "Heartbleed affected feature and up-to64KB disclosure",
+      "confidence": "high"
+    },
+    {
+      "url": "https://www.rfc-editor.org/rfc/rfc6520.html",
+      "checked": "Heartbeat header3bytes, payload and minimum16padding; record limits",
+      "confidence": "high"
+    },
+    {
+      "url": "https://www.chromium.org/Home/chromium-security/memory-safety/",
+      "checked": "Historical912high/critical Stable-channel bug sample and70%",
+      "confidence": "high"
+    },
+    {
+      "url": "https://clang.llvm.org/docs/AddressSanitizer.html",
+      "checked": "Instrumentation, supported detections and limitations",
+      "confidence": "high"
+    },
+    {
+      "url": "https://clang.llvm.org/docs/MemorySanitizer.html",
+      "checked": "Uninitialised-value detection distinct from ASan",
+      "confidence": "high"
+    },
+    {
+      "url": "https://www.llvm.org/docs/LibFuzzer.html",
+      "checked": "Coverage-guided input generation",
+      "confidence": "high"
+    },
+    {
+      "url": "https://aflplus.plus/docs/",
+      "checked": "Fuzzer documentation and scope",
+      "confidence": "high"
+    },
+    {
+      "url": "https://google.github.io/oss-fuzz/",
+      "checked": "Continuous fuzzing and eligibility",
+      "confidence": "high"
+    },
+    {
+      "url": "https://valgrind.org/docs/manual/quick-start.html",
+      "checked": "Memcheck mechanism and workload-dependent overhead",
+      "confidence": "high"
+    },
+    {
+      "url": "https://man7.org/linux/man-pages/man3/malloc.3.html",
+      "checked": "calloc/reallocarray overflow, NULL/free, allocation failures",
+      "confidence": "high"
+    },
+    {
+      "url": "https://man7.org/linux/man-pages/man2/fork.2.html",
+      "checked": "Inherited address space",
+      "confidence": "high"
+    },
+    {
+      "url": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html",
+      "checked": "Stack-protector scope, optimised-away variables, target-specific hardening flags",
+      "confidence": "high"
+    },
+    {
+      "url": "https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html",
+      "checked": "Format-security diagnosis scope",
+      "confidence": "high"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention",
+      "checked": "NX/DEP execution permissions and executable mappings",
+      "confidence": "high"
+    },
+    {
+      "url": "https://learn.microsoft.com/en-us/windows/win32/secbp/control-flow-guard",
+      "checked": "Instrumented indirect-call allowed-target policy",
+      "confidence": "high"
+    },
+    {
+      "url": "https://docs.kernel.org/arch/x86/shstk.html",
+      "checked": "CET shadow stack and IBT, hardware/kernel/runtime requirements",
+      "confidence": "high"
+    },
+    {
+      "url": "https://docs.kernel.org/admin-guide/sysctl/vm.html",
+      "checked": "mmap_rnd_bits configuration",
+      "confidence": "high"
+    },
+    {
+      "url": "https://docs.kernel.org/security/self-protection.html",
+      "checked": "KASLR and threat/protection scope",
+      "confidence": "high"
+    },
+    {
+      "url": "https://sourceware.org/binutils/docs/ld/Options.html",
+      "checked": "RELRO segment, eager binding at program/shared-object load",
+      "confidence": "high"
+    },
+    {
+      "url": "https://sourceware.org/glibc/manual/latest/html_node/Source-Fortification.html",
+      "checked": "FORTIFY levels, dynamic object size, unknown-size exceptions",
+      "confidence": "high"
+    },
+    {
+      "url": "https://codebrowser.dev/glibc/glibc/sysdeps/generic/dl-osinfo.h.html",
+      "checked": "Inspected glibc guard initialization clears first byte; implementation snapshot",
+      "confidence": "high"
+    },
+    {
+      "url": "https://codebrowser.dev/glibc/glibc/malloc/malloc.c.html",
+      "checked": "Safe-linking selected singly-linked free-list pointers",
+      "confidence": "high"
+    },
+    {
+      "url": "https://clang.llvm.org/docs/ControlFlowIntegrity.html",
+      "checked": "Type policies, LTO/visibility requirements and scope",
+      "confidence": "high"
+    },
+    {
+      "url": "https://clang.llvm.org/docs/PointerAuthentication.html",
+      "checked": "Keyed pointer authentication and contexts, not encryption",
+      "confidence": "high"
+    },
+    {
+      "url": "https://source.android.com/docs/security/test/memory-safety/arm-mte",
+      "checked": "Tagging, SYNC/ASYNC/ASYMM modes and enablement",
+      "confidence": "high"
+    },
+    {
+      "url": "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html",
+      "checked": "Four-bit tags,16-byte granules, PROT_MTE and fault policies",
+      "confidence": "high"
+    },
+    {
+      "url": "https://security.googleblog.com/2022/09/use-after-freedom-miracleptr.html",
+      "checked": "BackupRefPtr quarantine tracks raw_ptr references in eligible allocations",
+      "confidence": "high"
+    },
+    {
+      "url": "https://developer.arm.com/community/arm-community-blogs/b/architectures-and-processors-blog/posts/enabling-pac-and-bti-on-aarch64",
+      "checked": "BTI landing-pad and enablement scope",
+      "confidence": "high"
+    },
+    {
+      "url": "https://eel.is/c++draft/unique.ptr",
+      "checked": "Unique ownership and borrowed observers",
+      "confidence": "high"
+    },
+    {
+      "url": "https://eel.is/c++draft/util.smartptr.shared",
+      "checked": "Shared ownership semantics",
+      "confidence": "high"
+    },
+    {
+      "url": "https://cwe.mitre.org/data/definitions/416.html",
+      "checked": "Use-after-free classification and consequences",
+      "confidence": "high"
+    },
+    {
+      "url": "https://heartbleed.com/",
+      "checked": "Original vulnerability report; corroborated OpenSSL advisory",
+      "confidence": "high"
+    },
+    {
+      "url": "https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html",
+      "checked": "Platform-specific build guidance and limitations",
+      "confidence": "high"
+    }
+  ],
+  "omissions": [
+    {
+      "file": "content/security/05-systems-security/sys-memory-bugs.md",
+      "reason": "A universal current vulnerability percentage, a ranking of the most productive testing technique, and fixed sanitizer costs are omitted because this review did not establish representative measurements. Historical Chromium figures describe only its stated sample.",
+      "confidence": "unresolved",
+      "action": "unsupported universal empirical claims omitted; scope/model explicitly stated"
+    },
+    {
+      "file": "content/security/05-systems-security/sys-mitigations.md",
+      "reason": "Universal ASLR defaults, platform-wide deployment rates, fixed exploit costs and guaranteed crash or prevention rates are omitted because this review did not establish the necessary versioned measurements. MTE and CET hardware enforcement were not exercised in this review.",
+      "confidence": "unresolved",
+      "action": "unsupported universal empirical claims omitted; scope/model explicitly stated"
+    }
+  ],
+  "limitations": [
+    "All2lesson bodies and23question records read completely, including all options/explanations/answers. Source checks are relevant-section retrievals, not a distinct primary proof for every sentence.",
+    "C11/C17 model and explicit ABI assumptions; sanitizer observations are implementation-specific, not portable behavior of undefined programs.",
+    "Initial macOS ASan executions timed out even outside sandbox; no success claimed. Switched to approved disposable GCC14.2 Debian13 ARM64 image with test network disabled.",
+    "No real OpenSSL vulnerability replay, kernel copy_to_user, production service, fuzzing campaign, cross-platform benchmark, or CET/MTE hardware-enforcement experiment.",
+    "The x86 CET flag was reviewed against GCC/kernel docs; supported ARM64 ELF flag subset was actually compiled and inspected.",
+    "Kernel/glibc/runtime implementation claims are scoped and should be rechecked when target versions/configurations change.",
+    "Secondary existing quiz reference pages are further reading; corrected claims use primary evidence recorded here."
+  ],
+  "counts": {
+    "correction_groups": 144,
+    "primary_source_records": 34,
+    "visible_gap_notes": 2
+  },
+  "count_method": "Correction groups are individual logged edits, including related answer fields and source-link replacements, not a fabricated total of every atomic factual claim.",
+  "validation": {
+    "c_examples": {
+      "result": "PASS",
+      "environment": "gcc (Debian 14.2.0-19) 14.2.0",
+      "cases": [
+        {
+          "case": "lesson greet overlong",
+          "passed": true,
+          "expected_diagnostic": "AddressSanitizer",
+          "returncode": 1
+        },
+        {
+          "case": "lesson bounded greet",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "lesson off-by-one",
+          "passed": true,
+          "expected_diagnostic": "runtime error",
+          "returncode": 1
+        },
+        {
+          "case": "lesson unchecked memcpy",
+          "passed": true,
+          "expected_diagnostic": "AddressSanitizer",
+          "returncode": 1
+        },
+        {
+          "case": "lesson corrected heartbeat guard",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "lesson allocation fragment normal bounded context",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "lesson stale session",
+          "passed": true,
+          "expected_diagnostic": "heap-use-after-free",
+          "returncode": 1
+        },
+        {
+          "case": "lesson printf formats literal benign input",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "quiz q1 capacity misuse",
+          "passed": true,
+          "expected_diagnostic": "AddressSanitizer",
+          "returncode": 1
+        },
+        {
+          "case": "quiz q2 answer substitution",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "quiz q4 snprintf and checked result",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "quiz q6 uint32 request arithmetic",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "quiz q11 kernel copy stub ABI",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "mitigation quiz q4 valid-input context",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "strncpy fixed-size buffer",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        },
+        {
+          "case": "double free observed ASan diagnosis",
+          "passed": true,
+          "expected_diagnostic": "double-free",
+          "returncode": 1
+        },
+        {
+          "case": "free NULL is valid",
+          "passed": true,
+          "expected_diagnostic": null,
+          "returncode": 0
+        }
+      ],
+      "c_test_cases": 17,
+      "model_and_answer_index_assertions": 27,
+      "heartbeat_grid_assertions": 65536,
+      "heartbeat_extreme_assertions": 2,
+      "lesson_c_fences_executed": 8,
+      "quiz_c_fences_executed": 7,
+      "limits": [
+        "Contextual fragments were wrapped with minimal declarations/stubs; kernel copy_to_user replaced by memcpy, not a real kernel test.",
+        "Intended 32-bit multiplication is modeled with uint32_t on this 64-bit host. Allocation lesson executed only for a small valid count.",
+        "Invalid examples run under sanitizers show observed diagnoses, not guaranteed C behavior.",
+        "ELF hardening Makefile fragment inspected against GNU docs. x86 CET option not runnable on arm64; no CET/MTE hardware experiment."
+      ]
+    },
+    "hardening": {
+      "result": "PASS",
+      "checks": [
+        "GNU/Linux ARM64 supported flag subset compiled; safe/truncated cases and ELF PIE/RELRO/NOW/canary references checked",
+        "glibc fortify level 0 at -O0 versus 3 at -O2 confirmed",
+        "illustrated nonliteral printf rejected by warning-as-error"
+      ],
+      "limits": [
+        "x86-only -fcf-protection=full excluded on ARM64; no claim of CET/MTE hardware enforcement",
+        "ELF properties inspect binary configuration, not every possible exploit",
+        "No production system tuning or untrusted network activity"
+      ]
+    },
+    "links": {
+      "result": "PASS",
+      "unique_urls": 27,
+      "failures": 0,
+      "completed_session": 72954
+    },
+    "scoped_build": "PASS: content valid; 1186 diagram definitions/1201 appearances"
+  },
+  "checkpoint": {
+    "verification_stamped": true,
+    "running_processes": [],
+    "next": "Independent shared diagram and metadata review assigned by root"
+  }
+}

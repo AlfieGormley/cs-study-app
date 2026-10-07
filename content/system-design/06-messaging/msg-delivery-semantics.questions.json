@@ -1,0 +1,377 @@
+[
+  {
+    "id": "msg-delivery-semantics-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume a broker that never redelivers after successful acknowledgement, no duplicate publishes, and no lost acknowledgements. A consumer **acknowledges a message as soon as it receives it**, then processes it. Which delivery semantics does this give?",
+    "options": [
+      {
+        "text": "At-most-once",
+        "explanation": "Correct. If the consumer crashes after the ack but before finishing, the broker will not redeliver, so the message is lost. It will never be processed twice, so it is at most once."
+      },
+      {
+        "text": "At-least-once",
+        "explanation": "Wrong. At-least-once needs the ack to happen after processing, so a crash causes redelivery. Here the broker has already forgotten the message before work begins."
+      },
+      {
+        "text": "Exactly-once",
+        "explanation": "Wrong. Exactly-once processing would require both no loss and no duplicates. Early acking removes duplicates only by accepting loss."
+      },
+      {
+        "text": "It depends on the broker's replication factor",
+        "explanation": "Wrong. Replication protects messages stored on the broker. Once the consumer has acked, the broker discards the message however many replicas it had, so replication cannot save it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Order of operations: **ack → process**.\n2. Crash between them: broker thinks done, work not done → **lost**.\n3. Can it be processed twice? Only if redelivered, and the broker has no reason to redeliver after an ack → **no duplicates**.\n4. Loss possible, duplicates impossible → **at-most-once**.\n\nSwap the order (process → ack) and the analysis flips to at-least-once.",
+    "link": {
+      "title": "Kafka message delivery semantics (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/delivery-semantics.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A consumer handles `PaymentReceived {paymentId, orderId, amount}` by running `UPDATE orders SET paid_total = paid_total + :amount`. Delivery is at-least-once. What is the risk, and what is the simplest robust change?",
+    "options": [
+      {
+        "text": "No risk; at-least-once delivery means each message is processed exactly once",
+        "explanation": "Wrong. At-least-once explicitly permits duplicates. A redelivered message would add the amount a second time."
+      },
+      {
+        "text": "Duplicates will over-count; check a Redis set for the ID before updating and add it afterwards",
+        "explanation": "Wrong. The check and the write are not atomic with the database update. A crash after the update but before the Redis write, or two concurrent deliveries, still double-counts."
+      },
+      {
+        "text": "Duplicates will over-count; record the payment ID in a processed table with a unique constraint in the same transaction as the update",
+        "explanation": "Correct. The increment is not idempotent. Recording a stable payment ID atomically with the update makes a duplicate fail the unique insert and roll back, so the total changes once."
+      },
+      {
+        "text": "Messages may be lost; switch to at-most-once to be safe",
+        "explanation": "Wrong. At-least-once does not lose messages; it duplicates them. At-most-once would make lost payments possible, which is worse."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `paid_total + amount` applied twice adds twice: **not idempotent**.\n2. Options, best first:\n   - Make it absolute: store each payment as a row keyed by `paymentId` (`INSERT ... ON CONFLICT DO NOTHING`) and compute the total with `SUM`.\n   - Or dedup: `INSERT INTO processed(payment_id)` plus the `UPDATE` in **one transaction**.\n3. Walk through a duplicate: first delivery commits both. Second delivery's insert hits the primary key → rollback → consumer acks. Total unchanged.\n4. The key requirement is **atomicity** between 'remember I did it' and 'do it'.",
+    "link": {
+      "title": "Idempotent Receiver (EIP)",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/IdempotentReceiver.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why is true exactly-once **delivery** between a broker and a consumer over a network considered impossible in general?",
+    "options": [
+      {
+        "text": "Because networks reorder packets",
+        "explanation": "Wrong. TCP already restores packet order within a connection. Reordering is not the obstacle; uncertainty about whether the other side completed is."
+      },
+      {
+        "text": "Because it would require global clocks",
+        "explanation": "Wrong. The impossibility does not depend on clocks. Even with perfect clocks, a lost ack is indistinguishable from lost processing."
+      },
+      {
+        "text": "Because brokers do not replicate messages",
+        "explanation": "Wrong. Most production brokers replicate. Replication protects against broker failure but does nothing about the ambiguity of an unacknowledged delivery."
+      },
+      {
+        "text": "Because after a timeout the sender cannot know whether the receiver processed the message, so it must either risk loss or risk a duplicate",
+        "explanation": "Correct. A missing ack could mean the message never arrived or that only the ack was lost. No finite protocol removes that uncertainty (the Two Generals' Problem), so systems get exactly-once effects through deduplication instead."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Broker sends message m. It waits for an ack.\n2. No ack arrives. Possible worlds:\n   - (a) m never arrived → must resend.\n   - (b) m processed, ack lost → must not resend.\n3. The broker cannot distinguish (a) from (b).\n4. Resend → duplicates in world (b). Don't resend → loss in world (a).\n5. Way out: resend always (at-least-once), and have the receiver recognise m's ID and ignore it the second time. Delivery is still 'at least once'; **effects** are once.",
+    "link": {
+      "title": "Exactly-once semantics in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/exactly-once-semantics-are-possible-heres-how-apache-kafka-does-it/"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these operations are **naturally idempotent**, so a duplicate message causes no harm for the illustrated state effect, ignoring interleaved newer writes, triggers and external side effects? Select all that apply.",
+    "options": [
+      {
+        "text": "`UPDATE users SET email = 'a@x.com' WHERE id = 7`",
+        "explanation": "Correct. Setting a field to an absolute value gives the same final state however many times it runs (ignoring interleaving with other updates)."
+      },
+      {
+        "text": "`INSERT INTO orders(...) VALUES (...)` with an auto-increment primary key",
+        "explanation": "Wrong. Each run creates a new row with a new ID, so duplicates create duplicate orders. Keying the insert on a natural or producer-supplied ID would fix this."
+      },
+      {
+        "text": "`PUT /carts/9/items/sku-1 {qty: 2}`",
+        "explanation": "Correct. PUT replaces the resource with the given state; quantity is 2 after one call or ten."
+      },
+      {
+        "text": "Sending a push notification to a phone",
+        "explanation": "Wrong. Each send produces another notification the user sees. A local sent record alone has a crash window around an external send; use provider-enforced deduplication or reconcile uncertain outcomes."
+      },
+      {
+        "text": "`DELETE FROM sessions WHERE id = 'abc'`",
+        "explanation": "Correct. After the first delete the row is gone; later deletes affect zero rows and leave the same state."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Test each by running it twice and comparing the end state with running it once:\n\n| Op | Once | Twice | Same? |\n|---|---|---|---|\n| SET email | a@x | a@x | ✓ |\n| INSERT auto-id | 1 row | 2 rows | ✗ |\n| PUT qty 2 | 2 | 2 | ✓ |\n| Push | 1 alert | 2 alerts | ✗ |\n| DELETE | gone | gone | ✓ |\n\nDesign messages to carry **absolute state or stable keys** so consumers can use the idempotent forms.",
+    "link": {
+      "title": "Idempotence (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Idempotence"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka Streams app reads `payments`, aggregates per merchant, and writes to `merchant-totals` with `processing.guarantee=exactly_once_v2`. It also calls an external fraud API for each payment. After a broker restart, the fraud team reports some payments were **scored twice**. The totals are correct. Explain.",
+    "options": [
+      {
+        "text": "exactly_once_v2 is buggy; switch back to at_least_once",
+        "explanation": "Wrong. at_least_once would make things worse: the totals could also double-count. The behaviour is the expected limit of EOS, not a bug."
+      },
+      {
+        "text": "Kafka EOS makes Kafka writes and offset commits atomic, but external calls are outside the transaction, so an aborted and retried transaction repeats them",
+        "explanation": "Correct. When a transaction aborts, its output records are discarded for read_committed consumers and the input is reprocessed. Kafka cannot undo an HTTP call, so the fraud API sees it twice. Pass an idempotency key (such as the payment ID) to the API."
+      },
+      {
+        "text": "The fraud API received duplicates because read_committed was not set on the producer",
+        "explanation": "Wrong. isolation.level is a consumer setting, and it governs which Kafka records are visible. It has no effect on HTTP calls made during processing."
+      },
+      {
+        "text": "The broker restart caused unclean leader election, which duplicated input records",
+        "explanation": "Wrong. Unclean election can lose data, not duplicate it, and it is disabled by default. Correct totals alone do not prove absence of input duplication; the stated failure is consistent with transaction retries outside the external API boundary."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Transaction T reads offsets 500–599, calls fraud API for each, writes totals, then tries to commit.\n2. Suppose the failure causes T to abort (a restart alone does not imply every transaction aborts).\n3. Kafka's view: aborted output is invisible to `read_committed` readers; offsets were not committed → reprocess 500–599. **Totals stay correct.**\n4. Fraud API's view: it already received 100 calls from the aborted attempt, and now receives them again. **Duplicates.**\n5. Fix: send `Idempotency-Key: payment-<id>` so the API returns the earlier score, or move the call into a separate at-least-once consumer with its own dedup.",
+    "link": {
+      "title": "Transactions in Apache Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/transactions-apache-kafka/"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a transactional Kafka read-process-write app, instance A pauses for 60 seconds in a GC pause. The group rebalances and instance B takes over A's partitions with the same transactional.id and successfully calls initTransactions(). A then wakes up and tries to commit its open transaction. What happens?",
+    "options": [
+      {
+        "text": "Both A's and B's outputs are committed, producing duplicates",
+        "explanation": "Wrong. This is exactly the zombie scenario that transactional IDs are designed to prevent."
+      },
+      {
+        "text": "A's commit succeeds and B's transaction is aborted instead",
+        "explanation": "Wrong. Fencing always favours the newer epoch. Letting the older instance win would allow a paused zombie to overwrite the current owner's work."
+      },
+      {
+        "text": "A's commit is rejected because B's initTransactions() bumped the producer epoch, fencing A",
+        "explanation": "Correct. The coordinator tracks an epoch per transactional.id. B's initTransactions() incremented it and aborted A's open transaction; A's requests carry the old epoch and fail with a fencing error."
+      },
+      {
+        "text": "The consumer group blocks until A either commits or times out",
+        "explanation": "Wrong. The rebalance already completed when A missed its deadline. B proceeds; Kafka does not wait for A."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A: `transactional.id = app-p3`, epoch 5. Opens transaction, writes some output.\n2. A pauses; the group gives P3 to B.\n3. B calls `initTransactions()` with `app-p3` → coordinator **aborts** any open transaction for that ID and bumps the epoch to 6.\n4. A wakes and sends commit with epoch 5 → `ProducerFencedException`. A must shut down.\n5. Result: A's partial output is aborted (invisible to read_committed), and B reprocesses from the last committed offset, so each input produces output once.\n\n(Since KIP-447, fencing also uses the consumer group generation, so apps no longer need a static transactional.id per partition.)",
+    "link": {
+      "title": "Transactions in Apache Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/transactions-apache-kafka/"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SQS FIFO producer times out on `SendMessage` and retries **7 minutes later** with the same `MessageDeduplicationId`. The first attempt had actually succeeded. What happens?",
+    "options": [
+      {
+        "text": "SQS accepts the retry as a new message, so the consumer receives a duplicate",
+        "explanation": "Correct. The deduplication window is 5 minutes. A retry outside it is treated as a fresh message, so the consumer must still be idempotent for late retries."
+      },
+      {
+        "text": "SQS discards the retry as a duplicate",
+        "explanation": "Wrong. SQS FIFO deduplication only applies within a 5-minute interval. After 7 minutes the ID is no longer remembered."
+      },
+      {
+        "text": "SQS rejects the retry with an error",
+        "explanation": "Wrong. Within the window SQS silently accepts the duplicate and does not deliver it; outside it, SQS accepts it as new. Neither case is an error."
+      },
+      {
+        "text": "SQS merges both messages into one",
+        "explanation": "Wrong. Messages are never merged. Each is either deduplicated (dropped) or delivered."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FIFO dedup: same `MessageDeduplicationId` within **5 minutes** → accepted but not delivered again.\n2. Retry at 7 minutes: 7 > 5 → window expired → new message.\n3. Consumer receives two messages with the same business content.\n4. Lessons:\n   - Broker dedup windows are finite; they cover quick retries, not slow ones.\n   - Keep consumer-side dedup (keyed on the same ID) for as long as late duplicates are possible.\n   - Retry promptly with backoff measured in seconds, not minutes, when relying on broker dedup.",
+    "link": {
+      "title": "Amazon SQS FIFO queues",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A producer publishes `RefundIssued` to an SQS standard queue and retries `SendMessage` whenever a call times out. The consumer deduplicates on the SQS `MessageId`, recording it in the same database transaction as the refund. Some refunds are still applied twice. Why?",
+    "options": [
+      {
+        "text": "SQS gives a redelivered message a new MessageId each time it is received",
+        "explanation": "Wrong. A message keeps its MessageId across redeliveries; it is the **receipt handle** that changes on each receive. Broker redeliveries are caught by this dedup."
+      },
+      {
+        "text": "When a timed-out send had actually succeeded, the retry creates a second message with a different MessageId; dedup should use a producer-assigned ID such as the refund ID",
+        "explanation": "Correct. SQS assigns MessageId when it accepts a message, so two successful sends of the same refund get two IDs and look unrelated. A stable, producer-assigned ID is the same for both copies."
+      },
+      {
+        "text": "SQS standard queues do not support deduplication, so consumer-side dedup cannot work",
+        "explanation": "Wrong. Standard queues have no broker-side dedup, which is exactly why consumer-side dedup is needed. It works as long as it keys on an ID that is stable across producer retries."
+      },
+      {
+        "text": "The visibility timeout is too short",
+        "explanation": "Wrong. A short visibility timeout causes broker redelivery of the same message, which keeps the same MessageId and would be caught by this dedup."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Track the two kinds of duplicate:\n\n| Source | MessageId |\n|---|---|\n| Broker redelivery | Same |\n| Producer retry | **New** |\n\n1. Producer sends; SQS stores it as `MessageId = A`; the response is lost.\n2. Producer retries; SQS stores another copy, `MessageId = B`.\n3. The consumer sees A and B as different and applies both.\n4. Fix: the producer puts `refundId` (or an event UUID generated **once**, before the first attempt) in the message, and the consumer dedups on that.",
+    "link": {
+      "title": "Idempotent Receiver (Enterprise Integration Patterns)",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/IdempotentReceiver.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka consumer applies payments to Postgres with a dedup table whose rows expire after **1 hour**. The topic retains 7 days of data. During an incident, an operator resets the consumer group's offsets **3 days back** to reprocess possibly missed records. Afterwards, many payments have been applied twice. How long should dedup records be kept?",
+    "options": [
+      {
+        "text": "1 hour is fine; the operator should not have reset offsets",
+        "explanation": "Wrong. Replaying from an earlier offset is a normal recovery tool for a log, and the consumer should survive it. The dedup window was too short for the duplicates the system can produce."
+      },
+      {
+        "text": "As long as `max.poll.interval.ms`, since that bounds how long a record can be in flight",
+        "explanation": "Wrong. That covers only redelivery after a stuck consumer. Replays and late producer retries can bring back records from days earlier."
+      },
+      {
+        "text": "At least as long as a duplicate can plausibly arrive: here at least the documented replay/retry horizon, with a bound on deletion lag and replay duration",
+        "explanation": "Correct. Any record still in the topic can be replayed, so dedup records must outlive it. A configured 7-day retention is not an exact deadline: segment deletion can lag and replays take time. An 8-day TTL is safe only if all permitted retry/replay paths are proven bounded by it."
+      },
+      {
+        "text": "Forever, because there is no safe bound",
+        "explanation": "Wrong. Keeping them forever works but grows without limit. A finite bound requires an explicit replay/retry policy, including archives, republishing, segment deletion lag and replay duration; topic retention alone is insufficient."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Records replayed: offsets from **3 days** ago onwards.\n2. Dedup memory: **1 hour**. Anything older than that is unrecognised → applied again.\n3. So roughly 3 days minus 1 hour of payments double-applied.\n4. Rule from the lesson: keep dedup records longer than *queue retention plus the longest replay you might do*.\n   - Kafka retention: 7 days → TTL ≥ 7 days, plus margin.\n5. Cost check: 500 payments/s × 86,400 × 8 days ≈ 346 million rows. Store a compact key (16-byte UUID) and partition the table by day to make expiry cheaper. PostgreSQL partitioned unique constraints must include the partition key; preserve global payment-ID uniqueness through an appropriate schema or separate durable payment table.\n6. Better still, make the effect naturally idempotent (upsert keyed by payment ID), so no TTL is needed.",
+    "link": {
+      "title": "Kafka message delivery semantics (Confluent docs)",
+      "url": "https://docs.confluent.io/kafka/design/delivery-semantics.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A consumer charges customers through Stripe when it receives `ChargeRequested {orderId, amount}` from an at-least-once queue. Assume one charge per order, identical request parameters, and all automatic retries occur within the provider's retained-key window. Which designs make duplicate delivery harmless? Select all that apply.",
+    "options": [
+      {
+        "text": "Acknowledge the message before calling Stripe, so it cannot be redelivered",
+        "explanation": "Wrong. Acking first gives at-most-once: a crash after the ack but before the charge means the customer is never charged. Duplicates disappear only by accepting loss."
+      },
+      {
+        "text": "Send `Idempotency-Key: charge-<orderId>` with the request",
+        "explanation": "Correct. The key is stable across redeliveries, so Stripe returns the original result for a repeated key instead of charging again. The external system does the dedup."
+      },
+      {
+        "text": "Check a Redis flag for the order, call Stripe, then set the flag",
+        "explanation": "Wrong. Check-then-act is racy: two concurrent deliveries both see no flag, and a crash after the charge but before setting the flag also lets the next delivery charge again."
+      },
+      {
+        "text": "Insert a row into `charges(order_id UNIQUE)` before calling Stripe; if the row exists and is complete, skip; otherwise call Stripe with the same idempotency key",
+        "explanation": "Correct. The unique insert is an atomic claim, and reusing the same idempotency key makes a retry after a crash safe. The row also gives you a local record of charge state."
+      },
+      {
+        "text": "Use the SQS receipt handle as the idempotency key",
+        "explanation": "Wrong. The receipt handle changes on every receive, so each redelivery would present a new key and Stripe would charge again."
+      }
+    ],
+    "answer": [
+      1,
+      3
+    ],
+    "workedExample": "1. The effect (a charge) lives in an **external** system, so a local transaction cannot cover it.\n2. The tool is an **idempotency key** that is:\n   - derived from business data (`orderId`), so it is identical on every delivery\n   - sent on every attempt\n3. A local claim row adds coordination and visibility, but must reuse the **same** key so a crash between claim and charge is safe on retry.\n4. What fails:\n   - early ack → possible loss\n   - Redis check-then-set → race and crash window\n   - receipt handle → changes per delivery\n\nRemember the provider's window: Stripe keeps keys for at least 24 hours, so after the provider may have pruned the key, a completed local record can suppress retries, but an uncertain pending charge requires reconciliation with the provider before another charge is attempted.",
+    "link": {
+      "title": "Making retries safe with idempotent APIs (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A consumer reads `payments` from Kafka and adds each amount to a `merchant_totals` row in Postgres. It commits offsets to Kafka **after** the database transaction commits. After crashes, totals are occasionally too high. Without using Kafka transactions, which design gives exactly-once effects?",
+    "options": [
+      {
+        "text": "Store the partition's next offset in Postgres in the same transaction as the totals update, atomically guard that update by the expected previous offset or ownership epoch, and on startup/rebalance seek to the stored offset",
+        "explanation": "Correct. Totals and position now commit atomically in one database, so after a crash the consumer resumes exactly where its last applied batch ended. Kafka's own committed offsets are no longer the source of truth."
+      },
+      {
+        "text": "Turn on `exactly_once_v2` or Kafka transactions for the consumer",
+        "explanation": "Wrong. Kafka transactions make Kafka writes and Kafka offset commits atomic. The Postgres update is outside them, so a crash between the database commit and the offset commit still replays the batch."
+      },
+      {
+        "text": "Commit offsets to Kafka before the database transaction",
+        "explanation": "Wrong. That swaps duplicates for loss: a crash after the offset commit but before the database commit skips the batch."
+      },
+      {
+        "text": "Set `isolation.level=read_committed` on the consumer",
+        "explanation": "Wrong. That only hides records from aborted Kafka transactions on the input. It does nothing about the gap between the Postgres commit and the offset commit."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Find the gap: `COMMIT` in Postgres → crash → offset never committed → batch replayed → totals added twice.\n2. Close it by putting both in **one** atomic store:\n\n```sql\nBEGIN;\nUPDATE merchant_totals\n  SET total = total + :amt\n  WHERE id = :m;\nUPDATE kafka_offsets SET next = :o\n  WHERE topic = 'payments'\n    AND part = :p AND next = :expected;\n-- If row count != 1: ROLLBACK.\nCOMMIT;\n```\n\n3. On partition assignment, read `kafka_offsets` and `seek(partition, next)`.\n4. Atomically require the expected offset/ownership guard to match; roll back both changes otherwise. With this guard, a stale consumer cannot apply the batch twice. Crash anywhere: either both updates committed (resume after the batch) or neither did (replay it). Each payment counts once.\n5. This is the \"store offsets with the results\" pattern the lesson mentions for external sinks.",
+    "link": {
+      "title": "Kafka consumer design (Confluent docs)",
+      "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka Streams app with `processing.guarantee=exactly_once_v2` writes invoices to an `invoices` topic. Another team's plain Java consumer of `invoices`, built with default settings, sometimes receives duplicate invoices after broker restarts. Reading the same topic with a `read_committed` consumer shows no duplicates. What is the cause?",
+    "options": [
+      {
+        "text": "The Streams app's idempotent producer is disabled",
+        "explanation": "Wrong. exactly_once_v2 requires and enables idempotence and transactions. The fact that a read_committed reader sees clean output shows the producer side is working."
+      },
+      {
+        "text": "Unclean leader election duplicated records during the restart",
+        "explanation": "Wrong. Unclean election can lose records; it does not duplicate them, and it is off by default. A read_committed reader would also see any such problem."
+      },
+      {
+        "text": "The other team's consumer group has more members than partitions",
+        "explanation": "Wrong. Extra members sit idle; they never share a partition or cause duplicates."
+      },
+      {
+        "text": "The Java consumer defaults to `isolation.level=read_uncommitted`, so it also reads output from transactions that were later aborted and retried",
+        "explanation": "Correct. When a transaction aborts, its records stay in the log with an abort marker, and the retry writes them again. Only read_committed consumers skip the aborted copy. Exactly-once output needs read_committed readers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Transaction T1 writes invoices 1–50, then suppose a broker failure causes T1 to abort.\n2. The records from T1 remain in the log, followed by an **abort marker**.\n3. The Streams app retries in T2 and writes invoices 1–50 again, then commits.\n4. A `read_committed` consumer skips T1's records → each invoice once.\n5. A `read_uncommitted` consumer (the Java client default) returns T1's and T2's records → duplicates.\n6. Fix: set `isolation.level=read_committed` on every consumer of transactional topics. Expect slightly higher latency, since records become visible only at commit.",
+    "link": {
+      "title": "Transactions in Apache Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/transactions-apache-kafka/"
+    }
+  }
+]

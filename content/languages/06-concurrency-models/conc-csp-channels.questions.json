@@ -1,0 +1,343 @@
+[
+  {
+    "id": "conc-csp-channels-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What happens when this Go program runs?\n\n```go\nfunc main() {\n  ch := make(chan int)\n  ch <- 1\n  fmt.Println(<-ch)\n}\n```",
+    "options": [
+      {
+        "text": "It prints 1",
+        "explanation": "That would need the send to complete without a receiver. On an unbuffered channel a send waits for a receiver, and the only receive comes after it."
+      },
+      {
+        "text": "It prints 0, the zero value",
+        "explanation": "Zero values come from receiving on a *closed* channel. This channel is never closed, and the receive is never reached."
+      },
+      {
+        "text": "It fails to compile: you cannot send and receive in the same goroutine",
+        "explanation": "The compiler allows it. The problem is only detected at run time."
+      },
+      {
+        "text": "It crashes with \"all goroutines are asleep - deadlock!\"",
+        "explanation": "Correct. `main` blocks on the send, no other goroutine exists to receive, so the runtime detects total deadlock."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `make(chan int)` is unbuffered: capacity 0.\n2. `ch <- 1` blocks until another goroutine is ready to receive.\n3. There is only `main`, and it is stuck on line 2, so the receive on line 3 never runs.\n4. Every goroutine is blocked, so the runtime aborts with the deadlock error.\n5. With `make(chan int, 1)` the send would fit in the buffer, and the program would print `1`.",
+    "link": {
+      "title": "Effective Go: Concurrency",
+      "url": "https://go.dev/doc/effective_go#concurrency"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Go, what does `ch := make(chan int, 3)` give you, compared with `make(chan int)`?",
+    "options": [
+      {
+        "text": "A channel that can be used by at most three goroutines",
+        "explanation": "Any number of goroutines can send to and receive from a channel. The 3 is a buffer capacity."
+      },
+      {
+        "text": "An open channel with capacity for three queued values; sends can complete without a receiver while capacity remains",
+        "explanation": "Correct. Buffered sends complete immediately while there is room; receives block only when the buffer is empty."
+      },
+      {
+        "text": "A channel that delivers values in batches of three",
+        "explanation": "Values are delivered one at a time in FIFO order. Capacity does not batch them."
+      },
+      {
+        "text": "A channel that closes automatically after three values",
+        "explanation": "Channels only close when someone calls `close`. Capacity has nothing to do with closing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "| Channel | Send blocks when | Receive blocks when |\n|---|---|---|\n| `make(chan int)` | No receiver waiting | No sender waiting |\n| `make(chan int, 3)` | 3 items queued | 0 items queued |\n\nAn unbuffered channel is a rendezvous; a buffered one is a bounded queue that absorbs bursts and applies backpressure once full.",
+    "link": {
+      "title": "Effective Go: Concurrency",
+      "url": "https://go.dev/doc/effective_go#concurrency"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the core idea of Hoare's CSP, summed up in Go's proverb \"share memory by communicating\"?",
+    "options": [
+      {
+        "text": "Independent sequential processes interact only by passing messages over channels, rather than by reading and writing shared variables under locks",
+        "explanation": "Correct. Exclusive ownership is a programming discipline here; Go does not enforce it merely because a pointer passes through a channel."
+      },
+      {
+        "text": "All threads share one global memory, and channels make every access atomic",
+        "explanation": "This is shared-memory threading with a different name. CSP's point is that processes do not share mutable state."
+      },
+      {
+        "text": "Each process has a named mailbox that anyone can send to asynchronously",
+        "explanation": "That describes actors (next lesson). In the Go-style channel model, an unbuffered send targets a channel and rendezvous with a receiver; historical CSP notations vary."
+      },
+      {
+        "text": "Processes run one at a time in a fixed order to avoid races",
+        "explanation": "CSP processes run concurrently. Channels coordinate them; they do not serialise everything."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Contrast the two styles for handing work to another thread:\n\n1. **Shared memory**: put the job in a shared list, protect the list with a lock, signal a condition variable.\n2. **CSP**: `jobs <- job`. The channel does the queuing, synchronisation and visibility; after sending, the sender stops touching the job.\n\nThe synchronisation still exists, but it lives in one well-tested primitive instead of being scattered across your code.",
+    "link": {
+      "title": "Share Memory By Communicating — The Go Blog",
+      "url": "https://go.dev/blog/codelab-share"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```go\nch := make(chan int, 3)\nch <- 1\nch <- 2\nclose(ch)\nfor i := 0; i < 3; i++ {\n  v, ok := <-ch\n  fmt.Println(v, ok)\n}\n```",
+    "options": [
+      {
+        "text": "It panics on the first receive, because the channel is closed",
+        "explanation": "Receiving from a closed channel never panics. Only sending to it, or closing it again, does."
+      },
+      {
+        "text": "1 true, 2 true, then it blocks forever",
+        "explanation": "A receive on a closed, empty channel returns immediately. It does not block."
+      },
+      {
+        "text": "1 true, 2 true, 0 false",
+        "explanation": "Correct. Buffered values are still delivered after `close`; once drained, receives return the zero value with `ok == false`."
+      },
+      {
+        "text": "0 false, 0 false, 0 false",
+        "explanation": "Closing does not discard buffered values. Receivers drain them first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Buffer after the sends: `[1 2]`. Then `close` marks the channel closed.\n2. Receive 1: buffer non-empty, get `1, true`.\n3. Receive 2: get `2, true`.\n4. Receive 3: buffer empty and channel closed, so get the zero value `0, false` immediately.\n\nThis is why `for v := range ch` stops cleanly: it ends when `ok` would be false.",
+    "link": {
+      "title": "The Go Programming Language Specification",
+      "url": "https://go.dev/ref/spec#Close"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these operations cause a Go **panic**? Select all that apply.",
+    "options": [
+      {
+        "text": "Sending on a closed channel",
+        "explanation": "Correct. `send on closed channel` panics, which is why only the sender should close."
+      },
+      {
+        "text": "Receiving on a closed channel",
+        "explanation": "This returns the zero value with `ok == false` (after draining any buffer). No panic."
+      },
+      {
+        "text": "Closing an already-closed channel",
+        "explanation": "Correct. `close of closed channel` panics, so a channel must have one clear closer."
+      },
+      {
+        "text": "Receiving on a nil channel",
+        "explanation": "This blocks forever. It is useful in `select` to disable a case, but it does not panic."
+      },
+      {
+        "text": "Closing a nil channel",
+        "explanation": "Correct. `close of nil channel` panics."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Recall the table from the lesson:\n\n| Op | Closed | nil |\n|---|---|---|\n| Send | Panic | Block |\n| Receive | Zero, `ok=false` | Block |\n| Close | Panic | Panic |\n\nSo the panics are send-on-closed, close-on-closed and close-on-nil. The design pushes you to one rule: the single owner of the sending side closes the channel, exactly once.",
+    "link": {
+      "title": "The Go Programming Language Specification",
+      "url": "https://go.dev/ref/spec#Close"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Go HTTP handler calls this for every request:\n\n```go\nfunc first(urls []string) string {\n  ch := make(chan string)\n  for _, u := range urls {\n    go func(u string) {\n      ch <- fetch(u)\n    }(u)\n  }\n  return <-ch\n}\n```\n\nEach call passes 4 URLs. Memory use rises steadily over days. Why?",
+    "options": [
+      {
+        "text": "`fetch` results are cached in the channel forever",
+        "explanation": "An unbuffered channel stores nothing. The memory is held by goroutines stuck trying to send."
+      },
+      {
+        "text": "Three goroutines per call block forever sending on a channel nobody reads, so they and their stacks are never freed",
+        "explanation": "Correct. `first` reads one value and returns. The other senders leak. Fix: `make(chan string, len(urls))`, or cancel a context after receiving the first result and let remaining senders select on cancellation."
+      },
+      {
+        "text": "Goroutines are never garbage-collected, even after they finish",
+        "explanation": "A goroutine that returns is cleaned up. The problem is these never return."
+      },
+      {
+        "text": "The Go runtime detects the deadlock and retries, using more memory each time",
+        "explanation": "The runtime only reports total deadlock. The server's other goroutines are alive, so nothing is reported and nothing is retried."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Four goroutines start; each will send once.\n2. `first` receives one value and returns. `ch` is now unreachable from `first`, but three goroutines still hold it.\n3. Each blocks on `ch <- ...` forever: there is no receiver and the channel is unbuffered.\n4. 3 leaked goroutines per request × millions of requests = unbounded growth (stacks plus whatever `fetch` returned).\n5. With `make(chan string, 4)` every send completes into the buffer, the goroutines exit, and the channel is collected.",
+    "link": {
+      "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
+      "url": "https://go.dev/blog/pipelines"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```go\nfunc gen(ns ...int) <-chan int {\n  out := make(chan int)\n  go func() {\n    for _, n := range ns {\n      out <- n\n    }\n    close(out)\n  }()\n  return out\n}\n\nfunc add1(in <-chan int) <-chan int {\n  out := make(chan int)\n  go func() {\n    for n := range in {\n      out <- n + 1\n    }\n    close(out)\n  }()\n  return out\n}\n\nfunc main() {\n  s := 0\n  c := add1(add1(gen(1, 2)))\n  for v := range c {\n    s += v\n  }\n  fmt.Println(s)\n}\n```",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That is the sum of the inputs with no stages applied. Each value passes through two `add1` stages."
+      },
+      {
+        "text": "5",
+        "explanation": "This applies only one `add1` (2 + 3). The pipeline has two."
+      },
+      {
+        "text": "It deadlocks, because `main` never closes any channel",
+        "explanation": "`main` does not need to close anything. Each stage closes its own output when its input is drained, so the final `range` ends."
+      },
+      {
+        "text": "7",
+        "explanation": "Correct. 1 becomes 3 and 2 becomes 4 after two stages, and 3 + 4 = 7."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `gen` emits 1, 2, then closes.\n2. First `add1` emits 2, 3, then closes when its input closes.\n3. Second `add1` emits 3, 4, then closes.\n4. `main` ranges over the last channel: `s = 3 + 4 = 7`, and the loop ends at the close.\n\n```\ngen -1,2-> add1 -2,3-> add1 -3,4-> main\n```",
+    "link": {
+      "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
+      "url": "https://go.dev/blog/pipelines"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a worker pool, three worker goroutines all send results to one shared `results` channel. Who should close `results`, and when?",
+    "options": [
+      {
+        "text": "Each worker, when it finishes its last job",
+        "explanation": "The first worker to finish would close it while the others are still sending, and their sends would panic. A second close would panic too."
+      },
+      {
+        "text": "Nobody; channels are garbage-collected when unused",
+        "explanation": "An unclosed channel is collected eventually, but the consumer's `range results` would block forever waiting for a close."
+      },
+      {
+        "text": "A separate goroutine that waits on a `sync.WaitGroup` for all workers, then closes it",
+        "explanation": "Correct. Only after every sender has finished is it safe to close, and the WaitGroup tells you when that is."
+      },
+      {
+        "text": "The consumer, after it has read the expected number of results",
+        "explanation": "A receiver must not close without a protocol proving no further sends are possible; receiving a guessed count is insufficient. If the count is known you can skip closing, but then you are not using `range`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The rule: close a channel only when no sender can send again.\n2. With three senders, no single worker knows the others are done.\n3. Each worker calls `wg.Done()` on exit; a helper does:\n\n```go\ngo func() {\n  wg.Wait()\n  close(results)\n}()\n```\n\n4. The consumer's `for r := range results` ends exactly after the last result.\n5. The helper must be its own goroutine: if `main` waited on `wg` before reading, the workers would block sending on unbuffered `results` and never finish.",
+    "link": {
+      "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
+      "url": "https://go.dev/blog/pipelines"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a `select` merging two channels `a` and `b`, a developer forgets to set `a = nil` after `a` is closed:\n\n```go\nfor {\n  select {\n  case v, ok := <-a:\n    if !ok { continue }\n    use(v)\n  case v := <-b:\n    use(v)\n  }\n}\n```\n\nWhat happens once `a` is closed but `b` is still open and slow?",
+    "options": [
+      {
+        "text": "The loop busy-spins while scheduled, because a receive on closed `a` is always ready",
+        "explanation": "Correct. `select` keeps finding the `a` case ready, so it never blocks and the loop never waits for `b`. Setting `a = nil` disables the case."
+      },
+      {
+        "text": "The loop blocks until `b` sends, as intended",
+        "explanation": "A closed channel never blocks a receive, so the `select` never needs to wait for `b`."
+      },
+      {
+        "text": "It panics on the next receive from closed `a`",
+        "explanation": "Receiving from a closed channel does not panic. It returns immediately with `ok == false`."
+      },
+      {
+        "text": "`b` is starved and its values are never delivered",
+        "explanation": "`select` chooses uniformly among ready cases, so whenever `b` has a value it is picked about half the time. This gives b opportunities to proceed, but does not guarantee a deterministic maximum wait. The real cost is the busy loop."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Closed channel: every receive succeeds immediately with zero value and `ok == false`.\n2. So the `a` case is *always* ready.\n3. `select` with a ready case never blocks; `continue` loops straight back.\n4. Result: a hot loop that burns a core while waiting for `b`.\n5. Fix: `if !ok { a = nil; continue }`. A receive on a nil channel is never ready, so `select` now blocks on `b` alone. Loop while `a != nil || b != nil`.",
+    "link": {
+      "title": "The Go Programming Language Specification: Select statements",
+      "url": "https://go.dev/ref/spec#Select_statements"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Goroutine T1 runs `data = 42; done <- true` and goroutine T2 runs `<-done; fmt.Println(data)`, where `done` is an unbuffered channel and `data` is a plain `int`. What can T2 print, and why?",
+    "options": [
+      {
+        "text": "0 or 42, because `data` is not protected by a mutex",
+        "explanation": "The channel itself provides the ordering. A mutex would be redundant here."
+      },
+      {
+        "text": "Only 42, because the send on `done` happens-before the corresponding receive completes",
+        "explanation": "Correct. Program order puts `data = 42` before the send; the memory model links send to receive; program order puts the receive before the print."
+      },
+      {
+        "text": "Only 42, but only because Go uses sequential consistency for all memory accesses",
+        "explanation": "Go only promises sequential consistency to programs free of data races. Here it is the channel's happens-before edge that makes the program race-free."
+      },
+      {
+        "text": "A torn value, because `int` writes are not atomic in Go",
+        "explanation": "With the happens-before edge there is no concurrent access, so tearing cannot arise."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Build the chain, as for Java's `volatile` in lesson 1:\n\n1. T1: `data = 42` is before `done <- true` (program order).\n2. Go memory model: a send happens-before the corresponding receive completes.\n3. T2: `<-done` is before `Println(data)` (program order).\n4. Transitivity: the write happens-before the read, so T2 prints 42.\n\nThis is why channels can carry ownership of data without extra locking. Remove the channel and the access becomes a data race, which the race detector can flag when the relevant accesses execute.",
+    "link": {
+      "title": "The Go Memory Model",
+      "url": "https://go.dev/ref/mem"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Go service keeps a hit counter per URL path in a `map[string]int` updated by thousands of request goroutines, and also distributes resize jobs to a pool of image workers. Which design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Protect the counter map with a `sync.Mutex`; it is shared state briefly updated by many goroutines",
+        "explanation": "Correct. This is the textbook mutex case: a short critical section around shared state. A channel-owning goroutine is another valid design; whether its queueing and ownership benefits justify the overhead depends on the workload."
+      },
+      {
+        "text": "Send resize jobs over a channel to the worker pool",
+        "explanation": "Correct. Distributing units of work is what channels are best at, and a buffered channel gives backpressure."
+      },
+      {
+        "text": "Send a pointer to the shared map over a channel to each request goroutine, so they can update it without locks",
+        "explanation": "Passing a pointer does not transfer exclusive ownership if everyone keeps using it. All goroutines would write the same map concurrently: a data race, and Go may detect concurrent map writes and terminate; detection is not a synchronization guarantee."
+      },
+      {
+        "text": "Rely on Go's runtime to detect that the map is updated concurrently and serialise the writes",
+        "explanation": "The runtime may detect concurrent map writes, but it reacts by crashing the program (`concurrent map writes`), not by serialising them."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Apply the guidance from the Go wiki: channels to pass ownership, distribute work and return results; mutexes for caches and state.\n\n1. Counter map: shared state, tiny updates. Mutex: sound.\n2. Resize jobs: units of work handed off. Channel: sound.\n3. Pointer over a channel: CSP only helps if the sender *stops* touching the data. Here everyone keeps writing: a race.\n4. Go's map access check is a crash, not a lock: `fatal error: concurrent map writes`.",
+    "link": {
+      "title": "Go Wiki: Use a sync.Mutex or a channel?",
+      "url": "https://go.dev/wiki/MutexOrChannel"
+    }
+  }
+]

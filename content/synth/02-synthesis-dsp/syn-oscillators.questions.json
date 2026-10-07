@@ -1,0 +1,348 @@
+[
+  {
+    "id": "syn-oscillators-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An oscillator stores phase in cycles, `[0, 1)`. What phase increment per sample gives 1 kHz at a 44.1 kHz sample rate?",
+    "options": [
+      {
+        "text": "44.1",
+        "explanation": "That is the number of *samples per cycle* (fs / f), the reciprocal of the increment."
+      },
+      {
+        "text": "0.022676",
+        "explanation": "Correct. inc = f / fs = 1000 / 44100 ≈ 0.022676 cycles per sample."
+      },
+      {
+        "text": "0.14248",
+        "explanation": "That is 2π × 0.022676, the increment in *radians*. It would be right only if phase were stored in radians, not cycles."
+      },
+      {
+        "text": "1000",
+        "explanation": "Adding 1000 cycles per sample would wrap a thousand times each sample. Frequency has to be divided by the sample rate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Phase in cycles advances by the fraction of a cycle covered in one sample:\n\n```\ninc = f / fs\n    = 1000 / 44100\n    = 0.022676 cycles/sample\n```\n\nCheck: 1 / 0.022676 = 44.1 samples per cycle, and 44,100 / 44.1 = 1000 cycles per second.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "syn-oscillators-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A beginner's oscillator declares `phase = 0` at the top of its `process(block)` function. With 48-sample blocks at 48 kHz, what do you hear on a steady 300 Hz tone?",
+    "options": [
+      {
+        "text": "A clean 300 Hz tone; the phase variable is only an implementation detail",
+        "explanation": "Each block restarts the waveform, so consecutive blocks don't join. That is audible."
+      },
+      {
+        "text": "A tone pitched exactly one octave down",
+        "explanation": "Restarting the cycle doesn't halve the frequency; it adds discontinuities."
+      },
+      {
+        "text": "A repeating 1 kHz waveform and its harmonics, replacing the intended 300 Hz tone",
+        "explanation": "Correct. Identical 48-sample blocks repeat 1,000 times per second. Their spectrum is a harmonic series of that repetition rate; a separate 300 Hz tone is not preserved."
+      },
+      {
+        "text": "Silence, because the phase never advances",
+        "explanation": "The phase advances within the block, then is thrown away at the end. You still get sound, just broken."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Block rate = fs / block size = 48000 / 48 = **1000 blocks per second**.\n2. Each block starts at phase 0, but the previous block ended at some other phase, so the waveform jumps.\n3. A jump repeating 1000 times a second is a periodic disturbance at 1 kHz.\n\nFix: keep `phase` as a member of the oscillator object so it survives between calls.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "syn-oscillators-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using `pulse(p, width)` from the lesson (`1.0 if p < width else -1.0`), what fraction of each cycle is the output +1 when `width = 0.25`, and what width gives a square wave?",
+    "options": [
+      {
+        "text": "25% high; width 0.5 gives a square wave",
+        "explanation": "Correct. The output is +1 while phase is below the width, i.e. a quarter of the cycle. At 0.5 high and low are equal: a square wave."
+      },
+      {
+        "text": "75% high; width 0.5 gives a square wave",
+        "explanation": "The comparison is `p < width`, so it is high for the *first* 25% only."
+      },
+      {
+        "text": "25% high; width 1.0 gives a square wave",
+        "explanation": "At width 1.0 the output is +1 the whole time: a constant (DC), which is silent."
+      },
+      {
+        "text": "50% high regardless; width only changes the volume",
+        "explanation": "Width changes the duty cycle (and hence the timbre), not just the level."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Phase sweeps 0 → 1 once per cycle.\n\n```\np:     0 .. 0.25 .. 1\nout:   +1   |  -1\n```\n\nHigh for p in [0, 0.25): 25% of the cycle. Square = equal high and low = width 0.5. Widths of 0 or 1 give DC and silence.",
+    "link": {
+      "title": "Pulse wave — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Pulse_wave"
+    }
+  },
+  {
+    "id": "syn-oscillators-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An oscillator at 44.1 kHz wraps with `if p >= 1: p = 0.0` instead of subtracting 1. You ask it for 1000 Hz. What frequency does it actually produce?",
+    "options": [
+      {
+        "text": "1000 Hz exactly",
+        "explanation": "Resetting to 0 discards the overshoot, so the cycle length is rounded up to a whole number of samples."
+      },
+      {
+        "text": "About 1023 Hz (sharp)",
+        "explanation": "The overshoot is thrown away, which *lengthens* cycles, so the error is flat, not sharp."
+      },
+      {
+        "text": "980 Hz, about 35 cents flat",
+        "explanation": "Correct. 1 / 0.022676 = 44.1 samples per cycle, but with reset-to-zero each cycle takes ceil(44.1) = 45 samples: 44100 / 45 = 980 Hz."
+      },
+      {
+        "text": "It cannot be predicted, because it depends on floating-point rounding",
+        "explanation": "The rounding up to a whole number of samples is systematic and easy to predict."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. inc = 1000 / 44100 = 0.022676.\n2. The wrap test fires on the first sample where `n · inc ≥ 1`, i.e. n = ceil(44.1) = **45**.\n3. Reset to 0 means every cycle is exactly 45 samples.\n4. f = 44100 / 45 = **980 Hz**.\n5. Error = 1200 · log2(980/1000) ≈ **−35 cents**, clearly out of tune.\n\nSubtracting 1 keeps the 0.1-sample remainder, so cycles are 44 or 45 samples and average to 44.1.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "syn-oscillators-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace this accumulator. What is `p` after the loop (to 2 decimal places)?\n\n```\np = 0.9\ninc = 0.25\nfor _ in range(3):\n    p += inc\n    if p >= 1.0:\n        p -= 1.0\n```",
+    "options": [
+      {
+        "text": "0.65",
+        "explanation": "Correct. 0.9 → 1.15 → wrap to 0.15 → 0.40 → 0.65."
+      },
+      {
+        "text": "1.65",
+        "explanation": "The wrap subtracts 1 when the phase passes 1, so it never stays above 1."
+      },
+      {
+        "text": "0.75",
+        "explanation": "That would be 3 × 0.25 from zero, ignoring the starting phase of 0.9."
+      },
+      {
+        "text": "0.50",
+        "explanation": "That would happen if the first wrap reset to 0 instead of keeping the 0.15 remainder."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nstart   0.90\n+0.25   1.15 -> wrap -> 0.15\n+0.25   0.40\n+0.25   0.65\n```\n\nPython prints 0.6499999999999999 because of binary floating point, which rounds to 0.65. The key point is that the 0.15 overshoot is kept.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "syn-oscillators-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your oscillator is used for through-zero FM, so its increment can be negative (as low as −0.3) and occasionally above 1 (up to 2.4). Which wrap is correct in every case?",
+    "options": [
+      {
+        "text": "`if p >= 1: p -= 1`",
+        "explanation": "This fails for negative phases (never wraps up) and for increments above 1 (one subtraction leaves p above 1)."
+      },
+      {
+        "text": "`if p >= 1: p = 0`",
+        "explanation": "This detunes even in the normal case and also ignores negative phase."
+      },
+      {
+        "text": "`p = fmod(p, 1.0)` in C",
+        "explanation": "C's `fmod` keeps the sign of its first argument, so −0.3 stays −0.3 rather than becoming 0.7."
+      },
+      {
+        "text": "`p = p - floor(p)`",
+        "explanation": "Correct. `floor` rounds towards minus infinity, so the result is always in [0, 1): 2.4 → 0.4 and −0.3 → 0.7."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Test each candidate on p = 2.4 and p = −0.3:\n\n```\np - floor(p):\n  2.4 - 2    = 0.4\n -0.3 - (-1) = 0.7\nfmod(p, 1):\n  2.4 -> 0.4\n -0.3 -> -0.3   wrong\nif p>=1: p-=1:\n  2.4 -> 1.4    wrong\n -0.3 -> -0.3   wrong\n```\n\nOnly `p - floor(p)` maps everything into [0, 1).",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "syn-oscillators-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 32-bit unsigned integer phase accumulator represents one cycle as 2³² counts. What increment gives 1000 Hz at 48 kHz, and roughly what is the frequency resolution?",
+    "options": [
+      {
+        "text": "Increment 89,478,485; resolution about 0.000011 Hz",
+        "explanation": "Correct. 1000 × 2³² / 48000 = 89,478,485.3, rounded to 89,478,485. One count of increment is 48000 / 2³² ≈ 0.000011 Hz."
+      },
+      {
+        "text": "Increment 1000; resolution 1 Hz",
+        "explanation": "That treats the accumulator as counting hertz. The increment must be scaled by 2³² / fs."
+      },
+      {
+        "text": "Increment 0.020833; resolution 0.000011 Hz",
+        "explanation": "0.020833 is the increment in *cycles* (1000 / 48000), suitable for a float accumulator, not an integer one."
+      },
+      {
+        "text": "Increment 89,478,485; resolution about 1.1 Hz",
+        "explanation": "The resolution is fs / 2³², which is tiny, not about 1 Hz."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\ninc = f * 2**32 / fs\n    = 1000 * 4294967296 / 48000\n    = 89,478,485.33  -> 89,478,485\nres = fs / 2**32\n    = 48000 / 4294967296\n    ≈ 1.1e-5 Hz\n```\n\nOverflow of the 32-bit register performs the wrap for free. The rounding of the increment gives an error far below anything audible.",
+    "link": {
+      "title": "Direct digital synthesis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Direct_digital_synthesis"
+    }
+  },
+  {
+    "id": "syn-oscillators-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these oscillator implementation choices cause an audible problem on a sustained note? Select all that apply.",
+    "options": [
+      {
+        "text": "Storing phase as a float in [0, 1) and subtracting 1 on wrap",
+        "explanation": "This is the recommended approach. Phase stays small, where float precision is fine; the lesson measured about 0.001 cents of error after a minute."
+      },
+      {
+        "text": "Wrapping by setting phase to 0 instead of subtracting 1",
+        "explanation": "Correct. Every cycle is rounded up to a whole number of samples, so the pitch goes flat (35 cents at 1 kHz, 44.1 kHz)."
+      },
+      {
+        "text": "Resetting phase to 0 at the start of every audio block",
+        "explanation": "Correct. The waveform restarts every block, adding a buzz at fs / block size."
+      },
+      {
+        "text": "Recomputing the increment every sample when the frequency changes",
+        "explanation": "That's fine: the phase continues from where it is, so frequency changes are glitch-free."
+      },
+      {
+        "text": "Computing sin(2π·f·n/fs) from a float32 sample counter n that never resets",
+        "explanation": "Correct. As n grows, float32 can't represent the small steps precisely, and the pitch drifts within seconds to minutes."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Go through each:\n\n| Choice | Problem? |\n|---|---|\n| Reset each block | buzz at fs/N |\n| Reset to 0 on wrap | flat pitch |\n| Wrapped float phase | fine |\n| Float32 counter n | drift |\n| New inc per sample | fine |\n\nThe common thread: phase is long-lived state and must be kept small and continuous.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "syn-oscillators-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A drone patch sounds in tune at first, but over a few minutes it slides noticeably out of tune. The oscillator code is `phase += inc` (float32, phase in cycles) with the wrap commented out because `sin()` is periodic anyway. What is going on?",
+    "options": [
+      {
+        "text": "The sine function becomes inaccurate for large arguments, so the waveform shape degrades but pitch is unaffected",
+        "explanation": "The drift is in the *increment*, not the sine's shape. Large phase values make each addition round to a coarse step, which changes pitch."
+      },
+      {
+        "text": "Float32 spacing grows with magnitude, so adding a small increment to a large phase rounds to the nearest coarse step and the effective pitch changes",
+        "explanation": "Correct. With 24 significand bits, at a phase of tens of thousands of cycles the gap between floats is around 0.002 cycles, comparable to a 440 Hz increment of 0.0092. The lesson measured 445 Hz after 10 s and 469 Hz after 60 s."
+      },
+      {
+        "text": "The CPU is overheating and its clock is drifting",
+        "explanation": "A clock drift would shift *all* pitches by the same ratio and would not follow this pattern. The arithmetic explains it fully."
+      },
+      {
+        "text": "Denormal numbers are slowing the CPU",
+        "explanation": "Denormals appear near zero, not when values grow large."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Float32 has a 24-bit significand: precision is relative to the number's size.\n2. After 60 s at 440 Hz, phase ≈ 26,400 cycles. The float spacing there is 2^(14−23) ≈ 0.00195 cycles.\n3. The intended increment 0.0091667 must round to a multiple of that spacing, e.g. 5 × 0.00195 = 0.00977.\n4. 0.00977 × 48000 ≈ 469 Hz, matching the measured 468.8 Hz.\n\nFix: restore the wrap (or use a 32-bit integer accumulator).",
+    "link": {
+      "title": "Single-precision floating-point format — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format"
+    }
+  },
+  {
+    "id": "syn-oscillators-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Someone generates audio as `sin(2π·f·n/fs)` with `n` a float32 sample counter. At 48 kHz, roughly when can float32 no longer represent every integer value of `n`, so the counter itself starts skipping?",
+    "options": [
+      {
+        "text": "After about 43.7 seconds",
+        "explanation": "That would be 2²¹ samples. Float32 represents every integer up to 2²⁴."
+      },
+      {
+        "text": "After about 24 hours",
+        "explanation": "Integers stop being exact much earlier than that; the 24-bit significand runs out at 16.8 million."
+      },
+      {
+        "text": "Never, because integers are always exact in floating point",
+        "explanation": "Only integers up to 2²⁴ (16,777,216) are all exactly representable in float32."
+      },
+      {
+        "text": "After about 5.8 minutes",
+        "explanation": "Correct. 2²⁴ = 16,777,216 samples; 16,777,216 / 48,000 ≈ 349.5 s ≈ 5.8 minutes. Beyond that, `n + 1` can round back to `n`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Float32 significand: 24 bits (23 stored + 1 implicit).\n2. All integers up to 2²⁴ = 16,777,216 are exact; above that, only even numbers are, and so on.\n3. Time to reach it: 16,777,216 / 48,000 = **349.5 s ≈ 5.8 min**.\n\nLong before then the *phase product* f·n/fs has already lost fractional precision, which is why pitch drifts within seconds. Keep a wrapped phase instead of a growing counter.",
+    "link": {
+      "title": "Single-precision floating-point format — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format"
+    }
+  },
+  {
+    "id": "syn-oscillators-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're deciding whether each oscillator's phase should reset to 0 on note-on or run freely. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Resetting gives the same attack waveform every note, which suits punchy basses and drums",
+        "explanation": "Correct. Every note starts at the same point in the cycle, so attacks are consistent."
+      },
+      {
+        "text": "Resetting phase on note-on can never cause a click",
+        "explanation": "If the voice is still sounding (e.g. a legato retrigger or a stolen voice), jumping the phase to 0 is a discontinuity and can click."
+      },
+      {
+        "text": "With two detuned free-running oscillators, the beating pattern differs from note to note",
+        "explanation": "Correct. Their relative phase at note-on is effectively random, so the beating starts at a different point each time."
+      },
+      {
+        "text": "Free-running oscillators make each note's start slightly different, similar to many analogue synths",
+        "explanation": "Correct. The phase at note-on depends on timing, giving natural variation."
+      },
+      {
+        "text": "Free-running oscillators must be stopped between notes to save CPU, so they can't really free-run",
+        "explanation": "A free-running oscillator only needs its phase advanced; whether you process silent voices is a separate CPU decision."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Consider what the listener hears at note start:\n\n- **Reset:** identical start every time. Predictable, punchy, can click if the voice was already sounding.\n- **Free-run:** start point varies. More organic; detuned oscillators beat differently each note.\n\nMany synths make it a per-patch option. Either way, a phase jump on a *sounding* voice is a discontinuity, so pair resets with an envelope starting from silence or a short fade.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  }
+]

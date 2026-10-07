@@ -1,0 +1,345 @@
+[
+  {
+    "id": "mls-lifecycle-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A feature pipeline starts writing `0` instead of the customer's real age because an upstream column was renamed. What is the **most likely** visible symptom in a production churn model?",
+    "options": [
+      {
+        "text": "The prediction service crashes with a type error",
+        "explanation": "Incorrect. `0` is a perfectly valid number, so nothing fails type checks. This is the misconception that ML bugs announce themselves like ordinary software bugs."
+      },
+      {
+        "text": "The model refuses to predict because the age is out of its training range",
+        "explanation": "Incorrect. Standard models have no notion of refusing; they extrapolate or simply apply their learned weights to whatever arrives."
+      },
+      {
+        "text": "The model automatically retrains to adapt to the new values",
+        "explanation": "Incorrect. Retraining happens only if a pipeline triggers it, and retraining on broken data would make things worse, not better."
+      },
+      {
+        "text": "Nothing errors; predictions quietly get worse until someone notices a business metric drop",
+        "explanation": "Correct. Models return confident outputs for any valid input. Silent degradation is the default failure mode, which is why ML systems need data validation and monitoring."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ask what the serving code sees: a row with `age = 0`. That is a valid float.\n2. The model multiplies it by learned weights (or sends it down a tree branch) and returns a score. No exception.\n3. The scores are now systematically wrong for everyone, but every request returns HTTP 200.\n4. The only ways to catch this are input validation (age should never be 0 for adults), distribution monitoring (the age histogram collapsed to one bar) or, much later, accuracy monitoring once labels arrive.\n\nThat is why the lesson calls silent failure the default for ML.",
+    "link": {
+      "title": "Hidden Technical Debt in ML Systems (NeurIPS 2015)",
+      "url": "https://papers.nips.cc/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A product manager asks for \"an ML model to flag risky orders\". There is no existing system. According to the lifecycle in this lesson, what should you do **first**?",
+    "options": [
+      {
+        "text": "Train a gradient-boosted model on whatever order data exists and measure its AUC",
+        "explanation": "Incorrect. Training before framing means you have no agreed decision, metric or baseline to compare the AUC against."
+      },
+      {
+        "text": "Define the decision the flag drives, the business metric, a proxy metric and a simple rule-based baseline",
+        "explanation": "Correct. Framing comes first: what happens to a flagged order, how success is measured, and what a heuristic achieves. The baseline may even be good enough to ship while data is collected."
+      },
+      {
+        "text": "Pick the deep-learning framework and GPU instance type",
+        "explanation": "Incorrect. Infrastructure choices depend on latency, volume and the decision being made, none of which are known yet."
+      },
+      {
+        "text": "Set up automated nightly retraining",
+        "explanation": "Incorrect. Automating the retraining of a model that has not been framed or shown to beat a baseline is building the pipeline before the product."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Walk the loop from the top:\n\n1. **Frame**: does a flag block the order, hold it for review, or add friction? That decides the cost of false positives.\n2. **Metric**: fraud loss prevented minus review cost; offline proxy might be precision at the review team's daily capacity.\n3. **Baseline**: e.g. \"flag orders over £1,000 to a new address\". Measure it.\n4. Only then collect labels and train, and require the model to beat the baseline.\n\nGoogle's Rules of ML make the same point: launching without ML first is often right.",
+    "link": {
+      "title": "Rules of Machine Learning — Google",
+      "url": "https://developers.google.com/machine-learning/guides/rules-of-ml"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does **CACE** (\"Changing Anything Changes Everything\") warn about?",
+    "options": [
+      {
+        "text": "Any change to the code requires a full redeploy of every microservice",
+        "explanation": "Incorrect. That is a deployment-coupling concern from general software architecture, not the ML-specific entanglement CACE describes."
+      },
+      {
+        "text": "Cache invalidation is the hardest problem in ML serving",
+        "explanation": "Incorrect. The acronym is unrelated to caches; this confuses it with a well-known systems joke."
+      },
+      {
+        "text": "Changing one input feature, its scaling or a hyperparameter can shift all of a model's learned behaviour, so changes are never truly isolated",
+        "explanation": "Correct. Learned weights are entangled: the model compensates across features, so a local change has global effects and must be re-evaluated end to end."
+      },
+      {
+        "text": "Changing the training data never matters if the code is unchanged",
+        "explanation": "Incorrect. This is the opposite of the point: in ML, data changes alter behaviour even with identical code."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose a model uses `income` and `postcode_wealth`, which are correlated.\n2. You rescale `income`. Gradient descent now finds a different balance of weights between the two features.\n3. Predictions change for people whose income never changed.\n4. So every change, however small, must go back through full offline evaluation and the promotion gate.",
+    "link": {
+      "title": "Hidden Technical Debt in ML Systems (NeurIPS 2015)",
+      "url": "https://papers.nips.cc/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace the lesson's promotion gate (`min_gain=0.005`, `max_slice_drop=0.01`).\n\n```\nchamp overall 0.810\n  uk 0.800  new_users 0.760\ncand  overall 0.818\n  uk 0.812  new_users 0.752\n```\n\nWhat does `promote(cand, champ, [\"uk\", \"new_users\"])` return?",
+    "options": [
+      {
+        "text": "`(False, \"not better\")`",
+        "explanation": "Incorrect. The overall gain is 0.818 − 0.810 = 0.008, which clears the 0.005 threshold, so the first check passes."
+      },
+      {
+        "text": "`(False, \"worse on new_users\")`",
+        "explanation": "Incorrect. The new_users drop is 0.760 − 0.752 = 0.008, which is below the 0.01 limit, so this slice does not block promotion."
+      },
+      {
+        "text": "`(False, \"worse on uk\")`",
+        "explanation": "Incorrect. The uk slice improved (0.800 to 0.812), so its \"drop\" is negative."
+      },
+      {
+        "text": "`(True, \"promote\")`",
+        "explanation": "Correct. Gain 0.008 ≥ 0.005, uk drop −0.012 and new_users drop 0.008 are both ≤ 0.01, so the loop finishes and the function promotes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `gain = 0.818 - 0.810 = 0.008`. Is `0.008 < 0.005`? No, continue.\n2. Slice `uk`: `drop = 0.800 - 0.812 = -0.012`. Is it `> 0.01`? No.\n3. Slice `new_users`: `drop = 0.760 - 0.752 = 0.008`. Is it `> 0.01`? No.\n4. Loop ends, return `(True, \"promote\")`.\n\nNote the gate still lets a slice get slightly worse. Whether 0.008 AUC on new users is acceptable is a product decision encoded in `max_slice_drop`.",
+    "link": {
+      "title": "The ML Test Score rubric — Google Research",
+      "url": "https://research.google/pubs/the-ml-test-score-a-rubric-for-ml-production-readiness-and-technical-debt-reduction/"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team predicts next-month spending from two years of customer data. They shuffle all rows and split 80/20 at random. Offline R² is 0.71; live performance is much worse. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Random splitting let the model train on rows from the same periods (and the future) it was tested on, inflating the offline score",
+        "explanation": "Correct. With time-dependent behaviour, a random split mixes future information into training. A time-based split (train on earlier months, test on later) mimics deployment honestly."
+      },
+      {
+        "text": "The test set was too small to be reliable",
+        "explanation": "Incorrect. 20% of two years of customers is large; a small sample would add noise, not a systematic optimistic bias."
+      },
+      {
+        "text": "R² is the wrong metric for regression",
+        "explanation": "Incorrect. R² is a reasonable regression metric. The problem is how the evaluation data was chosen, not the formula."
+      },
+      {
+        "text": "The model must be underfitting",
+        "explanation": "Incorrect. Underfitting would show poor offline scores too. Good offline, bad online points to a flawed evaluation setup or skew."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In deployment the model always predicts the **future** from the **past**.\n2. A random split puts, say, March 2025 rows in both train and test. Seasonal effects, promotions and price changes from that month are visible during training.\n3. The test set therefore rewards memorising period effects that will not repeat.\n4. Fix: train on months 1 to 20, validate on 21 to 22, test on 23 to 24. Expect a lower but honest score.",
+    "link": {
+      "title": "Leakage (machine learning) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Leakage_(machine_learning)"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Six months from now you must rebuild exactly the model that is in production today. Which of these must have been recorded? Select all that apply.",
+    "options": [
+      {
+        "text": "The git commit of the training and feature code",
+        "explanation": "Correct. Feature logic and model definition live in code; without the commit you cannot rerun the same transformations."
+      },
+      {
+        "text": "A snapshot or immutable version of the training data and labels",
+        "explanation": "Correct. Re-querying a live table later returns different rows (late labels, deletions, backfills), so the data must be versioned."
+      },
+      {
+        "text": "Hyperparameters, configuration and random seeds",
+        "explanation": "Correct. Learning rate, regularisation and seeds all change the result."
+      },
+      {
+        "text": "Library versions and the hardware/driver environment",
+        "explanation": "Correct. A different framework or CUDA version can change numerics and defaults."
+      },
+      {
+        "text": "Only the final model file, since everything else can be inferred from it",
+        "explanation": "Incorrect. The weights alone do not tell you how they were produced, what data they saw or how to retrain them on new data."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Think of a model as the output of a function:\n\n```\nmodel = train(code, data,\n              config, env)\n```\n\nChange any argument and the output changes. So you version all four inputs, plus the output artefact and its metrics. Experiment trackers and model registries exist to tie these together per run. Even then, GPU non-determinism means you may get a statistically equivalent rather than bit-identical model.",
+    "link": {
+      "title": "MLflow Model Registry docs",
+      "url": "https://mlflow.org/docs/latest/ml/model-registry/"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want to know whether a new ranking model's latency and score distribution look sane on real traffic **without any user seeing its results**. Which deployment pattern fits?",
+    "options": [
+      {
+        "text": "Canary release to 5% of users",
+        "explanation": "Incorrect. In a canary, 5% of users really receive the new model's output, so users are affected."
+      },
+      {
+        "text": "Shadow deployment: score live requests with the new model and only log its outputs",
+        "explanation": "Correct. Shadow mode duplicates traffic to the candidate, records latency and predictions, and discards them, so you can compare against the champion with zero user impact."
+      },
+      {
+        "text": "A/B test with 50/50 traffic",
+        "explanation": "Incorrect. An A/B test exists to measure user-facing impact; half of users see the new rankings."
+      },
+      {
+        "text": "Offline evaluation on last month's test set",
+        "explanation": "Incorrect. This uses historical data, not real live traffic, so it cannot reveal live latency or serving-path bugs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Order the patterns by user exposure:\n\n| Pattern | Users see it? |\n|---|---|\n| Offline eval | No, not live |\n| Shadow | No, live |\n| Canary | A few |\n| A/B | A large share |\n\nThe requirement is \"live traffic, no user impact\", which is exactly shadow mode. It catches serving bugs and skew before any user sees a result, but cannot measure business impact; that needs the canary or A/B stage.",
+    "link": {
+      "title": "Continuous Delivery for Machine Learning — martinfowler.com",
+      "url": "https://martinfowler.com/articles/cd4ml.html"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team retrains by hand: a data scientist reruns a notebook every few months and uploads the model file. In Google's MLOps maturity terms, what is the key step to the next level?",
+    "options": [
+      {
+        "text": "Move the notebook to a bigger GPU so it runs faster",
+        "explanation": "Incorrect. Speed does not change the process; a faster manual step is still a manual step."
+      },
+      {
+        "text": "Switch to a deep-learning model",
+        "explanation": "Incorrect. Maturity is about process and automation, not model family."
+      },
+      {
+        "text": "Turn training into an automated pipeline (data validation, training, evaluation, registration) that can run on fresh data without a human",
+        "explanation": "Correct. Level 1 is about making the pipeline, not the model, the deployable unit, enabling continuous training."
+      },
+      {
+        "text": "Add more features",
+        "explanation": "Incorrect. More features can help accuracy, but do nothing for repeatability or retraining cadence."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Level 0: manual, script-driven, models handed over as files. Retraining is rare and fragile.\n2. Level 1: an orchestrated pipeline runs the same steps every time (validate data, train, evaluate against a gate, push to registry). Triggers can be schedules or drift alerts.\n3. Level 2: the pipeline's own code goes through CI/CD.\n\nThe team is at level 0. Automating the pipeline is the step that unlocks regular retraining.",
+    "link": {
+      "title": "MLOps: continuous delivery in ML — Google Cloud",
+      "url": "https://cloud.google.com/architecture/mlops-continuous-delivery-and-automation-pipelines-in-machine-learning"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A news recommender is retrained daily on click logs. Over months, the homepage shows an ever-narrower set of topics and click-through rate slowly falls. Which mechanism best explains this, and what is the standard mitigation?",
+    "options": [
+      {
+        "text": "A feedback loop: the model only gets labels for items it chose to show, so it keeps reinforcing its own picks; mitigate with a little randomised exploration and logging of what was shown and why",
+        "explanation": "Correct. Unshown items never get clicks, so the model never learns they might be good. Exploration (and propensity logging for off-policy correction) breaks the loop."
+      },
+      {
+        "text": "Covariate shift in users' devices; mitigate by retraining more often",
+        "explanation": "Incorrect. Device mix is not implied, and retraining more often on the same self-generated data would accelerate the narrowing."
+      },
+      {
+        "text": "Overfitting; mitigate by adding dropout",
+        "explanation": "Incorrect. Overfitting to the training set is not the issue; the training data itself is biased by the model's previous choices."
+      },
+      {
+        "text": "Label leakage; mitigate with a time-based split",
+        "explanation": "Incorrect. Leakage inflates offline scores via unavailable information. Here the issue is which data gets collected at all."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Day 1: the model shows topics A and B. Users click some A and B.\n2. Topic C was never shown, so it has zero clicks in the logs.\n3. Day 2's model learns \"A and B get clicks; C does not\" and shows even less C.\n4. Repeat: the catalogue the model believes in shrinks, and users bored of A and B click less.\n\nMitigation: reserve a small share of slots for exploration (show some items at random or by uncertainty), log the probability each item was shown, and use that to correct training. This is a core ML-specific design concern with no equivalent in ordinary services.",
+    "link": {
+      "title": "Hidden Technical Debt in ML Systems (NeurIPS 2015)",
+      "url": "https://papers.nips.cc/paper/2015/hash/86df7dcfd896fcaf2674f757a2463eba-Abstract.html"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A candidate model beats the champion by 1.5 AUC points offline, but a two-week A/B test shows no change in revenue. Which are plausible explanations? Select all that apply.",
+    "options": [
+      {
+        "text": "The improvement is concentrated in examples that do not affect decisions, such as low-ranked items no user ever scrolls to",
+        "explanation": "Correct. AUC rewards ordering across the whole list; the business only cares about the top few slots. Gains elsewhere are invisible online."
+      },
+      {
+        "text": "Training/serving skew means the live model receives different feature values than it was evaluated on",
+        "explanation": "Correct. If a feature is computed differently online, the offline gain never materialises. This is lesson 2's topic."
+      },
+      {
+        "text": "The offline test set was not representative of current traffic (old period, or random split leakage)",
+        "explanation": "Correct. An optimistic or stale offline evaluation can show gains that do not exist today."
+      },
+      {
+        "text": "An A/B test cannot measure revenue, only clicks",
+        "explanation": "Incorrect. A/B tests can measure any metric you log per user or session, including revenue, provided the test has enough statistical power."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Treat the gap as a debugging problem with three suspects:\n\n1. **Metric mismatch**: is the proxy (AUC) aligned with the decision (top-5 ranking)? Check precision or NDCG at the cut-off actually shown.\n2. **Skew**: log the features the live model received and rerun offline scoring on them. If the score drops, it is skew.\n3. **Evaluation data**: was the test set from a time-based split, recent and free of leakage?\n\nAlso check the A/B test's power: a real but small effect may need more traffic or time. \"A/B tests cannot measure revenue\" is simply false.",
+    "link": {
+      "title": "Rules of Machine Learning — Google",
+      "url": "https://developers.google.com/machine-learning/guides/rules-of-ml"
+    }
+  },
+  {
+    "id": "mls-lifecycle-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A loan-default model gets its true labels about 12 months after each decision. The team wants to retrain weekly. What is the main problem?",
+    "options": [
+      {
+        "text": "Weekly retraining is too expensive for tabular models",
+        "explanation": "Incorrect. Tabular models are usually cheap to train. Cost is not the binding constraint."
+      },
+      {
+        "text": "Weekly retraining always causes overfitting",
+        "explanation": "Incorrect. Retraining frequency does not by itself cause overfitting; that depends on model capacity and data."
+      },
+      {
+        "text": "The model will automatically detect concept drift each week",
+        "explanation": "Incorrect. Detecting concept drift needs labels, which are exactly what is missing."
+      },
+      {
+        "text": "Most of each week's new data has no label yet, so weekly retraining adds almost no new supervised signal and may bias the training set towards older or early-defaulting loans",
+        "explanation": "Correct. Labels lag by a year. Recent loans are unlabelled, and loans that default quickly get labelled first, so naive inclusion skews the data. Cadence should follow label availability, with proxies for earlier monitoring."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A loan issued this week is labelled \"defaulted\" or \"repaid\" about a year from now.\n2. So retraining this week can only use loans issued a year or more ago, which barely changes week to week.\n3. Worse, if you treat \"not yet defaulted\" as \"repaid\", you mislabel recent loans. If you only include loans that have already defaulted, you over-represent early defaulters.\n4. Sensible plan: retrain on a cadence matched to labels (monthly or quarterly on fully matured cohorts), and monitor input drift and early proxies (missed first payment) in between.",
+    "link": {
+      "title": "Concept drift — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Concept_drift"
+    }
+  }
+]

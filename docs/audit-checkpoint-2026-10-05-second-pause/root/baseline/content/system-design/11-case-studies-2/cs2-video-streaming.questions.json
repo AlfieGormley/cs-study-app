@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs2-video-streaming-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an HLS-based video service, what does the `GET /videos/{id}/play` endpoint on your API servers typically return?",
+    "options": [
+      {
+        "text": "A signed URL to a manifest (master playlist) on the CDN, plus DRM licence details",
+        "explanation": "Correct. The player fetches the manifest from the CDN, picks a rendition and pulls segments over plain HTTP. The API only authorises playback and hands out signed, expiring URLs."
+      },
+      {
+        "text": "The video bytes, streamed from the API server over a long-lived HTTP response",
+        "explanation": "Wrong. Streaming tens of Tbps through API servers would be ruinously expensive and slow. The API tier serves only small control-plane responses, and the bytes come from the CDN."
+      },
+      {
+        "text": "A WebSocket connection over which the server pushes segments at the right bitrate",
+        "explanation": "Wrong. In HLS/DASH the client pulls segments and decides the bitrate itself. Server push over WebSockets would defeat ordinary HTTP caching, which is the main reason HTTP streaming won."
+      },
+      {
+        "text": "A single MP4 URL at the highest bitrate, which the player downscales locally",
+        "explanation": "Wrong. This is progressive download. It can't adapt to the network, so a viewer on 2 Mbps 4G would stall constantly on a 15 Mbps 4K file."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Separate the **control plane** from the **data plane**:\n\n1. Control plane (your API): is this user allowed to watch? Which CDN node should they use? Here is a signed manifest URL valid for a few hours.\n2. Data plane (CDN): the player downloads `master.m3u8`, sees the variants (480p at 1 Mbps, 1080p at 5 Mbps, ...), picks one based on measured throughput and buffer, then fetches 6 s segments one by one.\n\nThe API response is a few hundred bytes. The video might be gigabytes. Keeping them apart is what lets the API tier stay small while the CDN scales to Tbps.",
+    "link": {
+      "title": "HTTP Live Streaming (Apple developer docs)",
+      "url": "https://developer.apple.com/documentation/http-live-streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You expect 200 M daily viewers, each watching an average of 1 hour at an average 3 Mbps. Peak concurrency is about 2x the daily average. Roughly what peak egress must your delivery tier sustain?",
+    "options": [
+      {
+        "text": "About 5 Tbps",
+        "explanation": "Wrong, by 10x. This usually comes from dividing by 24 and then forgetting the peak factor, or from slipping a decimal place in the concurrency (0.83 M instead of 8.3 M)."
+      },
+      {
+        "text": "About 25 Tbps",
+        "explanation": "Close, but this is the *average* (8.3 M x 3 Mbps). Capacity must be planned for peak, which the question puts at 2x average."
+      },
+      {
+        "text": "About 50 Tbps",
+        "explanation": "Correct. Average concurrency is 200 M x 1/24 = 8.3 M. Peak is about 17 M. 17 M x 3 Mbps = 51 Tbps."
+      },
+      {
+        "text": "About 600 Tbps",
+        "explanation": "Wrong. This assumes all 200 M viewers watch at the same time (200 M x 3 Mbps). Daily viewers are spread across the day, so concurrency is much lower than DAU."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Step by step:\n\n1. Viewer-hours per day = 200 M x 1 h = 200 M.\n2. Average concurrent viewers = 200 M viewer-hours / 24 h = **8.3 M**.\n3. Peak = 2 x 8.3 M = **~17 M**.\n4. Egress = 17 M x 3 Mbps = 51 M Mbps = **51 Tbps**.\n\nFor comparison, a large data centre might have a few Tbps of internet transit. So the bytes *must* be served from thousands of edge locations, ideally inside ISPs.\n\nDaily volume as a sanity check: 200 M x 3,600 s x 3 Mbps / 8 = 2.7 x 10^17 bytes = **270 PB/day**.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A creator uploads a 2-hour film. Encoding it serially on one machine takes 6 hours. Which design gets it watchable in minutes?",
+    "options": [
+      {
+        "text": "Give the job a much larger machine (e.g. 192 cores) and run ffmpeg with more threads",
+        "explanation": "Wrong. A single encoder's parallelism tops out well below that core count because of frame dependencies and lookahead. You'd still wait a long time, and one crash restarts everything."
+      },
+      {
+        "text": "Transcode on the fly at the CDN edge when a viewer first requests each segment",
+        "explanation": "Wrong as the main strategy. Edge transcoding adds latency to every cold request, repeats work on every edge node, and needs heavy CPU at thousands of sites. It's occasionally used for niche formats, but not as the primary pipeline."
+      },
+      {
+        "text": "Split the source into keyframe-aligned chunks, fan out one idempotent task per chunk and rendition to a worker pool, then stitch the outputs",
+        "explanation": "Correct. With 4 s chunks, a 2-hour film is 1,800 chunks, or 10,800 tasks across 6 renditions. They run in parallel across thousands of cores, retry individually, and finish in minutes."
+      },
+      {
+        "text": "Only produce a 240p rendition at first, because it encodes fastest",
+        "explanation": "Partially useful (quick low renditions improve time to first watch), but on its own it gives viewers poor quality and doesn't solve the 6-hour wait for the full ladder."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Do the arithmetic:\n\n- 2 h = 7,200 s. At 4 s per chunk that is **1,800 chunks**.\n- 6 renditions gives **10,800 tasks**.\n- Serial cost is 6 h per rendition-set, so each chunk-rendition task is roughly 6 h x 3,600 s / 10,800 = **2 s** of work (in reality a bit more, due to per-task overhead).\n- With 2,000 workers, the wall-clock time is dominated by scheduling and the assembly step: **a few minutes**.\n\nThe critical details:\n1. Cut on **GOP/keyframe** boundaries so chunks decode independently.\n2. Make each task **idempotent**, writing to a deterministic path such as `/{video}/{rendition}/{chunk}.m4s`, so retries are safe.\n3. Orchestrate it as a DAG: probe, split, encode (fan out), package and manifest, mark ready.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q4",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Netflix serves almost all of its video from Open Connect Appliances embedded in ISPs. Which properties of Netflix's workload make **proactive overnight filling** of those caches work well? Select all that apply.",
+    "options": [
+      {
+        "text": "The catalogue is relatively small and curated (tens of thousands of titles), so a large share fits on each appliance",
+        "explanation": "Correct. A bounded catalogue means a set of appliances in one ISP can hold most of what that region will watch. YouTube's unbounded long tail can't be pre-positioned like this."
+      },
+      {
+        "text": "Viewing popularity is predictable a day ahead from regional history and release schedules",
+        "explanation": "Correct. If you can forecast tomorrow's demand, you can push it during off-peak hours, when the links are idle and cheap, rather than pulling at peak."
+      },
+      {
+        "text": "Traffic is strongly diurnal, leaving spare network capacity overnight",
+        "explanation": "Correct. Evening peaks and overnight troughs mean fill traffic can use capacity that would otherwise sit idle, keeping peak links free for playback."
+      },
+      {
+        "text": "Most content is live, so it must be pushed before anyone requests it",
+        "explanation": "Wrong. Netflix is overwhelmingly on-demand. Live content is the *hardest* case for pre-positioning, because it doesn't exist until it's broadcast."
+      },
+      {
+        "text": "Viewers rarely seek, so only the first few minutes of each title need caching",
+        "explanation": "Wrong. The fill places entire titles (all needed renditions). Viewers watch whole episodes and do seek, so first-minutes-only caching would cause misses mid-play."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask what proactive push needs:\n\n1. **Something bounded to push**: a curated catalogue. With a 100 TB+ appliance and a catalogue of a few PB across all renditions, a cluster of appliances in one ISP can hold the regionally popular majority.\n2. **Knowing what to push**: predictable popularity (new releases, regional trends).\n3. **A cheap time to push**: diurnal troughs.\n\nContrast YouTube: 720,000 new hours a day with unpredictable virality, so it relies on **pull-through** tiered caches (edge, then regional shield, then origin), where the first request populates the cache.\n\nLive and 'first few minutes only' both fail the reasoning above.",
+    "link": {
+      "title": "Netflix Open Connect overview",
+      "url": "https://openconnect.netflix.com/en/"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your player uses a purely throughput-based ABR algorithm. Viewers on mobile complain that quality keeps jumping between 480p and 1080p every few seconds. What is the most effective change?",
+    "options": [
+      {
+        "text": "Switch to a buffer-based or hybrid algorithm that chooses the bitrate mainly from buffer occupancy, with hysteresis",
+        "explanation": "Correct. Buffer-based approaches (such as Netflix's BBA research) are far more stable. A full buffer can ride out a short throughput dip without downshifting, and hysteresis prevents flapping."
+      },
+      {
+        "text": "Make segments 1 second long so the player reacts faster",
+        "explanation": "Wrong. Faster reaction makes oscillation *worse*, because each noisy throughput sample triggers a switch. It also adds request overhead and more keyframes."
+      },
+      {
+        "text": "Remove the 720p rendition so there are fewer rungs to switch between",
+        "explanation": "Wrong. Fewer rungs make each switch a *bigger* visible jump (480p straight to 1080p) and waste bandwidth. The ladder isn't the cause of the instability."
+      },
+      {
+        "text": "Have the server choose the bitrate instead of the client",
+        "explanation": "Wrong. The server knows even less about the client's last-mile conditions and buffer state. It also breaks the stateless, cacheable segment model."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Diagnose the cause:\n\n- Mobile throughput is noisy. One segment downloads at 8 Mbps and the next at 2 Mbps.\n- A throughput rule like 'pick the highest bitrate below 0.8 x the last measured throughput' flips between 5 Mbps (1080p) and 1 Mbps (480p) every segment.\n\nThe fix is to use the **buffer** as a shock absorber:\n\n| Buffer | Choice |\n|---|---|\n| < 10 s | lowest safe rung |\n| 10–30 s | step up gradually |\n| > 30 s | top sustainable rung |\n\nWith 30 s buffered, a 4 s dip doesn't threaten a stall, so there's no reason to drop quality. Add hysteresis (require sustained evidence before switching) and the flapping stops.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "AV1 saves about 40% of bits versus H.264 at equal quality, but costs about 8x the encode CPU. Encoding a 10-minute video in AV1 costs $0.40 extra. Egress costs $0.01 per GB. The H.264 version averages 2.5 Mbps. Roughly how many minutes watched must the video get before AV1 pays for itself?",
+    "options": [
+      {
+        "text": "About 50 minutes watched",
+        "explanation": "Wrong. This misses the conversion from bits to bytes. 2.5 Mbps is 0.31 MB/s, not 2.5 MB/s, so the saving per minute is about 8x smaller than this answer implies."
+      },
+      {
+        "text": "About 360 minutes watched (roughly 36 full views)",
+        "explanation": "Wrong. 360 minutes saves only 360 x 7.5 MB = 2.7 GB, which is $0.027 of egress, about 15x short of the $0.40 encode cost. Always finish by multiplying the per-minute saving back out and comparing it with the cost."
+      },
+      {
+        "text": "About 5,300 minutes watched (roughly 530 full views)",
+        "explanation": "Correct. One minute at 2.5 Mbps is 18.75 MB. AV1 saves 40%, which is 7.5 MB = 0.0075 GB, or $0.000075 per minute watched. $0.40 / $0.000075 = ~5,333 minutes."
+      },
+      {
+        "text": "It never pays off, because CPU is always more expensive than bandwidth",
+        "explanation": "Wrong. The encode is paid **once** but the saving recurs on **every** view. For any popular video the egress saving dominates, which is exactly why platforms re-encode hot videos in AV1."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Bytes per minute at 2.5 Mbps: 2.5e6 b/s x 60 s / 8 = **18.75 MB**.\n2. AV1 saves 40%: 0.4 x 18.75 = **7.5 MB = 0.0075 GB** per minute watched.\n3. Saving per minute: 0.0075 x $0.01 = **$0.000075**.\n4. Break-even: $0.40 / $0.000075 = **~5,333 minutes**, or about 530 full 10-minute views.\n\nSo a policy of 'encode H.264 on upload, add AV1 once a video passes about 500–1,000 views' is cost-justified. Most uploads never reach that, which is why encoding everything in AV1 up front would waste huge amounts of compute.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must support both Apple devices (HLS) and Android/web players (DASH). Storage and CDN cache footprint are major costs. What packaging approach minimises them?",
+    "options": [
+      {
+        "text": "Store separate MPEG-TS segments for HLS and separate fMP4 segments for DASH",
+        "explanation": "Wrong. This doubles storage and halves CDN cache efficiency, because the same frames are cached twice under different URLs."
+      },
+      {
+        "text": "Repackage on the fly at the edge from a single mezzanine file",
+        "explanation": "Just-in-time packaging is a legitimate technique (used by some origins), but doing it at every edge costs CPU at thousands of sites and still caches two formats. CMAF achieves the saving without per-request work."
+      },
+      {
+        "text": "Use only DASH and ship a JavaScript DASH player on iOS Safari",
+        "explanation": "Wrong in practice. Native iOS apps and AirPlay rely on HLS, and FairPlay DRM is built around HLS. Dropping HLS breaks a large share of devices."
+      },
+      {
+        "text": "Package once as CMAF (fragmented MP4) segments, and publish both an HLS playlist and a DASH MPD that reference the same files",
+        "explanation": "Correct. CMAF exists for exactly this purpose. One set of segment files, two small manifests. Storage and edge cache footprint are roughly halved compared with dual packaging."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think of segments as the expensive part and manifests as the cheap part:\n\n- Segments: gigabytes per title, cached at every edge.\n- Manifests: kilobytes.\n\nBefore CMAF, HLS used MPEG-TS and DASH used fMP4, so every title existed twice. With CMAF:\n\n```\n/v/123/1080p/seg_0001.m4s  (shared)\n/v/123/master.m3u8         (HLS)\n/v/123/manifest.mpd        (DASH)\n```\n\nAt 6–8 PB/day of new renditions, avoiding duplication saves petabytes a day, and doubles the effective size of each edge cache.",
+    "link": {
+      "title": "Dynamic Adaptive Streaming over HTTP (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A creator on a train is uploading a 4 GB video from a phone in 8 MB chunks. The connection drops after 3.1 GB. What should happen when the app reconnects?",
+    "options": [
+      {
+        "text": "The app restarts the upload from byte 0, because a partial object in storage may be corrupt",
+        "explanation": "Wrong. Throwing away 3.1 GB on every dropout means a long upload on a flaky link may never finish. Resumable protocols exist precisely to avoid this."
+      },
+      {
+        "text": "The app asks the upload endpoint for the last committed offset, then sends only the chunks after it",
+        "explanation": "Correct. Google's resumable uploads, tus and S3 multipart all work this way. Only the chunk in flight when the link dropped (at most 8 MB) is resent."
+      },
+      {
+        "text": "The API server buffers the whole upload in memory, so the app can just carry on sending where it thinks it stopped",
+        "explanation": "Wrong twice. Multi-GB bodies shouldn't pass through API servers at all, and the client can't know which in-flight bytes actually arrived, so it must ask the server for the committed offset."
+      },
+      {
+        "text": "The app re-sends the last 3.1 GB in parallel streams to make up time",
+        "explanation": "Wrong. Those bytes are already stored. Parallelism helps with the *remaining* parts (S3 multipart allows it), not with re-sending committed data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Think about what each side knows.\n\n1. The client knows what it *sent*. The server knows what it *committed*. After a dropout these differ.\n2. So the client asks: \"what have you got?\" The server answers with an offset, e.g. 3,095,396,352 bytes (369 chunks of 8 MB).\n3. The client resumes with `Content-Range: bytes 3095396352-...`.\n\nCost of a dropout: at most one chunk (8 MB) rather than the whole file. On a link that drops every few minutes, this is the difference between an upload finishing and never finishing.\n\nThe chunks go straight to object storage via a signed URL, so your API servers never see the bytes.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your transcoding pipeline runs on spot instances. A worker is reclaimed halfway through encoding chunk 412 of video `v9` at 720p, and the workflow engine retries the task on another machine. Which design choices make that retry safe? Select all that apply.",
+    "options": [
+      {
+        "text": "Outputs are written to a temporary key and only renamed or committed once the encode finishes",
+        "explanation": "Correct. Readers (the packager) never see a partial segment, and an abandoned temporary object is harmless garbage to clean up later."
+      },
+      {
+        "text": "Each attempt writes to a fresh random filename, so two attempts never collide",
+        "explanation": "Wrong. Random names mean a retry leaves orphaned outputs and the packager has to work out which one is real. Deterministic names make the retry idempotent instead."
+      },
+      {
+        "text": "The video is only marked `ready` after every task in the DAG has completed",
+        "explanation": "Correct. Marking ready early would publish a manifest pointing at a segment that doesn't exist yet. The DAG's final step is the single place that flips the status."
+      },
+      {
+        "text": "Workers increment a shared `chunks_done` counter when they finish",
+        "explanation": "Wrong. A counter increment is not idempotent. A task that finishes, crashes before acknowledging and is retried would count twice, and the video could be marked ready with a chunk missing."
+      },
+      {
+        "text": "Each task is keyed on `(video_id, chunk, rendition)` and writes to a deterministic path such as `v9/720p/0412.m4s`",
+        "explanation": "Correct. The retry overwrites the same object, so a half-written or duplicated output can't survive alongside the good one."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "The rule for any at-least-once pipeline: **assume every task runs more than once**.\n\nWalk the failure through:\n\n1. Attempt 1 writes half of `0412.m4s`, then the spot instance vanishes.\n2. The engine's lease on the task expires, and attempt 2 starts elsewhere.\n3. Attempt 2 writes the full output to the same path. The object store keeps the last complete write.\n4. Only when all 10,800 tasks report done does the final step write the manifests and set `status = ready`.\n\nCompare a counter: attempt 1 finishes and increments, crashes before acking, attempt 2 increments again. The count says 10,800 while one chunk is missing. Track completion as a *set* of task keys, not a number.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A music video goes viral with 2 M people watching at once. View counts are stored as `videos.view_count` in the sharded MySQL tier, and each player runs `UPDATE ... SET view_count = view_count + 1` when playback starts. The shard holding that video starts timing out. What is the best fix?",
+    "options": [
+      {
+        "text": "Move the shard to a bigger machine",
+        "explanation": "Wrong. Every increment to the same row takes the same row lock, so they serialise no matter how many cores you add. A bigger box buys little against a single hot row."
+      },
+      {
+        "text": "Re-shard `videos` by a hash of `video_id`",
+        "explanation": "Wrong. The video already lives on exactly one shard, and it's one row. No sharding key spreads writes to a single row."
+      },
+      {
+        "text": "Send view events to a log such as Kafka, deduplicate and aggregate per video per minute in a stream processor, and write the totals",
+        "explanation": "Correct. Thousands of increments a second become one write per video per minute. The count lags slightly, which nobody minds, and the stream step can also apply fraud rules such as a minimum watch time."
+      },
+      {
+        "text": "Cache the count in Redis and drop the database write",
+        "explanation": "Partly helpful for reads, but with no durable write the count is lost when Redis restarts, and there is still no deduplication or fraud filtering. The log-and-aggregate pattern solves both."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Quantify the hot spot. Suppose 2 M viewers start within about 10 minutes:\n\n```\n2,000,000 / 600 s = ~3,300 writes/s\n```\n\nall to **one row**. Each increment takes the row lock, writes redo and commits. Even at 1 ms each that saturates the row.\n\nWith stream aggregation:\n\n```\nKafka: 3,300 events/s (trivial)\nprocessor: sum per video per minute\nDB: 1 write/min for this video\n```\n\nThat is a reduction of about 200,000x for the hot row, and it gives you a place to dedupe one view per session.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You stream live football with 6-second HLS segments, and viewers hear neighbours cheer a goal 30 s before they see it. A colleague proposes cutting segments to 2 s. Which statement about that change is accurate?",
+    "options": [
+      {
+        "text": "It cuts latency with no downside, because segment length only affects the manifest",
+        "explanation": "Wrong. Each segment must start with a keyframe, so shorter segments mean more keyframes (worse compression) and three times as many HTTP requests per viewer."
+      },
+      {
+        "text": "It lowers latency, but triples segment requests and costs some compression because every segment starts with a keyframe. LL-HLS partial segments are the usual way to go lower still",
+        "explanation": "Correct. Players typically buffer around three segments before starting live playback, so 6 s segments imply roughly 18 s of buffer. 2 s segments cut that to about 6 s. LL-HLS goes further by publishing parts of a segment before it is complete."
+      },
+      {
+        "text": "It increases latency, because the player must fetch three times as many segments before starting",
+        "explanation": "Wrong. The player buffers a similar *number* of segments, so shorter segments mean less buffered time and lower latency."
+      },
+      {
+        "text": "It makes no difference to latency, which is set entirely by the CDN's cache TTL",
+        "explanation": "Wrong. Live latency is dominated by encode and packaging delay plus how much the player buffers, and buffer depth is measured in segments."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Break down where live latency comes from:\n\n```\nencode + package     ~ 1 segment\nCDN propagation      ~ 1-2 s\nplayer buffer      ~ 3 segments\n```\n\nWith 6 s segments: about 6 + 2 + 18 = **~26 s** behind live, close to the complaint.\n\nWith 2 s segments: about 2 + 2 + 6 = **~10 s**.\n\nThe cost: a viewer now makes 30 segment requests a minute instead of 10, and each 2 s segment starts with a keyframe, so the stream needs more bits for the same quality. For sub-5 s targets, LL-HLS or low-latency DASH deliver partial segments as they are produced, rather than shrinking whole segments further.",
+    "link": {
+      "title": "HTTP Live Streaming (Apple developer docs)",
+      "url": "https://developer.apple.com/documentation/http-live-streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An obscure video is suddenly shared by a celebrity. Within a minute, 3,000 edge caches worldwide miss on its first segments at the same moment. Which measures protect the origin object store? Select all that apply.",
+    "options": [
+      {
+        "text": "Generating a unique signed URL per viewer that is also used as the cache key",
+        "explanation": "Wrong. If the token is part of the cache key, every viewer misses. CDNs validate the token and then strip it from the key, so all viewers share one cached copy."
+      },
+      {
+        "text": "Prefetching the first few segments of each rendition into the regional tier when a video is published",
+        "explanation": "Correct. The opening segments are what every new viewer needs first, so having them warm in the shield removes the worst of the cold start."
+      },
+      {
+        "text": "Request collapsing at each cache tier, so concurrent misses for the same object wait on a single upstream fetch",
+        "explanation": "Correct. Without collapsing, 50 simultaneous misses at one shield node would still mean 50 origin fetches. With it, one fetch serves all 50."
+      },
+      {
+        "text": "An origin shield (regional cache tier) between the edges and the origin",
+        "explanation": "Correct. Edges miss to a handful of shield nodes rather than to origin, so 3,000 misses become a few origin fetches."
+      },
+      {
+        "text": "Lowering segment cache TTLs to a few seconds so caches stay fresh",
+        "explanation": "Wrong. Segments are immutable, so they can be cached for a long time. Short TTLs would *increase* origin traffic by forcing repeated revalidation."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Count origin fetches for one segment in each design:\n\n| Design | Origin fetches |\n|---|---|\n| Edges straight to origin | ~3,000 |\n| + shield (say 20 nodes) | ~20 |\n| + request collapsing | 1 per shield node at most |\n| + prefetched opening | ~0 for the first segments |\n\nThen check the traps. Immutable segments want *long* TTLs. Signed tokens are checked at the edge, not used as the cache key, otherwise the hit rate collapses to zero.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  }
+]

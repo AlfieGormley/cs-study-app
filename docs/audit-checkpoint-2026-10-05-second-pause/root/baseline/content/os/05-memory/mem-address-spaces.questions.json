@@ -1,0 +1,373 @@
+[
+  {
+    "id": "mem-address-spaces-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A process runs under base-and-bounds translation with **base = 40,000** and **bounds = 8,000**. The program loads from virtual address **5,000**. Which physical address is accessed?",
+    "options": [
+      {
+        "text": "5,000",
+        "explanation": "That is the virtual address. Under base and bounds the hardware always adds the base, so the program never sees its physical location."
+      },
+      {
+        "text": "45,000",
+        "explanation": "Correct. 5,000 is less than the bounds of 8,000, so the access is legal, and physical = 5,000 + 40,000 = 45,000."
+      },
+      {
+        "text": "48,000",
+        "explanation": "This adds the bounds to the base. The bounds is only used for the limit check, not in the address calculation."
+      },
+      {
+        "text": "It faults, because 5,000 is less than the base",
+        "explanation": "The check compares the *virtual* address with the bounds, not with the base. Virtual addresses start at 0 for every process."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Base and bounds does two things on every access:\n\n1. **Check**: is virtual < bounds? 5,000 < 8,000, so yes, the access is allowed.\n2. **Relocate**: physical = virtual + base = 5,000 + 40,000 = **45,000**.\n\nThe process's legal physical range is therefore 40,000 to 47,999. It can never reach anything outside that range, which is how the scheme provides protection.",
+    "link": {
+      "title": "OSTEP: Address Translation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-mechanism.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this program print? (Assume fork succeeds.)\n\n```c\nint x = 1;\nint main(void) {\n  if (fork() == 0) {\n    x = 2;\n    printf(\"c %p %d\\n\", (void*)&x, x);\n    return 0;\n  }\n  wait(NULL);\n  printf(\"p %p %d\\n\", (void*)&x, x);\n}\n```",
+    "options": [
+      {
+        "text": "Two different addresses; the child prints 2 and the parent prints 2",
+        "explanation": "The child's write cannot reach the parent's memory, and the addresses will match because the child's address space is a copy of the parent's."
+      },
+      {
+        "text": "The same address twice; the child prints 2 and the parent prints 2",
+        "explanation": "This assumes that the same virtual address means the same physical memory. Each process has its own mapping, so the child's write is invisible to the parent."
+      },
+      {
+        "text": "The same address twice; the child prints 2 and the parent prints 1",
+        "explanation": "Correct. The child's address space is a copy of the parent's, so `&x` is the same virtual address, but it maps to a separate physical frame once the child writes."
+      },
+      {
+        "text": "Two different addresses; the child prints 2 and the parent prints 1",
+        "explanation": "The values are right, but the addresses are the same: fork copies the address space layout exactly, including ASLR offsets."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `fork()` creates a child whose address space is a duplicate of the parent's: the same regions at the same virtual addresses.\n2. So `&x` is identical in both, for example `0x55e4c3a1b010`.\n3. The child writes `x = 2`. That write goes through the *child's* page tables to the child's copy of the page.\n4. The parent waits, then reads `x` through its own page tables and gets its own copy, still 1.\n\n```\nc 0x55e4c3a1b010 2\np 0x55e4c3a1b010 1\n```\n\nThe lesson: a virtual address is only meaningful inside one address space.",
+    "link": {
+      "title": "OSTEP: Address Spaces (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which problems does virtual memory solve for a multiprogrammed OS? Select all that apply.",
+    "options": [
+      {
+        "text": "Relocation: a program can run wherever it is placed in RAM without rewriting its pointers",
+        "explanation": "Correct. Each process uses its own virtual addresses, and the MMU maps them to wherever the OS put the data."
+      },
+      {
+        "text": "Protection: one process cannot read or overwrite another's memory",
+        "explanation": "Correct. A process can only reach physical memory that its own tables map, and kernel pages are supervisor-only."
+      },
+      {
+        "text": "Speed: memory accesses become faster than with physical addressing",
+        "explanation": "Wrong. Translation adds work to every access; the TLB exists to make that overhead small, not negative."
+      },
+      {
+        "text": "Sharing: one copy of a library's code can be mapped into many processes",
+        "explanation": "Correct. Several address spaces can map the same physical frames, typically read-only for code."
+      },
+      {
+        "text": "It removes the need for CPU caches",
+        "explanation": "Wrong. Caches address the speed gap between the core and DRAM, an entirely separate problem from translation."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Go through each option and ask: is this about *where* memory is, *who* can touch it, or how *fast* it is?\n\n- Relocation: yes, the core motivation. Programs use addresses from 0 and the OS places them anywhere.\n- Protection: yes, enforced by the MMU on every access.\n- Sharing: yes, mapping the same frames into many address spaces (libc is shared by almost every process).\n- Speed: no. Translation is overhead. Hardware (the MMU and TLB) keeps it cheap, but it never makes access faster than raw physical addressing.\n- Caches: no. Caches solve DRAM latency and are unaffected by whether addresses are virtual.",
+    "link": {
+      "title": "OSTEP: Address Spaces (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A process has **base = 100,000** and **bounds = 8,000**. It accesses virtual address **8,000**. What happens?",
+    "options": [
+      {
+        "text": "Physical address 108,000 is accessed",
+        "explanation": "This is an off-by-one error. Legal virtual addresses are 0 to bounds − 1, so 8,000 is one past the end."
+      },
+      {
+        "text": "Physical address 8,000 is accessed",
+        "explanation": "Base and bounds always adds the base; physical address 8,000 might belong to the kernel or another process."
+      },
+      {
+        "text": "The hardware raises a fault and the OS typically kills the process",
+        "explanation": "Correct. The check is virtual < bounds. 8,000 is not less than 8,000, so the access is out of range."
+      },
+      {
+        "text": "The OS automatically grows the bounds to 8,001",
+        "explanation": "Simple base-and-bounds hardware has no notion of growth on demand; it just faults. The OS would have to relocate the whole process to grow it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Bounds is the **size** of the address space: 8,000 bytes means virtual addresses 0 to 7,999.\n2. The hardware check is `virtual < bounds`.\n3. 8,000 < 8,000 is false, so the MMU raises an exception before any memory is touched.\n4. The OS's handler sees an illegal access by a user process and terminates it (the ancestor of today's SIGSEGV).\n\nOff-by-one at the boundary is a classic exam trap, so always check whether the limit is a size or a last valid address. On real hardware it varies; in this model it is the size.",
+    "link": {
+      "title": "OSTEP: Address Translation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-mechanism.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A toy machine uses 14-bit virtual addresses. The top 2 bits select the segment; the low 12 bits are the offset.\n\n| Seg | Base | Size |\n|---|---|---|\n| 00 code | 0x4000 | 0x800 |\n| 01 heap | 0x9000 | 0xC00 |\n\nWhat does virtual address **0x1A40** translate to?",
+    "options": [
+      {
+        "text": "0x9A40",
+        "explanation": "Correct. 0x1A40 is `01 1010 0100 0000`: segment 01 (heap), offset 0xA40. 0xA40 < 0xC00, so physical = 0x9000 + 0xA40 = 0x9A40."
+      },
+      {
+        "text": "0xAA40",
+        "explanation": "This adds the whole virtual address (0x1A40) to the base. The segment bits must be stripped off first; only the 12-bit offset is added."
+      },
+      {
+        "text": "0x5A40",
+        "explanation": "This uses the code segment's base. The top two bits are 01, which selects the heap."
+      },
+      {
+        "text": "Segmentation fault, offset out of range",
+        "explanation": "The offset 0xA40 (2,624) is below the heap size 0xC00 (3,072), so the access is legal."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Write 0x1A40 in binary: `0001 1010 0100 0000`.\n2. Keep the low 14 bits: `01 1010 0100 0000`.\n3. Top two bits `01` select the **heap**.\n4. Low 12 bits `1010 0100 0000` = **0xA40** = 2,624.\n5. Bounds check: 0xA40 < 0xC00 (3,072). Legal.\n6. Physical = base + offset = 0x9000 + 0xA40 = **0x9A40**.\n\nNotice the hex trick: with a 12-bit offset, the last three hex digits *are* the offset, and the leading digit 1 here means segment 01.",
+    "link": {
+      "title": "OSTEP: Segmentation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A segmentation-based system has 512 MiB of RAM. After hours of running, free memory consists of holes of 30 MiB, 25 MiB and 40 MiB (95 MiB in total). A new process needs a single 60 MiB segment. What is the problem, and what would solve it?",
+    "options": [
+      {
+        "text": "Internal fragmentation; use smaller segments",
+        "explanation": "Internal fragmentation is wasted space *inside* an allocated block. Here the waste is between allocations, which is external fragmentation."
+      },
+      {
+        "text": "Thrashing; add swap space",
+        "explanation": "Thrashing is about constant paging when the working set doesn't fit. This is a placement problem: the total is enough, but not contiguous."
+      },
+      {
+        "text": "External fragmentation; compact memory by moving segments together, or switch to fixed-size paging",
+        "explanation": "Correct. 95 MiB is free, but no hole is 60 MiB. Compaction can merge the holes (slowly, by copying), and paging avoids the problem since any free frame can hold any page."
+      },
+      {
+        "text": "The process is simply too big; there is not enough free memory",
+        "explanation": "There *is* enough in total (95 MiB > 60 MiB). The issue is that it is split into pieces too small to hold a contiguous segment."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Total free: 30 + 25 + 40 = 95 MiB, which exceeds the 60 MiB needed.\n2. A segment must be contiguous in physical memory. The largest hole is 40 MiB, so the request fails.\n3. Free space split into unusable pieces *between* allocations is **external fragmentation**.\n4. Fixes:\n   - **Compaction**: stop processes, copy their segments together, update base registers. This leaves one 95 MiB hole but costs a lot of copying.\n   - **Paging**: split memory into fixed-size frames. A 60 MiB region becomes 15,360 pages of 4 KiB that can go in any free frames.",
+    "link": {
+      "title": "OSTEP: Segmentation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does Linux deliberately leave virtual page 0 (addresses 0 to 4095) unmapped in every process?",
+    "options": [
+      {
+        "text": "Because the BIOS interrupt table lives at physical address 0",
+        "explanation": "That was true on real-mode PCs for *physical* address 0. Virtual page 0 could map to any frame; Linux leaves it unmapped for a different reason."
+      },
+      {
+        "text": "So that dereferencing a NULL pointer (or a small offset from it) faults immediately instead of reading or corrupting memory",
+        "explanation": "Correct. A NULL dereference becomes a clean SIGSEGV, and there is also a `vm.mmap_min_addr` setting that stops processes mapping low pages, which blocks a class of kernel exploits."
+      },
+      {
+        "text": "Because the kernel's code is mapped there",
+        "explanation": "On x86-64 Linux the kernel lives in the upper (negative) half of the address space, not at 0."
+      },
+      {
+        "text": "To save RAM, since page 0 would be wasted",
+        "explanation": "An unmapped page costs no RAM whether it is at 0 or anywhere else; the choice of page 0 is about catching bugs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In C, NULL is address 0. `p->field` on a NULL `p` reads from a small address such as 0x10.\n2. If page 0 were mapped, that read would quietly return garbage and the bug could go unnoticed or be exploited.\n3. With page 0 unmapped, the MMU finds no translation, raises a page fault, and the kernel finds no mapping there, so it sends **SIGSEGV**.\n4. Linux also enforces a minimum mmap address (`vm.mmap_min_addr`, commonly 65536) so a process cannot map page 0 on purpose. That blocks exploits where a kernel NULL-pointer bug would otherwise read attacker-controlled data.",
+    "link": {
+      "title": "Virtual memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Virtual_memory"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about segmentation on **x86-64 in 64-bit long mode** are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The base addresses of CS, DS, ES and SS are treated as 0",
+        "explanation": "Correct. Long mode ignores these bases, giving a flat address space."
+      },
+      {
+        "text": "The FS and GS segment bases are still honoured, and are used for thread-local storage",
+        "explanation": "Correct. glibc points FS at each thread's TLS block, and the kernel uses GS for per-CPU data."
+      },
+      {
+        "text": "Segment limits are checked on every data access, so Linux uses them to isolate processes",
+        "explanation": "Wrong. Long mode does not check limits for these segments, and Linux isolates processes with page tables, not segments."
+      },
+      {
+        "text": "Paging is optional in long mode; segmentation can be used instead",
+        "explanation": "Wrong. Long mode *requires* paging to be enabled. Segmentation is vestigial."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Remember the history:\n\n1. 8086: segment × 16 + offset, to reach 1 MiB.\n2. 286: protected-mode segments with base, limit and privilege.\n3. 386: paging added; Linux set every segment to base 0, limit 4 GiB, so segmentation did nothing.\n4. x86-64 long mode makes that official: CS/DS/ES/SS bases are 0 and limits aren't checked; paging is mandatory.\n\nThe survivor is FS/GS. A thread-local variable in C compiles to something like `mov %fs:-8, %rax`, which reads relative to the FS base.",
+    "link": {
+      "title": "Memory segmentation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_segmentation"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On x86-64 with 4-level paging (48-bit virtual addresses), which of these addresses is **non-canonical**, so that using it raises a fault even before any page table is consulted?",
+    "options": [
+      {
+        "text": "`0x00007fffffffffff`",
+        "explanation": "Canonical. Bits 63 to 47 are all 0. This is the highest user-space address on Linux."
+      },
+      {
+        "text": "`0xffff800000000000`",
+        "explanation": "Canonical. Bits 63 to 47 are all 1. This is the bottom of the kernel half."
+      },
+      {
+        "text": "`0x0000800000000000`",
+        "explanation": "Correct. Bit 47 is 1 but bits 63 to 48 are 0. They must all equal bit 47, so this address lies in the non-canonical 'hole'."
+      },
+      {
+        "text": "`0xffffffffffffffff`",
+        "explanation": "Canonical. Every bit is 1, so bits 63 to 47 agree; this is the last byte of the kernel half."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With 48-bit addressing, only 48 bits are translated. The rule is that bits 63 to 48 must be **copies of bit 47** (sign-extension).\n2. That splits the space into two halves:\n\n```\n0x0000_0000_0000_0000\n  .. 0x0000_7fff_ffff_ffff  user\n(hole: non-canonical)\n0xffff_8000_0000_0000\n  .. 0xffff_ffff_ffff_ffff  kernel\n```\n\n3. `0x0000800000000000` has bit 47 = 1 and bits 63 to 48 = 0, which is inconsistent, so it is in the hole.\n4. The CPU raises a general-protection fault for a non-canonical address. The hole exists so that future CPUs can translate more bits (5-level paging uses 57) without old software abusing the spare bits.",
+    "link": {
+      "title": "x86-64 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86-64"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "200 processes run the same program, whose code is 10 MiB. Under **base and bounds**, each process's code must sit inside its own contiguous region. Under **segmentation** with a shared, read-only code segment, all 200 can map the same physical copy. Roughly how much RAM does the code use in each case?",
+    "options": [
+      {
+        "text": "10 MiB with base and bounds; 2,000 MiB with segmentation",
+        "explanation": "This has the cases reversed. Sharing is what segmentation adds; base and bounds forces one copy per process."
+      },
+      {
+        "text": "2,000 MiB in both, because each process needs its own copy",
+        "explanation": "Read-only code never changes, so there is no reason for separate copies once the hardware can map one segment into many address spaces."
+      },
+      {
+        "text": "About 2,000 MiB with base and bounds; about 10 MiB with segmentation",
+        "explanation": "Correct. 200 × 10 MiB = 2,000 MiB when each process needs its own copy, versus a single 10 MiB copy plus small per-process segment-table entries."
+      },
+      {
+        "text": "10 MiB in both, because the OS deduplicates pages automatically",
+        "explanation": "Base and bounds has no way to point part of one address space at another region; its single base register covers the whole process."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Base and bounds**: one base register per process covers its *entire* address space, code included. So each process holds its own 10 MiB copy: 200 × 10 = **2,000 MiB**.\n2. **Segmentation**: each segment has its own base. Every process's code-segment entry can point at the *same* physical base, with protection bits set to read and execute only so no process can modify it.\n3. Cost: one 10 MiB copy plus a few bytes of segment-table entry per process, about **10 MiB**.\n4. Paging does the same at page granularity, which is how Linux shares libc and executables today.",
+    "link": {
+      "title": "OSTEP: Segmentation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Process A allocates a struct with malloc, then writes the raw pointer value (8 bytes) into a pipe. Process B, an unrelated program, reads those 8 bytes, casts them to a pointer, and dereferences it. What is the most likely outcome?",
+    "options": [
+      {
+        "text": "B reads A's struct, because the pointer is a physical RAM address",
+        "explanation": "User-space pointers are virtual. B's MMU translates them with B's page tables, which don't include A's heap."
+      },
+      {
+        "text": "B reads A's struct, because both processes share one heap",
+        "explanation": "Each process has its own heap. Only explicitly shared mappings (for example `mmap` with `MAP_SHARED`, or System V shared memory) are visible to both."
+      },
+      {
+        "text": "The kernel translates the pointer for B automatically when it passes through the pipe",
+        "explanation": "Pipes copy bytes; they do not interpret or translate them."
+      },
+      {
+        "text": "B either segfaults (the address is unmapped in B) or silently reads unrelated data of its own",
+        "explanation": "Correct. The value is just a number in B's address space: either nothing is mapped there (SIGSEGV) or something of B's is, and B reads that instead."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A's pointer, say `0x5581f3a02ac0`, is a virtual address valid in **A's** address space.\n2. B dereferences the same number, but the MMU uses **B's** page tables.\n3. Two cases:\n   - That page isn't mapped in B: page fault, the kernel finds no VMA, and B gets **SIGSEGV**.\n   - It happens to be mapped (ASLR makes this unlikely but possible): B reads its *own* data at that address.\n4. Neither is A's struct. To share data, set up a shared mapping (`shm_open` + `mmap`), and store **offsets** inside it rather than raw pointers, since each process may map it at a different base address.",
+    "link": {
+      "title": "Virtual memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Virtual_memory"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does Linux map the kernel into the upper half of *every* process's address space, and what did kernel page-table isolation (KPTI) change after Meltdown?",
+    "options": [
+      {
+        "text": "So user code can call kernel functions directly; KPTI made these calls go through the syscall instruction",
+        "explanation": "User code could never call kernel functions directly: kernel pages are supervisor-only and fault from user mode."
+      },
+      {
+        "text": "So system calls and interrupts can run kernel code without switching page tables; KPTI unmaps most of the kernel while in user mode, at the cost of a page-table switch on every kernel entry and exit",
+        "explanation": "Correct. Keeping the kernel mapped avoids a CR3 switch per syscall. Meltdown let user code speculatively read supervisor-only pages, so KPTI uses separate user tables with only a small trampoline mapped."
+      },
+      {
+        "text": "To save RAM by sharing kernel memory; KPTI duplicated the kernel per process",
+        "explanation": "Kernel pages are shared either way. KPTI duplicates only the top-level page-table entries, not the kernel itself."
+      },
+      {
+        "text": "Because 64-bit CPUs require it; KPTI moved the kernel to the lower half",
+        "explanation": "No architecture requirement forces this layout, and KPTI didn't move the kernel; it changed what is mapped while user code runs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before KPTI: each process's page tables include the kernel's mappings, marked supervisor-only (the U/S bit clear). A syscall changes the privilege level but **not** CR3, so no page-table switch and no TLB flush.\n2. Protection relied on the permission check: user-mode access to those pages faults.\n3. **Meltdown** (2018) showed that on many Intel CPUs the data could be loaded speculatively *before* the fault, then leaked through cache timing.\n4. **KPTI**: while in user mode, the active page tables map only a minimal entry/exit trampoline from the kernel. On each syscall or interrupt, the kernel switches CR3 to the full tables, and back on return.\n5. Cost: extra CR3 writes and potential TLB misses on every kernel crossing. PCIDs (lesson 3) reduce the cost by letting both sets of translations stay in the TLB.",
+    "link": {
+      "title": "Kernel page-table isolation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Kernel_page-table_isolation"
+    }
+  }
+]

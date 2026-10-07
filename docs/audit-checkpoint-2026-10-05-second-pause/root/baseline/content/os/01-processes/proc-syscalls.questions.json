@@ -1,0 +1,349 @@
+[
+  {
+    "id": "proc-syscalls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Classify each event: (1) a program executes `syscall` to call `read`; (2) a program touches a heap page for the first time and the kernel maps it; (3) a network card signals that a packet arrived. Which classification is right?",
+    "options": [
+      {
+        "text": "(1) trap, (2) interrupt, (3) exception",
+        "explanation": "A page fault is synchronous: it is caused by the very instruction that ran. That makes it an exception, not an interrupt."
+      },
+      {
+        "text": "(1) trap, (2) exception, (3) interrupt",
+        "explanation": "Correct. The syscall is a deliberate trap, the first-touch page fault is an exception caused by the current instruction, and the NIC signal is an asynchronous hardware interrupt."
+      },
+      {
+        "text": "(1) interrupt, (2) trap, (3) exception",
+        "explanation": "This muddles deliberate versus external. A syscall isn't caused by external hardware, and a NIC packet isn't caused by the running instruction."
+      },
+      {
+        "text": "All three are interrupts",
+        "explanation": "Some manuals use 'interrupt' loosely for everything, but the distinction matters: only (3) is asynchronous and unrelated to the running code."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask two questions of each event:\n\n1. **Is it caused by the instruction just executed?** If yes it's synchronous (trap or exception); if no it's an interrupt.\n2. **Was it intended?** Intended means trap; an error or special condition means exception.\n\n| Event | Caused by instr? | Intended? | Type |\n|---|---|---|---|\n| `syscall` | yes | yes | trap |\n| first touch | yes | no | exception |\n| NIC packet | no | n/a | interrupt |\n\nThe page fault here isn't an error from the program's view: the kernel maps the page and re-runs the instruction.",
+    "link": {
+      "title": "Mechanism: Limited Direct Execution — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
+    }
+  },
+  {
+    "id": "proc-syscalls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can't a malicious program enter kernel mode by jumping directly to the address of a privileged kernel function, such as the one that disables memory protection?",
+    "options": [
+      {
+        "text": "A jump doesn't change the CPU mode; only entry points registered by the kernel (syscall, exception and interrupt vectors) switch to kernel mode, and kernel pages aren't executable from user mode",
+        "explanation": "Correct. Mode changes happen only through hardware-defined gates whose targets the kernel set at boot. A plain jump stays in user mode and faults on the kernel page."
+      },
+      {
+        "text": "The compiler refuses to generate such a jump",
+        "explanation": "Attackers don't need a cooperating compiler; they can write machine code directly. Enforcement must be in hardware."
+      },
+      {
+        "text": "It can, which is why programs must run as root",
+        "explanation": "Even root processes run in user mode. Root has more *permissions* checked by the kernel, not hardware privilege."
+      },
+      {
+        "text": "The kernel's addresses are secret, so the program can't find them",
+        "explanation": "Address randomisation (KASLR) helps but isn't the main defence. Even with the address known, a user-mode jump into kernel memory faults."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. CPU mode is changed only by specific events: `syscall`/`sysenter`, exceptions and interrupts.\n2. Each one jumps to an address the kernel configured (an MSR for `syscall`, the interrupt descriptor table for the rest).\n3. A normal `jmp` keeps the current mode. Kernel pages are mapped as supervisor-only, so fetching an instruction from them in user mode causes a page fault.\n4. So user code can choose *which* service (the number in `rax`), never *where* in the kernel to start.\n\nNote the root point: root is a kernel permission check, not ring 0.",
+    "link": {
+      "title": "Mechanism: Limited Direct Execution — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
+    }
+  },
+  {
+    "id": "proc-syscalls-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A C program calls `printf(\"x\\n\")` 1,000 times with stdout redirected to a file. Roughly how many `write` syscalls does `strace` show?",
+    "options": [
+      {
+        "text": "Zero: `printf` writes directly to the file without the kernel",
+        "explanation": "Writing to a file always needs the kernel. Buffering reduces syscalls; it can't remove the final one."
+      },
+      {
+        "text": "Exactly 1,000: one per `printf`",
+        "explanation": "That would be the case for an unbuffered stream. When stdout is a file, glibc fully buffers it, so many calls share one `write`."
+      },
+      {
+        "text": "2,000: one for the `x` and one for the newline",
+        "explanation": "`printf` never issues a syscall per character; it formats into a buffer."
+      },
+      {
+        "text": "About 1: 2,000 bytes fit in the stdio buffer, which is flushed once at exit",
+        "explanation": "Correct. When stdout isn't a terminal it's fully buffered (typically 4 KiB or more). 2,000 bytes fit, so the buffer is written once when the program exits."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each `printf` writes 2 bytes (`x` and `\\n`) into glibc's stdout buffer.\n2. Is stdout a terminal? No, it's a file, so it is **fully buffered**: newlines don't trigger a flush.\n3. Total output is 1,000 × 2 = 2,000 bytes. The buffer is at least 4,096 bytes, so it never fills.\n4. At `exit`, glibc flushes once: one `write(1, ..., 2000)`.\n\nRun on a terminal instead and you'd see about 1,000 writes, because terminals are line-buffered. You can check both with `strace -e trace=write`.",
+    "link": {
+      "title": "stdio buffering: setbuf(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/setbuf.3.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Linux x86-64, a raw `syscall` returns `-9` in `rax` for a `write`. What does the program see if it called glibc's `write()` wrapper instead?",
+    "options": [
+      {
+        "text": "The program receives `SIGSEGV`",
+        "explanation": "A bad file descriptor is an ordinary error return, not a fault."
+      },
+      {
+        "text": "`write` returns -9",
+        "explanation": "The raw kernel convention returns a negated errno; glibc doesn't pass it through unchanged."
+      },
+      {
+        "text": "`write` returns -1 and `errno` is set to 9 (`EBADF`, bad file descriptor)",
+        "explanation": "Correct. glibc sees a value in the range -4095 to -1, stores its negation in `errno`, and returns -1, the POSIX convention."
+      },
+      {
+        "text": "`write` returns 0 and `errno` is 9",
+        "explanation": "0 means zero bytes written, which isn't an error. glibc signals errors with -1."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The kernel's ABI: success returns a non-negative result; failure returns `-errno`.\n2. `-9` therefore means errno 9.\n3. Errno 9 on Linux is `EBADF`: the fd isn't open (or not open for writing).\n4. glibc's wrapper converts: `errno = 9; return -1;`.\n\nSo `perror(\"write\")` would print `write: Bad file descriptor`. This is why you must check the return value *before* reading `errno`.",
+    "link": {
+      "title": "syscall(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/syscall.2.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You copy a 1 GiB file using `read`/`write` with a 4 KiB buffer, then with a 1 MiB buffer. Assume each syscall costs about 500 ns of overhead. Roughly how much syscall overhead does the larger buffer save?",
+    "options": [
+      {
+        "text": "About 0.5 ms",
+        "explanation": "That's roughly the overhead of the *1 MiB* case alone (2,048 calls). The saving is the difference from the 4 KiB case, which is much larger."
+      },
+      {
+        "text": "About 262 ms",
+        "explanation": "Correct. 4 KiB: 2 × 262,144 = 524,288 calls ≈ 262 ms. 1 MiB: 2 × 1,024 = 2,048 calls ≈ 1 ms. The saving is about 261 ms."
+      },
+      {
+        "text": "About 2.6 s",
+        "explanation": "This is ten times too large. Recheck: 1 GiB / 4 KiB is 262,144 reads, not 2.6 million."
+      },
+      {
+        "text": "Nothing: the same bytes are copied either way",
+        "explanation": "The bytes copied are the same, but the number of kernel entries isn't. Per-call overhead is paid per call, not per byte."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count syscalls (one `read` + one `write` per chunk):\n\n```\n4 KiB:  1 GiB / 4 KiB = 262,144\n        x 2 calls     = 524,288\n        x 500 ns      ~ 262 ms\n\n1 MiB:  1 GiB / 1 MiB = 1,024\n        x 2 calls     = 2,048\n        x 500 ns      ~ 1 ms\n```\n\nSaving ≈ 261 ms. Past a certain size the copy itself (memory bandwidth, disk speed) dominates, so going from 1 MiB to 64 MiB buffers gains little. `cp` uses buffers of around 128 KiB or more, or `copy_file_range` to avoid the user-space copy entirely.",
+    "link": {
+      "title": "Anatomy of a system call, part 1 — LWN",
+      "url": "https://lwn.net/Articles/604287/"
+    }
+  },
+  {
+    "id": "proc-syscalls-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are reasons a syscall is much more expensive than a plain function call? Select all that apply.",
+    "options": [
+      {
+        "text": "Switching CPU mode and saving/restoring user registers",
+        "explanation": "Correct. The `syscall`/`sysret` pair and the register save on the kernel stack are direct costs a function call doesn't have."
+      },
+      {
+        "text": "KPTI on Meltdown-affected CPUs switches page tables on entry and exit",
+        "explanation": "Correct. Changing the page-table root costs time and (without PCID) flushes TLB entries."
+      },
+      {
+        "text": "Kernel code and data displace the program's cache lines and TLB entries",
+        "explanation": "Correct. This *indirect* cost shows up as slower user code just after the syscall returns."
+      },
+      {
+        "text": "Every syscall forces a context switch to another process",
+        "explanation": "Wrong. A syscall is a *mode switch* within the same process. A context switch only happens if the call blocks or the scheduler decides to preempt."
+      },
+      {
+        "text": "The kernel validates arguments and copies data across the boundary",
+        "explanation": "Correct. The kernel can't trust user pointers, so it checks them and copies with `copy_from_user`/`copy_to_user`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Break the cost into parts:\n\n1. **Mode switch + register save** (A): direct.\n2. **Security mitigations** (B): KPTI page-table switch, Spectre barriers.\n3. **Validation and copying** (E): the kernel treats user memory as hostile.\n4. **Cache/TLB pollution** (C): the kernel's footprint evicts yours.\n\nD is the common confusion. `getpid` enters and leaves the kernel in the *same* process; no other process runs. Only a blocking call like `read` on an empty pipe leads to a context switch.",
+    "link": {
+      "title": "Anatomy of a system call, part 1 — LWN",
+      "url": "https://lwn.net/Articles/604287/"
+    }
+  },
+  {
+    "id": "proc-syscalls-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`strace -c` on a busy logging service shows almost no `clock_gettime` syscalls, yet the code calls `clock_gettime` about 2 million times a second. What's the explanation?",
+    "options": [
+      {
+        "text": "The kernel batches the calls and handles them all at once",
+        "explanation": "Syscalls aren't batched like this. Each would be a separate entry if it reached the kernel."
+      },
+      {
+        "text": "strace can't trace time-related syscalls",
+        "explanation": "strace can trace any real syscall. The calls aren't showing because they never reach the kernel."
+      },
+      {
+        "text": "glibc caches the time and only refreshes it once a second",
+        "explanation": "glibc doesn't cache the clock: that would return stale times. The fresh value comes from the vDSO."
+      },
+      {
+        "text": "The calls go through the vDSO, which reads kernel-maintained time data in user mode without entering the kernel",
+        "explanation": "Correct. The vDSO page is mapped into each process; `clock_gettime` runs there, reading a shared data page and the CPU timestamp counter, so no syscall happens."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. strace intercepts real kernel entries (via ptrace).\n2. 2 million calls a second yet few traced means the calls aren't entering the kernel.\n3. On x86-64, Linux provides `clock_gettime`, `gettimeofday`, `time` and `getcpu` in the vDSO.\n4. The vDSO reads the kernel's time data page plus the TSC in user mode: tens of nanoseconds, no mode switch.\n\nIf you *did* see lots of `clock_gettime` syscalls, the clock source probably doesn't support vDSO reads (a known issue on some VMs), and it's worth investigating.",
+    "link": {
+      "title": "vdso(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/vdso.7.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program reads from a socket: `n = read(fd, buf, 65536);`. It returns 1,200. The code assumes it now has the whole 65,536-byte message. What's wrong?",
+    "options": [
+      {
+        "text": "1,200 means an error code; check `errno`",
+        "explanation": "Errors are signalled by -1. A positive return is the number of bytes actually read."
+      },
+      {
+        "text": "Nothing: `read` always waits for the full count on sockets",
+        "explanation": "This is the misconception. On pipes and sockets, `read` returns as soon as *some* data is available."
+      },
+      {
+        "text": "`read` can return fewer bytes than requested (a short read); the code must loop until it has the full message",
+        "explanation": "Correct. A short read is normal, not an error. Robust code loops, tracking how many bytes remain, or uses a framing protocol."
+      },
+      {
+        "text": "The kernel truncated the message, so the rest is lost",
+        "explanation": "Nothing is lost. The remaining bytes arrive later and will be returned by subsequent reads."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `read(fd, buf, 65536)` means *up to* 65,536 bytes.\n2. For sockets the kernel returns whatever is in the receive buffer right now: here 1,200 bytes (about one TCP segment's worth).\n3. The rest will arrive in later segments.\n4. Correct pattern:\n\n```c\nsize_t got = 0;\nwhile (got < len) {\n  ssize_t n = read(fd, buf + got,\n                   len - got);\n  if (n == 0) break;   /* EOF */\n  if (n < 0) {\n    if (errno == EINTR) continue;\n    return -1;\n  }\n  got += n;\n}\n```\n\nThe `EINTR` check handles a signal interrupting the call.",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On x86-64 Linux, syscall arguments go in `rdi, rsi, rdx, r10, r8, r9`, whereas the normal C function-calling convention uses `rcx` for the fourth argument instead of `r10`. Why?",
+    "options": [
+      {
+        "text": "`rcx` is reserved for the syscall number",
+        "explanation": "The syscall number goes in `rax`."
+      },
+      {
+        "text": "The `syscall` instruction overwrites `rcx` with the user return address (and `r11` with RFLAGS), so the fourth argument can't live there",
+        "explanation": "Correct. The hardware uses `rcx` to remember where to return to, so glibc's wrapper moves the fourth argument from `rcx` to `r10` before executing `syscall`."
+      },
+      {
+        "text": "`r10` is faster to read in kernel mode",
+        "explanation": "Register access speed doesn't depend on privilege level or register number."
+      },
+      {
+        "text": "It's a historical bug that has never been fixed",
+        "explanation": "It's a deliberate consequence of how the instruction is defined, not a bug."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The `syscall` instruction saves the user `rip` into `rcx` and `rflags` into `r11`, then jumps to the kernel entry point.\n2. Anything the program had in `rcx` is destroyed at that moment.\n3. So the kernel ABI uses `r10` for argument 4.\n4. glibc's `syscall()` wrapper does `mov %rcx, %r10` before the instruction.\n\nOn the way out, `sysret` uses `rcx` and `r11` to restore `rip` and `rflags`. This is also why `rcx` and `r11` are clobbered across any syscall.",
+    "link": {
+      "title": "Anatomy of a system call, part 1 — LWN",
+      "url": "https://lwn.net/Articles/604287/"
+    }
+  },
+  {
+    "id": "proc-syscalls-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After a kernel upgrade enabling KPTI, a service making about 400,000 tiny syscalls per second per core loses about 20% throughput. Which change is most likely to recover it?",
+    "options": [
+      {
+        "text": "Reduce the number of kernel crossings: batch I/O with `writev`/`sendmmsg` or `io_uring`, and buffer in user space",
+        "explanation": "Correct. KPTI adds a fixed cost per entry and exit. Fewer crossings means less of that cost, without weakening security."
+      },
+      {
+        "text": "Run the service as root so syscalls skip permission checks",
+        "explanation": "Root changes permission checks, not the entry and exit path; KPTI applies to every user-mode process."
+      },
+      {
+        "text": "Rewrite the service in a faster language",
+        "explanation": "The overhead is in the kernel boundary, not in the user code. A faster language makes the same number of syscalls."
+      },
+      {
+        "text": "Disable the timer interrupt",
+        "explanation": "The timer is how the kernel schedules; removing it isn't an option, and it isn't the source of this overhead."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. 400,000 syscalls/s per core means one every 2.5 µs.\n2. If KPTI adds roughly 0.5 µs per round trip, that's 400,000 × 0.5 µs = 0.2 s of every second: 20%.\n3. The fix is to cross less often:\n   - `writev`: many buffers, one call.\n   - `sendmmsg`/`recvmmsg`: many UDP datagrams, one call.\n   - `io_uring`: queue submissions in shared memory, submit many at once.\n4. Turning KPTI off (`pti=off`) recovers speed but re-opens Meltdown on affected CPUs; it's only acceptable on hardware that isn't vulnerable, where the kernel disables it automatically anyway.",
+    "link": {
+      "title": "Kernel page-table isolation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Kernel_page-table_isolation"
+    }
+  },
+  {
+    "id": "proc-syscalls-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A blocking `read()` on an empty pipe is interrupted when the process receives a signal whose handler was installed with `sigaction` **without** `SA_RESTART`. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The handler runs before `read` returns to the caller",
+        "explanation": "Correct. The kernel delivers the signal on the way back to user mode, running the handler first."
+      },
+      {
+        "text": "`read` returns -1 with `errno` set to `EINTR`",
+        "explanation": "Correct. Without `SA_RESTART`, an interrupted blocking call on a pipe fails with `EINTR` so the program can react."
+      },
+      {
+        "text": "Any data already in the pipe is discarded",
+        "explanation": "Wrong. The pipe was empty, and even if not, no data is lost: an `EINTR` return means nothing was transferred."
+      },
+      {
+        "text": "With `SA_RESTART`, the kernel would automatically restart the `read` after the handler",
+        "explanation": "Correct. `SA_RESTART` makes many blocking calls, including `read` on pipes, resume transparently."
+      },
+      {
+        "text": "The process is terminated, because signals always kill processes",
+        "explanation": "Wrong. The process installed a handler, so the signal is caught; only the default action of many signals is termination."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk through the timeline:\n\n1. `read` blocks in the kernel waiting for data.\n2. A signal arrives. The kernel wakes the task and abandons the wait.\n3. On the way out to user mode it runs the handler.\n4. Now the choice: with `SA_RESTART`, the kernel re-issues `read` and the caller never notices. Without it, `read` returns -1, `errno = EINTR`.\n\nThat's why robust loops check `if (errno == EINTR) continue;`. The full rules are in `signal(7)`, section 'Interruption of system calls'.",
+    "link": {
+      "title": "signal(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/signal.7.html"
+    }
+  }
+]

@@ -1,0 +1,348 @@
+[
+  {
+    "id": "qp-reading-explain-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague wants to see why a cleanup statement is slow and runs `EXPLAIN ANALYZE DELETE FROM orders WHERE ordered_on < '2021-01-01';` on production. What happens?",
+    "options": [
+      {
+        "text": "Nothing is deleted; EXPLAIN never modifies data",
+        "explanation": "Plain EXPLAIN doesn't, but `ANALYZE` makes it actually execute the statement in order to measure it."
+      },
+      {
+        "text": "The rows are really deleted, and the plan with actual timings is shown",
+        "explanation": "Correct. EXPLAIN ANALYZE runs the statement for real. To undo transactional changes after measuring, wrap it: `BEGIN; EXPLAIN ANALYZE DELETE ...; ROLLBACK;`. Sequence advances and external trigger effects are not necessarily undone."
+      },
+      {
+        "text": "Postgres refuses: EXPLAIN ANALYZE only works on SELECT",
+        "explanation": "It works on INSERT, UPDATE, DELETE, MERGE and more. That's what makes it both useful and dangerous."
+      },
+      {
+        "text": "The rows are deleted but automatically restored after the EXPLAIN finishes",
+        "explanation": "There's no automatic rollback. Outside an explicit transaction, the change is committed as normal."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "`ANALYZE` in EXPLAIN means \"execute and measure\". So:\n\n```sql\nBEGIN;\nEXPLAIN ANALYZE\n  DELETE FROM orders\n  WHERE ordered_on < '2021-01-01';\nROLLBACK;\n```\n\nThe delete runs inside the transaction (so the timing is real, including index maintenance and triggers), then ROLLBACK undoes transactional changes. Sequence advances and external side effects are not necessarily undone. Locks are still taken while it runs, so be careful on a busy table.",
+    "link": {
+      "title": "EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A node reads:\n\n```\nSeq Scan on customers\n  (cost=0.00..2529.00 rows=500\n   width=49)\n  (actual time=0.109..16.982\n   rows=1.00 loops=1)\n```\n\nWhich statement is right?",
+    "options": [
+      {
+        "text": "The scan returned 500 rows and took 2,529 ms",
+        "explanation": "500 is the planner's estimate and 2,529 is an estimated cost in planner units. Neither is a measurement."
+      },
+      {
+        "text": "The planner estimated 500 rows; the scan actually returned 1 row and finished after about 17 ms",
+        "explanation": "Correct. The first parentheses are estimates; the `actual` ones are measurements. A 500x overestimate is worth investigating."
+      },
+      {
+        "text": "The scan returned 1 row 500 times",
+        "explanation": "`loops=1`, so the node ran once. `rows=500` in the first group is an estimate, not a loop count."
+      },
+      {
+        "text": "The rows are 49 KB wide on average",
+        "explanation": "`width` is in bytes: about 49 bytes per row."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Split the node into its two groups:\n\n| Group | Figures |\n|---|---|\n| Estimate | cost 0..2529, 500 rows, 49 B wide |\n| Actual | 0.109 ms to first row, 16.982 ms to last, 1 row, 1 loop |\n\nThis came from `WHERE lower(email) = '...'`. The 500 is the default 0.5% guess for an expression without statistics (0.005 x 100,000).",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "```\nSeq Scan on orders\n  (actual time=2.224..19.154\n   rows=14.00 loops=1)\n  Filter: (customer_id = 42)\n  Rows Removed by Filter: 999986\n  Buffers: shared read=7353\n```\n\nWhat does this most strongly suggest?",
+    "options": [
+      {
+        "text": "The statistics are stale",
+        "explanation": "Statistics and cost settings could influence the chosen access path. Without estimated rows or table metadata, this excerpt cannot establish whether statistics are stale."
+      },
+      {
+        "text": "`work_mem` is too low",
+        "explanation": "A plain scan with a filter uses almost no memory. `work_mem` matters for sorts and hashes."
+      },
+      {
+        "text": "A selective lookup is scanning the whole table; investigate whether a usable index on `customer_id` is missing or not chosen",
+        "explanation": "Correct. Rejecting 999,986 rows to keep 14 suggests checking the index and cost estimates. A usable index can greatly reduce heap access, but this plan alone does not establish why a scan was chosen."
+      },
+      {
+        "text": "The table is bloated and needs VACUUM FULL",
+        "explanation": "Page count alone does not establish bloat; use table size, tuple-width and dead-space measurements before considering VACUUM FULL."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The scan retains 14 of 1,000,000 rows (0.0014%). A suitable index could locate those rows directly, though the selected plan depends on estimates and costs. `shared read=7353` counts shared-buffer reads, which may be served by the operating-system cache.\n\nContent gap: no reproducible benchmark record is available for the previously asserted 75-fold speedup; measure any proposed index with a representative workload.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "```\nHash Join  (actual time=31.0..80.0\n            rows=50000.00 loops=1)\n-> Seq Scan on a\n     (actual time=0.01..50.0 loops=1)\n-> Hash  (actual time=20.0..20.0\n          loops=1)\n```\n\nHow much time was spent in the Hash Join node itself (its exclusive time)?",
+    "options": [
+      {
+        "text": "80 ms",
+        "explanation": "80 ms is the inclusive time: it covers the children too. Times in EXPLAIN ANALYZE are cumulative."
+      },
+      {
+        "text": "49 ms",
+        "explanation": "That's 80 - 31, the gap between first and last row. Part of that is the scan of `a` streaming rows in."
+      },
+      {
+        "text": "30 ms",
+        "explanation": "That only subtracts the Seq Scan. The Hash child's 20 ms is also included in the join's 80 ms."
+      },
+      {
+        "text": "About 10 ms",
+        "explanation": "Correct. 80 ms total, minus 50 ms in the probe-side scan, minus 20 ms building the hash, leaves about 10 ms for probing and joining."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nexclusive = inclusive - children\n          = 80.0 - 50.0 - 20.0\n          = 10.0 ms\n```\n\nBoth children ran once, so no loop multiplication is needed. The real bottleneck is the scan of `a` (50 ms), so that's where to look first: is it reading far more rows than it returns?",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The inner side of a nested loop shows:\n\n```\nIndex Scan using items_order_idx\n  (actual time=0.010..0.012\n   rows=2.50 loops=4000)\n```\n\nHow many rows did this node return in total, and roughly how long did it take altogether?",
+    "options": [
+      {
+        "text": "10,000 rows in about 48 ms",
+        "explanation": "Correct. Figures are per loop: 2.5 rows x 4,000 loops = 10,000 rows, and 0.012 ms x 4,000 = 48 ms."
+      },
+      {
+        "text": "2.5 rows in 0.012 ms",
+        "explanation": "Those are per-loop averages. The node ran 4,000 times."
+      },
+      {
+        "text": "4,000 rows in 0.012 ms",
+        "explanation": "4,000 is the number of executions, not rows; and the time must be multiplied by loops too."
+      },
+      {
+        "text": "It can't return half a row, so the plan is corrupt",
+        "explanation": "2.50 is an average over 4,000 loops: some lookups found 2 rows, others 3. Postgres 18 prints the decimals for exactly this reason."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\ntotal rows = rows x loops\n           = 2.50 x 4,000 = 10,000\ntotal time ~ last-row time x loops\n           = 0.012 x 4,000 = 48 ms\n```\n\nA 0.012 ms node looks harmless until you multiply it by its loops. That's how a nested loop with a very cheap inner side can still dominate a query.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An admin page runs `SELECT * FROM orders ORDER BY total DESC LIMIT 50 OFFSET 0` and the plan shows `Sort Method: top-N heapsort  Memory: 30kB`. A separate CSV export runs the same query without LIMIT and shows `Sort Method: external merge  Disk: 36344kB`. Which statement is correct?",
+    "options": [
+      {
+        "text": "Both sorts read the same number of rows, but the export sorts everything and spills 36 MB to temp files; an index on `total` or more `work_mem` for that session would avoid the spill",
+        "explanation": "Correct. Both read all 1,000,000 rows, but top-N keeps only 50 in a small heap. The full sort exceeds the 4 MB `work_mem` and does an external merge sort on disk."
+      },
+      {
+        "text": "The export's sort is broken; external merge only happens when the disk is full",
+        "explanation": "External merge is the normal fallback whenever a sort doesn't fit in `work_mem`. It's not an error."
+      },
+      {
+        "text": "Raising `work_mem` to 40MB guarantees an in-memory sort, because the data is 36 MB",
+        "explanation": "The in-memory sort needs more than the on-disk size. The lesson uses illustrative sizes; actual memory requirements depend on tuples and executor overhead."
+      },
+      {
+        "text": "The admin page's query reads only 50 rows",
+        "explanation": "Without an index on `total`, any of the million rows might be among the top 50, so all are read. Only the memory is saved."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Top-N heapsort: reads all rows, keeps a heap of N = 50. Memory is tiny.\n2. Full sort of 1,000,000 rows: needs far more than 4 MB, so it writes sorted runs to temp files and merges them (`temp read=9084 written=9101` in the lesson).\n3. Options for the export:\n   - `SET work_mem = '128MB'` for that session (an illustrative trial setting, not a guaranteed requirement);\n   - or an index on `total`, so rows come out already in order;\n   - or accept the spill: 36 MB of sequential temp I/O is fine for a nightly job.",
+    "link": {
+      "title": "Resource consumption — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-resource.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the `Buffers:` line in EXPLAIN (ANALYZE, BUFFERS) are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`shared hit` counts pages found in Postgres's shared buffer cache",
+        "explanation": "Correct. Hits are served from Postgres's own memory without asking the operating system."
+      },
+      {
+        "text": "`shared read` always means the page came from disk",
+        "explanation": "Not necessarily. A read means Postgres asked the OS, and the OS may have it in its page cache. Turn on `track_io_timing` to see actual I/O time."
+      },
+      {
+        "text": "`temp read` and `temp written` come from sorts or hashes that spilled",
+        "explanation": "Correct. Temp buffers are temporary-file traffic, typically from `work_mem` being too small for a sort or hash."
+      },
+      {
+        "text": "With the usual 8 KiB block size, `hit=12800` represents 100 MiB of buffer accesses, possibly revisiting pages",
+        "explanation": "Correct. 12,800 × 8 KiB = 100 MiB of accesses; this is not necessarily 100 MiB of distinct data."
+      },
+      {
+        "text": "A node's buffer counts are per loop, so multiply by `loops`",
+        "explanation": "Buffer counts are totals across all loops, unlike `rows` and `actual time`, which are per-loop averages."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. hit = Postgres shared buffers. True.\n2. read = from the OS, which could be its cache or the disk. False as stated.\n3. temp = spill files. True.\n4. At the usual block size, `12,800 × 8 KiB = 100 MiB` of accesses, not necessarily distinct data. True.\n5. In the lesson, an inner index scan with `loops=200` showed `Buffers: shared hit=1191 read=9`: 1,200 in total, i.e. 6 per lookup. That's a total, not a per-loop figure. False.",
+    "link": {
+      "title": "EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which node is the most likely **root cause** of this bad plan?\n\n```\nHash Join (rows=484)\n  (actual rows=3686.00)\n-> Seq Scan on orders o\n     (rows=30767)\n     (actual rows=30066.00)\n-> Hash (rows=1573)\n     (actual rows=12500.00)\n   -> Seq Scan on customers c\n        (rows=1573)\n        (actual rows=12500.00)\n        Filter: city = 'Glasgow'\n          AND country = 'Scotland'\n```",
+    "options": [
+      {
+        "text": "The Hash Join, because its estimate (484) is furthest from the actual (3,686)",
+        "explanation": "The join's error is inherited: it multiplies its inputs' estimates. Fix the input and the join estimate improves."
+      },
+      {
+        "text": "The Seq Scan on `orders`, because it reads the most rows",
+        "explanation": "Its estimate (30,767) is within 3% of the actual (30,066). Big isn't the same as wrong."
+      },
+      {
+        "text": "There's no problem; the estimates are all close",
+        "explanation": "The customers estimate is 8x too low and the join is 7.6x too low. That's enough to change plan choices in a bigger query."
+      },
+      {
+        "text": "The Seq Scan on `customers`, where correlated city and country conditions are underestimated by 8x",
+        "explanation": "Correct. It's the lowest node with a big error. The planner multiplied 1/8 x 1/8 as if the columns were independent, but city determines country."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk up from the leaves:\n\n| Node | Est | Actual | Ratio |\n|---|---|---|---|\n| Scan orders | 30,767 | 30,066 | 1.0x |\n| Scan customers | 1,573 | 12,500 | 8x |\n| Hash Join | 484 | 3,686 | 7.6x |\n\nThe first big error is on `customers`, and the join inherits it. Fix: `CREATE STATISTICS ... (dependencies) ON city, country`, then ANALYZE.",
+    "link": {
+      "title": "Multivariate statistics examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/multivariate-statistics-examples.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "```\nIndex Scan using orders_cust_date_idx\n  on orders\n  Index Cond: (customer_id = 42)\n  Filter: (status = 'pending'::text)\n  Rows Removed by Filter: 13\n```\n\nThe index is on `(customer_id, ordered_on)`. What does the split between Index Cond and Filter tell you?",
+    "options": [
+      {
+        "text": "Both conditions were used to search the index",
+        "explanation": "Only conditions under Index Cond bound the index search. `status` isn't in the index, so it can't be."
+      },
+      {
+        "text": "The index found all of customer 42's orders; each was fetched from the heap and then checked for `status`, rejecting 13",
+        "explanation": "Correct. Index Cond limits which index entries are read; Filter is evaluated after fetching each row. Cheap here, but for a customer with 100,000 orders it would mean 100,000 heap fetches to find a few pending ones."
+      },
+      {
+        "text": "The Filter means the index is corrupt and Postgres is double-checking",
+        "explanation": "That's not what Filter means. (Postgres does recheck in bitmap scans, shown as `Recheck Cond`, for a different reason.)"
+      },
+      {
+        "text": "Postgres ignored the index and scanned the table",
+        "explanation": "The node is an Index Scan with an Index Cond, so the index was used to find customer 42's rows."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index Cond `customer_id = 42`: descend the B-tree to customer 42 and read their entries (14 in our data).\n2. For each entry, fetch the row from the heap.\n3. Apply Filter `status = 'pending'`: 13 rejected, 1 kept.\n\nSo the heap work is proportional to *all* of the customer's orders, not to the result. If this query is hot and customers can have many orders, consider an index that puts `status` in the key, or a partial index `WHERE status = 'pending'`.",
+    "link": {
+      "title": "Multicolumn indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You test two plans for a batch join on a warm-cache staging box. Plan A (nested loop) took 575 ms with `Buffers: shared hit=3589400 read=13260`. Plan B (hash join) took 527 ms with about 19,000 buffers and some temp I/O. Production has far less RAM than the working set. Which plan should you expect to hold up better in production, and why?",
+    "options": [
+      {
+        "text": "Plan A, because it was nearly as fast and uses no temp files",
+        "explanation": "Nearly all its 3.6 million accesses were shared-buffer hits, with 13,260 reads that might still hit the OS cache. With a cold or small cache, many become random disk reads."
+      },
+      {
+        "text": "They are equivalent because their times are within 10%",
+        "explanation": "Times measured on a warm cache hide I/O cost. The work done differs by about 190x."
+      },
+      {
+        "text": "Plan B is a promising candidate because it makes far fewer buffer accesses; validate with representative cache and I/O conditions",
+        "explanation": "Correct. Total buffer accesses help measure work, but the hit/read split depends on cache state and accesses may revisit the same page. Plan B reads each table once in order; Plan A does 600,000 index descents."
+      },
+      {
+        "text": "Neither: you can only decide by running them both in production",
+        "explanation": "Measuring in production is ideal, but buffer counts guide investigation but do not guarantee performance across machines and cache states."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nPlan A: 3,589,400 + 13,260\n      ~ 3,602,660 page accesses\nPlan B: ~19,000\nratio ~ 190x\n```\n\nOn the staging box nearly all of A's accesses were hits, so they cost well under a microsecond each. If even 10% became random SSD reads at around 0.1 ms each, that would add about 36 seconds. This is a hypothetical calculation, not a measured hardware prediction. Compare buffer accesses and measured timings under representative conditions.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about EXPLAIN output in **PostgreSQL 18** are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`EXPLAIN ANALYZE` includes buffer counts without needing the BUFFERS option",
+        "explanation": "Correct. Postgres 18 made BUFFERS the default when ANALYZE is used."
+      },
+      {
+        "text": "Actual row counts are shown with decimals, such as `rows=2.50`, because they are averages per loop",
+        "explanation": "Correct. Earlier versions rounded the per-loop average to an integer, which could hide fractional averages (e.g. 0.4 rows per loop shown as 0)."
+      },
+      {
+        "text": "Index scans report `Index Searches`, the number of index descents, which skip scan can make larger than the number of loops",
+        "explanation": "Correct. In the lesson, a skip scan made 1,031 descents in one loop."
+      },
+      {
+        "text": "Costs are now shown in milliseconds",
+        "explanation": "Costs are still in planner units anchored on `seq_page_cost = 1.0`. Only `actual time` is in milliseconds."
+      },
+      {
+        "text": "Plain `EXPLAIN` (without ANALYZE) also shows actual row counts",
+        "explanation": "Without ANALYZE the query isn't executed, so there's nothing actual to report. Only estimates are shown."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Postgres 18 changed EXPLAIN in several visible ways:\n\n1. `ANALYZE` implies `BUFFERS`. True.\n2. Fractional actual rows: `rows=10.01 loops=12500` shows on average just over 10 rows per lookup. True.\n3. `Index Searches: N` per index node. True.\n4. Costs remain unitless planner estimates. False.\n5. Plain EXPLAIN never runs the query. False.",
+    "link": {
+      "title": "PostgreSQL 18 release notes",
+      "url": "https://www.postgresql.org/docs/18/release-18.html"
+    }
+  }
+]

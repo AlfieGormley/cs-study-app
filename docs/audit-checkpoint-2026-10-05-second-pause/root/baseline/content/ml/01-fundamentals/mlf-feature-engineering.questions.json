@@ -1,0 +1,167 @@
+[
+  {
+    "id": "mlf-feature-engineering-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For a linear regression, a colleague encodes the column `city` as London = 1, Leeds = 2, Bristol = 3. What is the problem?",
+    "options": [
+      { "text": "Nothing; any numbers will do as long as each city gets a unique one", "explanation": "Unique numbers are enough for a lookup but not for a linear model, which multiplies the value by a weight and so treats it as a quantity." },
+      { "text": "The model will treat the cities as ordered and evenly spaced, e.g. Leeds halfway between London and Bristol", "explanation": "Correct. A single weight w means Bristol's effect is forced to be 3w and Leeds's 2w. One-hot encoding gives each city its own independent weight." },
+      { "text": "The numbers should start at 0", "explanation": "Starting at 0 still imposes an order and equal spacing; it doesn't fix anything." },
+      { "text": "The numbers need standardising first", "explanation": "Scaling 1, 2, 3 keeps the same false ordering and spacing, just in different units." }
+    ],
+    "answer": 1,
+    "workedExample": "1. A linear model computes ŷ = … + w × city.\n2. With codes 1, 2, 3 the city contributions are w, 2w, 3w: forced to be in a straight line and in that order.\n3. If Leeds is actually the cheapest city, no value of w can express it.\n4. One-hot: `is_london`, `is_leeds`, `is_bristol`, each with its own weight, so any pattern is possible.\n5. Ordinal codes are fine only when the categories truly are ordered (S < M < L), and even then they assume equal steps.",
+    "link": { "title": "Working with categorical data — Google ML Crash Course", "url": "https://developers.google.com/machine-learning/crash-course/categorical-data" }
+  },
+  {
+    "id": "mlf-feature-engineering-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these models is essentially **unaffected** by standardising its numeric features?",
+    "options": [
+      { "text": "k-nearest neighbours", "explanation": "k-NN uses distances, so a feature with a large range dominates. Scaling changes which neighbours are nearest." },
+      { "text": "Ridge regression", "explanation": "The ridge penalty treats all weights alike, so the feature scale changes how much each one is penalised and therefore the fitted model." },
+      { "text": "A random forest", "explanation": "Correct. Trees split on thresholds (\"income > 42,000\"). A monotonic rescaling moves the threshold but produces exactly the same partitions." },
+      { "text": "k-means clustering", "explanation": "k-means assigns points by Euclidean distance, so it is strongly affected by feature scales." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask how each model uses a feature's **magnitude**.\n2. Distance-based (k-NN, k-means): magnitude defines closeness. Scale matters.\n3. Penalised linear models (ridge, lasso): magnitude sets how big a weight must be, and the penalty depends on weight size. Scale matters.\n4. Trees: only the **order** of values matters for choosing a split. Standardising preserves order, so a tree built on z-scores makes identical splits (just with rescaled thresholds).",
+    "link": { "title": "Feature scaling — Wikipedia", "url": "https://en.wikipedia.org/wiki/Feature_scaling" }
+  },
+  {
+    "id": "mlf-feature-engineering-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On the training set a feature has mean 50 and standard deviation 10. A new example arrives with value 65. What is its standardised value?",
+    "options": [
+      { "text": "6.5", "explanation": "That divides by the standard deviation without subtracting the mean first." },
+      { "text": "15", "explanation": "That subtracts the mean but forgets to divide by the standard deviation." },
+      { "text": "0.65", "explanation": "That looks like min–max scaling to a 0–100 range, a different transform." },
+      { "text": "1.5", "explanation": "Correct. z = (65 − 50) / 10 = 1.5: one and a half standard deviations above the training mean." }
+    ],
+    "answer": 3,
+    "workedExample": "z = (x − mean) / std = (65 − 50) / 10 = 15 / 10 = **1.5**.\n\nNote that the mean and standard deviation come from the **training** set and are reused unchanged for every new example. Recomputing them on the new data, or on train plus test, would be leakage or skew.",
+    "link": { "title": "Preprocessing data — scikit-learn user guide", "url": "https://scikit-learn.org/stable/modules/preprocessing.html" }
+  },
+  {
+    "id": "mlf-feature-engineering-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You target-encode `merchant_id` for fraud prediction with smoothing m = 20. The global fraud rate is 0.05. A merchant appears 4 times, with 3 frauds. What is its encoded value?",
+    "options": [
+      { "text": "0.75", "explanation": "That is the raw rate, 3/4. With only 4 rows it is mostly noise, which is exactly what smoothing corrects." },
+      { "text": "About 0.167", "explanation": "Correct. (3 + 20 × 0.05) / (4 + 20) = 4 / 24 ≈ 0.167." },
+      { "text": "About 0.054", "explanation": "That over-weights the prior, as if the merchant had far fewer frauds. The 3 frauds still pull it well above 0.05." },
+      { "text": "0.40", "explanation": "That averages the raw rate and the prior equally ((0.75 + 0.05)/2). The weights should be count (4) and m (20)." }
+    ],
+    "answer": 1,
+    "workedExample": "encoded = (positives + m × prior) / (count + m)\n\n```\npositives   3\nm × prior   20 × 0.05 = 1\ncount + m   4 + 20 = 24\nencoded     4 / 24 ≈ 0.167\n```\n\nThe smoothed value is a weighted average of the raw rate (weight 4) and the prior (weight 20): (4 × 0.75 + 20 × 0.05) / 24 = 0.167. As a merchant accumulates rows, its own rate takes over.",
+    "link": { "title": "TargetEncoder — scikit-learn", "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.TargetEncoder.html" }
+  },
+  {
+    "id": "mlf-feature-engineering-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using sin(2πh/24) and cos(2πh/24), what are the features for 18:00, and why use both functions?",
+    "options": [
+      { "text": "(−1, 0); with sine alone, pairs such as 00:00 and 12:00 would be indistinguishable", "explanation": "Correct. 18/24 of a circle is 270°, giving sin = −1, cos = 0. Each function alone maps two different hours to the same value." },
+      { "text": "(1, 0); cosine is redundant but harmless", "explanation": "(1, 0) is 06:00. And cosine isn't redundant: without it, hours symmetric about 06:00 collide." },
+      { "text": "(0, −1); sine and cosine are needed because the model can't take square roots", "explanation": "(0, −1) is 12:00. The reason for two features is uniqueness on the circle, not arithmetic limitations." },
+      { "text": "(−0.75, 0.75); the pair keeps values in [−1, 1]", "explanation": "These aren't the values of sine and cosine at 270°. Either function alone already lies in [−1, 1]." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Angle = 2π × 18/24 = 3π/2 (270°).\n2. sin(270°) = −1, cos(270°) = 0. So 18:00 → (−1, 0).\n3. Why both: sin(0°) = sin(180°) = 0, so 00:00 and 12:00 would look identical with sine alone. Similarly 03:00 and 09:00 share a sine. The (sin, cos) pair is unique for every hour.\n4. Bonus: distances now respect the wrap-around. 23:00 to 00:00 is about 0.26, the same as any one-hour gap.",
+    "link": { "title": "Working with numerical data — Google ML Crash Course", "url": "https://developers.google.com/machine-learning/crash-course/numerical-data" }
+  },
+  {
+    "id": "mlf-feature-engineering-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You compute a target encoding for `user_id` on the full training set, then train gradient-boosted trees on it. Training AUC is 0.99; validation AUC is 0.71. Many users have only one or two rows. What went wrong?",
+    "options": [
+      { "text": "The trees are too shallow", "explanation": "Shallow trees would underfit and lower training AUC, not produce a 0.99 vs 0.71 gap." },
+      { "text": "Target encoding is never usable with tree models", "explanation": "Target encoding works well with trees when computed out of fold; the method isn't the problem, the implementation is." },
+      { "text": "Each row's own label was included in its encoding, so for rare users the feature nearly equals the label; use out-of-fold encoding", "explanation": "Correct. A user with one row has an encoding that is (smoothed) their own label. The model learns to trust the feature, which doesn't hold on new data." },
+      { "text": "Validation users should be removed from the encoding", "explanation": "The validation set should be encoded with statistics from training data, which is fine. The leak is inside the training set itself." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Encoding for a user with a single row = (y + m × prior)/(1 + m). It moves up or down with that row's own label.\n2. So in training the feature is correlated with the target *by construction*. The trees exploit it: training AUC 0.99.\n3. On validation, encodings come from other rows, so that free signal disappears: 0.71.\n4. Fix: K-fold cross-fitting. Split training data into, say, 5 folds; encode each fold using statistics from the other 4. scikit-learn's `TargetEncoder.fit_transform` does this.\n5. Bigger smoothing m also helps by shrinking rare categories towards the prior.",
+    "link": { "title": "TargetEncoder — scikit-learn", "url": "https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.TargetEncoder.html" }
+  },
+  {
+    "id": "mlf-feature-engineering-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A k-NN classifier uses two raw features: age (18–90) and annual income in pounds (10,000–500,000). Which statements are true? Select all that apply.",
+    "options": [
+      { "text": "Distances are dominated by income, so age has almost no influence on which neighbours are chosen", "explanation": "Correct. An age gap of 30 years is a distance of 30; an income gap of £5,000 is 5,000. Income swamps age." },
+      { "text": "Standardising both features would give them comparable influence", "explanation": "Correct. After standardisation, one unit means one standard deviation on both axes." },
+      { "text": "Changing income to thousands of pounds would leave k-NN's predictions unchanged", "explanation": "Rescaling one feature changes Euclidean distances and therefore which points are nearest. Income in thousands (10–500) would make it comparable to age." },
+      { "text": "A log transform of income might help further, since income is right-skewed", "explanation": "Correct. Logs stop a few very high earners from stretching the income axis, so differences among typical incomes count for more." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Compare two people: A (30, £40,000) and B (60, £41,000).\n\n```\nage gap² = 30²     =        900\nincome²  = 1000²   =  1,000,000\ndistance ≈ 1000.4\n```\n\nThe 30-year age gap barely registers. After standardising (say age std 15, income std 60,000), the gaps become 2.0 and 0.017, so age now dominates *this* pair, which is sensible since their incomes are nearly equal.\n\nRescaling either feature changes distances, so units matter for k-NN. Logs additionally tame the long tail of incomes.",
+    "link": { "title": "Feature scaling — Wikipedia", "url": "https://en.wikipedia.org/wiki/Feature_scaling" }
+  },
+  {
+    "id": "mlf-feature-engineering-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Binary features x₁ and x₂ have label y = 1 exactly when one of them is 1 (XOR). A logistic regression on x₁ and x₂ alone scores no better than chance. Which single added feature makes the classes linearly separable?",
+    "options": [
+      { "text": "x₁ + x₂", "explanation": "This is already a linear combination of the existing features, so it gives the linear model nothing new." },
+      { "text": "x₁²", "explanation": "For a 0/1 feature, x₁² = x₁, so this adds nothing." },
+      { "text": "x₁ · x₂", "explanation": "Correct. With the product, y = x₁ + x₂ − 2·x₁·x₂ exactly, so a linear model on (x₁, x₂, x₁x₂) can separate the classes." },
+      { "text": "A standardised copy of x₁", "explanation": "Rescaling doesn't change what a linear model can represent." }
+    ],
+    "answer": 2,
+    "workedExample": "Truth table with the product feature:\n\n```\nx1 x2 x1*x2  y  x1+x2-2*x1x2\n0  0    0    0       0\n0  1    0    1       1\n1  0    0    1       1\n1  1    1    0       0\n```\n\nThe score s = x₁ + x₂ − 2x₁x₂ equals y exactly, so the threshold s > 0.5 classifies perfectly. Without the product, no line in the (x₁, x₂) plane puts (0,1) and (1,0) on one side and (0,0) and (1,1) on the other. This is the essence of a feature cross. Trees and neural networks learn such interactions themselves.",
+    "link": { "title": "Feature engineering — Wikipedia", "url": "https://en.wikipedia.org/wiki/Feature_engineering" }
+  },
+  {
+    "id": "mlf-feature-engineering-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An ad system hashes 10 million distinct `site_url` values into 2²⁰ (1,048,576) buckets for a linear model. Which statements are true? Select all that apply.",
+    "options": [
+      { "text": "On average about 9.5 URLs share each bucket, so collisions are certain", "explanation": "Correct. 10,000,000 / 1,048,576 ≈ 9.5. Popular URLs still dominate their buckets, which is why hashing often works anyway." },
+      { "text": "A URL that first appears after training needs no vocabulary update; it simply hashes to some bucket", "explanation": "Correct. There is no dictionary to maintain. The new URL shares a bucket (and weight) with whatever trained URLs hash there." },
+      { "text": "Memory for the weights is fixed by the bucket count, not the number of distinct URLs", "explanation": "Correct. The model has 2²⁰ weights however many URLs exist." },
+      { "text": "Hashing preserves similarity, so similar URLs land in nearby buckets", "explanation": "Hash functions deliberately scatter inputs. Nearby bucket numbers mean nothing, and similar URLs end up in unrelated buckets." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. Load: 10⁷ / 2²⁰ ≈ 9.54 URLs per bucket on average.\n2. Each bucket gets one weight, learned from all URLs in it. If one URL has most of the traffic, the weight mostly reflects it. Collisions among rare URLs add noise, often tolerable.\n3. Unseen URLs hash to an existing bucket, so serving never fails. The flip side: the prediction for a new URL is influenced by unrelated URLs.\n4. Memory is set by the bucket count, a fixed cost you choose. Doubling buckets halves average load.\n5. Hashing is not locality-preserving; similarity needs embeddings or explicit features.",
+    "link": { "title": "Feature hashing — Wikipedia", "url": "https://en.wikipedia.org/wiki/Feature_hashing" }
+  },
+  {
+    "id": "mlf-feature-engineering-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A churn model was trained with missing `last_login_days` filled by the training median (12). In the live service an engineer fills missing values with 0. Offline AUC was 0.86; live AUC is 0.74. Most churners have missing values. What is the best explanation and fix?",
+    "options": [
+      { "text": "Concept drift; retrain on newer data", "explanation": "Drift may exist, but there is a concrete code difference here. Retraining won't fix inputs being built differently in the two environments." },
+      { "text": "Training–serving skew: the same input is encoded differently live; ship the fitted preprocessing with the model and add a missing indicator", "explanation": "Correct. Live, a missing value becomes 0 (\"logged in today\"), which looks like a highly engaged user, the opposite of what training taught the model." },
+      { "text": "The median should have been the mean", "explanation": "Mean versus median isn't the issue. Any value would cause problems if training and serving disagree." },
+      { "text": "AUC can't be measured live", "explanation": "It can, once outcomes arrive. The drop is real and points to a pipeline difference." }
+    ],
+    "answer": 1,
+    "workedExample": "1. In training, missing → 12 days. The model learned that 12 is typical-to-disengaged.\n2. Live, missing → 0 days, which means \"logged in today\": a strong signal of *not* churning.\n3. Since most churners have missing values, live churners now look loyal, and AUC drops.\n4. Fixes:\n   - Serve the **same fitted pipeline** (the `SimpleImputer` with its stored median) instead of re-implementing it.\n   - Add a `last_login_missing` indicator so missingness is explicit.\n   - Monitor feature distributions in production against training.",
+    "link": { "title": "Pipelines and composite estimators — scikit-learn", "url": "https://scikit-learn.org/stable/modules/compose.html" }
+  },
+  {
+    "id": "mlf-feature-engineering-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A loan model has a feature `previous_loan_amount`, blank for 40% of applicants. Blanks mostly mean the applicant has never had a loan, and first-time borrowers default more often. What is the best treatment for a logistic regression?",
+    "options": [
+      { "text": "Drop the rows with blanks", "explanation": "That throws away 40% of the data and removes exactly the higher-risk group, so the model would never learn about them." },
+      { "text": "Fill blanks with the median loan amount only", "explanation": "That makes first-time borrowers look like typical repeat borrowers and hides the informative missingness." },
+      { "text": "Drop the column", "explanation": "That throws away a useful signal for the 60% who do have a value, as well as the missingness signal." },
+      { "text": "Impute a value (e.g. 0 or the median) and add a `had_previous_loan` indicator column", "explanation": "Correct. The indicator lets the model learn a separate effect for first-time borrowers, while the imputed column still carries the amount for everyone else." }
+    ],
+    "answer": 3,
+    "workedExample": "1. Here missingness is **informative**: blank ≈ \"no previous loan\" ≈ higher risk.\n2. A linear model needs a number in every cell, so impute something. 0 is natural here (no previous loan means £0); the median is a neutral choice.\n3. Add the indicator `had_previous_loan` (0 for blanks). Its weight captures the extra risk of first-timers directly.\n4. Compute any imputation statistics on training data only.\n\nTree libraries such as XGBoost and LightGBM can learn a direction for missing values on their own, but the indicator is still a cheap, explicit signal.",
+    "link": { "title": "Preprocessing data — scikit-learn user guide", "url": "https://scikit-learn.org/stable/modules/preprocessing.html" }
+  }
+]

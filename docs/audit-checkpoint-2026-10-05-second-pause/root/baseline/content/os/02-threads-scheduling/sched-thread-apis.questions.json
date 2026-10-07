@@ -1,0 +1,348 @@
+[
+  {
+    "id": "sched-thread-apis-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the most likely result of running this program?\n\n```c\nvoid *hello(void *arg) {\n    sleep(1);\n    printf(\"hello\\n\");\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t;\n    pthread_create(&t, NULL,\n                   hello, NULL);\n    return 0;\n}\n```",
+    "options": [
+      {
+        "text": "It prints `hello` after one second, then exits",
+        "explanation": "That would need `main` to wait. Returning from `main` calls `exit()`, which ends the process and every thread in it."
+      },
+      {
+        "text": "It exits almost immediately without printing anything",
+        "explanation": "Correct. `main` returns straight away, which terminates the whole process while the new thread is still sleeping."
+      },
+      {
+        "text": "It hangs forever because the thread was never joined",
+        "explanation": "An unjoined thread doesn't keep the process alive; the opposite happens. Exiting the process kills it."
+      },
+      {
+        "text": "It fails to compile because `pthread_join` is required",
+        "explanation": "The compiler doesn't require a join. Forgetting it is a logic bug, not a compile error."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `pthread_create` starts `hello`, which immediately sleeps for a second.\n2. `main` carries on and returns 0.\n3. Returning from `main` is equivalent to calling `exit(0)`, which terminates the **whole process**, including all threads.\n4. The thread never wakes to print.\n\nFixes: call `pthread_join(t, NULL)` before returning, or end `main` with `pthread_exit(NULL)` so only the main thread ends.",
+    "link": {
+      "title": "pthread_create(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_create.3.html"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`pthread_create` fails because the system has hit its thread limit. How does it report the error?",
+    "options": [
+      {
+        "text": "It returns −1 and sets `errno` to `EAGAIN`",
+        "explanation": "That is the convention for most system calls, but pthreads functions are different. Checking `errno` after a pthreads call is a common mistake."
+      },
+      {
+        "text": "It returns 0 and leaves the `pthread_t` set to NULL",
+        "explanation": "0 means success for pthreads functions; it would never signal failure that way."
+      },
+      {
+        "text": "It returns the error number (`EAGAIN`) directly",
+        "explanation": "Correct. pthreads functions return 0 on success or an error number on failure, so you check the return value, e.g. with `strerror(rc)`."
+      },
+      {
+        "text": "It raises SIGSEGV in the calling thread",
+        "explanation": "Resource exhaustion is reported through return values, not signals."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Classic Unix system calls return −1 and put the reason in `errno`.\n2. The pthreads functions were designed differently: they **return the error number** itself and return 0 on success.\n3. For a thread limit (`RLIMIT_NPROC`, `threads-max`) or lack of memory, `pthread_create` returns `EAGAIN`.\n\nSo write:\n\n```c\nint rc = pthread_create(...);\nif (rc != 0)\n    fprintf(stderr, \"%s\\n\",\n            strerror(rc));\n```",
+    "link": {
+      "title": "pthread_create(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_create.3.html"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Select **all** true statements about joinable and detached POSIX threads.",
+    "options": [
+      {
+        "text": "A joinable thread that exits but is never joined keeps holding some resources",
+        "explanation": "Correct. Its stack and return value are kept until someone joins it, like a zombie process waiting to be reaped."
+      },
+      {
+        "text": "A detached thread's resources are released automatically when it exits",
+        "explanation": "Correct. That is the whole point of detaching: nobody needs to join it."
+      },
+      {
+        "text": "You can call `pthread_join` on a detached thread to get its return value",
+        "explanation": "Wrong: once detached, a thread can't be joined. Its return value is discarded, and calling join on it is an error (undefined behaviour if it has already gone)."
+      },
+      {
+        "text": "A detached thread keeps running after `main` returns",
+        "explanation": "Wrong: detaching only affects cleanup. Returning from `main` still exits the process and kills every thread."
+      },
+      {
+        "text": "Calling `pthread_exit(NULL)` at the end of `main` lets other threads finish",
+        "explanation": "Correct. It ends only the main thread; the process lives until the last thread exits."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Separate two questions:\n\n1. **Who frees a finished thread's resources?** Joinable: whoever joins it. Detached: the system, automatically. A joinable thread that's never joined leaks.\n2. **When does the process end?** When any thread calls `exit()` (including returning from `main`), or when the last thread ends.\n\nDetaching answers question 1 only. It doesn't protect a thread from the process exiting. `pthread_exit` in `main` is the way to let `main` finish without ending the process.",
+    "link": {
+      "title": "pthread_detach(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_detach.3.html"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This program prints four numbers. Which output is possible?\n\n```c\nvoid *f(void *arg) {\n    printf(\"%d\\n\", *(int *)arg);\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t[4];\n    int i;\n    for (i = 0; i < 4; i++)\n        pthread_create(&t[i], NULL,\n                       f, &i);\n    for (int j = 0; j < 4; j++)\n        pthread_join(t[j], NULL);\n}\n```",
+    "options": [
+      {
+        "text": "Something like `2 2 4 3`, with duplicates and even 4",
+        "explanation": "Correct. Every thread dereferences the one shared `i`. By the time a thread runs, the loop may have advanced, so values repeat and a thread can see 4, the value after the loop ends."
+      },
+      {
+        "text": "Only `0 1 2 3` in some order",
+        "explanation": "That assumes each thread gets its own copy of `i`. They all receive the address of the same variable, which the loop keeps changing."
+      },
+      {
+        "text": "Always `4 4 4 4`",
+        "explanation": "Possible if every thread starts late, but not guaranteed. Threads often start while the loop is still running, so they see 1, 2 or 3."
+      },
+      {
+        "text": "Nothing: it fails to compile because `&i` is an `int *`, not a `void *`",
+        "explanation": "In C any object pointer converts implicitly to `void *`, so it compiles without complaint. The bug is in the logic, not the types."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `&i` is the address of the single variable `i` in `main`'s stack frame.\n2. All four threads get that same pointer.\n3. Each thread reads `*arg` whenever it gets scheduled, and the loop keeps incrementing `i` in the meantime.\n4. Typical runs:\n\n```\n2 2 4 3\n3 3 3 4\n```\n\n5. The read in `f` also races with the write in the loop, so strictly it is a data race.\n\nFix: give each thread its own slot, e.g. `int ids[4]; ids[i] = i;` and pass `&ids[i]`.",
+    "link": {
+      "title": "pthread_create(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_create.3.html"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You submit 10 tasks to `ThreadPoolExecutor(max_workers=4)`. Each task just calls `time.sleep(1)`. Roughly how long until all results are available?",
+    "options": [
+      {
+        "text": "About 1 second",
+        "explanation": "Only 4 tasks can run at once. The other 6 wait in the queue for a free worker."
+      },
+      {
+        "text": "About 2.5 seconds",
+        "explanation": "Tasks can't be split across workers: each needs a full second on one worker, so the work proceeds in whole waves."
+      },
+      {
+        "text": "About 10 seconds",
+        "explanation": "That's the serial time. `time.sleep` releases the GIL, so the 4 workers really do wait in parallel."
+      },
+      {
+        "text": "About 3 seconds",
+        "explanation": "Correct. 10 tasks over 4 workers needs ⌈10/4⌉ = 3 waves of 1 second each."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. 4 workers, each running one task at a time.\n2. Seconds 0–1: tasks 1–4. Seconds 1–2: tasks 5–8. Seconds 2–3: tasks 9–10 (two workers idle).\n3. Number of waves = ⌈10 / 4⌉ = 3, so about 3 seconds.\n4. The GIL doesn't get in the way because `time.sleep` releases it, as does real blocking I/O.",
+    "link": {
+      "title": "concurrent.futures — Python docs",
+      "url": "https://docs.python.org/3/library/concurrent.futures.html"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service runs on 16 cores. Each request spends about 40 ms waiting for a remote API and 10 ms computing. Using the rule of thumb `threads = cores × (1 + wait/compute)`, how many worker threads should you start with?",
+    "options": [
+      {
+        "text": "16",
+        "explanation": "That's the right size for purely CPU-bound work. Here each thread is idle 80% of the time, so 16 threads would leave cores unused."
+      },
+      {
+        "text": "64",
+        "explanation": "That's 16 × 4: it misses the `1 +` term, which accounts for the time each thread actually spends computing."
+      },
+      {
+        "text": "80",
+        "explanation": "Correct. wait/compute = 40/10 = 4, so 16 × (1 + 4) = 80."
+      },
+      {
+        "text": "800",
+        "explanation": "That treats the ratio as 50 (or multiplies by request time). The formula uses the ratio of wait to compute, 4."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. wait / compute = 40 ms / 10 ms = 4.\n2. Each thread keeps a core busy only 10/50 = 20% of the time, so you need about 5 threads per core to keep it busy.\n3. threads = 16 × (1 + 4) = **80**.\n\nTreat this as a starting point. Measure throughput and latency, and remember the remote API may become the bottleneck before your cores do.",
+    "link": {
+      "title": "Thread pool — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Thread_pool"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** statements that are true for the standard (GIL) build of CPython.",
+    "options": [
+      {
+        "text": "Two threads running a pure-Python CPU-bound loop do not run in parallel",
+        "explanation": "Correct. Only the thread holding the GIL executes bytecode, so the threads take turns."
+      },
+      {
+        "text": "The GIL makes `counter = bump(counter)` safe to run from several threads without a lock",
+        "explanation": "Wrong: a thread can lose the GIL between reading `counter` and writing it back, so updates get lost. The GIL protects the interpreter, not your invariants."
+      },
+      {
+        "text": "The GIL is released while a thread waits in a blocking `socket.recv`",
+        "explanation": "Correct. Blocking I/O releases the GIL, which is why threads are fine for I/O-bound Python."
+      },
+      {
+        "text": "A large NumPy matrix multiplication in one thread need not stop other threads running Python",
+        "explanation": "Correct. NumPy releases the GIL for long operations, so other threads can run meanwhile."
+      },
+      {
+        "text": "Python threads are green threads scheduled by the interpreter, not the OS",
+        "explanation": "Wrong: CPython threads are real OS threads (1:1). The GIL limits which one may run bytecode, but the OS schedules them."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The GIL is one lock that must be held to **execute Python bytecode**.\n\n1. Pure-Python CPU work: always needs the GIL, so no parallelism.\n2. Blocking I/O and long C-level work that release the GIL: other threads run meanwhile.\n3. Correctness: the GIL can be handed over between any two bytecodes, so multi-step operations on shared data still race.\n4. Implementation: `threading.Thread` creates a real OS thread; the OS schedules it, and it then waits for the GIL.",
+    "link": {
+      "title": "Global interpreter lock — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Global_interpreter_lock"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You have a pure-Python, CPU-bound image filter to run over 10,000 images on an 8-core machine, using standard CPython. Which approach is most likely to give close to an 8× speed-up?",
+    "options": [
+      {
+        "text": "`ThreadPoolExecutor(max_workers=8)`",
+        "explanation": "Threads share one GIL, so pure-Python CPU work runs on one core at a time. Expect roughly no speed-up."
+      },
+      {
+        "text": "`ThreadPoolExecutor(max_workers=64)`",
+        "explanation": "More threads make it worse: still one GIL, now with more switching."
+      },
+      {
+        "text": "`ProcessPoolExecutor(max_workers=8)`",
+        "explanation": "Correct. Each worker process has its own interpreter and its own GIL, so 8 processes can run on 8 cores. The cost is pickling the images in and the results out."
+      },
+      {
+        "text": "Lower `sys.setswitchinterval` so threads take turns faster",
+        "explanation": "That changes how often the GIL changes hands, not how many threads hold it at once. It adds overhead without adding parallelism."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The work is pure Python and CPU-bound, so it needs the GIL the whole time.\n2. In one process, only one thread can hold the GIL at once: threads give about 1×.\n3. Separate processes each have their own GIL, so 8 processes can use 8 cores.\n4. Overheads: process start-up and pickling. For images, passing file paths rather than pixel data keeps that cheap.\n\n(Alternatives: rewrite the filter with NumPy, which releases the GIL, or use a free-threaded Python build.)",
+    "link": {
+      "title": "concurrent.futures — Python docs",
+      "url": "https://docs.python.org/3/library/concurrent.futures.html"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What happens when you run this?\n\n```python\nfrom concurrent.futures import (\n    ThreadPoolExecutor)\n\npool = ThreadPoolExecutor(max_workers=2)\n\ndef child():\n    return 1\n\ndef parent():\n    f = pool.submit(child)\n    return f.result()\n\nfs = [pool.submit(parent)\n      for _ in range(2)]\nprint([f.result() for f in fs])\n```",
+    "options": [
+      {
+        "text": "It prints `[1, 1]`",
+        "explanation": "That would need a free worker for each `child`. Both workers are busy running `parent`, blocked in `f.result()`."
+      },
+      {
+        "text": "It hangs forever",
+        "explanation": "Correct. This is pool-induced deadlock: both workers run `parent` and wait on a `child` that is stuck in the queue because no worker is free to run it."
+      },
+      {
+        "text": "It raises a `RuntimeError` about deadlock",
+        "explanation": "`ThreadPoolExecutor` doesn't detect deadlocks. The futures just never complete."
+      },
+      {
+        "text": "It prints `[1, 1]` but only after the 5-second switch interval",
+        "explanation": "The switch interval (5 ms, not 5 s) governs the GIL, not the pool's queue. No worker ever becomes free."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace it:\n\n1. Two `parent` tasks are submitted; the two workers pick them up.\n2. Each `parent` submits a `child`. Both children go into the queue.\n3. Each `parent` then blocks in `f.result()` waiting for its child.\n4. A child can only run on a free worker, but both workers are blocked inside `parent`.\n5. Nobody can make progress: deadlock.\n\nWith 3 workers it would work, which is why this bug often hides until load increases. Fixes: a separate pool for child tasks, not blocking inside tasks (compose futures or use `asyncio`), or doing the child work inline.",
+    "link": {
+      "title": "concurrent.futures — Python docs",
+      "url": "https://docs.python.org/3/library/concurrent.futures.html"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Four threads each increment their own element of a shared array 100 million times. On 4 cores this runs **slower** than doing all the work in one thread. Why?\n\n```c\nlong counts[4];\n\nvoid *work(void *arg) {\n    int me = *(int *)arg;\n    for (long i = 0; i < 100000000;\n         i++)\n        counts[me]++;\n    return NULL;\n}\n```",
+    "options": [
+      {
+        "text": "There is a data race on `counts`, so the hardware serialises the updates",
+        "explanation": "There's no race: each thread writes a different element. The slowdown is a cache effect, not a correctness issue."
+      },
+      {
+        "text": "Thread creation overhead dominates",
+        "explanation": "Creating four threads takes microseconds; the loop does 400 million increments. The overhead is negligible."
+      },
+      {
+        "text": "The GIL prevents the threads running in parallel",
+        "explanation": "This is C; there is no GIL. The threads do run in parallel, they just fight over one cache line."
+      },
+      {
+        "text": "False sharing: the four `long`s share one 64-byte cache line, so each write forces the line to bounce between cores",
+        "explanation": "Correct. Cache coherence works on whole lines, not individual variables. Every increment invalidates the line in the other three cores' caches, so most writes become slow cross-core transfers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `counts` is 4 × 8 = 32 bytes, so all four elements fit in one 64-byte cache line.\n2. Coherence protocols (such as MESI) track ownership per **line**. To write, a core needs the line in exclusive state.\n3. Thread 0 writes `counts[0]`: the line moves to core 0 and is invalidated on cores 1–3. Thread 1 writes `counts[1]`: the line moves to core 1. And so on, millions of times.\n4. Each move costs tens of nanoseconds, against about 1 ns for a cached write.\n\nFixes:\n- accumulate in a local variable and write once at the end (as the lesson's sum example does);\n- or pad each counter to its own line, e.g. `struct { long n; char pad[56]; }`.",
+    "link": {
+      "title": "False sharing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/False_sharing"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What is wrong with this thread function?\n\n```c\nvoid *compute(void *arg) {\n    long result = expensive(arg);\n    return &result;\n}\n/* main: */\nvoid *p;\npthread_join(t, &p);\nprintf(\"%ld\\n\", *(long *)p);\n```",
+    "options": [
+      {
+        "text": "It returns a pointer into the thread's own stack, which is freed when the thread exits, so reading it is undefined behaviour",
+        "explanation": "Correct. `result` lives on `compute`'s stack. After the thread ends, its stack can be unmapped or reused; dereferencing `p` may print garbage or crash."
+      },
+      {
+        "text": "Nothing: `pthread_join` copies the returned value into `p`",
+        "explanation": "`pthread_join` copies the *pointer*, not what it points to. The pointer refers to memory that is no longer valid."
+      },
+      {
+        "text": "`pthread_join` cannot return values; only `pthread_exit` can",
+        "explanation": "Returning from the start function is equivalent to calling `pthread_exit` with that value, and `pthread_join` retrieves it."
+      },
+      {
+        "text": "It is a data race between `main` and the thread on `result`",
+        "explanation": "`pthread_join` provides proper ordering: the thread is finished before `main` reads. The problem is that the memory is dead, not that it's raced."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `result` is a local, so it is on the thread's stack.\n2. `return &result` hands back the address of that stack slot.\n3. When the thread exits, its stack is freed (or cached for reuse by a new thread).\n4. `main` reads through a dangling pointer. It may *seem* to work in a test and fail in production.\n\nFixes:\n- `malloc` the result and have the joiner `free` it;\n- or let the caller pass in a struct with a result field (as in the lesson's sum example);\n- or, for small integers, return the value cast through `intptr_t`.",
+    "link": {
+      "title": "pthread_join(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_join.3.html"
+    }
+  }
+]

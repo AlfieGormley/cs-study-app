@@ -1,0 +1,373 @@
+[
+  {
+    "id": "test-doubles-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your tests use an `InMemoryOrders` class that stores orders in a dict, assigns increasing ids and raises on duplicate order numbers, just like the Postgres-backed repository. What kind of test double is it?",
+    "options": [
+      {
+        "text": "Fake",
+        "explanation": "Correct. A fake is a working, simplified implementation; here it keeps data in memory instead of a database."
+      },
+      {
+        "text": "Stub",
+        "explanation": "A stub returns canned answers and has no real logic. This class actually stores and enforces rules."
+      },
+      {
+        "text": "Mock",
+        "explanation": "A mock is pre-programmed with expected calls and verifies them. This class does not check how it was called."
+      },
+      {
+        "text": "Dummy",
+        "explanation": "A dummy is passed but never used. This class does real work in the test."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask two questions:\n\n1. Does it have working behaviour? Yes: it stores, assigns ids and enforces uniqueness.\n2. Does it take a shortcut compared with production? Yes: a dict instead of Postgres.\n\nWorking-but-simplified is the definition of a fake. Stubs return fixed answers; mocks verify calls; dummies are never used.",
+    "link": {
+      "title": "Test Double — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/TestDouble.html"
+    }
+  },
+  {
+    "id": "test-doubles-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which situation is the **weakest** reason to replace a collaborator with a test double?",
+    "options": [
+      {
+        "text": "The collaborator charges a real credit card",
+        "explanation": "Side effects like real charges are a strong reason to use a double."
+      },
+      {
+        "text": "The collaborator is a third-party API that is sometimes down",
+        "explanation": "Nondeterministic, slow dependencies are a classic reason to use a double."
+      },
+      {
+        "text": "The collaborator is a small pure function that formats a date",
+        "explanation": "Correct. It is fast, deterministic and in-process, so the real thing is the better choice; doubling it just adds setup and drift."
+      },
+      {
+        "text": "You need to test what happens when the provider times out",
+        "explanation": "Hard-to-provoke failures are best produced on demand with a double's `side_effect`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The reasons to double are: slow, nondeterministic, side-effecting, hard to provoke, or not yet built.\n\n- Real card charges: side-effecting. Double it.\n- Flaky third-party API: nondeterministic and slow. Double it.\n- Provider timeouts: hard to provoke. Double it.\n- Pure date formatter: none of the above. Use the real function.\n\nDoubling a pure function only adds a way for the test to disagree with reality.",
+    "link": {
+      "title": "Test Doubles — Software Engineering at Google, ch. 13",
+      "url": "https://abseil.io/resources/swe-book/html/ch13.html"
+    }
+  },
+  {
+    "id": "test-doubles-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In this test, what role is `rates` playing?\n\n```python\nrates = Mock()\nrates.get.return_value = 1.17\nassert convert(100, \"GBP\",\n    \"EUR\", rates) == 117.0\n```",
+    "options": [
+      {
+        "text": "A fake: it implements exchange rates",
+        "explanation": "It has no working logic; it returns 1.17 for any call."
+      },
+      {
+        "text": "A mock in the strict sense: it verifies expected calls",
+        "explanation": "Nothing here checks the calls. Adding `rates.get.assert_called_once_with(...)` would make it act as a mock or spy."
+      },
+      {
+        "text": "A dummy: it is never used",
+        "explanation": "`convert` calls `rates.get`, so it is used."
+      },
+      {
+        "text": "A stub: it supplies a canned answer so the test can check `convert`'s result",
+        "explanation": "Correct. The test only feeds in a fixed rate and checks the returned value (state), without verifying how `rates` was called."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Look at what the test does with the double:\n\n1. It configures a return value: canned answer.\n2. It asserts on `convert`'s output, not on `rates`.\n\nCanned answers with no verification of calls is a stub. The same `Mock` object becomes a spy or mock the moment you assert on its calls.",
+    "link": {
+      "title": "Test Double — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/TestDouble.html"
+    }
+  },
+  {
+    "id": "test-doubles-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`checkout.py` does `from payments import charge` and calls `charge(card, total)`. Assume checkout was imported before the patch. What happens when this test runs?\n\n```python\nwith patch(\"payments.charge\") as f:\n    f.return_value = {\"status\":\n                      \"paid\"}\n    place_order(\"4242\", 10)\n```",
+    "options": [
+      {
+        "text": "The patched `charge` runs and `place_order` returns `\"ok\"`",
+        "explanation": "`checkout` copied a reference to the original function at import time, so it never sees the patch on `payments`."
+      },
+      {
+        "text": "The real `payments.charge` runs, because `checkout.charge` still points to the original function",
+        "explanation": "Correct. Patch where the name is looked up: `patch(\"checkout.charge\")`."
+      },
+      {
+        "text": "`patch` raises because `payments.charge` is imported elsewhere",
+        "explanation": "`patch` happily replaces the attribute on `payments`; it just has no effect on other modules' copies."
+      },
+      {
+        "text": "Both the patch and the real function run",
+        "explanation": "Only one function object is called: the one `checkout.charge` refers to, which is the original."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow the references:\n\n```\nimport time:\n  checkout.charge = payments.charge\n                    (original fn)\ntest:\n  payments.charge = <MagicMock>\n  checkout.charge still -> original\n```\n\n`place_order` looks up `charge` in `checkout`'s globals, finds the original, and makes the real call. Patch `checkout.charge` instead.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Now `checkout.py` does `import payments` and calls `payments.charge(card, total)`. Which patch target makes the test use the double?",
+    "options": [
+      {
+        "text": "`patch(\"checkout.charge\")`",
+        "explanation": "There is no `charge` name in `checkout` now; this would raise `AttributeError` because the attribute does not exist."
+      },
+      {
+        "text": "Either works the same",
+        "explanation": "Only one of them is where the name is looked up."
+      },
+      {
+        "text": "`patch(\"payments.charge\")`",
+        "explanation": "Correct. The lookup happens on the `payments` module at call time, so replacing `payments.charge` is seen by `checkout`."
+      },
+      {
+        "text": "Neither; module attributes cannot be patched",
+        "explanation": "Patching module attributes is exactly what `patch` does."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Apply 'patch where it is looked up':\n\n1. `checkout` holds a reference to the `payments` **module**.\n2. Each call evaluates `payments.charge` fresh.\n3. So replacing the `charge` attribute on the `payments` module takes effect.\n\n`patch` also refuses to create attributes that don't exist by default, so `checkout.charge` fails with `AttributeError`.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this test do?\n\n```python\npay = Mock()\npay.chrage(\"4242\", 10)\npay.charge.assert_not_called()\n```",
+    "options": [
+      {
+        "text": "Passes: the typo created a separate child mock, and `charge` really was never called",
+        "explanation": "Correct. Without a `spec`, the mock cannot know `chrage` is a typo. If production code had this typo, a test like this would not notice."
+      },
+      {
+        "text": "Raises `AttributeError` because `chrage` does not exist",
+        "explanation": "A bare Mock creates many ordinary attributes on demand, including this typo; unsupported special attributes and protected assertion names can raise AttributeError."
+      },
+      {
+        "text": "Fails, because `charge` was called",
+        "explanation": "Nothing called `charge`; the call went to a different child, `chrage`."
+      },
+      {
+        "text": "Fails with `TypeError` for the wrong argument count",
+        "explanation": "A bare `Mock` accepts any arguments."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A bare `Mock`:\n\n1. `pay.chrage` creates a new child mock named `chrage`.\n2. Calling it records the call on that child.\n3. `pay.charge` is another, untouched child.\n4. `assert_not_called()` on it passes.\n\nWith `Mock(spec=PaymentClient)` step 1 would raise `AttributeError`, because the real class has no `chrage`.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is the result of `pay_with_retry(pay)`?\n\n```python\npay = Mock(side_effect=[\n    TimeoutError,\n    {\"status\": \"paid\"}])\n\ndef pay_with_retry(pay, tries=3):\n    for i in range(tries):\n        try:\n            return pay(), i + 1\n        except TimeoutError:\n            pass\n    raise RuntimeError(\"gave up\")\n```",
+    "options": [
+      {
+        "text": "`({'status': 'paid'}, 1)`",
+        "explanation": "The first call raises `TimeoutError`, so it is caught and the loop continues."
+      },
+      {
+        "text": "`RuntimeError: gave up`",
+        "explanation": "The second attempt succeeds, so the loop returns before running out of tries."
+      },
+      {
+        "text": "`TimeoutError` propagates",
+        "explanation": "It is caught by `except TimeoutError`."
+      },
+      {
+        "text": "`({'status': 'paid'}, 2)`",
+        "explanation": "Correct. Call 1 raises `TimeoutError` (i=0, swallowed); call 2 returns the dict (i=1), so it returns `(dict, 2)` and `pay.call_count` is 2."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "`side_effect` as an iterable is consumed one item per call. An exception class or instance is raised; anything else is returned.\n\n| i | side_effect item | result |\n|---|---|---|\n| 0 | TimeoutError | caught |\n| 1 | dict | return (dict, 2) |\n\nThis is how you test retry logic in microseconds without real timeouts.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Same `pay_with_retry`, but `pay = Mock(side_effect=[TimeoutError, TimeoutError])`. What happens?",
+    "options": [
+      {
+        "text": "`RuntimeError: gave up` after 3 calls",
+        "explanation": "The third call never reaches a TimeoutError: the side_effect list is exhausted."
+      },
+      {
+        "text": "`StopIteration` is raised on the third call and escapes the function",
+        "explanation": "Correct. When an iterable `side_effect` runs out, the mock raises `StopIteration`. It is not a `TimeoutError`, so the retry loop doesn't catch it."
+      },
+      {
+        "text": "The third call returns `None`",
+        "explanation": "An exhausted iterable does not fall back to a default return value."
+      },
+      {
+        "text": "`TimeoutError` escapes on the second call",
+        "explanation": "Both TimeoutErrors are caught; the loop allows three tries."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace it:\n\n```\ni=0  TimeoutError -> caught\ni=1  TimeoutError -> caught\ni=2  list empty   -> StopIteration\n```\n\n`StopIteration` is not caught by `except TimeoutError`, so it escapes. The test author probably intended to test the 'gave up' path. Fix: give three failures, e.g. `side_effect=[TimeoutError] * 3`, or set `side_effect=TimeoutError` to raise on every call. A test double's own behaviour has to match the scenario you think you are testing.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "`PaymentClient.charge(card, amount)` gains a required `currency` parameter, and production code is not yet updated. Which tests of the calling code would **fail** and expose the problem? Select all that apply.",
+    "options": [
+      {
+        "text": "Tests using a bare `Mock()` for the client",
+        "explanation": "A bare `Mock` accepts any arguments, so `charge(card, amount)` still 'works' and the tests stay green."
+      },
+      {
+        "text": "Tests using `create_autospec(PaymentClient, instance=True)`",
+        "explanation": "Correct. Autospec copies the real signature, so calling without `currency` raises `TypeError`."
+      },
+      {
+        "text": "Tests using `Mock(spec=PaymentClient)`",
+        "explanation": "`spec` checks attribute names, not method signatures, so the call with two arguments still succeeds."
+      },
+      {
+        "text": "Integration tests that call the real client against the provider's sandbox",
+        "explanation": "Correct. The real method rejects the missing argument."
+      },
+      {
+        "text": "Tests using `patch('app.client', autospec=True)`",
+        "explanation": "Correct. `autospec=True` on `patch` gives the same signature checking as `create_autospec`."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Separate what each double checks:\n\n| Double | Names | Signatures |\n|---|---|---|\n| `Mock()` | no | no |\n| `Mock(spec=...)` | yes | no |\n| autospec | yes | yes |\n\nOnly signature-checking doubles (B, E) and the real implementation (D) catch a changed signature. This is why bare mocks are dangerous: they keep passing while the real API moves on.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An `OrderService` test mocks the pricer, the tax calculator, the repository and the payment client, then asserts `payment.charge` was called with `12`, the value the tax mock was told to return. Someone introduces a bug that makes the real calculator return 0% instead of this scenario's required 20% tax. What happens to this test?",
+    "options": [
+      {
+        "text": "It still passes, because it only checks the plumbing between mocks, not the real tax rules",
+        "explanation": "Correct. Over-mocked tests restate the implementation; real bugs in mocked-out collaborators are invisible to them."
+      },
+      {
+        "text": "It fails, because the total is wrong",
+        "explanation": "The tax calculator is mocked, so its real logic never runs in this test."
+      },
+      {
+        "text": "It errors, because the mock and real class disagree",
+        "explanation": "Nothing compares the mock to the real class unless you use autospec, and the signature hasn't changed anyway."
+      },
+      {
+        "text": "It fails only if run with `--strict-markers`",
+        "explanation": "Markers have nothing to do with it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace what actually executes:\n\n1. `pricer.price` (mock) returns 10.\n2. `tax.add` (mock) returns 12.\n3. `OrderService` passes 12 to `payment.charge` (mock).\n4. Assert 12. Pass.\n\nThe real tax calculator never runs, so its bug cannot affect this test. Better: use the real (pure, fast) pricer and tax calculator and double only the payment client, which has side effects.",
+    "link": {
+      "title": "Mocks Aren't Stubs — Martin Fowler",
+      "url": "https://martinfowler.com/articles/mocksArentStubs.html"
+    }
+  },
+  {
+    "id": "test-doubles-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your service calls `requests.get` to a weather API. Which approach gives the most trustworthy tests?",
+    "options": [
+      {
+        "text": "Patch `requests.get` in every unit test with a `Mock` returning a hand-written JSON dict",
+        "explanation": "This encodes your guess of the API's behaviour in dozens of places. If the guess is wrong or the API changes, every test is wrong together."
+      },
+      {
+        "text": "Call the real API in every unit test for realism",
+        "explanation": "That makes unit tests slow, flaky and dependent on someone else's uptime and rate limits."
+      },
+      {
+        "text": "Skip testing the weather code because it is third-party",
+        "explanation": "The parsing and error handling are your code and need tests."
+      },
+      {
+        "text": "Wrap the API in a small `WeatherClient` adapter you own; double the adapter in unit tests; cover the adapter with a few integration tests against the real or sandbox API",
+        "explanation": "Correct. 'Don't mock what you don't own': the adapter gives you a narrow interface to double, and the adapter's own tests check your assumptions against reality."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Split the problem:\n\n1. **Your logic** (what to do with a forecast) should be tested fast and deterministically. Double a narrow interface you control: `WeatherClient.forecast(city)`.\n2. **Your assumptions about the API** (field names, error codes) must be checked against the real thing, in a handful of integration tests on the adapter.\n\nThis keeps hundreds of tests fast while keeping the one risky boundary honest.",
+    "link": {
+      "title": "Test Doubles — Software Engineering at Google, ch. 13",
+      "url": "https://abseil.io/resources/swe-book/html/ch13.html"
+    }
+  },
+  {
+    "id": "test-doubles-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In which of these tests is **interaction verification** (asserting on calls made to a double) the right approach? Select all that apply.",
+    "options": [
+      {
+        "text": "Checking that a password-reset request invokes its email adapter once with the intended user",
+        "explanation": "Correct for the local adapter-invocation requirement. It does not prove successful delivery of an email by a remote provider."
+      },
+      {
+        "text": "Checking that this checkout code invokes its payment adapter once when handling the same logical request twice",
+        "explanation": "Correct for the local call-count requirement. Exactly-once remote payment effects need additional idempotency and failure-path checks."
+      },
+      {
+        "text": "Checking that `Cart.total()` internally calls `_sum_lines()` before `_apply_vat()`",
+        "explanation": "That is internal plumbing; assert on the total instead, so refactoring doesn't break the test."
+      },
+      {
+        "text": "Checking that a user is saved, when a fake repository is available",
+        "explanation": "With a fake you can use state verification: save, then read back. That is less coupled to how saving happens."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Ask: is the call itself the behaviour a user or another system cares about?\n\n- A: yes, the local email-adapter invocation is the asserted contract; delivery requires separate checks.\n- B: yes, the number of local adapter calls is the asserted contract, not proof of remote payment effects.\n- C: no, it is how `total()` works internally.\n- D: no, what matters is that the user can be found afterwards, which a fake lets you check directly.\n\nPrefer state; use interactions for side effects at the system's edges.",
+    "link": {
+      "title": "Mocks Aren't Stubs — Martin Fowler",
+      "url": "https://martinfowler.com/articles/mocksArentStubs.html"
+    }
+  }
+]

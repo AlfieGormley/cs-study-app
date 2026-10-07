@@ -1,0 +1,349 @@
+[
+  {
+    "id": "type-generics-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "This Java 5+ raw-list code illustrates the pre-generics API style and compiles with unchecked warnings. What happens when it runs?\n\n```java\nList names = new ArrayList();\nnames.add(\"Ada\");\nnames.add(42);\nString s = (String) names.get(1);\n```",
+    "options": [
+      {
+        "text": "It throws `ClassCastException` on the last line",
+        "explanation": "Correct. The raw `List` holds `Object`, so adding `42` is allowed; the cast to `String` is checked at run time and fails because the element is an `Integer`."
+      },
+      {
+        "text": "The compiler rejects `names.add(42)`",
+        "explanation": "That is what `List<String>` would give you. A raw `List` accepts any `Object`, so the compiler has nothing to complain about."
+      },
+      {
+        "text": "`s` becomes the string `\"42\"`",
+        "explanation": "This reference cast checks object compatibility; it does not stringify. Numeric casts can convert values, so not all Java casts behave identically."
+      },
+      {
+        "text": "`s` becomes `null`",
+        "explanation": "Java casts don't silently produce `null` on failure (that is C#'s `as`). A failed reference cast throws."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `List` with no type parameter stores `Object`. Both `\"Ada\"` and `42` (autoboxed to `Integer`) are `Object`s, so both `add` calls compile.\n2. `names.get(1)` returns `Object`. To use it as a `String` you must cast.\n3. A reference cast is checked at run time. The object is an `Integer`, not a `String`.\n4. Result: `ClassCastException`, on the line that reads the value, far from the line that inserted the bad value.\n\nWith `List<String>`, step 1 would fail at compile time instead. That move of the error from run time to compile time is the whole point of generics.",
+    "link": {
+      "title": "Why use generics? — The Java Tutorials",
+      "url": "https://docs.oracle.com/javase/tutorial/java/generics/why.html"
+    }
+  },
+  {
+    "id": "type-generics-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which kind of polymorphism is each of these?\n\n1. TypeScript `function first<T>(xs: T[]): T | undefined`\n2. Haskell's `show :: Show a => a -> String`, where each type supplies its own `show`\n3. Passing a `Dog` to a Java method that takes an `Animal`",
+    "options": [
+      {
+        "text": "1 parametric, 2 subtype, 3 ad hoc",
+        "explanation": "Type classes are not subtyping: `Int` is not a subclass of `Show`. And passing a `Dog` as an `Animal` is the textbook case of subtype polymorphism."
+      },
+      {
+        "text": "1 parametric, 2 ad hoc, 3 subtype",
+        "explanation": "Correct. `first` runs identical code for every `T`; `show` runs different code per type, chosen by the type class instance; `Dog` for `Animal` relies on a subclass relationship."
+      },
+      {
+        "text": "All three are parametric, because they all work for more than one type",
+        "explanation": "Working for many types is what all polymorphism has in common. Parametric means *the same code* for every type, which isn't true of `show`."
+      },
+      {
+        "text": "1 ad hoc, 2 parametric, 3 subtype",
+        "explanation": "This swaps the first two. `first` never inspects `T`, which is the definition of parametric; `show` has a separate implementation per type, which is ad hoc."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask one question of each: *does the same code run whatever the type?*\n\n- `first<T>`: yes, it just indexes the array. **Parametric.**\n- `show`: no. `show 3` and `show True` run different instance code. Choosing an implementation by type is **ad hoc** polymorphism (overloading and type classes).\n- `Dog` as `Animal`: the method's code is written against `Animal`, and works because `Dog` is a **subtype**. Any overridden methods are picked at run time by dynamic dispatch.\n\nSo: parametric, ad hoc, subtype.",
+    "link": {
+      "title": "Parametric polymorphism — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Parametric_polymorphism"
+    }
+  },
+  {
+    "id": "type-generics-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does the last call fail to type-check?\n\n```ts\nfunction longest<\n  T extends { length: number }\n>(a: T, b: T): T {\n  return a.length >= b.length ? a : b;\n}\nlongest(\"abc\", \"de\");\nlongest([1, 2], [3]);\nlongest(10, 20);\n```",
+    "options": [
+      {
+        "text": "Generic functions can't be called with primitive types",
+        "explanation": "The first call passes strings, which are primitives, and type-checks fine. The issue is specific to what `number` lacks."
+      },
+      {
+        "text": "`T` is inferred as `any`, which isn't allowed here",
+        "explanation": "TypeScript infers `T` as `number` from the arguments. It doesn't fall back to `any`."
+      },
+      {
+        "text": "`number` doesn't satisfy the bound `{ length: number }`",
+        "explanation": "Correct. The bound says `T` must have a numeric `length` property. Strings and arrays do; numbers don't, so `T = number` is rejected."
+      },
+      {
+        "text": "The two arguments have different values, so `T` can't be chosen",
+        "explanation": "`T` is about types, not values. `10` and `20` are both `number`, so they agree on `T`; the problem is the bound."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The bound requires a numeric length property. Strings and arrays satisfy it; numeric arguments do not. The string call can infer a union of string literal types, rather than exactly string. Removing the bound makes a.length invalid, because an unconstrained T does not guarantee that property.",
+    "link": {
+      "title": "Generics — TypeScript handbook",
+      "url": "https://www.typescriptlang.org/docs/handbook/2/generics.html"
+    }
+  },
+  {
+    "id": "type-generics-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are **rejected** by the Java compiler, because of type erasure? Select all that apply.",
+    "options": [
+      {
+        "text": "`T x = new T();` inside a generic class",
+        "explanation": "Rejected. At run time there's no `T` to construct, only the erased bound (usually `Object`)."
+      },
+      {
+        "text": "`List<int> xs = new ArrayList<>();`",
+        "explanation": "Rejected. Type arguments must be reference types, because erased code stores everything as `Object`. You must write `List<Integer>` and pay for boxing."
+      },
+      {
+        "text": "`if (obj instanceof List<String>)` where `obj` is an `Object`",
+        "explanation": "Rejected. The `String` part is erased, so the JVM can't check it. Only `instanceof List<?>` (or raw `List`) is allowed here."
+      },
+      {
+        "text": "Two overloads `void f(List<String> a)` and `void f(List<Integer> a)` in one class",
+        "explanation": "Rejected with \"name clash: ... have the same erasure\". After erasure both are `f(List)`, so the JVM couldn't tell them apart."
+      },
+      {
+        "text": "`static <T> T id(T x) { return x; }`",
+        "explanation": "Allowed. An ordinary generic method that never needs `T` at run time is exactly what erasure supports well."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Apply one test to each: *does this need to know `T` at run time?* After erasure, it can't.\n\n- `new T()`: needs the class `T` at run time. **Rejected.**\n- `List<int>`: erased code stores elements as `Object` references; `int` isn't one. **Rejected.**\n- `instanceof List<String>`: needs the element type at run time. **Rejected.**\n- Two `f` overloads: both erase to `f(List)`, which is the same JVM signature. **Rejected.**\n- `id(T x)`: compiles to `Object id(Object x)` plus a cast at each call site. Nothing needs `T` at run time. **Allowed.**",
+    "link": {
+      "title": "Restrictions on generics — The Java Tutorials",
+      "url": "https://docs.oracle.com/javase/tutorial/java/generics/restrictions.html"
+    }
+  },
+  {
+    "id": "type-generics-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Haskell function has the type `f :: a -> a`, with no constraints. It terminates and doesn't use `undefined`, `seq` or unsafe functions. What can you conclude about `f`, without seeing its code?",
+    "options": [
+      {
+        "text": "Nothing: you'd need to read the implementation",
+        "explanation": "Parametricity is exactly the reason you don't. A fully polymorphic type severely limits what the code can do."
+      },
+      {
+        "text": "It could add 1 if `a` is a number and return other values unchanged",
+        "explanation": "That needs to inspect the type of its argument. A parametric function can't branch on what `a` is; it runs the same code for every type."
+      },
+      {
+        "text": "It returns some fixed default value of type `a`",
+        "explanation": "There is no way to create a value of an unknown type `a` out of nothing. The only `a` available is the argument."
+      },
+      {
+        "text": "It must be the identity function: `f x = x`",
+        "explanation": "Correct. The only value of type `a` in scope is the argument, and `f` can't inspect or change it, so the only thing it can return is that argument."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Reason about what `f` has to work with.\n\n1. `f` must return a value of type `a`, for **every** `a` the caller chooses.\n2. It has no operations on `a`: no `+`, no `==`, no `show`, because there are no constraints.\n3. It can't build an `a` from scratch, because it doesn't know what `a` is.\n4. The only `a` in scope is its argument `x`.\n5. So the only total implementation is `f x = x`.\n\nThis is Wadler's \"theorems for free\": a polymorphic type is a promise about behaviour.",
+    "link": {
+      "title": "Philip Wadler, Theorems for free! (PDF)",
+      "url": "https://people.mpi-sws.org/~dreyer/tor/papers/wadler.pdf"
+    }
+  },
+  {
+    "id": "type-generics-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these Haskell functions could be given the type `[a] -> [a]`, with **no** type class constraints? Select all that apply.",
+    "options": [
+      {
+        "text": "`reverse`",
+        "explanation": "Yes. It only rearranges elements by position, never looking at them."
+      },
+      {
+        "text": "`take 2`",
+        "explanation": "Yes. It drops elements based on position alone."
+      },
+      {
+        "text": "`sort`",
+        "explanation": "No. Sorting has to compare elements, so its type is `Ord a => [a] -> [a]`. Without `Ord`, there's no way to compare two `a`s."
+      },
+      {
+        "text": "`\\xs -> xs ++ xs`",
+        "explanation": "Yes. Duplicating the list uses only its structure."
+      },
+      {
+        "text": "`filter (> 0)`",
+        "explanation": "No. `> 0` needs `a` to be numeric and ordered, giving `(Ord a, Num a) => [a] -> [a]`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A function of type `[a] -> [a]` with no constraints can only use the list's **shape**: its length and positions. It can drop, duplicate and reorder elements, but never look at them or invent new ones.\n\n| Function | Looks at values? | Fits? |\n|---|---|---|\n| `reverse` | No | Yes |\n| `take 2` | No | Yes |\n| `sort` | Compares | No |\n| `xs ++ xs` | No | Yes |\n| `filter (> 0)` | Compares to 0 | No |\n\nThe ones that need to inspect values each need a constraint (`Ord`, `Num`).",
+    "link": {
+      "title": "Philip Wadler, Theorems for free! (PDF)",
+      "url": "https://people.mpi-sws.org/~dreyer/tor/papers/wadler.pdf"
+    }
+  },
+  {
+    "id": "type-generics-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Rust crate calls this function with `Vec<i32>`, `Vec<f64>` and `Vec<char>` slices, and also calls it twice more with `i32`. How many distinct type instantiations of `largest` are requested? Count type arguments, not emitted machine-code functions.\n\n```rust\nfn largest<T: PartialOrd + Copy>(\n    xs: &[T],\n) -> T { /* ... */ }\n```",
+    "options": [
+      {
+        "text": "1, shared by all callers through a vtable",
+        "explanation": "That's how `&dyn Trait` works. A plain generic with a trait bound is monomorphised, not dispatched through a vtable."
+      },
+      {
+        "text": "3, one per distinct type argument",
+        "explanation": "Correct. The distinct requested type arguments are i32, f64 and char. Repeated i32 calls do not add a fourth type argument."
+      },
+      {
+        "text": "5, one per call site",
+        "explanation": "There are five calls but only three distinct type arguments. This question does not count emitted machine-code copies."
+      },
+      {
+        "text": "0, because generic functions are always inlined",
+        "explanation": "Inlining is a separate optimisation decision. Monomorphisation produces real specialised functions that may or may not be inlined afterwards."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "There are three distinct type arguments: i32, f64 and char. Repeated calls with i32 do not add another type instantiation. Inlining, dead-code elimination, codegen units and linker merging mean this is not a guarantee of exactly three emitted native functions.",
+    "link": {
+      "title": "Performance of code using generics — The Rust Programming Language",
+      "url": "https://doc.rust-lang.org/book/ch10-01-syntax.html"
+    }
+  },
+  {
+    "id": "type-generics-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In code review you see:\n\n```ts\nfunction log<T>(x: T): void {\n  console.log(x);\n}\n```\n\nWhat's the best feedback?",
+    "options": [
+      {
+        "text": "Fine as is: generics are always more type-safe than `unknown`",
+        "explanation": "Generics only add safety when the type parameter *links* two things, such as an input to an output. Here nothing is linked."
+      },
+      {
+        "text": "Replace `T` with `any` so that any argument is accepted",
+        "explanation": "`unknown` already accepts any argument, and unlike `any` it doesn't switch off checking on the value."
+      },
+      {
+        "text": "Add a bound, `T extends object`, so primitives are rejected",
+        "explanation": "That changes the behaviour (now `log(3)` fails) without addressing the real issue, which is that `T` is redundant."
+      },
+      {
+        "text": "`T` appears only once, so it does nothing; write `log(x: unknown): void`",
+        "explanation": "Correct. A type parameter used only once relates nothing to anything. The TypeScript handbook's guideline is to drop it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A type parameter earns its place by appearing **at least twice**, tying types together. In `first<T>(xs: T[]): T`, `T` links the array's element type to the return type.\n2. In `log<T>(x: T): void`, `T` appears once. Callers gain nothing: the return type is `void` either way.\n3. `x: unknown` accepts every argument just the same, and is simpler to read.\n4. Avoid `any`: it accepts everything *and* disables checking on uses of `x`.",
+    "link": {
+      "title": "Guidelines for writing good generic functions — TypeScript handbook",
+      "url": "https://www.typescriptlang.org/docs/handbook/2/functions.html"
+    }
+  },
+  {
+    "id": "type-generics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`g :: [a] -> [a]` has no constraints, and `g [1, 2, 3] == [3, 1]`. What is `g [\"x\", \"y\", \"z\"]`? Assume total parametric behavior on finite, fully defined inputs, with no seq or unsafe operations.",
+    "options": [
+      {
+        "text": "`[\"z\", \"x\"]`",
+        "explanation": "Correct. `g` can only act on positions, so it must do the same thing to any 3-element list: take the third element, then the first."
+      },
+      {
+        "text": "You can't tell: `g` might behave differently on strings",
+        "explanation": "A parametric `g` can't tell strings from numbers. That's the whole content of parametricity."
+      },
+      {
+        "text": "`[\"z\", \"y\"]`",
+        "explanation": "This assumes `g` picks the largest and next-largest, but `g` can't compare elements. And in the number example it returned 1, not 2."
+      },
+      {
+        "text": "`[3, 1]`",
+        "explanation": "`g` can't invent values of type `a`; it can only return elements of its input. With strings, the result must contain strings."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Use the free theorem: for any function `h`,\n\n```\nmap h (g xs) == g (map h xs)\n```\n\n1. Choose `h` to map 1 to \"x\", 2 to \"y\", 3 to \"z\".\n2. `map h [1, 2, 3]` is `[\"x\", \"y\", \"z\"]`.\n3. So `g [\"x\", \"y\", \"z\"]` equals `map h (g [1, 2, 3])`.\n4. That is `map h [3, 1]`, which is `[\"z\", \"x\"]`.\n\nIntuitively: `g` can only rearrange by position, and on 3-element lists it takes position 3 then position 1.",
+    "link": {
+      "title": "Philip Wadler, Theorems for free! (PDF)",
+      "url": "https://people.mpi-sws.org/~dreyer/tor/papers/wadler.pdf"
+    }
+  },
+  {
+    "id": "type-generics-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume a hypothetical measured JVM layout with 4-byte ints, 4-byte references and 16-byte Integer objects. One million boxed elements each have a separate object, with no sharing. Ignoring container headers and spare capacity, what is the memory use of int[] versus ArrayList<Integer>, in decimal MB?",
+    "options": [
+      {
+        "text": "About 4 MB in both: the JIT unboxes `ArrayList<Integer>`",
+        "explanation": "Under the stated model the retained list contains references to separately allocated objects, whose sizes must also be counted."
+      },
+      {
+        "text": "About 4 MB versus about 20 MB",
+        "explanation": "Correct. `int[]` is 1M × 4 bytes. The list stores 1M references (4 MB) plus 1M separate `Integer` objects (16 MB)."
+      },
+      {
+        "text": "About 4 MB versus about 8 MB",
+        "explanation": "This counts the references but forgets the `Integer` objects they point to, which are the bigger cost."
+      },
+      {
+        "text": "About 16 MB versus about 20 MB",
+        "explanation": "This treats each `int` as an object. A primitive array stores raw 4-byte values with no per-element header."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Under the stated layout and no-sharing assumptions: primitive payload is 1,000,000 × 4 = 4 MB. Boxed elements need 4 MB of references plus 16 MB of objects, totaling 20 MB. These are model calculations, not universal JVM measurements; caches and existing objects can change allocation costs.",
+    "link": {
+      "title": "Autoboxing and unboxing — The Java Tutorials",
+      "url": "https://docs.oracle.com/javase/tutorial/java/data/autoboxing.html"
+    }
+  },
+  {
+    "id": "type-generics-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A .NET program uses `List<string>`, `List<object>`, `List<int>` and `List<double>`. How many distinct native-code versions of `List<T>`'s methods does the JIT typically generate?",
+    "options": [
+      {
+        "text": "1, because .NET erases type arguments like Java",
+        "explanation": ".NET **reifies** generics: type arguments exist at run time, which is why `typeof(T)` works and `List<int>` holds raw ints."
+      },
+      {
+        "text": "4, one per type argument",
+        "explanation": "That would be full monomorphisation. .NET shares code between reference types, since they're all pointers of the same size."
+      },
+      {
+        "text": "3: one shared by `string` and `object`, one for `int`, one for `double`",
+        "explanation": "Correct. Reference types share one native copy; each value type gets its own specialised copy so values are stored unboxed."
+      },
+      {
+        "text": "2: one for reference types and one shared by all value types",
+        "explanation": "Value types differ in size and layout (`int` is 4 bytes, `double` 8), so they can't share one unboxed copy."
+      }
+    ],
+    "answer": 2,
+    "workedExample": ".NET's hybrid strategy:\n\n1. **Reference types** (`string`, `object`) are all pointers of the same size, so one native copy works for all of them. The real type is still known at run time via a hidden type handle.\n2. **Value types** (`int`, `double`) differ in size and layout. To store them unboxed, the JIT generates a specialised copy for each.\n3. Count: 1 shared + `int` + `double` = **3**.\n\nContrast Java (one erased copy, everything boxed) and Rust (one copy per type: 4).\n\nThis counts conceptual specialization groups in the usual JIT sharing model. Actual emitted methods depend on use, inlining and runtime compilation mode; Rust also does not guarantee one surviving machine-code function per type.",
+    "link": {
+      "title": "Generics in the runtime — C# docs, Microsoft Learn",
+      "url": "https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/generics/generics-in-the-run-time"
+    }
+  }
+]

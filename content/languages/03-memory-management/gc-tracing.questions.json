@@ -1,0 +1,348 @@
+[
+  {
+    "id": "gc-tracing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The roots are `r1 → A` and `r2 → D`. Other pointers: `A → B`, `C → A`, `D → E`, `F → G`, `G → F`. Which objects does a tracing collector free?",
+    "options": [
+      {
+        "text": "C, F and G",
+        "explanation": "Correct. Starting from the roots you reach A, B, D and E. C points *into* the live set but nothing points to C. F and G form a cycle with no path from a root."
+      },
+      {
+        "text": "F and G only",
+        "explanation": "C is not reachable either. A pointer *from* C to a live object doesn't keep C alive; only pointers *to* C from live objects would."
+      },
+      {
+        "text": "C only",
+        "explanation": "F and G point at each other, but tracing ignores that: no root leads to them, so they are garbage."
+      },
+      {
+        "text": "Nothing, because every object has at least one reference",
+        "explanation": "Having a reference is the reference-counting view. Tracing asks whether there is a path from a root."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace from the roots:\n\n1. r1 → A → B. Live: A, B.\n2. r2 → D → E. Live: D, E.\n3. Remaining: C, F, G.\n   - C → A goes the wrong way; nothing reaches C.\n   - F ↔ G is a cycle, but unreachable.\n\n```\nlive:    A B D E\ngarbage: C F G\n```\n\nThis is why tracing collectors need no special cycle handling.",
+    "link": {
+      "title": "Tracing garbage collection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
+    }
+  },
+  {
+    "id": "gc-tracing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is NOT a GC root in a typical managed runtime such as the JVM?",
+    "options": [
+      {
+        "text": "A local variable in a running thread's stack frame",
+        "explanation": "Stack slots and registers are the main roots: the running code can use them directly."
+      },
+      {
+        "text": "A static reference of a class whose loader remains reachable",
+        "explanation": "Such a static keeps referenced data reachable; unloadable class-loader cycles need not be permanent roots."
+      },
+      {
+        "text": "A field inside an object on the heap",
+        "explanation": "Correct. Heap fields are followed *during* tracing, but they keep their targets alive only if the object containing them is itself reachable."
+      },
+      {
+        "text": "A reference held in a CPU register by compiled code",
+        "explanation": "Registers are roots too; at a safepoint the JIT's stack maps tell the collector which registers and slots hold pointers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A root is a reference the program can use *without first following another pointer*.\n\n1. Stack locals: yes, a root.\n2. Statics: yes, a root.\n3. Heap field: no. If the object holding it is garbage, so is the field's target (unless reached another way).\n4. Registers: yes, a root.\n\nGetting roots exactly right is why the JVM and Go compilers emit stack maps at safepoints.\n\nOnly live reference slots/registers count; a source local that will never be used again need not remain a GC root.",
+    "link": {
+      "title": "Tracing garbage collection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
+    }
+  },
+  {
+    "id": "gc-tracing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the main advantage of compacting (or copying) collectors over plain mark-sweep?",
+    "options": [
+      {
+        "text": "They never need to pause the program",
+        "explanation": "Classic compacting and copying collectors stop the world too; moving objects while the program runs is the hard part modern collectors solve."
+      },
+      {
+        "text": "They eliminate fragmentation, so allocation becomes a simple pointer bump",
+        "explanation": "Correct. Live objects are packed together, leaving one contiguous free region. Allocation just advances a pointer."
+      },
+      {
+        "text": "They can collect cycles and mark-sweep cannot",
+        "explanation": "All tracing collectors handle cycles, because they decide liveness by reachability."
+      },
+      {
+        "text": "They use less memory than mark-sweep",
+        "explanation": "Space use is implementation-dependent. Semispace copying reserves a spare half; compaction can reduce fragmentation, so neither a universal lower-memory nor higher-memory rule is justified."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Mark-sweep leaves live objects where they are, so free space ends up in holes:\n\n```\n[A][ ][B][  ][C][ ]\n```\n\n2. Allocation must search free lists, and a big request can fail despite enough total space.\n3. Compaction or copying packs live objects:\n\n```\n[A][B][C][        ]\n         ^ bump\n```\n\n4. Allocation is now as cheap as stack allocation: check the limit, advance the pointer.",
+    "link": {
+      "title": "Tracing garbage collection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
+    }
+  },
+  {
+    "id": "gc-tracing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A copying collector's semispace holds 1,000 objects, of which 30 are reachable. How much work does a collection do, roughly? Assume similarly sized objects with bounded pointer fields and ignore root-scan/fixed costs.",
+    "options": [
+      {
+        "text": "Proportional to 1,000, because it must visit every object to find the dead ones",
+        "explanation": "That is the sweep phase of mark-sweep. A copying collector never looks at dead objects; it abandons the whole from-space."
+      },
+      {
+        "text": "Proportional to 970, the number of objects freed",
+        "explanation": "Freeing the dead objects is free: from-space is simply reused as a whole."
+      },
+      {
+        "text": "Proportional to 30: it copies the live objects and discards from-space without touching the other 970",
+        "explanation": "Correct. Work is proportional to live data, which is why copying suits the young generation, where survival rates are low."
+      },
+      {
+        "text": "Constant, regardless of how many objects are live",
+        "explanation": "Every live object must be copied and scanned, so cost grows with live data."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Copying collection only ever visits what it copies.\n2. Live objects: 30. Each is copied to to-space, and its pointers are scanned and forwarded.\n3. Dead objects: 970. Never touched; from-space is reused wholesale after the swap.\n\n```\nwork ~ 30 objects\nfreed = 970 objects (for free)\n```\n\n4. Contrast mark-sweep: marks 30, but sweeps all 1,000.\n\nLow survival is exactly the young generation's profile, hence copying nurseries.",
+    "link": {
+      "title": "Cheney's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cheney%27s_algorithm"
+    }
+  },
+  {
+    "id": "gc-tracing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Cheney's algorithm runs with roots R1 → A and R2 → C. Pointers: `A → B`, `B → D`, `C → B`. Objects are copied in the order they are first discovered. What is the order of objects in to-space at the end? Visit R1 before R2 and copy both root targets before scanning copied objects.",
+    "options": [
+      {
+        "text": "A, C, B, D",
+        "explanation": "Correct. The roots are copied first (A, C). Scanning A copies B. Scanning C finds B already forwarded. Scanning B copies D. Breadth-first order."
+      },
+      {
+        "text": "A, B, D, C",
+        "explanation": "That is depth-first order. Cheney's algorithm is breadth-first: it copies all roots before scanning any of them."
+      },
+      {
+        "text": "A, B, C, D",
+        "explanation": "The roots are copied before scanning begins, so C comes straight after A."
+      },
+      {
+        "text": "A, C, B, B, D",
+        "explanation": "B is copied once. When C's pointer to B is scanned, B already has a forwarding pointer, so C's field is updated to B's new address instead."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track `scan` and `free`:\n\n1. Copy roots: to-space = `[A][C]`. scan at A.\n2. Scan A: child B not yet copied, copy it: `[A][C][B]`. Leave a forwarding pointer in old B.\n3. Scan C: child B is forwarded. Just update C's field.\n4. Scan B: child D not copied: `[A][C][B][D]`.\n5. Scan D: no children. scan == free: done.\n\n```\nto-space: A C B D\n```\n\nForwarding pointers make shared objects (B is pointed to twice) get copied exactly once.",
+    "link": {
+      "title": "Cheney's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cheney%27s_algorithm"
+    }
+  },
+  {
+    "id": "gc-tracing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a simplified model a service allocates 400 MB/s into 200 MB of available nursery allocation space, and 3% of those bytes survive each collection. Ignoring pause time and survivor-space overhead, roughly how often does it fill and how much is copied?",
+    "options": [
+      {
+        "text": "Every 2 s, copying about 60 MB",
+        "explanation": "200 MB at 400 MB/s fills in 0.5 s, not 2 s; and 3% of 200 MB is 6 MB."
+      },
+      {
+        "text": "Every 0.5 s, copying about 6 MB",
+        "explanation": "Correct. 200 / 400 = 0.5 s between collections; 0.03 × 200 MB = 6 MB copied out each time."
+      },
+      {
+        "text": "Every 0.5 s, copying about 194 MB",
+        "explanation": "194 MB is the *dead* data, which a copying young collection never touches."
+      },
+      {
+        "text": "Every 50 ms, copying about 12 MB",
+        "explanation": "The young generation fills in 200/400 = 0.5 s, ten times longer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Time to fill the young generation:\n\n```\n200 MB / 400 MB/s = 0.5 s\n```\n\n2. Survivors per collection:\n\n```\n3% x 200 MB = 6 MB copied\n```\n\n3. The other 194 MB is reclaimed with no per-object work.\n\nThis is the generational bet paying off: you collect frequently, but each collection is small because almost everything is already dead.",
+    "link": {
+      "title": "HotSpot GC implementation — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"
+    }
+  },
+  {
+    "id": "gc-tracing-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do generational collectors need a write barrier?",
+    "options": [
+      {
+        "text": "To stop two threads writing the same field at once",
+        "explanation": "That is a lock or atomic operation. Write barriers exist for the collector's bookkeeping, not mutual exclusion."
+      },
+      {
+        "text": "To prevent writes to objects in the old generation",
+        "explanation": "Old objects are written to constantly; the barrier just notes those writes."
+      },
+      {
+        "text": "To count references to each object, like reference counting",
+        "explanation": "Card marking records *where* a pointer was written, not how many references each object has."
+      },
+      {
+        "text": "To record old-to-young pointers, so a minor GC can treat them as roots without scanning the whole old generation",
+        "explanation": "Correct. A young object referenced only from an old object would otherwise be freed by a minor GC that ignores the old generation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A minor GC traces only the young generation.\n2. Problem: `oldMap.put(k, new Value())`. The new `Value` is young and reachable only from `oldMap`, which is old.\n3. Without help, the minor GC would miss it and free a live object.\n4. Scanning the whole old generation each minor GC would make it as slow as a full GC.\n5. The write barrier marks the affected card (512 bytes in a common HotSpot configuration) containing the updated field. The minor GC scans only dirty cards as extra roots.\n\nCost: barrier work on relevant stores; costs and elimination depend on the collector and compiler.",
+    "link": {
+      "title": "HotSpot GC implementation — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"
+    }
+  },
+  {
+    "id": "gc-tracing-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about conservative collectors such as the Boehm GC are true? Select all that apply.",
+    "options": [
+      {
+        "text": "They can work with C and C++ programs without compiler support for stack maps",
+        "explanation": "Correct. They scan memory for anything that looks like a pointer, so they need no type information."
+      },
+      {
+        "text": "They may keep some garbage alive because an integer happens to look like a heap address",
+        "explanation": "Correct. A false positive pins whatever the 'pointer' seems to refer to."
+      },
+      {
+        "text": "They routinely move objects to compact the heap",
+        "explanation": "Moving would mean rewriting the 'pointer', which might really be an integer. Conservative collectors leave objects where they are (at least those referenced ambiguously)."
+      },
+      {
+        "text": "They free objects that are still reachable if the pointer is hidden, for example XOR-encoded",
+        "explanation": "Correct. If a real pointer doesn't look like one, the collector can't see it and may free a live object. This is a real hazard with pointer-hiding tricks."
+      },
+      {
+        "text": "They are precise about which stack slots hold pointers",
+        "explanation": "Being imprecise about that is what makes them conservative."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Conservative scanning treats plausible addresses as pointers, so it may retain unreachable objects and requires programs not to hide necessary pointers. Boehm works without precise compiler stack maps and does not move objects. Hybrid designs can pin ambiguously referenced objects while moving others. Precise collectors can move objects safely if their implementation supports it; Go’s standard heap collector is precise but non-moving.",
+    "link": {
+      "title": "Boehm-Demers-Weiser conservative GC",
+      "url": "https://www.hboehm.info/gc/"
+    }
+  },
+  {
+    "id": "gc-tracing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A tracing collector's cost per byte allocated is roughly proportional to `live / (heap - live)`. A service has 2 GB of live data and a 3 GB heap. You raise the heap to 6 GB. By about how much does GC work fall? Assume constant live size and per-byte scan cost; ignore sweep, root, fixed and concurrent-pacing overheads.",
+    "options": [
+      {
+        "text": "By half, because the heap doubled",
+        "explanation": "The ratio depends on the *spare* room (heap - live), which grows from 1 GB to 4 GB, not 2x."
+      },
+      {
+        "text": "Not at all; GC work depends only on live data",
+        "explanation": "Each collection costs about the live data, but a bigger heap means far fewer collections."
+      },
+      {
+        "text": "By about four times",
+        "explanation": "Correct. Before: 2 / (3 - 2) = 2. After: 2 / (6 - 2) = 0.5. That is a factor of 4."
+      },
+      {
+        "text": "By about eight times",
+        "explanation": "Check the arithmetic: 2 / 0.5 = 4."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each collection does work ~ live data (2 GB here).\n2. Each collection frees ~ heap - live, which is how much you can allocate before the next one.\n3. So work per byte allocated ~ live / (heap - live).\n\n```\n3 GB heap: 2 / (3 - 2) = 2.0\n6 GB heap: 2 / (6 - 2) = 0.5\nratio: 2.0 / 0.5 = 4\n```\n\n4. Doubling the heap quadrupled the headroom, so collections run four times less often.\n\nThis non-linear effect is why small heaps near the live size make GC thrash, and why Go's `GOGC` and JVM heap sizing matter so much.",
+    "link": {
+      "title": "Tracing garbage collection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
+    }
+  },
+  {
+    "id": "gc-tracing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A JVM application keeps a 20 GB in-memory cache of long-lived objects. Its minor GCs are getting slower even though the young generation size hasn't changed. Which explanation fits best?",
+    "options": [
+      {
+        "text": "The cache is constantly updated with references to new objects, dirtying many cards that each minor GC must scan as roots",
+        "explanation": "Correct. Every old-to-young pointer store marks a card. A large, churning old-generation structure means many dirty cards, and scanning them adds to every minor pause."
+      },
+      {
+        "text": "The young generation is copying the 20 GB cache every time",
+        "explanation": "Long-lived cache entries were promoted to the old generation long ago and aren't copied by minor GCs."
+      },
+      {
+        "text": "Minor GCs always scan the entire heap",
+        "explanation": "Avoiding that is the whole point of generations and card tables."
+      },
+      {
+        "text": "The write barrier has been disabled",
+        "explanation": "Write barriers can't be turned off in a generational collector; they are what makes it correct."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Minor GC work = trace young survivors + scan **dirty cards** in the old generation.\n2. A cache that keeps storing fresh young objects into old structures dirties cards across the 20 GB.\n\n```\n20 GB / 512 B = ~40 million cards\neven 1% dirty = ~400,000 cards\n```\n\n3. Each dirty card must be scanned for pointers into the young generation, so pause time grows with cache churn, not just young size.\n\nRemedies: store values off-heap or in primitive arrays, reduce churn, or use a collector designed for big heaps (lesson 5).\n\nThe card calculation assumes 512-byte granularity; collector settings and remembered-set refinement can change the actual work. This is one plausible cause, not a diagnosis established from heap size alone.",
+    "link": {
+      "title": "HotSpot GC implementation — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"
+    }
+  },
+  {
+    "id": "gc-tracing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of the following correctly describe why classic tracing collectors stop the world, and at safepoints specifically? Select all that apply.",
+    "options": [
+      {
+        "text": "If the program changes pointers while the collector traces, a live object could be missed and freed",
+        "explanation": "Correct. A mutator could move the only pointer to a not-yet-visited object into an already-visited one. Concurrent collectors need extra barriers to prevent this (lesson 5)."
+      },
+      {
+        "text": "Moving collectors must update every pointer to a moved object, including those in stacks and registers",
+        "explanation": "Correct. If threads kept running they could use stale addresses mid-move."
+      },
+      {
+        "text": "At a safepoint, the compiler has recorded which stack slots and registers hold pointers",
+        "explanation": "Correct. Stack maps exist only at specific points (calls, loop back-edges), so threads are brought to one before the collector reads their stacks."
+      },
+      {
+        "text": "Safepoints are needed only for reference counting",
+        "explanation": "Reference counting doesn't need to stop threads or read stack maps; safepoints are a tracing-GC (and JIT) mechanism."
+      },
+      {
+        "text": "Stop-the-world pauses are always shorter than 1 ms",
+        "explanation": "Full compactions of large old generations can take seconds. Short pauses are what concurrent collectors are for."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Correctness: tracing assumes the graph doesn't change under it. A concurrent change can hide a live object. True.\n2. Moving: every reference must be rewritten; running threads would see half-moved state. True.\n3. Safepoints: the JIT emits pointer maps at chosen points; threads poll and park there. True.\n4. Reference counting: no. False.\n5. Always under 1 ms: no. False.\n\nSo the classic design pays for simplicity with pauses that grow with the work.",
+    "link": {
+      "title": "Tracing garbage collection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
+    }
+  }
+]

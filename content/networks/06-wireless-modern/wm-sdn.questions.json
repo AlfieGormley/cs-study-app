@@ -1,0 +1,374 @@
+[
+  {
+    "id": "wm-sdn-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is a **data-plane** task on a router, rather than a control-plane task?",
+    "options": [
+      {
+        "text": "Exchanging BGP updates with a neighbouring network",
+        "explanation": "Exchanging routing information belongs to the control plane. An SDN architecture may retain distributed BGP rather than moving every decision to one controller."
+      },
+      {
+        "text": "Running Dijkstra's algorithm to compute OSPF shortest paths",
+        "explanation": "Computing routes is control plane; its output is the forwarding table the data plane uses."
+      },
+      {
+        "text": "Looking up each arriving packet's destination in the forwarding table and sending it out of the chosen port",
+        "explanation": "Correct. Per-packet forwarding is a data-plane operation, whether implemented in hardware or software."
+      },
+      {
+        "text": "An operator changing the configuration through the command line",
+        "explanation": "Configuration is management, feeding the control plane. It does not forward packets."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Control logic determines forwarding policy/state; the data plane applies it to packets. Device management configures behaviour. Implementation location and throughput are not definitions of these roles, and SDN does not require eliminating every local control function.",
+    "link": {
+      "title": "Software-defined networking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Software-defined_networking"
+    }
+  },
+  {
+    "id": "wm-sdn-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A switch has this OpenFlow table:\n\n```\nprio match               action\n50   ip dst=10.1.0.0/16  out:1\n40   tcp dp=80           out:4\n10   ip dst=10.1.2.3     out:2\n0    (anything)          drop\n```\n\nA TCP packet to 10.1.2.3 port 80 arrives. Where does it go?",
+    "options": [
+      {
+        "text": "Port 2, because 10.1.2.3 is the most specific match",
+        "explanation": "OpenFlow does not use longest-prefix match automatically: it uses **priority**. The /32 entry has priority 10, the lowest that matches apart from the catch-all."
+      },
+      {
+        "text": "Port 4, because it is HTTP traffic",
+        "explanation": "The port-80 entry matches, but at priority 40, which is below the /16 entry at 50."
+      },
+      {
+        "text": "Port 1",
+        "explanation": "Correct. Entries at 50, 40, 10 and 0 all match, and the highest priority (50) wins."
+      },
+      {
+        "text": "Dropped by the table-miss entry",
+        "explanation": "The table-miss entry only applies if nothing of higher priority matches."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check every entry against the packet (TCP, dst 10.1.2.3, port 80):\n   - 50: 10.1.2.3 is inside 10.1.0.0/16 → match\n   - 40: TCP port 80 → match\n   - 10: dst 10.1.2.3 → match\n   - 0: matches everything\n2. Pick the highest priority: 50.\n3. Action: output to port 1.\n\nA controller that wants longest-prefix behaviour must assign longer prefixes higher priorities itself. This table is probably a bug: the /32 entry can never take effect for IP traffic.",
+    "link": {
+      "title": "OpenFlow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/OpenFlow"
+    }
+  },
+  {
+    "id": "wm-sdn-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An EC2 interface’s only security group allows inbound TCP 443 and has no outbound rules. For a tracked client connection, assume valid tracking state, a listening service and all routing/NACL/host controls permit traffic. Does the missing outbound rule alone block its replies?",
+    "options": [
+      {
+        "text": "The handshake fails because the instance's SYN-ACK is blocked by the missing outbound rule",
+        "explanation": "Security groups are stateful: return traffic for an allowed inbound connection is permitted automatically, whatever the outbound rules say."
+      },
+      {
+        "text": "The connection works; security groups track connections, so replies to allowed inbound traffic are permitted",
+        "explanation": "Correct under the stated tracking and other-control assumptions. Allowed response traffic does not need a separate outbound security-group rule."
+      },
+      {
+        "text": "The connection works only if the subnet's NACL allows it, because security groups only filter inbound",
+        "explanation": "Security groups filter both directions. The NACL may also need to allow the traffic, but that is a separate layer."
+      },
+      {
+        "text": "It is impossible: AWS requires at least one outbound rule",
+        "explanation": "You can remove all outbound rules; the default group simply comes with an allow-all outbound rule."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The inbound SYN is allowed and tracked. Responses associated with that tracked connection are permitted by security-group state despite the lack of an outbound allow rule. Unrelated initiated outbound traffic is a separate case, and response allowance does not bypass NACLs, routing or other filters.",
+    "link": {
+      "title": "Control traffic with security groups — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An ordinary AWS private IPv4 /26 subnet uses the standard first-four-and-last reservation rule, with no BYOIP exception or additional reservations. How many addresses remain assignable?",
+    "options": [
+      {
+        "text": "64",
+        "explanation": "A /26 has 64 addresses in total, but AWS reserves some in every subnet."
+      },
+      {
+        "text": "62",
+        "explanation": "62 is the classic answer that excludes only network and broadcast. AWS reserves three more."
+      },
+      {
+        "text": "59",
+        "explanation": "Correct. There are 64 total addresses and five reserved, leaving 59. Reserved base-plus-two is not necessarily the actual DNS resolver address of this subnet."
+      },
+      {
+        "text": "54",
+        "explanation": "Under the supplied ordinary-subnet rule, five rather than ten addresses are reserved."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A /26 contains 2^(32−26) = 64 addresses. For 10.20.48.0/26, the reserved addresses are .0, .1, .2, .3 and .63, leaving .4 through .62: 59 addresses. The base-plus-two address is reserved; the VPC resolver uses the primary VPC CIDR base plus two (and supported link-local addresses), not automatically 10.20.48.2. AWS subnet broadcast is unsupported.",
+    "link": {
+      "title": "Subnet CIDR blocks — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/subnet-sizing.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For an HTTPS server on TCP 443, a custom subnet NACL allows inbound destination port 443 and outbound destination port 443, denying everything else. A client uses source port 51234. Routing and other filters are correct. Why does this connection fail?",
+    "options": [
+      {
+        "text": "NACLs need rule 100 to be rule 1",
+        "explanation": "Rule numbers only matter relative to each other; with one rule each way, numbering is not the problem."
+      },
+      {
+        "text": "The NACL is stateless, and the server's replies go to the client's ephemeral port (e.g. 51234), not 443, so the outbound rule does not match them",
+        "explanation": "Correct. Allow the required client return-port range in the outbound NACL, scoped appropriately. Ephemeral-port ranges depend on the clients and NAT path."
+      },
+      {
+        "text": "Security groups and NACLs cannot both be used on the same traffic",
+        "explanation": "They are designed to be layered: traffic must pass both."
+      },
+      {
+        "text": "TLS needs UDP 443 as well",
+        "explanation": "This question specifies HTTPS over TCP. HTTP/3 uses QUIC over UDP, but applications do not all guarantee a TCP fallback."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Client → server: source `198.51.100.7:51234`, destination `server:443`. Inbound rule allows destination port 443. ✓\n2. Server → client: source `server:443`, destination `198.51.100.7:51234`.\n3. The outbound rule allows destination port **443**. The reply's destination port is **51234**. No match → denied by the final rule.\n4. A NACL has no connection tracking, so it cannot know this is a reply.\n5. Fix: an outbound allow covering the required client return ports and destinations; 1024–65535 is a broad commonly used range, not every system’s exact ephemeral range. The security group, being stateful, never needed this.",
+    "link": {
+      "title": "Network ACLs — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "VXLAN carries untagged inner Ethernet with no inner FCS over IPv4 without options. UDP and VXLAN headers are 8 bytes each. The underlay IP MTU is fixed at 1,500 bytes, with no other encapsulation. What is the largest inner IP packet that fits without fragmentation?",
+    "options": [
+      {
+        "text": "1,500 bytes",
+        "explanation": "The inner IP packet plus 50 bytes of headers must fit the underlay IP MTU. A 1,500-byte inner IP packet needs 1,550 outer IP bytes; the outer Ethernet framing is additional."
+      },
+      {
+        "text": "1,450 bytes",
+        "explanation": "Correct. The physical MTU limits the outer IP packet, which contains outer IPv4 (20) + UDP (8) + VXLAN (8) + the inner Ethernet header (14) + the inner IP packet. 50 + X ≤ 1,500, so X ≤ 1,450."
+      },
+      {
+        "text": "1,472 bytes",
+        "explanation": "1,472 is the largest ICMP echo payload in a 1,500-byte packet (1,500 − 20 − 8). It is unrelated to VXLAN overhead."
+      },
+      {
+        "text": "1,492 bytes",
+        "explanation": "1,492 is the usual PPPoE MTU (8 bytes of PPPoE overhead), not VXLAN."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The physical MTU limits the **outer IP packet**:\n\n```\nouter IPv4 header      20\nouter UDP header        8\nVXLAN header            8\ninner Ethernet header  14\ninner IP packet         X\n----------------------------\ntotal = 50 + X <= 1500\nX <= 1450\n```\n\n(The 14-byte outer Ethernet header is not counted in the MTU, but the inner Ethernet header is, which is why the total overhead still comes to 50.)\n\nFor this fixed underlay use an inner MTU no larger than 1,450. In a different deployment an underlay IP MTU of at least 1,550 would accommodate 1,500 inner bytes under these assumptions; 9,000 is not required. Do not infer a cloud provider’s internal encapsulation from its advertised instance MTU.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  },
+  {
+    "id": "wm-sdn-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "VPC A (10.1.0.0/16) is peered with VPC B (10.2.0.0/16), and B is peered with VPC C (10.3.0.0/16). Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Instances in A cannot reach C through B, because VPC peering is not transitive",
+        "explanation": "Correct. Traffic over a peering must start or end in one of the two peered VPCs."
+      },
+      {
+        "text": "To connect A and C, add an A–C peering or attach all three to a Transit Gateway",
+        "explanation": "Correct as a connectivity design, with the necessary routes, attachments and filters. Creating a peering or Transit Gateway attachment alone does not guarantee connectivity."
+      },
+      {
+        "text": "Creating a peering automatically adds the routes, so no route-table changes are needed",
+        "explanation": "You must add routes to each side's route tables pointing the peer's CIDR at the peering connection, and allow the traffic in security groups."
+      },
+      {
+        "text": "If C had used 10.1.0.0/16, an A–C peering would be impossible",
+        "explanation": "Correct. Peering requires non-overlapping CIDR blocks, because routes could not tell the two ranges apart."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Peering is a point-to-point relationship. B will not forward A's packets on to C.\n2. Options for A ↔ C: a third peering (fine for a few VPCs; the mesh grows as n(n − 1)/2), or an appropriately routed Transit Gateway hub. Costs, limits and topology determine the choice.\n3. Peering needs explicit routes on both sides plus security-group rules.\n4. Overlapping CIDRs block peering entirely, which is why central IP allocation matters from day one.",
+    "link": {
+      "title": "VPC peering — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-peering.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reactive OpenFlow deployment sends new-flow misses to its controller. During a traffic surge, measured packet-in queues fill and flow-installation delay rises, while packets covered by existing rules continue. What explains the new-flow delay?",
+    "options": [
+      {
+        "text": "The switches' data planes are too slow for the extra traffic",
+        "explanation": "Existing-rule forwarding continues while telemetry identifies packet-in queuing and flow-installation delay. This points to the reactive control path; it does not certify all forwarding hardware capacity."
+      },
+      {
+        "text": "New-flow forwarding depends on the overloaded controller path, so first packets can queue or be dropped and may need retransmission",
+        "explanation": "Correct. The measured controller path is overloaded. Preinstalled aggregate rules can remove this dependency for covered traffic, subject to policy and table capacity."
+      },
+      {
+        "text": "OpenFlow does not support TCP",
+        "explanation": "OpenFlow supports TCP-related match fields, with exact field availability depending on version and extensions; TCP flags are not universally available in every base version."
+      },
+      {
+        "text": "The flow entries' hard timeout expired for all users at once",
+        "explanation": "Expired entries would affect existing flows too, and these are fine."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A miss notification, controller decision, flow modification and forwarding of the first packet create a control-path dependency. Here telemetry establishes saturation. Dropped setup packets may require retransmission, whose timers are implementation/configuration-dependent. Preinstalling suitable rules can reduce misses, while overload protection and capacity planning remain necessary.",
+    "link": {
+      "title": "OpenFlow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/OpenFlow"
+    }
+  },
+  {
+    "id": "wm-sdn-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A subnet NACL has these inbound rules:\n\n```\nrule  proto port src             action\n100   tcp   22   0.0.0.0/0       ALLOW\n110   tcp   22   203.0.113.0/24  DENY\n*     all   all  0.0.0.0/0       DENY\n```\n\nFor an inbound TCP SYN from 203.0.113.9 to destination port 22, what verdict does this NACL alone produce?",
+    "options": [
+      {
+        "text": "Denied, because rule 110 is more specific",
+        "explanation": "NACLs do not use specificity: they evaluate rules in ascending number order and stop at the first match."
+      },
+      {
+        "text": "Allowed, because rule 100 matches first and evaluation stops there",
+        "explanation": "Correct. To block that range, give the DENY a lower number than the ALLOW (e.g. 90)."
+      },
+      {
+        "text": "Denied, because DENY rules always override ALLOW rules",
+        "explanation": "That is how some firewalls behave, but not NACLs; order alone decides."
+      },
+      {
+        "text": "Allowed only if the security group also has a DENY rule",
+        "explanation": "Security groups have no DENY rules at all; they are allow-only."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. NACL evaluation: sort rules by number, test each, apply the **first** that matches, stop.\n2. Rule 100: TCP, port 22, source in 0.0.0.0/0 → matches 203.0.113.9 → **ALLOW**.\n3. Rule 110 is never reached.\n4. Fix:\n\n```\n90   tcp 22 203.0.113.0/24 DENY\n100  tcp 22 0.0.0.0/0      ALLOW\n```\n\n5. Better still, do not expose SSH to 0.0.0.0/0 at all: use a security group allowing only a bastion or use Session Manager.\n\nAn ALLOW verdict from this one NACL does not establish that the end-to-end connection succeeds; routes, security groups, the host and return traffic still matter.",
+    "link": {
+      "title": "Network ACLs — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "VXLAN encapsulates every tenant packet in an outer UDP header. RFC 7348 recommends setting the outer UDP **source port** from a hash of the inner packet's headers. Why?",
+    "options": [
+      {
+        "text": "To let the receiving host decrypt the inner packet",
+        "explanation": "VXLAN provides no encryption; the source port carries no key material."
+      },
+      {
+        "text": "So the physical fabric's ECMP, which hashes outer headers, spreads different tenant flows across different paths",
+        "explanation": "Correct. A flow-stable source-port hash gives an outer-header ECMP selector useful variation. Hash collisions and mapping changes still occur; perfect balance or ordering is not guaranteed."
+      },
+      {
+        "text": "Because UDP requires a unique source port per packet",
+        "explanation": "UDP has no such requirement; a fixed source port would be legal, just bad for load balancing."
+      },
+      {
+        "text": "To carry the 24-bit VNI",
+        "explanation": "The VNI is carried in the 8-byte VXLAN header, not the UDP port."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For an ECMP implementation hashing only the outer five-tuple, fixed tunnel IPs and UDP ports give the same key for all enclosed flows. A source port derived consistently from inner headers adds variation while retaining flow affinity under a stable mapping. Some hardware can inspect inner headers directly. VXLAN itself supplies no encryption, and the VNI is a separate 24-bit field.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  },
+  {
+    "id": "wm-sdn-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An OpenFlow-only fabric loses all controller connectivity for two minutes. Assume fail-secure mode, retained non-expiring proactive entries, no autonomous routing fallback, and any local backups explicitly preinstalled. Which statements follow? Select all that apply.",
+    "options": [
+      {
+        "text": "Existing traffic keeps flowing on the installed entries",
+        "explanation": "Correct for covered traffic whose forwarding path remains usable under these assumptions."
+      },
+      {
+        "text": "Any flows that depend on reactive packet-in to the controller cannot be set up",
+        "explanation": "Correct. Without the controller, table misses have nowhere useful to go."
+      },
+      {
+        "text": "A link failure is not routed around unless backup paths were pre-installed (e.g. OpenFlow fast-failover groups)",
+        "explanation": "Correct under the stated absence of autonomous fallback. Preinstalled local failover still depends on what failures it can detect."
+      },
+      {
+        "text": "All traffic stops immediately because switches cannot forward without the controller",
+        "explanation": "The stated fail-secure mode retains usable entries. Other configured failure modes can behave differently; there is no universal fail-static guarantee."
+      },
+      {
+        "text": "The switches automatically fall back to running OSPF among themselves",
+        "explanation": "Pure OpenFlow switches have no distributed control plane to fall back to unless explicitly configured as hybrid."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "In the specified fail-secure configuration, existing non-expiring entries can continue to forward. Controller-dependent decisions cannot complete through the disconnected controller. Preinstalled local failover can handle failures it detects; no unspecified OSPF fallback appears automatically. Actual implementations can have timeouts, fail-standalone behaviour or hybrid control, which this question excludes.",
+    "link": {
+      "title": "Software-defined networking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Software-defined_networking"
+    }
+  },
+  {
+    "id": "wm-sdn-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Traffic uses A → B → D and will move to A → C → D. C lacks a rule; unmatched packets drop. Links remain healthy and updates arrive separately. Which sequence also protects packets already in flight on the old path?",
+    "options": [
+      {
+        "text": "Update A to forward to C, then install the entry on C",
+        "explanation": "A can send packets to C before its entry exists. Under the supplied drop-on-miss policy those packets are dropped, creating a temporary black hole."
+      },
+      {
+        "text": "Install and confirm C’s rule, switch A to C, wait for old-path packets to drain, then remove B’s rule",
+        "explanation": "Correct. Downstream preparation avoids a new-path gap, and the drain step protects packets A sent to B before the change."
+      },
+      {
+        "text": "Remove B's entry first so the old path is freed",
+        "explanation": "Packets still sent by A to B would hit the missing entry and be dropped."
+      },
+      {
+        "text": "Order does not matter because OpenFlow updates are atomic across switches",
+        "explanation": "OpenFlow does not make updates across different switches atomic. Supported local atomic modifications or bundles do not imply network-wide atomicity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Install C → D and confirm successful installation, checking errors and the appropriate barrier/acknowledgment mechanism.\n2. Change A’s next hop to C.\n3. Retain B → D until old-path packets have drained, using a justified delay bound or version/epoch mechanism.\n4. Remove the obsolete rule.\n\nA control-message barrier confirms processing; it does not by itself prove that every previously forwarded data packet has left the old path. Versioned updates must also delay old-version cleanup until those packets are gone.",
+    "link": {
+      "title": "B4: Experience with a Globally-Deployed Software Defined WAN — Google Research",
+      "url": "https://research.google/pubs/b4-experience-with-a-globally-deployed-software-defined-wan/"
+    }
+  }
+]

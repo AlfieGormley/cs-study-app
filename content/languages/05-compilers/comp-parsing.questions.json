@@ -1,0 +1,378 @@
+[
+  {
+    "id": "comp-parsing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does the Calc program `10 - 4 - 3` evaluate to, and why?",
+    "options": [
+      {
+        "text": "9, because the parser groups it as `10 - (4 - 3)`",
+        "explanation": "That grouping is right associativity. Subtraction is left-associative in Calc, as in maths and almost every language."
+      },
+      {
+        "text": "3, because the parser groups it as `(10 - 4) - 3`",
+        "explanation": "Correct. The loop in `expr` (or `prec + 1` in precedence climbing) keeps wrapping the tree built so far on the left, giving `BinOp('-', BinOp('-', 10, 4), 3)`."
+      },
+      {
+        "text": "It is a syntax error, because the grammar is ambiguous",
+        "explanation": "Calc's grammar is not ambiguous: precedence levels and associativity rules give exactly one tree."
+      },
+      {
+        "text": "It depends on the order in which the evaluator visits children",
+        "explanation": "The evaluator just follows the tree. Grouping is fixed by the parser before evaluation starts."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `expr` parses `10` as the first term.\n2. It sees `-`, parses the next term `4`, and builds `node = (10 - 4)`.\n3. It sees `-` again, parses `3`, and builds `node = ((10 - 4) - 3)`.\n4. Evaluate: 10 − 4 = 6, then 6 − 3 = 3.\n\nThe tree leans left, which is what left associativity means.",
+    "link": {
+      "title": "Parsing Expressions — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  },
+  {
+    "id": "comp-parsing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Calc, `^` is right-associative. What is the value of `2 ^ 3 ^ 2`?",
+    "options": [
+      {
+        "text": "64",
+        "explanation": "64 is `(2 ^ 3) ^ 2` = 8², the left-associative reading."
+      },
+      {
+        "text": "12",
+        "explanation": "Power is not multiplication; this looks like 2 × 3 × 2."
+      },
+      {
+        "text": "512",
+        "explanation": "Correct. Right associativity groups it as `2 ^ (3 ^ 2)` = 2⁹ = 512, the same as Python's `2 ** 3 ** 2`."
+      },
+      {
+        "text": "36",
+        "explanation": "This is (2 × 3)², which mixes up the operators."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Right-associative means the rightmost `^` is applied first: `2 ^ (3 ^ 2)`.\n2. Inner: 3² = 9.\n3. Outer: 2⁹ = 512.\n\nIn the parser this comes from `nxt = prec` for `^`: the recursive call for the right operand accepts another `^`, so it grabs `3 ^ 2` as a unit.",
+    "link": {
+      "title": "Parsing expressions by precedence climbing — Eli Bendersky",
+      "url": "https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing"
+    }
+  },
+  {
+    "id": "comp-parsing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A student writes the rule `expr = expr \"+\" term | term` directly as a recursive descent function whose first line is `left = self.expr()`. What happens when it parses `1 + 2`?",
+    "options": [
+      {
+        "text": "It parses correctly but builds a right-leaning tree",
+        "explanation": "It never gets far enough to build any tree, because it never consumes a token."
+      },
+      {
+        "text": "It raises `RecursionError`: `expr` calls itself before consuming a token, so it recurses forever",
+        "explanation": "Correct. Direct left recursion makes this naive recursive-descent parser call the same function at the same position endlessly. Rewrite it as `term { \"+\" term }` instead."
+      },
+      {
+        "text": "It raises `SyntaxError: expected NUM`",
+        "explanation": "No token is ever examined; the failure is unbounded recursion, not a mismatch."
+      },
+      {
+        "text": "It works, because Python optimises tail calls",
+        "explanation": "Python does not do tail-call optimisation, and this call is not in tail position anyway; it is the very first thing the function does."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `expr()` at token 0 calls `expr()`.\n2. That call is still at token 0, so it calls `expr()` again.\n3. No call ever reaches the code that consumes a token, so the position never changes.\n4. Python stops it at the recursion limit (1,000 frames by default) with `RecursionError`.\n\nBottom-up LR parsers handle left recursion naturally; naive recursive descent needs rewriting or specialized left-recursion support, which CPython's PEG parser has.",
+    "link": {
+      "title": "Recursive descent parser — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Recursive_descent_parser"
+    }
+  },
+  {
+    "id": "comp-parsing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You change Calc's `BINARY` table so that `\"-\": (1, \"R\")`. What does `10 - 4 - 3` now evaluate to?",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That is the left-associative answer, which the change has just broken."
+      },
+      {
+        "text": "It raises a syntax error",
+        "explanation": "The parser still accepts the same strings; only the shape of the tree changes."
+      },
+      {
+        "text": "-3",
+        "explanation": "Neither grouping gives −3: `(10 - 4) - 3` is 3 and `10 - (4 - 3)` is 9. A negative answer would need the minus signs to apply to `10` itself."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. With `nxt = prec`, the right operand `expr(1)` swallows `4 - 3`, giving `10 - (4 - 3)` = 10 − 1 = 9."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace precedence climbing with `-` right-associative:\n\n```\nexpr(1): left = 10\n '-' prec 1 >= 1\n right = expr(1)     # nxt = prec = 1\n   left = 4\n   '-' prec 1 >= 1  -> continue!\n   right = expr(1) -> 3\n   -> (4 - 3)\n -> 10 - (4 - 3)\n```\n\n10 − 1 = 9. One character in the table silently changes the meaning of every chain of subtractions, which is why parser test suites check associativity explicitly.",
+    "link": {
+      "title": "Parsing expressions by precedence climbing — Eli Bendersky",
+      "url": "https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing"
+    }
+  },
+  {
+    "id": "comp-parsing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does Calc return for `2 * -3 ^ 2`?",
+    "options": [
+      {
+        "text": "36",
+        "explanation": "That would need `(2 * -3) ^ 2`, but `^` binds tighter than `*`."
+      },
+      {
+        "text": "18",
+        "explanation": "This treats it as `2 * (-3) ^ 2` = 2 × 9. In Calc unary minus binds *looser* than `^`, so the minus applies to `3 ^ 2`."
+      },
+      {
+        "text": "-18",
+        "explanation": "Correct. `unary` parses its operand with `expr(3)`, so `-3 ^ 2` is `-(3 ^ 2)` = −9, and 2 × −9 = −18. Python's `2 * -3 ** 2` gives the same."
+      },
+      {
+        "text": "A syntax error, because `*` cannot be followed by `-`",
+        "explanation": "`-` starts a unary expression, which is a valid right operand for `*`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `expr(1)` parses `2`, sees `*` (prec 2), and calls `expr(3)` for the right side.\n2. `expr(3)` calls `unary`, which sees `-` and parses its operand with `expr(3)`.\n3. That parses `3`, sees `^` (prec 3 ≥ 3) and takes `3 ^ 2`.\n4. Tree: `2 * Neg(3 ^ 2)`.\n5. Evaluate: 3² = 9, negate: −9, times 2: −18.",
+    "link": {
+      "title": "Parsing Expressions — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  },
+  {
+    "id": "comp-parsing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add function calls to Calc's `factor`: `factor = NAME | NAME \"(\" expr \")\" | NUM | ...`. Why is this no longer LL(1), and what is the standard fix?",
+    "options": [
+      {
+        "text": "Two alternatives start with NAME, so one token of lookahead cannot choose. Left-factor it: `NAME [ \"(\" expr \")\" ]`",
+        "explanation": "Correct. After seeing NAME, parse it, then peek: if the next token is `(`, it is a call. The common prefix is pulled out so each decision needs only one token."
+      },
+      {
+        "text": "It is left-recursive; rewrite it as a loop",
+        "explanation": "Neither alternative starts with `factor`, so there is no left recursion. The problem is a shared prefix."
+      },
+      {
+        "text": "It is ambiguous; add precedence levels",
+        "explanation": "Each string still has one parse. The problem is choosing between rules with one token, not multiple trees."
+      },
+      {
+        "text": "LL(1) parsers cannot handle brackets; switch to LR",
+        "explanation": "LL(1) parsers handle brackets fine, as `\"(\" expr \")\"` already shows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. LL(1) means: looking at the next token, you can always tell which alternative to take.\n2. FIRST(`NAME`) = {NAME} and FIRST(`NAME \"(\" ...`) = {NAME}. They overlap.\n3. Left factoring rewrites `A = x | x y` as `A = x [ y ]`.\n4. In code:\n\n```\nif peek() == \"NAME\":\n    name = eat(\"NAME\")\n    if peek() == \"(\":\n        ... parse call\n    return Var(name)\n```",
+    "link": {
+      "title": "LL parser — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/LL_parser"
+    }
+  },
+  {
+    "id": "comp-parsing-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about LL and LR parsing are true? Select all that apply.",
+    "options": [
+      {
+        "text": "LR parsers can handle left-recursive grammars directly",
+        "explanation": "Correct. Bottom-up parsers reduce `E + T` to `E` after seeing it; left recursion causes no infinite loop. Bison grammars are usually written left-recursive."
+      },
+      {
+        "text": "Every LR(1) grammar is also LL(1)",
+        "explanation": "It is the other way round: every LL(1) grammar is LR(1), and LR(1) covers strictly more grammars."
+      },
+      {
+        "text": "Recursive descent parsers are a form of top-down (LL-style) parsing",
+        "explanation": "Correct. They start from the start symbol and predict which rule applies, as LL parsing does."
+      },
+      {
+        "text": "Major compilers such as GCC, Clang and V8 use hand-written recursive descent",
+        "explanation": "Correct. GCC switched away from Bison for C++ in 3.4 and for C in 4.1; Clang and V8 also use hand-written parsing."
+      },
+      {
+        "text": "LR parsers cannot report syntax errors",
+        "explanation": "They detect errors as soon as no action applies; the difficulty is producing *friendly* messages, not detecting the error."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each against the mechanics:\n\n1. **Left recursion.** LR shifts tokens and reduces once a full right-hand side is on the stack, so `E → E + T` is fine. True.\n2. **LR(1) ⊆ LL(1)?** No: LL(1) ⊂ LR(1). False.\n3. **Recursive descent.** One function per rule, called top-down. True.\n4. **Industry practice.** True; parser generators also serve production languages such as PostgreSQL.\n5. **Errors.** LR parsers detect errors precisely; their messages are just harder to tailor. False.",
+    "link": {
+      "title": "LR parser — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/LR_parser"
+    }
+  },
+  {
+    "id": "comp-parsing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An LR parser for `E → E + T | T`, `T → T * F | F`, `F → NUM` is parsing `2 + 3 + 4`. The stack is `E + T` and the next token is `+`. What should it do?",
+    "options": [
+      {
+        "text": "Shift the `+`",
+        "explanation": "A shift on + is not a valid table action here: this grammar admits left-associated addition and the completed E + T must first reduce. With `*` next it would shift, but not with `+`."
+      },
+      {
+        "text": "Reduce `T` to `F`",
+        "explanation": "Reductions go from right-hand side to left-hand side: `F` reduces to `T`, never the reverse."
+      },
+      {
+        "text": "Report a syntax error",
+        "explanation": "`E + T` followed by `+` is perfectly valid; there is a clear action."
+      },
+      {
+        "text": "Reduce `E + T` to `E`",
+        "explanation": "Correct. Nothing on the right can bind tighter than this `+`, so the parser finishes `2 + 3` now. That makes addition left-associative: `(2 + 3) + 4`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The top of the stack, `E + T`, matches the right-hand side of `E → E + T`.\n2. Should we wait? Only if the next token could make `T` longer, i.e. `*` (from `T → T * F`).\n3. The next token is `+`, which cannot extend `T`, so reduce: stack becomes `E`.\n4. Then shift `+`, shift `4`, reduce `F`, `T`, then `E + T` to `E`.\n\nResult: `(2 + 3) + 4`. Compare with the lesson's trace, where lookahead `*` made the parser shift instead.",
+    "link": {
+      "title": "LR parser — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/LR_parser"
+    }
+  },
+  {
+    "id": "comp-parsing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You add `==` to Calc with lower precedence than `+`, as `BINARY[\"==\"] = (0, \"L\")`, and teach the lexer to emit `==`. `parse(\"1 + 1 == 2\")` fails with `expected EOF, got '==' at 6`. Why?",
+    "options": [
+      {
+        "text": "`==` must be right-associative",
+        "explanation": "Associativity only matters for chains like `a == b == c`; this input has a single `==`."
+      },
+      {
+        "text": "`expr` starts with `min_prec=1`, so the top-level loop stops at any operator with precedence 0 and leaves it unparsed",
+        "explanation": "Correct. Precedence 0 is below the default minimum, so `==` is never accepted. Either renumber all levels so the weakest is 1, or start with `min_prec=0`."
+      },
+      {
+        "text": "The lexer splits `==` into two `=` tokens",
+        "explanation": "The error message names a single `'=='` token, so the lexer produced it correctly."
+      },
+      {
+        "text": "Precedence climbing cannot handle more than three levels",
+        "explanation": "It handles any number of levels; that is its whole advantage over one-function-per-level."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace `parse` → `expr(1)`:\n\n```\nleft = 1\n'+' prec 1 >= 1: right = expr(2) -> 1\nleft = (1 + 1)\n'==' prec 0 < 1: break\nreturn (1 + 1)\n```\n\n`parse` then calls `expect(\"EOF\")`, sees `==` at position 6 and fails. The table and the entry point must agree: renumber to `== : 1`, `+ - : 2`, `* / : 3`, `^ : 4` (and `unary` must call `expr(4)`), or change all full-expression entry points, including parentheses and let bodies, to start at expr(0). Note how the unary minus line hard-codes 3: that is a maintenance hazard worth naming as a constant.",
+    "link": {
+      "title": "Parsing expressions by precedence climbing — Eli Bendersky",
+      "url": "https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing"
+    }
+  },
+  {
+    "id": "comp-parsing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A grammar contains `stmt = \"if\" expr stmt | \"if\" expr stmt \"else\" stmt | other`. Bison reports one shift/reduce conflict. What does Bison do by default with `if a if b s1 else s2`, and what does that mean?",
+    "options": [
+      {
+        "text": "It shifts `else`, attaching it to the nearest `if b`",
+        "explanation": "Correct. With `if b s1` on the stack and `else` next, reducing would close the inner `if` and give `else` to `if a`; shifting gives it to `if b`. In the absence of overriding precedence rules, Bison resolves this conflict by shifting, which matches C and Java."
+      },
+      {
+        "text": "It reduces, attaching `else` to the outer `if a`",
+        "explanation": "Reduce would close `if b s1` first, which is the opposite of Bison's default and of C's rule."
+      },
+      {
+        "text": "It refuses to generate a parser until the conflict is fixed",
+        "explanation": "With its default warning settings Bison still generates a parser for this conflict; warnings-as-errors can change that; you can silence the warning with `%expect 1`."
+      },
+      {
+        "text": "It tries both and picks the one that type-checks",
+        "explanation": "Bison's LALR(1) parsers are deterministic and know nothing about types. Only GLR mode explores both."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. After reading `if a if b s1`, the stack ends with `if expr stmt`, a complete short `if`. Next token: `else`.\n2. **Reduce**: turn `if b s1` into `stmt`. Then `else` must belong to `if a`.\n3. **Shift**: push `else`, continuing `if b s1 else s2`. The `else` belongs to `if b`.\n4. Bison chooses shift for shift/reduce conflicts, so `else` binds to the nearest unmatched `if`.\n\nLanguages like Python and Rust avoid the problem with indentation or mandatory braces.",
+    "link": {
+      "title": "Dangling else — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dangling_else"
+    }
+  },
+  {
+    "id": "comp-parsing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Why do production compilers such as GCC, Clang and V8 hand-write their parsers instead of generating them? Select all that apply.",
+    "options": [
+      {
+        "text": "It is easier to produce precise, helpful error messages and recover from errors",
+        "explanation": "Correct. A hand-written parser knows exactly what it was trying to parse and can say \"expected `)` to match this `(`\", or suggest fixes."
+      },
+      {
+        "text": "Real languages have context-sensitive corners, like C++ needing to know whether a name is a type",
+        "explanation": "Correct. Hand-written code can consult the symbol table or look ahead arbitrarily far where the grammar alone is not enough."
+      },
+      {
+        "text": "Generated LR parsers cannot handle operator precedence",
+        "explanation": "Bison has `%left`, `%right` and `%prec` declarations exactly for this; precedence is easy in LR generators."
+      },
+      {
+        "text": "Hand-written parsers can be tuned for speed, such as V8's lazy pre-parsing of function bodies",
+        "explanation": "Correct. V8 pre-parses inner functions quickly and only fully parses them when called, which is easy to build into a hand-written parser."
+      },
+      {
+        "text": "Context-free grammars cannot describe programming languages at all",
+        "explanation": "CFGs describe most of the syntax; the hand-written parser still follows one. The issue is the few non-context-free parts and the engineering benefits."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Weigh the actual reasons:\n\n1. **Errors.** A practical engineering reason. True.\n2. **Context sensitivity.** C typedef-name classification can need symbol information; C++ also has syntactic declaration-disambiguation rules. True.\n3. **Precedence.** Generators handle it with declarations. False.\n4. **Speed and laziness.** V8 skips full parsing of functions that may never run. True.\n5. **CFGs useless?** No; they remain the specification. False.",
+    "link": {
+      "title": "Recursive descent parser — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Recursive_descent_parser"
+    }
+  },
+  {
+    "id": "comp-parsing-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On CPython 3.14 with the default recursion limit of 1,000, `parse(\"(\" * d + \"1\" + \")\" * d)` has three recursive parser frames per nesting level. Ignoring small caller overhead, what approximate nesting budget does that suggest?",
+    "options": [
+      {
+        "text": "About 1,000, one frame per bracket",
+        "explanation": "Each bracket costs more than one frame: `expr` calls `unary`, which calls `atom`, which calls `expr` again."
+      },
+      {
+        "text": "About 330",
+        "explanation": "Correct. Each nesting level uses three frames (`expr` → `unary` → `atom` → back to `expr`), so 1,000 / 3 ≈ 333 levels. Caller overhead and runtime details shift the exact threshold; no original measurement artifact is available."
+      },
+      {
+        "text": "About 100",
+        "explanation": "That would mean ten frames per level; the call chain per bracket is three functions long."
+      },
+      {
+        "text": "It never fails, because the parser uses a loop for brackets",
+        "explanation": "Only operator chains use a loop. Brackets are handled by recursion through `atom`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. For each `(`, the call chain is `expr` → `unary` → `atom` → (sees `(`) → `expr` ...\n2. That is 3 frames per level.\n3. Budget: about 1,000 frames, minus a few for `parse`, the caller and the interpreter.\n4. 1,000 / 3 ≈ 333. This is a model estimate, not a verified exact failure threshold.\n\nReal compilers face the same issue with generated or adversarial code, which is why CPython's own parser enforces a nesting limit and reports a clean error instead of crashing.",
+    "link": {
+      "title": "Recursive descent parser — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Recursive_descent_parser"
+    }
+  }
+]

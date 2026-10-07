@@ -1,0 +1,340 @@
+[
+  {
+    "id": "pattern-behavioural-2-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ng = (x * 2 for x in range(3))\nprint(list(g))\nprint(list(g))\n```",
+    "options": [
+      {
+        "text": "`[0, 2, 4]` then `[0, 2, 4]`",
+        "explanation": "That's how a list or `range` behaves, because each `for` gets a fresh iterator. A generator *is* an iterator, and iterators are single-use."
+      },
+      {
+        "text": "`[0, 2, 4]` then `[]`",
+        "explanation": "Correct. The first `list()` consumes every item. The generator is then exhausted, so the second `list()` immediately gets `StopIteration` and returns an empty list."
+      },
+      {
+        "text": "`[2, 4, 6]` then `[]`",
+        "explanation": "`range(3)` yields 0, 1, 2, so doubled values are 0, 2, 4."
+      },
+      {
+        "text": "A `StopIteration` error on the second line",
+        "explanation": "`list()` catches `StopIteration` as the normal end signal; it never escapes to your code here."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A generator expression creates one **iterator**.\n2. First `list(g)`: `next()` yields 0, 2, 4, then `StopIteration` → `[0, 2, 4]`.\n3. Second `list(g)`: the same iterator is already finished; the first `next()` raises `StopIteration` → `[]`.\n\nContrast an **iterable** such as a list or a class whose `__iter__` returns a new generator each time: every loop starts afresh.",
+    "link": {
+      "title": "The Iterator pattern in Python — Python Design Patterns guide",
+      "url": "https://python-patterns.guide/gang-of-four/iterator/"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In `unittest`, you write `setUp`, `tearDown` and `test_*` methods, and the framework's `run()` calls them in order. Which pattern is this?",
+    "options": [
+      {
+        "text": "Template method",
+        "explanation": "Correct. `TestCase.run()` is a fixed skeleton (set up, run test, tear down, record result) that calls steps your subclass overrides."
+      },
+      {
+        "text": "Strategy",
+        "explanation": "Strategy passes an interchangeable algorithm *into* an object. Here the steps are supplied by *subclassing* and called by a base-class algorithm."
+      },
+      {
+        "text": "Observer",
+        "explanation": "Nothing subscribes to events here; the base class calls fixed hook methods in a fixed order."
+      },
+      {
+        "text": "Visitor",
+        "explanation": "Visitor dispatches an operation over a structure of different node types. There's no such structure here."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Look for the shape:\n\n```\nTestCase.run():       base class\n  self.setUp()        hook\n  self.test_x()       your step\n  self.tearDown()     hook\n```\n\n1. The algorithm lives in the base class.\n2. Subclasses fill in steps but don't control the order.\n3. The base calls the subclass (\"don't call us, we'll call you\").\n\nThat is template method. `socketserver.BaseRequestHandler` (setup, handle, finish) is another stdlib example.",
+    "link": {
+      "title": "unittest — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.html"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using the lesson's `Document` with state objects, what's printed?\n\n```python\nd = Document()\nd.approved = True\nprint(d.publish())\nprint(d.publish())\n```",
+    "options": [
+      {
+        "text": "`published` then `already published`",
+        "explanation": "Approval doesn't let a document skip review. The document starts in `Draft`, whose `publish` always moves it to `Review` first."
+      },
+      {
+        "text": "`sent for review` then `needs approval`",
+        "explanation": "`approved` is already `True`, so `Review.publish` moves the document on to `Published` instead of refusing."
+      },
+      {
+        "text": "`sent for review` then `published`",
+        "explanation": "Correct. Draft → Review on the first call. On the second, `Review.publish` sees `approved` is True and moves to Published."
+      },
+      {
+        "text": "`sent for review` then `sent for review`",
+        "explanation": "`Draft.publish` replaces `doc.state` with a `Review`, so the second call is handled by `Review`, not `Draft`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace the state:\n\n```\nstart        Draft\npublish()    Draft.publish:\n             state = Review\n             -> \"sent for review\"\npublish()    Review.publish:\n             approved? yes\n             state = Published\n             -> \"published\"\n```\n\nThe `Document` class itself contains no `if` on status: each state object decides what `publish` means and what comes next.",
+    "link": {
+      "title": "State pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/State_pattern"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nclass Tree:\n    def __init__(self, v, kids=()):\n        self.v = v\n        self.kids = kids\n\n    def __iter__(self):\n        for k in self.kids:\n            yield from k\n        yield self.v\n\nt = Tree(1, [Tree(2, [Tree(3)]),\n             Tree(4)])\nprint(list(t))\n```",
+    "options": [
+      {
+        "text": "`[1, 2, 3, 4]`",
+        "explanation": "That's pre-order (yield the node, then its children), as in the lesson. Here `yield self.v` comes *after* the children."
+      },
+      {
+        "text": "`[4, 3, 2, 1]`",
+        "explanation": "Children are visited in list order: the subtree rooted at 2 before the one at 4."
+      },
+      {
+        "text": "`[1]`",
+        "explanation": "`yield from k` delegates to each child's `__iter__`, so the whole tree is walked, not just the root."
+      },
+      {
+        "text": "`[3, 2, 4, 1]`",
+        "explanation": "Correct. This is post-order: each node yields its children's values first, then its own. 3 comes before its parent 2, and 1 (the root) comes last."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Expand recursively (post-order):\n\n```\niter(Tree 3) -> 3\niter(Tree 2) -> kids: 3; self: 2\n            -> 3, 2\niter(Tree 4) -> 4\niter(Tree 1) -> 3, 2, 4, then 1\n```\n\nMoving one `yield` line changes the traversal order, while callers keep writing `for x in t`. That's what the iterator pattern buys: traversal is the collection's business.",
+    "link": {
+      "title": "Iterator pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Iterator_pattern"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An order moves between 6 statuses with 9 allowed transitions. Each status has almost identical behaviour; the main rule is which transitions are legal. What's the clearest design?",
+    "options": [
+      {
+        "text": "An enum of statuses and a transition table mapping (status, event) to the next status",
+        "explanation": "Correct. The whole machine is in one readable table; adding a transition is one line; you can test every pair; and the enum value is what you store in the database anyway."
+      },
+      {
+        "text": "One State class per status, each with methods for every event",
+        "explanation": "With little behaviour per state, that's 6 classes × several methods of near-identical code, and the legal transitions are scattered across them."
+      },
+      {
+        "text": "A boolean flag per status on the order",
+        "explanation": "Six booleans allow 2⁶ = 64 combinations, almost all invalid (paid and cancelled and shipped). A single status field prevents impossible states."
+      },
+      {
+        "text": "An observer per status that listens for events",
+        "explanation": "Observers react to events, but they don't give you a single source of truth for which transitions are allowed."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. What varies? Mostly *which transition is legal*, not what each state *does*.\n2. A table captures exactly that:\n\n```python\nNEXT = {\n  (PENDING, \"pay\"): PAID,\n  (PAID, \"ship\"): SHIPPED,\n  (PAID, \"refund\"): REFUNDED,\n  # ... 9 entries\n}\n```\n\n3. Illegal events are simply missing keys → raise.\n4. Choose State classes when each state has substantial, *different* behaviour.",
+    "link": {
+      "title": "State pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/State_pattern"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport ast\n\nclass Names(ast.NodeVisitor):\n    def __init__(self):\n        self.found = []\n\n    def visit_Name(self, node):\n        self.found.append(node.id)\n\ntree = ast.parse(\"y = f(x) + x\")\nv = Names()\nv.visit(tree)\nprint(v.found)\n```",
+    "options": [
+      {
+        "text": "`['x']`",
+        "explanation": "Every identifier is an `ast.Name` node, including the assignment target `y` and the called function `f`, not just variables being read."
+      },
+      {
+        "text": "`['y', 'f', 'x', 'x']`",
+        "explanation": "Correct. `generic_visit` walks the tree in field order: the target `y`, then the value `f(x) + x`, whose left side is the call (`f`, then its argument `x`) and right side is `x`."
+      },
+      {
+        "text": "`['f', 'x', 'y']`",
+        "explanation": "The visitor collects in traversal order and doesn't remove duplicates. `Assign`'s `targets` field is visited before its `value`."
+      },
+      {
+        "text": "`[]`, because `visit` only looks at the root node",
+        "explanation": "For node types with no `visit_*` method (like `Module`, `Assign`, `BinOp`), `visit` falls back to `generic_visit`, which recurses into children."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The tree:\n\n```\nModule\n  Assign\n    targets: Name y\n    value: BinOp(+)\n      left: Call\n        func: Name f\n        args: Name x\n      right: Name x\n```\n\n1. `visit(Module)`: no `visit_Module`, so `generic_visit` recurses.\n2. Same for `Assign`, `BinOp`, `Call`.\n3. Each `Name` reaches `visit_Name`: y, f, x, x.\n\nNote `visit_Name` doesn't call `generic_visit` itself. That's fine here because `Name` has no child nodes of interest, but in general forgetting it stops traversal below that node.",
+    "link": {
+      "title": "ast — Abstract syntax trees — Python docs",
+      "url": "https://docs.python.org/3/library/ast.html"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are template methods in Python's standard library? Select all that apply.",
+    "options": [
+      {
+        "text": "`socketserver.BaseRequestHandler`, whose constructor calls `setup()`, `handle()` and `finish()`",
+        "explanation": "Correct. The constructor is the fixed skeleton; you override `handle()` (and optionally the other two)."
+      },
+      {
+        "text": "`collections.abc.Mapping`, which provides `get`, `items` and `__contains__` built on your `__getitem__`, `__iter__` and `__len__`",
+        "explanation": "Correct. The mixin methods are algorithms written in terms of abstract steps that subclasses supply."
+      },
+      {
+        "text": "`threading.Thread`, where `start()` arranges for your overridden `run()` to be called",
+        "explanation": "Correct. `start()` handles the thread machinery and calls the `run()` hook. (You can also pass `target=` instead, which is the strategy-style alternative.)"
+      },
+      {
+        "text": "`functools.partial`",
+        "explanation": "Incorrect. `partial` fixes some arguments of a function. There's no base-class skeleton calling overridable steps."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Test each: is there a base-class algorithm that calls steps a subclass provides?\n\n1. `BaseRequestHandler.__init__` → `setup(); handle(); finish()`. Yes.\n2. `Mapping.get(k)` → tries `self[k]`, falls back to default. Yes.\n3. `Thread.start()` → new OS thread → `self.run()`. Yes.\n4. `partial(f, x)` → just a callable with pre-filled arguments. No.\n\n`Thread` is a nice contrast: subclassing and overriding `run` is template method; passing `target=fn` is strategy.",
+    "link": {
+      "title": "socketserver — Python docs",
+      "url": "https://docs.python.org/3/library/socketserver.html"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A compiler has 30 AST node types and 8 passes written as visitors. The language adds a new node type, `Await`. Separately, the team wants a new linting pass. Which is cheaper, and why?",
+    "options": [
+      {
+        "text": "Adding `Await` is cheaper: one new class",
+        "explanation": "With visitors, a new node type needs a `visit_Await` method in each of the 8 visitors (or a sensible generic fallback), so it touches every pass."
+      },
+      {
+        "text": "Both cost the same, because visitors decouple everything",
+        "explanation": "Visitors decouple operations from nodes, but the dependency between each visitor and the full set of node types remains."
+      },
+      {
+        "text": "Neither can be done without rewriting the node classes",
+        "explanation": "A new visitor needs no change to the nodes at all; that's the visitor pattern's main benefit."
+      },
+      {
+        "text": "Adding the linting pass is cheaper: one new visitor class; adding `Await` means touching all 8 visitors",
+        "explanation": "Correct. This is the expression problem. Visitors make new operations cheap and new types expensive; methods on node classes would be the reverse."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Draw the grid: rows are node types, columns are passes.\n\n```\n          pass1 ... pass8 lint\nNum         x         x    +\nAdd         x         x    +\n...30 rows\nAwait       +   ...   +    +\n```\n\n1. New **column** (lint): one visitor class with up to 30 methods, written in one place. Nothing else changes.\n2. New **row** (`Await`): one method added in each of 8 visitors.\n3. Visitors organise code by column. Choose them when columns (operations) grow faster than rows (types), as in most compilers.",
+    "link": {
+      "title": "Expression problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Expression_problem"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a classic (Java-style) visitor, `node.accept(visitor)` calls `visitor.visitAdd(this)`. Why is this two-step call needed in languages like Java and C++?",
+    "options": [
+      {
+        "text": "Method overloads are chosen by the *static* type of the argument, so `visitor.visit(node)` with `node` typed as `Node` can't pick `visit(Add)`; `accept` adds a second dynamic dispatch on the node",
+        "explanation": "Correct. Virtual calls dispatch on the receiver only. `node.accept` dispatches on the node's runtime type, and inside `Add.accept`, `this` has static type `Add`, so the right overload is chosen. Two single dispatches make a double dispatch."
+      },
+      {
+        "text": "To make the code thread-safe",
+        "explanation": "`accept` has nothing to do with concurrency; it's about choosing which method to run."
+      },
+      {
+        "text": "Because visitors can't access node fields directly",
+        "explanation": "Visitors receive the node as an argument and can read its public fields. The issue is choosing the right method, not access."
+      },
+      {
+        "text": "To let the node refuse to be visited",
+        "explanation": "A node could do that in `accept`, but that's not why the pattern needs it. The reason is dispatching on two runtime types."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Java/C++ choose an **overload** at compile time from the argument's declared type.\n2. In `for (Node n : nodes) v.visit(n);`, `n` is declared `Node`, so `visit(Node)` is chosen, never `visit(Add)`.\n3. Fix: ask the node to call back.\n\n```\nn.accept(v)        dispatch 1: on n\n  Add.accept:\n    v.visit(this)  this is Add\n                   dispatch 2: on v\n```\n\n4. Python avoids this by dispatching on `type(node).__name__` at run time, so `accept` isn't needed, which is what `ast.NodeVisitor` does.",
+    "link": {
+      "title": "Double dispatch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Double_dispatch"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're writing a Python tool that evaluates a small expression tree with 4 node types. Which are reasonable alternatives to a visitor class hierarchy? Select all that apply.",
+    "options": [
+      {
+        "text": "One function using `match node:` with a `case` per node type (Python 3.10+)",
+        "explanation": "Correct. Structural pattern matching keeps the whole operation in one place, like a visitor, with less ceremony. Classes need `__match_args__` (dataclasses set it automatically) for positional patterns."
+      },
+      {
+        "text": "`functools.singledispatch`, registering one implementation per node type",
+        "explanation": "Correct. It dispatches a function on its first argument's type, and new types can be registered from other modules."
+      },
+      {
+        "text": "An `eval()` method on each node class",
+        "explanation": "Correct. With only one or two operations, methods on the nodes are the simplest design. It's the other side of the expression problem: cheap new types, costlier new operations."
+      },
+      {
+        "text": "A singleton that holds every node",
+        "explanation": "Incorrect. Singleton controls how many instances exist; it does nothing to route an operation to per-type code."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "All three valid options answer the same question, 'which code runs for this node type?':\n\n```python\ndef ev(n):\n    match n:\n        case Num(v):\n            return v\n        case Add(l, r):\n            return ev(l) + ev(r)\n```\n\n1. `match`: one function per operation.\n2. `singledispatch`: one registered function per type, per operation.\n3. Methods: one method per operation, per class.\n\nPick by which axis grows: operations (visitor, `match`, `singledispatch`) or types (methods).",
+    "link": {
+      "title": "PEP 636 — Structural pattern matching tutorial",
+      "url": "https://peps.python.org/pep-0636/"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A base class `Exporter.export()` calls `self.open()`, `self.write_rows()` and `self.close()`. Over time, subclasses appear for every combination of format (CSV, JSON, Parquet) and destination (local disk, S3, GCS), giving 9 subclasses. What's the best refactor?",
+    "options": [
+      {
+        "text": "Add another level of inheritance: `CsvExporter`, then `CsvS3Exporter`",
+        "explanation": "More inheritance makes the combinatorial explosion worse. Each new format or destination still multiplies the class count."
+      },
+      {
+        "text": "Merge everything into one class with `if format == ...` and `if dest == ...` branches",
+        "explanation": "That removes subclasses but recreates the conditional sprawl the patterns were meant to avoid, and every new format means editing the core."
+      },
+      {
+        "text": "Make each exporter a singleton",
+        "explanation": "The number of instances isn't the problem; the number of *classes* is."
+      },
+      {
+        "text": "Keep the template method but pass a format strategy and a destination strategy into one `Exporter`",
+        "explanation": "Correct. Two independent dimensions are the bridge/strategy signal. 3 formats + 3 destinations = 6 small classes instead of 9 subclasses, and the gap grows with each addition."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Template method varies steps by subclass, giving one fixed combination per class.\n2. Two independent axes → combinations multiply: 3 × 3 = 9 today, 4 × 4 = 16 tomorrow.\n3. Compose instead:\n\n```python\nExporter(fmt=Csv(),\n         dest=S3(bucket))\n```\n\n4. Classes needed: 3 + 3 = 6 now, 4 + 4 = 8 later.\n5. The skeleton (`open`, write, `close`) can stay in `Exporter`; it just delegates steps to the parts.",
+    "link": {
+      "title": "Template method pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Template_method_pattern"
+    }
+  }
+]

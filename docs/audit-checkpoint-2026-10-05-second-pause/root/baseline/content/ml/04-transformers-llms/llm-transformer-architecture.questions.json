@@ -1,0 +1,378 @@
+[
+  {
+    "id": "llm-transformer-architecture-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a transformer block, each sub-layer computes `x = x + f(x)` rather than `x = f(x)`. What is the main benefit?",
+    "options": [
+      {
+        "text": "It halves the number of parameters",
+        "explanation": "Adding the input back costs no parameters but saves none either; `f` has the same weights either way."
+      },
+      {
+        "text": "It stops tokens attending to future positions",
+        "explanation": "That is the causal mask's job, not the residual connection's."
+      },
+      {
+        "text": "Gradients get a direct identity path back to early layers, which makes deep stacks trainable, and layers only need to learn an update",
+        "explanation": "Correct. This is the residual connection. The derivative of `x + f(x)` includes the identity, so gradients do not vanish through many layers."
+      },
+      {
+        "text": "It normalises the activations to unit variance",
+        "explanation": "Normalisation is done by LayerNorm or RMSNorm. A residual add can actually make activations grow with depth."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With `y = x + f(x)`, `dy/dx = I + df/dx`.\n2. Even if `df/dx` is small, the `I` term passes the gradient straight through.\n3. Across L layers the gradient has a short path from the loss to layer 1.\n4. It also means each layer writes an additive update into a shared residual stream rather than rebuilding the representation.",
+    "link": {
+      "title": "Transformer (deep learning architecture) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need a model that produces a single vector per document for semantic search, and separately a model that writes long answers. Which families fit best?",
+    "options": [
+      {
+        "text": "Encoder-only (bidirectional, like BERT) for search vectors; decoder-only (causal, like GPT) for generation",
+        "explanation": "Correct. Bidirectional attention lets every token see the whole document, ideal for representation; causal decoders generate one token at a time."
+      },
+      {
+        "text": "Decoder-only for search vectors, encoder-only for writing",
+        "explanation": "Reversed. Encoder-only models lack the causal structure needed for left-to-right generation."
+      },
+      {
+        "text": "Encoder-decoder for both, since it is always strictly better",
+        "explanation": "Encoder-decoder models are good at input-to-output tasks like translation but are not strictly better; decoder-only dominates general LLMs and encoders are cheaper for embeddings."
+      },
+      {
+        "text": "Any family works identically because they share the same block",
+        "explanation": "The blocks are similar, but masking and training objective differ, which determines what each is good at."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Embedding a document: you want each token to use context on both sides → bidirectional encoder.\n2. Generating text: you must predict token t+1 from tokens ≤ t → causal decoder.\n3. In practice many embedding models are encoders; most chat LLMs are decoders. (Decoders can also be adapted to produce embeddings, but that is a further step.)",
+    "link": {
+      "title": "Transformer (deep learning architecture) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which line describes a **pre-norm** transformer sub-layer, as used in GPT-2 and Llama?",
+    "options": [
+      {
+        "text": "`x = Norm(x + f(x))`",
+        "explanation": "That is post-norm, the 2017 original layout. The normalisation sits on the residual path."
+      },
+      {
+        "text": "`x = Norm(f(x))`",
+        "explanation": "There is no residual connection here at all, so deep stacks would be hard to train."
+      },
+      {
+        "text": "`x = f(x) + Norm(x)`",
+        "explanation": "This normalises the skip connection instead of the sub-layer input, which is not a standard design."
+      },
+      {
+        "text": "`x = x + f(Norm(x))`",
+        "explanation": "Correct. The residual path stays an untouched identity; only the input to `f` is normalised."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Post-norm: add first, then normalise the sum. The skip connection passes through Norm every layer.\n2. Pre-norm: normalise a copy of x, run f on it, add the result to the original x.\n3. Because the residual path is pure addition, gradients flow cleanly; Xiong et al. showed pre-norm trains stably without long warm-up.\n4. A final Norm after the last block is then needed, since the stream itself is never normalised.",
+    "link": {
+      "title": "On Layer Normalization in the Transformer Architecture (Xiong et al.)",
+      "url": "https://arxiv.org/abs/2002.04745"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A GPT-2-style block (biases on, two LayerNorms, 4d FFN) has `d = 1024`. Exactly how many parameters does one block hold?",
+    "options": [
+      {
+        "text": "12,582,912",
+        "explanation": "That is 12d², the rule-of-thumb figure without biases or LayerNorm parameters."
+      },
+      {
+        "text": "12,596,224",
+        "explanation": "Correct. 12d² = 12,582,912 plus biases (3d + d + 4d + d = 9d = 9,216) plus two LayerNorms (4d = 4,096)."
+      },
+      {
+        "text": "4,194,304",
+        "explanation": "That is only the attention projections, 4d². The FFN adds 8d²."
+      },
+      {
+        "text": "16,777,216",
+        "explanation": "That is 16d², as if the FFN had four d × 4d matrices. It has two."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nqkv  d*3d + 3d  = 3,145,728 + 3,072\nout  d*d  + d   = 1,048,576 + 1,024\nfc   d*4d + 4d  = 4,194,304 + 4,096\nproj 4d*d + d   = 4,194,304 + 1,024\nLNs  2 * 2d     =             4,096\n```\n\nWeights: 12d² = 12,582,912.\nBiases: 9d = 9,216. Norms: 4,096.\nTotal: 12,582,912 + 9,216 + 4,096 = 12,596,224.\n\nThis is the block size of GPT-2 medium.",
+    "link": {
+      "title": "Transformer (deep learning architecture) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the `12 · L · d²` rule of thumb, roughly how many **non-embedding** parameters does a model with `L = 24` and `d = 1024` have?",
+    "options": [
+      {
+        "text": "About 25 million",
+        "explanation": "That is 24 × 1024² = 25,165,824, forgetting the factor of 12 (4d² attention + 8d² FFN)."
+      },
+      {
+        "text": "About 3.6 billion",
+        "explanation": "Likely used d = 1024 without squaring correctly or multiplied by an extra 12. Recheck: d² ≈ 1.05 million."
+      },
+      {
+        "text": "About 302 million",
+        "explanation": "Correct. 12 × 24 × 1,048,576 = 301,989,888."
+      },
+      {
+        "text": "About 1.2 billion",
+        "explanation": "That would be 48d² per layer, four times the rule of thumb."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Attention per block ≈ 4d² (Q, K, V, O). FFN ≈ 2 × d × 4d = 8d². Sum 12d².\n2. d² = 1,048,576; × 12 = 12,582,912 per block.\n3. × 24 blocks = 301,989,888 ≈ 302M.\n4. GPT-2 medium has exactly this shape; with embeddings (50,257 × 1,024 + 1,024 × 1,024 ≈ 52.5M) and biases its total is 354,823,168.",
+    "link": {
+      "title": "Scaling Laws for Neural Language Models (Kaplan et al.)",
+      "url": "https://arxiv.org/abs/2001.08361"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Llama 2 7B uses a SwiGLU FFN with hidden size 11,008 for `d = 4096`, rather than the 16,384 (4d) of a GELU FFN. Why roughly 8d/3?",
+    "options": [
+      {
+        "text": "SwiGLU needs fewer dimensions because SiLU is a more expressive activation",
+        "explanation": "The size choice is about matching parameter count, not expressiveness of the activation."
+      },
+      {
+        "text": "SwiGLU has three weight matrices instead of two, so shrinking the hidden size to about 2/3 of 4d keeps the parameter count roughly the same",
+        "explanation": "Correct. 3 × d × (8d/3) = 8d², equal to the 2 × d × 4d of a standard FFN. 11,008 is 8d/3 ≈ 10,923 rounded up to a multiple of 256."
+      },
+      {
+        "text": "11,008 is the vocabulary size divided by three",
+        "explanation": "The vocabulary is 32,000; 32,000 / 3 ≈ 10,667. The FFN size is derived from d, not V."
+      },
+      {
+        "text": "GPU memory limits forced the reduction",
+        "explanation": "The choice keeps the compute and parameter budget comparable with standard FFNs; it is not an emergency memory fix."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. GELU FFN: W_1 (d × 4d) + W_2 (4d × d) = 8d².\n2. SwiGLU: W_gate, W_up (d × h) and W_down (h × d) = 3dh.\n3. Set 3dh = 8d² → h = 8d/3 = 10,922.67 for d = 4,096.\n4. Round up to a multiple of 256 → 11,008.\n5. Check: 3 × 4,096 × 11,008 = 135,266,304 vs 8 × 4,096² = 134,217,728. Within 1%.",
+    "link": {
+      "title": "GLU Variants Improve Transformer (Shazeer)",
+      "url": "https://arxiv.org/abs/2002.05202"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What property makes **RoPE** attractive compared with a learned absolute position table?",
+    "options": [
+      {
+        "text": "After rotating q and k by angles proportional to their positions, their dot product depends only on the relative offset between the two tokens",
+        "explanation": "Correct. Rotating q by angle mθ and k by nθ gives a dot product that depends on (m − n)θ, so attention naturally sees relative distance."
+      },
+      {
+        "text": "It adds a large table of trainable position vectors that capture more information",
+        "explanation": "RoPE adds no parameters at all; the rotations are fixed functions of position."
+      },
+      {
+        "text": "It removes the need for a causal mask",
+        "explanation": "Position encoding and masking are independent. Decoders with RoPE still use a causal mask."
+      },
+      {
+        "text": "It guarantees perfect performance at any context length",
+        "explanation": "Models with RoPE still degrade beyond their training length without extra techniques such as frequency rescaling and further training."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. RoPE treats each pair of dimensions as a 2-D vector and rotates it by an angle `pos × θ_i`.\n2. For two 2-D vectors rotated by α and β, their dot product equals the unrotated dot product rotated by (α − β).\n3. So `q_m · k_n` depends on m − n only: relative position for free.\n4. No table means no hard maximum index, though quality still drops beyond trained lengths.",
+    "link": {
+      "title": "RoFormer: Rotary Position Embedding (Su et al.)",
+      "url": "https://arxiv.org/abs/2104.09864"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Llama 2 7B's 6,738,415,616 parameters are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "The two vocabulary matrices (input embedding and output layer) hold 262,144,000 parameters together, because they are untied",
+        "explanation": "Correct. 2 × 32,000 × 4,096."
+      },
+      {
+        "text": "The FFNs hold about two-thirds of all parameters",
+        "explanation": "Correct. 32 × 135,266,304 = 4,328,521,728, about 64% of 6.74B."
+      },
+      {
+        "text": "RoPE contributes 32 × 4,096 position parameters",
+        "explanation": "RoPE has no learned parameters; the rotation angles are fixed."
+      },
+      {
+        "text": "Each RMSNorm has 4,096 parameters (a scale only, no shift)",
+        "explanation": "Correct. RMSNorm has γ of size d and no β."
+      },
+      {
+        "text": "Biases account for several million parameters",
+        "explanation": "Llama 2 uses no biases in its linear layers."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "```\nembed     32,000 x 4,096   131,072,000\nper block                   202,383,360\n  attn  4 x 4,096^2          67,108,864\n  ffn   3 x 4,096 x 11,008  135,266,304\n  norms 2 x 4,096                 8,192\n32 blocks                 6,476,267,520\nfinal norm                        4,096\nlm head                     131,072,000\n```\n\nSum = 6,738,415,616. FFN share = 4.33B / 6.74B ≈ 64%. No biases, no RoPE parameters.",
+    "link": {
+      "title": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+      "url": "https://arxiv.org/abs/2307.09288"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Using the 6N rule, roughly how many FLOPs does it take to train a 1-billion-parameter model on 20 billion tokens?",
+    "options": [
+      {
+        "text": "4 × 10¹⁹",
+        "explanation": "That is 2N × D, the forward-pass cost only. Training adds a backward pass costing about twice the forward."
+      },
+      {
+        "text": "1.2 × 10²⁰",
+        "explanation": "Correct. 6 × 10⁹ × 2 × 10¹⁰ = 1.2 × 10²⁰ FLOPs."
+      },
+      {
+        "text": "1.2 × 10¹¹",
+        "explanation": "Forgot to multiply by the number of tokens; 6N is per token."
+      },
+      {
+        "text": "2 × 10¹⁹",
+        "explanation": "That is N × D with no factor for multiply-adds or the backward pass."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Forward pass ≈ 2N FLOPs per token (one multiply + one add per weight).\n2. Backward pass ≈ 4N (gradients with respect to activations and weights).\n3. Total ≈ 6N per token.\n4. 6 × 1×10⁹ × 2×10¹⁰ = 12 × 10¹⁹ = 1.2 × 10²⁰.\n5. At a sustained 10¹⁴ FLOP/s (100 TFLOP/s) that is 1.2 × 10⁶ s, about two weeks on one accelerator. The attention-score term is ignored, which is fine when context is small relative to 12d (roughly).",
+    "link": {
+      "title": "Scaling Laws for Neural Language Models (Kaplan et al.)",
+      "url": "https://arxiv.org/abs/2001.08361"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "GPT-2 uses a learned absolute position table with 1,024 rows. A developer feeds it 1,500 tokens in one pass. What happens?",
+    "options": [
+      {
+        "text": "It works but quality degrades gracefully, like RoPE models",
+        "explanation": "With a learned table there is no row 1,024 or beyond to look up, so it cannot even produce position vectors for those tokens."
+      },
+      {
+        "text": "The model automatically interpolates new positions",
+        "explanation": "Interpolation can be added deliberately, with fine-tuning, but nothing happens automatically."
+      },
+      {
+        "text": "Positions beyond 1,023 have no embedding row, so the lookup fails (typically an index error); inputs must be truncated or windowed",
+        "explanation": "Correct. A learned table is a fixed-size array; GPT-2 simply cannot represent position 1,024 or later."
+      },
+      {
+        "text": "Attention wraps positions around modulo 1,024 with no ill effect",
+        "explanation": "No wrapping is built in, and if you forced it, tokens 1,024 apart would look identical in position, confusing the model."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Position vectors come from `P[pos]` for `pos` in 0..1,023.\n2. Token 1,025 needs `P[1024]`, which does not exist.\n3. Libraries raise an index error or refuse sequences above `n_positions`.\n4. Workarounds: truncate, use a sliding window, or extend the table and fine-tune. Schemes such as RoPE and ALiBi have no table, so the failure is softer (quality drops) rather than a hard error.",
+    "link": {
+      "title": "Transformer (deep learning architecture) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You reproduce the original post-norm transformer with 48 layers and train with a high learning rate from step 0. The loss explodes within a few hundred steps. Which change most directly addresses this?",
+    "options": [
+      {
+        "text": "Switch to pre-norm (`x + f(Norm(x))`), or keep post-norm but add a learning-rate warm-up",
+        "explanation": "Correct. Xiong et al. showed post-norm has large gradients near the output at initialisation, which needs warm-up; pre-norm removes that problem."
+      },
+      {
+        "text": "Increase the vocabulary size",
+        "explanation": "Vocabulary affects sequence length and embedding size, not the gradient instability of post-norm at depth."
+      },
+      {
+        "text": "Remove the residual connections",
+        "explanation": "That would make the network much harder to train, not easier."
+      },
+      {
+        "text": "Use a larger √d_k scaling factor",
+        "explanation": "Attention scaling controls softmax saturation; it does not fix the depth-related gradient issue of post-norm."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In post-norm, every residual sum passes through a normalisation, so the identity path is broken at each layer.\n2. At initialisation, gradients for the parameters near the output are large; a high learning rate makes updates blow up.\n3. The original recipe hid this with warm-up.\n4. Pre-norm keeps a clean residual path, giving well-behaved gradients at any depth, which is why GPT-2 onwards adopted it.",
+    "link": {
+      "title": "On Layer Normalization in the Transformer Architecture (Xiong et al.)",
+      "url": "https://arxiv.org/abs/2002.04745"
+    }
+  },
+  {
+    "id": "llm-transformer-architecture-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You tie Llama 2 7B's input embedding and output layer (keeping everything else the same). Which consequences follow? Select all that apply.",
+    "options": [
+      {
+        "text": "The parameter count drops by 131,072,000 to 6,607,343,616",
+        "explanation": "Correct. One 32,000 × 4,096 matrix disappears."
+      },
+      {
+        "text": "The forward pass needs fewer FLOPs per token",
+        "explanation": "The output projection is still computed; it just reuses the embedding weights. FLOPs are unchanged."
+      },
+      {
+        "text": "The same matrix now receives gradients both from how tokens are read and how they are predicted",
+        "explanation": "Correct. Each row gets updates from input lookups and from the output softmax."
+      },
+      {
+        "text": "Weight memory in 16-bit precision falls by about 262 MB",
+        "explanation": "Correct. 131,072,000 × 2 bytes = 262,144,000 bytes ≈ 262 MB (250 MiB)."
+      },
+      {
+        "text": "The model can no longer use a causal mask",
+        "explanation": "Tying weights has nothing to do with attention masking."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Removed parameters: 32,000 × 4,096 = 131,072,000.\n2. New total: 6,738,415,616 − 131,072,000 = 6,607,343,616.\n3. Memory saving at 2 bytes each: 262,144,000 bytes.\n4. FLOPs: the d → V projection still runs every token (≈ 2 × 131M FLOPs), so compute is unchanged.\n5. GPT-2 ties; Llama 2 does not. At 7B scale the saving is under 2%, so untying costs little and gives the output layer freedom.",
+    "link": {
+      "title": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+      "url": "https://arxiv.org/abs/2307.09288"
+    }
+  }
+]

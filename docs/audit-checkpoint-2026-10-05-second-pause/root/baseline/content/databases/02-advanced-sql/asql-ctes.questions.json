@@ -1,0 +1,348 @@
+[
+  {
+    "id": "asql-ctes-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the last value this query returns?\n\n```sql\nWITH RECURSIVE n(i) AS (\n  SELECT 1\n  UNION ALL\n  SELECT i * 2 FROM n\n  WHERE i < 20\n)\nSELECT i FROM n;\n```",
+    "options": [
+      {
+        "text": "16",
+        "explanation": "16 is the last value below 20, but the filter tests the *input* row. When the pass sees 16, `16 < 20` is true, so it still produces 32."
+      },
+      {
+        "text": "20",
+        "explanation": "The values are powers of two, so 20 is never produced. The `WHERE` is a stop condition on the previous row, not a cap on output values."
+      },
+      {
+        "text": "It never terminates",
+        "explanation": "It does: once a pass reads 32, the `WHERE` filters it out and the pass adds no rows, which ends the recursion."
+      },
+      {
+        "text": "32",
+        "explanation": "Correct. The rows are 1, 2, 4, 8, 16, 32. The pass that reads 32 produces nothing because `32 < 20` is false."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the working table pass by pass:\n\n| pass | reads | i < 20? | makes |\n|---|---|---|---|\n| anchor | - | - | 1 |\n| 1 | 1 | yes | 2 |\n| 2 | 2 | yes | 4 |\n| 3 | 4 | yes | 8 |\n| 4 | 8 | yes | 16 |\n| 5 | 16 | yes | 32 |\n| 6 | 32 | no | nothing |\n\nThe `WHERE` filters the row being read, so one value past the limit gets through. To cap the output instead, filter on the new value: `WHERE i * 2 < 20`.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What ends the loop that evaluates a recursive CTE?",
+    "options": [
+      {
+        "text": "A pass of the recursive term that produces no new rows",
+        "explanation": "Correct. Each pass reads only the previous pass's output; when a pass adds nothing, the working table is empty and evaluation stops."
+      },
+      {
+        "text": "Reaching a row limit set by the database, typically 1,000 passes",
+        "explanation": "Postgres has no such default limit; a runaway recursive CTE keeps going until it runs out of resources or hits `statement_timeout`."
+      },
+      {
+        "text": "The recursive term reading every row of the base table once",
+        "explanation": "Nothing tracks which base rows have been read. The same base row can be joined again in later passes, which is how cycles cause infinite loops."
+      },
+      {
+        "text": "The anchor query returning NULL",
+        "explanation": "The anchor runs once at the start. Its result has nothing to do with stopping."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The engine keeps a working table:\n\n1. Start with the anchor rows.\n2. Run the recursive term with the CTE name meaning \"the previous pass's rows\".\n3. Append the new rows to the result; they become the next working table.\n4. If the pass produced no rows, stop.\n\nSo termination is entirely your responsibility: a `WHERE` that eventually filters everything out, a join that runs out of children, or a cycle guard.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need \"customers whose total spend is above the average customer's spend\". Why is a CTE a better fit than a derived table here?\n\n```sql\nWITH spend AS (\n  SELECT customer_id,\n         SUM(total) AS spent\n  FROM orders\n  GROUP BY customer_id)\nSELECT customer_id FROM spend\nWHERE spent > (SELECT AVG(spent)\n               FROM spend);\n```",
+    "options": [
+      {
+        "text": "A CTE is always faster than a derived table",
+        "explanation": "Neither is inherently faster. In Postgres 12+ a once-referenced CTE is inlined just like a derived table."
+      },
+      {
+        "text": "Derived tables can't contain GROUP BY",
+        "explanation": "They can; the aggregation could be written as a derived table. It would just have to be written twice."
+      },
+      {
+        "text": "The CTE is defined once and referenced twice, so the per-customer aggregation isn't duplicated",
+        "explanation": "Correct. `spend` is used in the FROM and in the scalar subquery. With derived tables you'd copy the same GROUP BY into both places."
+      },
+      {
+        "text": "CTEs are the only way to compare an aggregate with another aggregate",
+        "explanation": "A nested derived table or a window function (`AVG(spent) OVER ()`) can do it too."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The question needs per-customer totals twice: once to list them and once to average them.\n2. A CTE names that result, so both uses refer to `spend`.\n3. Spend per customer: Ana 240, Ben 135, Cat 230, Dev 45. Average = 650 / 4 = 162.5.\n4. Ana and Cat are above 162.5.\n5. Without the CTE you'd repeat the subquery, and two copies of the same logic tend to drift apart when someone edits one.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the `staff` tree (Mia manages Raj and Sam; Raj manages Tom and Uma; Tom manages Vic), how many rows does this return?\n\n```sql\nWITH RECURSIVE sub AS (\n  SELECT id, name FROM staff\n  WHERE id = 2   -- Raj\n  UNION ALL\n  SELECT s.id, s.name\n  FROM staff s\n  JOIN sub ON s.manager_id = sub.id\n)\nSELECT name FROM sub;\n```",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That counts Raj's reports (Tom, Uma, Vic) but forgets the anchor row, Raj himself, which is part of the result."
+      },
+      {
+        "text": "2",
+        "explanation": "Only Raj's direct reports are Tom and Uma, but recursion continues down to Vic, and the anchor row Raj is included."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Raj (anchor), then Tom and Uma (pass 1), then Vic (pass 2). Pass 3 finds no one reporting to Vic."
+      },
+      {
+        "text": "6",
+        "explanation": "Six is the whole company. The anchor starts at Raj, so Mia and Sam are never reached."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Anchor: `id = 2` gives {Raj}.\n2. Pass 1: staff whose manager is in {Raj}: {Tom, Uma}.\n3. Pass 2: staff whose manager is in {Tom, Uma}: {Vic}.\n4. Pass 3: staff whose manager is Vic: none, so stop.\n5. Result: Raj, Tom, Uma, Vic = **4 rows**.\n\nTo count only reports, subtract the anchor: `SELECT COUNT(*) - 1 FROM sub` gives 3.",
+    "link": {
+      "title": "Hierarchical and recursive queries in SQL — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL"
+    }
+  },
+  {
+    "id": "asql-ctes-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Postgres 11, this query on a 100-million-row table takes minutes, even though `orders.id` is the primary key. After upgrading to Postgres 16 it takes milliseconds. Why?\n\n```sql\nWITH o AS (SELECT * FROM orders)\nSELECT * FROM o WHERE id = 104;\n```",
+    "options": [
+      {
+        "text": "Postgres 16 caches CTE results between queries",
+        "explanation": "Postgres has no cross-query result cache for CTEs. Each execution is planned and run fresh."
+      },
+      {
+        "text": "Postgres 11 always materialised CTEs, so the filter couldn't be pushed into the scan; 12+ inlines a once-referenced CTE, so the primary-key index is used",
+        "explanation": "Correct. Before 12 every CTE was an optimisation fence: the whole table was scanned into the CTE, then filtered. Since 12 it is folded into the outer query."
+      },
+      {
+        "text": "Postgres 16 automatically creates an index on CTE output",
+        "explanation": "CTE results are never indexed. The speed-up comes from not building the CTE at all."
+      },
+      {
+        "text": "Postgres 11 doesn't support indexes inside CTEs",
+        "explanation": "Indexes could be used inside the CTE in 11, but the `id = 104` filter was outside it, so it couldn't drive an index scan."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In Postgres 11 and earlier, `WITH o AS (...)` always materialises: it runs `SELECT * FROM orders` to completion (100M rows) into a temporary store.\n2. Only then is `WHERE id = 104` applied, to that store, with no index.\n3. Postgres 12 changed the default: a side-effect-free, non-recursive CTE referenced once is inlined, becoming `SELECT * FROM orders WHERE id = 104`.\n4. That uses the primary key: an index lookup of a few pages.\n5. If you relied on the old fence behaviour, write `WITH o AS MATERIALIZED (...)`.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Someone sets Mia's `manager_id` to Vic, creating a cycle. Which changes would make the org-chart query terminate?",
+    "options": [
+      {
+        "text": "Carry a path of visited ids and skip any row whose id is already in the path",
+        "explanation": "Correct. A row is never revisited, so the recursion runs out of new rows."
+      },
+      {
+        "text": "In Postgres 14+, add `CYCLE id SET is_cycle USING path`",
+        "explanation": "Correct. Postgres tracks the path for you, marks the first repeated row with `is_cycle = true`, and stops following it."
+      },
+      {
+        "text": "Add a depth column and a guard such as `WHERE c.depth < 20`",
+        "explanation": "Correct. The loop is cut at depth 20, though you get repeated rows up to that point; it is a safety net rather than a proper fix."
+      },
+      {
+        "text": "Switch `UNION ALL` to `UNION` while still carrying a depth column",
+        "explanation": "Each lap round the cycle has a new depth, so the rows are never exact duplicates and `UNION` removes nothing. It still runs forever."
+      },
+      {
+        "text": "Add `ORDER BY name` to the final SELECT",
+        "explanation": "The outer ORDER BY only runs after the CTE finishes, which it never does."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think about whether each change eventually yields a pass with no new rows.\n\n1. Path check: Mia's id is in the path when the walk returns to her, so that row is filtered. The walk ends.\n2. `CYCLE`: built-in path tracking; the repeated Mia row is emitted once with `is_cycle = true` and not followed.\n3. Depth cap: after 20 levels the `WHERE` filters everything. It terminates, with duplicates.\n4. `UNION` with depth: `(1, 'Mia', 0)` and `(1, 'Mia', 4)` differ, so nothing is deduplicated. (Without the depth column, `UNION` *would* stop it.)\n5. `ORDER BY` outside: irrelevant to the loop.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This query works in SQLite but fails in PostgreSQL with `relation \"n\" does not exist`. What is the fix?\n\n```sql\nWITH n(i) AS (\n  SELECT 1\n  UNION ALL\n  SELECT i + 1 FROM n WHERE i < 3\n)\nSELECT i FROM n;\n```",
+    "options": [
+      {
+        "text": "Write `WITH RECURSIVE n(i) AS (...)`",
+        "explanation": "Correct. Postgres follows the SQL standard: a CTE may only reference itself if the WITH clause says RECURSIVE. SQLite doesn't enforce this."
+      },
+      {
+        "text": "Add a column alias: `SELECT 1 AS i`",
+        "explanation": "The column list `n(i)` already names the column. The problem is that the CTE refers to itself."
+      },
+      {
+        "text": "Replace `UNION ALL` with `UNION`",
+        "explanation": "`UNION` changes deduplication, not whether self-reference is allowed."
+      },
+      {
+        "text": "Move the termination condition into the anchor",
+        "explanation": "The anchor runs once and can't reference `n` either. The `WHERE` belongs in the recursive term."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Without `RECURSIVE`, each CTE can only see CTEs defined *before* it, never itself.\n2. So `FROM n` inside `n` is an unknown relation in Postgres, which hints: \"Use WITH RECURSIVE\".\n3. SQLite skips this rule for compatibility with SQL Server and Oracle, which have no `RECURSIVE` keyword.\n4. `RECURSIVE` applies to the whole WITH clause; once present, any CTE in it may be recursive. Writing it always makes the SQL portable.",
+    "link": {
+      "title": "The WITH clause — SQLite docs",
+      "url": "https://www.sqlite.org/lang_with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How many rows does this return, and what is the last value of `a`?\n\n```sql\nWITH RECURSIVE f(a, b) AS (\n  SELECT 0, 1\n  UNION ALL\n  SELECT b, a + b FROM f\n  WHERE b < 10\n)\nSELECT a FROM f;\n```",
+    "options": [
+      {
+        "text": "6 rows, last a = 5",
+        "explanation": "That stops one pass too early. The row (5, 8) has b = 8 < 10, so it still produces (8, 13)."
+      },
+      {
+        "text": "8 rows, last a = 13",
+        "explanation": "13 only ever appears as b, in the final row (8, 13). That row's b fails the filter, so no row with a = 13 is created."
+      },
+      {
+        "text": "7 rows, last a = 13",
+        "explanation": "The seventh row is (8, 13): a is 8. Keep track of which column each value lands in."
+      },
+      {
+        "text": "7 rows, last a = 8",
+        "explanation": "Correct. Rows are (0,1), (1,1), (1,2), (2,3), (3,5), (5,8), (8,13). The pass reading (8,13) stops because 13 < 10 is false."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Each pass reads one row (a, b) and, if b < 10, makes (b, a + b):\n\n| pass | reads | makes |\n|---|---|---|\n| anchor | - | (0, 1) |\n| 1 | (0, 1) | (1, 1) |\n| 2 | (1, 1) | (1, 2) |\n| 3 | (1, 2) | (2, 3) |\n| 4 | (2, 3) | (3, 5) |\n| 5 | (3, 5) | (5, 8) |\n| 6 | (5, 8) | (8, 13) |\n| 7 | (8, 13) | nothing |\n\n`a` takes the values 0, 1, 1, 2, 3, 5, 8: **7 rows**, ending at 8. The CTE carries two columns because each pass only sees the previous row, so any state you need must travel in the row.",
+    "link": {
+      "title": "Hierarchical and recursive queries in SQL — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL"
+    }
+  },
+  {
+    "id": "asql-ctes-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In PostgreSQL, `staff.name` is `varchar(10)`. This fails with `column 4 has type character varying(10) in non-recursive term but type character varying overall`. What is the right fix?\n\n```sql\nWITH RECURSIVE chain AS (\n  SELECT id, name, 0 AS depth,\n         name AS path\n  FROM staff\n  WHERE manager_id IS NULL\n  UNION ALL\n  SELECT s.id, s.name, c.depth + 1,\n         c.path || ' > ' || s.name\n  FROM staff s\n  JOIN chain c\n    ON s.manager_id = c.id\n)\nSELECT path FROM chain;\n```",
+    "options": [
+      {
+        "text": "Change the column type of `staff.name` to `text`",
+        "explanation": "That works but changes the schema to fix one query. The error is about the CTE's own column types, which you can fix locally."
+      },
+      {
+        "text": "Use `UNION` instead of `UNION ALL`",
+        "explanation": "Deduplication doesn't change column types; the mismatch remains."
+      },
+      {
+        "text": "Cast in the anchor: `name::text AS path`",
+        "explanation": "Correct. The concatenation in the recursive term produces unconstrained text-like output, so the anchor must declare the same type. Casting the anchor to `text` makes them match."
+      },
+      {
+        "text": "Add `LIMIT 100` to the recursive term",
+        "explanation": "The query fails during planning, before any rows are produced. A limit can't fix a type error."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The CTE's column types come from the anchor. Here `path` is `varchar(10)`.\n2. In the recursive term, `c.path || ' > ' || s.name` yields `varchar` with no length limit, which doesn't match `varchar(10)`.\n3. Postgres requires the two terms to agree exactly, and its hint says: cast the output of the non-recursive term.\n4. `name::text AS path` (or `CAST(name AS varchar(200))`) declares a type wide enough for the growing path.\n5. SQLite has dynamic typing and performs no such check, which is one reason recursive SQL copied from SQLite can fail on Postgres.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`order_items` has 13 rows, 2 of them for order 101. In PostgreSQL, what does the final SELECT return?\n\n```sql\nWITH d AS (\n  DELETE FROM order_items\n  WHERE order_id = 101\n  RETURNING order_id\n)\nSELECT COUNT(*) FROM order_items;\n```",
+    "options": [
+      {
+        "text": "13, because the main query sees the snapshot taken before the DELETE",
+        "explanation": "Correct. All parts of the statement see the same snapshot. The DELETE happens, but the main query's `COUNT(*)` reads the table as it was."
+      },
+      {
+        "text": "11, because the DELETE runs first",
+        "explanation": "The sub-statements in a WITH run against the same snapshot, so the main query doesn't see the CTE's deletion."
+      },
+      {
+        "text": "0, because the DELETE's RETURNING output replaces the table",
+        "explanation": "RETURNING feeds rows to anything that references `d`; it doesn't alter what `order_items` means elsewhere."
+      },
+      {
+        "text": "Nothing, because the DELETE is skipped when `d` isn't referenced",
+        "explanation": "Postgres always runs data-modifying CTEs to completion, whether or not the main query reads them."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Postgres runs every statement in a WITH, and the main query, against **one snapshot** taken at the start.\n2. The DELETE removes 2 rows, but that change is invisible to other parts of the same statement.\n3. So `SELECT COUNT(*) FROM order_items` returns **13**.\n4. A follow-up query afterwards returns 11.\n5. To use the deleted rows, read them from the CTE: `SELECT COUNT(*) FROM d` gives 2. Data-modifying CTEs also run even if unreferenced, which surprises people who expect lazy evaluation.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In Postgres 12+, when is it reasonable to add `AS MATERIALIZED` to a CTE?",
+    "options": [
+      {
+        "text": "The CTE is referenced once and the outer query filters it on an indexed primary key",
+        "explanation": "That's exactly the case where inlining wins: the filter is pushed down and the index is used. Materialising would scan everything first."
+      },
+      {
+        "text": "The CTE is an expensive aggregation referenced three times in the outer query",
+        "explanation": "Reasonable, though Postgres already materialises a CTE referenced more than once by default. Writing it documents the intent."
+      },
+      {
+        "text": "The CTE calls a volatile function such as `random()` and every reference must see the same values",
+        "explanation": "Correct. Inlining could evaluate the function separately at each place; materialising computes the rows once so all references agree."
+      },
+      {
+        "text": "The planner keeps choosing a bad plan by pushing a filter into the CTE, and you want to fence it off",
+        "explanation": "Correct. MATERIALIZED restores the pre-12 fence on purpose, so the CTE is planned independently of the outer query."
+      },
+      {
+        "text": "You want the CTE's result cached for the next query in the session",
+        "explanation": "Materialisation lasts only for one statement. Use a temporary table or materialized view to keep results."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Weigh what materialising gives and costs:\n\n- Gives: compute once, reuse many times; a stable result for volatile expressions; a planning fence.\n- Costs: no filter push-down, no index use from outer predicates, possibly a large temporary result.\n\n1. Single reference, selective filter: inlining is far better.\n2. Many references to an expensive result: compute once. Fine.\n3. `random()`: one evaluation keeps references consistent. Postgres actually won't inline a CTE containing volatile functions, but saying MATERIALIZED makes it explicit.\n4. Fence against a bad plan: the classic deliberate use.\n5. Nothing survives past the statement.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-with.html"
+    }
+  }
+]

@@ -1,0 +1,340 @@
+[
+  {
+    "id": "mls-serving-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bank wants a model to decide, during card authorisation, whether a transaction is fraudulent. The amount and merchant are only known at that moment. Which serving mode fits?",
+    "options": [
+      {
+        "text": "Nightly batch prediction stored in a table",
+        "explanation": "Incorrect. Batch scoring cannot use inputs that only exist at request time, such as this transaction's amount and merchant."
+      },
+      {
+        "text": "Online prediction per request, with features fetched at request time",
+        "explanation": "Correct. The decision depends on request-time inputs and must return within the authorisation window, which is the definition of online serving."
+      },
+      {
+        "text": "On-device prediction in the customer's banking app",
+        "explanation": "Incorrect. Authorisation happens on the bank's and card network's servers, not on the customer's phone, and the model must not be in an attacker's hands."
+      },
+      {
+        "text": "Weekly retraining",
+        "explanation": "Incorrect. Retraining frequency is a separate question from how predictions are served."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask two questions:\n\n1. **Do the key inputs exist before the request?** No: the transaction amount and merchant arrive with the request.\n2. **How fast must the answer be?** Within the authorisation latency budget, tens of milliseconds.\n\nBoth point to online serving. Batch could still precompute slow-moving features (a customer's typical spend) that the online model fetches.",
+    "link": {
+      "title": "Overview of getting inferences — Vertex AI",
+      "url": "https://cloud.google.com/vertex-ai/docs/predictions/overview"
+    }
+  },
+  {
+    "id": "mls-serving-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A shop precomputes product recommendations for every user nightly. What happens for a user who signed up 20 minutes ago?",
+    "options": [
+      {
+        "text": "They get personalised recommendations immediately",
+        "explanation": "Incorrect. The nightly job has not run since they signed up, so there is no stored prediction for them."
+      },
+      {
+        "text": "The batch job automatically reruns for that user",
+        "explanation": "Incorrect. Batch jobs run on a schedule; nothing triggers a rerun unless you build an online path."
+      },
+      {
+        "text": "There is no precomputed prediction, so the system needs a fallback such as popular items or an online model",
+        "explanation": "Correct. Batch prediction cannot cover entities that appear between runs. A cold-start fallback is a standard part of batch designs."
+      },
+      {
+        "text": "The lookup throws an error and the page fails",
+        "explanation": "Incorrect. That would be a bug, not the inherent behaviour. Well-designed systems return a fallback on a missing key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Batch scoring writes `user_id → recs` once a night.\n2. A new user has no row until tonight's run.\n3. So the application must handle a missing key: show popular or trending items, use a simple online model on whatever the user has done so far, or score on demand.\n\nThis is the classic weakness of batch serving: staleness and new entities.",
+    "link": {
+      "title": "Overview of getting inferences — Vertex AI",
+      "url": "https://cloud.google.com/vertex-ai/docs/predictions/overview"
+    }
+  },
+  {
+    "id": "mls-serving-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Weights stored as fp32 take 400 MB. Roughly how large are they after int8 quantisation?",
+    "options": [
+      {
+        "text": "200 MB",
+        "explanation": "Incorrect. That is the fp16/bf16 size (2 bytes per weight), not int8."
+      },
+      {
+        "text": "50 MB",
+        "explanation": "Incorrect. That would be 4 bits per weight (int4), an 8× reduction."
+      },
+      {
+        "text": "400 MB, because quantisation only speeds up compute",
+        "explanation": "Incorrect. Quantisation changes how weights are stored; the memory saving is one of its main benefits."
+      },
+      {
+        "text": "100 MB",
+        "explanation": "Correct. fp32 is 4 bytes per weight and int8 is 1, so the weights shrink about 4×: 400 / 4 = 100 MB (plus a little for scale factors)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nfp32 = 4 bytes/weight\nint8 = 1 byte/weight\n400 MB / 4 = 100 MB\n```\n\nA few extra bytes store per-tensor or per-channel scale factors. Re-evaluate accuracy afterwards, including on rare classes and slices.",
+    "link": {
+      "title": "Quantize ONNX models — ONNX Runtime",
+      "url": "https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html"
+    }
+  },
+  {
+    "id": "mls-serving-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A model's GPU latency is about `8 ms + 0.25 ms × b` for batch size b. What throughput (requests per second) does one GPU achieve at **b = 1** and at **b = 32**?",
+    "options": [
+      {
+        "text": "About 121 and about 2,000",
+        "explanation": "Correct. b = 1: 8.25 ms → 1/0.00825 ≈ 121/s. b = 32: 16 ms → 32/0.016 = 2,000/s."
+      },
+      {
+        "text": "About 121 and about 3,900",
+        "explanation": "Incorrect. 3,900 would be 32 × 121, assuming a batch of 32 takes the same time as a batch of 1. The per-item term still adds 0.25 ms each."
+      },
+      {
+        "text": "About 125 and about 125",
+        "explanation": "Incorrect. This ignores batching entirely; the fixed 8 ms is shared by the whole batch, so throughput rises."
+      },
+      {
+        "text": "About 4,000 and about 2,000",
+        "explanation": "Incorrect. 4,000 uses only the per-item cost (1/0.25 ms) and ignores the fixed 8 ms per call."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nb=1:  8 + 0.25    = 8.25 ms\n      1 / 0.00825 ≈ 121 req/s\nb=32: 8 + 0.25×32 = 16 ms\n      32 / 0.016  = 2,000 req/s\n```\n\nLatency doubles (8.25 to 16 ms) but throughput rises about 16×, because the fixed 8 ms is paid once per batch instead of once per request.",
+    "link": {
+      "title": "Dynamic batching — NVIDIA Triton docs",
+      "url": "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/batcher.html"
+    }
+  },
+  {
+    "id": "mls-serving-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace the lesson's `MicroBatcher` with `max_n=4` and a long `wait`. Nine `predict` calls arrive at the same instant. With what batch sizes is `model` called?",
+    "options": [
+      {
+        "text": "9",
+        "explanation": "Incorrect. The inner loop stops at `len(batch) < self.max_n`, so a batch never exceeds 4."
+      },
+      {
+        "text": "4, 4, 1",
+        "explanation": "Correct. The loop fills a batch until it has `max_n = 4` items: 4, then 4 more, then the 1 left over is sent when the wait expires with no more arrivals."
+      },
+      {
+        "text": "1 nine times",
+        "explanation": "Incorrect. That would be serving without batching. The loop keeps pulling queued items until the batch is full or time runs out."
+      },
+      {
+        "text": "3, 3, 3",
+        "explanation": "Incorrect. The batcher fills greedily up to `max_n`; it does not try to balance batch sizes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `run()` takes item 1, sets a deadline, and pulls items 2, 3, 4. `len(batch) == 4`, so the inner loop ends. Call model with 4.\n2. Next outer iteration: takes items 5 to 8. Call model with 4.\n3. Takes item 9. Queue is empty, so `_get` waits until the deadline, times out and returns `None`. Break. Call model with 1.\n\nSizes: `[4, 4, 1]`. Every caller's future is resolved with its own result via `zip(batch, ys)`.",
+    "link": {
+      "title": "Clipper: low-latency prediction serving",
+      "url": "https://arxiv.org/abs/1612.03079"
+    }
+  },
+  {
+    "id": "mls-serving-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service receives 3,000 requests/s. Dynamic batching uses a 4 ms max wait, and a full batch takes 20 ms on the GPU. Using Little's law with the worst-case latency, about how many requests are in flight?",
+    "options": [
+      {
+        "text": "12",
+        "explanation": "Incorrect. This uses only the 4 ms wait: 3,000 × 0.004 = 12. Requests also spend 20 ms being processed."
+      },
+      {
+        "text": "60",
+        "explanation": "Incorrect. This uses only the 20 ms compute time and ignores the queueing delay."
+      },
+      {
+        "text": "72",
+        "explanation": "Correct. Worst-case latency ≈ 4 + 20 = 24 ms. Little's law: L = λW = 3,000 × 0.024 = 72."
+      },
+      {
+        "text": "3,000",
+        "explanation": "Incorrect. That is the arrival rate per second, not the number concurrently in the system."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nW = wait + batch latency\n  = 4 ms + 20 ms = 24 ms\nL = λ × W\n  = 3,000/s × 0.024 s\n  = 72 requests\n```\n\nThat tells you how many concurrent connections, queue slots and in-flight futures the server must handle. It is an upper estimate, since not every request waits the full 4 ms.",
+    "link": {
+      "title": "Little's law — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+    }
+  },
+  {
+    "id": "mls-serving-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An online ranking service misses its 100 ms p99 budget. The model takes 15 ms. Which changes target the most likely ML-specific bottlenecks? Select all that apply.",
+    "options": [
+      {
+        "text": "Fetch the 12 feature groups in parallel rather than one after another",
+        "explanation": "Correct. Sequential feature lookups add their latencies; in parallel, the slowest one sets the time. Feature fetches often dominate ML budgets."
+      },
+      {
+        "text": "Drop features whose accuracy contribution is tiny but whose lookup is slow",
+        "explanation": "Correct. Every feature has a latency cost; ablation tells you which ones earn their place."
+      },
+      {
+        "text": "Move CPU-heavy preprocessing (tokenisation, decoding) off the request thread or precompute it",
+        "explanation": "Correct. Preprocessing is often CPU-bound and can exceed model time."
+      },
+      {
+        "text": "Double the model's size to make predictions more accurate",
+        "explanation": "Incorrect. A bigger model makes latency worse, not better, and the model is not the bottleneck here."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Model is 15 ms of a 100 ms budget, so 85 ms is elsewhere.\n2. Usual suspects in ML serving: feature fetches (often sequential, often with a slow tail), preprocessing, and logging.\n3. Parallelise fetches: 12 × 6 ms sequential = 72 ms; in parallel, about the slowest single fetch.\n4. Drop low-value slow features, and move preprocessing off the critical path.\n5. A bigger model goes the wrong way.",
+    "link": {
+      "title": "Clipper: low-latency prediction serving",
+      "url": "https://arxiv.org/abs/1612.03079"
+    }
+  },
+  {
+    "id": "mls-serving-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A recommender must choose 10 items from 5 million per request within 50 ms. The best ranking model costs 0.05 ms per item. Why is a **retrieval → ranking cascade** used rather than ranking every item?",
+    "options": [
+      {
+        "text": "Ranking all items would take 250 seconds; cheap retrieval (e.g. embedding nearest-neighbour) narrows to ~1,000 candidates, which the ranker scores in about 50 ms",
+        "explanation": "Correct. 5e6 × 0.05 ms = 250,000 ms. Retrieval cuts the set to a size the expensive model can afford: 1,000 × 0.05 = 50 ms (in practice batched on accelerators and parallelised)."
+      },
+      {
+        "text": "Cascades improve accuracy because the ranker only sees easy items",
+        "explanation": "Incorrect. Cascades exist for cost, and can actually lose accuracy if retrieval misses good items."
+      },
+      {
+        "text": "The ranking model cannot run on more than 1,000 inputs",
+        "explanation": "Incorrect. There is no such inherent limit; the limit is the latency budget."
+      },
+      {
+        "text": "Retrieval is needed to remove duplicates only",
+        "explanation": "Incorrect. Deduplication may happen, but retrieval's main job is cutting millions of items to a manageable candidate set."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nrank all:  5e6 × 0.05 ms\n         = 250,000 ms = 250 s\nrank 1k:   1e3 × 0.05 ms\n         = 50 ms\n```\n\nSo a cheap first stage is mandatory. Item embeddings are precomputed in batch; at request time the user embedding is compared using approximate nearest-neighbour search in a few milliseconds. The trade-off: anything retrieval misses can never be ranked, so retrieval recall is a key metric.",
+    "link": {
+      "title": "Overview of getting inferences — Vertex AI",
+      "url": "https://cloud.google.com/vertex-ai/docs/predictions/overview"
+    }
+  },
+  {
+    "id": "mls-serving-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A new model version is rolled out to 10% of traffic. Error rate is 0% and p99 latency is fine. Which additional check is **most** important before going to 100%?",
+    "options": [
+      {
+        "text": "CPU utilisation on the serving hosts",
+        "explanation": "Incorrect. Useful for capacity, but it would not detect a model that returns nonsense quickly."
+      },
+      {
+        "text": "Whether the container image is smaller",
+        "explanation": "Incorrect. Image size affects deploy speed, not prediction quality."
+      },
+      {
+        "text": "The number of HTTP 200 responses",
+        "explanation": "Incorrect. A model returning 0.0 for everyone produces nothing but 200s."
+      },
+      {
+        "text": "Compare the new version's prediction distribution (and business metrics) against the old version on comparable traffic",
+        "explanation": "Correct. A model can be fast and error-free while predicting badly, for example a constant score from a broken feature. Output distributions catch this immediately; business metrics confirm it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ordinary health checks (errors, latency, CPU) prove the service runs.\n2. They do not prove predictions are sensible: ML fails silently.\n3. Compare score histograms between versions: mean, quantiles, share above the decision threshold. A sudden jump in the share flagged, or a collapse to one value, is a red flag.\n4. Then watch business metrics on the canary slice before full rollout.",
+    "link": {
+      "title": "Continuous Delivery for Machine Learning — martinfowler.com",
+      "url": "https://martinfowler.com/articles/cd4ml.html"
+    }
+  },
+  {
+    "id": "mls-serving-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about **dynamic batching** are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It increases throughput by amortising fixed per-call GPU costs across many requests",
+        "explanation": "Correct. Kernel launches and weight loads are paid once per batch rather than per request."
+      },
+      {
+        "text": "It adds up to the maximum queue delay to each request's latency",
+        "explanation": "Correct. A request may wait up to the configured delay for others to join its batch."
+      },
+      {
+        "text": "Under overload, it removes the need for load shedding",
+        "explanation": "Incorrect. Batching raises capacity but does not make it infinite. Beyond peak throughput the queue grows without bound unless you shed load."
+      },
+      {
+        "text": "At very low traffic, most batches will be of size 1 after waiting the full delay",
+        "explanation": "Correct. With few arrivals, nobody joins in time, so requests pay the delay without gaining a batch; some systems shrink the delay at low load."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Think of the two limits:\n\n- **Busy**: batches fill before the timeout. Latency ≈ batch time; throughput is high.\n- **Quiet**: batches rarely fill. Each request waits the full delay and runs alone, so latency rises with no throughput gain.\n- **Overloaded**: arrivals exceed max throughput. The queue grows and latency explodes; batching cannot fix this, only shedding or more capacity can.",
+    "link": {
+      "title": "Dynamic batching — NVIDIA Triton docs",
+      "url": "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/batcher.html"
+    }
+  },
+  {
+    "id": "mls-serving-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After int8 quantisation, a skin-lesion classifier's overall accuracy falls from 94.1% to 93.8%. What should you do before shipping?",
+    "options": [
+      {
+        "text": "Ship it; a 0.3-point drop is negligible",
+        "explanation": "Incorrect. The overall number can hide a much bigger drop on a rare but important class or a subgroup."
+      },
+      {
+        "text": "Evaluate per class and per slice (e.g. the rare malignant class, different skin tones) and compare recall where errors are costly",
+        "explanation": "Correct. Compression errors are not spread evenly. Check the slices where mistakes matter most before accepting the trade-off."
+      },
+      {
+        "text": "Re-quantise to int4 to win back speed",
+        "explanation": "Incorrect. Lower precision typically loses more accuracy, which is the opposite of what the concern calls for."
+      },
+      {
+        "text": "Retrain the full-precision model with more epochs",
+        "explanation": "Incorrect. That does not address whether the quantised model is safe to ship; the question is how the loss is distributed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Suppose malignant cases are 2% of 10,000 test images: 200 cases.\n2. The overall drop of 0.3 points is 30 more errors.\n3. If 20 of those 30 are malignant cases, malignant recall falls by 20/200 = 10 points, which is clinically serious.\n4. So break results down by class and subgroup, and set acceptance criteria on the critical ones. Quantisation-aware training or keeping sensitive layers at higher precision can recover accuracy.",
+    "link": {
+      "title": "Quantize ONNX models — ONNX Runtime",
+      "url": "https://onnxruntime.ai/docs/performance/model-optimizations/quantization.html"
+    }
+  }
+]

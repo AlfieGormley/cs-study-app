@@ -1,0 +1,348 @@
+[
+  {
+    "id": "app-p2p-webrtc-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the bencoding of the dictionary `{\"b\": 7, \"a\": \"xy\"}`?",
+    "options": [
+      {
+        "text": "`d1:a2:xy1:bi7ee`",
+        "explanation": "Correct. Sorted keys: `1:a` → `2:xy`, then `1:b` → `i7e`, wrapped in `d...e`."
+      },
+      {
+        "text": "`d1:bi7e1:a2:xye`",
+        "explanation": "Keys must be sorted, so `a` comes before `b`. Unsorted dictionaries would give different bytes, and so different info-hashes, for the same data."
+      },
+      {
+        "text": "`d1:a2:xy1:b7e`",
+        "explanation": "Integers need the `i...e` wrapper: 7 is `i7e`."
+      },
+      {
+        "text": "`{1:a=2:xy,1:b=i7e}`",
+        "explanation": "Bencoding has no braces or separators; a dictionary is `d`, alternating keys and values, then `e`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Sort keys: `a`, `b`.\n2. `a` → `1:a`; value \"xy\" → `2:xy`.\n3. `b` → `1:b`; value 7 → `i7e`.\n4. Wrap: `d` + `1:a2:xy` + `1:bi7e` + `e`.\n\nResult: `d1:a2:xy1:bi7ee`.",
+    "link": {
+      "title": "BEP 3: The BitTorrent Protocol Specification",
+      "url": "https://www.bittorrent.org/beps/bep_0003.html"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a 4-bit Kademlia ID space, which node is closest to key `1011`: `1000`, `0011` or `1110`?",
+    "options": [
+      {
+        "text": "`0011`, because it shares the last three bits",
+        "explanation": "XOR distance weights the **high** bits most. Differing in the top bit makes the distance at least 8."
+      },
+      {
+        "text": "`1110`",
+        "explanation": "1011 XOR 1110 = 0101 = 5, further than 1000's distance of 3."
+      },
+      {
+        "text": "They're all equally close",
+        "explanation": "XOR gives three different distances; exactly one node is at each distance from the key."
+      },
+      {
+        "text": "`1000`",
+        "explanation": "Correct. 1011 XOR 1000 = 0011 = 3, the smallest of 3, 8 and 5."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\n1011 ^ 1000 = 0011 = 3\n1011 ^ 0011 = 1000 = 8\n1011 ^ 1110 = 0101 = 5\n```\n\nThe closest is `1000`. Rule of thumb: longest shared prefix wins, because the first differing bit dominates the distance.",
+    "link": {
+      "title": "Kademlia — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Kademlia"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An Opus audio RTP stream sends one 20 ms frame per packet. By how much does the RTP timestamp increase per packet?",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "RTP timestamps are in media clock ticks, not milliseconds."
+      },
+      {
+        "text": "960",
+        "explanation": "Correct. Opus uses a 48,000 Hz RTP clock: 48,000 × 0.020 = 960."
+      },
+      {
+        "text": "1",
+        "explanation": "That's the sequence number, which increases by one per packet."
+      },
+      {
+        "text": "1,800",
+        "explanation": "That would be 20 ms at the 90 kHz video clock. Opus uses 48 kHz."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Opus RTP clock rate: 48,000 ticks per second (always, regardless of actual sample rate).\n2. 20 ms = 0.02 s.\n3. 48,000 × 0.02 = **960**.\n\nWith illustrative zero initial values, timestamps would be 0, 960, 1920... and sequences 0, 1, 2...; actual initial values are randomised and wrap modulo their field widths.",
+    "link": {
+      "title": "RFC 7587: RTP Payload Format for Opus",
+      "url": "https://www.rfc-editor.org/rfc/rfc7587"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A BitTorrent v1 client with trusted metainfo finishes downloading piece 812, hashes it, and the SHA-1 does not match the metainfo. What should it do?",
+    "options": [
+      {
+        "text": "Keep the piece, since TCP guarantees integrity",
+        "explanation": "TCP's checksum only catches transmission errors, not a peer deliberately (or buggily) sending wrong data."
+      },
+      {
+        "text": "Ask the tracker for the correct hash",
+        "explanation": "Given the trusted metainfo in the prompt, a tracker is not a replacement source of piece hashes. A mismatch means these bytes cannot be accepted as the expected piece."
+      },
+      {
+        "text": "Discard the piece, re-download it (possibly from other peers), and consider banning peers that contributed bad blocks",
+        "explanation": "Correct. Piece hashes make peers untrusted: bad data is detected and replaced."
+      },
+      {
+        "text": "Abort the whole torrent",
+        "explanation": "One bad piece is routine (poisoning attempts, buggy peers). Only that piece needs redoing."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `pieces` in the info dict has 20 bytes per piece; take bytes 812 × 20 to 812 × 20 + 19.\n2. Compare with SHA-1 of the downloaded piece. Mismatch.\n3. Throw away all blocks of piece 812.\n4. Re-request them, preferring other peers.\n5. Apply a cautious peer-reputation policy. A mixed-source piece mismatch alone cannot identify the bad contributor; even a sole supplier does not prove deliberate malice.\n6. Only after a good hash do you send `have 812` to peers.",
+    "link": {
+      "title": "BEP 3: The BitTorrent Protocol Specification",
+      "url": "https://www.bittorrent.org/beps/bep_0003.html"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A new BitTorrent peer joins a swarm with no pieces. Under strict tit-for-tat, nobody would upload to it because it has nothing to offer. Which mechanism gets it started?",
+    "options": [
+      {
+        "text": "Rarest-first piece selection",
+        "explanation": "Rarest first decides *which* piece to fetch, not whether anyone will send it."
+      },
+      {
+        "text": "Endgame mode",
+        "explanation": "Endgame applies near the *end* of a download, requesting remaining blocks from everyone."
+      },
+      {
+        "text": "The tracker uploads the first piece",
+        "explanation": "The tracker role supplies peer lists, rather than the initial data piece. A machine could separately run a seeding service."
+      },
+      {
+        "text": "Optimistic unchoking gives a peer an upload opportunity without requiring a prior contribution",
+        "explanation": "In the classic BEP 3 policy an optimistic slot rotates on a 30-second cadence, with bias towards new connections. This creates an opportunity, not a guarantee of rapid completion."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "BEP 3 describes changing choking decisions every ten seconds and rotating an optimistic unchoke every thirty. If that optimistic peer is interested, it counts within the four allowed interested downloaders. New connections are favoured in selection. This lets a newcomer obtain something to trade; seeders and modern client policies may behave differently.",
+    "link": {
+      "title": "BEP 3: The BitTorrent Protocol Specification",
+      "url": "https://www.bittorrent.org/beps/bep_0003.html"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two WebRTC peers are on different private networks with endpoint-dependent NAT mappings. ICE direct host and server-reflexive checks have failed, but a valid TURN relay path succeeds. Which candidate pair can be selected?",
+    "options": [
+      {
+        "text": "A pair involving a TURN relay candidate",
+        "explanation": "The stated successful relay path supplies connectivity after these direct checks failed. TURN is not guaranteed to work on every network."
+      },
+      {
+        "text": "host to host, because it has the highest priority",
+        "explanation": "Priority cannot make a failed path usable; this prompt explicitly says the direct host checks failed."
+      },
+      {
+        "text": "srflx to srflx via hole punching",
+        "explanation": "The prompt says those checks failed. Endpoint-dependent mappings can make a STUN-observed address unsuitable for another destination, but NAT labels alone do not prove universal failure."
+      },
+      {
+        "text": "No pair; WebRTC cannot work behind symmetric NATs",
+        "explanation": "TURN exists precisely for this case."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "ICE evaluates actual reachability. In this scenario, direct checks fail and a relay-involving pair succeeds, so the controlling agent can nominate that valid pair. Depending on the selected pair, one or both peers use a TURN allocation. Relay transport must itself be allowed by the network; media traffic consumes relay bandwidth.",
+    "link": {
+      "title": "RFC 8445: Interactive Connectivity Establishment — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc8445"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Six people join a video call, each sending 1.2 Mbit/s of video. Using a full **mesh**, ignoring protocol overhead and retransmissions, how much does each participant upload? And with an SFU (no simulcast)?",
+    "options": [
+      {
+        "text": "Mesh 7.2 Mbit/s; SFU 1.2 Mbit/s",
+        "explanation": "Mesh sends to the *other* participants, which is 5, not 6."
+      },
+      {
+        "text": "Mesh 6.0 Mbit/s; SFU 1.2 Mbit/s",
+        "explanation": "Correct. Mesh: 5 × 1.2 = 6.0. SFU: one upstream copy, which the server forwards to each receiver."
+      },
+      {
+        "text": "Mesh 1.2 Mbit/s; SFU 6.0 Mbit/s",
+        "explanation": "That's backwards; the SFU exists to cut each client's upload to one stream."
+      },
+      {
+        "text": "Both 6.0 Mbit/s",
+        "explanation": "An SFU forwards copies server-side, so the client uploads only once."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Mesh: (6−1) × 1.2 = 6.0 Mbit/s per client. With one nonsimulcast upstream to an SFU: 1.2 Mbit/s. If all five other streams are forwarded at full rate, download is 6.0 Mbit/s in either topology. Selective forwarding or different encodings change the download; overhead and retransmissions add traffic.",
+    "link": {
+      "title": "WebRTC for the Curious",
+      "url": "https://webrtcforthecurious.com/"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about WebRTC security are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Media is always encrypted with SRTP, keyed via a DTLS handshake",
+        "explanation": "Correct. Unencrypted RTP is not allowed in WebRTC."
+      },
+      {
+        "text": "Each peer checks the DTLS certificate against the fingerprint received in SDP",
+        "explanation": "Correct. That's how the peers authenticate each other without a CA."
+      },
+      {
+        "text": "Because media is encrypted end to end, a compromised signalling server cannot intercept calls",
+        "explanation": "Whoever controls signalling can substitute their own fingerprints and relay the call as a man in the middle."
+      },
+      {
+        "text": "Data channels run over SCTP inside DTLS",
+        "explanation": "Correct. SCTP gives multiple streams with configurable reliability, encrypted by DTLS."
+      },
+      {
+        "text": "Ordinary per-hop DTLS-SRTP alone prevents an SFU that terminates those sessions from reading the media content",
+        "explanation": "False. That SFU has the per-hop media keys. Additional end-to-end content encryption such as SFrame can keep payload content hidden from it."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. DTLS handshake over the ICE path; the certificate may be self-signed.\n2. Its hash must equal `a=fingerprint` in the SDP from the other side.\n3. Without independent identity verification, substituted signalling fingerprints can enable an active intermediary; a passive TURN relay does not automatically obtain the media keys.\n4. With an SFU, each client's DTLS-SRTP session terminates at the SFU, which decrypts and re-encrypts (or at least has the keys). End-to-end needs SFrame-style encryption on top.",
+    "link": {
+      "title": "WebRTC for the Curious",
+      "url": "https://webrtcforthecurious.com/"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Parse this RTP header: `80 e0 00 05 00 01 5f 90 12 34 56 78`. What are the marker bit, payload type, sequence number and timestamp?",
+    "options": [
+      {
+        "text": "M=0, PT=224, seq=5, ts=90,000",
+        "explanation": "This reads the whole second byte as the payload type. Its top bit is the marker, leaving 7 bits for PT."
+      },
+      {
+        "text": "M=1, PT=96, seq=5, ts=1,000",
+        "explanation": "0x00015f90 is 90,000, not 1,000. Convert: 0x15f90 = 1×65,536 + 0x5f90 (24,464)."
+      },
+      {
+        "text": "M=1, PT=96, seq=1280, ts=90,000",
+        "explanation": "That reads the sequence number in little-endian. Network byte order is big-endian: `00 05` = 5."
+      },
+      {
+        "text": "M=1, PT=96, seq=5, ts=90,000",
+        "explanation": "Correct. `e0` = 1 1100000: marker 1, PT 96. Sequence 0x0005 = 5. Timestamp 0x00015f90 = 90,000 (90,000 ticks, corresponding to a one-second interval if the negotiated clock is 90 kHz)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Byte 0x80 gives V=2, P=0, X=0, CC=0. Byte 0xe0 gives M=1 and PT=96. Big-endian sequence 0x0005 is 5; timestamp 0x00015f90 is 90,000; SSRC is 0x12345678.\n\nPT 96 is dynamically mapped; the header alone does not identify the codec or clock rate. A difference of 90,000 ticks means one second at 90 kHz, but this absolute timestamp does not show elapsed stream time without a reference. Marker semantics depend on the negotiated payload format.",
+    "link": {
+      "title": "RFC 3550: RTP — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc3550"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which properties make Kademlia lookups efficient and robust? Select all that apply.",
+    "options": [
+      {
+        "text": "XOR distance is symmetric, so nodes learn useful contacts from the queries they receive",
+        "explanation": "Correct. If A is close to B, B is equally close to A, so incoming queries populate the right buckets."
+      },
+      {
+        "text": "Exponentially sized distance buckets support logarithmic lookup scaling when routing and ID-distribution assumptions hold",
+        "explanation": "The model supports progress through ID prefixes. This is not a promise that every response halves numeric XOR distance or that failed nodes and adversaries cannot disrupt a lookup."
+      },
+      {
+        "text": "Parallel queries reduce dependence on one slow or dead contact",
+        "explanation": "Concurrency, such as the paper's example α=3, can overlap delays. It does not eliminate all timeouts or guarantee a result."
+      },
+      {
+        "text": "Full buckets replace old contacts with new ones, keeping the table fresh",
+        "explanation": "The opposite: Kademlia keeps responsive old contacts and drops newcomers, because long-lived nodes tend to stay up and it resists table flooding."
+      },
+      {
+        "text": "A central bootstrap server answers every lookup",
+        "explanation": "Bootstrap nodes only help a new node join; lookups are fully distributed."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "XOR symmetry allows incoming messages to teach useful contacts. Maintained distance buckets support prefix progress under the model's assumptions. Parallel queries overlap delays, while responsive old contacts are retained rather than automatically replaced by newcomers. If a round finds no closer node, original Kademlia still queries remaining closest candidates before terminating. Actual latency, success and churn behaviour depend on the network; no current typical round count is assumed.",
+    "link": {
+      "title": "Kademlia: A Peer-to-peer Information System Based on the XOR Metric (paper)",
+      "url": "https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf"
+    }
+  },
+  {
+    "id": "app-p2p-webrtc-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Using seconds for this arithmetic example rather than the compact wire representation, a sender's RTCP sender report left at time T. The receiver held it for DLSR = 40 ms, then sent a receiver report echoing LSR = T. The report arrives back at the sender at T + 190 ms. What is the round-trip time?",
+    "options": [
+      {
+        "text": "190 ms",
+        "explanation": "This includes the 40 ms the receiver held the report before replying, which isn't network time."
+      },
+      {
+        "text": "230 ms",
+        "explanation": "This adds DLSR instead of subtracting it."
+      },
+      {
+        "text": "150 ms",
+        "explanation": "Correct. RTT = A − LSR − DLSR = (T + 190) − T − 40 = 150 ms."
+      },
+      {
+        "text": "75 ms",
+        "explanation": "That's the one-way estimate (RTT / 2), assuming symmetry."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nA    = T + 190 ms (arrival)\nLSR  = T          (echoed)\nDLSR = 40 ms      (held)\nRTT  = A - LSR - DLSR\n     = 190 - 40 = 150 ms\n```\n\nNeither side's clocks need to agree: A and LSR are both read from the sender's clock, and DLSR is a duration measured by the receiver. This assumes stable rates and no intervening clock step. On the wire LSR/A use compact NTP fields, DLSR uses 1/65536-second units, and subtraction must handle wraparound.",
+    "link": {
+      "title": "RFC 3550: RTP — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc3550"
+    }
+  }
+]

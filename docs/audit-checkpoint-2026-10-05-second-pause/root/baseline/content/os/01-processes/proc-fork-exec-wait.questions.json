@@ -1,0 +1,348 @@
+[
+  {
+    "id": "proc-fork-exec-wait-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How many times does this print `x`?\n\n```c\nint main(void) {\n  fork();\n  fork();\n  printf(\"x\\n\");\n  return 0;\n}\n```",
+    "options": [
+      {
+        "text": "8",
+        "explanation": "That would be three forks (2³). Here there are two."
+      },
+      {
+        "text": "2",
+        "explanation": "This counts the forks, not the processes. Each fork is executed by every process alive at that point."
+      },
+      {
+        "text": "3",
+        "explanation": "This assumes the second fork runs only in the parent. The child from the first fork also runs it."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. After the first fork there are 2 processes; both run the second fork, giving 4; all 4 print."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the processes:\n\n```\nstart:          P\nafter fork 1:   P, C1\nafter fork 2:   P, C2   (from P)\n                C1, C3  (from C1)\nprintf:         4 processes print\n```\n\nEach fork doubles the count: 1 → 2 → 4. With *n* forks in a straight line you get 2ⁿ processes.",
+    "link": {
+      "title": "Interlude: Process API — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-api.pdf"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```c\nint x = 10;\npid_t p = fork();\nif (p == 0) {\n  x = x * 2;\n  printf(\"c %d\\n\", x);\n  exit(0);\n}\nwait(NULL);\nprintf(\"p %d\\n\", x);\n```",
+    "options": [
+      {
+        "text": "`c 10` then `p 10`",
+        "explanation": "The child does change its own `x` to 20 before printing."
+      },
+      {
+        "text": "`c 20` then `p 20`",
+        "explanation": "This assumes parent and child share `x`. After fork each has its own copy of memory."
+      },
+      {
+        "text": "`c 20` then `p 10`",
+        "explanation": "Correct. The child doubles its own copy. The parent waits for the child, then prints its unchanged copy."
+      },
+      {
+        "text": "`p 10` then `c 20`",
+        "explanation": "The parent calls `wait` first, so it can't print until the child has exited."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `fork` gives the child a copy of the parent's memory, so both have `x = 10`.\n2. The child (`p == 0`) sets its `x` to 20, prints `c 20`, exits.\n3. The parent blocks in `wait(NULL)` until then.\n4. The parent's `x` was never touched: it prints `p 10`.\n\nCopy-on-write means the page holding `x` is physically shared until the child writes, then the child gets a private copy. Either way, the *semantics* are separate memory.",
+    "link": {
+      "title": "fork(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/fork.2.html"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A shell runs a command and then `echo $?` prints `137`. What happened?",
+    "options": [
+      {
+        "text": "The command wasn't found",
+        "explanation": "Command not found is 127."
+      },
+      {
+        "text": "The process was killed by signal 9 (`SIGKILL`): 128 + 9 = 137",
+        "explanation": "Correct. Shells report signal deaths as 128 + signal number. `SIGKILL` often comes from the OOM killer or a container runtime's stop timeout."
+      },
+      {
+        "text": "The program segfaulted",
+        "explanation": "A segfault is `SIGSEGV`, signal 11, so the shell would show 139."
+      },
+      {
+        "text": "The program called `exit(137)`",
+        "explanation": "Possible in principle, but 137 is the classic shell code for death by signal 9. Programs rarely choose it themselves."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Exit statuses run 0–255.\n2. When a process is killed by a signal, `wait` reports `WIFSIGNALED` with `WTERMSIG = N`; shells encode that as 128 + N.\n3. 137 − 128 = 9 → `SIGKILL`.\n\nCommon values worth memorising:\n\n| `$?` | Cause |\n|---|---|\n| 127 | not found |\n| 130 | Ctrl-C (SIGINT, 2) |\n| 137 | SIGKILL (9) |\n| 139 | SIGSEGV (11) |\n| 143 | SIGTERM (15) |\n\nIn Kubernetes, `OOMKilled` with exit code 137 is the same thing.",
+    "link": {
+      "title": "wait(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/wait.2.html"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print when run on a terminal, and when piped into `cat`?\n\n```c\nprintf(\"a\\n\");\nfork();\nprintf(\"b\\n\");\n```",
+    "options": [
+      {
+        "text": "Terminal: `a b b`; piped: `a b a b`",
+        "explanation": "Correct. On a terminal stdout is line-buffered, so `a\\n` is written before `fork`. Piped, it's fully buffered, so `a\\n` is still in the buffer when it's copied, and both processes flush it."
+      },
+      {
+        "text": "`a b b` in both cases",
+        "explanation": "This ignores that buffering depends on what stdout is connected to. Through a pipe, `a\\n` hasn't been written yet at fork time."
+      },
+      {
+        "text": "`a b a b` in both cases",
+        "explanation": "On a terminal the newline flushes `a` before the fork, so only one copy exists."
+      },
+      {
+        "text": "Terminal: `a b a b`; piped: `a b b`",
+        "explanation": "This has the buffering modes reversed: terminals are line-buffered, pipes and files fully buffered."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track the stdio buffer, which lives in user memory and is copied by `fork`:\n\n```\nterminal (line-buffered):\nprintf a\\n -> flushed now: a\nfork        -> buffers empty\neach: b\\n   -> b, b\n=> a b b\n\npipe (fully buffered):\nprintf a\\n -> buffer: \"a\\n\"\nfork        -> both have \"a\\n\"\neach: b\\n   -> \"a\\nb\\n\"\nexit flush  -> a b a b\n```\n\nThe order of the two `a b` blocks could interleave in principle, but each process writes its whole buffer in one `write`. Fix: `fflush(stdout)` before `fork`.",
+    "link": {
+      "title": "Interlude: Process API — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-api.pdf"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A child calls `exit(300)`. The parent does `waitpid(pid, &st, 0)` and prints `WEXITSTATUS(st)`. What's printed?",
+    "options": [
+      {
+        "text": "0",
+        "explanation": "That would be `exit(256)`. 300 isn't a multiple of 256."
+      },
+      {
+        "text": "300",
+        "explanation": "Exit statuses are only 8 bits wide; values above 255 can't survive."
+      },
+      {
+        "text": "255",
+        "explanation": "Values aren't clamped to the maximum; they're truncated to the low 8 bits."
+      },
+      {
+        "text": "44",
+        "explanation": "Correct. Only the low 8 bits are kept: 300 & 0xFF = 300 − 256 = 44."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `exit(status)` passes `status & 0377` to the parent.\n2. 300 in binary is `1 0010 1100`. Keep the low 8 bits: `0010 1100` = 44.\n3. Equivalently 300 mod 256 = 44.\n\nA real bug pattern: a script runs `exit $error_count`. With 256 errors it exits 0, reporting success. Return a small fixed code instead.",
+    "link": {
+      "title": "wait(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/wait.2.html"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "How many lines contain `A`, and how many `B`?\n\n```c\nif (fork() && fork())\n  printf(\"A\\n\");\nelse\n  printf(\"B\\n\");\n```",
+    "options": [
+      {
+        "text": "2 A, 2 B",
+        "explanation": "That would need four processes. `&&` short-circuits, so the first child never calls the second fork: only three processes exist."
+      },
+      {
+        "text": "1 A, 1 B",
+        "explanation": "This forgets that the second fork creates another process, which also prints."
+      },
+      {
+        "text": "1 A, 2 B",
+        "explanation": "Correct. The original runs both forks, sees two non-zero returns and prints A. The first child sees 0 from the first fork, short-circuits and prints B. The second child sees 0 from the second fork and prints B."
+      },
+      {
+        "text": "2 A, 1 B",
+        "explanation": "Only the process for which *both* forks returned non-zero takes the A branch, and that's just the original."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Evaluate `fork() && fork()` in each process:\n\n```\nP: fork#1 -> C1's pid (true)\n   fork#2 -> C2's pid (true)\n   => A\nC1: fork#1 returned 0 (false)\n   && short-circuits, no fork#2\n   => B\nC2: born at fork#2 in P\n   fork#1 was true (inherited)\n   fork#2 returned 0 (false)\n   => B\n```\n\nThree processes: 1 A, 2 B.",
+    "link": {
+      "title": "fork(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/fork.2.html"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A process has a file descriptor 3 open (without `O_CLOEXEC`), a `SIGINT` handler installed, and `SIGPIPE` set to `SIG_IGN`. It calls `execve` on a new program. Which statements are true afterwards? Select all that apply.",
+    "options": [
+      {
+        "text": "The PID is unchanged",
+        "explanation": "Correct. `exec` replaces the program in the same process; it doesn't create a new one."
+      },
+      {
+        "text": "fd 3 is still open in the new program",
+        "explanation": "Correct. Descriptors survive `exec` unless marked close-on-exec. This is how shells pass redirected stdin/stdout, and also how fds leak into children by accident."
+      },
+      {
+        "text": "`SIGINT` still runs the old handler",
+        "explanation": "Wrong. The handler's code was in the old program's memory, which is gone. Caught signals reset to their default action."
+      },
+      {
+        "text": "`SIGPIPE` is still ignored",
+        "explanation": "Correct. An *ignored* disposition carries over, since it doesn't refer to any code. This is why programs started from some environments mysteriously ignore SIGPIPE."
+      },
+      {
+        "text": "Heap memory allocated by the old program is still accessible",
+        "explanation": "Wrong. The entire old address space is replaced."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Sort by whether the item refers to the old program's memory:\n\n| Item | Survives exec? | Why |\n|---|---|---|\n| PID | yes | same process |\n| fd 3 | yes | kernel object, no CLOEXEC |\n| SIGINT handler | no | handler code is gone |\n| SIGPIPE ignore | yes | no code needed |\n| heap | no | address space replaced |\n\nBest practice: open fds with `O_CLOEXEC` unless you mean to pass them on, to avoid leaking sockets or files into child programs.",
+    "link": {
+      "title": "execve(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A web server forks a child per request but never calls `wait`. After a week, `fork` starts failing with `EAGAIN`, though memory is plentiful. `ps` shows thousands of `<defunct>` entries. What's going on, and what's the fix?",
+    "options": [
+      {
+        "text": "The children are zombies holding PIDs and process-table entries; reap them with `waitpid(-1, &st, WNOHANG)` in a loop (e.g. on `SIGCHLD`), or set `SIGCHLD` to `SIG_IGN`",
+        "explanation": "Correct. Each unreaped child keeps a PID until its parent collects it. Eventually the PID or process limit is reached and `fork` fails."
+      },
+      {
+        "text": "Kill the zombies with `kill -9`",
+        "explanation": "Zombies are already dead; signals do nothing to them. Only reaping (or the parent exiting) removes them."
+      },
+      {
+        "text": "Increase `ulimit -s`",
+        "explanation": "The stack size limit has nothing to do with the number of processes."
+      },
+      {
+        "text": "Memory leak in the children; restart nightly",
+        "explanation": "Zombies hold no memory beyond a small kernel record. The resource running out is PIDs/process slots."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `<defunct>` = zombie: exited, but the parent hasn't called `wait`.\n2. Each zombie holds a PID and counts towards the user's process limit (`RLIMIT_NPROC`) and `pid_max`.\n3. When those run out, `fork` returns -1 with `EAGAIN`.\n4. Fix in the parent:\n\n```c\nvoid on_chld(int s) {\n  int e = errno;\n  while (waitpid(-1, NULL,\n                 WNOHANG) > 0)\n    ;\n  errno = e;\n}\n```\n\nLoop because several children may exit while one `SIGCHLD` is pending (standard signals don't queue). Save `errno` because the handler could interrupt code that's checking it.",
+    "link": {
+      "title": "Zombie process — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Zombie_process"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Python app runs as PID 1 in a Docker container. `docker stop` always takes about 10 seconds and the logs show the app never ran its shutdown code. Why, and what's the cleanest fix?",
+    "options": [
+      {
+        "text": "Python can't handle signals",
+        "explanation": "Python's `signal` module handles `SIGTERM` fine. The issue is the default action not applying to PID 1."
+      },
+      {
+        "text": "The container's stop timeout is set too low",
+        "explanation": "The timeout is why it takes 10 seconds, not why shutdown code doesn't run. Raising it would just make stop take longer."
+      },
+      {
+        "text": "Docker sends `SIGKILL` immediately; nothing can be done",
+        "explanation": "Docker sends `SIGTERM` first and waits (10 seconds by default) before `SIGKILL`. The problem is that the app ignores the `SIGTERM`."
+      },
+      {
+        "text": "As PID 1, the kernel won't deliver `SIGTERM` unless the process installed a handler, so the default 'terminate' action doesn't apply; Docker then kills it after the timeout. Install a `SIGTERM` handler, or run a minimal init like `docker run --init` (tini) that forwards signals",
+        "explanation": "Correct. PID 1 in a namespace is protected from signals it doesn't handle. A tiny init forwards signals to the app and also reaps orphaned zombies."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `docker stop` sends `SIGTERM` to the container's PID 1, waits 10 s, then sends `SIGKILL`.\n2. Normally `SIGTERM`'s default action terminates a process.\n3. But the kernel doesn't apply default actions to init: a signal PID 1 hasn't installed a handler for is dropped.\n4. The app never sees `SIGTERM`; after 10 s, `SIGKILL` (which can't run handlers) ends it.\n5. Fixes:\n   - `signal.signal(signal.SIGTERM, handler)` in the app.\n   - Better: `--init` or `tini` as entrypoint, which also reaps zombies the app never `wait`s for.",
+    "link": {
+      "title": "docker container run (--init) — Docker docs",
+      "url": "https://docs.docker.com/reference/cli/docker/container/run/"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Redis instance uses 20 GB of RAM, and the dataset is updated so heavily that most pages change within a minute. A `BGSAVE` snapshot takes 2 minutes. Roughly how much memory might the host need during the save, and why?",
+    "options": [
+      {
+        "text": "About 21 GB: only the page tables are duplicated",
+        "explanation": "Page tables are duplicated at fork time, but page *contents* are copied on write, and here most pages are written."
+      },
+      {
+        "text": "About 20 GB: COW means fork uses no extra memory",
+        "explanation": "COW avoids copying *at fork time*, but each page written afterwards gets copied. Heavy writes during the save copy most of the dataset."
+      },
+      {
+        "text": "Up to about 40 GB, because nearly every page the parent writes during the 2-minute save gets a private copy while the child keeps the original",
+        "explanation": "Correct. With most pages modified during the save, almost the whole dataset ends up duplicated. Transparent huge pages make this worse, since one small write copies 2 MiB."
+      },
+      {
+        "text": "About 60 GB: one copy each for parent, child and the disk buffer",
+        "explanation": "There are only two views (parent and child) sharing frames; the file being written doesn't need a third full copy in memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. At `fork`: the child gets copied page tables. 20 GB of pages are shared, read-only.\n2. During the 2-minute save, the parent keeps writing. Each first write to a shared page triggers a fault and a 4 KiB copy.\n3. If most pages change within a minute, almost all 20 GB is copied before the child finishes.\n4. Peak ≈ 20 GB (child's frozen view) + ~20 GB (parent's new copies) ≈ 40 GB.\n\nMitigations: provision headroom, disable THP (Redis warns at startup if it's on), use replicas for snapshots, or set `vm.overcommit_memory = 1` so the fork itself isn't refused.",
+    "link": {
+      "title": "Redis persistence — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A 30 GB Java service needs to launch a small helper binary many times per second. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Plain `fork` + `exec` copies page tables for the whole 30 GB address space each time, which can take tens to hundreds of milliseconds",
+        "explanation": "Correct. COW avoids copying pages, but the page tables for every mapping still have to be duplicated."
+      },
+      {
+        "text": "`posix_spawn` avoids most of that cost, because glibc implements it with a `clone` that shares memory with the parent until the exec",
+        "explanation": "Correct. Like `vfork`, the child borrows the parent's address space briefly, so there's no page-table copy."
+      },
+      {
+        "text": "Forking a multithreaded process copies all of its threads into the child",
+        "explanation": "Wrong. Only the calling thread exists in the child. Other threads simply vanish, which is why locks they held stay locked."
+      },
+      {
+        "text": "In the forked child, calling only async-signal-safe functions before `exec` avoids deadlocks on locks held by other threads",
+        "explanation": "Correct. After forking a multithreaded program, functions like `malloc` might wait on a lock held by a thread that no longer exists. POSIX permits only async-signal-safe calls until `exec`."
+      },
+      {
+        "text": "`exec` is the slow part, so switching to `posix_spawn` doesn't help",
+        "explanation": "Wrong. For a large parent the page-table copy in `fork` dominates; the `exec` of a small binary is quick."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Cost of `fork` scales with the parent's mapped memory: 30 GB / 4 KiB ≈ 7.9 million PTEs, around 60 MB of page tables to copy. At ~10 ms per GB that's on the order of 300 ms in the worst case (A true).\n2. `posix_spawn` (or `vfork`) skips the copy by sharing the address space until `exec` (B true; E false).\n3. Multithreaded fork hazards: only the caller survives (C false), so locks may be stuck; stick to async-signal-safe calls before `exec` (D true).\n\nThis is why Java's `ProcessBuilder` on Linux uses `posix_spawn` (via `jspawnhelper`) by default in modern JDKs.",
+    "link": {
+      "title": "posix_spawn(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/posix_spawn.3.html"
+    }
+  }
+]

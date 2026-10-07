@@ -1,0 +1,378 @@
+[
+  {
+    "id": "cache-fundamentals-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a cache that holds only 10% of all keys often achieve a hit ratio well above 10%?",
+    "options": [
+      {
+        "text": "Because caches compress data, so 10% of the memory holds far more than 10% of the keys",
+        "explanation": "Compression may help memory use, but the premise says the cache holds 10% of the keys. The hit ratio is about which keys are requested, not how they are stored."
+      },
+      {
+        "text": "Because every miss automatically loads all neighbouring keys into the cache",
+        "explanation": "Pre-fetching neighbours (spatial locality) is used in CPU caches and some databases, but it is not an automatic property of application caches and does not explain the general effect."
+      },
+      {
+        "text": "Because the hit ratio counts writes as hits",
+        "explanation": "Hit ratio is defined over lookups: hits divided by hits plus misses. Writes are not counted as hits."
+      },
+      {
+        "text": "Because real access patterns are skewed: a small set of popular keys receives most requests",
+        "explanation": "Correct. Workloads follow Zipf-like or 80/20 distributions, and requests repeat over time (temporal locality). If the cache holds the hottest 10% of keys, those may account for 80–95% of lookups."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Hit ratio depends on **which keys are asked for**, not how many keys exist.\n2. Suppose 1 million products, and the top 100,000 (10%) receive 90% of page views, which is typical for e-commerce.\n3. If the cache holds those 100,000 products, then 90% of lookups find their key: `h ≈ 0.9`.\n4. The remaining 900,000 products share the other 10% of traffic, so caching them adds little.\n5. So skew (popularity) plus repetition (temporal locality) is what makes small caches effective.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Redis responds in 1 ms and your database in 20 ms. On a miss, the app checks Redis first, then queries the database. What is the average read latency at an 85% hit ratio?",
+    "options": [
+      {
+        "text": "1 ms",
+        "explanation": "That would only be true at a 100% hit ratio. 15% of requests still go to the database."
+      },
+      {
+        "text": "4 ms",
+        "explanation": "Correct. Every request pays the 1 ms cache lookup, and the 15% that miss also pay 20 ms: `1 + 0.15 × 20 = 4 ms`."
+      },
+      {
+        "text": "3.85 ms",
+        "explanation": "Close, but this uses `0.85 × 1 + 0.15 × 20 = 3.85`, which forgets that misses also pay the 1 ms cache lookup before going to the database."
+      },
+      {
+        "text": "17 ms",
+        "explanation": "This is `0.85 × 20`, which weights the database by the hit ratio instead of the miss ratio. Hits are the requests that avoid the database."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Use `T_avg = T_cache + (1 - h) × T_backend`.\n\n1. `T_cache = 1 ms` is paid on **every** request, hit or miss, because you always look in the cache first.\n2. Miss ratio `= 1 - 0.85 = 0.15`.\n3. Backend cost on misses `= 0.15 × 20 = 3 ms`.\n4. Total `= 1 + 3 = 4 ms`.\n\nCompare with no cache: 20 ms. The cache gives a 5× speed-up and cuts database reads by 85%.",
+    "link": {
+      "title": "Cache (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your cache hit ratio rises from 99% to 99.9% after you double the cache size. Latency barely moves on the dashboard. What is the most important effect of this change?",
+    "options": [
+      {
+        "text": "Nothing significant: a 0.9 percentage point gain is noise",
+        "explanation": "This judges the change by the hit ratio, but the backend experiences the miss ratio, which has fallen from 1% to 0.1%, a 10× change."
+      },
+      {
+        "text": "Average latency falls by 10×",
+        "explanation": "Average latency is dominated by the cache lookup once the hit ratio is high. With 1 ms cache and 20 ms DB, it goes from 1.2 ms to 1.02 ms, about 15%, not 10×."
+      },
+      {
+        "text": "Database read load falls by roughly 10×",
+        "explanation": "Correct. Misses fall from 1 in 100 to 1 in 1,000 requests. At 100k req/s, database reads drop from 1,000/s to 100/s, which frees capacity and reduces tail latency under load."
+      },
+      {
+        "text": "The cache now needs less memory per key",
+        "explanation": "Hit ratio has nothing to do with per-key memory. Doubling the cache used more memory in total."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Assume 100,000 reads/s, cache 1 ms, DB 20 ms.\n2. At 99%: misses `= 1% × 100,000 = 1,000/s`. Latency `= 1 + 0.01 × 20 = 1.2 ms`.\n3. At 99.9%: misses `= 0.1% × 100,000 = 100/s`. Latency `= 1 + 0.001 × 20 = 1.02 ms`.\n4. Latency improved ~15%. **Database load improved 10×.**\n5. Lesson: once hit ratios are high, think in miss ratios. That is the number that decides how big your database must be.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these workloads are **good** candidates for adding a cache? Select all that apply.",
+    "options": [
+      {
+        "text": "A product page read 50,000 times for every price update",
+        "explanation": "Correct. A huge read-to-write ratio on the same key means each cached copy serves many reads before it needs refreshing."
+      },
+      {
+        "text": "A nightly job that scans every row of a 2 TB table exactly once",
+        "explanation": "Not a good fit. Each row is read once, so there is no reuse. Caching it would just churn memory and evict useful data (this is called cache pollution)."
+      },
+      {
+        "text": "A slow third-party exchange-rate API whose values change every few minutes",
+        "explanation": "Correct. The call is expensive and slow, many requests share the same answer, and a staleness of a minute or so is acceptable. A short TTL fits well."
+      },
+      {
+        "text": "The account balance check that authorises a card payment",
+        "explanation": "Not a good fit. Authorisation needs the latest committed balance. A stale cached value could approve a payment that overdraws the account."
+      },
+      {
+        "text": "A rendered homepage that is identical for all anonymous visitors",
+        "explanation": "Correct. One copy serves everyone, it is expensive to render, and it can be cached at the reverse proxy or CDN for seconds to minutes."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each workload against four tests:\n\n1. **Read-heavy?** 2. **Repeated keys?** 3. **Staleness acceptable?** 4. **Expensive to produce?**\n\n| Workload | Reuse | Stale OK | Verdict |\n|---|---|---|---|\n| Product page | Very high | Seconds | Cache |\n| Full table scan | None | n/a | Don't |\n| FX rate API | High | Minutes | Cache |\n| Balance for auth | High | No | Don't |\n| Anonymous homepage | Very high | Seconds | Cache |\n\nThe scan fails on reuse; the balance check fails on staleness.",
+    "link": {
+      "title": "Caching overview — AWS",
+      "url": "https://aws.amazon.com/caching/"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run 40 app servers, each with an in-process cache of user profiles (TTL 10 minutes). A user changes their display name. What will they most likely experience?",
+    "options": [
+      {
+        "text": "The name flips between old and new on refresh, depending on which server the load balancer picks, for up to 10 minutes",
+        "explanation": "Correct. Each server has its own copy. Servers that cached the old name keep serving it until their entry expires, so requests landing on different servers see different values."
+      },
+      {
+        "text": "The new name appears everywhere immediately, because the database was updated",
+        "explanation": "The database is updated, but 40 independent in-process caches still hold the old value until their TTL expires or they are explicitly invalidated."
+      },
+      {
+        "text": "The old name appears for exactly 10 minutes on every server, then changes everywhere at once",
+        "explanation": "Each server cached the profile at a different time, so each entry expires at a different moment. There is no single synchronised switch-over."
+      },
+      {
+        "text": "The update fails, because in-process caches lock the row",
+        "explanation": "In-process caches hold copies; they do not take database locks. The write succeeds."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In-process means **one cache per server**: 40 separate copies.\n2. Server A cached the profile at 10:00, server B at 10:07, server C never cached it.\n3. The user renames at 10:08.\n4. A request to C misses and reads the new name. A request to A shows the old name until 10:10. B shows it until 10:17.\n5. The load balancer spreads requests, so the user sees the name flicker.\n\nFixes: use a shared cache (Redis), shorten the in-process TTL to a few seconds, or broadcast invalidations (for example via Redis pub/sub).",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your database can sustain 5,000 reads/s. Peak traffic is 200,000 reads/s and the cache hit ratio is 98%. A bad deploy flushes the cache. Roughly what happens, and what does it tell you about capacity planning?",
+    "options": [
+      {
+        "text": "The database sees about 4,000 reads/s before and after, because the hit ratio is a property of the workload",
+        "explanation": "Hit ratio depends on what the cache currently holds. An empty cache has a hit ratio near 0%, so almost every request goes to the database."
+      },
+      {
+        "text": "Load rises to 10,000/s, double the normal miss rate",
+        "explanation": "This underestimates badly. A flushed cache does not merely double misses; it turns almost every request into a miss until it warms up."
+      },
+      {
+        "text": "Nothing changes for the database; the app servers just get slower",
+        "explanation": "The app servers get slower because they are waiting on the database, which is now receiving almost all traffic."
+      },
+      {
+        "text": "The database load jumps from about 4,000/s to nearly 200,000/s, 40× its capacity, so it falls over unless traffic is shed or the cache refills quickly",
+        "explanation": "Correct. Normal misses are `2% × 200,000 = 4,000/s`, within capacity. With an empty cache, nearly all 200,000/s miss. The database was only ever sized for the miss traffic, so the cache is effectively a load-bearing part of the system."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Normal DB load `= (1 - 0.98) × 200,000 = 4,000 reads/s`, under the 5,000/s limit.\n2. After a flush, the hit ratio is ~0%, so DB load `≈ 200,000 reads/s`.\n3. `200,000 / 5,000 = 40×` overload. Queries queue, latency soars, connections are exhausted, and the cache cannot refill because the database is too slow to answer.\n4. Capacity-planning lesson: if the backend cannot survive the cache disappearing, the cache is **critical infrastructure**. Plan for it with replicas, warming, request coalescing, rate-limiting misses, and load shedding (covered in lesson 7).",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q7",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do sites serve JavaScript bundles with fingerprinted names like `app.3f9a1c.js` and a one-year cache lifetime?",
+    "options": [
+      {
+        "text": "Because browsers refuse to cache files without a hash in the name",
+        "explanation": "Browsers cache any response permitted by its headers; the file name does not matter to the browser."
+      },
+      {
+        "text": "Because you cannot purge a user's browser cache, so a new version must use a new URL; the old cached file is simply never requested again",
+        "explanation": "Correct. Long lifetimes give perfect hit ratios, and changing the URL on every content change sidesteps the need to invalidate copies you do not control."
+      },
+      {
+        "text": "Because the hash encrypts the file so CDNs cannot read it",
+        "explanation": "The hash is a content fingerprint in the URL, not encryption. The CDN reads and serves the file normally."
+      },
+      {
+        "text": "Because it makes the file smaller",
+        "explanation": "Adding a hash to the name has no effect on file size."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Browser caches are on the user's device. You have no API to delete entries there.\n2. If `app.js` is cached for a year and you ship a bug fix, users keep the buggy copy.\n3. Fingerprinting: the build names the file after a hash of its content, `app.3f9a1c.js`.\n4. Fixing the bug changes the content, so the hash and URL change, for example `app.8b02de.js`. The HTML (cached briefly) points at the new URL.\n5. Result: immutable files cached forever, with instant updates. This is \"invalidation by renaming\".",
+    "link": {
+      "title": "HTTP caching — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each app server has an in-process cache that serves 60% of reads. Behind it, Redis serves 75% of the reads that reach it. What fraction of all reads reach the database?",
+    "options": [
+      {
+        "text": "25%",
+        "explanation": "This is Redis's own miss ratio, but Redis only sees the 40% of reads the in-process layer missed."
+      },
+      {
+        "text": "15%",
+        "explanation": "This adds the miss ratios (40% − 25%) instead of multiplying them. Each layer filters what the layer above let through."
+      },
+      {
+        "text": "10%",
+        "explanation": "Correct. `(1 − 0.6) × (1 − 0.75) = 0.4 × 0.25 = 0.10`, so the combined hit ratio is 90%."
+      },
+      {
+        "text": "40%",
+        "explanation": "This is the in-process miss ratio. It ignores the reads that Redis then catches."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Start with 100 reads.\n2. In-process hits 60, so **40** go to Redis.\n3. Redis hits 75% of 40 = 30, so **10** go to the database.\n4. Database share `= 10 / 100 = 10%`.\n\nGeneral rule for stacked caches:\n\n```\nDB = (1 - h1) * (1 - h2)\n```\n\nRedis's 75% looks mediocre, but that is because the in-process layer already took the hottest keys.",
+    "link": {
+      "title": "Cache (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You have 20 million registered users, of whom 4 million are active in a typical day. Each cached session object is about 1.5 KB, and Redis adds roughly 80 bytes of overhead per key. Roughly how much memory should you plan for the daily working set?",
+    "options": [
+      {
+        "text": "About 6.3 GB",
+        "explanation": "Correct. `4M × (1,500 + 80) B ≈ 6.3 GB`. Size for the working set, then add headroom for fragmentation and growth."
+      },
+      {
+        "text": "About 31.6 GB",
+        "explanation": "This sizes for all 20 million registered users. Users who are not active today mostly won't be in the cache, and caching them buys few hits."
+      },
+      {
+        "text": "About 6.0 GB",
+        "explanation": "This counts the values but forgets per-key overhead, which is about 5% here and much more for small values."
+      },
+      {
+        "text": "About 320 MB",
+        "explanation": "This counts only the per-key overhead (`4M × 80 B`) and leaves out the values themselves."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Working set = distinct keys touched in the window = **4 million** active users, not 20 million registered.\n2. Bytes per key `= 1,500 + 80 = 1,580 B`.\n3. Total:\n\n```\n4,000,000 * 1,580 B\n= 6.32e9 B ≈ 6.3 GB\n```\n\n4. Add headroom (say 25–50%) for fragmentation, replication buffers and growth, so plan for an 8–10 GB node.\n5. Then measure the hit ratio at a few sizes: skew may mean a smaller cache gets almost the same hits.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are choosing between an in-process cache and a shared Redis cache for product data on 30 app servers. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "An in-process lookup avoids a network round trip and serialisation, so it is far faster than Redis",
+        "explanation": "Correct. A dictionary lookup is on the order of 100 ns; a Redis call is a network round trip of a fraction of a millisecond plus (de)serialisation."
+      },
+      {
+        "text": "With in-process caching, each of the 30 servers misses independently, so the database can see up to 30 loads for the same key",
+        "explanation": "Correct. Every server has to warm its own copy, so a cold key can be fetched once per server rather than once overall."
+      },
+      {
+        "text": "A Redis cache is lost whenever an app server is redeployed",
+        "explanation": "Incorrect. Redis runs as a separate service, so it survives app deploys. It is the in-process cache that is emptied on every restart."
+      },
+      {
+        "text": "An in-process cache keeps all 30 servers consistent with each other automatically",
+        "explanation": "Incorrect. Each server holds an independent copy, so they can disagree until each entry expires or is invalidated."
+      },
+      {
+        "text": "A small in-process cache with a 1–5 s TTL in front of Redis can absorb very hot keys",
+        "explanation": "Correct. This two-tier pattern takes load off the single Redis node that owns a hot key, while bounding staleness to a few seconds."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Compare the two on the axes the lesson uses:\n\n| | In-process | Redis |\n|---|---|---|\n| Latency | ~100 ns | ~0.2–1 ms |\n| Copies | 1 per server | 1 shared |\n| Survives deploy | No | Yes |\n| Consistent | No | Yes |\n\n1. Speed favours in-process (A true).\n2. Copies-per-server means 30 independent misses (B true) and disagreement (D false).\n3. Redis is a separate process, so deploys do not empty it (C false).\n4. Combining them, with a short TTL on the local tier, gets most of both (E true).",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Every request checks Redis (1 ms) before querying a 10 ms database. Below what hit ratio does the cache make *average* latency worse than having no cache at all?",
+    "options": [
+      {
+        "text": "50%",
+        "explanation": "At 50%, `1 + 0.5 × 10 = 6 ms`, which is still better than 10 ms with no cache."
+      },
+      {
+        "text": "1%",
+        "explanation": "At 1%, `1 + 0.99 × 10 = 10.9 ms`, which is already worse than 10 ms. The break-even point is higher than this."
+      },
+      {
+        "text": "90%",
+        "explanation": "At 90% the average is `1 + 0.1 × 10 = 2 ms`, a large improvement. The break-even is far lower."
+      },
+      {
+        "text": "10%",
+        "explanation": "Correct. Solve `1 + (1 − h) × 10 = 10`, giving `h = 0.1`. Below a 10% hit ratio the cache costs more latency than it saves."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. With the cache: `T = 1 + (1 - h) × 10`.\n2. Without it: `T = 10`.\n3. Break-even:\n\n```\n1 + (1 - h) * 10 = 10\n(1 - h) * 10 = 9\nh = 0.1\n```\n\n4. In general, break-even `h = T_cache / T_backend`.\n5. Latency is not the only consideration: even at a low hit ratio the cache may still shed useful load. But you have also added a new dependency that can fail.",
+    "link": {
+      "title": "Cache (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team stores shopping baskets *only* in Redis, with no persistence and no copy in the database, because \"it is just a cache and it's fast\". A Redis node is restarted during a deploy. What is the core design mistake?",
+    "options": [
+      {
+        "text": "They should have used Memcached, which keeps data across restarts",
+        "explanation": "Memcached is purely in-memory too. Swapping products doesn't fix the fact that the data has no durable home."
+      },
+      {
+        "text": "Redis was being used as the system of record, so losing the cache lost data instead of just making things slower",
+        "explanation": "Correct. Cached data must be disposable. Baskets that exist nowhere else are not a cache entry; they are primary data that needs a durable store (or Redis configured and operated as a database)."
+      },
+      {
+        "text": "The TTL on the baskets was too long",
+        "explanation": "TTL controls staleness, not durability. Any TTL would still lose the baskets on restart."
+      },
+      {
+        "text": "The hit ratio was too low",
+        "explanation": "Hit ratio is irrelevant here. The problem is that there was nothing to fall back to on a miss."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Apply the lesson's test: *if the cache is wiped, does the system get slower or wrong?*\n2. Here, a wipe means customers' baskets vanish. That is **wrong**, not slower.\n3. So Redis was acting as a database without a database's durability guarantees.\n4. Fixes: write baskets to a durable store and cache them in front, or deliberately run Redis as a primary store (persistence, replication, backups) and treat it with database-level care.",
+    "link": {
+      "title": "Caching overview — AWS",
+      "url": "https://aws.amazon.com/caching/"
+    }
+  }
+]

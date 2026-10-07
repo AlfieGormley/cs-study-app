@@ -1,0 +1,340 @@
+[
+  {
+    "id": "emb-gpio-buttons-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A button is wired between a GPIO pin and ground, with the pin's internal pull-up enabled. What does the firmware read when the button is pressed?",
+    "options": [
+      {
+        "text": "1, because pressing a button always reads high",
+        "explanation": "That holds for a pull-down wiring to 3.3 V, not this one. Here pressing connects the pin to ground."
+      },
+      {
+        "text": "0, because the button connects the pin directly to ground",
+        "explanation": "Correct. This is active-low wiring: the pull-up holds the pin at 1 when released, and the closed button pulls it to 0."
+      },
+      {
+        "text": "A random value, because the pin floats",
+        "explanation": "The pull-up prevents floating. Without it the released state would float; the pressed state is solidly 0 either way."
+      },
+      {
+        "text": "3.3, the voltage in volts",
+        "explanation": "A digital input returns a logic level (0 or 1), not a voltage. Reading voltages is the ADC's job."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Released: no path to ground, so the pull-up raises the pin to 3.3 V, read as 1.\n2. Pressed: the button is a near-zero-ohm path to ground, so the pin sits at 0 V, read as 0.\n3. So `pressed = (read(pin) == 0)`. Put that inversion in one helper so the rest of the code thinks in pressed/released.",
+    "link": {
+      "title": "Pull-up resistor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Pull-up_resistor"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You wire a button from a GPIO input to 3.3 V, with no resistor and no internal pull enabled. While the button is released, the firmware sees the input flicker between 0 and 1. Why?",
+    "options": [
+      {
+        "text": "The button is broken",
+        "explanation": "The flicker happens with the button untouched, which points to the circuit, not the switch."
+      },
+      {
+        "text": "The pin is in output mode",
+        "explanation": "An output pin drives a fixed level; it would not flicker. This is the classic symptom of an undriven input."
+      },
+      {
+        "text": "Switch bounce",
+        "explanation": "Bounce happens briefly around a press or release. This flicker continues while nothing is moving."
+      },
+      {
+        "text": "The released input is floating; add a pull-down (or rewire to ground with a pull-up)",
+        "explanation": "Correct. A high-impedance input connected to nothing picks up stray charge. A pull resistor gives it a defined default level."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "When released, what drives the pin? Nothing. A CMOS input draws almost no current, so stray fields and leakage decide its level, which wanders.\n\nFix: give it a default.\n\n- Button to 3.3 V: add a pull-down; pressed = 1.\n- Button to GND: add a pull-up; pressed = 0 (the common choice).",
+    "link": {
+      "title": "Pull-up resistor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Pull-up_resistor"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A 10 kΩ pull-up to 3.3 V is used with an active-low button. How much current flows through the resistor while the button is held down?",
+    "options": [
+      {
+        "text": "0.33 mA",
+        "explanation": "Correct. The full 3.3 V appears across the resistor: I = 3.3 / 10,000 = 0.00033 A."
+      },
+      {
+        "text": "33 mA",
+        "explanation": "That is a factor of 100 too large, as if the resistor were 100 Ω."
+      },
+      {
+        "text": "3.3 mA",
+        "explanation": "That would be a 1 kΩ resistor. Check the units: 10 kΩ is 10,000 Ω."
+      },
+      {
+        "text": "0 mA, because the button is a short circuit",
+        "explanation": "The button shorts the pin to ground, but the resistor is still between 3.3 V and that node, so current flows through it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Pressed, the pin node is at 0 V, so the resistor has 3.3 V across it.\n\n```\nI = V / R\n  = 3.3 / 10000\n  = 0.00033 A = 0.33 mA\n```\n\nThis is why pull-ups use high values: little current is wasted while the button is held.",
+    "link": {
+      "title": "Pull-up resistor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Pull-up_resistor"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You plan to connect a 5 V logic signal from an old keyboard's circuit to a Teensy 4.1 digital pin. According to PJRC's Teensy 4.1 page, what should you do?",
+    "options": [
+      {
+        "text": "Connect it directly; all modern MCU pins are 5 V tolerant",
+        "explanation": "PJRC explicitly states the Teensy 4.1 pins are not 5 V tolerant. Assuming tolerance is how pins get damaged."
+      },
+      {
+        "text": "Connect it through the internal pull-down to limit the voltage",
+        "explanation": "A pull-down sets a default level; it does not reduce a driven 5 V signal to 3.3 V."
+      },
+      {
+        "text": "Shift the level down to 3.3 V first (for example with a level shifter), because the pins accept only 0–3.3 V",
+        "explanation": "Correct. PJRC says 'Do not drive any digital pin higher than 3.3V'. A level shifter or suitable divider keeps it within range."
+      },
+      {
+        "text": "Enable INPUT_PULLUP, which clamps inputs to 3.3 V",
+        "explanation": "A pull-up resistor connects to 3.3 V weakly; it cannot clamp a stronger 5 V source."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Find the limit: Teensy 4.1 page, Digital Input Pins: 0–3.3 V, not 5 V tolerant.\n2. Compare: 5 V exceeds it.\n3. So convert the level first. Then document the source and date checked, as the project brief requires for product facts.",
+    "link": {
+      "title": "Teensy 4.1 — PJRC",
+      "url": "https://www.pjrc.com/store/teensy41.html"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shift-register debouncer runs every 1 ms: `reg = ((reg << 1) | raw) & 0xFF`, and reports a press when `reg == 0x7F`. The button's last bounce (a 0) arrives at t = 6 ms and it reads 1 from t = 7 ms onward. When is the press reported?",
+    "options": [
+      {
+        "text": "t = 7 ms",
+        "explanation": "At t = 7 the register holds only one 1 after the final 0. It needs seven."
+      },
+      {
+        "text": "t = 14 ms",
+        "explanation": "Off by one. Count the ones: t = 7 through t = 13 is already seven readings."
+      },
+      {
+        "text": "t = 8 ms",
+        "explanation": "Two ones after the 0 gives a pattern ending ...011, not 0x7F."
+      },
+      {
+        "text": "t = 13 ms",
+        "explanation": "Correct. 0x7F is 01111111: a 0 followed by seven 1s. The 0 is at t = 6 and the ones at t = 7…13, so the pattern completes at t = 13."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "0x7F in binary is `0111 1111`: the oldest bit (a 0) then seven 1s.\n\n```\nt=6  last 0 shifted in\nt=7  ...0 1\nt=13 0111 1111 = 0x7F\n```\n\nCount 7, 8, 9, 10, 11, 12, 13: seven readings. libDaisy's Switch class uses this pattern, so a press is reported about 7 ms after the bouncing stops.",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your synth has a \"tap tempo\" button. Players complain it occasionally registers a tap when nobody touched it, especially when a nearby relay clicks. You use a lockout debouncer (accept the first edge, ignore 30 ms). What change best addresses this?",
+    "options": [
+      {
+        "text": "Increase the lockout to 100 ms",
+        "explanation": "Lockout accepts the *first* edge, so a single glitch still counts. A longer window only blocks later edges."
+      },
+      {
+        "text": "Switch to a method that needs the new state to persist, such as stable-for-N or an integrator",
+        "explanation": "Correct. Those methods require several consecutive (or net) agreeing readings, so a brief noise spike is rejected, at the cost of a few ms of latency."
+      },
+      {
+        "text": "Move the button to an interrupt pin so it is read faster",
+        "explanation": "Interrupts react to even shorter glitches, making the problem worse; Ganssle advises against undebounced switches on interrupts."
+      },
+      {
+        "text": "Remove the pull-up so the line is more sensitive",
+        "explanation": "Removing the pull-up makes the input float and far more noise-prone."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Diagnose the failure: the false taps are single short spikes from interference.\n\n- Lockout: 1 spike leads to an accepted press. Bad.\n- Stable-for-N: a spike lasts < N ticks, the count resets, so it is rejected.\n- Integrator: a spike nudges the counter up by 1, then it decays. Rejected.\n\nA stronger external pull-up and shorter wiring also help the hardware side.",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want a 3.3 V output to drive a red LED (V_f ≈ 2.0 V) at no more than PJRC's recommended 4 mA. What is the smallest series resistor you could use?",
+    "options": [
+      {
+        "text": "825 Ω",
+        "explanation": "That is 3.3 V / 4 mA, which forgets to subtract the LED's forward voltage."
+      },
+      {
+        "text": "500 Ω",
+        "explanation": "That is 2.0 V / 4 mA: it divides the LED voltage instead of the resistor's share."
+      },
+      {
+        "text": "325 Ω (so 330 Ω as a standard value)",
+        "explanation": "Correct. The resistor drops 3.3 − 2.0 = 1.3 V; 1.3 / 0.004 = 325 Ω. 330 Ω gives about 3.9 mA."
+      },
+      {
+        "text": "32.5 Ω",
+        "explanation": "A unit slip: 4 mA is 0.004 A, not 0.04 A. This would allow about 40 mA."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nV_R = 3.3 - 2.0 = 1.3 V\nR   = 1.3 / 0.004 = 325 ohm\n```\n\nPick the next standard value up: 330 Ω gives 1.3 / 330 = 3.9 mA. If the LED is bright enough at 1–2 mA, use about 1 kΩ for margin. Use the forward voltage from your LED's datasheet.",
+    "link": {
+      "title": "Teensy 4.1 — PJRC",
+      "url": "https://www.pjrc.com/store/teensy41.html"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "When would you choose an external pull-up resistor instead of the MCU's internal one? Select all that apply.",
+    "options": [
+      {
+        "text": "The switch is at the end of a long cable that picks up noise",
+        "explanation": "Correct. A stronger (lower-value) external pull-up holds the line more firmly against interference."
+      },
+      {
+        "text": "You need a known, documented resistance value",
+        "explanation": "Correct. Internal pull-ups have a wide tolerance range in the datasheet; an external part has a known value."
+      },
+      {
+        "text": "The pin also drives an on-board LED",
+        "explanation": "Correct. An LED on the pin interferes with a weak internal pull-up; PJRC warns not to use INPUT_PULLUP on Teensy pin 13 for this reason."
+      },
+      {
+        "text": "You want to save parts on a simple short-wired panel",
+        "explanation": "That is the case for the *internal* pull-up: it saves a component when conditions are benign."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Internal pull-ups are convenient but weak (typically tens of kΩ: 22 kΩ for Teensy 4.x's INPUT_PULLUP, roughly 30–50 kΩ on an STM32H7) and loosely specified. Reach for an external one when:\n\n1. Noise is high (long wires).\n2. The value matters.\n3. Something else loads the pin.\n\nFor a short, quiet wire to a panel button, the internal pull-up is fine.",
+    "link": {
+      "title": "Teensy 4.1 — PJRC",
+      "url": "https://www.pjrc.com/store/teensy41.html"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An integrator debouncer with TOP = 4 is ticked every 1 ms. Starting from released (acc = 0), it receives `1,0,1,1,0,1,1,1`. At which reading (1-based) does it first report pressed?",
+    "options": [
+      {
+        "text": "4th",
+        "explanation": "After four readings acc is 1, 0, 1, 2. It has not reached 4."
+      },
+      {
+        "text": "8th",
+        "explanation": "Correct. acc goes 1, 0, 1, 2, 1, 2, 3, 4. It reaches TOP on the 8th reading."
+      },
+      {
+        "text": "Never; the 0s reset it",
+        "explanation": "An integrator does not reset on a contrary reading; it only steps down by one. That is what distinguishes it from stable-for-N."
+      },
+      {
+        "text": "6th",
+        "explanation": "At the 6th reading acc is 2: two steps short of TOP."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace acc (clamped 0..4):\n\n```\nread  1 0 1 1 0 1 1 1\nacc   1 0 1 2 1 2 3 4\n```\n\nacc hits TOP = 4 on reading 8, so the state becomes pressed then. It will become released only when acc falls all the way back to 0.",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You design a panel with 16 step LEDs, each at 4 mA, all driven directly from MCU pins. Which concerns are valid? Select all that apply.",
+    "options": [
+      {
+        "text": "The total current (64 mA with all on) may exceed the chip's total I/O current limit even if each pin is within its own limit",
+        "explanation": "Correct. MCUs have per-pin and whole-package limits; check both in the datasheet."
+      },
+      {
+        "text": "Sixteen pins is a lot of GPIO to spend on LEDs; a shift register or LED driver chip can drive them from a few pins",
+        "explanation": "Correct. Driver chips or shift registers save pins and move the current off the MCU."
+      },
+      {
+        "text": "PWM cannot be used to dim LEDs driven from GPIO",
+        "explanation": "PWM on a GPIO (or timer) output is a standard way to dim an LED; PJRC lists it as a use of PWM."
+      },
+      {
+        "text": "Switching many LEDs at once can disturb supply and ground, which matters near audio circuitry",
+        "explanation": "Correct. Large simultaneous current steps cause supply and ground noise; this is part of why audio boards separate analogue and digital grounds."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. 16 × 4 mA = 64 mA total. Compare with the package limit in the MCU datasheet, not just the per-pin figure.\n2. Pins: 16 is a big share of a board's GPIO; a serial-in driver needs about 3 pins.\n3. Dimming: PWM works fine.\n4. Noise: current steps on shared ground can leak into audio. Keep LED currents low and follow the board's grounding advice.",
+    "link": {
+      "title": "Daisy Seed datasheet v1.2.0 — Electro-Smith",
+      "url": "https://daisy.nyc3.cdn.digitaloceanspaces.com/products/seed/Daisy_Seed_datasheet.pdf"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague attaches a mechanical button directly to a pin-change interrupt and increments a counter in the interrupt handler. One press often counts as 3–6. They propose adding a 20 ms busy-wait delay inside the handler. What is the better design?",
+    "options": [
+      {
+        "text": "Keep the interrupt and add the delay; 20 ms is short",
+        "explanation": "Busy-waiting 20 ms inside an interrupt blocks everything at its priority or lower. If that includes the audio interrupt, then with 1 ms blocks that is up to 20 missed deadlines; even if not, the main loop stalls."
+      },
+      {
+        "text": "Use a faster interrupt priority so the bounces are processed first",
+        "explanation": "Priority does not remove the bounces; it just processes them more eagerly."
+      },
+      {
+        "text": "Poll the button from a regular timer tick (about 1 ms) and debounce in that code, leaving interrupts for clean signals",
+        "explanation": "Correct. Ganssle recommends regular sampling for switches, and PJRC's Teensy page says interrupts should only be used for clean signals and recommends the Bounce library for switches."
+      },
+      {
+        "text": "Replace the button with a smaller one that bounces less",
+        "explanation": "Smaller switches still bounce, and Ganssle's measurements show bounce varies unpredictably even within one switch."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Root cause: each bounce edge fires the interrupt.\n2. Busy-waiting in an ISR wastes CPU and delays other interrupts, which an audio system cannot afford.\n3. Polling at 1 ms with a debouncer costs microseconds per tick and handles bounce and glitches cleanly.\n4. Reserve interrupts for clean digital signals (for example a UART receiving MIDI).",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  }
+]

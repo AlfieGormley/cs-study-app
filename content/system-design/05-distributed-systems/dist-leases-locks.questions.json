@@ -1,0 +1,378 @@
+[
+  {
+    "id": "dist-leases-locks-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do practical distributed locks always have an expiry time?",
+    "options": [
+      {
+        "text": "To save memory in the lock service.",
+        "explanation": "Wrong. A lock entry is a few bytes; memory isn't the reason."
+      },
+      {
+        "text": "Because the network forces TCP connections to close.",
+        "explanation": "Wrong. Lock lifetimes aren't tied to TCP connections in general; and if they were, a stuck but connected holder would block forever."
+      },
+      {
+        "text": "So that a crashed holder doesn't block everyone forever.",
+        "explanation": "Correct. The lock service can't tell whether the holder is dead or just quiet, so it must release the lock eventually, which makes it a lease."
+      },
+      {
+        "text": "To guarantee only one holder at a time.",
+        "explanation": "Wrong, in fact the opposite: expiry is what *allows* two holders when the old one is merely paused. Safety needs fencing tokens."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Without expiry: holder crashes → lock held forever → system stuck.\n2. With expiry: holder must renew; if it crashes, renewals stop; after the TTL someone else can acquire.\n3. Side effect: a holder that's paused (not dead) also stops renewing and loses the lock without noticing. That's why expiry alone can't guarantee mutual exclusion.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Worker A holds a lock with fencing token 41 and pauses. The lease expires. Worker B acquires token 42 and writes. Then B releases and C acquires 43 but hasn't written yet. A wakes and writes with token 41. What does a storage service that enforces fencing do?",
+    "options": [
+      {
+        "text": "Rejects it, because 41 < 42, the highest token it has seen.",
+        "explanation": "Correct. Storage tracks the max token from any accepted request. B's write recorded 42, so A's 41 is stale and rejected."
+      },
+      {
+        "text": "Accepts it, because C hasn't written yet so the highest seen is still 41.",
+        "explanation": "Wrong. Storage has already seen 42 from B's write, so the highest seen is 42."
+      },
+      {
+        "text": "Accepts it, because 41 was a valid token when issued.",
+        "explanation": "Wrong. Validity at issue time is irrelevant; the whole point is rejecting tokens that have since been superseded."
+      },
+      {
+        "text": "Asks the lock service whether A still holds the lock.",
+        "explanation": "Wrong. That's another check-then-act race and adds a dependency; fencing works by comparing numbers locally at the resource."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Storage state over time:\n\n| Event | max token |\n|---|---|\n| start | 40 |\n| B writes (42) | 42 |\n| C acquires 43 (no write) | 42 |\n| A writes (41) | 41 < 42 → **reject** |\n\nNote that storage only learns about tokens from requests it receives. That's fine: any token lower than one already used is definitely stale.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly job regenerates a cached report. If two instances run at once, the only harm is wasted CPU. Which lock is appropriate?",
+    "options": [
+      {
+        "text": "Redlock across 5 Redis masters",
+        "explanation": "Wrong. More complex and expensive than needed; for an efficiency lock its extra fault tolerance buys little."
+      },
+      {
+        "text": "ZooKeeper lock with fencing tokens enforced at the cache",
+        "explanation": "Wrong. Correct but over-engineered; fencing matters when a double holder causes damage, which isn't the case here."
+      },
+      {
+        "text": "No lock at all, ever",
+        "explanation": "Wrong. Some coordination is cheap and avoids burning CPU every night on duplicate work; 'no lock' isn't the best answer here."
+      },
+      {
+        "text": "A single Redis `SET key value NX PX 60000`",
+        "explanation": "Correct. This is an efficiency lock: an occasional double run after a Redis failover is harmless, so a single node is simple and good enough."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Classify the lock:\n\n1. What happens with two holders? Duplicate computation, same result.\n2. That's an **efficiency** lock.\n3. Pick the cheapest mechanism that usually prevents duplicates: single-node Redis with NX (only set if absent) and PX (expiry).\n4. Release with a compare-and-delete (Lua script checking the random value) so you don't delete someone else's lock.",
+    "link": {
+      "title": "Distributed locks with Redis",
+      "url": "https://redis.io/docs/latest/develop/use/patterns/distributed-locks/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q4",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which are valid criticisms of using Redlock for a **correctness** lock? Select all that apply.",
+    "options": [
+      {
+        "text": "It doesn't generate monotonically increasing fencing tokens.",
+        "explanation": "Correct. Its random values can't be ordered, so a resource can't reject a stale holder by comparing numbers."
+      },
+      {
+        "text": "A clock jump on one Redis node can expire a key early, letting a second client get a majority.",
+        "explanation": "Correct. Redlock's safety relies on TTLs measured by each node's clock; a forward jump on one of the majority nodes breaks mutual exclusion."
+      },
+      {
+        "text": "Redis is too slow to acquire locks quickly.",
+        "explanation": "Wrong. Redis is extremely fast; speed isn't the concern."
+      },
+      {
+        "text": "A node that restarts without persisting keys can forget a lock and grant it again.",
+        "explanation": "Correct. Without fsync on every write, a crash-restart loses the key, and a second client can then reach a majority."
+      },
+      {
+        "text": "It needs at least 7 Redis nodes to be safe.",
+        "explanation": "Wrong. The node count isn't the issue; Redlock with 5 nodes tolerates 2 failures by design. The problems are timing assumptions and missing fencing."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Kleppmann's argument had two parts:\n\n1. **No fencing**: even a perfect lock service can't stop a paused ex-holder unless the resource checks an increasing token. Redlock gives random strings.\n2. **Timing assumptions**: safety depends on bounded clock drift, network delay and pauses. Examples that break it:\n  - clock jump on node C → C1's key expires early → C2 gets C, D, E;\n  - node C crash-restart without fsync → same effect.\n\nPerformance and node count aren't the issue.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kubernetes-style controller uses a 15-second lease in etcd and renews every 5 seconds. Its process suffers a 20-second GC pause right after a successful renewal. Another replica takes over at t = 15 s. The protected records are in that same etcd cluster. What is the safest design for its writes?",
+    "options": [
+      {
+        "text": "Check `time.now() < lease_expiry` before each write.",
+        "explanation": "Wrong. The pause can happen between the check and the write; the check passes, the write lands after expiry."
+      },
+      {
+        "text": "Include the lease's etcd revision in each write as a transaction condition, so writes from an old lease holder fail.",
+        "explanation": "Correct for writes in the same etcd transaction. Compare the leadership key revision and update the protected keys atomically. A separate check followed by an external write would still race."
+      },
+      {
+        "text": "Make the lease 30 seconds so 20-second pauses are covered.",
+        "explanation": "Wrong. Pauses are unbounded; a 35-second pause breaks it, and failover becomes slower for every real crash."
+      },
+      {
+        "text": "Disable garbage collection on the controller.",
+        "explanation": "Wrong. Pauses also come from VM migration, swapping and network delay; removing GC doesn't remove the problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Timeline:\n\n```\nt=0   renew; lease to t=15\nt=0   GC pause begins\nt=15  lease expires\nt=15  replica 2 becomes leader\nt=20  replica 1 resumes, writes\n```\n\nFixes ranked:\n\n1. Client-side time checks: race, unsafe.\n2. Longer lease: makes the window rarer, not impossible.\n3. **Fencing**: `Txn(If(mod_revision(leader_key) == my_rev)).Then(put ...)` fails for replica 1 because replica 2's election changed the revision. Safe whatever the timing.",
+    "link": {
+      "title": "etcd API guarantees",
+      "url": "https://etcd.io/docs/v3.6/learning/api_guarantees/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You choose a lease of **2 seconds** for your database primary election instead of 30 seconds. What's the main new risk?",
+    "options": [
+      {
+        "text": "Frequent false failovers from brief GC pauses or network blips.",
+        "explanation": "Correct. Any hiccup over ~2 s causes the lease to lapse and a new election, which means disruption, possible data loss on async replicas and churn."
+      },
+      {
+        "text": "Slower failover when the primary crashes.",
+        "explanation": "Wrong. Shorter leases mean *faster* failover; that's their main benefit."
+      },
+      {
+        "text": "The lock service will run out of leases.",
+        "explanation": "Wrong. Lease count is unaffected by duration."
+      },
+      {
+        "text": "Two primaries become impossible.",
+        "explanation": "Wrong. Lease length doesn't make split brain impossible; only fencing does. Shorter leases make false expiry more likely, not less."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trade-off:\n\n| Lease | Detection on real crash | False expiry risk |\n|---|---|---|\n| 2 s | ~2 s | high |\n| 30 s | ~30 s | low |\n\nA 2 s lease with renewal every ~0.7 s fails if any renewal path stalls for over ~1.3 s: a GC pause, a busy etcd, a slow disk fsync. Each false failover may lose unreplicated writes and restart connections, so many teams settle around 10–15 s.",
+    "link": {
+      "title": "Leader election in distributed systems (AWS)",
+      "url": "https://aws.amazon.com/builders-library/leader-election-in-distributed-systems/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your lock protects calls to a third-party payment API that has no notion of fencing tokens. Two holders could double-charge. What's the best mitigation?",
+    "options": [
+      {
+        "text": "Use Redlock with 7 nodes instead of 5.",
+        "explanation": "Wrong. More nodes don't fix pauses or missing fencing; a stale holder can still call the API."
+      },
+      {
+        "text": "Rely on etcd's linearizability.",
+        "explanation": "Wrong. etcd guarantees agreement on who holds the lock, but can't stop a paused ex-holder's in-flight call reaching the external API."
+      },
+      {
+        "text": "Send an idempotency key derived from the operation (e.g. order id) so repeated calls have no extra effect.",
+        "explanation": "Correct. When the resource can't check tokens, making the operation idempotent means a stale holder's duplicate call is harmless."
+      },
+      {
+        "text": "Shorten the lease to 1 second.",
+        "explanation": "Wrong. Shorter leases increase false expiry and do nothing about stale holders; they make it worse."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Fencing needs the resource to compare tokens; the payment API won't.\n2. So the lock alone can't give safety.\n3. Move safety to the operation: an idempotency key like `charge:order-9182` means the processor returns the original result on a duplicate instead of charging again.\n4. Stripe, Adyen and most payment APIs support this.\n\nRule: lock for efficiency, idempotency (or fencing) for correctness.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client acquires a 10-second lease. The request takes 300 ms to reach the lock service and the reply 300 ms to come back. From which moment should the **client** count its 10 seconds?",
+    "options": [
+      {
+        "text": "From the moment it receives the reply, since that's when it knows it holds the lease.",
+        "explanation": "Wrong. The service started counting when it granted, about 300 ms before the reply arrived. Counting from receipt makes the client think it holds the lease ~300 ms longer than it does."
+      },
+      {
+        "text": "From the timestamp in the reply, converted from the service's wall clock.",
+        "explanation": "Wrong. That compares wall clocks across two machines, which are skewed and can jump. The client should rely only on its own monotonic clock."
+      },
+      {
+        "text": "It doesn't matter, because 300 ms is small compared with 10 s.",
+        "explanation": "Wrong. Delays can be far larger than 300 ms under load, and the error is always in the unsafe direction."
+      },
+      {
+        "text": "From just before it sent the request, measured on its monotonic clock, minus a safety margin.",
+        "explanation": "Correct. The grant can't have happened before the request was sent, so counting from then guarantees the client's view of expiry comes no later than the service's, as long as clock rates are similar."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Timeline on a common scale:\n\n```\nt=0.0  client sends (start here)\nt=0.3  service grants; expires 10.3\nt=0.6  client gets reply\n```\n\n- Count from 0.0: client stops at 10.0 (minus margin), before 10.3. Safe side.\n- Count from 0.6: client acts until 10.6, after expiry. Unsafe.\n\nThis narrows the danger window but doesn't remove it: a pause can still strike between \"lease still valid\" and the write. That's what fencing tokens are for.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these can serve as a **fencing token**, one that the protected resource can compare to reject a stale lock holder? Select all that apply.",
+    "options": [
+      {
+        "text": "The etcd revision at which the lock key was created",
+        "explanation": "Correct. etcd revisions are cluster-wide and strictly increasing, so every new acquisition gets a larger number."
+      },
+      {
+        "text": "The sequence number of a ZooKeeper ephemeral sequential lock node",
+        "explanation": "Correct. ZooKeeper assigns increasing sequence numbers under a parent, so a later lock holder's node has a higher number."
+      },
+      {
+        "text": "The random value Redlock stores in the key",
+        "explanation": "Wrong. Random values can show \"this isn't my lock\", but can't be ordered, so the resource can't tell whether a request comes from an older or newer holder."
+      },
+      {
+        "text": "The lock holder's wall-clock time when it acquired the lock",
+        "explanation": "Wrong. Wall clocks on different machines are skewed and can jump backwards, so a later holder may present a smaller timestamp."
+      },
+      {
+        "text": "The Raft term of the leader that issues the writes",
+        "explanation": "Correct. Terms strictly increase with each election, and Raft followers already use them to reject a deposed leader."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "A fencing token needs one property: **every new grant gets a strictly larger number than every earlier grant**, decided by a single authority.\n\n| Candidate | Strictly increasing? |\n|---|---|\n| etcd revision | yes |\n| ZK sequence number | yes |\n| Redlock random value | no (unordered) |\n| Holder's wall clock | no (skew, jumps) |\n| Raft term | yes |\n\nThe consensus-backed ones work because a single replicated log decides the order of grants.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You add fencing to a storage service that has three replicas with **asynchronous** replication. Writes go to whichever replica is nearest, and each replica independently rejects tokens lower than the highest it has seen. Holder A (token 33) is paused; B gets token 34 and writes to replica R1. A wakes and writes to R2. What happens?",
+    "options": [
+      {
+        "text": "R2 rejects A, because 34 is the highest token in the system.",
+        "explanation": "Wrong. R2 only knows tokens it has seen itself. If B's write hasn't replicated to R2 yet, R2's highest is still 33 or lower."
+      },
+      {
+        "text": "R2 may accept A's stale write, because it hasn't yet seen token 34. Fencing must be checked in one consistent place.",
+        "explanation": "Correct. Independent checks on asynchronously replicated copies re-create the race fencing was meant to remove. The token check and the write must be one atomic step in a linearizable place, such as a single leader or a conditional write."
+      },
+      {
+        "text": "The write is rejected because replicas share tokens instantly over gossip.",
+        "explanation": "Wrong. Gossip is eventually consistent; there's always a window in which R2 hasn't heard about 34."
+      },
+      {
+        "text": "Both writes are kept, and the token is used to merge them later.",
+        "explanation": "Wrong. The design rejects or accepts writes; it doesn't merge. And even if replication later orders by token, A's write may already have been read and acted on."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nR1: max=34 (B wrote)\nR2: max=33 (not replicated)\nA writes 33 to R2 -> 33 >= 33 OK!\n```\n\nThe stale holder got through because the \"highest token seen\" isn't a single agreed value. Fixes:\n\n- Route all writes for the resource through a single leader that checks the token.\n- Use a linearizable conditional write (`UPDATE ... WHERE token <= 34`, an etcd transaction, a DynamoDB condition expression).\n\nFencing moves the problem to the resource; the resource must then be strongly consistent about the token.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Workers use a single-node Redis lock: `SET lock:report <random> NX PX 30000`. When done, each worker runs `DEL lock:report`. Worker A pauses for 40 s mid-job, B acquires the lock, then A finishes and runs `DEL`. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing: DEL fails because A no longer owns the key.",
+        "explanation": "Wrong. Redis has no idea who \"owns\" a key. DEL deletes it unconditionally."
+      },
+      {
+        "text": "Redis rejects the DEL because the key has a TTL.",
+        "explanation": "Wrong. Keys with a TTL can be deleted normally."
+      },
+      {
+        "text": "A deletes B's lock, so a third worker C can acquire it while B is still running.",
+        "explanation": "Correct. A's lease expired at 30 s and B took the lock. A's blind DEL removes B's key, and now B and C can both run. Release should delete only if the value still equals A's random token, atomically (a Lua script)."
+      },
+      {
+        "text": "A's DEL extends B's lock by another 30 s.",
+        "explanation": "Wrong. DEL removes the key; it never extends anything."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. t=0: A sets lock = \"a7f\". TTL 30 s.\n2. t=30: key expires. B sets lock = \"c19\".\n3. t=40: A resumes and runs `DEL lock:report`, deleting **B's** lock.\n4. C acquires: B and C now both run.\n\nSafe release, atomically in Lua:\n\n```\nif get(key) == my_token:\n    del(key)\n```\n\nWrapping it in a Lua script makes the compare and delete a single step. A still overran its lease (that's inherent), but it no longer breaks the next holder's lock.",
+    "link": {
+      "title": "Distributed locks with Redis (Redis docs)",
+      "url": "https://redis.io/docs/latest/develop/use/patterns/distributed-locks/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A ledger service must apply each account's transactions one at a time, in order. Volume is high and spread across millions of accounts. Which design avoids a per-account distributed lock while staying safe?",
+    "options": [
+      {
+        "text": "Partition by account id, process sequentially, and atomically enforce both transaction-id deduplication and a per-account sequence or fencing condition in the ledger.",
+        "explanation": "Correct. Kafka partitions provide input order, but an old consumer can overlap a new owner. The ledger must reject duplicate and out-of-order or stale-owner writes atomically; idempotency alone only rejects repeats of the same transaction."
+      },
+      {
+        "text": "Take a Redlock lock on the account id for every transaction.",
+        "explanation": "Wrong. It adds a multi-node round trip per transaction and still lacks fencing, so it isn't safe for correctness anyway."
+      },
+      {
+        "text": "Let any worker process any transaction and rely on database autocommit.",
+        "explanation": "Wrong. Concurrent workers could apply an account's transactions out of order or interleave read-modify-write cycles and lose updates."
+      },
+      {
+        "text": "Use a single worker for all accounts.",
+        "explanation": "Wrong. It's safe but can't keep up with high volume, and it is a single point of failure."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Route each account to one partition and process its records sequentially.\n2. During rebalancing, an old consumer may still issue writes.\n3. In one ledger transaction, check the expected account sequence (or a validated owner epoch), check the unique transaction id, update the balance and advance the sequence.\n4. Reject or retry out-of-order work. Deduplication by transaction id alone would still allow two distinct transactions to apply in the wrong order.",
+    "link": {
+      "title": "Leader election in distributed systems (AWS)",
+      "url": "https://aws.amazon.com/builders-library/leader-election-in-distributed-systems/"
+    }
+  }
+]

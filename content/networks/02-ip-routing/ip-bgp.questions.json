@@ -1,0 +1,369 @@
+[
+  {
+    "id": "ip-bgp-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A BGP router in AS 65010 receives an eBGP update for 198.51.100.0/24 with AS_PATH `3356 65010 1299`. What does it do? Assume normal AS-loop checking with no configured exception.",
+    "options": [
+      {
+        "text": "Rejects the route, because its own ASN is already in the path",
+        "explanation": "Correct. Normal AS-loop checking excludes this route because 65010 appears in its advertised path. The path is not proof of actual traffic traversal."
+      },
+      {
+        "text": "Accepts it and prepends 65010 again",
+        "explanation": "Prepending happens when a router *sends* to an eBGP neighbour, and accepting a looped path is exactly what AS_PATH checking prevents."
+      },
+      {
+        "text": "Accepts it as the best route because the path is short",
+        "explanation": "Path length only matters among acceptable routes. A path containing your own ASN is discarded before selection."
+      },
+      {
+        "text": "Forwards it to its iBGP peers to decide",
+        "explanation": "Loop detection happens on receipt. The route is dropped, not passed around."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The advertised sequence contains 3356, 65010 and 1299.\n2. The receiver uses local ASN 65010.\n3. With normal loop checking, the route is excluded because the local ASN occurs in that sequence.\n4. This is an AS-loop check, not cryptographic verification of the path or a guarantee against every forwarding loop.",
+    "link": {
+      "title": "RFC 4271: BGP-4",
+      "url": "https://www.rfc-editor.org/rfc/rfc4271"
+    }
+  },
+  {
+    "id": "ip-bgp-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How do two BGP routers exchange routes?",
+    "options": [
+      {
+        "text": "Multicast Hellos discover neighbours automatically, like OSPF",
+        "explanation": "Base BGP has no OSPF-style multicast Hello discovery. Peer relationships are configured, although implementations can automate provisioning or accept dynamic peers under rules."
+      },
+      {
+        "text": "Over UDP port 520 with periodic full-table updates",
+        "explanation": "UDP port 520 and periodic routing updates describe RIPv2, not BGP."
+      },
+      {
+        "text": "Over a configured TCP session on port 179, sending incremental UPDATEs after the initial exchange",
+        "explanation": "Correct. BGP uses TCP and normally incremental UPDATEs. KEEPALIVE and UPDATE messages maintain hold-timer liveness; extensions can request route refreshes."
+      },
+      {
+        "text": "Directly over IP as protocol 89",
+        "explanation": "Protocol 89 is OSPF. BGP relies on TCP for reliability."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Peer configuration establishes addresses, ASNs and policy.\n2. A TCP session is opened to port 179.\n3. OPEN exchanges session parameters and negotiated capabilities.\n4. Initial advertisements contain the routes permitted by selection and export policy; subsequent updates normally describe changes.\n5. For a nonzero negotiated hold time, KEEPALIVE or UPDATE receipt resets the timer. Expiry closes the session. Graceful-restart mechanisms can retain stale routes under specified conditions; hold time zero disables the hold timer.",
+    "link": {
+      "title": "RFC 4271: BGP-4",
+      "url": "https://www.rfc-editor.org/rfc/rfc4271"
+    }
+  },
+  {
+    "id": "ip-bgp-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An ISP wants all outbound traffic to a prefix to leave via its cheap peering link rather than its expensive transit link, even though the transit path has a shorter AS_PATH. Which attribute should it set on routes from the peer? Assume both routes are eligible, visible to the relevant routers, and earlier vendor-specific preferences are equal.",
+    "options": [
+      {
+        "text": "A lower MED",
+        "explanation": "MED usually influences entry into the advertising neighbour and is normally compared only for the same neighbouring AS. Under the stated ordering it follows AS_PATH."
+      },
+      {
+        "text": "A higher LOCAL_PREF",
+        "explanation": "Correct. LOCAL_PREF is carried over iBGP and, with the earlier checks tied here, takes priority over AS_PATH length."
+      },
+      {
+        "text": "A longer AS_PATH via prepending",
+        "explanation": "Prepending affects how *others* pick paths towards you, i.e. inbound traffic. And making the peer path longer would push traffic away from it."
+      },
+      {
+        "text": "A different NEXT_HOP",
+        "explanation": "NEXT_HOP identifies a forwarding next hop. Changing it can affect eligibility or later IGP-cost tie-breaks, but is not the stated direct way to rank the peer route ahead of transit before AS_PATH."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The decision concerns outbound routing within the AS.\n2. Both eligible routes pass earlier checks equally.\n3. Assign LOCAL_PREF 200 to the peer route and 100 to transit.\n4. LOCAL_PREF decides before path length.\n5. Consistent policy and visibility of the preferred route are needed across the AS; iBGP does not guarantee identical information at every router.",
+    "link": {
+      "title": "Cisco: BGP best-path algorithm",
+      "url": "https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/13753-25.html"
+    }
+  },
+  {
+    "id": "ip-bgp-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A router has two eBGP routes for the same prefix, both with origin IGP:\n\n| | LOCAL_PREF | AS_PATH | MED |\n|---|---|---|---|\n| X | 100 | 64500 64501 65010 | 10 |\n| Y | 100 | 64600 65010 | 50 |\n\nWhich is chosen? Assume both are eligible and equally weighted, with no local origination or configuration overriding the lesson’s selection order.",
+    "options": [
+      {
+        "text": "X, because its MED is lower",
+        "explanation": "MED is checked only after AS_PATH length. And X and Y come from different neighbouring ASes, so their MEDs wouldn't normally be compared at all."
+      },
+      {
+        "text": "Both, load-balanced, since LOCAL_PREF ties",
+        "explanation": "A LOCAL_PREF tie just moves on to the next step. Multipath requires a tie through many more attributes."
+      },
+      {
+        "text": "X, because it was received first",
+        "explanation": "Route age can be a late eBGP tie-breaker on some implementations; it cannot overcome the AS_PATH difference under the stated order."
+      },
+      {
+        "text": "Y, because its AS_PATH is shorter (2 vs 3)",
+        "explanation": "Correct. LOCAL_PREF ties at 100, there's no local origination, so AS_PATH length decides: 2 ASes beats 3."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk the order:\n\n1. LOCAL_PREF: 100 vs 100, tie.\n2. Locally originated: neither.\n3. AS_PATH length: X = 3, Y = 2. **Y wins.**\n\nSelection stops here. MED (step 5) never comes into it, and would normally be skipped anyway because the routes come from different neighbours (64500 vs 64600).",
+    "link": {
+      "title": "Cisco: BGP best-path algorithm",
+      "url": "https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/13753-25.html"
+    }
+  },
+  {
+    "id": "ip-bgp-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Under the usual Gao–Rexford policy, an ISP learns a route from a settlement-free **peer**. Which of its neighbours should it announce that route to?",
+    "options": [
+      {
+        "text": "Everyone: customers, peers and providers",
+        "explanation": "That would make the ISP carry traffic between its peer and its other peers or providers for free, or even pay for it. It's the definition of a route leak."
+      },
+      {
+        "text": "Only its customers",
+        "explanation": "Correct. Customers pay for reachability, so giving them the peer's routes earns money. Telling providers or other peers would attract traffic the ISP isn't paid to carry."
+      },
+      {
+        "text": "Only its providers",
+        "explanation": "Announcing peer routes upstream invites the provider to send traffic through you to the peer, which you'd be paying transit for."
+      },
+      {
+        "text": "Nobody; peer routes are for the ISP's own use only",
+        "explanation": "Its customers expect to reach the peer's customers; that's much of the value of peering."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask who pays for each link.\n2. Customer link: they pay you. Peer link: free, but only for traffic between your customers and theirs. Provider link: you pay.\n3. Announcing a route invites traffic towards it.\n4. Inviting customers' traffic to the peer: they pay you, good.\n5. Inviting providers' or other peers' traffic: nobody pays you, and you might pay. So export peer and provider routes to **customers only**.",
+    "link": {
+      "title": "Tier 1 network — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tier_1_network"
+    }
+  },
+  {
+    "id": "ip-bgp-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An AS has 20 BGP routers. How many iBGP sessions does a full mesh need, and how many with two route reflectors (each of the other 18 routers peers with both reflectors, and the reflectors peer with each other)?",
+    "options": [
+      {
+        "text": "380 and 36",
+        "explanation": "380 counts each pair twice (20 × 19). Sessions are between pairs, so divide by 2. And you've left out the reflector-to-reflector session."
+      },
+      {
+        "text": "190 and 20",
+        "explanation": "190 is right for the mesh. With two reflectors each client needs two sessions, not one."
+      },
+      {
+        "text": "190 and 37",
+        "explanation": "Correct. Mesh: 20 × 19 / 2 = 190. Reflectors: 18 clients × 2 = 36, plus 1 between the reflectors = 37."
+      },
+      {
+        "text": "20 and 2",
+        "explanation": "These count routers, not sessions."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "**Full mesh**\nn(n − 1)/2 = 20 × 19 / 2 = **190** sessions. Adding a 21st router means configuring 20 new sessions.\n\n**Route reflectors**\n1. 18 clients, each with 2 sessions: 36.\n2. The reflectors peer with each other: +1.\n3. Total **37**. A new client needs just 2 sessions.\n\nTwo suitably designed reflectors can tolerate one reflector failing; shared infrastructure and configuration faults can still affect both.",
+    "link": {
+      "title": "RFC 4456: BGP Route Reflection",
+      "url": "https://www.rfc-editor.org/rfc/rfc4456"
+    }
+  },
+  {
+    "id": "ip-bgp-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "About the February 2008 Pakistan Telecom incident, which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Pakistan Telecom announced 208.65.153.0/24, more specific than YouTube's 208.65.152.0/22",
+        "explanation": "Correct. The /24 sat inside YouTube's /22."
+      },
+      {
+        "text": "Where both routes were installed, forwarding preferred the hijacked /24 to the covering /22, regardless of the /22’s AS_PATH or LOCAL_PREF",
+        "explanation": "Correct. Best-path selection compares alternatives for the same prefix. Once the /24 and /22 are installed, forwarding selects the longer matching prefix."
+      },
+      {
+        "text": "Its upstream provider passed the announcement on without filtering it",
+        "explanation": "Correct. RIPE RIS observed PCCW propagating the unauthorised announcement; it was not blocked on that path."
+      },
+      {
+        "text": "YouTube fixed it by announcing a shorter prefix, such as a /21",
+        "explanation": "A /21 would not defeat an installed /24 through longest-prefix match. YouTube counter-announced the /24 and then two /25s; PCCW later withdrew the hijack."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. YouTube advertised 208.65.152.0/22, covering third octets 152 through 155.\n2. At 18:47 UTC on 24 February 2008, RIS observed Pakistan Telecom’s 208.65.153.0/24 propagated by PCCW.\n3. Where both were installed, the /24 won forwarding by longest-prefix match.\n4. YouTube counter-announced the /24 at 20:07 and two /25s at 20:18. Equal-prefix choices depended on policy; the /25s helped where accepted.\n5. RIS observed PCCW withdrawing Pakistan Telecom-originated prefixes at 21:01.",
+    "link": {
+      "title": "RIPE NCC: YouTube hijacking presentation and timeline",
+      "url": "https://ripe56.ripe.net/presentations/Refice-YouTube_Prefix_Hijacking.pdf"
+    }
+  },
+  {
+    "id": "ip-bgp-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're a customer of providers P1 and P2. To push inbound traffic onto P2, you prepend your ASN three times on announcements to P1. Most traffic shifts to P2, but traffic from P1's own customers still arrives via P1. Why? P1 confirms that the updates arrived unchanged and that its customer routes have higher LOCAL_PREF; earlier selection checks tie.",
+    "options": [
+      {
+        "text": "Prepending takes a few days to propagate",
+        "explanation": "The prompt confirms receipt of the updates. Selection policy, rather than propagation delay, explains this case; BGP has no universal convergence-time guarantee."
+      },
+      {
+        "text": "P1 gives routes learnt from its customers a higher LOCAL_PREF than routes via P2, and LOCAL_PREF is compared before AS_PATH length",
+        "explanation": "Correct. Inside P1, your direct (customer) route beats any path via P2 at step 1, so the extra length you added is never compared."
+      },
+      {
+        "text": "P1 strips prepended ASNs",
+        "explanation": "The prompt says the prepended paths arrived unchanged. Some configurations can rewrite paths, but that is not the cause here."
+      },
+      {
+        "text": "MED overrides prepending",
+        "explanation": "You didn't set a MED, and MED comes after AS_PATH in the order anyway."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. P1 sees the direct customer route with higher LOCAL_PREF than the alternative.\n2. With earlier checks tied, LOCAL_PREF decides before AS_PATH length.\n3. Extra prepending therefore does not displace this route inside P1.\n4. Other networks may choose differently under their own policies; the observed traffic shift alone does not reveal all of those policies.\n5. A provider’s documented communities may offer a way to change preference; check its actual policy before relying on them.",
+    "link": {
+      "title": "Cisco: BGP best-path algorithm",
+      "url": "https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/13753-25.html"
+    }
+  },
+  {
+    "id": "ip-bgp-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In this hypothetical validation exercise, the only covering validated ROA record says: prefix `192.0.0.0/22`, max length 23, origin AS 65010. Which announcements are **Invalid** under route origin validation? Select all that apply.",
+    "options": [
+      {
+        "text": "192.0.2.0/24 from AS 65010",
+        "explanation": "Correct, Invalid. The origin is right, but /24 is longer than the ROA's max length of 23."
+      },
+      {
+        "text": "192.0.2.0/23 from AS 65010",
+        "explanation": "Valid: covered by the ROA, origin matches and /23 is within max length."
+      },
+      {
+        "text": "192.0.2.0/23 from AS 64666",
+        "explanation": "Correct, Invalid. A ROA covers the prefix but authorises a different origin AS."
+      },
+      {
+        "text": "198.51.100.0/24 from AS 64666",
+        "explanation": "NotFound, not Invalid. No ROA covers 198.51.100.0/24, so validation has no opinion."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "For each route, ask: is it covered by a ROA? If so, does the origin match and is the length ≤ max length (23)?\n\n| Route | Check | State |\n|---|---|---|\n| /24 from 65010 | 24 > 23 | Invalid |\n| /23 from 65010 | all ok | Valid |\n| /23 from 64666 | wrong origin | Invalid |\n| 198.51.100.0/24 | no ROA | NotFound |\n\nNetworks configured to reject Invalid routes drop those two. A different covering record that authorises a route could instead make it Valid; this exercise specifies only one.",
+    "link": {
+      "title": "RFC 6811: BGP Prefix Origin Validation",
+      "url": "https://www.rfc-editor.org/rfc/rfc6811"
+    }
+  },
+  {
+    "id": "ip-bgp-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical validation exercise, AS 65010 is authorised by a validated ROA for a /24. An attacker advertises that /24 with AS_PATH `64666 65010`. What does origin validation establish?",
+    "options": [
+      {
+        "text": "Invalid, because 64666 isn't in the ROA",
+        "explanation": "ROV checks only the **origin**, the last ASN in the path. Here that's 65010, which matches the ROA."
+      },
+      {
+        "text": "NotFound, because the path is longer than one AS",
+        "explanation": "NotFound means no ROA covers the prefix. One does."
+      },
+      {
+        "text": "Valid: the origin matches, but ROV does not authenticate the intervening path",
+        "explanation": "Correct. The final ASN and prefix length match the authorisation. ROV alone cannot tell whether the preceding AS relationship is genuine."
+      },
+      {
+        "text": "Valid, and nothing can detect it",
+        "explanation": "ROV’s limitation does not mean no defence exists. Appropriately configured prefix/path filters and deployed path-validation mechanisms can help, with their own assumptions and coverage limits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. For this AS_SEQUENCE, the claimed origin is 65010.\n2. The validated record authorises that origin and /24: Valid.\n3. Origin validation does not authenticate the preceding 64666 entry.\n4. Whether this route wins depends on competing routes and policy; its relative length is not specified.\n5. Additional filtering or path validation requires appropriate trusted data and deployment. Merely naming ASPA or BGPsec does not guarantee detection in this scenario.",
+    "link": {
+      "title": "RFC 6811: origin-validation security limitations",
+      "url": "https://www.rfc-editor.org/rfc/rfc6811"
+    }
+  },
+  {
+    "id": "ip-bgp-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "According to Meta’s report on the October 2021 outage, how did the backbone disconnection also make its operational authoritative DNS servers unreachable?",
+    "options": [
+      {
+        "text": "An attacker hijacked Facebook's prefixes",
+        "explanation": "There was no hijack. The routes were withdrawn by Facebook's own systems."
+      },
+      {
+        "text": "Facebook's DNS servers, unable to reach the data centres, withdrew their BGP announcements, so the prefixes hosting Facebook's authoritative DNS vanished and the names stopped resolving",
+        "explanation": "Correct. Loss of connectivity to the data centres triggered the DNS sites to withdraw advertisements. Fresh lookups needing these authoritative servers failed; cached answers could still exist, while the backbone outage separately disrupted services."
+      },
+      {
+        "text": "RPKI marked Facebook's routes Invalid after a ROA expired",
+        "explanation": "RPKI played no part. The prefixes weren't rejected; they were no longer announced."
+      },
+      {
+        "text": "A route leak sent Facebook's traffic through a small ISP that couldn't carry it",
+        "explanation": "That describes the 2019 Verizon/DQE leak, not Facebook in 2021."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A maintenance command disconnected the backbone between data centres.\n2. DNS sites could no longer reach those data centres.\n3. Their health mechanism withdrew BGP advertisements, leaving the still-operational DNS servers unreachable externally.\n4. DNS failures compounded the underlying connectivity outage; they were not its sole cause.\n5. Network-dependent internal access and recovery tools were also affected.",
+    "link": {
+      "title": "Meta: October 2021 outage details",
+      "url": "https://engineering.fb.com/2021/10/05/networking-traffic/outage-details/"
+    }
+  },
+  {
+    "id": "ip-bgp-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical routing exercise, a company announces only 203.0.112.0/22 from AS 65010. To \"be flexible\", its ROA says max length 24. What risk does this create, and what's the fix?",
+    "options": [
+      {
+        "text": "None; a looser max length only makes more of your own announcements Valid",
+        "explanation": "It also makes an attacker's more-specific announcements Valid, if they forge your ASN as origin."
+      },
+      {
+        "text": "Your /22 becomes Invalid because it's shorter than 24",
+        "explanation": "Max length is an upper bound. Anything from /22 to /24 under the ROA's prefix with the right origin is Valid."
+      },
+      {
+        "text": "Routers reject ROAs with max length greater than the prefix length",
+        "explanation": "Max length longer than the prefix is allowed; it's just discouraged when you don't announce those lengths."
+      },
+      {
+        "text": "A forged-origin /24 can pass ROV and win LPM where installed; restrict max length to 22 if only the /22 is authorised",
+        "explanation": "Correct. The broader max length permits the forged-origin /24. Where it is accepted and installed beside the /22, LPM selects it. Restricting length makes that /24 Invalid; local rejection policy is still required."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Hypothetical ROA: 203.0.112.0/22, max length 24, origin 65010.\n2. The attacker claims 203.0.113.0/24 with path `64666 65010`.\n3. Prefix coverage, origin and permitted length match: Valid.\n4. Where installed with the /22, the /24 wins forwarding for its addresses.\n5. Restricting max length to 22 makes that /24 Invalid, assuming no other authorising record, so networks configured to reject Invalid routes discard it.\n6. A forged-origin /22 can still pass origin validation and compete under normal policy; removing excess maxLength is not complete path authentication.",
+    "link": {
+      "title": "RFC 9319: The Use of maxLength in the RPKI",
+      "url": "https://www.rfc-editor.org/rfc/rfc9319"
+    }
+  }
+]

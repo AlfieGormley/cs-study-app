@@ -1,0 +1,378 @@
+[
+  {
+    "id": "fs-crash-consistency-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A non-journaling file system is appending a block to a file. It must write the data block, the inode and the data bitmap. Power fails after the **inode and bitmap** reach the disk, but before the data block does. What is the state after reboot? Assume the lesson's ordinary non-checksummed three-block teaching model, with no concurrent changes.",
+    "options": [
+      {
+        "text": "Inconsistent: the inode points at a block the bitmap says is free",
+        "explanation": "That's the \"inode only\" case. Here the bitmap was written too, so the two agree."
+      },
+      {
+        "text": "Consistent metadata, but the file's new block contains whatever garbage was there before, and fsck can't tell",
+        "explanation": "Correct. The inode and bitmap agree, so every metadata check passes. Only the contents are wrong, and fsck doesn't inspect contents."
+      },
+      {
+        "text": "A leaked block that fsck will reclaim",
+        "explanation": "A leak means the bitmap marks a block as used that no inode references. Here the inode does reference it."
+      },
+      {
+        "text": "Everything is fine, because the data is still in the page cache",
+        "explanation": "The page cache is in RAM and was wiped by the power cut."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Go through the three structures:\n\n```\ndata block   OLD contents (not written)\ninode        size + pointer  (written)\nbitmap       block marked used (written)\n```\n\n1. Does the inode point at a used block? Yes, the bitmap agrees.\n2. Is the block claimed by one inode only? Yes.\n3. So fsck finds no inconsistency.\n4. But reading the file returns the block's previous contents, possibly another user's deleted data.\n\nThis is why ext4's ordered mode writes data blocks *before* the metadata that points at them.",
+    "link": {
+      "title": "OSTEP: Crash Consistency: FSCK and Journaling (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A server with a 60 TB array of hard disks crashes. On reboot, a full `fsck` runs on its non-journaled file system and takes over three hours. Why so slow?",
+    "options": [
+      {
+        "text": "fsck only repairs the blocks that were being written at the crash, but has to wait for the disks to spin up",
+        "explanation": "If fsck knew which blocks were in flight, it would be fast. Its problem is that it *doesn't* know."
+      },
+      {
+        "text": "fsck must scan all the file system's metadata (every inode, every directory, the bitmaps), so its time scales with the size of the file system, not the damage",
+        "explanation": "Correct. Without a log of what was in progress, the only way to find inconsistencies is to check everything. That's what journaling fixes."
+      },
+      {
+        "text": "fsck also verifies every data block's checksum",
+        "explanation": "Classic fsck doesn't read file contents; ext2/3 have no data checksums to verify."
+      },
+      {
+        "text": "fsck is single-threaded and can't use the RAID array",
+        "explanation": "Parallelism would help a little, but the core problem is the total amount of metadata it has to read."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A classic full checker must inspect broadly enough to reconcile inode/block ownership, directories and allocation metadata. Its cost depends on metadata volume, layout, algorithms and hardware, not just the damaged bytes. Journal replay usually bounds normal crash-recovery work to relevant log transactions, but neither a fixed runtime nor freedom from all later full checks follows. The stated three-hour result is hypothetical.",
+    "link": {
+      "title": "fsck — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Fsck"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After a crash, ext4 scans its journal and finds a transaction with a begin block (TxB) and all its logged metadata blocks, but **no** commit block (TxE). What does recovery do? Focus on journaled metadata under the teaching protocol, not rollback of unjournaled file data.",
+    "options": [
+      {
+        "text": "Replays it, since all the data blocks are present",
+        "explanation": "Without the commit block there's no proof the transaction is complete. A partial one could be missing blocks or contain garbage."
+      },
+      {
+        "text": "Discards it: the change is treated as never having happened, and the file system stays at its last committed state",
+        "explanation": "Correct. Only committed transactions are replayed. An uncommitted one hadn't been checkpointed yet, so the in-place structures are still in their old, consistent state."
+      },
+      {
+        "text": "Runs a full fsck to decide",
+        "explanation": "The whole point of the journal is to avoid a full scan."
+      },
+      {
+        "text": "Marks the file system read-only until an administrator intervenes",
+        "explanation": "An incomplete transaction is the normal result of crashing mid-write, and is handled automatically."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The protocol's states:\n\n```\nTxB+blocks  TxE  checkpoint   on crash\nno          no   no           nothing\nyes         no   no           discard\nyes         yes  no/partial   replay\nyes         yes  yes          replay\n                              (harmless)\n```\n\n1. Checkpointing (writing blocks in place) only starts after TxE is durable.\n2. So with no TxE, the metadata from this transaction must not have been checkpointed. Unjournaled file data can already have reached its home location.\n3. Discarding the transaction leaves the old, consistent state. Its journaled metadata changes are not replayed, which is acceptable: they were never acknowledged as durable.",
+    "link": {
+      "title": "OSTEP: Crash Consistency: FSCK and Journaling (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An application streams 1 GB of new data into a file on ext4. Roughly how much is written to the disk in `data=journal` mode compared with the default `data=ordered` mode? Use a simplified completed-journal-plus-checkpoint payload-traffic model, ignoring device amplification and repeated overwrites.",
+    "options": [
+      {
+        "text": "About 1 GB in both modes; only metadata differs",
+        "explanation": "In `data=journal`, the data blocks themselves go through the journal, so every data byte is written twice."
+      },
+      {
+        "text": "About 2 GB in `data=journal` and about 1 GB in `data=ordered` (plus a little metadata in both)",
+        "explanation": "Correct. Full data journaling writes each block to the journal, then again to its home location. Ordered mode writes data once, in place, and journals only the small metadata changes."
+      },
+      {
+        "text": "About 3 GB in `data=journal`, since the journal is written, read and checkpointed",
+        "explanation": "Checkpointing writes the blocks once more in place, usually from memory, not from a re-read of the journal. That's two writes, not three."
+      },
+      {
+        "text": "About 1 GB in `data=journal` and 2 GB in `data=ordered`",
+        "explanation": "This has the modes backwards: ordered mode doesn't put data in the journal at all."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nmode      journal  in place  total\njournal   ~1 GB    ~1 GB     ~2 GB\nordered   meta     ~1 GB     ~1 GB\nwriteback meta     ~1 GB     ~1 GB\n```\n\n1. `data=journal`: data and metadata are logged, committed, then checkpointed to their final location.\n2. `data=ordered`: data goes straight to its final location *first*, then the metadata transaction commits.\n3. Extent metadata can be compact for long runs; fragmentation and allocation metadata add work.\n\nThe model illustrates additional traffic, not an exact throughput ratio or measured hardware write amplification.",
+    "link": {
+      "title": "ext4 mount options — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/ext4.html"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program appends a record to a log file on ext4 (default `data=ordered`) and never calls `fsync`. Power fails 2 seconds later. Which outcome is **not** possible after reboot? Assume a newly allocated data block, functioning storage honoring flushes, and no corruption outside the modeled crash.",
+    "options": [
+      {
+        "text": "The file is unchanged: the append is simply lost",
+        "explanation": "Possible. Neither the data nor the metadata transaction may have been written in 2 seconds; ext4 commits about every 5 seconds."
+      },
+      {
+        "text": "The file contains the new record",
+        "explanation": "Possible. If the commit and its data write happened before the power cut, the append survived."
+      },
+      {
+        "text": "The file's size has grown, but the new bytes are leftover contents from some other, previously deleted file",
+        "explanation": "Correct, this is the impossible one. Ordered mode writes data blocks *before* committing the metadata that points to them, so the size can't grow over unwritten blocks. That outcome is possible in `data=writeback`."
+      },
+      {
+        "text": "The file system mounts normally without a full fsck",
+        "explanation": "Possible. Normal journal recovery can avoid a full checker; its runtime is not fixed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In ordered mode, a transaction that extends the inode to new blocks commits only after those blocks are on disk.\n2. For the simplified new-block transaction, relevant states include:\n   - nothing committed → old file;\n   - committed → new data, already written.\n3. \"Bigger file over garbage\" would need committed metadata pointing at unwritten blocks. Ordered mode forbids exactly that.\n4. In `writeback` mode there's no such ordering, and stale data can appear.\n\nNote that neither mode guarantees your 2-second-old write survived. Successful appropriate synchronization, such as fsync plus required directory synchronization, provides durability under the storage contract. Other synchronous I/O mechanisms can also provide it.",
+    "link": {
+      "title": "ext4 mount options — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/ext4.html"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program creates a **new** file `order-1001.json`, writes it, calls `fsync` on its descriptor, closes it and reports success. It never fsyncs the directory. Power fails a second later. What can happen?",
+    "options": [
+      {
+        "text": "Nothing can go wrong: fsync made the file durable",
+        "explanation": "`fsync` on the file flushes its contents and inode, but the *name* lives in the parent directory's data. That's a separate file that hasn't been flushed."
+      },
+      {
+        "text": "The file's contents may be corrupted",
+        "explanation": "The contents and inode were flushed by `fsync`; the risk lies with the name, not the bytes."
+      },
+      {
+        "text": "After reboot, `order-1001.json` may not exist at all, even though its data reached the disk",
+        "explanation": "Correct as a general Linux filesystem portability concern: file fsync does not by itself guarantee persistence of the parent directory entry. Directory synchronization support and semantics must be checked."
+      },
+      {
+        "text": "The file will appear in `lost+found` every time",
+        "explanation": "Only fsck puts files in `lost+found`. With a journal there's usually no fsck, and the file system may simply have no committed entry for the name."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Creating a file changes two objects: the new inode (plus its data) and the parent directory (a new entry).\n2. `fsync(file_fd)` guarantees the first.\n3. The directory's new entry is durable only after it's committed. On ext4, `fsync` on a new file often commits the entry as a side effect of the journal, but POSIX doesn't promise it and other file systems differ.\n4. On Linux filesystems supporting directory fsync, explicitly synchronize the directory and check errors:\n\n```python\ndfd = os.open(dirname, os.O_RDONLY)\nos.fsync(dfd)\nos.close(dfd)\n```\n\nThe same applies after `rename`.",
+    "link": {
+      "title": "Files are hard — Dan Luu",
+      "url": "https://danluu.com/file-consistency/"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You want to replace `settings.json` so that after a crash at **any** moment you see either the complete old version or the complete new one, and once your function returns, the new version is durable. Which steps are needed? Select all that apply. Assume the old file and its directory entry are already durable, a trusted stable directory, full successful writes, checked errors, and a filesystem/device with the required rename/fsync crash guarantees.",
+    "options": [
+      {
+        "text": "Write the new contents to a temporary file in the same directory and `fsync` it before renaming",
+        "explanation": "Correct. Without this `fsync`, the rename can become durable before the data does, which is the ext4 zero-length file problem."
+      },
+      {
+        "text": "`rename()` the temporary file over `settings.json`",
+        "explanation": "Correct. rename within one file system is atomic: the name points at the old inode or the new one, never at a half-written file."
+      },
+      {
+        "text": "`fsync` the parent directory after the rename",
+        "explanation": "Correct. The rename is a change to the directory. Until the directory is flushed, a crash can bring back the old version even though you reported success."
+      },
+      {
+        "text": "Open the temporary file with `O_DIRECT`",
+        "explanation": "`O_DIRECT` bypasses the page cache but doesn't on its own guarantee durability or ordering; you'd still need `fsync`. It's beside the point here."
+      },
+      {
+        "text": "Write directly into `settings.json` with `O_TRUNC`, then `fsync`",
+        "explanation": "Truncating then writing in place has a window where the file is empty or partly written. A crash there loses both versions."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The three-step pattern, and what each step protects:\n\n```\n1 write tmp + fsync(tmp)\n    data durable before name\n2 rename(tmp, settings.json)\n    atomic swap of the name\n3 fsync(dir)\n    the swap itself is durable\n```\n\nCrash between 1 and 2: old file intact, stray tmp file.\nCrash between 2 and 3: old or new, both complete.\nAfter 3: new, durably.\n\n`O_TRUNC` in place breaks atomicity, and `O_DIRECT` doesn't address it.",
+    "link": {
+      "title": "Files are hard — Dan Luu",
+      "url": "https://danluu.com/file-consistency/"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a copy-on-write file system, a transaction has written new copies of a modified data block and all its ancestor blocks to free space, but the system crashes **before** the root pointer (the ZFS uberblock) is updated. What does the file system look like after reboot? Consider the simplified tree-commit model before any replay of a separate intent log.",
+    "options": [
+      {
+        "text": "Corrupted: half the tree is new and half is old",
+        "explanation": "The new blocks aren't reachable from the active root, so they aren't part of the visible tree at all. Nothing in the old tree was overwritten."
+      },
+      {
+        "text": "The previous, fully consistent version of the tree; the new blocks are simply unreferenced free space",
+        "explanation": "Correct. CoW never overwrites live blocks, and the root switch is the single atomic commit point. Before it, the old root describes a complete, consistent tree."
+      },
+      {
+        "text": "The new version, because all the new blocks were written",
+        "explanation": "They were written but never made reachable. The root still points to the old tree."
+      },
+      {
+        "text": "It depends on fsck reconciling the two trees",
+        "explanation": "There's nothing to reconcile, which is why ZFS has no fsck."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The old committed root references an intact old tree. New blocks not reachable from a valid committed root are not part of that state. Real ZFS commit selection uses redundant validated uberblocks rather than assuming one universally atomic physical write. After selecting a root, intent-log replay can recover separately acknowledged synchronous operations; the question explicitly isolates the tree-commit stage.",
+    "link": {
+      "title": "ZFS — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/ZFS"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your storage service calls `fsync(fd)` and gets `EIO` because of a transient SAN fault. The code logs a warning, waits a second, calls `fsync(fd)` again and gets `0` (success). On Linux, what is the state of the data written since the previous successful fsync?",
+    "options": [
+      {
+        "text": "Safe: the second fsync succeeded, so the data is on disk",
+        "explanation": "This is the risk: some writeback failures can leave no dirty data for the retry to flush. The second success alone does not establish that earlier data persisted."
+      },
+      {
+        "text": "Possibly lost: the failed pages may have been marked clean and dropped, and the retry's success doesn't mean they were written",
+        "explanation": "Correct. Writeback-error handling does not guarantee failed data remains available for retry. Use error-aware recovery; PostgreSQL normally PANICs for data-file sync failure and relies on surviving WAL."
+      },
+      {
+        "text": "Safe, as long as the kernel is newer than 4.13",
+        "explanation": "Improved errseq_t tracking is about reporting, not guaranteeing dirty-data retention. Descriptor sampling and error coalescing also matter."
+      },
+      {
+        "text": "Lost, and the second fsync should have returned EIO again",
+        "explanation": "Data may be lost, but neither loss nor another EIO is guaranteed. No new recorded error may remain for that description after the first report."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "One possible writeback-failure path:\n\n```\nwrite()     page dirty in cache\nwriteback   I/O fails -> EIO recorded\n            page marked CLEAN (!)\nfsync #1    reports recorded EIO\nfsync #2    no dirty pages, no new\n            error -> returns 0\n```\n\n1. A \"clean\" page can be evicted at any time, so the only copy of your data may vanish.\n2. Reading it back might even return the *old* on-disk contents.\n3. Correct handling: regard affected durability as uncertain; not every byte is necessarily lost. Rewrite it from an application log or replica, or crash and recover.\n\nThis is what PostgreSQL adopted in 2019 (PANIC on fsync failure, with `data_sync_retry` defaulting to off).",
+    "link": {
+      "title": "Fsync Errors — PostgreSQL wiki",
+      "url": "https://wiki.postgresql.org/wiki/Fsync_Errors"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the 2018 PostgreSQL \"fsyncgate\" episode are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "Before Linux 4.13, a write-back error could be consumed by a different descriptor or process, so the one that needed it might never see it",
+        "explanation": "Correct. Errors were tracked with a single per-file flag, cleared by whichever `fsync` saw it first. PostgreSQL's checkpointer often wasn't that caller."
+      },
+      {
+        "text": "After a write-back failure, Linux could mark the unwritten pages clean, so a later fsync reported success",
+        "explanation": "Correct. That's the core of the problem: the error was reported once, and then the dirty data was effectively forgotten."
+      },
+      {
+        "text": "PostgreSQL's fix was to PANIC on fsync failure and recover by replaying its write-ahead log",
+        "explanation": "Correct. The WAL still holds the changes, so crash recovery redoes them. The change was back-patched to all supported versions in early 2019."
+      },
+      {
+        "text": "The bug only affected PostgreSQL because it used `O_DIRECT`, which other databases avoid",
+        "explanation": "The episode involved buffered writes and error handling; O_DIRECT was not the required cause. This lesson does not establish that other named engines made identical fixes."
+      },
+      {
+        "text": "Linux was changed so that dirty pages are kept after a write-back error and retrying fsync is now safe",
+        "explanation": "Not so. Error *reporting* got more reliable (`errseq_t`), but Linux still doesn't guarantee to keep failed pages dirty for a retry."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The historical issue combined lossy writeback-error reporting with failure paths that could discard unwritten data. Linux4.13 improved error tracking using errseq_t, but that does not promise retention of every failed page or a permanent queue of every error. PostgreSQL11.2 documents default PANIC instead of retry, allowing recovery from surviving WAL. The general lesson is possible data loss and uncertain durability after a writeback failure, not that all kernels always discard all data or every fsync error is unrecoverable.",
+    "link": {
+      "title": "PostgreSQL's fsync() surprise — LWN.net",
+      "url": "https://lwn.net/Articles/752063/"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A database stores its 500 GB table file on Btrfs (copy-on-write). The workload is lots of random 8 KB page updates. Over months, full table scans get much slower even though the data size hasn't changed. Which layout-related explanation should be checked, and what mitigation has relevant tradeoffs?",
+    "options": [
+      {
+        "text": "The journal is full; increase the journal size",
+        "explanation": "Btrfs is copy-on-write, so it has no ext4-style journal that could fill up."
+      },
+      {
+        "text": "CoW writes each updated page to a new location, so a once-contiguous file fragments into many small extents; mitigate with `chattr +C` (nodatacow) on the database directory, or by defragmenting",
+        "explanation": "CoW updates can fragment layout. NOCOW must be configured on empty/new files or inherited by newly created files; it disables data checksums and compression for that data. Snapshot-shared extents still require COW when modified. Measure layout and I/O before changing policy."
+      },
+      {
+        "text": "Btrfs checksums make reads slower as the file ages",
+        "explanation": "Checksum cost is per block read and doesn't grow over time. The slowdown comes from layout, not from verification."
+      },
+      {
+        "text": "The page cache is too small; add RAM",
+        "explanation": "More RAM helps if the hot set fits, but a 500 GB full scan will still read from disk, and the scattered layout is what makes that slow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Random CoW updates can replace adjacent logical blocks with scattered extents, but measure fragmentation and storage behavior before attributing slowdown. A directory NOCOW attribute affects newly created files; it does not convert existing populated files. NOCOW disables data checksums/compression and still needs COW for shared extents. Defragmentation may unshare extents and increase space use. Filesystem migration and database-record-size tuning require workload-specific validation; database WAL does not replace all filesystem integrity features. No measured seek latency or universal tuning value is supplied.",
+    "link": {
+      "title": "Btrfs documentation",
+      "url": "https://btrfs.readthedocs.io/en/latest/"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A file system designer sends the journal's begin block, the logged metadata blocks **and** the commit block to the disk in one batch, to save a round trip. What can go wrong? Assume the naive protocol has neither an ordering guarantee nor transaction-integrity verification.",
+    "options": [
+      {
+        "text": "Nothing; the disk always writes blocks in the order they were submitted",
+        "explanation": "Disks and controllers reorder writes freely to optimise head movement or flash parallelism, unless told otherwise with flushes or FUA."
+      },
+      {
+        "text": "The disk may persist the commit block before the logged blocks; after a crash, recovery sees a \"committed\" transaction and replays garbage into the file system",
+        "explanation": "Correct. A commit marker alone is insufficient if it can persist before its dependencies. An asynchronous checksummed journal can reject incomplete transactions, but it still needs a complete durable commit before acknowledging success. journal_async_commit and journal_checksum are distinct settings."
+      },
+      {
+        "text": "The journal fills up twice as fast",
+        "explanation": "The number of blocks written is the same either way; only the ordering guarantee changes."
+      },
+      {
+        "text": "Recovery would discard every transaction, losing all changes",
+        "explanation": "Recovery discards only transactions without a valid commit block. The danger is the opposite: wrongly *accepting* a broken one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "In the naive protocol, the commit marker can persist while some logged blocks do not, allowing invalid replay. One remedy orders and flushes log contents before the durable commit record. An asynchronous protocol can use transaction checksums to reject incomplete records, but must still ensure all required writes are stable before promising durability. Checksums detect incomplete/corrupt records; they do not themselves persist data or universally make commits faster.",
+    "link": {
+      "title": "OSTEP: Crash Consistency: FSCK and Journaling (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf"
+    }
+  }
+]

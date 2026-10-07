@@ -1,0 +1,183 @@
+[
+  {
+    "id": "ip-nat-ipv6-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A home router doing NAPT has public address 203.0.113.7. Its translation table holds two mappings, public ports 40000 and 40001. A packet arrives from the Internet for `203.0.113.7:8080`, and nobody has set up port forwarding. What does the router do?",
+    "options": [
+      { "text": "Broadcasts it to every host on the LAN so the right one can answer", "explanation": "NAT never broadcasts inbound traffic. It only forwards packets that match a mapping, because the address and port are all it has to identify the inside host." },
+      { "text": "Forwards it to the host that most recently made an outbound connection", "explanation": "There's no such fallback. Guessing would send traffic to the wrong machine; the router has no mapping, so it has no destination." },
+      { "text": "Drops it, because no mapping exists for port 8080", "explanation": "Correct. Inbound lookup is keyed on the public port. With no entry for 8080 the packet has nowhere to go, which is why unsolicited inbound connections fail behind NAT." },
+      { "text": "Creates a new mapping for port 8080 and forwards it to the router's own web interface", "explanation": "Mappings are created by outbound traffic (or by explicit port forwarding), not by inbound packets. Many routers listen on the LAN side only." }
+    ],
+    "answer": 2,
+    "workedExample": "1. NAPT keeps a table of `(private ip, port) <-> public port`.\n2. Entries are created when an inside host sends **outbound**.\n3. The inbound packet is for public port 8080. Look it up: only 40000 and 40001 exist.\n4. No match, no destination: the packet is **dropped**.\n\nThis is the root of NAT's \"no inbound connections\" problem, and why servers behind NAT need port forwarding or hole punching.",
+    "link": { "title": "Network address translation — Wikipedia", "url": "https://en.wikipedia.org/wiki/Network_address_translation" }
+  },
+  {
+    "id": "ip-nat-ipv6-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the canonical shortened form of `2001:0db8:0000:0000:0000:0000:0000:0001`?",
+    "options": [
+      { "text": "`2001:db8::1`", "explanation": "Correct. Drop leading zeros in each group (0db8 becomes db8, 0001 becomes 1) and replace the single run of six zero groups with `::`." },
+      { "text": "`2001:db8:0:0:0:0:0:1`", "explanation": "This is valid but not shortest. RFC 5952 says the longest run of zero groups must be compressed with `::`." },
+      { "text": "`2001:db8::0001`", "explanation": "The `::` is right, but leading zeros in a group must also be removed in canonical form, so 0001 becomes 1." },
+      { "text": "`21:db8::1`", "explanation": "Only *leading* zeros can be dropped. Removing the zeros inside 2001 changes the value of the group." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Strip leading zeros group by group:\n```\n2001:db8:0:0:0:0:0:1\n```\n2. Find the longest run of all-zero groups: groups 3 to 8 minus the last, six in a row.\n3. Replace that run with `::` (allowed once):\n```\n2001:db8::1\n```\n4. Check the expansion: 2001, db8, then six zeros to make eight groups, then 1. Same address.",
+    "link": { "title": "RFC 5952: IPv6 Address Text Representation", "url": "https://www.rfc-editor.org/rfc/rfc5952" }
+  },
+  {
+    "id": "ip-nat-ipv6-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`ip -6 addr` on a laptop shows `fe80::4a1f:2cff:fe9a:10b3/64`. What kind of address is this?",
+    "options": [
+      { "text": "A global unicast address assigned by the ISP", "explanation": "Global unicast addresses come from 2000::/3. fe80:: is outside that range." },
+      { "text": "A unique local address (the IPv6 version of 10.0.0.0/8)", "explanation": "Unique local addresses are fc00::/7 (in practice fd00::/8). fe80:: is different." },
+      { "text": "A multicast group address", "explanation": "Multicast addresses start with ff (ff00::/8)." },
+      { "text": "A link-local address, valid only on that one link", "explanation": "Correct. fe80::/10 is link-local. Every IPv6 interface has one; routers never forward packets with link-local source or destination to other links." }
+    ],
+    "answer": 3,
+    "workedExample": "Match the prefix against the table:\n\n| Prefix | Type |\n|---|---|\n| 2000::/3 | Global unicast |\n| fe80::/10 | Link-local |\n| fc00::/7 | Unique local |\n| ff00::/8 | Multicast |\n\nThe address starts `fe80`, so it's **link-local**. The `ff:fe` in the middle also hints that the interface identifier was built with modified EUI-64 from a MAC address.",
+    "link": { "title": "IPv6 address — Wikipedia", "url": "https://en.wikipedia.org/wiki/IPv6_address" }
+  },
+  {
+    "id": "ip-nat-ipv6-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your ISP delegates `2001:db8:ab00::/56` to your office. Following the /64-per-subnet convention, how many subnets can you create?",
+    "options": [
+      { "text": "8", "explanation": "That would be 3 bits of subnet space. 64 − 56 = 8 *bits*, not 8 subnets." },
+      { "text": "256", "explanation": "Correct. There are 64 − 56 = 8 bits between the delegated prefix and the /64 boundary, and 2⁸ = 256." },
+      { "text": "65,536", "explanation": "That's what a /48 gives you (16 bits of subnet space). A /56 has only 8." },
+      { "text": "2⁷² − 2", "explanation": "This counts host addresses in the whole /56 and subtracts two as if it were IPv4. IPv6 has no broadcast address, and the question asks for /64 subnets." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Subnets are /64, so the subnet ID sits in bits 57 to 64.\n2. Bits available: 64 − 56 = 8.\n3. Subnets: 2⁸ = **256**, from `2001:db8:ab00::/64` to `2001:db8:abff::/64`.\n4. For comparison, a /48 gives 2¹⁶ = 65,536 subnets.",
+    "link": { "title": "IPv6 address — Wikipedia", "url": "https://en.wikipedia.org/wiki/IPv6_address" }
+  },
+  {
+    "id": "ip-nat-ipv6-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A host with MAC address `3c:22:fb:12:34:56` builds a modified EUI-64 interface identifier. What is it?",
+    "options": [
+      { "text": "`3c22:fbff:fe12:3456`", "explanation": "The `ff:fe` insertion is right, but you forgot to flip the universal/local bit (the 7th bit of the first byte), so 3c should become 3e." },
+      { "text": "`3e22:fb12:3456:fffe`", "explanation": "`ff:fe` goes in the *middle*, between the third and fourth bytes of the MAC, not at the end." },
+      { "text": "`3e22:fbff:fe12:3456`", "explanation": "Correct. Split the MAC in half, insert ff:fe, and flip bit 0x02 of the first byte: 0x3c XOR 0x02 = 0x3e." },
+      { "text": "`3d22:fbff:fe12:3456`", "explanation": "This flips the lowest bit (0x01, the multicast bit). The universal/local bit is 0x02, the 7th bit counting from the left." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Split the MAC: `3c:22:fb` | `12:34:56`.\n2. Insert `ff:fe`: `3c:22:fb:ff:fe:12:34:56`.\n3. Flip the U/L bit of the first byte:\n```\n0x3c = 0011 1100\nXOR    0000 0010\n     = 0011 1110 = 0x3e\n```\n4. Group into 16-bit chunks: **`3e22:fbff:fe12:3456`**.\n\nModern systems avoid this because it exposes the MAC; they use RFC 7217 stable privacy IDs and temporary addresses.",
+    "link": { "title": "RFC 4291: IPv6 Addressing Architecture (Appendix A)", "url": "https://www.rfc-editor.org/rfc/rfc4291" }
+  },
+  {
+    "id": "ip-nat-ipv6-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Peer A is behind a NAT with address-and-port-dependent mapping (a symmetric NAT). It learns `198.51.100.4:50123` from a STUN server and sends that to Peer B via signalling. B's packets to that address never arrive. Why, and what does ICE fall back to?",
+    "options": [
+      { "text": "STUN gave a wrong address because STUN only works over TCP; ICE retries STUN over TCP", "explanation": "STUN normally runs over UDP and reported A's mapping correctly. The problem is that the mapping is only valid for the STUN server." },
+      { "text": "A's NAT allocated a new public port when A talked to B, so the STUN-learnt port only maps traffic to and from the STUN server; ICE falls back to a TURN relay", "explanation": "Correct. Destination-dependent mapping means each new remote endpoint gets a different public port, so the reflexive address can't be shared. Hole punching fails and the relayed candidate wins." },
+      { "text": "B needs to use IPv6; ICE switches B to IPv6", "explanation": "Address family isn't the issue. The mapping behaviour of A's NAT is." },
+      { "text": "The NAT drops all UDP; ICE falls back to port forwarding via UPnP", "explanation": "A could reach the STUN server over UDP, so UDP isn't blocked. ICE gathers host, reflexive and relayed candidates; UPnP isn't part of it." }
+    ],
+    "answer": 1,
+    "workedExample": "1. With endpoint-independent mapping, `192.168.1.10:5000` maps to one public port for *every* destination, so the STUN-learnt address is reusable.\n2. A symmetric NAT creates a mapping per destination: STUN server sees port 50123, but A's packets to B leave from, say, 50124.\n3. B sends to 50123. With address-and-port-dependent filtering, that mapping accepts only the STUN server, so B's packets are dropped.\n4. ICE's connectivity checks on the direct pairs fail, so it nominates the **relayed (TURN)** candidate pair.",
+    "link": { "title": "RFC 8445: Interactive Connectivity Establishment", "url": "https://www.rfc-editor.org/rfc/rfc8445" }
+  },
+  {
+    "id": "ip-nat-ipv6-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine problems caused by NAT or carrier-grade NAT? Select all that apply.",
+    "options": [
+      { "text": "SIP and active-mode FTP carry the private address inside the payload, which is useless outside", "explanation": "Correct. Protocols that embed addresses in their data break unless an ALG rewrites them, and ALGs are often buggy." },
+      { "text": "Banning one abusive IP behind CGNAT can block many innocent customers", "explanation": "Correct. Thousands of subscribers may share a CGNAT address, so IP-based bans and rate limits hit neighbours too." },
+      { "text": "NAT encrypts traffic, so intrusion detection systems can't inspect it", "explanation": "NAT rewrites headers; it doesn't encrypt anything. Payloads are as visible as before." },
+      { "text": "When the NAT reboots, existing connections through it die", "explanation": "Correct. The translation table is state in the middle of the network. Lose it and replies no longer map back to inside hosts." },
+      { "text": "To identify a user from abuse logs, the ISP needs the source port and timestamp, not just the address", "explanation": "Correct. Under CGNAT an address alone doesn't identify a customer, so logs must include ports and precise times." }
+    ],
+    "answer": [0, 1, 3, 4],
+    "workedExample": "Go through each option against what NAT actually does (rewrite addresses and ports, hold per-flow state):\n\n1. Payload addresses: NAT only rewrites headers, so embedded private IPs leak through. **Problem.**\n2. CGNAT sharing: one public IP, many customers. **Problem.**\n3. Encryption: NAT doesn't encrypt. **Not a NAT effect.**\n4. Reboot: state is lost. **Problem.**\n5. Logging: identity now needs address + port + time. **Problem.**",
+    "link": { "title": "Carrier-grade NAT — Wikipedia", "url": "https://en.wikipedia.org/wiki/Carrier-grade_NAT" }
+  },
+  {
+    "id": "ip-nat-ipv6-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user's router advertises IPv6, but the ISP's IPv6 path is broken: packets go out and nothing comes back. The user opens a site with both A and AAAA records in a browser that implements Happy Eyeballs v2. What do they experience?",
+    "options": [
+      { "text": "The page never loads, because IPv6 is always preferred", "explanation": "That was the problem Happy Eyeballs was designed to solve. Clients no longer wait for IPv6 to time out." },
+      { "text": "The page loads after the full TCP connect timeout (tens of seconds) on IPv6, then IPv4", "explanation": "This is pre-Happy-Eyeballs behaviour. HE starts IPv4 in parallel after a short delay instead of waiting for the IPv6 attempt to fail." },
+      { "text": "The page loads normally over IPv4, about a quarter of a second later than it otherwise would", "explanation": "Correct. The client tries IPv6 first, starts an IPv4 attempt after the recommended 250 ms delay, and uses whichever connects. IPv4 wins." },
+      { "text": "The browser tunnels IPv6 over IPv4 to reach the site", "explanation": "Browsers don't set up 6in4 tunnels. Happy Eyeballs just races the two address families." }
+    ],
+    "answer": 2,
+    "workedExample": "1. DNS returns both AAAA and A records.\n2. Happy Eyeballs sends the IPv6 SYN first.\n3. No SYN-ACK arrives. After the connection attempt delay (RFC 8305 recommends 250 ms) the client also sends an IPv4 SYN.\n4. The IPv4 handshake completes; the client uses it and abandons IPv6.\n5. Cost to the user: roughly 250 ms extra, instead of a hang.",
+    "link": { "title": "RFC 8305: Happy Eyeballs Version 2", "url": "https://www.rfc-editor.org/rfc/rfc8305" }
+  },
+  {
+    "id": "ip-nat-ipv6-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On an IPv6-only mobile network with DNS64 using the well-known prefix `64:ff9b::/96`, an app looks up a host whose only record is `A 192.0.2.33`. What AAAA record does DNS64 synthesise?",
+    "options": [
+      { "text": "`64:ff9b::192.0.2.33` written as `64:ff9b::c000:221`", "explanation": "Correct. The 32-bit IPv4 address goes in the last 32 bits: 192 = c0, 0 = 00, 2 = 02, 33 = 21, giving c000:0221, shortened to c000:221. Both notations are the same address." },
+      { "text": "`::ffff:192.0.2.33`", "explanation": "That's an IPv4-mapped address, used inside dual-stack hosts' socket APIs. It isn't routable on the wire and isn't what DNS64 produces." },
+      { "text": "`64:ff9b::c002:21`", "explanation": "This drops the zero octet: 192.0.2.33 is four bytes (c0, 00, 02, 21), so the groups are c000 and 0221." },
+      { "text": "None: DNS64 returns NXDOMAIN and the app must fall back to IPv4", "explanation": "There is no IPv4 on an IPv6-only network. The whole point of DNS64 is to synthesise an AAAA so traffic goes to the NAT64 translator." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Convert each octet of 192.0.2.33 to hex:\n```\n192 -> c0\n  0 -> 00\n  2 -> 02\n 33 -> 21\n```\n2. Pack into two 16-bit groups: `c000:0221`.\n3. Append to the /96 prefix: `64:ff9b::c000:221`.\n4. The app connects there; NAT64 strips the prefix, recovers 192.0.2.33 and translates the packet to IPv4.",
+    "link": { "title": "RFC 6147: DNS64", "url": "https://www.rfc-editor.org/rfc/rfc6147" }
+  },
+  {
+    "id": "ip-nat-ipv6-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A sysadmin copies an old IPv4 habit into a server's IPv6 host firewall: drop all inbound ICMPv6. Which of these will break? Select all that apply.",
+    "options": [
+      { "text": "Resolving the default router's link-layer address (Neighbor Discovery)", "explanation": "Correct. Neighbor Solicitation and Advertisement are ICMPv6 messages. Drop the inbound Advertisements and the server can't learn the router's MAC, so it can't send off-link at all." },
+      { "text": "Learning the prefix and default router via SLAAC", "explanation": "Correct. Router Advertisements are ICMPv6. Without them SLAAC can't form a global address or find a default route." },
+      { "text": "Path MTU discovery for large TCP transfers", "explanation": "Correct. IPv6 routers never fragment; they send ICMPv6 Packet Too Big. Drop it and large packets vanish in a PMTUD black hole." },
+      { "text": "The server's IPv4 traffic", "explanation": "An ICMPv6 rule doesn't touch IPv4 or ICMP for IPv4. The two stacks are filtered separately, which is exactly how IPv6 rules get forgotten." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "ICMPv6 isn't optional in IPv6; it carries core functions:\n\n| Function | ICMPv6 message |\n|---|---|\n| Address resolution (ARP's job) | NS / NA |\n| Router discovery, SLAAC | RS / RA |\n| PMTUD | Packet Too Big |\n\nSo blocking it breaks on-link reachability, autoconfiguration and large transfers. IPv4 is unaffected because it's a separate protocol stack. Filter ICMPv6 selectively (RFC 4890 gives guidance), never wholesale.",
+    "link": { "title": "RFC 4890: Recommendations for Filtering ICMPv6", "url": "https://www.rfc-editor.org/rfc/rfc4890" }
+  },
+  {
+    "id": "ip-nat-ipv6-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A VoIP app registers with its server over UDP from behind a home router. Outbound calls always work, but incoming calls fail if the phone has been idle for more than about a minute. What's the most likely cause and fix?",
+    "options": [
+      { "text": "The router's UDP NAT mapping times out when idle; send keepalives more often than the timeout, e.g. every 15 to 30 seconds", "explanation": "Correct. RFC 4787 asks for at least two minutes, but many home routers expire idle UDP mappings much sooner. After that, the server's INVITE hits a port with no mapping and is dropped." },
+      { "text": "The server's DNS TTL expires; lower it to 30 seconds", "explanation": "DNS TTL affects how the phone finds the server, not whether the server can reach the phone. Incoming calls fail at the NAT." },
+      { "text": "UDP is unreliable, so incoming packets are lost randomly; switch to TCP and nothing else", "explanation": "Random loss wouldn't correlate with idle time. TCP mappings can also time out behind NAT; the real fix is keepalives (over either transport)." },
+      { "text": "The phone's IPv6 temporary address rotated; disable privacy extensions", "explanation": "This is a NAT (IPv4) scenario. Temporary addresses rotate over hours to days, not after a minute of idle." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Outbound packets create a mapping, so outbound calls always work.\n2. Incoming calls rely on the server sending to the *existing* mapping.\n3. The failure appears only after idle time: the signature of a NAT timer.\n4. RFC 4787 requires at least 2 minutes for UDP, but many consumer routers use 30 to 60 seconds.\n5. Fix: send a small keepalive (e.g. a CRLF or a STUN binding request) at an interval below the shortest timeout you expect.",
+    "link": { "title": "RFC 4787: NAT Behavioral Requirements for UDP", "url": "https://www.rfc-editor.org/rfc/rfc4787" }
+  },
+  {
+    "id": "ip-nat-ipv6-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A router receives a 1,600-byte IPv6 packet that must go out over a link with a 1,500-byte MTU. What happens?",
+    "options": [
+      { "text": "The router fragments it into two packets using the Fragment extension header", "explanation": "In IPv6 only the *source* host may fragment, using the Fragment header. Routers never fragment." },
+      { "text": "The router truncates the packet to 1,500 bytes and forwards it", "explanation": "IP never truncates payloads; that would silently corrupt data." },
+      { "text": "The router drops it and sends ICMPv6 Packet Too Big back to the source, with the MTU of 1,500", "explanation": "Correct. Path MTU discovery is mandatory in practice for IPv6: the source learns the smaller MTU and resends smaller packets." },
+      { "text": "The router forwards it anyway and the next router fragments it", "explanation": "A packet larger than the link MTU can't be transmitted on that link at all, and no IPv6 router fragments." }
+    ],
+    "answer": 2,
+    "workedExample": "1. IPv6 removed in-network fragmentation (and the header checksum) to make forwarding simpler.\n2. Packet size 1,600 > link MTU 1,500, so it can't be sent as is.\n3. The router drops it and returns **ICMPv6 Packet Too Big** with MTU = 1,500.\n4. The source caches that path MTU and resends in smaller packets (TCP lowers its segment size).\n5. This is why blocking ICMPv6 Packet Too Big causes black holes.",
+    "link": { "title": "RFC 8200: IPv6 Specification", "url": "https://www.rfc-editor.org/rfc/rfc8200" }
+  }
+]

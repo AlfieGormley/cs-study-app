@@ -1,0 +1,375 @@
+[
+  {
+    "id": "par-memory-models-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does it mean for a multicore system to be **sequentially consistent**?",
+    "options": [
+      {
+        "text": "Every core sees every write instantly, with zero latency",
+        "explanation": "SC is about ordering, not speed. Writes may take time; what matters is that the result matches some single interleaving."
+      },
+      {
+        "text": "The result of any execution matches some single interleaving of all cores' operations, with each core's operations in program order",
+        "explanation": "Correct. This is Lamport's definition: one global sequence, respecting each thread's program order."
+      },
+      {
+        "text": "All writes to the same address are seen in the same order by every core",
+        "explanation": "That is cache coherence, which is per-address. SC is a stronger, cross-address guarantee."
+      },
+      {
+        "text": "Threads execute one at a time, never in parallel",
+        "explanation": "SC allows true parallel execution. It only requires the outcome to be explainable by some interleaving."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Sequential consistency has two parts:\n\n1. There is **one global order** of all memory operations from all cores.\n2. Each core's operations appear in that order **in program order**.\n\nCoherence is the weaker per-address version of point 1. The difference shows up only when a thread reads and writes *different* addresses, as in the store-buffering and message-passing litmus tests.",
+    "link": {
+      "title": "Sequential consistency — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sequential_consistency"
+    }
+  },
+  {
+    "id": "par-memory-models-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For aligned, same-size ordinary accesses to distinct addresses in coherent write-back memory under x86-TSO, which reordering can be observable?",
+    "options": [
+      {
+        "text": "A later load completing before an earlier store (store → load)",
+        "explanation": "Correct. The per-core store buffer lets a load proceed while an older store is still waiting to become visible. This is the only relaxation in x86-TSO."
+      },
+      {
+        "text": "A later store becoming visible before an earlier store (store → store)",
+        "explanation": "x86 drains its store buffer in FIFO order, so stores become visible in program order."
+      },
+      {
+        "text": "A later load completing before an earlier load (load → load)",
+        "explanation": "x86 does not let loads appear reordered with older loads. ARM does."
+      },
+      {
+        "text": "All four kinds, just like ARM",
+        "explanation": "x86 is much stronger than ARM. It allows only store → load reordering."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Picture x86-TSO as SC plus a FIFO store buffer per core:\n\n- Stores enter the buffer in order and leave in order: no store → store reordering.\n- Loads execute in order relative to each other: no load → load.\n- A store after a load waits behind it: no load → store.\n- But a load can read memory while an older store is still buffered: **store → load is visible**.",
+    "link": {
+      "title": "x86-TSO (Sewell et al., CACM)",
+      "url": "https://www.cl.cam.ac.uk/~pes20/weakmemory/cacm.pdf"
+    }
+  },
+  {
+    "id": "par-memory-models-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How can a store buffer improve performance by allowing work to continue while a store awaits ownership or visibility?",
+    "options": [
+      {
+        "text": "To save memory by storing values in compressed form",
+        "explanation": "Store buffers hold pending writes, not compressed data. Their purpose is latency hiding."
+      },
+      {
+        "text": "Because cache coherence protocols cannot handle stores at all without it",
+        "explanation": "Coherence protocols handle stores fine; the buffer is there so the core need not *wait* for them."
+      },
+      {
+        "text": "It can hold pending stores while independent instructions continue, until capacity or other dependencies limit progress",
+        "explanation": "Correct. The benefit depends on the workload and implementation; it is not necessarily a win on every workload."
+      },
+      {
+        "text": "To let programs undo stores after an exception",
+        "explanation": "Speculative state is handled by the reorder buffer; once a store reaches the store buffer as committed it is not undone."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A store may wait for a cache line or ownership. Buffering can let independent instructions continue while that wait is unresolved, subject to buffer capacity and other constraints. In the x86-TSO abstraction, later loads to other addresses may observe memory before the store drains, enabling SB outcomes. A buffer need not imply that every implementation exposes weak ordering.",
+    "link": {
+      "title": "Memory reordering caught in the act — Preshing",
+      "url": "https://preshing.com/20120515/memory-reordering-caught-in-the-act/"
+    }
+  },
+  {
+    "id": "par-memory-models-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Two threads run this x86 assembly-level code, with `x` and `y` initially 0. Assume aligned, same-size ordinary accesses to distinct coherent write-back locations, with no other writers or fences. Which final values of (r1, r2) are permitted by x86-TSO? Select all that apply.\n\n```\nThread 1      Thread 2\nx = 1         y = 1\nr1 = y        r2 = x\n```",
+    "options": [
+      {
+        "text": "(0, 1)",
+        "explanation": "Possible. Thread 1 runs completely before Thread 2: Thread 1 reads y = 0, then Thread 2 reads x = 1."
+      },
+      {
+        "text": "(1, 0)",
+        "explanation": "Possible. The mirror image: Thread 2 runs first."
+      },
+      {
+        "text": "(1, 1)",
+        "explanation": "Possible. Both stores happen, then both loads, in an interleaving."
+      },
+      {
+        "text": "(0, 0)",
+        "explanation": "Possible on x86. Each store sits in its core's store buffer while the following load reads the old value from memory. SC forbids this; TSO allows it."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Enumerate:\n\n| Outcome | How |\n|---|---|\n| (0, 1) | T1 entirely first |\n| (1, 0) | T2 entirely first |\n| (1, 1) | stores, then loads |\n| (0, 0) | both stores buffered |\n\nThe first three are SC interleavings. (0, 0) needs each load to overtake its own thread's earlier store, which x86's store buffer permits. Adding `mfence` between the store and load in each thread rules (0, 0) out.",
+    "link": {
+      "title": "Memory reordering caught in the act — Preshing",
+      "url": "https://preshing.com/20120515/memory-reordering-caught-in-the-act/"
+    }
+  },
+  {
+    "id": "par-memory-models-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a single machine-level publication using aligned, same-size accesses to distinct initially-zero coherent write-back/Normal-memory locations, with no other writers, barriers or dependencies. A producer writes `data = 42` then `flag = 1` with plain stores; a consumer reads `flag`, then `data`, with plain loads (assume the compiler emits them exactly in this order). The consumer sees `flag == 1`. On which hardware might it still read `data == 0`?",
+    "options": [
+      {
+        "text": "Neither x86 nor ARM: once the flag is visible, so is the data",
+        "explanation": "This holds on x86 but not on ARM, where the stores or the loads may be reordered."
+      },
+      {
+        "text": "Both x86 and ARM",
+        "explanation": "x86 keeps stores in order with stores and loads in order with loads, so message passing works there."
+      },
+      {
+        "text": "x86 only, because of its store buffer",
+        "explanation": "The x86 store buffer only allows store → load reordering, which is not what this pattern needs."
+      },
+      {
+        "text": "ARM only, because it may reorder the two stores or the two loads",
+        "explanation": "Correct. ARM's weak model allows store → store and load → load reordering for independent addresses, either of which breaks this pattern."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Message passing needs two orderings:\n\n1. The producer's `data` store must be visible before its `flag` store (store → store).\n2. The consumer's `flag` load must happen before its `data` load (load → load).\n\nx86 guarantees both. ARMv8 guarantees neither for unrelated addresses. Fix: a release store of the flag (STLR) and an acquire load of it (LDAR), or C11 `memory_order_release` / `memory_order_acquire`, whose compiler mapping must provide the required ordering; exact instructions depend on target and compiler.",
+    "link": {
+      "title": "Weak vs strong memory models — Preshing",
+      "url": "https://preshing.com/20120930/weak-vs-strong-memory-models/"
+    }
+  },
+  {
+    "id": "par-memory-models-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C++ one-shot producer/consumer publication uses a plain bool ready initially false. Exactly one producer initialises an item, then sets ready; one consumer waits, then reads the item, with no concurrent reuse. The flag is accessed without synchronisation. Which change fixes this publication protocol?",
+    "options": [
+      {
+        "text": "Mark `ready` as `volatile`",
+        "explanation": "`volatile` in C++ gives neither atomicity nor inter-thread ordering. It would not prevent the reordering."
+      },
+      {
+        "text": "Make `ready` a `std::atomic<bool>`, store it with `memory_order_release`, and load it with `memory_order_acquire`",
+        "explanation": "Correct. Release/acquire guarantees that writes before the store are visible to a thread whose acquire load sees it. It also removes the data race (UB)."
+      },
+      {
+        "text": "Add `sleep(1)` after initialising each item",
+        "explanation": "Timing does not create ordering; it only makes the bug rarer and the service slower."
+      },
+      {
+        "text": "Compile with `-O0` so the compiler does not reorder anything",
+        "explanation": "Even without compiler reordering, the ARM hardware can reorder the accesses. Also the code still contains a data race."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The unsynchronised flag is a data race on every C++ target, including x86. Under the stated one-shot ownership/lifetime assumptions, an atomic release store and an acquire load that reads it publish the initialised item. Reusable queues need additional ownership, reclamation and reuse protocols. Exact generated instructions and performance depend on compiler and target.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "par-memory-models-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For a naturally aligned lock-free 32-bit atomic in ordinary write-back memory, suppose the selected x86-64 GCC build compiles a `memory_order_release` atomic store to a plain `mov`, but a `memory_order_seq_cst` store to `xchg`. Why does the seq_cst store need the more expensive instruction?",
+    "options": [
+      {
+        "text": "A plain `mov` is not atomic on x86",
+        "explanation": "The ordinary aligned32-bit MOV in this question can provide atomic access; its cross-address ordering is the missing issue. Larger, misaligned or special-memory accesses need their own guarantees."
+      },
+      {
+        "text": "`xchg` flushes the cache so other cores see the write",
+        "explanation": "`xchg` does not flush caches; coherence handles visibility. It acts as a full barrier."
+      },
+      {
+        "text": "seq_cst must forbid the store being reordered with a later seq_cst load, which TSO allows; `xchg` is implicitly locked and acts as a full barrier",
+        "explanation": "Correct. TSO already gives release ordering without an extra hardware instruction for the scoped ordinary accesses, but not store → load ordering. The locked `xchg` drains the store buffer."
+      },
+      {
+        "text": "Release stores are not ordered at all on x86",
+        "explanation": "x86 stores are already ordered after earlier loads and stores, which is exactly release semantics, so a plain `mov` suffices."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare what each ordering needs with what TSO gives:\n\n- Release: earlier loads and stores must not move after the store. TSO already guarantees this, so `mov` works.\n- Seq_cst: additionally, all seq_cst operations form one total order. A seq_cst store followed by a seq_cst load must not be reordered, but TSO allows store → load reordering.\n\nSo the compiler uses a locked instruction (`xchg`, or `mov` plus `mfence`), which waits for the store buffer to drain.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "par-memory-models-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about C and C++ concurrency are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A data race on a non-atomic variable is undefined behaviour",
+        "explanation": "Correct. The C11 and C++11 memory models make races on non-atomics UB, so the compiler may assume they do not happen."
+      },
+      {
+        "text": "`volatile` makes a variable safe to share between threads",
+        "explanation": "False. `volatile` prevents some compiler optimisations, but gives no atomicity and no ordering between threads."
+      },
+      {
+        "text": "A data-race-free program using only seq_cst atomics behaves as if sequentially consistent",
+        "explanation": "Correct. This is the DRF-SC guarantee."
+      },
+      {
+        "text": "Relaxed atomic fetch_add is suitable for an independent statistics counter when no publication or ordering of other data is required",
+        "explanation": "Correct for the stated purpose. The read-modify-write prevents lost increments; relaxed ordering retains per-object coherence without publishing unrelated data. Reading a live counter is not a synchronised snapshot of other state."
+      },
+      {
+        "text": "Testing on x86 is enough to find ordering bugs that would show up on ARM",
+        "explanation": "False. x86 is stronger, so many bugs that weak ordering exposes never manifest there."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The true choices are: a C/C++ data race is undefined behaviour; correctly synchronised code using mutexes and seq_cst operations without weaker synchronisation has the DRF-SC guarantee; and relaxed atomic fetch_add can maintain an independent counter. C/C++ volatile does not supply inter-thread synchronisation, and successful tests on x86 do not prove a program correct on every target.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "par-memory-models-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You implement Peterson's lock for two threads on x86, using aligned ordinary stores and loads to coherent write-back memory in assembly; flag and turn locations are initially set appropriately and there are exactly two participants. Each thread does `flag[me] = 1; turn = other;` and then spins while `flag[other] == 1 && turn == other`. Occasionally both threads enter the critical section. Which listed change is sufficient on both threads before their spin loops?",
+    "options": [
+      {
+        "text": "Insert `MFENCE` after the stores and before the spin loop's loads",
+        "explanation": "Correct. The failure is store → load reordering: each thread reads the other's flag before its own flag store is visible. A full fence prevents that."
+      },
+      {
+        "text": "Insert `SFENCE` between the two stores",
+        "explanation": "SFENCE orders stores with stores, which x86 already does for normal stores. The problem is a load overtaking a store."
+      },
+      {
+        "text": "Make the spin loop read `flag[other]` twice",
+        "explanation": "Re-reading does not stop the first read happening before your own store is visible to the other core."
+      },
+      {
+        "text": "Nothing can fix it; Peterson's algorithm is incorrect",
+        "explanation": "The algorithm is correct under sequential consistency. It just needs a fence to get SC behaviour on TSO hardware."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Peterson's lock is a store-buffering pattern:\n\n```\nT0: flag[0]=1; turn=1\n    read flag[1]\nT1: flag[1]=1; turn=0\n    read flag[0]\n```\n\n1. Both threads' stores sit in their store buffers.\n2. Each reads the other's flag from memory and sees 0.\n3. Both conclude the other is not interested and enter.\n\nThe missing ordering is store → load, the one relaxation TSO has. `MFENCE` (or a locked instruction, or seq_cst atomics in C11) restores it.",
+    "link": {
+      "title": "Memory reordering caught in the act — Preshing",
+      "url": "https://preshing.com/20120515/memory-reordering-caught-in-the-act/"
+    }
+  },
+  {
+    "id": "par-memory-models-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the store-buffering test, a developer makes both stores `memory_order_release` and both loads `memory_order_acquire`. Is the outcome r1 = r2 = 0 still allowed by the C++ memory model?\n\n```\nT1: x.store(1, rel)\n    r1 = y.load(acq)\nT2: y.store(1, rel)\n    r2 = x.load(acq)\n```",
+    "options": [
+      {
+        "text": "No: acquire and release together act as a full fence",
+        "explanation": "Release and acquire are one-way barriers. Together they do not stop a store moving after a later load."
+      },
+      {
+        "text": "No, but only on x86",
+        "explanation": "The C++ model permits it independent of the target; ordinary MOV-based x86 mappings also permit it, without guaranteeing that every run observes it."
+      },
+      {
+        "text": "Yes. Both acquire loads may read the initial zeros, so no release/acquire synchronises-with edge connects the threads",
+        "explanation": "Correct at the language level. A particular compiler/target may impose stronger ordering and never exhibit it. Using seq_cst on all four operations is sufficient, but not the only possible repair."
+      },
+      {
+        "text": "Yes, but only because the variables are not atomic",
+        "explanation": "They are atomics here. The outcome is permitted by the orderings chosen, not by a data race."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Assume both atomics initially zero. If both acquire loads read those initial values, neither reads the other thread’s release store, so publication synchronisation does not connect the threads. The language permits (0, 0). Ordinary MOV-based x86 mappings also permit it; some AArch64 mappings can be stronger. Four seq_cst operations prohibit it; properly designed fences or locking are other options.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "par-memory-models-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hardware-level IRIW test, two writers independently set x and y from 0 to 1. Each reader’s two loads are ordered by the specified model: R1 reads x then y, R2 reads y then x. Which model statement about R1 seeing (1, 0) and R2 seeing (1, 0) is correct? Assume ordinary aligned coherent memory and no other writers.",
+    "options": [
+      {
+        "text": "Yes, on x86, because of the store buffer",
+        "explanation": "x86-TSO gives a global store order and orders these reads; the store buffer does not permit this IRIW outcome."
+      },
+      {
+        "text": "A non-multicopy-atomic model may allow it; an appropriately ordered multicopy-atomic model such as x86-TSO forbids it",
+        "explanation": "Correct. With ordered reads, inconsistent propagation to different observers can allow the outcome in a weaker non-MCA model. The revised Armv8-A MCA model also forbids ordered IRIW."
+      },
+      {
+        "text": "Yes, on every architecture, because coherence is per-address",
+        "explanation": "Coherence alone would allow it, but x86 and ARMv8 provide multi-copy atomicity, which forbids it."
+      },
+      {
+        "text": "No, on every architecture",
+        "explanation": "A suitable non-MCA model can allow the outcome; architecture and barrier choices must be specified before applying the example to hardware."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "In the forbidden MCA outcome, R1 would require x’s write before y’s write, while R2 would require y’s write before x’s write. With both reader orders preserved, no single globally consistent propagation order satisfies both. A non-MCA model can instead let different observers receive the writes in different orders. C++ acquire-only source code must be analysed at the language level rather than assumed to force an identical hardware mapping everywhere.",
+    "link": {
+      "title": "Memory ordering — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_ordering"
+    }
+  },
+  {
+    "id": "par-memory-models-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A simple lock implementation releases an aligned lock word with an ordinary store to coherent write-back memory on x86, with compiler ordering preserved. Why can that store provide release ordering?",
+    "options": [
+      {
+        "text": "x86 stores are always sequentially consistent",
+        "explanation": "TSO permits the store-buffering outcome across stores and later independent loads. Release ordering needs less than a full SC protocol."
+      },
+      {
+        "text": "Unlock only needs release semantics, so no earlier access from the critical section moves after it, and TSO already guarantees that for every ordinary store",
+        "explanation": "Correct. TSO forbids load → store and store → store reordering, which is precisely release ordering."
+      },
+      {
+        "text": "The x86 cache coherence protocol orders all accesses",
+        "explanation": "Coherence orders writes to one address; it does not order the critical section's accesses (to other addresses) relative to the unlock."
+      },
+      {
+        "text": "Unlocking needs no ordering at all",
+        "explanation": "Without release ordering, writes in the critical section could become visible after the lock appears free, letting the next owner see stale data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Under the stated x86-TSO model, earlier stores and loads are ordered before the unlock store. A subsequent successful acquire of the lock can then synchronise with that release under the complete protocol. This is an ordering guarantee, not a claim that every access has reached DRAM. Compiler ordering, correct acquisition, memory attributes and lock ownership still matter; the behaviour is not supplied by cache coherence alone.",
+    "link": {
+      "title": "Linux kernel memory barriers",
+      "url": "https://www.kernel.org/doc/Documentation/memory-barriers.txt"
+    }
+  }
+]

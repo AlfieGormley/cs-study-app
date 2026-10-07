@@ -1,0 +1,345 @@
+[
+  {
+    "id": "sep-dry-kiss-yagni-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bug report says users can set an 8-character password on sign-up but not on reset. You find:\n\n```python\n# signup.py\nif len(pw) < 8: raise Weak()\n\n# reset.py\nif len(pw) < 10: raise Weak()\n```\n\nWhich principle would have prevented this?",
+    "options": [
+      {
+        "text": "YAGNI",
+        "explanation": "YAGNI is about not building features before they're needed. Both checks are needed; the problem is that they disagree."
+      },
+      {
+        "text": "KISS",
+        "explanation": "Each check is already simple. Simplicity of each copy doesn't stop two copies drifting apart."
+      },
+      {
+        "text": "DRY: one rule (minimum password length) should have one authoritative representation",
+        "explanation": "Correct. The rule exists in two places that must be kept in step by hand, and they drifted. A single `MIN_PASSWORD_LENGTH` and a shared `check_password()` makes drift impossible."
+      },
+      {
+        "text": "Liskov substitution",
+        "explanation": "No subtypes are involved; this is about duplicated knowledge."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask what *knowledge* each line encodes: \"a password must be at least N characters\".\n2. That's one business rule, so it should live in one place.\n3. Two copies means every change must be made twice, and here someone changed only one.\n4. Fix:\n\n```python\nMIN_PASSWORD_LENGTH = 10\n\ndef check_password(pw):\n    if len(pw) < MIN_PASSWORD_LENGTH:\n        raise Weak()\n```\n\nBoth `signup` and `reset` call `check_password`.",
+    "link": {
+      "title": "Don't repeat yourself — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A reviewer suggests merging these into one `twenty_percent(price)` helper \"to keep it DRY\". What is the best response?\n\n```python\ndef vat(price):\n    return round(price * 0.20, 2)\n\ndef staff_discount(price):\n    return round(price * 0.20, 2)\n```",
+    "options": [
+      {
+        "text": "Agree: identical code is always duplication",
+        "explanation": "DRY is about knowledge, not identical text. Identical code that encodes different rules is coincidence."
+      },
+      {
+        "text": "Disagree: these encode different rules (a tax rate and an HR policy) that will change independently, so this is accidental duplication",
+        "explanation": "Correct. If the staff discount moves to 25%, VAT must not change. Merging them couples two unrelated decisions, and someone will soon add a parameter to separate them again."
+      },
+      {
+        "text": "Agree, but make it a class to allow future extension",
+        "explanation": "That's merging plus speculative design. The underlying problem (two unrelated rules forced together) is unchanged."
+      },
+      {
+        "text": "Disagree, because functions should never be shorter than five lines",
+        "explanation": "There's no such rule. Short functions are fine; the reason to keep these apart is what they mean."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Apply the DRY test: \"if one changed, would the other *have* to change?\"\n2. VAT is set by government; the staff discount is set by HR. A change to one says nothing about the other.\n3. So the answer is no: this is **accidental duplication**.\n4. A better improvement is naming the knowledge:\n\n```python\nVAT_RATE = 0.20\nSTAFF_DISCOUNT = 0.20\n```\n\nNow each rule has one home, and the two are free to diverge.",
+    "link": {
+      "title": "Don't repeat yourself — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The ticket says: \"Export the orders table as CSV.\" A developer delivers an `ExporterFactory` supporting CSV, XML and JSON, plus a plugin system for future formats. Only CSV is used. Which principle does this most directly go against?",
+    "options": [
+      {
+        "text": "YAGNI: build only the capability needed now",
+        "explanation": "Correct. XML, JSON and plugins are speculative. They cost time now and must be read, tested and maintained by everyone, for a need that may never arrive."
+      },
+      {
+        "text": "DRY",
+        "explanation": "Nothing is duplicated. The problem is building things nobody asked for."
+      },
+      {
+        "text": "Open/closed",
+        "explanation": "A plugin system is often cited *in favour* of OCP. The issue is that the extension point was built before any second case existed."
+      },
+      {
+        "text": "Dependency inversion",
+        "explanation": "DIP concerns which way dependencies point, not how much functionality is built."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Compare requirement with delivery: one format asked for; three formats plus a plugin system built.\n2. Everything beyond CSV is a guess about the future.\n3. Even if the guess is right, the code has to be carried (read, tested, upgraded) from now until it's needed.\n4. Enough for today:\n\n```python\ndef orders_to_csv(orders, f):\n    w = csv.writer(f)\n    for o in orders:\n        w.writerow([o.id, o.total])\n```\n\n5. If XML is requested next quarter, add it then, with a real requirement to shape it.",
+    "link": {
+      "title": "Yagni — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/Yagni.html"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shared helper has grown to this, and every change to it breaks some caller:\n\n```python\ndef export(rows, fmt, legacy=False,\n           skip_header=False,\n           eu=False, finance=False):\n    ...\n```\n\nFollowing Sandi Metz's advice on \"the wrong abstraction\", what should you do first?",
+    "options": [
+      {
+        "text": "Add another flag for the next requirement, since callers already depend on it",
+        "explanation": "This is the very cycle that produced the mess: each new flag adds a branch only one caller uses."
+      },
+      {
+        "text": "Split it into one subclass per flag combination",
+        "explanation": "With four booleans that's up to 16 combinations, and inheritance makes the coupling permanent."
+      },
+      {
+        "text": "Rewrite it as a generic, configurable pipeline",
+        "explanation": "That's a bigger abstraction built on the same poor understanding of what's really shared."
+      },
+      {
+        "text": "Inline the function back into each caller, delete the branches each caller doesn't use, then look for what's genuinely common",
+        "explanation": "Correct. Metz's advice is to go back to duplication. Once each caller has only the code it actually runs, the real shared idea (if any) becomes visible."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Recognise the pattern: an abstraction that 'almost fitted' each new requirement, so it grew a parameter and a conditional each time.\n2. Now each caller uses a different path through it. Changing one path risks the others.\n3. Metz's recipe:\n   - Inline the function into every caller.\n   - In each copy, delete the branches that caller never takes (`finance` code only stays in the finance caller).\n   - Each copy is now short and clear.\n4. Then look again. Maybe the CSV-writing core is shared and worth extracting; maybe nothing is.\n5. \"Duplication is far cheaper than the wrong abstraction.\"",
+    "link": {
+      "title": "The Wrong Abstraction — Sandi Metz",
+      "url": "https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're writing code to parse dates from a vendor file. A very similar parser already exists for another vendor. Following the rule of three, what should you do?",
+    "options": [
+      {
+        "text": "Extract a shared parser now, since there are two cases",
+        "explanation": "With only two examples it's hard to tell which differences are fundamental. The rule of three waits for a third case."
+      },
+      {
+        "text": "Duplicate it for now, and extract a shared abstraction if a third similar parser is needed",
+        "explanation": "Correct. 'Write it; the second time, wince and duplicate; the third time, refactor.' Three examples give you much better evidence of what's truly shared."
+      },
+      {
+        "text": "Never extract; duplication is always cheaper",
+        "explanation": "Metz's point is that duplication is cheaper than the *wrong* abstraction, not that abstraction is always wrong. Real shared knowledge should be unified."
+      },
+      {
+        "text": "Copy it and add a comment telling future developers to keep them in sync",
+        "explanation": "If they must be kept in sync, they share knowledge and should be unified. If they needn't, the comment is misleading."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Count occurrences: this is the second.\n2. With two examples, you can see what's the same but not what *varies*. An abstraction built now encodes a guess.\n3. The rule of three:\n   - 1st: write it.\n   - 2nd: duplicate, noting the similarity.\n   - 3rd: refactor, now that you can see the axis of variation.\n4. Exception: if the duplicated part is clearly the same *rule* (both vendors use ISO 8601 and must stay consistent), unify it now. That's DRY on knowledge, not on appearance.",
+    "link": {
+      "title": "Rule of three (computer programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Rule_of_three_(computer_programming)"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is the tight asymptotic time complexity of this \"clever\" flatten on a flat list of `n` integers?\n\n```python\ndef flatten(xs):\n    return sum(([x] for x in xs), [])\n```",
+    "options": [
+      {
+        "text": "O(n)",
+        "explanation": "It would be if lists were extended in place. But `sum` uses `+`, which builds a brand-new list each time."
+      },
+      {
+        "text": "O(n log n)",
+        "explanation": "Nothing here halves or sorts; the cost comes from repeated copying."
+      },
+      {
+        "text": "O(n²)",
+        "explanation": "Correct. Copying the growing left operand alone costs n(n−1)/2; including the one-element right operand gives n(n+1)/2 element-reference copies, still Θ(n²)."
+      },
+      {
+        "text": "O(1)",
+        "explanation": "Every input element must be visited; that establishes an Ω(n) lower bound, not an O(n) upper bound."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `sum(iterable, [])` starts with `acc = []` and repeatedly does `acc = acc + item`.\n2. List `+` creates a new list and copies both operands.\n3. At step k, `acc` has k elements, so step k copies about k elements.\n4. Total copies of both operands: 1 + 2 + ... + n = n(n+1)/2, which is **O(n²)**.\n5. For n = 100,000 that's about 5 billion element copies.\n6. The plain loop with `out.append(x)` (or `list(xs)` for this flat input) is O(n), and easier to read. Clever wasn't simple, and wasn't fast either.",
+    "link": {
+      "title": "KISS principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/KISS_principle"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine DRY violations (duplicated **knowledge**)? Select **all** that apply.",
+    "options": [
+      {
+        "text": "The VAT rate is hard-coded in both the checkout front end and the invoicing back end",
+        "explanation": "Correct. One fact, two copies. When the rate changes, missing one produces mismatched totals. Have the back end supply it."
+      },
+      {
+        "text": "A hand-written API reference lists every endpoint's fields, separately from the code that defines them",
+        "explanation": "Correct. The field definitions exist twice. Generating docs from the code (or the code from an OpenAPI spec) removes the drift."
+      },
+      {
+        "text": "Two unrelated reports both use a `for` loop over rows that writes to a CSV",
+        "explanation": "Not a DRY violation. Sharing a code *shape* is not sharing knowledge. Each report's columns and rules can change independently."
+      },
+      {
+        "text": "The same database connection string is copied into three services' config files",
+        "explanation": "Correct. One fact (where the database lives) in three places. A move or credential rotation needs three coordinated edits."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Apply the test to each: \"if one copy changed, would the others *have* to change?\"\n\n| Case | Must change together? |\n|---|---|\n| VAT in two tiers | yes |\n| API docs vs code | yes |\n| Two CSV loops | no |\n| Connection string ×3 | yes |\n\n1. DRY applies beyond code: config, docs and schemas count.\n2. The usual fix is a single source plus derivation: generated docs, config from one secret store, values served by the back end.\n3. The CSV loops look alike but encode different reports; merging them is the wrong abstraction.",
+    "link": {
+      "title": "Don't repeat yourself — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In Fowler's displayed ordering, the simple-design rules are: passes the tests, reveals intention, no duplication, fewest elements. Removing a small duplication would require a generic helper that makes two functions harder to read. Using that displayed ordering for this example, what should you prefer?",
+    "options": [
+      {
+        "text": "Remove the duplication; 'no duplication' is the core rule",
+        "explanation": "It's rule 3. 'Reveals intention' is rule 2 and takes precedence."
+      },
+      {
+        "text": "Keep the clearer code, since revealing intention ranks above removing duplication",
+        "explanation": "Correct for the ordering stated in the question. Historical formulations swap the middle two rules, and Fowler says they usually reinforce one another."
+      },
+      {
+        "text": "Pick whichever gives fewer classes",
+        "explanation": "'Fewest elements' is the lowest priority; it only breaks ties after the other rules."
+      },
+      {
+        "text": "The rules don't say anything about conflicts",
+        "explanation": "They're explicitly ordered so that conflicts can be resolved."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Rank the options against the rules, in order.\n2. Rule 1 (passes tests): both versions pass.\n3. Rule 2 (reveals intention): the duplicated version is clearer. It wins here.\n4. Rules 3 and 4 only matter when the higher rules tie.\n5. In practice, removing duplication usually *improves* clarity, so conflicts are rare. When it doesn't, clarity wins.\n\nThis is an exercise in the stated ordering, not proof of a universal priority between clarity and removing duplication.",
+    "link": {
+      "title": "Beck Design Rules — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/BeckDesignRules.html"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Eight microservices share a `common-models` library containing the `Customer` class, to avoid duplicating it. Adding one field for the loyalty service forces all eight to upgrade and redeploy together. What is the best diagnosis?",
+    "options": [
+      {
+        "text": "Not enough DRY; move more shared code into `common-models`",
+        "explanation": "That increases the coupling that's causing the pain."
+      },
+      {
+        "text": "The library should be copied into each repository so it can't change",
+        "explanation": "Freezing copies means services drift out of date without any explicit contract; it's duplication without the boundary that makes it safe."
+      },
+      {
+        "text": "DRY applied across a boundary has created tight coupling; each service should own its own model of the customer, sharing only a versioned contract",
+        "explanation": "Correct. Each service's `Customer` is different knowledge (billing cares about addresses; loyalty about points). Duplicating small models per service, with a stable API or event schema between them, restores independent deployment."
+      },
+      {
+        "text": "This is a YAGNI violation because the field wasn't needed",
+        "explanation": "The field is needed by the loyalty service. The problem is that one service's need forces seven others to change."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symptom: lockstep deploys. That's the hallmark of tight coupling, a 'distributed monolith'.\n2. Cause: one shared class serves eight contexts. Each context's idea of a customer differs and changes for its own reasons.\n3. DRY says each *piece of knowledge* has one home. Loyalty's view of a customer is not the same knowledge as billing's.\n4. Better:\n   - Each service defines the fields it needs.\n   - Services communicate through a versioned API or event schema.\n   - Additive changes (new optional fields) don't force consumers to upgrade.\n5. A little duplication across a boundary buys independence.",
+    "link": {
+      "title": "Bounded Context — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/BoundedContext.html"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "YAGNI says not to build what you don't need yet. Which of these still deserve deliberate up-front design? Select **all** that apply.",
+    "options": [
+      {
+        "text": "The format of events your service publishes to other teams",
+        "explanation": "Correct. Once consumers depend on it, changing it needs versioning and coordination. Cheap to think about now, expensive to fix later."
+      },
+      {
+        "text": "The authentication and authorisation model",
+        "explanation": "Correct. Retrofitting security is costly and risky, and mistakes are exposed to attackers in the meantime."
+      },
+      {
+        "text": "The private helper functions inside one module",
+        "explanation": "These are cheap to change later: rename or restructure them whenever a need appears. YAGNI applies fully."
+      },
+      {
+        "text": "Versioning and deprecation strategy for a public SDK",
+        "explanation": "Correct. External callers you can't see will depend on it; breaking them later is expensive."
+      },
+      {
+        "text": "Writing tests and refactoring as you go",
+        "explanation": "Correct, in a different sense: Fowler says YAGNI never excuses skipping these, because clean, tested code is what makes deferring features safe."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "1. YAGNI weighs the cost of building now against the cost of building later.\n2. For most internal code, 'later' is cheap, so wait.\n3. For decisions other people depend on (formats, public APIs) or that are costly to reverse (security), 'later' is expensive, so think ahead.\n4. Separately, YAGNI applies to *features*. Practices that keep code malleable (tests, refactoring) are what let you wait safely, so they're never 'not needed'.\n\n| Decision | Cost later | Approach |\n|---|---|---|\n| Private helper | low | YAGNI |\n| Event format | high | design |\n| Auth model | high | design |\n| Public SDK | high | design |",
+    "link": {
+      "title": "Yagni — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/Yagni.html"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Six months ago a team built a multi-currency feature \"because we'll need it\". The business has now asked for exactly that feature, and the code fits. According to Fowler's analysis, which costs did the early build still incur?",
+    "options": [
+      {
+        "text": "None: the guess was right, so YAGNI doesn't apply",
+        "explanation": "Fowler's point is that even a correct guess has costs. YAGNI is about when to build, not only whether."
+      },
+      {
+        "text": "Only the cost of repair",
+        "explanation": "Repair is the cost when the guess is wrong. Here the guess was right, so repair is the one cost avoided."
+      },
+      {
+        "text": "Only the cost of build, which would have been paid anyway",
+        "explanation": "Build cost would have been paid later, but two further costs were added by building early."
+      },
+      {
+        "text": "The cost of delay (other features shipped later) and the cost of carry (six months of extra complexity in every change and test)",
+        "explanation": "Correct. Building early pushed back whatever else the team could have shipped, and the unused code made every change in that area slower for six months."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Fowler's four costs of a presumptive feature:\n\n| Cost | Paid when guess is right? |\n|---|---|\n| Build | yes (but would be later anyway) |\n| Delay | **yes** |\n| Carry | **yes** |\n| Repair | no |\n\n1. **Delay**: the effort originally spent on multi-currency was effort not spent on features users wanted then.\n2. **Carry**: every developer touching pricing had to understand currency code, keep its tests green and work around it.\n3. **Repair** was avoided only because the guess was right; often, requirements arrive different from the guess.\n4. So 'it turned out we needed it' doesn't mean building it early was free.",
+    "link": {
+      "title": "Yagni — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/Yagni.html"
+    }
+  }
+]

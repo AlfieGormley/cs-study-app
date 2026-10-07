@@ -1,0 +1,378 @@
+[
+  {
+    "id": "llm-inference-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a KV cache speed up autoregressive generation?",
+    "options": [
+      {
+        "text": "It caches the final answers to repeated prompts",
+        "explanation": "That is a response cache. The KV cache stores intermediate attention tensors within one generation."
+      },
+      {
+        "text": "It stores the model weights in faster memory",
+        "explanation": "Weights are read from GPU memory either way; the KV cache holds activations, not weights."
+      },
+      {
+        "text": "Keys and values of earlier tokens never change under a causal mask, so storing them means each new step only computes K and V for the one new token",
+        "explanation": "Correct. Without the cache, every step would recompute the projections for the entire prefix."
+      },
+      {
+        "text": "It lets the model skip attention entirely after the first token",
+        "explanation": "The new token still attends over all cached keys and values; the cache just avoids recomputing them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Step t needs K and V for tokens 1..t at every layer.\n2. Causal masking means token j's K and V depend only on tokens ≤ j, so they are identical at every later step.\n3. Cache them: each step computes one new K and V row per layer and appends it.\n4. Projection work per step drops from O(t) tokens to O(1); attention over the cache is still O(t).",
+    "link": {
+      "title": "KV cache strategies — Hugging Face",
+      "url": "https://huggingface.co/docs/transformers/kv_cache"
+    }
+  },
+  {
+    "id": "llm-inference-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You lower the sampling temperature from 1.0 towards 0. What happens to generation?",
+    "options": [
+      {
+        "text": "The distribution sharpens towards the most likely token; at T → 0 it becomes greedy decoding",
+        "explanation": "Correct. With logits [2, 1, 0, −1], T = 0.5 already gives the top token 0.865 versus 0.644 at T = 1."
+      },
+      {
+        "text": "Outputs become more random and creative",
+        "explanation": "Reversed. Dividing logits by a small T exaggerates differences, concentrating probability on the top token."
+      },
+      {
+        "text": "The model's knowledge improves, so answers become more accurate",
+        "explanation": "Temperature only reshapes the output distribution; it cannot add knowledge. A wrong top token stays wrong."
+      },
+      {
+        "text": "Generation becomes faster because fewer tokens are considered",
+        "explanation": "The forward pass is identical; temperature is a cheap rescaling of the logits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Probabilities are softmax(z / T).\n2. Smaller T multiplies the gaps between logits, so the largest dominates.\n3. With z = [2, 1, 0, −1]: T = 1 → [0.644, 0.237, 0.087, 0.032]; T = 0.5 → [0.865, 0.117, 0.016, 0.002].\n4. In the limit, all mass is on the argmax: greedy decoding.",
+    "link": {
+      "title": "The Curious Case of Neural Text Degeneration (nucleus sampling)",
+      "url": "https://arxiv.org/abs/1904.09751"
+    }
+  },
+  {
+    "id": "llm-inference-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement best describes the two phases of LLM inference?",
+    "options": [
+      {
+        "text": "Prefill and decode are both compute-bound",
+        "explanation": "Decode processes one token per sequence per step, too little maths per byte of weights read to saturate compute."
+      },
+      {
+        "text": "Prefill is memory-bound; decode is compute-bound",
+        "explanation": "Reversed. More tokens per weight read (prefill) means higher arithmetic intensity."
+      },
+      {
+        "text": "Decode happens before prefill",
+        "explanation": "Prefill must process the prompt and fill the KV cache before the first new token can be decoded."
+      },
+      {
+        "text": "Prefill processes the whole prompt in parallel and is mostly compute-bound; decode generates one token per step and is mostly memory-bandwidth-bound",
+        "explanation": "Correct. Prefill reuses each weight across many tokens; decode must reread every weight for each step."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Arithmetic intensity = FLOPs per byte moved.\n2. Prefill with a 2,000-token prompt does about 2,000 multiply-adds per weight read.\n3. Decode at batch 1 does about one multiply-add per weight read.\n4. GPUs can do hundreds of FLOPs per byte of memory bandwidth, so decode at small batch leaves compute idle. Batching raises decode intensity.",
+    "link": {
+      "title": "Efficient Memory Management for LLM Serving with PagedAttention (vLLM)",
+      "url": "https://arxiv.org/abs/2309.06180"
+    }
+  },
+  {
+    "id": "llm-inference-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A model has 40 layers and 40 attention heads of size 128, using standard multi-head attention, with a 16-bit KV cache. How much KV cache does one 4,096-token sequence need?",
+    "options": [
+      {
+        "text": "800 KiB",
+        "explanation": "That is the per-token figure (819,200 bytes). Multiply by 4,096 tokens."
+      },
+      {
+        "text": "3.125 GiB",
+        "explanation": "Correct. 2 × 40 × 40 × 128 × 2 = 819,200 bytes per token; × 4,096 = 3,355,443,200 bytes = 3.125 GiB."
+      },
+      {
+        "text": "1.56 GiB",
+        "explanation": "Forgot the factor of 2 for storing both K and V."
+      },
+      {
+        "text": "125 GiB",
+        "explanation": "Multiplied by an extra 40. The formula has layers × heads once each."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nper token = 2 (K,V) x 40 layers\n          x 40 heads x 128 dims\n          x 2 bytes\n        = 819,200 bytes = 800 KiB\nsequence  = 819,200 x 4,096\n        = 3,355,443,200 bytes\n        = 3.125 GiB\n```\n\nThis is Llama 2 13B's shape. A batch of 8 such sequences would need 25 GiB of cache alone.",
+    "link": {
+      "title": "KV cache strategies — Hugging Face",
+      "url": "https://huggingface.co/docs/transformers/kv_cache"
+    }
+  },
+  {
+    "id": "llm-inference-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The same 40-layer model is retrained with grouped-query attention using 8 KV heads (still 40 query heads of size 128). What is the KV cache per token now?",
+    "options": [
+      {
+        "text": "800 KiB",
+        "explanation": "That is the MHA figure. GQA stores K and V only for the 8 shared heads."
+      },
+      {
+        "text": "20 KiB",
+        "explanation": "That is the MQA figure with 1 KV head (2 × 40 × 1 × 128 × 2 = 20,480 bytes)."
+      },
+      {
+        "text": "160 KiB",
+        "explanation": "Correct. 2 × 40 × 8 × 128 × 2 = 163,840 bytes = 160 KiB, a 5× reduction."
+      },
+      {
+        "text": "100 KiB",
+        "explanation": "Divided by 8 instead of by 40/8 = 5; the reduction factor is query heads ÷ KV heads."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Only K/V heads are cached; query heads are recomputed each step from the current token.\n2. Per token: 2 × 40 × 8 × 128 × 2 = 163,840 bytes = 160 KiB.\n3. Reduction: 40 query heads / 8 KV heads = 5×.\n4. This raises the batch size or context length that fits, and cuts bytes read per decode step.",
+    "link": {
+      "title": "GQA: Training Generalized Multi-Query Transformer Models",
+      "url": "https://arxiv.org/abs/2305.13245"
+    }
+  },
+  {
+    "id": "llm-inference-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After temperature, the next-token probabilities are `[0.50, 0.20, 0.15, 0.10, 0.05]`. With top-p = 0.8, which tokens remain, and what is the renormalised probability of the top token?",
+    "options": [
+      {
+        "text": "Only the first two; 0.714",
+        "explanation": "0.50 + 0.20 = 0.70 is below 0.8, so the nucleus must include the third token."
+      },
+      {
+        "text": "The first three; about 0.588",
+        "explanation": "Correct. Cumulative 0.50, 0.70, 0.85: the third token pushes it past 0.8. 0.50 / 0.85 ≈ 0.588."
+      },
+      {
+        "text": "The first four; 0.526",
+        "explanation": "The nucleus is the smallest set reaching p; 0.85 already exceeds 0.8, so the fourth is not needed."
+      },
+      {
+        "text": "All five; 0.50",
+        "explanation": "That is top-p = 1.0, no truncation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nsorted  0.50 0.20 0.15 0.10 0.05\ncum     0.50 0.70 0.85 0.95 1.00\n                  ^ first >= 0.8\nkeep    0.50 0.20 0.15  (sum 0.85)\nrenorm  0.588 0.235 0.176\n```\n\nThe two tail tokens (0.15 of the mass) can never be sampled at this step.",
+    "link": {
+      "title": "The Curious Case of Neural Text Degeneration (nucleus sampling)",
+      "url": "https://arxiv.org/abs/1904.09751"
+    }
+  },
+  {
+    "id": "llm-inference-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 13-billion-parameter model in FP16 is served at batch size 1 on a GPU with 2 TB/s memory bandwidth. Roughly what is the best-case decode speed?",
+    "options": [
+      {
+        "text": "About 77 tokens/s",
+        "explanation": "Correct. 13 × 10⁹ × 2 bytes = 26 GB per step; 26 GB / 2 TB/s = 13 ms per token ≈ 77 tokens/s."
+      },
+      {
+        "text": "About 150 tokens/s",
+        "explanation": "That would be a 6.5B-parameter model, or forgetting that FP16 is 2 bytes per parameter."
+      },
+      {
+        "text": "Thousands of tokens/s, because the GPU has hundreds of TFLOP/s",
+        "explanation": "At batch 1 the limit is memory bandwidth, not FLOPs."
+      },
+      {
+        "text": "About 7.7 tokens/s",
+        "explanation": "Off by 10×; recheck 26 × 10⁹ / 2 × 10¹² = 0.013 s."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Each decode step reads every weight once: 13 × 10⁹ × 2 bytes = 2.6 × 10¹⁰ bytes.\n2. Time ≥ bytes / bandwidth = 2.6 × 10¹⁰ / 2 × 10¹² = 0.013 s.\n3. 1 / 0.013 ≈ 77 tokens/s upper bound.\n4. KV cache reads and kernel overheads make reality slower. INT4 weights would cut the bytes about 4× (plus scales).",
+    "link": {
+      "title": "Efficient Memory Management for LLM Serving with PagedAttention (vLLM)",
+      "url": "https://arxiv.org/abs/2309.06180"
+    }
+  },
+  {
+    "id": "llm-inference-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about **quantising LLM weights** are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Going from FP16 to INT4 cuts weight memory roughly 4×, which can also speed up memory-bound decoding",
+        "explanation": "Correct. 2 bytes → 0.5 bytes per parameter, plus a little for scales."
+      },
+      {
+        "text": "A few large-magnitude outliers can ruin a single shared scale, so practical methods use per-group scales or keep outliers in higher precision",
+        "explanation": "Correct. One huge value forces a large step size that crushes small weights to zero."
+      },
+      {
+        "text": "Quantisation is always lossless at any bit width",
+        "explanation": "Errors grow as bits fall; below about 4 bits quality usually drops noticeably."
+      },
+      {
+        "text": "GPTQ uses a small calibration set and compensates the rounding error of each column by adjusting the remaining weights",
+        "explanation": "Correct. That is GPTQ's core idea."
+      },
+      {
+        "text": "Quantised models must be retrained from scratch",
+        "explanation": "Post-training quantisation (absmax, LLM.int8(), GPTQ) works on existing checkpoints."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Memory: 6.74B params × 0.5 bytes ≈ 3.4 GB at INT4 versus 13.5 GB at FP16.\n2. Decode reads all weights each step, so fewer bytes → faster.\n3. Outliers: with absmax scaling, step = max|w| / 127; a 60 among weights near 1 makes the step 0.47.\n4. Remedies: per-group scales, mixed precision, error-compensating rounding.\n5. These are post-training methods; no retraining needed.",
+    "link": {
+      "title": "GPTQ: Accurate Post-Training Quantization",
+      "url": "https://arxiv.org/abs/2210.17323"
+    }
+  },
+  {
+    "id": "llm-inference-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Quantise the weights `[0.1, −0.3, 0.8]` to INT8 with absmax scaling (range −127..127). What are the stored integers and the dequantised value of −0.3?",
+    "options": [
+      {
+        "text": "`[13, −38, 100]`; −0.3",
+        "explanation": "Uses a scale of 0.008 (max mapped to 100). Absmax maps the largest magnitude to 127."
+      },
+      {
+        "text": "`[16, −48, 127]`; about −0.302",
+        "explanation": "Correct. Scale = 0.8 / 127 ≈ 0.0063; −0.3 / 0.0063 = −47.625 → −48; −48 × 0.0063 ≈ −0.3024."
+      },
+      {
+        "text": "`[16, −47, 127]`; about −0.296",
+        "explanation": "−47.625 rounds to −48, not −47 (truncation towards zero is not rounding)."
+      },
+      {
+        "text": "`[0, 0, 1]`; 0",
+        "explanation": "That uses a scale of 0.8 (one step per max value), discarding nearly all precision."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nscale = 0.8 / 127 = 0.0062992\n0.1 / scale  = 15.875  -> 16\n-0.3 / scale = -47.625 -> -48\n0.8 / scale  = 127     -> 127\ndequant -48 * 0.0062992\n            = -0.30236\n```\n\nThe error is 0.0024, less than half a step (0.00315), as rounding guarantees.",
+    "link": {
+      "title": "LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale",
+      "url": "https://arxiv.org/abs/2208.07339"
+    }
+  },
+  {
+    "id": "llm-inference-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You serve Llama 2 7B in FP16 (13,476,831,232 bytes of weights) on an 80 GB (80 × 10⁹ bytes) GPU. KV cache is 524,288 bytes per token. Ignoring activations and other overhead, how many full 4,096-token sequences can be cached at once?",
+    "options": [
+      {
+        "text": "37",
+        "explanation": "Divides 80 GB by 2.147 GB without subtracting the weights first."
+      },
+      {
+        "text": "31",
+        "explanation": "30.98 rounds to 31, but you can only fit whole sequences; the 31st would not fit."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. (80 × 10⁹ − 13.48 × 10⁹) / (524,288 × 4,096) = 66.52 × 10⁹ / 2.147 × 10⁹ ≈ 30.98, so 30 whole sequences."
+      },
+      {
+        "text": "15",
+        "explanation": "That assumes a 32-bit KV cache (4 bytes per element). The question gives 524,288 bytes per token, which is the 16-bit figure."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nfree   = 80,000,000,000\n       - 13,476,831,232\n       = 66,523,168,768 bytes\nper seq = 524,288 x 4,096\n        = 2,147,483,648 bytes\nfree / per seq = 30.98 -> 30\n```\n\nIn practice activations, fragmentation and framework overhead reduce this further. Most requests are shorter than 4,096 tokens, which is why paged allocation fits many more.",
+    "link": {
+      "title": "Efficient Memory Management for LLM Serving with PagedAttention (vLLM)",
+      "url": "https://arxiv.org/abs/2309.06180"
+    }
+  },
+  {
+    "id": "llm-inference-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server reserves a contiguous KV cache for 4,096 tokens per request, but requests average 500 tokens. Roughly what fraction of reserved cache memory is unused, and how does PagedAttention with 16-token blocks change that?",
+    "options": [
+      {
+        "text": "About 88% wasted; with paging, each sequence wastes at most 15 token slots in its last partially filled block",
+        "explanation": "Correct. 1 − 500 / 4,096 ≈ 0.878. Blocks are allocated on demand, so only the final block can be partly empty."
+      },
+      {
+        "text": "About 12% wasted; paging makes no difference",
+        "explanation": "500 / 4,096 ≈ 12% is the fraction *used*. The waste is the other 88%."
+      },
+      {
+        "text": "About 50% wasted; paging halves it",
+        "explanation": "No basis for 50%; compute 1 − 500/4,096."
+      },
+      {
+        "text": "No waste, because unused cache is automatically compressed",
+        "explanation": "Reserved memory is held whether or not it is written; nothing compresses it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Used fraction: 500 / 4,096 = 0.122.\n2. Unused: 0.878 ≈ 88% of reserved memory.\n3. PagedAttention allocates 16-token blocks through a block table as the sequence grows.\n4. A 500-token sequence needs ⌈500/16⌉ = 32 blocks = 512 slots: 12 slots wasted.\n5. Freed memory lets the server batch many more sequences, which is where vLLM's 2–4× throughput gains came from.",
+    "link": {
+      "title": "Efficient Memory Management for LLM Serving with PagedAttention (vLLM)",
+      "url": "https://arxiv.org/abs/2309.06180"
+    }
+  },
+  {
+    "id": "llm-inference-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about **speculative decoding** are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A small draft model proposes several tokens and the large target model checks them all in a single forward pass",
+        "explanation": "Correct. Verifying k positions in one pass costs about the same as one decode step because decode is memory-bound."
+      },
+      {
+        "text": "With the correct acceptance rule, the output follows exactly the target model's distribution",
+        "explanation": "Correct. The rejection-sampling scheme in Leviathan et al. makes it exact, not an approximation."
+      },
+      {
+        "text": "The speed-up is largest when the draft model often disagrees with the target",
+        "explanation": "Reversed. Each rejection discards the remaining proposals; high agreement means more tokens per target pass."
+      },
+      {
+        "text": "It reduces the number of sequential target-model passes per generated token",
+        "explanation": "Correct. Several accepted tokens per pass means fewer serial passes."
+      },
+      {
+        "text": "It requires retraining the target model",
+        "explanation": "The paper accelerates off-the-shelf models without retraining or architecture changes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Decode is bandwidth-bound: reading the target's weights dominates, whether you score 1 position or 5.\n2. Draft proposes k tokens cheaply; target scores all k + 1 positions at once.\n3. Accept each proposed token with probability min(1, p_target / p_draft); at the first rejection, resample from the adjusted target distribution and stop.\n4. Expected tokens per target pass rises with the acceptance rate; the paper reports 2–3× on T5-XXL with identical outputs.",
+    "link": {
+      "title": "Fast Inference from Transformers via Speculative Decoding",
+      "url": "https://arxiv.org/abs/2211.17192"
+    }
+  }
+]

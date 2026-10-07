@@ -1,0 +1,373 @@
+[
+  {
+    "id": "tcp-reliability-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A TCP segment has `seq=5001` and carries 1,200 bytes of data. What is the number of its last byte, and what sequence number will the next segment start at? Assume ordinary contiguous new data, no SYN/FIN and that the receiver already has all earlier data in this connection.",
+    "options": [
+      {
+        "text": "Last byte 6201, next segment 6202",
+        "explanation": "This counts one byte too many. Bytes 5001 up to and including 6200 are exactly 1,200 bytes."
+      },
+      {
+        "text": "Last byte 6200, next segment 6201",
+        "explanation": "Correct. The segment covers 5001 to 5001 + 1200 − 1 = 6200, so the next byte is 6201."
+      },
+      {
+        "text": "Last byte 5002, next segment 5003",
+        "explanation": "This treats sequence numbers as counting segments. TCP numbers bytes, so a 1,200-byte segment advances the number by 1,200."
+      },
+      {
+        "text": "It depends on the MSS of the next segment",
+        "explanation": "Under the stated contiguous-new-data assumption, the next byte is 6201 regardless of the next segment’s length. Retransmissions could begin at other earlier sequence positions."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. TCP sequence numbers count **bytes**.\n2. First byte = 5001. With 1,200 bytes:\n\n```\nlast = 5001 + 1200 - 1 = 6200\nnext = 6200 + 1        = 6201\n```\n\n3. The receiver will ACK this segment with `ack=6201` (the next byte it wants).",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-reliability-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A receiver sends `ACK 3001` without any SACK option. What exactly does that tell the sender? Interpret this as a current cumulative ACK within one unwrapped sequence interval, not an old duplicate ACK or a SYN/FIN boundary.",
+    "options": [
+      {
+        "text": "The receiver got the segment whose sequence number is 3001",
+        "explanation": "The ACK number is the next byte wanted, not the last one received. Byte 3001 has not arrived yet."
+      },
+      {
+        "text": "The receiver has bytes up to 3001 but may be missing some earlier ones",
+        "explanation": "A cumulative ACK can't have gaps below it. It promises everything before the number."
+      },
+      {
+        "text": "The receiver has received exactly 3,001 bytes in total since the handshake",
+        "explanation": "Sequence numbers start at a random ISN, not at zero, so the ACK number doesn't count bytes received."
+      },
+      {
+        "text": "The receiver has every byte before 3001, and 3001 is the next byte it expects",
+        "explanation": "Correct. TCP ACKs are cumulative. It may also hold later out-of-order bytes, but without SACK it can't say so."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "In the stated sequence interval, ACK 3001 identifies the next expected position. Preceding data in this connection has been accepted contiguously by TCP; later ranges may also be buffered. This says neither how many total bytes have ever arrived nor whether the application consumed or stored them. Sequence wrap and old ACKs require the connection’s serial-number context.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-reliability-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Classic fast retransmit waits for **three** duplicate ACKs before resending. Why not resend as soon as the first duplicate arrives?",
+    "options": [
+      {
+        "text": "A single duplicate ACK can result from packet reordering rather than loss",
+        "explanation": "Correct. Waiting for more evidence reduces sensitivity to modest reordering. Three duplicates can still occur without actual loss, so it is a heuristic rather than proof."
+      },
+      {
+        "text": "Because the receiver only sends duplicate ACKs in threes",
+        "explanation": "The threshold is a sender-side algorithm rule. Receivers often promptly ACK out-of-order data, but ACK loss, duplication and coalescing can change the observed pattern."
+      },
+      {
+        "text": "To give the retransmission timer a chance to fire first",
+        "explanation": "Fast retransmit is intended to recover before RTO expiry when enough qualifying duplicate ACKs arrive; there is no universal ordering between an arbitrary few RTTs and the configured timer."
+      },
+      {
+        "text": "Because the receiver's window must open by three segments",
+        "explanation": "The threshold is used for loss inference, not a requirement to increase the window by three segments. The classic duplicate-ACK definition does include an unchanged advertised-window condition."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Suppose segments A, B, C are sent and B is delayed slightly so the order becomes A, C, B.\n2. After C the receiver sends a duplicate ACK (still waiting for B). When B arrives, the ACK jumps past C.\n3. If the sender had resent B on the first duplicate, that retransmission would be wasted, and a congestion response could reduce its sending allowance unnecessarily.\n4. In the simple example with one ACK per arrival, three duplicates provide stronger evidence of a hole; they do not universally prove three distinct later segments or actual loss. Modern RACK uses timing instead of a count for the same reason.",
+    "link": {
+      "title": "RFC 5681: TCP Congestion Control",
+      "url": "https://www.rfc-editor.org/rfc/rfc5681"
+    }
+  },
+  {
+    "id": "tcp-reliability-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's toy receiver, what does this print?\n\n```python\nrx([(1, 500), (1001, 500),\n    (501, 500), (1501, 500)])\n```",
+    "options": [
+      {
+        "text": "ACKs 501, 1501, 1501, 2001; nothing ever held",
+        "explanation": "This assumes the segment at 1001 is accepted in order. It arrives while the receiver is still waiting for 501, so it is held, and the ACK stays at 501."
+      },
+      {
+        "text": "ACKs 501, 501, 1001, 2001; 1001 still held after the third line",
+        "explanation": "When 501–1000 fills the gap, it joins the held 1001–1500 interval and the cumulative point advances to 1501. That held range no longer remains outstanding."
+      },
+      {
+        "text": "ACKs 501, 501, 1501, 2001; 1001 held only on the second line",
+        "explanation": "Correct. The model merges adjacent received ranges and advances across their combined coverage once the gap fills."
+      },
+      {
+        "text": "ACKs 501, 1501, 1501, 2001; 1001 held on the second line",
+        "explanation": "A cumulative ACK can't move past a hole. With 501–1000 missing, the ACK must stay at 501."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Start with nxt = 1 and no held intervals.\n\n1. (1, 500) covers [1,501), so print `ACK 501 held []`.\n2. (1001, 500) covers [1001,1501), beyond the gap; print `ACK 501 held [1001]`.\n3. (501, 500) joins it into [501,1501), so print `ACK 1501 held []`.\n4. (1501, 500) extends coverage to 2001; print `ACK 2001 held []`.\n\nThe printed held list contains starts of merged ranges, not one entry per original packet.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-reliability-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A connection currently has SRTT = 100 ms and RTTVAR = 50 ms. A new RTT sample of 120 ms arrives. Using RFC 6298 (α = 1/8, β = 1/4, ignoring clock granularity and minimums), what is the new RTO?",
+    "options": [
+      {
+        "text": "120 ms",
+        "explanation": "The RTO is not the latest sample. It is a smoothed estimate plus a safety margin of four deviations."
+      },
+      {
+        "text": "272.5 ms",
+        "explanation": "Correct. RTTVAR = 0.75 × 50 + 0.25 × 20 = 42.5; SRTT = 0.875 × 100 + 0.125 × 120 = 102.5; RTO = 102.5 + 4 × 42.5 = 272.5 ms."
+      },
+      {
+        "text": "300 ms",
+        "explanation": "That is the RTO before this sample (100 + 4 × 50). The new sample changes both SRTT and RTTVAR."
+      },
+      {
+        "text": "205 ms",
+        "explanation": "Even 102.5 + 2 × 42.5 would be 187.5 ms, not 205 ms. The specified estimator uses four times RTTVAR, producing 272.5 ms before bounds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Update RTTVAR first, using the **old** SRTT:\n\n```\n|SRTT - R| = |100 - 120| = 20\nRTTVAR = 0.75*50 + 0.25*20\n       = 37.5 + 5 = 42.5\n```\n\nThen SRTT:\n\n```\nSRTT = 0.875*100 + 0.125*120\n     = 87.5 + 15 = 102.5\n```\n\nThen the timeout:\n\n```\nRTO = 102.5 + 4*42.5\n    = 102.5 + 170 = 272.5 ms\n```\n\nA configured 200 ms floor would not change this estimate; the RFC’s recommended one-second floor would. The question explicitly omits those bounds, and this arithmetic does not reproduce every implementation’s estimator.",
+    "link": {
+      "title": "RFC 6298: Computing TCP's Retransmission Timer",
+      "url": "https://www.rfc-editor.org/rfc/rfc6298"
+    }
+  },
+  {
+    "id": "tcp-reliability-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In a simplified classic Reno model using the three-duplicate-ACK trigger, no Limited Transmit/TLP/RACK, no new data beyond the stated flight and one qualifying duplicate ACK per out-of-order arrival, which losses may require the RTO? Assume ACKs themselves are delivered. Select all that apply.",
+    "options": [
+      {
+        "text": "An API returns a 3-segment response and the last segment is lost",
+        "explanation": "Correct. Nothing is sent after the lost segment, so the receiver has no reason to send any duplicate ACKs. This tail loss waits for the timer (or for TLP)."
+      },
+      {
+        "text": "A bulk transfer has 40 segments in flight and the 10th is lost",
+        "explanation": "Thirty segments arrive after the hole, each producing a duplicate ACK, so three duplicates arrive quickly and fast retransmit works."
+      },
+      {
+        "text": "Only 3 segments are in flight and the first is lost",
+        "explanation": "Correct. Only two later segments arrive, so only two duplicate ACKs come back, one short of the threshold."
+      },
+      {
+        "text": "The fast retransmission is itself lost, with no additional recovery mechanism or new acknowledgement progress",
+        "explanation": "Correct under the specified simplified recovery model. Repeated ACKs for the same gap do not establish a new recovery event; the RTO remains the fallback. Other algorithms can recover differently."
+      },
+      {
+        "text": "Two adjacent segments exchange arrival order and none is lost",
+        "explanation": "There's no loss to repair here. At most one duplicate ACK is sent, so fast retransmit correctly doesn't fire."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Under these assumptions: tail loss has no following data to generate duplicate ACKs; the three-segment flight with its first segment lost has only two later arrivals; a lost retransmission has no additional recovery mechanism. Those cases can need the timer. The bulk flight provides enough delivered later data for the threshold. Adjacent reordering without loss has no loss to repair. Real stacks may use additional mechanisms.",
+    "link": {
+      "title": "RFC 8985: The RACK-TLP Loss Detection Algorithm",
+      "url": "https://www.rfc-editor.org/rfc/rfc8985"
+    }
+  },
+  {
+    "id": "tcp-reliability-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A segment times out and is retransmitted. 50 ms after the retransmission, an ACK covering it arrives. The original was sent 350 ms before that ACK. Without timestamps, why does Karn's algorithm say not to use this as an RTT sample?",
+    "options": [
+      {
+        "text": "Because the sample is too large and would push the RTO above its 60-second cap",
+        "explanation": "Both candidate samples are below one second. Their size is not the ambiguity, and RFC 6298 does not mandate a 60-second cap: a chosen cap must be at least 60 seconds."
+      },
+      {
+        "text": "Because retransmitted segments travel on a slower priority queue",
+        "explanation": "There is no TCP rule requiring retransmissions to use a slower network queue. That does not explain which transmission the cumulative ACK covers."
+      },
+      {
+        "text": "Because the ACK could be for the original (RTT 350 ms) or the retransmission (RTT 50 ms), and there's no way to tell",
+        "explanation": "Correct. The cumulative ACK number alone cannot distinguish the copies. Timestamp-based measurement can remove the ambiguity under its specified echo rules."
+      },
+      {
+        "text": "Because RTT samples are only taken during the handshake",
+        "explanation": "TCP samples the RTT throughout the connection; that is how it adapts to changing paths."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Two copies of the same bytes are in flight: the original (sent at t = 0) and the retransmission (sent at t = 300 ms).\n2. The ACK arrives at t = 350 ms. It carries only an ACK number, which is identical for either copy.\n3. Candidate RTTs: 350 ms (original) or 50 ms (copy).\n4. Picking 50 ms when the truth is 350 ms makes the RTO too short, causing more timeouts; the reverse makes it too long.\n5. Karn: **discard samples from retransmitted data**, and keep the backed-off RTO until a clean sample arrives. The timestamp option permits RTT sampling when its echo rules disambiguate the measurement; it is not simply a universal echo of the latest arrival.",
+    "link": {
+      "title": "RFC 6298: Computing TCP's Retransmission Timer",
+      "url": "https://www.rfc-editor.org/rfc/rfc6298"
+    }
+  },
+  {
+    "id": "tcp-reliability-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A sender sent six contiguous 1,000-byte segments beginning at 1001 through 6001. It receives `ACK 1001 SACK 2001-4001, 5001-7001`, with exclusive right edges. Assume this report completely describes received later ranges, no reneging, and a separate loss detector has declared all uncovered sent ranges lost. Which segment ranges require retransmission?",
+    "options": [
+      {
+        "text": "Only 1001",
+        "explanation": "The SACK blocks have a second gap: 4001–5000 is not covered by either block, so segment 4001 is missing too."
+      },
+      {
+        "text": "Everything from 1001 to 7000",
+        "explanation": "That is Go-Back-N behaviour, which SACK exists to avoid. Blocks 2001–4000 and 5001–7000 have arrived."
+      },
+      {
+        "text": "1001 and 4001",
+        "explanation": "Correct. The cumulative ACK says 1001 is missing; the SACK blocks cover 2001–4000 and 5001–7000, leaving a hole at 4001–5000."
+      },
+      {
+        "text": "2001 and 5001, the left edges of the SACK blocks",
+        "explanation": "SACK blocks list data the receiver **has**. Their left edges are received segments; the gaps between blocks are what's missing."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Lay out the six segments and mark what the receiver reports:\n\n```\n1001 2001 3001 4001 5001 6001\n  ?   ok   ok   ?    ok   ok\n```\n\n1. `ACK 1001`: everything before 1001 received; 1001 is the next byte needed. **Missing.**\n2. `SACK 2001-4001`: segments 2001 and 3001 held.\n3. `SACK 5001-7001`: segments 5001 and 6001 held.\n4. Uncovered: 4001–5000. **Missing.**\n\nGiven the explicit loss-detection and complete-report assumptions, retransmit 1001 and 4001. A SACK report alone does not prove every omitted range is lost or must be retransmitted immediately.",
+    "link": {
+      "title": "RFC 2018: TCP Selective Acknowledgment Options",
+      "url": "https://www.rfc-editor.org/rfc/rfc2018"
+    }
+  },
+  {
+    "id": "tcp-reliability-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A connection has an RTO of 300 ms when the peer's network cable is pulled. The sender keeps retransmitting the same segment with exponential backoff. How long after the **original** transmission is the 4th retransmission sent? Assume the RTO timer starts with that original transmission, no ACK restarts it, no probe or early retry intervenes, and no floor/cap or application timeout changes the stated waits.",
+    "options": [
+      {
+        "text": "1.2 s",
+        "explanation": "This is 4 × 300 ms, a linear backoff. TCP doubles the timeout each time."
+      },
+      {
+        "text": "2.4 s",
+        "explanation": "2.4 s is the length of the fourth wait on its own, not the total elapsed time."
+      },
+      {
+        "text": "4.8 s",
+        "explanation": "4.8 s is the next doubled timeout interval after the fourth expiry, not the elapsed time to retransmission four. The elapsed time is 0.3 + 0.6 + 1.2 + 2.4."
+      },
+      {
+        "text": "4.5 s",
+        "explanation": "Correct. The waits are 0.3, 0.6, 1.2 and 2.4 s, which sum to 4.5 s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Each expiry doubles the RTO for the next attempt.\n\n| Event | Wait | Elapsed |\n|---|---|---|\n| Original | – | 0 s |\n| Retx 1 | 0.3 s | 0.3 s |\n| Retx 2 | 0.6 s | 0.9 s |\n| Retx 3 | 1.2 s | 2.1 s |\n| Retx 4 | 2.4 s | 4.5 s |\n\nLinux’s actual abort timing depends on its configured limits and retry policy. An entirely idle connection with no outstanding data has no retransmission waiting to fail; use suitable keepalives, application heartbeats or operation deadlines when detection is required.",
+    "link": {
+      "title": "RFC 6298: Computing TCP's Retransmission Timer",
+      "url": "https://www.rfc-editor.org/rfc/rfc6298"
+    }
+  },
+  {
+    "id": "tcp-reliability-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After a retransmission of bytes 8001–9000, the first SACK block in an ACK is `8001-9001`, entirely below the cumulative ACK. What does this D-SACK report establish, and how might a sender use it?",
+    "options": [
+      {
+        "text": "The receiver is buggy; the sender should reset the connection",
+        "explanation": "A SACK block below the cumulative ACK is a deliberate signal defined by D-SACK (RFC 2883), not an error."
+      },
+      {
+        "text": "Those bytes were received more than once; the sender may use this evidence to assess spurious retransmission and adjust recovery or reordering tolerance",
+        "explanation": "Correct. D-SACK reports duplicate receipt. It does not alone distinguish delayed originals from network duplication, or require unconditional congestion-window undo."
+      },
+      {
+        "text": "Segment 8001 is still missing and must be sent again",
+        "explanation": "The cumulative ACK is already past 9001, so 8001 has definitely arrived. The block reports a duplicate, not a hole."
+      },
+      {
+        "text": "The receiver's window is full and it is asking the sender to pause",
+        "explanation": "Flow control is signalled by the window field, not by SACK blocks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The first SACK block below the cumulative point is the D-SACK duplicate report defined by RFC 2883.\n2. It says the indicated data was received more than once.\n3. A delayed original plus retransmission is one cause; duplication elsewhere is another.\n4. A sender can combine this information with transmission history and its recovery algorithm to assess undo or greater reordering tolerance. The report alone does not prescribe a particular window change.",
+    "link": {
+      "title": "RFC 2883: An Extension to SACK (D-SACK)",
+      "url": "https://www.rfc-editor.org/rfc/rfc2883"
+    }
+  },
+  {
+    "id": "tcp-reliability-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In an RFC 8985 teaching scenario, segments 1–8 are cumulatively acknowledged and 9–10 are lost. SRTT is 40 ms, two segments remain outstanding, probe eligibility checks pass, no new data is available and the RTO deadline is later than the baseline PTO. Assume the probe and its ACK arrive. Which statements are correct?",
+    "options": [
+      {
+        "text": "The baseline PTO is 2 × 40 = 80 ms from its scheduling point, after which the eligible probe retransmits the highest-sequence segment",
+        "explanation": "Correct under the supplied assumptions. The full algorithm includes timer restarts, eligibility checks, delayed-ACK adjustment for one outstanding segment and an RTO deadline bound."
+      },
+      {
+        "text": "The ACK of the probe can SACK segment 10 and provide RACK evidence for recovering segment 9, subject to its timing/reordering checks",
+        "explanation": "Correct. Delivery of later-transmitted data helps infer loss, but an ACK does not universally force an immediate retransmission without the algorithm’s checks."
+      },
+      {
+        "text": "Without TLP, three duplicate ACKs would still arrive and trigger fast retransmit",
+        "explanation": "No later original data follows the lost tail, so the simple three-duplicate-ACK trigger has no such evidence. Additional mechanisms or the RTO are needed; there is no universal 200 ms floor."
+      },
+      {
+        "text": "The sender must first fall back to a congestion window of one segment, as after an RTO",
+        "explanation": "An eligible probe can be sent before an RTO event. The congestion response depends on the recovery algorithm; it is not required to enter RTO recovery before probing."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. With SRTT 40 ms and the stated two-segment flight, the baseline probe interval is 80 ms.\n2. Since no new data is available and eligibility checks pass, the probe retransmits segment 10.\n3. Its arrival elicits an ACK with a SACK block for that later range while 9 remains missing.\n4. RACK uses transmission/delivery times and its reordering window to decide when to mark 9 lost.\n5. No fixed total repair time follows: scheduling, path delay, further loss and recovery state still matter.",
+    "link": {
+      "title": "RFC 8985: The RACK-TLP Loss Detection Algorithm",
+      "url": "https://www.rfc-editor.org/rfc/rfc8985"
+    }
+  },
+  {
+    "id": "tcp-reliability-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An idealised TCP flow advances its data sequence space at 40 Gbit/s of payload, ignoring headers and control positions. Roughly how long does one 32-bit sequence-space wrap take, and which negotiated mechanism helps reject old duplicates?",
+    "options": [
+      {
+        "text": "About 0.86 s; PAWS, using the timestamp option to reject segments with older timestamps",
+        "explanation": "Correct. 2^32 × 8 / (40 × 10^9) ≈ 0.859 s. Negotiated timestamps support PAWS comparisons against maintained timestamp state under RFC 7323 rules."
+      },
+      {
+        "text": "About 107 s; TIME_WAIT",
+        "explanation": "107 seconds does not follow from the specified payload rate. TIME_WAIT concerns connection closure/reuse, not sequence-space cycling within this continuing connection."
+      },
+      {
+        "text": "About 0.86 s; the TCP checksum",
+        "explanation": "The wrap time is right, but a stale segment has a perfectly valid checksum. The checksum detects corruption, not age."
+      },
+      {
+        "text": "It never wraps; window scaling extends the sequence space to 46 bits",
+        "explanation": "Window scaling extends the window field, not the sequence number. Sequence numbers stay 32 bits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. One sequence-space cycle is 2^32 data bytes.\n2. 40 Gbit/s of payload is 5 × 10^9 bytes/s.\n3. 2^32 / (5 × 10^9) = 0.8589934592 seconds.\n4. PAWS uses negotiated timestamps, maintained recent-timestamp state and serial-number comparisons to reject stale segments. It includes rules for timestamp wrap, idle state and validation; it is not “reject anything older than any timestamp ever seen”.",
+    "link": {
+      "title": "RFC 7323: TCP Extensions for High Performance",
+      "url": "https://www.rfc-editor.org/rfc/rfc7323"
+    }
+  }
+]

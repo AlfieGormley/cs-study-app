@@ -1,0 +1,347 @@
+[
+  {
+    "id": "qp-anti-patterns-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`events.created_at` is a `timestamp` with a B-tree index. Which rewrite of `WHERE date(created_at) = '2026-03-01'` lets the index be used?",
+    "options": [
+      {
+        "text": "`WHERE created_at::date = '2026-03-01'`",
+        "explanation": "That's the same function in different syntax: a cast applied to the column. The index on `created_at` still can't be used."
+      },
+      {
+        "text": "`WHERE created_at >= '2026-03-01' AND created_at < '2026-03-02'`",
+        "explanation": "Correct. The bare column is compared with constants, so the condition becomes an index range scan over exactly one day. A half-open range also avoids missing times like 23:59:59.5."
+      },
+      {
+        "text": "`WHERE created_at BETWEEN '2026-03-01' AND '2026-03-01'`",
+        "explanation": "It's sargable, but it's wrong: it only matches the instant 2026-03-01 00:00:00, not the whole day."
+      },
+      {
+        "text": "`WHERE to_char(created_at, 'YYYY-MM-DD') = '2026-03-01'`",
+        "explanation": "Still a function on the column, and a more expensive one. No index on `created_at` can serve it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "An index on `created_at` is sorted by `created_at`. It can find a contiguous range of values, but it knows nothing about `date(created_at)`.\n\n1. Ask: which raw values does the condition accept? All timestamps from midnight on 1 March up to, not including, midnight on 2 March.\n2. Write that as a half-open range on the bare column.\n\nIn the lesson, the same rewrite for a whole year went from a 66 ms Seq Scan to an 8.7 ms Index Only Scan.",
+    "link": {
+      "title": "Use The Index, Luke: functions in WHERE",
+      "url": "https://use-the-index-luke.com/sql/where-clause/functions"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An API pages through orders with `ORDER BY id LIMIT 20 OFFSET :n`, using an index on `id`. When a client requests page 5,000 (`OFFSET 99980`), roughly how many index entries does Postgres walk?",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "That's what keyset pagination would do. With OFFSET, Postgres can't jump to the 99,981st entry; it must count its way there."
+      },
+      {
+        "text": "99,980",
+        "explanation": "Close, but it also has to produce the 20 rows it returns."
+      },
+      {
+        "text": "100,000",
+        "explanation": "Correct. It produces 99,980 rows to skip plus 20 to return. In the lesson OFFSET 900,000 walked 900,020 entries and took 67 ms."
+      },
+      {
+        "text": "The whole table, 1,000,000",
+        "explanation": "The index is ordered by `id`, so once it has produced 100,000 rows the LIMIT stops it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nrows produced = OFFSET + LIMIT\n              = 99,980 + 20\n              = 100,000\n```\n\nThe work grows linearly with the page number. Keyset pagination remembers the last `id` and asks for `WHERE id > :last_id ORDER BY id LIMIT 20`: an index seek followed by the next visible rows, without scanning earlier pages. In the lesson that was 0.014 ms against 67 ms.",
+    "link": {
+      "title": "Use The Index, Luke: paging without OFFSET",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`archived(customer_id)` contains the rows `1` and `NULL`. What does this return?\n\n```sql\nSELECT id FROM customers\nWHERE id IN (2, 3)\n  AND id NOT IN\n    (SELECT customer_id FROM archived);\n```",
+    "options": [
+      {
+        "text": "2 and 3",
+        "explanation": "That's what most people expect, but it ignores the NULL. `2 NOT IN (1, NULL)` isn't true."
+      },
+      {
+        "text": "An error, because the subquery contains NULL",
+        "explanation": "NULLs in a subquery are legal. They silently change the result instead of raising an error."
+      },
+      {
+        "text": "Only 2",
+        "explanation": "There's nothing to distinguish 2 from 3 here: neither equals 1, and both are compared with the NULL the same way."
+      },
+      {
+        "text": "No rows",
+        "explanation": "Correct. `2 NOT IN (1, NULL)` means `2 <> 1 AND 2 <> NULL`, which is `TRUE AND NULL` = NULL. WHERE keeps only TRUE, so nothing is returned."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Expand NOT IN:\n\n```\n2 NOT IN (1, NULL)\n= 2 <> 1 AND 2 <> NULL\n= TRUE AND NULL\n= NULL\n```\n\nThe same happens for 3. NULL isn't TRUE, so both rows are dropped. `NOT EXISTS (SELECT 1 FROM archived a WHERE a.customer_id = c.id)` returns 2 and 3, because a NULL never equals anything and so never counts as a match. It can often be planned as an anti-join.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A slow endpoint's plan shows:\n\n```\nSeq Scan on orders  (rows=5000)\n  Filter: ((id)::numeric = 42.0)\n```\n\n`orders.id` is an `integer` primary key. What is the cause?",
+    "options": [
+      {
+        "text": "The parameter was sent as `numeric`, so Postgres casts every `id` to numeric to compare, which prevents use of the integer index",
+        "explanation": "Correct. The `::numeric` cast is on the column side. That's a function applied to every row, so the primary key's B-tree (on integers) can't be used. Send an integer parameter."
+      },
+      {
+        "text": "The primary key index is missing",
+        "explanation": "Primary keys always have a unique index. The plan doesn't use it because of the cast, not because it's missing."
+      },
+      {
+        "text": "Statistics are stale",
+        "explanation": "`rows=5000` is the 0.5% default for an expression, which results from the cast. ANALYZE won't help."
+      },
+      {
+        "text": "Postgres always scans for numeric comparisons",
+        "explanation": "A numeric column with a numeric index would be searched normally. The problem is comparing *different* types."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Look at which side of the comparison has the cast: `(id)::numeric`. The column is being converted.\n2. Why? Integer = numeric has no direct integer index operator, so Postgres promotes the integer to numeric.\n3. A function on the column is non-sargable, and the estimate falls back to 0.5% of 1,000,000 = 5,000.\n4. Fix in the application: bind the parameter as an integer. (`WHERE id = '42'` works, because an untyped literal takes the column's type.)",
+    "link": {
+      "title": "Sargable — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sargable"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You replace OFFSET pagination for a feed sorted by `ordered_on DESC`. Assume `ordered_on` is NOT NULL, `id` is the primary key, and every page orders by `ordered_on DESC, id DESC`. Many orders share the same date. The last row of the previous page had `ordered_on = '2026-05-01'` and `id = 7001`. Which next-page query is correct and index-friendly, given an index on `(ordered_on, id)`?",
+    "options": [
+      {
+        "text": "`WHERE ordered_on < '2026-05-01' ORDER BY ordered_on DESC LIMIT 20`",
+        "explanation": "This skips every remaining order on 2026-05-01 that came after id 7001 in the ordering. With a non-unique sort key you need a tie-breaker."
+      },
+      {
+        "text": "`WHERE ordered_on <= '2026-05-01' ORDER BY ordered_on DESC LIMIT 20`",
+        "explanation": "This repeats rows already shown on the previous page (everything on 2026-05-01 again)."
+      },
+      {
+        "text": "`ORDER BY ordered_on DESC LIMIT 20 OFFSET 20`",
+        "explanation": "That's OFFSET pagination again, with its linear cost and drifting pages when new rows arrive."
+      },
+      {
+        "text": "`WHERE (ordered_on, id) < ('2026-05-01', 7001) ORDER BY ordered_on DESC, id DESC LIMIT 20`",
+        "explanation": "Correct. The row comparison continues exactly after the last row seen, including ties on the date, and the index on `(ordered_on, id)` can be read backwards from that point."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Keyset pagination needs a **unique** ordering, so add the primary key as a tie-breaker:\n\n```\norder: (ordered_on DESC, id DESC)\nlast seen: ('2026-05-01', 7001)\nnext: rows that sort after it\n  = (ordered_on, id)\n    < ('2026-05-01', 7001)\n```\n\nThe row-value comparison means \"earlier date, or same date and smaller id\". Postgres can turn it into a single index range on `(ordered_on, id)`, so the scan starts at the cursor instead of counting past earlier pages; visibility checks and other filters may require extra work.",
+    "link": {
+      "title": "Use The Index, Luke: paging without OFFSET",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A page lists 2,000 posts and, for each one, the ORM runs `SELECT * FROM users WHERE id = %s` to load its author. Each query executes in 0.05 ms and the network round trip is 0.4 ms. About how long does the page spend on database calls, and what's the fix?",
+    "options": [
+      {
+        "text": "About 0.1 seconds; it's fine because every query uses the primary key",
+        "explanation": "That counts only execution time (2,000 x 0.05 ms). Each query also pays a round trip, which dominates."
+      },
+      {
+        "text": "About 0.9 seconds; load all authors in one query with `WHERE id = ANY(...)` or a JOIN",
+        "explanation": "Correct. 2,001 queries x 0.45 ms is about 0.9 s, almost all of it network latency. One batched query costs one round trip."
+      },
+      {
+        "text": "About 0.9 seconds; add an index on `users.id`",
+        "explanation": "`users.id` is the primary key and already indexed. Each query is already fast; the problem is the number of round trips."
+      },
+      {
+        "text": "About 2 seconds; increase `work_mem`",
+        "explanation": "The arithmetic is off, and `work_mem` affects sorts and hashes inside one query. It does nothing for round trips."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nqueries = 1 (posts) + 2,000 (authors)\nper query = 0.05 exec + 0.4 RTT\n          = 0.45 ms\ntotal ~ 2,001 x 0.45 ms ~ 900 ms\n```\n\nBatched:\n\n```sql\nSELECT * FROM users\nWHERE id = ANY(%s)\n```\n\nwith the distinct author IDs reduces author loading to one round trip; execution time and plan depend on the data and environment. In Django use `select_related('author')`; in SQLAlchemy, `selectinload` or `joinedload`.",
+    "link": {
+      "title": "pg_stat_statements — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/pgstatstatements.html"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "With a B-tree index on `events.created_at` (a `timestamp`), which conditions are **sargable**, i.e. able to use the index directly? Select all that apply.",
+    "options": [
+      {
+        "text": "`created_at >= now() - interval '1 day'`",
+        "explanation": "Sargable. The function is on the constant side: `now() - interval '1 day'` is computed once, and the bare column is compared with it."
+      },
+      {
+        "text": "`date_trunc('day', created_at) = '2026-03-01'`",
+        "explanation": "Not sargable. The function is applied to the column, so the index on `created_at` can't be searched."
+      },
+      {
+        "text": "`created_at + interval '1 day' > now()`",
+        "explanation": "Not sargable. Arithmetic on the column is still a function of the column. Move it to the other side: `created_at > now() - interval '1 day'`."
+      },
+      {
+        "text": "`created_at BETWEEN $1 AND $2`",
+        "explanation": "Sargable. A range on the bare column, with parameters as bounds."
+      },
+      {
+        "text": "`extract(hour FROM created_at) = 9`",
+        "explanation": "Not sargable on this index. \"9 am on any day\" isn't a contiguous range of timestamps; you would need an expression index on the extract."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "The test: is the indexed column alone on one side of the comparison, with everything else on the other side computable before the scan?\n\n| Condition | Column bare? |\n|---|---|\n| `created_at >= now() - ...` | Yes |\n| `date_trunc(.., created_at)` | No |\n| `created_at + interval` | No |\n| `created_at BETWEEN $1 AND $2` | Yes |\n| `extract(hour FROM ..)` | No |\n\nAlgebra often rescues the third case; the fifth needs an expression index.",
+    "link": {
+      "title": "Sargable — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sargable"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A report lists Bath customers who have placed at least one order:\n\n```sql\nSELECT DISTINCT c.*\nFROM customers c\nJOIN orders o ON o.customer_id = c.id\nWHERE c.city = 'Bath';\n```\n\nIt runs in 42 ms, producing 125,174 joined rows that collapse to 12,500. What's the better formulation and why?",
+    "options": [
+      {
+        "text": "Add `LIMIT 12500`, so the join stops early",
+        "explanation": "Some DISTINCT plans can stream and stop early, but adding a fixed LIMIT changes the requested result and does not solve unnecessary join multiplicity. It also hard-codes a count that will change."
+      },
+      {
+        "text": "Use `GROUP BY c.id` instead of DISTINCT",
+        "explanation": "That still produces all 125,174 joined rows and then groups them. It's the same work, written differently."
+      },
+      {
+        "text": "Use `WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)`, which can use a semi-join and avoid returning duplicate customers",
+        "explanation": "Correct. The question is \"does an order exist?\", and a semi-join answers it with one match per customer. In the lesson it took 11 ms, about 4x faster."
+      },
+      {
+        "text": "Use a LEFT JOIN instead",
+        "explanation": "A LEFT JOIN keeps customers with no orders (the opposite of what's wanted) and still multiplies rows for customers with many orders."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each Bath customer has about 10 orders, so the join produces about 10 rows per customer: 125,174.\n2. DISTINCT then hashes all of them to remove duplicates.\n3. EXISTS asks a yes/no question per customer:\n\n```\nNested Loop Semi Join\n  (actual rows=12500.00)\n-> Seq Scan on customers c\n-> Index Only Scan on orders\n     (actual rows=1.00\n      loops=12500)\n```\n\nThe inner side returns 1 row per loop (it stops at the first match) instead of 10.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An app uses a prepared statement `SELECT count(*) FROM orders WHERE status = $1`, almost always with 'pending' (3% of rows). The first five executions take under 1 ms each. From the sixth onwards, each takes about 50 ms, and EXPLAIN EXECUTE shows `Seq Scan ... (rows=333333) Filter: (status = $1)`. What happened?",
+    "options": [
+      {
+        "text": "The table grew suddenly after the fifth call",
+        "explanation": "The table didn't change; the plan did. The switch after exactly five executions is the giveaway."
+      },
+      {
+        "text": "The partial index on pending orders was dropped",
+        "explanation": "The index still exists; a custom plan would still use it. The generic plan can't, because it doesn't know `$1` is 'pending'."
+      },
+      {
+        "text": "Statistics went stale after five executions",
+        "explanation": "Executing a query doesn't alter statistics. The 333,333 estimate is the generic 1/n_distinct guess (3 statuses), not a stale stat."
+      },
+      {
+        "text": "Postgres switched from custom plans to a generic plan, which assumes an average value (1/3 of rows) and can't use the partial index; set `plan_cache_mode = force_custom_plan` or avoid preparing this query",
+        "explanation": "Correct. After five custom plans, Postgres tries a generic plan and keeps it if its *estimated* cost isn't much higher than the custom plans' average. With skewed data, that estimate is misleading."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Executions 1-5: custom plans using the real value 'pending' -> `Index Only Scan using orders_pending_idx (rows=30767)`.\n2. Execution 6: Postgres builds a generic plan with `$1` unknown. Selectivity = 1/3 (3 distinct values): `rows=333333`. For a third of the table, a Seq Scan is cheapest, and the partial index isn't provably applicable.\n3. The planner compares estimated costs, decides the generic plan is acceptable, and caches it.\n4. Every later call scans the table.\n\nFixes: `plan_cache_mode = force_custom_plan` for this connection or role; or use a literal for the hot value.",
+    "link": {
+      "title": "PREPARE — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-prepare.html"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague says \"correlated subqueries are always slow; rewrite them as joins\". In the lesson, this query took 30 ms while the equivalent `LEFT JOIN ... GROUP BY` took 84 ms:\n\n```sql\nSELECT c.id,\n  (SELECT count(*) FROM orders o\n   WHERE o.customer_id = c.id)\nFROM customers c\nWHERE c.city = 'York';\n```\n\nWhich statement best explains the result?",
+    "options": [
+      {
+        "text": "The subquery ran once and its result was cached for every customer",
+        "explanation": "The plan showed `loops=12500` on the SubPlan: it ran once per customer. Results depend on `c.id`, so a single run can't serve them all."
+      },
+      {
+        "text": "It's a nested loop: 12,500 cheap index-only lookups beat hashing all 1,000,000 orders, but without the index each loop would be a full table scan",
+        "explanation": "Correct. The subquery costs about the inner lookup x outer rows. With an index on `customer_id` that's small; without one the estimated cost rose to about 248 million, against 23,000 for the join."
+      },
+      {
+        "text": "Postgres automatically rewrote the subquery into a join",
+        "explanation": "Postgres doesn't decorrelate scalar subqueries in the SELECT list; that's why the plan has a SubPlan with 12,500 loops."
+      },
+      {
+        "text": "Joins are always slower than subqueries in Postgres",
+        "explanation": "Neither form is always faster. Which wins depends on the outer row count and whether the inner lookup is indexed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare the two plans' work:\n\n```\nSubquery: 12,500 loops x\n  Index Only Scan (~10 entries)\n  ~ 125,000 index entries\nJoin: Seq Scan all 1,000,000\n  orders + hash + group\n```\n\nThe subquery reads about 1/8 as many rows. Remove the index and each loop becomes a 1,000,000-row scan:\n\n```\n12,500 x 1,000,000\n  = 12.5 billion row visits\n```\n\nIn this example the scalar correlated SubPlan repeats an indexed lookup per outer row; other correlated subqueries may be transformed into joins. Check `loops` and whether the inner side uses an index.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these statements about PostgreSQL behaviour are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A BitmapOr needs index paths covering all relevant OR branches; an unindexed branch can prevent that strategy",
+        "explanation": "Correct. Otherwise rows satisfying the uncovered branch could be missed. Other conditions or a different access path may still allow index use."
+      },
+      {
+        "text": "Since Postgres 12, a side-effect-free, non-recursive SELECT CTE referenced once is normally inlined into the main query",
+        "explanation": "Correct. It's then optimised together with the rest. `AS MATERIALIZED` restores the old fencing behaviour when you want it."
+      },
+      {
+        "text": "`SELECT count(*) FROM big_table` is instant because Postgres stores the row count",
+        "explanation": "Under MVCC different transactions can see different row counts, so there's no single stored total. Postgres scans (a table or an index). Use `pg_class.reltuples` for an estimate."
+      },
+      {
+        "text": "`SELECT *` can prevent an index-only scan that a narrower column list would allow",
+        "explanation": "Correct. An index-only scan needs every requested column to be in the index. Asking for all columns usually makes the heap visit unavoidable."
+      },
+      {
+        "text": "`NOT IN (subquery)` is always planned as an anti-join, just like `NOT EXISTS`",
+        "explanation": "Because of NULL semantics, Postgres can't plan NOT IN as an anti-join. It uses a hashed SubPlan, or a plain per-row SubPlan if the results don't fit in `work_mem`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. OR: a BitmapOr needs an index scan for every branch. True.\n2. CTE inlining arrived in Postgres 12 for side-effect-free, non-recursive CTEs referenced once. True.\n3. count(*): an exact MVCC-visible count generally scans a table or index; it is not a constant-time catalog lookup. False.\n4. SELECT *: forces heap access unless the index happens to contain every column. True.\n5. NOT IN: hashed SubPlan at best, a cost cliff (976 million in the lesson) at worst. False.",
+    "link": {
+      "title": "Don't Do This — PostgreSQL wiki",
+      "url": "https://wiki.postgresql.org/wiki/Don%27t_Do_This"
+    }
+  }
+]

@@ -1,0 +1,379 @@
+[
+  {
+    "id": "cache-failure-modes-q1",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A dashboard key gets 2,000 requests/s and takes 500 ms to rebuild. It expires and nothing protects it. Roughly how many requests start an identical rebuild before the first finishes?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "That's what request coalescing would achieve. Without protection, every request that misses rebuilds independently."
+      },
+      {
+        "text": "About 4,000",
+        "explanation": "This multiplies by 2 instead of 0.5. The window is half a second, so half a second's worth of requests miss."
+      },
+      {
+        "text": "About 1,000",
+        "explanation": "Correct. All requests arriving during the 0.5 s rebuild window miss: `2,000/s × 0.5 s = 1,000` concurrent rebuilds, and more if the DB slows down under the load."
+      },
+      {
+        "text": "About 2,000",
+        "explanation": "That would be one full second of traffic. The rebuild only takes 0.5 s, so the first rebuild repopulates the key halfway through that second (ignoring the slowdown feedback)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Window of vulnerability = rebuild time = 0.5 s.\n2. Requests in window = rate × window = `2,000 × 0.5 = 1,000`.\n3. Each runs the same 500 ms query. The DB, sized for a trickle of misses, now has 1,000 heavy queries in flight.\n4. Queries slow to, say, 3 s, so the window grows to 3 s and `2,000 × 3 = 6,000` requests pile up: a feedback loop.\n5. With single-flight: 1 rebuild per key (or per server), everyone else waits or gets stale data.",
+    "link": {
+      "title": "Cache stampede — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_stampede"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q2",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With probabilistic early expiration (XFetch), a request refreshes early if `now + delta × beta × (−ln(rand())) ≥ expiry`. Why does this reduce stampede risk on hot keys **without** routinely wasting work on cold ones?",
+    "options": [
+      {
+        "text": "Each request has a small, rising chance of refreshing as expiry nears; a hot key gets so many requests that one refreshes just before expiry, while a cold key is rarely requested in that window so rarely refreshes early",
+        "explanation": "Correct as a probabilistic mitigation, not a guarantee. Hot keys provide many refresh opportunities; refreshes can overlap or fail and rare cold requests can still refresh early."
+      },
+      {
+        "text": "It locks the key so only one request can refresh",
+        "explanation": "XFetch needs no lock or coordination; each request decides independently."
+      },
+      {
+        "text": "It refreshes all keys at exactly `delta` seconds before expiry",
+        "explanation": "A fixed early time would make all requests in that instant refresh together, just shifting the stampede earlier. The randomness spreads it out."
+      },
+      {
+        "text": "It extends the TTL of hot keys so they never expire",
+        "explanation": "The TTL is unchanged. Hot keys stay fresh because they're recomputed early, not because their TTL is extended."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `−ln(rand())` is exponentially distributed with mean 1, so the \"early\" offset averages `delta × beta`.\n2. Let delta = 0.5 s, beta = 1. A request 2 s before expiry refreshes only if the offset ≥ 2 s: probability `e^(−2/0.5) = e^(−4) ≈ 1.8%`.\n3. Hot key at 1,000 req/s: in the last 2 s there are 2,000 rolls, so one almost surely succeeds; a refresh is likely to start before expiry, but it must also finish successfully; overlapping decisions may launch multiple refreshes.\n4. Cold key at 1 request/minute: probably zero requests in that 2 s window, so no wasted early refresh.\n5. Tune `beta` > 1 to refresh earlier if rebuild times vary.",
+    "link": {
+      "title": "Optimal Probabilistic Cache Stampede Prevention (VLDB 2015)",
+      "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker requests `GET /products/<random-uuid>` at 30,000 req/s. None exist. You already cache \"not found\" results for 60 s. Database load is still huge. Why, and what helps most?",
+    "options": [
+      {
+        "text": "Negative caching TTL is too short; raise it to 1 hour",
+        "explanation": "Each random UUID is requested once. A longer TTL doesn't help keys that never repeat, and fills memory with junk markers."
+      },
+      {
+        "text": "Switch from LRU to LFU",
+        "explanation": "Eviction policy decides what to drop when full. The requests never hit anything in the cache at all, so no policy change helps."
+      },
+      {
+        "text": "Add more Redis nodes",
+        "explanation": "The cache isn't the bottleneck; every request misses and goes to the database regardless of cache capacity."
+      },
+      {
+        "text": "Each UUID is new, so negative caching never hits; put a Bloom filter of valid product ids in front of the cache to reject most invalid ids without touching the DB, and rate-limit the client",
+        "explanation": "Correct if every currently valid product id is already represented in the filter. A stale/incompletely updated filter can wrongly reject new products. A 1% false-positive estimate describes random invalid inputs, not an adaptive attacker deliberately reusing positives."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Negative caching only helps **repeated** misses. Random UUIDs never repeat: hit ratio ≈ 0.\n2. So all 30,000 req/s hit the DB.\n3. Bloom filter of 10 million product ids at 1% FPR: `10M × 9.6 bits ≈ 12 MB`. Fits in every app server's memory.\n4. Random UUID → filter says \"definitely not\" 99% of the time → return 404 immediately.\n5. DB load: `30,000 × 1% = 300 req/s`.\n6. Add per-client rate limits on 404s to stop the traffic at the edge.\nCoordinate filter publication with creation so a newly visible product cannot be absent from the filter; during uncertainty fall back to an authoritative lookup rather than return a false 404. Rate limits reduce accepted attack traffic, not literally all attacker resource use.",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q4",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A nightly job warms 2 million keys at 06:00, all with `EX 3600`. Every day at 07:00 the database CPU spikes. What's the simplest fix?",
+    "options": [
+      {
+        "text": "Set all TTLs to 7200 seconds",
+        "explanation": "This just moves the synchronised expiry to 08:00."
+      },
+      {
+        "text": "Add random jitter to each TTL (for example 3600 + random(0–360) seconds)",
+        "explanation": "Correct. Jitter spreads expiry/reload opportunities rather than guaranteeing the resulting rate is small enough. Compare the remaining peak miss rate with origin capacity."
+      },
+      {
+        "text": "Switch the eviction policy to LFU",
+        "explanation": "These keys are expiring, not being evicted for memory, so the eviction policy is irrelevant."
+      },
+      {
+        "text": "Remove TTLs entirely",
+        "explanation": "That avoids the spike but leaves data stale forever and removes the safety net for missed invalidations."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. All 2M keys were set within minutes of 06:00 with the same TTL → all expire at ~07:00. That's an avalanche.\n2. With jitter of up to 10%: expiries spread uniformly over 07:00–07:06 (360 s).\n3. Rate of expiries: `2,000,000 / 360 ≈ 5,600/s` rather than 2M at once, and only keys actually requested get reloaded.\n4. One line of code: `ttl = 3600 + random.randint(0, 360)`.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "During a live final, the key `match:final:score` receives 400,000 reads/s. The Redis shard holding it maxes out at ~120,000 ops/s; the cluster's other 19 shards are mostly idle. Assume bounded score staleness is acceptable. Which measures would actually relieve it? Select all that apply.",
+    "options": [
+      {
+        "text": "Add 20 more shards to the cluster",
+        "explanation": "Incorrect. A single key lives in one slot on one shard. More shards don't split one key's traffic."
+      },
+      {
+        "text": "Add an in-process cache on each of the 200 app servers with a 1 s TTL",
+        "explanation": "Correct with per-server miss coalescing and stable cache residency: roughly one fill per server per TTL can cut origin reads. The total age also includes source lag and any stale-fill delay."
+      },
+      {
+        "text": "Store 8 copies as `match:final:score#0..7`, write all of them, and have readers pick one at random",
+        "explanation": "Correct if those copies are deliberately distributed over enough physical shards and updates handle partial failures. Different slots may still share one shard; eight suffixes do not guarantee eight independent capacities."
+      },
+      {
+        "text": "Add read replicas to the hot shard and route reads for that key to them",
+        "explanation": "Correct if reads tolerate replica lag and routing balances them. Capacity may approach the sum of measured node capacities, but replication work, network and load distribution prevent assuming perfect linear scaling."
+      },
+      {
+        "text": "Switch to `allkeys-lfu`",
+        "explanation": "Incorrect. LFU would keep the hot key cached, but it's already cached. The problem is throughput on one node, not eviction."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "1. Diagnose: one key → one hash slot → one shard. Cluster size is irrelevant for a single key.\n2. Need: cut per-shard load from 400k to under 120k.\n3. Local cache (1 s TTL, 200 servers): Redis load ≈ 200/s. Huge reduction.\n4. Key splitting (8 copies): if copies occupy eight distinct capable shards, 400k/8=50k reads/s each before overhead; verify placement and headroom.\n5. Replicas (3 + primary): ~100k each. Just within capacity.\n6. Often you combine the local cache with one of the others for headroom.",
+    "link": {
+      "title": "Redis Cluster specification",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're launching a new region with an empty Redis cluster. The regional database replica is sized for a 2% miss rate at full traffic. What's the safest way to go live?",
+    "options": [
+      {
+        "text": "Ramp traffic gradually (1% → 5% → 25% → 100%) and/or pre-load the hottest keys, so the database never sees more misses than it can handle",
+        "explanation": "Correct. Each step fills the cache with that slice's working set before the next. Pre-warming from access logs or a peer cluster shortens the ramp."
+      },
+      {
+        "text": "Switch 100% of the region's traffic over at once; the cache will fill within minutes",
+        "explanation": "At first the miss rate is ~100%, i.e. 50× what the database is sized for. It will likely fall over before the cache fills."
+      },
+      {
+        "text": "Set very long TTLs on the new cluster",
+        "explanation": "TTL length doesn't affect the initial empty state; every key still misses on first access."
+      },
+      {
+        "text": "Disable the cache until the database is warm",
+        "explanation": "Without the cache the database gets 100% of traffic, which is exactly the overload you're trying to avoid."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Full traffic T. DB capacity ≈ 2% of T.\n2. Cold cache at 100% traffic → misses ≈ T → 50× overload.\n3. Ramp: at 1% traffic, misses ≈ 1% of T (within capacity). As the hit ratio climbs, step up.\n4. Step to 5% when hit ratio > 60% → misses ≈ `0.05 × 0.4 = 2%` of T. OK.\n5. Continue until 100%, by which time the hit ratio is ~98%.\n6. Pre-warming the top keys (or reading misses from a warm peer cluster, as Facebook did) makes each step safer and faster.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A deploy changes the cache key prefix from `user:v2:` to `user:v3:` across all 300 app servers at once. Ten minutes later the database is overloaded. What went wrong, and how should it have been rolled out?",
+    "options": [
+      {
+        "text": "Redis evicted the v2 keys too slowly",
+        "explanation": "Old copies consume memory and can cause eviction pressure, but the key observation is that the new prefix cannot hit existing v2 entries."
+      },
+      {
+        "text": "The new prefix hashed every key to the same shard",
+        "explanation": "There are no hash tags here; different full key names spread across slots as before."
+      },
+      {
+        "text": "Every v3 lookup missed, which is equivalent to flushing the whole cache; roll out gradually (a few servers at a time), or read v3 and fall back to v2/write both during the transition",
+        "explanation": "Correct with compatible serialization and a protocol that updates or invalidates both key versions. Dual reads reduce misses but do not eliminate them or automatically preserve freshness."
+      },
+      {
+        "text": "The v3 serialisation was larger, so the cache ran out of memory",
+        "explanation": "Possible in principle, but the immediate cause of DB overload is the 100% miss rate on the new keys, not memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: hit ratio 98% on `user:v2:*`.\n2. After an all-at-once deploy: every request looks up `user:v3:*`, which doesn't exist yet → hit ratio ≈ 0%.\n3. DB load jumps ~50×: a self-inflicted avalanche.\n4. Safer options:\n   - Canary 5% of servers → the new 5% may all miss plus existing misses on the other 95%; with 2% old misses this is about 6.9% overall before warming.\n   - Dual-read: try v3; on miss, read v2, convert, write v3.\n   - Pre-populate v3 keys from v2 with a background job before switching reads.\n5. Treat a key-format change like a schema migration.\nChoose rollout percentages from available origin headroom, not a fixed 5% rule, and keep both key versions coherent until old readers have drained.",
+    "link": {
+      "title": "Thundering herd problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Thundering_herd_problem"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your stampede lock is `SET lock:feed 1 NX EX 10`, released with a plain `DEL lock:feed` in a `finally` block. Under heavy load a rebuild takes 15 s. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing: `NX` guarantees only one rebuilder at a time",
+        "explanation": "`NX` only guarantees one holder *while the lock exists*. After 10 s it expires, and a second caller can acquire it."
+      },
+      {
+        "text": "The lock expires at 10 s and a second caller takes it; at 15 s the first caller's `DEL` removes the second caller's lock, so a third can start, and rebuilds pile up",
+        "explanation": "Correct. Expiry plus an unconditional delete lets each slow rebuilder free someone else's lock. Store a random token as the value and delete only if it still matches (atomically, via a Lua script)."
+      },
+      {
+        "text": "Redis refuses the `DEL` because the key has expired",
+        "explanation": "Deleting a missing key is not an error; it simply returns 0. The danger is the case where the key exists but belongs to someone else."
+      },
+      {
+        "text": "The cache value is written twice, which corrupts it",
+        "explanation": "Identical values would be harmless, but overlapping rebuilds can read different database versions and a late older result can overwrite a newer cache value. The unconditional release bug also allows additional rebuilds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Timeline:\n\n```\n0s   A: SET NX ok, rebuilds\n10s  lock expires\n11s  B: SET NX ok, rebuilds\n15s  A: DEL -> deletes B's lock!\n16s  C: SET NX ok, rebuilds\n```\n\n1. Two problems combine: a rebuild longer than the lock TTL, and a release that doesn't check ownership.\n2. Fix the release:\n\n```\nif GET lock == my_token:\n    DEL lock      (atomic, Lua)\n```\n\n3. Also set the lock TTL comfortably above the slowest rebuild, and alert when rebuilds approach it. Slow rebuilds are a sign the database is already struggling.\nAn ownership-checked release does not prevent a paused expired holder from publishing a stale result. Guard publication atomically by the current token or a suitable version/lease protocol; no finite TTL covers an arbitrarily paused process.",
+    "link": {
+      "title": "Cache stampede — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_stampede"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You want a Bloom filter in front of the cache to block penetration attacks on 50 million valid order ids, all already inserted in the filter, with a 1% false-positive rate. Roughly how much memory does it need, and what fraction of random invalid ids still reach the database?",
+    "options": [
+      {
+        "text": "About 6 MB; 0% reach the database",
+        "explanation": "This is off by 10× on memory (it uses ~1 bit per element), and Bloom filters do have false positives, so some invalid ids get through."
+      },
+      {
+        "text": "About 480 MB; 1% reach the database",
+        "explanation": "480 is the size in **megabits**. Divide by 8 to get megabytes."
+      },
+      {
+        "text": "About 60 MB; about 1% reach the database",
+        "explanation": "Correct. `50M × 9.6 bits = 480 Mbit ≈ 60 MB`, and by design about 1% of ids that are not in the set are wrongly reported as \"maybe present\"."
+      },
+      {
+        "text": "About 60 MB; about 1% of *valid* ids are wrongly rejected",
+        "explanation": "Bloom filters have **no false negatives**: every valid id always passes. The 1% error applies only to invalid ids."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Rule of thumb: ~9.6 bits per element for a 1% false-positive rate.\n2. Memory:\n\n```\n50,000,000 * 9.6 = 480,000,000 bits\n480e6 / 8 = 60e6 bytes ≈ 60 MB\n```\n\n3. An invalid id is wrongly reported as \"maybe\" 1% of the time, so 1% of attack traffic still reaches the cache and then the database.\n4. At 30,000 attack req/s, that is ~300 req/s, a remaining load that must be checked against measured database capacity.\n5. Reducing the error tenfold to 0.1% costs about 14.4 bits per element (~90 MB). Each 10× cut in false positives costs roughly 4.8 extra bits per element.",
+    "link": {
+      "title": "Bloom filter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bloom_filter"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You implement **serve stale while refreshing** in Redis: each value stores a soft expiry of 60 s, and the key has a hard TTL of 10 minutes. Assume a fresh authoritative value at insertion, no stale refill, no early eviction, and a read path that blocks on a miss. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Between 60 s and 10 minutes, readers get the stored value immediately, and one of them triggers a refresh",
+        "explanation": "Correct. Past the soft expiry the value is stale but still usable, so nobody waits on the rebuild."
+      },
+      {
+        "text": "You still need something to stop many readers triggering the refresh at once, such as a short lock or a single-flight",
+        "explanation": "Correct. Without it, every reader that sees the soft expiry pass could start its own refresh: a background stampede."
+      },
+      {
+        "text": "If the database is down, readers can keep getting the stale value until the hard TTL, which improves availability",
+        "explanation": "Correct. This is the application-cache version of `stale-if-error`: the hard TTL bounds how stale you are willing to go."
+      },
+      {
+        "text": "After 10 minutes the key is gone, so the next reader must wait for a full rebuild",
+        "explanation": "Correct. Once the hard TTL passes there is nothing to serve, so the next reader waits (this is fine for keys read so rarely that no one refreshed them in 9 minutes)."
+      },
+      {
+        "text": "Readers can never see data older than 60 s",
+        "explanation": "Incorrect. They can see data up to 10 minutes old if refreshes fail or the key is rarely read. Choose the hard TTL to match the staleness you can accept."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Lay the two clocks on one timeline:\n\n```\n0s ---- 60s ----------- 600s\n fresh   stale but served  gone\n         (refresh async)\n```\n\n1. 0–60 s: fresh, plain hit.\n2. 60–600 s: serve stale, one reader refreshes (A), guarded by a lock so only one does (B). A failing database just means the stale copy keeps being served (C).\n3. After 600 s: a normal miss (D).\n4. So the worst-case staleness is the **hard** TTL, not the soft one (E false).",
+    "link": {
+      "title": "Thundering herd problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Thundering_herd_problem"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "To stop a bug flooding the database with lookups for missing users, you add negative caching with a **1-hour** TTL. Soon, users who sign up are told \"account not found\" when they log in a few seconds later. What is happening, and what is the fix?",
+    "options": [
+      {
+        "text": "The sign-up writes to a replica, so the account isn't visible yet",
+        "explanation": "The cached negative entry explains this scenario. Replica lag can also last a long time during faults; a duration alone cannot exclude it."
+      },
+      {
+        "text": "The Bloom filter is giving false negatives",
+        "explanation": "No Bloom filter is in this design. A correctly populated Bloom filter has no false negatives for inserted keys, but an out-of-date application filter can omit newly created keys."
+      },
+      {
+        "text": "Negative caching should never be used for user lookups",
+        "explanation": "It is fine for user lookups, and it is fixing the original bug. It just needs a short TTL and invalidation on create."
+      },
+      {
+        "text": "A lookup before or during sign-up cached \"not found\" for that id, and it persists for an hour; use a short TTL and delete the negative entry when the user is created",
+        "explanation": "Correct. A negative entry is a cached answer like any other, so it needs invalidating when the truth changes. Delete it on create and keep its TTL short (seconds to a minute)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. During sign-up, the flow checks whether the username or email exists: miss → database says no → cache `NULL_MARKER` for 1 hour.\n2. The account is created in the database, but the marker remains.\n3. At login, the cache returns the marker: \"not found\".\n4. Fixes:\n   - On create: `DEL user:<id>` (or the email key) after the commit, exactly like delete-on-write.\n   - Short negative TTLs (e.g. 30–60 s) as a safety net.\n5. Rule: negative entries are just cached values. Invalidate them when the thing they say doesn't exist starts to exist.\nConcurrent delayed negative fills can race with create-time deletion; use the same leases/version safeguards as for positive cached values when strict immediate visibility is required.",
+    "link": {
+      "title": "Cache stampede — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_stampede"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Normal load is 100,000 reads/s with a 97% overall hit ratio across its healthy cache tiers; the database can handle 6,000 reads/s. Each app server also has an in-process cache that would serve about 60% of reads on its own. The whole Redis cluster becomes unreachable. What load reaches the database, and what must happen next?",
+    "options": [
+      {
+        "text": "About 3,000 reads/s; nothing needs to change",
+        "explanation": "This is the normal miss load with Redis healthy. With Redis gone, only the in-process caches stand between the traffic and the database."
+      },
+      {
+        "text": "About 40,000 reads/s, roughly 6.7× capacity; you must shed or degrade load (circuit breakers, serving fallbacks, rate-limiting misses) until Redis returns",
+        "explanation": "Correct. In-process caches absorb 60%, but the remaining 40% of 100,000 is still far beyond 6,000/s. Without shedding, the database saturates and everything slows."
+      },
+      {
+        "text": "About 100,000 reads/s; in-process caches never help during an outage",
+        "explanation": "In-process caches are independent of Redis, so they keep serving their share. That is part of the point of multi-level caching."
+      },
+      {
+        "text": "About 6,000 reads/s, because the database applies back-pressure automatically",
+        "explanation": "Not guaranteed. A database may have admission controls, but its sustainable capacity does not automatically reduce offered application demand to that number; explicit bounded queues and shedding are needed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Normal DB load: `100,000 × (1 − 0.97) = 3,000/s`. Within the 6,000/s capacity.\n2. Redis down: only the local caches remain.\n\n```\nDB = 100,000 * (1 - 0.60)\n   = 40,000 reads/s\n```\n\n3. Overload: `40,000 / 6,000 ≈ 6.7×`.\n4. So the local cache helps a lot (it turns 100k into 40k), but not enough.\n5. Next steps: a circuit breaker on the database path, serving degraded or default responses for non-critical reads, rate-limiting rebuilds per key, and restoring Redis (replicas across zones make this outage less likely in the first place).",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  }
+]

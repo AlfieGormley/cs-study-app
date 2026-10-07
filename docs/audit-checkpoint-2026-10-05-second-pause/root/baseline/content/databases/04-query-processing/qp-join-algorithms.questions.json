@@ -1,0 +1,336 @@
+[
+  {
+    "id": "qp-join-algorithms-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You join `products p JOIN products q ON p.price < q.price - 199`. Which join algorithm will PostgreSQL use?",
+    "options": [
+      {
+        "text": "Hash join, because it is the fastest for large inputs",
+        "explanation": "A hash table can only find rows whose key is *equal* to the probe key. It has no way to find all rows with a larger price."
+      },
+      {
+        "text": "Merge join, because prices can be sorted",
+        "explanation": "In Postgres, merge join needs an equality (merge-joinable) condition. A pure inequality join can't be expressed as merge clauses."
+      },
+      {
+        "text": "Nested loop, because it is the only algorithm that handles arbitrary join conditions",
+        "explanation": "Correct. Nested loop evaluates the condition for each pair, so any expression works. The real plan was a Nested Loop with a `Join Filter` over a materialised inner scan."
+      },
+      {
+        "text": "It refuses to run the query because there is no equality condition",
+        "explanation": "Non-equi joins are perfectly valid SQL. They're just expensive, because only nested loop can run them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Hash join: build a table keyed on `q.price - 199`, probe with `p.price`. A probe only finds *equal* keys, so `<` can't be answered.\n2. Merge join: Postgres only builds merge clauses from equality operators.\n3. Nested loop: for each `p`, test every `q`. Works for any condition.\n\nThe plan:\n\n```\nNested Loop\n  Join Filter: (p.price <\n    (q.price - '199'::numeric))\n-> Seq Scan on products p\n-> Materialize\n   -> Seq Scan on products q\n```\n\n10,000 x 10,000 = 100 million comparisons.",
+    "link": {
+      "title": "Nested loop join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Nested_loop_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A hash join combines `orders` (1,000,000 rows) with `customers` (100,000 rows) on `customer_id`. Which input should the planner use as the **build** side?",
+    "options": [
+      {
+        "text": "`customers`, because the smaller input makes a smaller hash table that is more likely to fit in memory",
+        "explanation": "Correct. The build side must be held in memory (or split into batches). Hashing 100,000 rows needs about a tenth of the memory, and the larger side just streams past."
+      },
+      {
+        "text": "`orders`, because the larger side should be indexed in memory",
+        "explanation": "Building on the larger side wastes memory and is much more likely to spill into multiple batches on disk. The total work is O(|R| + |S|) either way, so you want the cheap-to-hold side in memory."
+      },
+      {
+        "text": "It doesn't matter; the cost is identical either way",
+        "explanation": "The number of rows touched is the same, but memory use and spilling are not. If the build side exceeds `work_mem x hash_mem_multiplier`, the join goes multi-batch and writes temporary files."
+      },
+      {
+        "text": "Whichever table appears first in the FROM clause",
+        "explanation": "SQL text order doesn't decide this. The planner picks the build side from its row and width estimates."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "In the real plan the `Hash` node sat over `Seq Scan on customers`:\n\n```\nHash\n  Buckets: 131072  Batches: 1\n  Memory Usage: 4540kB\n-> Seq Scan on customers c\n```\n\n100,000 keys took about 4.5 MB, which fits within the default 8 MB (`work_mem` 4 MB x `hash_mem_multiplier` 2). A hash table of 1,000,000 orders would need roughly ten times that and would spill.",
+    "link": {
+      "title": "Hash join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hash_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an EXPLAIN ANALYZE of a nested loop, the inner node shows `Index Scan using customers_pkey ... (actual time=0.004..0.004 rows=1.00 loops=99)`. What does `loops=99` tell you?",
+    "options": [
+      {
+        "text": "The query was retried 99 times",
+        "explanation": "EXPLAIN ANALYZE runs the query once. `loops` counts how many times this node was executed within that single run."
+      },
+      {
+        "text": "The index has 99 levels",
+        "explanation": "B-trees are shallow (3 or 4 levels for millions of rows). `loops` has nothing to do with tree depth."
+      },
+      {
+        "text": "The index scan ran 99 times, once per outer row, returning on average 1 row each time",
+        "explanation": "Correct. A nested loop re-executes its inner side for each outer row. `rows` and `time` are per-loop averages, so the total is about 99 rows and 99 x 0.004 ms."
+      },
+      {
+        "text": "It returned 99 rows in a single scan",
+        "explanation": "It returned about 1 row per execution. The 99 is the number of executions, not the number of rows per execution."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The outer side produced 99 orders (`id < 100`). For each, the nested loop asked the inner side \"find the customer with this id\".\n\n```\ntotal rows = rows x loops\n           = 1.00 x 99 = 99\ntotal time ~ 0.004 ms x 99\n           ~ 0.4 ms\n```\n\nThat matches the plan's `Execution Time: 0.405 ms`. Always multiply by `loops` when deciding where the time went.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Table R has 2,000 pages and table S has 400 pages. You have 52 buffer pages, so a block nested loop can hold 50 pages of the outer table at a time. What is the cheapest block nested loop cost in page I/Os?",
+    "options": [
+      {
+        "text": "18,000",
+        "explanation": "That uses R as the outer: 2,000 + 40 x 400. It's valid, but making the smaller table the outer side is cheaper."
+      },
+      {
+        "text": "800,400",
+        "explanation": "That's 400 + 400 x 2,000, a page-at-a-time nested loop that ignores the 50-page block."
+      },
+      {
+        "text": "16,400",
+        "explanation": "Correct. With S as the outer: read S once (400), in 8 blocks of 50 pages, and scan R (2,000 pages) once per block: 400 + 8 x 2,000."
+      },
+      {
+        "text": "7,200",
+        "explanation": "That's 3(M + N), the Grace hash join cost, not a nested loop."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Block nested loop cost = outer pages + (number of outer blocks) x inner pages.\n\n```\nR outer: 2000 + ceil(2000/50) x 400\n       = 2000 + 40 x 400 = 18,000\nS outer: 400 + ceil(400/50) x 2000\n       = 400 + 8 x 2000 = 16,400\n```\n\nThe smaller table goes outside, because the number of times you rescan the inner is what dominates.",
+    "link": {
+      "title": "Nested loop join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Nested_loop_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Same tables: R = 2,000 pages, S = 400 pages. Neither fits in memory, but there is enough memory for a two-phase Grace hash join. What does it cost in page I/Os?",
+    "options": [
+      {
+        "text": "2,400",
+        "explanation": "That's M + N: reading each table once. It only applies when the build side fits entirely in memory, which the question rules out."
+      },
+      {
+        "text": "4,800",
+        "explanation": "That's 2(M + N), the partitioning phase alone. The partitions must then be read back to join them."
+      },
+      {
+        "text": "12,000",
+        "explanation": "That's 5(M + N), the cost of a sort-merge join that writes each sorted table out before merging."
+      },
+      {
+        "text": "7,200",
+        "explanation": "Correct. Partition both tables by hash of the key (read and write each: 2 x 2,400), then read each partition pair once to join (2,400): 3 x 2,400."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Grace hash join has two phases:\n\n```\npartition: read R, S     2,400\n           write parts   2,400\njoin:      read parts    2,400\ntotal      3(M + N)  =   7,200\n```\n\nCompare with the block nested loop's best of 16,400 from the previous question. The output write is excluded in both, as is conventional.",
+    "link": {
+      "title": "Hash join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hash_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly report's hash join shows:\n\n```\nHash  Buckets: 65536  Batches: 4\n      Memory Usage: 1392kB\nBuffers: temp read=2421\n         written=2421\n```\n\nThe server has `work_mem = 1MB`. What is happening, and what's the most direct fix?",
+    "options": [
+      {
+        "text": "The hash table didn't fit in memory, so the join split into 4 batches with temporary files; raise `work_mem` for this session or query",
+        "explanation": "Correct. More than one batch means spilling. With `work_mem = 1MB` the hash limit is 2 MB (x `hash_mem_multiplier` 2). Setting a higher `work_mem` for the report's session lets it fit in one batch."
+      },
+      {
+        "text": "There are hash collisions; increase the number of buckets",
+        "explanation": "Buckets are sized automatically. `Batches` counts partitions written to disk, which is about memory, not collisions."
+      },
+      {
+        "text": "The planner should have used a nested loop instead",
+        "explanation": "With hundreds of thousands of rows on both sides and no selective filter, a nested loop would do far more work. Spilling is a memory problem, not a wrong-algorithm problem."
+      },
+      {
+        "text": "Four batches mean four parallel workers, which is good",
+        "explanation": "Parallel workers show up as `Workers Launched` under a Gather node. Batches are sequential partitions spilled to temporary files."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `Batches: 4` means Postgres used a hybrid hash join: it kept one partition in memory and wrote three to temp files.\n2. `temp read/written` confirm the disk traffic.\n3. In this lesson's run, the same join was 160 ms with 4 batches and 138 ms with 1 batch at the default 4 MB.\n4. Fix: `SET work_mem = '16MB'` in the report's session, or `SET LOCAL` inside its transaction. Avoid raising it globally without thought: `work_mem` applies **per sort or hash operation, per process**, so a big global value can exhaust RAM under concurrency.",
+    "link": {
+      "title": "Resource consumption — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-resource.html"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In which situations is a **merge join** a good choice? Select all that apply.",
+    "options": [
+      {
+        "text": "Both inputs can be read in join-key order from existing B-tree indexes",
+        "explanation": "Correct. With no sorting needed, the merge is a single linear pass over each input with little memory."
+      },
+      {
+        "text": "The query has `ORDER BY` on the join key, so the result must be sorted anyway",
+        "explanation": "Correct. Merge join outputs rows in join-key order, so the planner can skip a final sort. A hash join gives no order."
+      },
+      {
+        "text": "The join condition is `a.ts BETWEEN b.start AND b.finish` with no equality",
+        "explanation": "Postgres merge join requires an equality condition. A pure range condition gets a nested loop."
+      },
+      {
+        "text": "Both inputs are huge and unsorted, and there is plenty of memory for hashing",
+        "explanation": "Sorting both huge inputs costs O(n log n) and may spill; hashing is linear. In the lesson, a merge join that had to sort 3 million rows lost to the hash join (850 ms against 587 ms)."
+      }
+    ],
+    "answer": [0, 1],
+    "workedExample": "Merge join's cost is the merge (linear) plus any sorts needed. So ask: is the input already sorted?\n\n- Indexes in key order: no sort, cheap.\n- Output needed in key order: the sort would be needed anyway.\n- Unsorted, large: the sort dominates; hash join is usually better.\n- No equality condition: not eligible in Postgres.\n\nIn the lesson, the forced merge join for pending orders read `customers` via its primary key in order and sorted only 30,066 orders in memory, matching the hash join's time.",
+    "link": {
+      "title": "Sort-merge join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sort-merge_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `merge_join` (left keys unique, both inputs sorted), what does this print?\n\n```python\nleft = [1, 3, 5]\nright = [3, 3, 4, 5]\nk = lambda x: x\nprint(list(merge_join(left, right, k)))\n```",
+    "options": [
+      {
+        "text": "`[(3, 3), (5, 5)]`",
+        "explanation": "After a match, the code advances `j` but not `i`, so the left 3 is compared with the second right 3 as well. Duplicates on the right each produce a pair."
+      },
+      {
+        "text": "`[(3, 3), (3, 3), (5, 5)]`",
+        "explanation": "Correct. Left 3 matches both right 3s; then 3 < 4 advances left to 5, 5 > 4 advances right to 5, and they match."
+      },
+      {
+        "text": "`[(1, 3), (3, 3), (5, 5)]`",
+        "explanation": "Only equal keys are emitted. 1 < 3, so the code simply advances past the left 1."
+      },
+      {
+        "text": "`[(3, 3), (3, 3), (4, 5), (5, 5)]`",
+        "explanation": "4 never matches anything: there's no 4 on the left. When `a > b` the code just advances the right side."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace `(i, j)` and the keys:\n\n```\ni j  a b\n0 0  1 3  a<b  i=1\n1 0  3 3  emit (3,3)  j=1\n1 1  3 3  emit (3,3)  j=2\n1 2  3 4  a<b  i=2\n2 2  5 4  a>b  j=3\n2 3  5 5  emit (5,5)  j=4\nj = len(right): stop\n```\n\nEach step advances one pointer, so the loop runs at most `len(left) + len(right)` times: linear.",
+    "link": {
+      "title": "Sort-merge join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sort-merge_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A staging table was loaded with 600,000 new rows after its last ANALYZE. The join plan shows:\n\n```\nNested Loop (rows=3)\n  (actual rows=1800000.00)\n-> Seq Scan on imports m\n     (rows=1) (actual\n     rows=600000.00)\n-> Index Scan on order_items\n     (actual loops=600000)\nBuffers: shared hit=3589400\n```\n\nAfter `ANALYZE`, the planner picks a hash join that touches about 19,000 buffers. What went wrong?",
+    "options": [
+      {
+        "text": "The index on `order_items` is corrupt",
+        "explanation": "The index worked: it returned 3 rows per lookup, exactly as expected. The problem is how many lookups were made."
+      },
+      {
+        "text": "Nested loops are always worse than hash joins",
+        "explanation": "With 99 outer rows the nested loop was the right choice (0.4 ms). The algorithm isn't bad; it was picked for the wrong input size."
+      },
+      {
+        "text": "The planner estimated 1 outer row from stale statistics, so a nested loop with one index probe looked cheapest; in reality it made 600,000 probes",
+        "explanation": "Correct. A 1-row estimate makes index nested loop look nearly free. The actual 600,000 loops touched 3.6 million buffers, about 190 times more than the hash join."
+      },
+      {
+        "text": "`work_mem` was too small for a hash join",
+        "explanation": "After ANALYZE the hash join ran fine with the same `work_mem`. The planner never considered hashing worthwhile because it believed there was only 1 row."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compare estimate with actual on the outer side: `rows=1` vs `600000`. That's a 600,000x misestimate.\n2. Cost model with 1 outer row: one index probe, about 16 cost units. Nothing beats that.\n3. Reality: 600,000 probes x ~6 buffers each ~ 3.6 million buffer accesses.\n4. After ANALYZE: the planner sees 600,000 rows and hashes them instead (~19,000 buffers).\n\nOn this warm-cache laptop both took about half a second, but the nested loop's 3.6 million buffer touches would become random disk reads on a cold cache. Lesson 3 explains why the estimate was 1.",
+    "link": {
+      "title": "Statistics used by the planner — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/planner-stats.html"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A toy model: an index nested loop costs 4 random page reads per outer row, at 4 units each. A hash join costs one sequential scan of the 1,029-page inner table at 1 unit per page (ignore CPU). Roughly how many outer rows make the two plans cost the same?",
+    "options": [
+      {
+        "text": "About 64",
+        "explanation": "Correct. Each outer row costs 4 x 4 = 16 units in the nested loop. 1,029 / 16 is about 64 rows."
+      },
+      {
+        "text": "About 257",
+        "explanation": "That's 1,029 / 4: it charges 4 pages per row but forgets that random pages cost 4 units each."
+      },
+      {
+        "text": "About 1,029",
+        "explanation": "That assumes one unit per outer row. Each probe touches several pages, and random reads are charged more."
+      },
+      {
+        "text": "There is no crossover; the nested loop is always cheaper with an index",
+        "explanation": "The nested loop's cost grows linearly with outer rows while the scan's cost is fixed, so there's always a crossover."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nnested loop: k x 4 pages x 4 = 16k\nhash join:   1,029 x 1 = 1,029\n16k = 1,029  ->  k ~ 64\n```\n\nBelow about 64 outer rows the index probes win; above, scanning the inner table once and hashing wins. Real planners add CPU costs, caching effects (`effective_cache_size`) and correlation, so the real crossover moves, but the shape is the same. That's why a misestimate of the outer row count flips the join choice.",
+    "link": {
+      "title": "Query planning configuration — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about join variants in PostgreSQL are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A `FULL OUTER JOIN` can be run as a hash or merge join, but not as a nested loop",
+        "explanation": "Correct. A full join must also emit inner rows that never matched. Hash and merge joins can track that; Postgres's nested loop can't, so full joins need a hash- or merge-joinable condition."
+      },
+      {
+        "text": "`WHERE EXISTS (subquery)` is typically planned as a Semi Join, which stops at the first match per outer row",
+        "explanation": "Correct. A semi join returns each outer row at most once, so it can stop probing after the first match."
+      },
+      {
+        "text": "A `Hash Right Join` in the plan means the SQL must have said `RIGHT JOIN`",
+        "explanation": "No. The planner may swap the inputs of a LEFT JOIN so the smaller one is hashed, and it then appears as a Hash Right Join."
+      },
+      {
+        "text": "`NOT EXISTS (subquery)` can be planned as an Anti Join",
+        "explanation": "Correct. An anti join emits outer rows that have no match, which is exactly NOT EXISTS."
+      },
+      {
+        "text": "Merge join produces output in no particular order",
+        "explanation": "Merge join emits rows in join-key order. It's hash join whose output order is arbitrary."
+      }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Go through each:\n\n1. FULL JOIN needs to remember unmatched inner rows. Hash join marks matched entries in its table; merge join sees them as it walks. True.\n2. EXISTS: one match is enough, so Semi Join. True.\n3. Hash Right Join: the side swap is the planner's choice. False.\n4. NOT EXISTS: Anti Join (Postgres 16+ can even show `Hash Right Anti Join`). True.\n5. Merge join output is sorted by the key. False.",
+    "link": {
+      "title": "Planner/optimiser — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/planner-optimizer.html"
+    }
+  }
+]

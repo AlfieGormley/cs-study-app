@@ -1,0 +1,378 @@
+[
+  {
+    "id": "api-designing-good-apis-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should every list endpoint enforce a maximum page size, even for authenticated, trusted clients?",
+    "options": [
+      {
+        "text": "Because JSON can't represent more than 1,000 array elements",
+        "explanation": "JSON has no array size limit. The concern is cost, not format."
+      },
+      {
+        "text": "Because HTTP/1.1 limits responses to 1 MB",
+        "explanation": "HTTP has no such limit; responses can be gigabytes. Again, the issue is resource cost on your side."
+      },
+      {
+        "text": "To make offset pagination stable under concurrent inserts",
+        "explanation": "A page size cap doesn't fix offset's instability. Items still shift between pages when rows are inserted or deleted; keyset pagination with stable sort keys avoids those shifts; a stable snapshot is another option."
+      },
+      {
+        "text": "Because one request for an unbounded result set (e.g. 2 million orders) can exhaust database, memory and network resources and hurt every other client",
+        "explanation": "Correct. A bounded page keeps each request's cost predictable. Stripe, for example, defaults to 10 and caps at 100. Trusted clients still have bugs, and one runaway loop can take the database down."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Estimate the unbounded case:\n\n- 2,000,000 orders × ~1 KB each ≈ **2 GB** of JSON.\n- The server must read all rows, hold or stream them, and serialise them.\n- The client must download and parse 2 GB.\n\nWith `limit` capped at 100: ~100 KB per response, while database time still depends on the query and workload. Page limits bound result size; query budgets and measurements support capacity planning.",
+    "link": {
+      "title": "Stripe API: Pagination",
+      "url": "https://docs.stripe.com/api/pagination"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user is paging through a feed sorted newest-first using `?limit=10&offset=N`. After they load page 1 (items 1–10), 3 new items are inserted at the top. What do they see on page 2 (`offset=10`)?",
+    "options": [
+      {
+        "text": "Items 11–20, as expected",
+        "explanation": "Offset is evaluated against the *current* data, not the data at the time page 1 loaded. The 3 inserts shift every item down by 3 positions."
+      },
+      {
+        "text": "Items 8–17: the last three items from page 1 are shown again",
+        "explanation": "Correct. After 3 inserts, old item 8 is now at position 11. `OFFSET 10` skips positions 1–10 and returns positions 11–20, which are old items 8–17. Items 8, 9 and 10 appear twice."
+      },
+      {
+        "text": "Items 14–23: three items are skipped",
+        "explanation": "Skipping happens when items are *deleted* above the cursor position, shifting items up. Inserts shift items down, causing duplicates instead."
+      },
+      {
+        "text": "An error, because the data changed",
+        "explanation": "Offset pagination has no way to detect changes; it silently returns whatever is at that position now."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Track positions:\n\n```\nBefore: pos 1..10 = items 1..10\nInsert 3 at top:\n  pos 1..3  = new X Y Z\n  pos 4..13 = items 1..10\n  pos 14..  = items 11..\n```\n\nPage 2 = `OFFSET 10 LIMIT 10` = positions 11–20.\n\n- Positions 11, 12, 13 = old items **8, 9, 10** (duplicates)\n- Positions 14–20 = items 11–17\n\nSo the user sees items 8–17. With an immutable compound cursor (`created_at, id`) defining the same total order, page 2 resumes after item 10 without the insertion-induced duplicates.",
+    "link": {
+      "title": "Use The Index, Luke: Paging through results",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You implement keyset pagination with `WHERE created_at < $last ORDER BY created_at DESC LIMIT 20`. Bulk imports often create hundreds of rows with the identical `created_at`. What goes wrong, and what's the fix?",
+    "options": [
+      {
+        "text": "Rows that share the boundary timestamp are skipped, because `<` excludes all of them. Fix: sort and compare on `(created_at, id)` so the order is total",
+        "explanation": "Correct. If page 1 ends partway through 300 rows sharing one timestamp, `created_at < $last` jumps past all the remaining ones. A unique tiebreaker such as `id` lets the cursor resume precisely: `WHERE (created_at, id) < ($t, $id)`."
+      },
+      {
+        "text": "Nothing; timestamps are always unique",
+        "explanation": "Timestamps are not unique, especially for bulk inserts or at millisecond resolution under high write rates."
+      },
+      {
+        "text": "It becomes O(offset). Fix: switch to offset pagination",
+        "explanation": "Keyset remains an index seek; the issue is correctness, not performance. Offset pagination would reintroduce slow deep pages and duplicates."
+      },
+      {
+        "text": "Rows are duplicated. Fix: use `<=` instead of `<`",
+        "explanation": "Switching to `<=` would return the boundary rows again on every page, causing duplicates or even an infinite loop if more than 20 rows share a timestamp."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Suppose 300 rows have `created_at = 12:00:00`.\n\n1. Page 1 returns 20 of them; the last has `created_at = 12:00:00`.\n2. Page 2: `WHERE created_at < 12:00:00` → skips the other **280** rows entirely.\n3. Switching to `<=` can keep returning rows at the boundary timestamp instead of making progress.\n\nFix with a compound key:\n\n```\nWHERE (created_at, id) < ($t, $id)\nORDER BY created_at DESC, id DESC\nLIMIT 21\n```\n\nand an index on `(created_at, id)`. Now each row has a unique position and pages resume exactly.",
+    "link": {
+      "title": "Google AIP-158: Pagination",
+      "url": "https://google.aip.dev/158"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your public API has thousands of integrations. Which of these changes can you ship **without** a new API version, assuming you've documented that clients must ignore unknown fields? Select all that apply.",
+    "options": [
+      {
+        "text": "Adding a new optional `metadata` field to the order response",
+        "explanation": "Correct. Additive response fields are safe when clients follow the robustness principle and ignore what they don't recognise."
+      },
+      {
+        "text": "Renaming `amount` to `amount_cents`",
+        "explanation": "Wrong. Every client reading `amount` now gets nothing. A rename is a removal plus an addition, so it's breaking."
+      },
+      {
+        "text": "Adding a new optional `?currency=` query parameter that defaults to the current behaviour",
+        "explanation": "Correct. Existing clients don't send it, so they get exactly the old behaviour."
+      },
+      {
+        "text": "Making the previously optional `phone` request field required",
+        "explanation": "Wrong. Existing clients that omit `phone` will start receiving 400s. Tightening validation is breaking."
+      },
+      {
+        "text": "Adding a brand new endpoint `POST /orders/{id}/notes`",
+        "explanation": "Correct. No existing client calls it, so nothing can break."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Apply one test to each change: *Would a client written yesterday, and never updated, still work?*\n\n| Change | Old client | Safe |\n|---|---|---|\n| New response field | Ignores it | Yes |\n| Rename field | Reads missing field | No |\n| New optional param | Doesn't send it | Yes |\n| Optional → required | Gets 400 | No |\n| New endpoint | Never calls it | Yes |\n\nSafe changes: 1, 3 and 5.",
+    "link": {
+      "title": "Stripe blog: API versioning",
+      "url": "https://stripe.com/blog/api-versioning"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An `orders` table has 10 million rows and a B-tree index on `(created_at, id)`. A client pages through all of them, 100 at a time. Roughly how many index entries does the database touch for the **last page** with offset pagination vs keyset pagination?",
+    "options": [
+      {
+        "text": "About 100 for both",
+        "explanation": "This is true for keyset but not offset. With `OFFSET`, the database can't jump to row 9,999,900; it must walk past every earlier entry."
+      },
+      {
+        "text": "About 10 million for both",
+        "explanation": "Keyset uses the `WHERE (created_at, id) < (...)` predicate to *seek* directly to the starting point in the B-tree, so it doesn't scan earlier entries."
+      },
+      {
+        "text": "About 10 million for offset; about 100 for keyset",
+        "explanation": "Correct. `OFFSET 9999900 LIMIT 100` walks ~10,000,000 entries and throws away all but the last 100. Keyset seeks to the cursor position (a few page reads down the tree) and reads the final 100 entries (there is no 101st row on this final page)."
+      },
+      {
+        "text": "About 100 for offset; about 10 million for keyset",
+        "explanation": "This reverses the two. Offset is the one whose cost grows with page depth."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "**Offset**: last page has offset = 10,000,000 − 100 = 9,999,900.\n\nEntries touched ≈ offset + limit = **10,000,000**.\n\n**Keyset**: B-tree seek is O(log n). With a fan-out of ~300, log₃₀₀(10⁷) ≈ 3 levels, so ~3 page reads to find the start, then read the remaining 100 entries.\n\nEntries touched ≈ **100**.\n\nOver the whole walk of 100,000 pages:\n\n- Offset: Σ ≈ n²/(2·limit) = 10¹⁴ / 200 = **5 × 10¹¹** entries\n- Keyset: ≈ n = **10⁷** entries\n\nThat is about 50,000 times as many scanned entries in this simplified model; seek overhead and actual execution costs are separate.",
+    "link": {
+      "title": "Use The Index, Luke: Paging through results",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Stripe's published versioning design, which pattern helps support old response shapes without a separate deployment for every version?",
+    "options": [
+      {
+        "text": "It runs one deployment per API version",
+        "explanation": "That would mean running and patching dozens of deployments, which is exactly the maintenance burden Stripe's approach avoids."
+      },
+      {
+        "text": "Business logic always produces the latest response, then a chain of small version-change modules transforms it backwards, step by step, to the caller's pinned version",
+        "explanation": "Correct. Each breaking change is encapsulated in a module that knows how to downgrade one version step. Response compatibility can be handled by composed transformations; some behavior changes still require explicit version-aware logic."
+      },
+      {
+        "text": "It never makes breaking changes",
+        "explanation": "Stripe does make breaking changes. That's why it needs versioning at all. The point is that they're isolated into transformation modules."
+      },
+      {
+        "text": "Clients are forced to upgrade every 6 months",
+        "explanation": "The design goal is the opposite: clients upgrade when they choose, so old integrations keep working without forced migrations."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Illustrative dates and field transformations, not actual Stripe release claims: picture a request from an account pinned to `2023-10-16` when the latest is `2026-03-01`:\n\n1. Request is handled by current code → latest-shaped response.\n2. Gateway walks the list of version changes newer than `2023-10-16`, newest first.\n3. Each module applies its downgrade, e.g. 'rename `amount_details` back to `amount`', 'collapse `payment_method_options`'.\n4. Response now matches what that integration expects.\n\nAdding a new breaking change = writing one more small module plus its downgrade, not forking the codebase.",
+    "link": {
+      "title": "Stripe blog: API versioning",
+      "url": "https://stripe.com/blog/api-versioning"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A client sends `GET /orders?stauts=shipped` (note the typo). Your API ignores unknown query parameters. What is the most likely consequence, and the best design response?",
+    "options": [
+      {
+        "text": "The request returns all orders regardless of status; the client may act on the wrong data. Reject unknown parameters with a 400 naming the bad one",
+        "explanation": "Correct. Silently ignoring an unrecognised filter turns a typo into 'no filter', which can mean emailing every customer instead of just shipped ones. A strict 400 with a Problem Details body naming `stauts` fails fast and visibly."
+      },
+      {
+        "text": "The request returns no orders, which is safe",
+        "explanation": "An ignored filter means no filter is applied, so it returns everything, not nothing. That's the opposite of safe."
+      },
+      {
+        "text": "The server crashes with a 500",
+        "explanation": "Ignoring parameters means the server just doesn't look at them. It won't crash; the danger is that it silently succeeds."
+      },
+      {
+        "text": "Nothing; ignoring unknown parameters is required for backwards compatibility",
+        "explanation": "Tolerating unknown *response* fields on the client side aids compatibility. On the server, rejecting unknown *request* filters is safer; you can still add new parameters later without breaking anyone."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Server sees `stauts`, doesn't recognise it, and drops it.\n2. Query becomes `SELECT * FROM orders` (paged).\n3. Client believes it has shipped orders and, say, sends 'your order has shipped' emails to everyone.\n\nStrict validation instead:\n\n```\nHTTP/1.1 400 Bad Request\nContent-Type: application/problem+json\n\n{\"type\": \".../unknown-parameter\",\n \"title\": \"Unknown query parameter\",\n \"detail\": \"'stauts' is not supported\"}\n```\n\nNote the asymmetry: servers should be strict about requests; clients should be tolerant of extra response fields.",
+    "link": {
+      "title": "RFC 9457: Problem Details for HTTP APIs",
+      "url": "https://www.rfc-editor.org/rfc/rfc9457"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add a new order status, `\"partially_refunded\"`. No field was renamed or removed, yet a partner's Android app starts crashing on the orders screen. What's the most likely cause, and the lesson?",
+    "options": [
+      {
+        "text": "The response got too large; enum values must be short",
+        "explanation": "One extra string value doesn't meaningfully change response size. The crash is about how the client *interprets* the value."
+      },
+      {
+        "text": "The client maps `status` onto a closed enum or exhaustive `switch` with no fallback, so an unknown value throws. Document that enums can grow and that clients must handle unknown values",
+        "explanation": "Correct. Adding an enum value is additive on the server but breaking for any client that assumed the set was closed. That's why the lesson rates it 'risky', not 'safe'."
+      },
+      {
+        "text": "Adding enum values always requires a new major API version",
+        "explanation": "Many APIs add enum values without a new version, provided they've told clients to expect it. The fix is a documented contract plus tolerant clients, not freezing the enum forever."
+      },
+      {
+        "text": "The client must have been relying on response field ordering",
+        "explanation": "Field ordering is a real Hyrum's Law risk, but nothing about ordering changed here. The new value itself is what the client couldn't handle."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. From the server's side, the change is additive: old values still mean what they meant.\n2. From a strict client's side, the set of possible values just changed:\n\n```\nenum class Status { PAID, REFUNDED }\n// Unknown name throws:\nval name = received.uppercase()\nval status = Status.valueOf(name)\n```\n\n3. Many JSON libraries also throw when they deserialise an unknown value into a closed enum type.\n4. Prevention: say in the docs that enums may gain values, map unknown values to a safe `UNKNOWN` case in your SDKs, and announce new values ahead of time.",
+    "link": {
+      "title": "Google AIP-126: Enumerations",
+      "url": "https://google.aip.dev/126"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You plan to retire `GET /v1/orders` in six months. Which steps belong in a safe deprecation plan? Select all that apply.",
+    "options": [
+      {
+        "text": "Send `Deprecation` and `Sunset` headers on every v1 response",
+        "explanation": "Correct. Machine-readable headers let clients' tooling and logs flag the dependency automatically, not just humans who read changelogs."
+      },
+      {
+        "text": "Measure v1 traffic per client and contact the heaviest users directly",
+        "explanation": "Correct. Announcements miss people. Per-client usage data tells you exactly who will break on removal day."
+      },
+      {
+        "text": "Quietly change v1 to return v2's response shape, so clients migrate automatically",
+        "explanation": "That's an unannounced breaking change to the old version, the very thing versioning exists to prevent."
+      },
+      {
+        "text": "Where operationally acceptable, run communicated and risk-assessed brownouts for short windows",
+        "explanation": "Correct. Brief planned failures make forgotten integrations surface while there's still time to fix them, instead of all at once on the cut-off date."
+      },
+      {
+        "text": "Remove v1 on the announced date regardless of remaining traffic",
+        "explanation": "A hard date is useful, but removing an endpoint that still carries significant traffic turns a migration into an outage for your customers. Remove when traffic is near zero, or after deliberate sign-off."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A good deprecation turns a surprise into a schedule:\n\n1. **Announce** with a date (docs, changelog, email).\n2. **Signal in-band**: `Deprecation` (RFC 9745) and `Sunset` (RFC 8594) headers.\n3. **Measure**: who still calls v1, and how often?\n4. **Consider brownouts** only after assessing whether deliberate failures are acceptable for these clients.\n5. **Remove** once traffic is near zero.\n\nChanging the old version's behaviour in place skips every one of those steps.",
+    "link": {
+      "title": "RFC 8594: The Sunset HTTP Header Field",
+      "url": "https://www.rfc-editor.org/rfc/rfc8594"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q10",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your API returns RFC 9457 Problem Details. Which field should a client's code branch on to decide how to handle an error?",
+    "options": [
+      {
+        "text": "`detail`",
+        "explanation": "`detail` is a human-readable message about *this* occurrence (\"Balance is 30, cost is 50\"). Its wording varies per request and may change, so string-matching it is fragile."
+      },
+      {
+        "text": "`title`",
+        "explanation": "`title` is a human-readable summary. It's meant for people and could be reworded or translated, which would silently break code that matches on it."
+      },
+      {
+        "text": "`type`",
+        "explanation": "Correct. `type` is a stable URI that identifies the error *class*, such as insufficient funds. It's the machine-readable contract; the other text fields are for humans."
+      },
+      {
+        "text": "`instance`",
+        "explanation": "`instance` identifies the specific occurrence (e.g. the payment it relates to). It's different every time, so it can't tell you what kind of error happened."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate what's for machines from what's for people:\n\n| Field | For | Stable? |\n|---|---|---|\n| `type` | Code | Yes |\n| `status` | Code | Yes |\n| `title` | People | Mostly |\n| `detail` | People | No |\n| `instance` | Support | No |\n\nSo the client does `if problem.type == \".../probs/funds\"`, then reads extension fields such as `balance` for context. The `status` alone is too coarse, since many different errors share 422.",
+    "link": {
+      "title": "RFC 9457: Problem Details for HTTP APIs",
+      "url": "https://www.rfc-editor.org/rfc/rfc9457"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your cursors are base64-encoded JSON such as `{\"t\":\"2026-03-01T10:00Z\",\"id\":981}`. A partner discovers this and starts building cursors themselves to 'jump' to a date. You now need to shard the table and add a shard id to every cursor. What's the best takeaway?",
+    "options": [
+      {
+        "text": "Nothing went wrong: partners are entitled to use anything they can decode",
+        "explanation": "They can use it, which is the problem: by Hyrum's Law, an observable format becomes a de facto contract. You'd now break the partner by changing it."
+      },
+      {
+        "text": "Switch to offset pagination, which has no cursor to tamper with",
+        "explanation": "That reintroduces O(offset) cost and unstable pages. The underlying need (start from a date) is better served by a proper filter."
+      },
+      {
+        "text": "Never change the cursor format again",
+        "explanation": "Freezing the format blocks the sharding work. Opaque cursors exist precisely so you *can* change what's inside them."
+      },
+      {
+        "text": "Base64 isn't opacity. Document cursors as opaque, authenticate them with an HMAC or authenticated encryption so hand-built ones are rejected, and give the partner a supported filter such as `created_before=` for the real use case",
+        "explanation": "Correct. An HMAC or authenticated encryption detects hand-built or altered cursors. Continue to support issued cursors until their documented expiry. Adding a real filter meets the partner's legitimate need through the public contract."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Hyrum's Law: anything observable will be depended on. A base64 cursor is observable to anyone with `base64 -d`.\n2. The partner's need (start at a date) is legitimate, but they met it through an implementation detail.\n3. Fix both sides:\n   - **Enforce opacity**: e.g. append an HMAC of the payload, or use authenticated encryption; reject cursors that fail the check with 400.\n   - **Offer the feature properly**: a `created_before=` filter.\n4. Now you can add the shard id (or change the sort key) with a migration that still accepts existing valid cursors until expiry.",
+    "link": {
+      "title": "Hyrum's Law",
+      "url": "https://www.hyrumslaw.com/"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Product wants the orders list to show \"Page 3 of 107,000\". The table has 40 million rows, you already use keyset pagination, and `COUNT(*)` with the user's filters takes several seconds. What's the most pragmatic API design?",
+    "options": [
+      {
+        "text": "Run the exact `COUNT(*)` on every page request",
+        "explanation": "That makes every page as slow as a full scan of the matching rows, which throws away the main benefit of keyset pagination."
+      },
+      {
+        "text": "Return `has_more` for navigation and, if a total is really needed, a capped or approximate count (e.g. \"10,000+\", or an estimate), computed separately or cached",
+        "explanation": "Correct. Most UIs only need 'is there a next page?'. When a total matters, a cap or an estimate (Postgres can estimate from planner statistics) gives users the gist without the full scan."
+      },
+      {
+        "text": "Switch to offset pagination so the count becomes free",
+        "explanation": "Offset pagination doesn't make counting cheaper. It needs the same `COUNT(*)` to show page totals, and adds O(offset) cost to deep pages."
+      },
+      {
+        "text": "Return the count of rows on the current page as the total",
+        "explanation": "That's simply wrong information. It would say \"20\" for a 40-million-row result."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In the stated scenario, the filtered exact-count query takes seconds; its cost depends on matching rows and the query plan, not merely total table size.\n2. Keyset pagination makes each indexed page roughly O(log n + limit), so an exact count would dominate the cost.\n3. Options, from cheapest:\n   - `has_more` only (fetch limit + 1).\n   - Capped count: count up to 10,001 and show \"10,000+\".\n   - Estimated count from database statistics.\n   - Exact count computed asynchronously and cached for a while.\n4. Push back on \"Page 3 of 107,000\": evaluate whether search and filters better meet the actual navigation need.",
+    "link": {
+      "title": "Use The Index, Luke: Paging through results (no offset)",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  }
+]

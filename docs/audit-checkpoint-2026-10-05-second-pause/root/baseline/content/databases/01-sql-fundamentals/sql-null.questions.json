@@ -1,0 +1,378 @@
+[
+  {
+    "id": "sql-null-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Chloe is the only customer whose city is NULL. How many rows does this return?\n\n```sql\nSELECT name FROM customers\nWHERE city = NULL;\n```",
+    "options": [
+      {
+        "text": "1 (Chloe)",
+        "explanation": "This assumes `=` can test for NULL. `NULL = NULL` is UNKNOWN, not TRUE, so even Chloe's row is dropped."
+      },
+      {
+        "text": "4 (everyone except Chloe)",
+        "explanation": "That would be `city IS NOT NULL`. Here every comparison is UNKNOWN, so nothing passes."
+      },
+      {
+        "text": "0",
+        "explanation": "Correct. Comparing anything with NULL using `=` gives UNKNOWN, and WHERE keeps only TRUE rows. Use `WHERE city IS NULL`."
+      },
+      {
+        "text": "It raises a syntax error",
+        "explanation": "It is valid SQL, which is what makes it dangerous: it silently returns nothing."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. For each row, evaluate `city = NULL`.\n2. London = NULL → UNKNOWN. Leeds = NULL → UNKNOWN. NULL = NULL → UNKNOWN.\n3. WHERE keeps only TRUE, so every row is discarded: 0 rows.\n4. The right test is `city IS NULL`, which is TRUE for Chloe and FALSE for the others.",
+    "link": {
+      "title": "Null (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Null_(SQL)"
+    }
+  },
+  {
+    "id": "sql-null-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`referred_by` is NULL for Asha and Erin, 1 for Ben and Chloe, and 2 for Dev. What does this return?\n\n```sql\nSELECT name FROM customers\nWHERE referred_by <> 1;\n```",
+    "options": [
+      {
+        "text": "Dev",
+        "explanation": "Correct. Ben and Chloe fail because 1 <> 1 is FALSE. Asha and Erin fail because NULL <> 1 is UNKNOWN. Only Dev (2 <> 1) is TRUE."
+      },
+      {
+        "text": "Asha, Dev, Erin",
+        "explanation": "This treats NULL as a value that differs from 1. In SQL, comparing NULL with 1 is UNKNOWN, and WHERE drops UNKNOWN rows."
+      },
+      {
+        "text": "Asha, Erin",
+        "explanation": "Dev's `referred_by` is 2, which is not 1, so he is kept. Asha and Erin are the ones dropped."
+      },
+      {
+        "text": "Nobody",
+        "explanation": "Dev's comparison, 2 <> 1, is plainly TRUE."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Evaluate `referred_by <> 1` per row:\n\n| name | value | result |\n|---|---|---|\n| Asha | NULL | UNKNOWN |\n| Ben | 1 | FALSE |\n| Chloe | 1 | FALSE |\n| Dev | 2 | TRUE |\n| Erin | NULL | UNKNOWN |\n\nOnly TRUE survives, so the result is Dev. To include people with no referrer, add `OR referred_by IS NULL`, or use `referred_by IS DISTINCT FROM 1`.",
+    "link": {
+      "title": "Null (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Null_(SQL)"
+    }
+  },
+  {
+    "id": "sql-null-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does `COALESCE(NULL, NULL, 'Leeds', 'York')` return?",
+    "options": [
+      {
+        "text": "NULL, because the first argument is NULL",
+        "explanation": "`COALESCE` exists precisely to skip NULLs. It only returns NULL if every argument is NULL."
+      },
+      {
+        "text": "'Leeds'",
+        "explanation": "Correct. `COALESCE` returns the first argument that is not NULL, scanning left to right."
+      },
+      {
+        "text": "'York'",
+        "explanation": "It returns the *first* non-NULL argument, not the last."
+      },
+      {
+        "text": "'LeedsYork'",
+        "explanation": "`COALESCE` picks one value; it doesn't concatenate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `COALESCE` scans its arguments left to right.\n2. Argument 1: NULL, skip. Argument 2: NULL, skip.\n3. Argument 3: 'Leeds', not NULL, so return it. 'York' is never looked at.\n4. A typical use: `COALESCE(city, 'unknown')` for display.",
+    "link": {
+      "title": "Conditional expressions (CASE, COALESCE, NULLIF) — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-conditional.html"
+    }
+  },
+  {
+    "id": "sql-null-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A marketing query is meant to find customers who have never ordered, but it returns no rows, even though Erin has never ordered:\n\n```sql\nSELECT name FROM customers\nWHERE id NOT IN (\n  SELECT customer_id\n  FROM orders);\n```\n\nWhat's going on?",
+    "options": [
+      {
+        "text": "The subquery needs DISTINCT",
+        "explanation": "Duplicates in the list don't change the result of `NOT IN`. The problem is a NULL in the list."
+      },
+      {
+        "text": "`NOT IN` can't be used with a subquery",
+        "explanation": "It can. It works correctly as long as the subquery returns no NULLs."
+      },
+      {
+        "text": "Erin's id must be NULL",
+        "explanation": "Erin's id is 5. It's the *subquery* that contains a NULL, from guest order 106."
+      },
+      {
+        "text": "Guest order 106 has a NULL `customer_id`, so for Erin `5 <> NULL` is UNKNOWN and the whole NOT IN is UNKNOWN; rewrite with NOT EXISTS",
+        "explanation": "Correct. `NOT IN` is a chain of `<>` joined by AND. One UNKNOWN makes the chain UNKNOWN for every row that isn't already FALSE."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The subquery returns (1, 1, 2, 3, 4, NULL).\n2. For Erin, `5 NOT IN (...)` means:\n\n```\n5<>1 AND 5<>1 AND 5<>2\nAND 5<>3 AND 5<>4 AND 5<>NULL\n```\n\n3. That is TRUE AND ... AND UNKNOWN = UNKNOWN. WHERE drops her.\n4. Every other customer has a FALSE term, so they're dropped too: 0 rows.\n5. Fix:\n\n```sql\nSELECT name FROM customers c\nWHERE NOT EXISTS (\n  SELECT 1 FROM orders o\n  WHERE o.customer_id = c.id);\n```\n\nThis returns Erin and stays correct when NULLs appear.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "sql-null-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Product ratings are 5, 3, NULL, NULL and 4. What does `SELECT AVG(rating) FROM products;` return?",
+    "options": [
+      {
+        "text": "2.4",
+        "explanation": "That's 12 / 5, which treats the two unrated products as 0. `AVG` skips NULLs, so it divides by 3."
+      },
+      {
+        "text": "NULL, because some ratings are NULL",
+        "explanation": "Aggregates don't propagate NULL the way `+` does. They skip NULL inputs."
+      },
+      {
+        "text": "4.0",
+        "explanation": "Correct. `AVG` ignores NULLs: (5 + 3 + 4) / 3 = 4.0. It is the average of the known ratings."
+      },
+      {
+        "text": "3.0",
+        "explanation": "This takes the middle value. `AVG` computes the mean, not the median."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Drop NULLs: the inputs are 5, 3, 4.\n2. Sum = 12, count = 3.\n3. Mean = 12 / 3 = 4.0.\n\nCompare:\n\n| expression | value |\n|---|---|\n| `AVG(rating)` | 4.0 |\n| `AVG(COALESCE(rating,0))` | 2.4 |\n\nChoose deliberately: \"average of rated products\" versus \"average where unrated counts as zero\".",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "sql-null-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which WHERE clauses include **Chloe** (city NULL) in the result? Select all that apply.",
+    "options": [
+      {
+        "text": "`city IS NULL`",
+        "explanation": "Correct. `IS NULL` is TRUE for a NULL value."
+      },
+      {
+        "text": "`city <> 'London'`",
+        "explanation": "`NULL <> 'London'` is UNKNOWN, so the row is dropped."
+      },
+      {
+        "text": "`city IS DISTINCT FROM 'London'`",
+        "explanation": "Correct. `IS DISTINCT FROM` treats NULL as a comparable value, so NULL is distinct from 'London': TRUE."
+      },
+      {
+        "text": "`NOT (city = 'London')`",
+        "explanation": "`city = 'London'` is UNKNOWN for Chloe, and `NOT UNKNOWN` is still UNKNOWN."
+      },
+      {
+        "text": "`COALESCE(city, '') <> 'London'`",
+        "explanation": "Correct. `COALESCE` turns NULL into `''`, and `'' <> 'London'` is TRUE."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Evaluate each one for Chloe:\n\n| clause | value |\n|---|---|\n| `IS NULL` | TRUE |\n| `<> 'London'` | UNKNOWN |\n| `IS DISTINCT FROM` | TRUE |\n| `NOT (= 'London')` | UNKNOWN |\n| `COALESCE(...) <>` | TRUE |\n\nOnly TRUE rows are kept. Note that `COALESCE` in a WHERE clause usually stops an index on `city` from being used; `IS DISTINCT FROM` or an explicit `OR city IS NULL` states the intent more clearly.",
+    "link": {
+      "title": "Comparison functions and operators — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-comparison.html"
+    }
+  },
+  {
+    "id": "sql-null-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table is defined as:\n\n```sql\nCREATE TABLE t (\n  email TEXT UNIQUE,\n  age INTEGER CHECK (age >= 18));\n```\n\nWhich insert fails (in SQLite and in PostgreSQL by default)?",
+    "options": [
+      {
+        "text": "Inserting `(NULL, NULL)` twice",
+        "explanation": "Both succeed. UNIQUE allows many NULLs (no NULL is known to equal another), and the CHECK is UNKNOWN for a NULL age, which passes."
+      },
+      {
+        "text": "Inserting `('a@x', NULL)`",
+        "explanation": "This succeeds: a CHECK fails only when its condition is FALSE, and `NULL >= 18` is UNKNOWN."
+      },
+      {
+        "text": "Inserting `('a@x', 10)`",
+        "explanation": "Correct. `10 >= 18` is FALSE, so the CHECK constraint rejects the row."
+      },
+      {
+        "text": "Inserting `(NULL, 30)`",
+        "explanation": "A NULL email is allowed (the column isn't NOT NULL) and 30 passes the CHECK."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. UNIQUE: two NULLs aren't considered duplicates. PostgreSQL 15+ lets you change this with `UNIQUE NULLS NOT DISTINCT`.\n2. CHECK: the row is rejected only if the condition is FALSE.\n   - `NULL >= 18` → UNKNOWN → accepted.\n   - `10 >= 18` → FALSE → rejected.\n3. So only `('a@x', 10)` fails. SQLite reports `CHECK constraint failed: age >= 18`.\n4. If age is required, declare `age INTEGER NOT NULL CHECK (age >= 18)`.",
+    "link": {
+      "title": "Comparison functions and operators — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-comparison.html"
+    }
+  },
+  {
+    "id": "sql-null-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this return for Chloe, whose city is NULL?\n\n```sql\nSELECT CASE city\n  WHEN NULL THEN 'none'\n  ELSE 'some' END\nFROM customers\nWHERE id = 3;\n```",
+    "options": [
+      {
+        "text": "'none'",
+        "explanation": "The simple `CASE x WHEN v` form tests `x = v`. `NULL = NULL` is UNKNOWN, so the NULL branch never matches."
+      },
+      {
+        "text": "'some'",
+        "explanation": "Correct. `CASE city WHEN NULL` compares with `=`, which is never TRUE for NULL, so it falls through to ELSE."
+      },
+      {
+        "text": "NULL",
+        "explanation": "There is an ELSE branch, so the CASE returns 'some' rather than NULL."
+      },
+      {
+        "text": "An error",
+        "explanation": "The syntax is valid; that is why this bug is easy to ship."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The simple CASE `CASE city WHEN NULL THEN ...` is shorthand for `CASE WHEN city = NULL THEN ...`.\n2. For Chloe, `NULL = NULL` is UNKNOWN, and a CASE branch is taken only when TRUE.\n3. It falls through to `ELSE 'some'`.\n4. Correct form:\n\n```sql\nCASE WHEN city IS NULL\n     THEN 'none'\n     ELSE 'some' END\n```",
+    "link": {
+      "title": "Conditional expressions (CASE, COALESCE, NULLIF) — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-conditional.html"
+    }
+  },
+  {
+    "id": "sql-null-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Trace this query. Asha (ref NULL, London), Ben (1, Leeds), Chloe (1, NULL), Dev (2, London), Erin (NULL, Bristol).\n\n```sql\nSELECT name FROM customers\nWHERE NOT (referred_by = 1\n           AND city = 'London');\n```",
+    "options": [
+      {
+        "text": "Asha, Ben, Chloe, Dev, Erin",
+        "explanation": "Nobody has both referred_by 1 and city London, but that doesn't make the inner condition FALSE for everyone. For Asha and Chloe it is UNKNOWN."
+      },
+      {
+        "text": "Ben, Dev",
+        "explanation": "Erin is kept too: `NULL = 1` is UNKNOWN, but `UNKNOWN AND FALSE` is FALSE, so NOT gives TRUE."
+      },
+      {
+        "text": "Ben, Chloe, Dev, Erin",
+        "explanation": "Chloe's inner condition is `TRUE AND UNKNOWN`, which is UNKNOWN, and NOT UNKNOWN is UNKNOWN. She is dropped."
+      },
+      {
+        "text": "Ben, Dev, Erin",
+        "explanation": "Correct. The inner AND is FALSE for Ben, Dev and Erin (each has a FALSE term) and UNKNOWN for Asha and Chloe. NOT flips FALSE to TRUE and leaves UNKNOWN alone."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Evaluate `ref = 1 AND city = 'London'`, then NOT:\n\n| name | ref=1, London | AND | NOT |\n|---|---|---|---|\n| Asha | U, T | U | U |\n| Ben | T, F | F | T |\n| Chloe | T, U | U | U |\n| Dev | F, T | F | T |\n| Erin | U, F | F | T |\n\nKey rules: `FALSE AND anything` is FALSE (Erin), and `NOT UNKNOWN` is UNKNOWN (Asha, Chloe). Result: Ben, Dev, Erin.",
+    "link": {
+      "title": "Three-valued logic — Modern SQL",
+      "url": "https://modern-sql.com/concept/three-valued-logic"
+    }
+  },
+  {
+    "id": "sql-null-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You want every customer listed, with their referrer's name shown only when the referrer is not from Leeds. This returns only Ben and Chloe:\n\n```sql\nSELECT c.name, r.name AS ref\nFROM customers c\nLEFT JOIN customers r\n  ON r.id = c.referred_by\nWHERE r.city <> 'Leeds';\n```\n\nWhat is the best fix?",
+    "options": [
+      {
+        "text": "Change LEFT JOIN to FULL JOIN",
+        "explanation": "A FULL JOIN adds unmatched referrer rows; it doesn't stop WHERE from discarding rows where `r.city` is NULL or Leeds."
+      },
+      {
+        "text": "Move the condition into the join: `ON r.id = c.referred_by AND r.city <> 'Leeds'`",
+        "explanation": "Correct. In ON, the condition only decides which referrer matches. Every customer is still kept, and those without a qualifying referrer get NULL in `ref`."
+      },
+      {
+        "text": "Use `WHERE r.city IS DISTINCT FROM 'Leeds'`",
+        "explanation": "This brings back Asha and Erin (whose `r.city` is NULL) but still drops Dev, whose referrer Ben *is* from Leeds. You wanted Dev listed with no referrer shown."
+      },
+      {
+        "text": "Add DISTINCT",
+        "explanation": "No rows are duplicated; rows are missing. DISTINCT can't bring them back."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. After the LEFT JOIN, every customer has a row. Asha and Erin have `r.*` all NULL; Dev's `r` is Ben (Leeds).\n2. `WHERE r.city <> 'Leeds'`:\n   - Asha, Erin: NULL <> 'Leeds' → UNKNOWN → dropped.\n   - Dev: 'Leeds' <> 'Leeds' → FALSE → dropped.\n3. A WHERE test on the right-hand table cancels the outer join.\n4. In ON, the test only filters candidate matches:\n\n```sql\nLEFT JOIN customers r\n  ON r.id = c.referred_by\n AND r.city <> 'Leeds'\n```\n\nResult: Asha NULL, Ben Asha, Chloe Asha, Dev NULL, Erin NULL.",
+    "link": {
+      "title": "Null (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Null_(SQL)"
+    }
+  },
+  {
+    "id": "sql-null-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about `IN` and `NOT IN` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`1 IN (1, NULL)` is TRUE",
+        "explanation": "Correct. IN is a chain of `=` joined by OR, and `TRUE OR UNKNOWN` is TRUE. Positive matches survive a NULL in the list."
+      },
+      {
+        "text": "`3 NOT IN (1, 2, NULL)` is TRUE",
+        "explanation": "It's UNKNOWN: `3<>1 AND 3<>2 AND 3<>NULL` is `TRUE AND TRUE AND UNKNOWN`."
+      },
+      {
+        "text": "`x NOT IN (subquery)` returns every row when the subquery returns no rows",
+        "explanation": "Correct. `NOT IN` of an empty set is TRUE for every x, even if x is NULL. A filter that accidentally empties the subquery makes NOT IN keep everything."
+      },
+      {
+        "text": "`NOT EXISTS` gives the same answer whether or not the subquery's column contains NULLs",
+        "explanation": "Correct. EXISTS only asks whether a row matched the correlated condition, which is always TRUE or FALSE. A NULL `customer_id` simply matches no customer."
+      },
+      {
+        "text": "If the list contains a NULL, `x NOT IN (list)` can still be TRUE for some x",
+        "explanation": "It can't. The `x <> NULL` term is always UNKNOWN, so the AND chain is at best UNKNOWN."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Expand each operator:\n\n- `x IN (a, b)` = `x = a OR x = b`. One TRUE term makes it TRUE.\n- `x NOT IN (a, b)` = `x <> a AND x <> b`. One UNKNOWN term caps it at UNKNOWN.\n\nSo:\n1. `1 IN (1, NULL)` = TRUE OR UNKNOWN = TRUE.\n2. `3 NOT IN (1, 2, NULL)` = UNKNOWN.\n3. Empty list: an AND of zero terms is TRUE, so all rows pass.\n4. NOT EXISTS returns TRUE or FALSE only.\n5. With a NULL present, NOT IN is never TRUE.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "sql-null-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An audit trigger logs a change when `OLD.city <> NEW.city`. Chloe's city is updated from NULL to 'Leeds', but no change is logged. What should the condition be?",
+    "options": [
+      {
+        "text": "`OLD.city != NEW.city`",
+        "explanation": "`!=` is just another spelling of `<>`. `NULL != 'Leeds'` is still UNKNOWN."
+      },
+      {
+        "text": "`COALESCE(OLD.city, '') <> COALESCE(NEW.city, '')`",
+        "explanation": "This catches NULL → 'Leeds', but misses a real change from NULL to `''`, because both become `''`. It works only while the sentinel can't occur."
+      },
+      {
+        "text": "`OLD.city IS DISTINCT FROM NEW.city`",
+        "explanation": "Correct. It is TRUE whenever the values differ, including NULL versus a value, and FALSE when both are NULL. In SQLite, `OLD.city IS NOT NEW.city` means the same."
+      },
+      {
+        "text": "`NOT (OLD.city = NEW.city)`",
+        "explanation": "For NULL vs 'Leeds' the inner comparison is UNKNOWN, and NOT UNKNOWN is still UNKNOWN, so the change is still missed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `NULL <> 'Leeds'` is UNKNOWN, and an IF or WHEN condition, like WHERE, acts only on TRUE. The change is skipped.\n2. You need a comparison that treats NULL as a value:\n\n| old | new | `<>` | `IS DISTINCT FROM` |\n|---|---|---|---|\n| NULL | Leeds | U | T |\n| NULL | NULL | U | F |\n| Leeds | York | T | T |\n\n3. `IS DISTINCT FROM` is standard and supported by PostgreSQL and SQLite 3.39+. In older SQLite, use `IS NOT`.\n4. The COALESCE trick relies on a sentinel that real data may contain.",
+    "link": {
+      "title": "Comparison functions and operators — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-comparison.html"
+    }
+  }
+]

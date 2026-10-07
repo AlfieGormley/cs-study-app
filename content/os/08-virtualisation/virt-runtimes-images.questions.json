@@ -1,0 +1,344 @@
+[
+  {
+    "id": "virt-runtimes-images-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On nodes using the same OS/architecture, you want to identify one exact platform image manifest rather than a mutable tag. Which registry reference should you use?",
+    "options": [
+      {
+        "text": "`myapp:latest`",
+        "explanation": "latest is a tag, not an automatic update mechanism. It can be moved when authorized publication changes it."
+      },
+      {
+        "text": "`myapp:v2.3.1`",
+        "explanation": "A version tag is still a name. Registry immutability policies may restrict updates, but the tag text itself does not encode content."
+      },
+      {
+        "text": "`myapp@sha256:...` (a digest)",
+        "explanation": "Correct. A digest is the hash of the manifest's bytes; it can only ever refer to that exact content."
+      },
+      {
+        "text": "The image ID shown by `docker images`",
+        "explanation": "That local ID is the config digest on your machine; registries and deployments reference manifests by their digest."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A platform manifest digest identifies the manifest bytes; its descriptors identify config and layers. A multi-platform index digest instead fixes a set whose selected platform can differ by node. Digest pinning does not guarantee future availability, publisher authenticity or identical runtime environment.",
+    "link": {
+      "title": "OCI Image Format Specification — GitHub",
+      "url": "https://github.com/opencontainers/image-spec/blob/main/spec.md"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a typical native Docker/containerd/runc stack, which component implements the low-level OCI container setup?",
+    "options": [
+      {
+        "text": "The `docker` CLI",
+        "explanation": "The CLI just sends an HTTP request to dockerd over the Docker socket."
+      },
+      {
+        "text": "dockerd",
+        "explanation": "dockerd handles the API, builds and networking, and delegates running containers to containerd."
+      },
+      {
+        "text": "containerd",
+        "explanation": "containerd pulls images, prepares snapshots and bundles, and starts a shim, but leaves the system calls to the OCI runtime."
+      },
+      {
+        "text": "runc (the OCI runtime), started via the shim",
+        "explanation": "Correct. runc implements the requested OCI setup. In the shim create/start flow, its lifecycle commands return while the shim supervises the task."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Follow `docker run`:\n\n1. CLI → REST call to **dockerd**.\n2. dockerd → gRPC to **containerd**: make sure the image is unpacked, create a container.\n3. containerd starts **containerd-shim-runc-v2**.\n4. The shim runs **runc create/start** with the bundle.\n5. runc does clone, cgroups, pivot_root, capabilities, seccomp, exec, and exits. The shim stays as the parent.",
+    "link": {
+      "title": "runc — GitHub",
+      "url": "https://github.com/opencontainers/runc"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which Dockerfile instruction does **not** add a file system layer to the image?",
+    "options": [
+      {
+        "text": "`RUN apt-get install -y curl`",
+        "explanation": "`RUN` executes a command and snapshots its file system changes as a new layer."
+      },
+      {
+        "text": "`ENV PORT=8080`",
+        "explanation": "Correct. `ENV` only changes the image config (its environment variables); no files change."
+      },
+      {
+        "text": "`COPY . /app`",
+        "explanation": "`COPY` writes files into the image, creating a layer."
+      },
+      {
+        "text": "`ADD app.tar.gz /app`",
+        "explanation": "`ADD` copies (and here extracts) files, creating a layer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Layers are file system diffs.\n2. `RUN`, `COPY` and `ADD` change files, so each produces a layer.\n3. `ENV`, `CMD`, `ENTRYPOINT`, `EXPOSE`, `USER` and `LABEL` only record settings in the image config.\n4. So `ENV` adds metadata, not a layer.",
+    "link": {
+      "title": "Building best practices — Docker docs",
+      "url": "https://docs.docker.com/build/building/best-practices/"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Given this Dockerfile, which was built once already with its cache retained and the same base image/configuration, you edit only `app.py` and rebuild. Which steps actually execute rather than coming from cache?\n\n```\nFROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY . .\nCMD [\"python\", \"app.py\"]\n```",
+    "options": [
+      {
+        "text": "All of them",
+        "explanation": "BuildKit reuses every step whose inputs are unchanged; `FROM`, `WORKDIR` and the first two copies/installs have not changed."
+      },
+      {
+        "text": "Only `COPY . .` (and the cheap `CMD` metadata after it)",
+        "explanation": "Correct. `requirements.txt` is unchanged, so its `COPY` and the `pip install` hit the cache. The second `COPY` sees a changed checksum."
+      },
+      {
+        "text": "`RUN pip install` and everything after it",
+        "explanation": "The pip step's inputs are the command string and its parent layer, both unchanged, so it is cached."
+      },
+      {
+        "text": "None, because Docker only checks file timestamps",
+        "explanation": "The cache checks file *contents* for `COPY`, not timestamps, so the edit is detected."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With the stated unchanged inputs and retained cache, the requirements COPY and pip-install result are reused. The final source COPY detects app.py changes; the final image metadata is then assembled with the existing CMD. This avoids rerunning dependency installation, but no rebuild duration follows from the Dockerfile alone.",
+    "link": {
+      "title": "Docker build cache — Docker docs",
+      "url": "https://docs.docker.com/build/cache/"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A teammate 'simplifies' the Dockerfile to the version below. What happens on each rebuild after a one-line change to `app.py`?\n\n```\nFROM python:3.12-slim\nWORKDIR /app\nCOPY . .\nRUN pip install -r requirements.txt\nCMD [\"python\", \"app.py\"]\n```",
+    "options": [
+      {
+        "text": "The full `pip install` re-runs, because `COPY . .` now misses and every later step must rebuild",
+        "explanation": "Correct. `app.py` is part of the `COPY . .` input, so that step misses and invalidates the `RUN pip install` after it."
+      },
+      {
+        "text": "Only the `COPY` re-runs; pip is smart enough to skip",
+        "explanation": "In this sequential stage, the changed source COPY is an input to the pip RUN, so the old RUN cache entry no longer matches. Independent stages can still be reused."
+      },
+      {
+        "text": "Nothing changes because `requirements.txt` is unchanged",
+        "explanation": "The builder does not know `pip` only reads `requirements.txt`; it only sees that the parent layer changed."
+      },
+      {
+        "text": "The build fails because `requirements.txt` was not copied",
+        "explanation": "`COPY . .` copies it along with everything else, so the build works, just slowly."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `COPY . .` hashes every file in the build context. `app.py` changed → miss.\n2. The next step, `RUN pip install`, has a new parent layer → miss, so it runs again.\n3. If dependencies take three minutes to install, every code change now costs three minutes.\n4. Rule of thumb: copy and install the things that change rarely (dependency manifests) before the things that change often (source code).",
+    "link": {
+      "title": "Docker build cache — Docker docs",
+      "url": "https://docs.docker.com/build/cache/"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume no apt package pins and an unchanged base. A Dockerfile caches apt-get update separately before installing nginx. Why can a later build reuse stale package information?",
+    "options": [
+      {
+        "text": "apt ignores updates inside containers",
+        "explanation": "apt behaves normally in a container; the problem is the build cache, not apt."
+      },
+      {
+        "text": "The base image pinned nginx",
+        "explanation": "Package pins are excluded in this scenario. A real base image could contain apt preferences, so inspect them when diagnosing a real build."
+      },
+      {
+        "text": "The `apt-get update` step was served from cache, so the install used months-old package lists",
+        "explanation": "Correct. `RUN` steps are cached by their command string. Unchanged text means the old layer, and old indexes, are reused."
+      },
+      {
+        "text": "BuildKit caches network responses for 30 days",
+        "explanation": "BuildKit does not cache HTTP responses for `RUN`; it caches the whole step's resulting layer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "RUN cache lookup does not query current package repositories. A reused update result can therefore contain stale indexes, and the install result may also be reused. Combine update and install so they refresh together when rebuilt. --no-cache forces build steps to execute; --pull checks for a newer base and does not itself invalidate unchanged RUN inputs when that base is unchanged.",
+    "link": {
+      "title": "Building best practices — Docker docs",
+      "url": "https://docs.docker.com/build/building/best-practices/"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a compatible containerd restart preserves its shims and tasks, and no service-manager policy stops them. What does the shim architecture allow for 40 running containers?",
+    "options": [
+      {
+        "text": "They all stop, because containerd is their parent",
+        "explanation": "Containers are children of their per-container shims, not of containerd."
+      },
+      {
+        "text": "They can keep running under their shims while containerd restarts and reconnects",
+        "explanation": "Correct under the stated conditions. A shim can supervise one or multiple tasks; daemon availability is separated from task lifetime."
+      },
+      {
+        "text": "They are migrated to another node",
+        "explanation": "Nothing in containerd migrates containers; that would be an orchestrator's job, and restarting a daemon does not trigger it."
+      },
+      {
+        "text": "They freeze until containerd returns",
+        "explanation": "The processes are ordinary Linux processes; they keep running without any daemon."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Shims supervise tasks independently of the containerd daemon. If the restart preserves those processes and is compatible, containerd can reconnect. This does not imply arbitrary upgrade or service shutdown is harmless. Docker daemon shutdown has separate live-restore configuration and limitations.",
+    "link": {
+      "title": "containerd",
+      "url": "https://containerd.io/"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about content-addressed image layers are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Identical layer blobs can be reused rather than downloaded/stored again where the content store supports it",
+        "explanation": "Correct. Matching content digests enable reuse; actual physical sharing depends on registry, content-store and snapshotter implementation."
+      },
+      {
+        "text": "A client can detect a corrupted or tampered layer after download",
+        "explanation": "Correct. It recomputes the SHA-256 and compares it with the digest in the manifest."
+      },
+      {
+        "text": "Pushing a new tag for an existing image changes its layer digests",
+        "explanation": "Tagging only creates a new name for the same manifest; no bytes change, so no digest changes."
+      },
+      {
+        "text": "Updating only your application code usually means pulling only the top layer(s)",
+        "explanation": "Correct. Lower layers already present locally are skipped because their digests match."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Matching digest-addressed blobs can be reused and verified against expected content. Adding a tag does not alter blob bytes. An app-only update can reuse unchanged cached base layers, though manifests/config and changed blobs still need resolving. Digest integrity is distinct from trusting who published the image.",
+    "link": {
+      "title": "OCI Image Format Specification — GitHub",
+      "url": "https://github.com/opencontainers/image-spec/blob/main/spec.md"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Compare two ways of adding a 300 MB archive that extracts to 600 MB, keeping only the extracted files:\n\n```\n# A\nRUN curl -o x.tgz $URL\nRUN tar xf x.tgz\nRUN rm x.tgz\n\n# B\nRUN curl -o x.tgz $URL && \\\n    tar xf x.tgz && rm x.tgz\n```\n\nIgnoring compression, filesystem metadata and sparse/deduplication effects, roughly how many uncompressed file-data bytes do A and B retain across their layers?",
+    "options": [
+      {
+        "text": "A: 600 MB, B: 600 MB",
+        "explanation": "In A, the archive is captured in the first layer before it is deleted; later layers cannot remove it."
+      },
+      {
+        "text": "A: 900 MB, B: 900 MB",
+        "explanation": "In B, the archive is created and deleted within one step, so it is never captured in a layer."
+      },
+      {
+        "text": "A: 300 MB, B: 600 MB",
+        "explanation": "A adds both the archive layer and the extracted layer; `rm` frees nothing."
+      },
+      {
+        "text": "A: 900 MB, B: 600 MB",
+        "explanation": "Correct. A's three layers are +300, +600 and a whiteout (+0). B's single layer contains only the final extracted files."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each `RUN` snapshots the file system diff at the end of the step.\n2. Version A:\n   - Layer 1: `x.tgz`, +300 MB.\n   - Layer 2: extracted files, +600 MB.\n   - Layer 3: a whiteout for `x.tgz`, +0. The 300 MB still ships in layer 1.\n   - Total ≈ 900 MB.\n3. Version B: by the time the step ends, `x.tgz` is gone, so the layer contains only the 600 MB of extracted files.\n4. A multi-stage build achieves the same and keeps tools like `curl` out of the final image.",
+    "link": {
+      "title": "Building best practices — Docker docs",
+      "url": "https://docs.docker.com/build/building/best-practices/"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Dockerfile does `COPY id_rsa /root/.ssh/`, then `RUN git clone git@github.com:org/private.git`, then `RUN rm /root/.ssh/id_rsa`. The image is pushed to a registry that contractors can pull from. Is the key exposed, and what is the right fix?",
+    "options": [
+      {
+        "text": "No; the key was deleted before the image was pushed",
+        "explanation": "Deletion only adds a whiteout in a later layer. The `COPY` layer containing the key is still in the image."
+      },
+      {
+        "text": "No, because layers are compressed",
+        "explanation": "Compression is not encryption; `docker save` or any registry client can unpack the layer."
+      },
+      {
+        "text": "Yes; fix it by squashing the final image only",
+        "explanation": "Squashing helps if done correctly, but secrets would still sit in your build cache and history. The robust fix is to never put them in a layer at all."
+      },
+      {
+        "text": "Yes. Rotate the exposed key and use an SSH/secret mount without copying or logging credentials into persistent output",
+        "explanation": "Correct. The earlier COPY layer exposes the key. Temporary build mounts avoid automatic persistence, but the build commands must not copy credentials into layers or logs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Deleting the visible key does not remove the earlier layer. Revoke/rotate the exposed credential and rebuild without it. Use an SSH agent or secret mount for the operation, and avoid copying/logging its contents. Multi-stage builds exclude unreferenced stage files from the final image but do not automatically purge secrets from caches or exported build artifacts.",
+    "link": {
+      "title": "Docker build cache — Docker docs",
+      "url": "https://docs.docker.com/build/cache/"
+    }
+  },
+  {
+    "id": "virt-runtimes-images-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your cluster upgrades to a Kubernetes version without dockershim (1.24+), with containerd as the runtime. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "All existing images must be rebuilt in a new format",
+        "explanation": "Docker-built images are OCI-compatible; containerd runs them unchanged."
+      },
+      {
+        "text": "The kubelet now talks to containerd's CRI plugin over gRPC",
+        "explanation": "Correct. CRI is the kubelet's only runtime interface after dockershim's removal."
+      },
+      {
+        "text": "A CI pod that mounts `/var/run/docker.sock` from the node to run `docker build` will break if the node has no dockerd",
+        "explanation": "Correct when the node no longer exposes a Docker daemon. Use a maintained compatible builder or dedicated build service; do not assume a removed daemon socket remains available."
+      },
+      {
+        "text": "`docker ps` on the node no longer shows the pods' containers",
+        "explanation": "Correct. They are managed by containerd directly; use `crictl ps` (or `ctr`) to inspect them."
+      },
+      {
+        "text": "Containers lose their cgroup limits",
+        "explanation": "Limits come from the kubelet via CRI and are applied by runc exactly as before."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "1. **Images**: OCI format either way. No rebuild. False.\n2. **Interface**: kubelet → CRI (gRPC) → containerd → shim → runc. True.\n3. **docker.sock**: only exists where dockerd runs. Workloads that relied on it break. True.\n4. **Tooling**: `docker ps` talks to dockerd, which no longer manages these containers. `crictl ps` talks CRI. True.\n5. **cgroups**: still set from pod requests and limits via the same OCI runtime. False.",
+    "link": {
+      "title": "Container Runtime Interface — Kubernetes docs",
+      "url": "https://kubernetes.io/docs/concepts/architecture/cri/"
+    }
+  }
+]

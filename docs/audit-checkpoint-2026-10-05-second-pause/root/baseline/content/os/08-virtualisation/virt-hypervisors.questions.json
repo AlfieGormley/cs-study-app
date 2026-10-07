@@ -1,0 +1,340 @@
+[
+  {
+    "id": "virt-hypervisors-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A developer runs Ubuntu inside VirtualBox, which they installed as an ordinary application on their Windows laptop. What kind of hypervisor is this?",
+    "options": [
+      {
+        "text": "Type 1, because the guest runs real Linux",
+        "explanation": "Whether the guest is a real OS has nothing to do with the type. The type is about what the *hypervisor* runs on."
+      },
+      {
+        "text": "Type 2, because the hypervisor runs on top of a host operating system",
+        "explanation": "Correct. VirtualBox is an application on Windows; Windows owns the hardware and the hypervisor relies on it for scheduling, memory and drivers."
+      },
+      {
+        "text": "Paravirtualised, because the guest is open source",
+        "explanation": "Paravirtualisation is a technique (modifying the guest to make hypercalls), not a hypervisor type, and being open source does not imply it."
+      },
+      {
+        "text": "A container, because it runs as a process",
+        "explanation": "A container shares the host kernel. Here Ubuntu boots its *own* kernel inside a VM, which is the defining difference."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask: what is directly beneath the hypervisor?\n2. Here it is Windows, a full host OS. VirtualBox is just a program Windows schedules.\n3. A hypervisor that runs on a host OS is **type 2** (hosted).\n4. Contrast: ESXi or Xen boot directly on the hardware with no general-purpose OS beneath them, which makes them **type 1**.",
+    "link": {
+      "title": "Hypervisor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hypervisor"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Under trap-and-emulate, the guest kernel runs deprivileged and executes `cli` (disable interrupts). What happens next?",
+    "options": [
+      {
+        "text": "The real CPU disables interrupts for the whole host",
+        "explanation": "That is exactly what must *not* happen: the guest would then control the host's interrupts, breaking resource control."
+      },
+      {
+        "text": "The guest crashes with an illegal instruction error",
+        "explanation": "The trap goes to the hypervisor, not to the guest's own fault handler. The guest never sees an error."
+      },
+      {
+        "text": "The instruction traps to the hypervisor, which clears the virtual CPU's interrupt flag and resumes the guest",
+        "explanation": "Correct. The privileged instruction faults because the guest is not in kernel mode; the VMM updates the vCPU's state and continues at the next instruction."
+      },
+      {
+        "text": "The hypervisor interprets every following instruction in software until `sti`",
+        "explanation": "Trap-and-emulate handles just the one instruction. Interpreting everything would throw away the efficiency that makes it worthwhile."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The guest kernel thinks it is in ring 0, but the hypervisor put it in a less privileged mode.\n2. `cli` is privileged, so executing it outside kernel mode raises a fault.\n3. Faults go to the most privileged software: the hypervisor.\n4. The hypervisor looks up which guest and vCPU trapped, sets `vcpu.interrupts = False`, advances the guest's instruction pointer past `cli`, and resumes it.\n5. Later, when a virtual interrupt is pending for that guest, the hypervisor checks the virtual flag and holds the interrupt back.",
+    "link": {
+      "title": "Virtual Machine Monitors — OSTEP (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vmm-intro.pdf"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these are genuine benefits of running workloads in virtual machines? Select all that apply.",
+    "options": [
+      {
+        "text": "Several lightly loaded servers can be consolidated onto one physical host",
+        "explanation": "Correct. Servers used to idle at low utilisation; packing VMs together saves hardware, power and space."
+      },
+      {
+        "text": "A kernel panic in one guest does not take down the other guests",
+        "explanation": "Correct. Each guest has its own kernel, so a panic is contained to its VM."
+      },
+      {
+        "text": "A whole running machine can be snapshotted, copied or moved, because a VM is just state",
+        "explanation": "Correct. This encapsulation is what makes snapshots, templates and live migration possible."
+      },
+      {
+        "text": "CPU-bound code runs faster than on the bare host",
+        "explanation": "Virtualisation adds a small overhead; at best CPU-bound code runs at near-native speed, never faster."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Go through each claim:\n\n- **Consolidation**: yes, the original business case.\n- **Isolation**: yes, every guest has its own kernel and the hypervisor controls what hardware each sees.\n- **Encapsulation**: yes. Disk image + memory + register state can be saved and restored anywhere.\n- **Faster CPU code**: no. Most instructions run natively, so speed is *close* to native, but traps and address translation only ever add cost.",
+    "link": {
+      "title": "Hypervisor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hypervisor"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On classic 32-bit x86 without hardware support, a deprivileged guest kernel executes `POPF` to restore a flags value with the interrupt flag (IF) set. What happens?",
+    "options": [
+      {
+        "text": "It traps to the hypervisor, which sets the virtual IF",
+        "explanation": "This is what Popek–Goldberg needs, but `POPF` does not trap in user mode, which is precisely the problem."
+      },
+      {
+        "text": "The CPU raises a general protection fault that the guest handles",
+        "explanation": "No fault is raised at all; that is why the instruction is dangerous."
+      },
+      {
+        "text": "The real IF is set, letting the guest control host interrupts",
+        "explanation": "The CPU protects the real IF from less privileged code, so it is not changed."
+      },
+      {
+        "text": "The IF change is silently ignored with no trap, so the hypervisor never learns the guest wanted interrupts on",
+        "explanation": "Correct. `POPF` is sensitive but unprivileged: in user mode it quietly drops the IF bit. The guest's view and the VMM's view of its state diverge."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A trap-and-emulate VMM only sees what traps.\n2. In kernel mode, `POPF` may change IF. In user mode it changes the other flags but leaves IF alone, **without faulting**.\n3. So the guest believes interrupts are enabled; the VMM still has them recorded as disabled for this vCPU and keeps virtual interrupts pending.\n4. The guest may hang waiting for a timer interrupt that never arrives.\n5. Because `POPF` is sensitive but not privileged, x86 failed the Popek–Goldberg condition. Binary translation fixed this by rewriting `POPF` before it ran.",
+    "link": {
+      "title": "Popek and Goldberg virtualization requirements — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Popek_and_Goldberg_virtualization_requirements"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A hypothetical CPU has an instruction `GETMODE` that returns whether the CPU is in kernel or user mode, and it never traps. A trap-and-emulate VMM runs a guest kernel in user mode. Which Popek–Goldberg property is broken?",
+    "options": [
+      {
+        "text": "Equivalence: the guest kernel reads 'user mode' and may behave differently than on real hardware",
+        "explanation": "Correct. `GETMODE` is behaviour-sensitive (its result depends on the mode) but not privileged, so the guest sees the truth instead of its virtual mode."
+      },
+      {
+        "text": "Efficiency: `GETMODE` forces the VMM to interpret every instruction",
+        "explanation": "Efficiency would only be lost if the VMM *chose* to interpret. The immediate problem is that the guest sees the wrong answer."
+      },
+      {
+        "text": "Resource control: the guest can take memory it was not given",
+        "explanation": "Reading the mode does not let the guest allocate or access real resources."
+      },
+      {
+        "text": "None, because the instruction does not change any state",
+        "explanation": "Sensitive includes instructions whose *results* depend on the mode, not just ones that change state."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Classify the instruction. It does not change machine state, but its output depends on the processor mode, so it is **behaviour-sensitive**.\n2. Is it privileged? No, it never traps.\n3. So it is sensitive but not privileged, violating the theorem's condition.\n4. Consequence: a guest kernel running deprivileged executes `GETMODE`, gets 'user', and might, say, refuse to boot. Its behaviour differs from bare hardware, which breaks **equivalence**.",
+    "link": {
+      "title": "Popek and Goldberg virtualization requirements — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Popek_and_Goldberg_virtualization_requirements"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's toy hypervisor, the guest runs `[\"add\", \"cli\", \"mov\", \"sti\", \"cli\"]` on a fresh `VCPU()`. How many traps occur, and what is `vcpu.interrupts` afterwards?",
+    "options": [
+      {
+        "text": "5 traps; True",
+        "explanation": "Only instructions in `PRIV` trap. `add` and `mov` run natively."
+      },
+      {
+        "text": "3 traps; False",
+        "explanation": "Correct. `cli`, `sti` and `cli` trap. The last one sets interrupts to False."
+      },
+      {
+        "text": "3 traps; True",
+        "explanation": "The final emulated instruction is `cli`, which leaves interrupts disabled."
+      },
+      {
+        "text": "2 traps; False",
+        "explanation": "There are three privileged instructions in the list, not two: `cli` appears twice."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace it, with `user_mode=True` every time:\n\n```\ninsn  priv?  action        interrupts\nadd   no     native        True\ncli   yes    trap: False   False\nmov   no     native        False\nsti   yes    trap: True    True\ncli   yes    trap: False   False\n```\n\nThree traps; final value `False`.",
+    "link": {
+      "title": "Virtual Machine Monitors — OSTEP (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vmm-intro.pdf"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "VMware's binary translator rewrote guest **kernel** code but let guest **user** code run directly on the CPU. Why was user code safe to run untranslated?",
+    "options": [
+      {
+        "text": "User code never contains sensitive instructions",
+        "explanation": "User code can contain `POPF` or `SGDT`. The point is that those behave the same in a VM as on real hardware when run from user mode."
+      },
+      {
+        "text": "User code ran in user mode on real hardware too, so sensitive instructions behave identically in the VM",
+        "explanation": "Correct. The problem was the guest *kernel* running at the wrong privilege level. User code is at the privilege level it expects, so `POPF` drops IF just as it would natively."
+      },
+      {
+        "text": "Translating user code would require the source code",
+        "explanation": "Binary translation works on machine code, not source; that is its whole advantage."
+      },
+      {
+        "text": "User code is too large to fit in the translation cache",
+        "explanation": "Size is not the reason; the translation cache works on hot blocks, not whole programs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Why does `POPF` misbehave in a VM? Because the guest *kernel* expects ring 0 but runs deprivileged, so the instruction acts like its user-mode version.\n2. Guest user code expects user mode and *gets* user mode.\n3. So every instruction behaves exactly as on bare metal: equivalence holds without help.\n4. Therefore only kernel code needs scanning and rewriting, which keeps translation overhead small for most applications.",
+    "link": {
+      "title": "Binary translation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Binary_translation"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements correctly describe Xen-style paravirtualisation? Select all that apply.",
+    "options": [
+      {
+        "text": "The guest kernel is modified to make hypercalls instead of executing sensitive instructions",
+        "explanation": "Correct. This sidesteps the instructions that do not trap."
+      },
+      {
+        "text": "Page table updates can be batched into a single hypercall",
+        "explanation": "Correct. Batching amortises the cost of entering the hypervisor, one reason PV performance was near native."
+      },
+      {
+        "text": "It can run an unmodified, closed-source Windows kernel",
+        "explanation": "Full PV needs the guest kernel's source to port it. Windows ran on Xen only once hardware support (HVM) arrived."
+      },
+      {
+        "text": "Devices are provided through split drivers sharing memory rings between a front end and a back end",
+        "explanation": "Correct. The guest front end queues requests in shared memory; a back end in a privileged domain performs the real I/O."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Recall what Xen changed:\n\n1. **CPU**: replace sensitive instructions with hypercalls. True.\n2. **Memory**: the guest asks Xen to validate and apply page-table writes, and can batch them. True.\n3. **I/O**: split drivers with shared rings rather than emulated hardware. True.\n4. **Unmodified Windows**: false. Porting requires the kernel source, which is why paravirtualisation alone could not run Windows.",
+    "link": {
+      "title": "Xen and the Art of Virtualization (PDF)",
+      "url": "https://www.cl.cam.ac.uk/research/srg/netos/papers/2003-xensosp.pdf"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In 2006, VMware engineers compared their binary translator with first-generation Intel VT-x on a fork-heavy workload that constantly creates processes and edits page tables. What did they find, and why?",
+    "options": [
+      {
+        "text": "VT-x was much faster, because hardware is always faster than software",
+        "explanation": "Counter-intuitively, early hardware was often slower. Hardware does each step in silicon but still pays for every exit."
+      },
+      {
+        "text": "They were identical, because both trap on every page-table write",
+        "explanation": "Binary translation does not have to trap: it can rewrite the instruction into a cheap inline sequence."
+      },
+      {
+        "text": "Binary translation was often faster, because it could replace sensitive operations with cheap code while VT-x paid an expensive VM exit for each",
+        "explanation": "Correct. Adams and Agesen found first-generation VT-x exits cost thousands of cycles. A translator can avoid the trap entirely by patching in a callout or direct update to virtual state."
+      },
+      {
+        "text": "Neither worked, because fork cannot be virtualised",
+        "explanation": "Both ran such workloads correctly; the comparison was about speed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Fork-heavy work means many page-table changes and context switches in the guest kernel.\n2. Under early VT-x (no nested paging yet), each of these causes a **VM exit**: save guest state, enter the VMM, handle, re-enter. Each round trip cost thousands of cycles.\n3. A translator sees the instruction *before* it runs and can replace it with a few instructions that update shadow state, with no hardware trap.\n4. So trap-heavy workloads favoured BT. Later CPUs cut exit costs and added nested paging (next lesson), which reversed the result.",
+    "link": {
+      "title": "x86 virtualization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_virtualization"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A guest triggers 50,000 hypervisor exits per second on one vCPU, and each exit costs about 2 µs end to end (exit, handling and re-entry). Roughly what fraction of that vCPU's time goes to exits?",
+    "options": [
+      {
+        "text": "0.1%",
+        "explanation": "That would be 1 ms per second. 50,000 × 2 µs is 100 ms, a hundred times more."
+      },
+      {
+        "text": "1%",
+        "explanation": "Off by a factor of ten: 50,000 × 2 µs = 100,000 µs = 100 ms per second."
+      },
+      {
+        "text": "10%",
+        "explanation": "Correct. 50,000 × 2 µs = 100 ms of every 1,000 ms, i.e. 10%."
+      },
+      {
+        "text": "50%",
+        "explanation": "That would need 250,000 exits per second at 2 µs each."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Time per second spent in exits = rate × cost.\n2. 50,000 /s × 2 µs = 100,000 µs/s.\n3. 100,000 µs = 100 ms.\n4. 100 ms / 1,000 ms = **10%**.\n\nThis is why hypervisor engineers obsess over exit *counts*: halve the exits (e.g. with paravirtual drivers or interrupt batching) and you claw back 5% of every vCPU.",
+    "link": {
+      "title": "Virtual Machine Monitors — OSTEP (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vmm-intro.pdf"
+    }
+  },
+  {
+    "id": "virt-hypervisors-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run a latency-sensitive service in a cloud VM. `top` inside the guest shows 30% `st` (steal) while your process is runnable. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "Your application has a memory leak",
+        "explanation": "A leak shows up as growing memory use and eventually swapping or OOM, not as steal time."
+      },
+      {
+        "text": "The guest kernel is spending 30% of its time in system calls",
+        "explanation": "System-call time is reported as `sy`, not `st`."
+      },
+      {
+        "text": "The disk is slow and your process is waiting on I/O",
+        "explanation": "I/O wait is reported as `wa`; steal is specifically about the CPU being taken away."
+      },
+      {
+        "text": "The host is overcommitted: your vCPU was ready to run but the hypervisor was running other guests",
+        "explanation": "Correct. Steal time counts periods when the vCPU wanted a physical CPU and the hypervisor scheduled someone else, the 'noisy neighbour' effect of overcommit."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Steal is a paravirtual metric: the hypervisor tells the guest how long its vCPUs were runnable but not running.\n2. 30% means almost a third of the time you wanted the CPU, a physical core was busy with another guest.\n3. Causes: more vCPUs than physical cores on the host, burstable instance credits running out, or a neighbour hogging cores.\n4. Fixes: a larger or dedicated instance, CPU pinning, or moving hosts. Nothing inside the guest can recover that time.",
+    "link": {
+      "title": "Hypervisor — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hypervisor"
+    }
+  }
+]

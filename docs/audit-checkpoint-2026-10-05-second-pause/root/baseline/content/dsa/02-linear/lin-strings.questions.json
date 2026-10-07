@@ -1,0 +1,349 @@
+[
+  {
+    "id": "lin-strings-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this Python print?\n\n```python\ns = \"data\"\nt = s\ns += \"base\"\nprint(t, s)\n```",
+    "options": [
+      {
+        "text": "`data database`",
+        "explanation": "Correct. `t` still refers to the original \"data\" object. `s += \"base\"` creates a new string \"database\" and points `s` at it."
+      },
+      {
+        "text": "`database database`",
+        "explanation": "This assumes `+=` modified the shared string in place. Strings are immutable, so `+=` builds a new string and re-binds only `s`."
+      },
+      {
+        "text": "`data data`",
+        "explanation": "The concatenation does happen; it just produces a new object. `s` is re-bound to that new object."
+      },
+      {
+        "text": "A TypeError, because strings are immutable",
+        "explanation": "Immutability forbids changing a string's contents (like `s[0] = 'D'`). Re-binding a variable to a new string is fine."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `s = \"data\"`: one string object, referenced by `s`.\n2. `t = s`: `t` now references the same object. No copy is made.\n3. `s += \"base\"`: because str is immutable, Python computes `s + \"base\"`, allocates a new object \"database\", and re-binds `s` to it.\n4. `t` was never touched, so it still sees \"data\".\n\nCompare a list: with `a = [1]; b = a; a += [2]`, both `a` and `b` show `[1, 2]`, because lists are mutable and `+=` extends in place.",
+    "link": {
+      "title": "Python built-in types: text sequences",
+      "url": "https://docs.python.org/3/library/stdtypes.html"
+    }
+  },
+  {
+    "id": "lin-strings-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Python, `s = \"café\"`. What are `len(s)` and `len(s.encode(\"utf-8\"))`?",
+    "options": [
+      {
+        "text": "4 and 4",
+        "explanation": "This assumes every character is one byte. That's only true for ASCII; é (U+00E9) needs two bytes in UTF-8."
+      },
+      {
+        "text": "5 and 5",
+        "explanation": "Python's `len` on a str counts code points, not bytes. As long as é is the single precomposed code point, the string has 4."
+      },
+      {
+        "text": "4 and 8",
+        "explanation": "That would be UTF-16 (2 bytes each). UTF-8 uses one byte for ASCII characters."
+      },
+      {
+        "text": "4 and 5",
+        "explanation": "Correct. Four code points: c, a, f, é. In UTF-8, c, a and f take one byte each and é takes two, giving 5 bytes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Code points: `c` U+0063, `a` U+0061, `f` U+0066, `é` U+00E9. `len(s)` = 4.\n2. UTF-8 sizes: code points below U+0080 take 1 byte; U+0080 to U+07FF take 2 bytes.\n3. Bytes: 1 + 1 + 1 + 2 = **5**.\n\nCaveat: if the é were typed as `e` + combining accent U+0301, `len(s)` would be 5 and the UTF-8 length 6, even though it looks identical. That's why you normalise text before comparing or counting it.",
+    "link": {
+      "title": "UTF-8 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  },
+  {
+    "id": "lin-strings-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can a Python `str` be used as a dict key, while a `list` cannot?",
+    "options": [
+      {
+        "text": "Strings are shorter than lists",
+        "explanation": "Length has nothing to do with it; a 1 MB string is a valid key, an empty list is not."
+      },
+      {
+        "text": "Strings are immutable, so their hash can never change after the key is stored",
+        "explanation": "Correct. A dict places each key in a slot chosen by its hash. A mutable key could change, its hash would no longer match its slot, and lookups would fail. Strings can even cache their hash."
+      },
+      {
+        "text": "Lists are stored as linked lists, which can't be hashed",
+        "explanation": "Python lists are dynamic arrays, and anything can in principle be hashed. The issue is that a list's contents, and so its hash, could change while it's a key."
+      },
+      {
+        "text": "Dicts only accept strings and numbers as keys",
+        "explanation": "Any hashable object works: tuples of immutables, frozensets, custom objects with `__hash__`. Lists are excluded because they're mutable."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `d[\"apple\"] = 1` computes `hash(\"apple\")` and stores the entry in the slot that hash points to.\n2. Later, `d[\"apple\"]` hashes again and looks in the same slot. This works only if the hash is stable.\n3. If keys could mutate, `k.append(4)` would change `hash(k)`, but the entry would still sit in the old slot: lost.\n4. Python prevents this by making lists unhashable. Use a `tuple` if you need a sequence key.\n5. Bonus: since a str can't change, CPython computes its hash once and caches it in the object.",
+    "link": {
+      "title": "Python built-in types: text sequences",
+      "url": "https://docs.python.org/3/library/stdtypes.html"
+    }
+  },
+  {
+    "id": "lin-strings-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A log formatter builds a line from n fields, each of length k, with `line = line + field` in a loop. Assume no in-place optimisation. What is the total copying work?",
+    "options": [
+      {
+        "text": "O(nk), the same as `\"\".join(fields)`",
+        "explanation": "`join` is O(nk) because it allocates once. Repeated `+` copies everything built so far on every iteration."
+      },
+      {
+        "text": "O(n log n · k)",
+        "explanation": "There's no halving anywhere. The copies grow linearly per iteration, giving an arithmetic series, which is quadratic."
+      },
+      {
+        "text": "O(n²k)",
+        "explanation": "Correct. Iteration i copies the existing (i − 1)k characters plus k new ones. Summing k + 2k + ... + nk ≈ kn²/2."
+      },
+      {
+        "text": "O(k), since only one field is added at a time",
+        "explanation": "Adding one field is cheap only for a mutable buffer. An immutable string must be fully copied into a new, longer one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. After iteration i, `line` has length ik.\n2. Building it copies the previous (i − 1)k characters plus the new k: ik characters.\n3. Total = k(1 + 2 + ... + n) = k · n(n + 1)/2 = O(n²k).\n4. Example: n = 1,000 fields of k = 20 chars → about 20 × 500,500 ≈ 10 million character copies.\n5. `\"\".join(fields)` copies each character once: 20,000 copies.",
+    "link": {
+      "title": "Programming FAQ — Python docs",
+      "url": "https://docs.python.org/3/faq/programming.html"
+    }
+  },
+  {
+    "id": "lin-strings-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This Java method is very slow for 200,000 rows. What's the best fix?\n\n```java\nString csv = \"\";\nfor (Row r : rows) {\n  csv = csv + r.toCsv() + \"\\n\";\n}\n```",
+    "options": [
+      {
+        "text": "Nothing; `javac` already compiles `+` into a StringBuilder, so this is linear",
+        "explanation": "`javac` optimises each expression, but it creates a fresh builder (or concat call) per iteration that still copies the whole `csv` string so far. The loop is quadratic."
+      },
+      {
+        "text": "Use `csv.concat(...)` instead of `+`",
+        "explanation": "`concat` still allocates a new String containing all previous characters. Same O(n²) behaviour."
+      },
+      {
+        "text": "Mark `csv` as `final` so the JVM can optimise it",
+        "explanation": "A `final` variable can't be reassigned at all, so the loop wouldn't compile. Immutability is the problem, not the solution."
+      },
+      {
+        "text": "Create one `StringBuilder` before the loop, `append` each row and newline, and call `toString()` once at the end",
+        "explanation": "Correct. The builder is a growable char array with amortised O(1) appends, so the total work is linear in the output size."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Suppose each row produces ~50 characters. After i rows, `csv` holds about 50i characters.\n2. Iteration i copies all of them into a new String: total ≈ 50 × (200,000²)/2 = 10¹² character copies. Far too slow.\n3. With one `StringBuilder`, each append writes into spare capacity; when full, the buffer roughly doubles. Total copying is O(total length) ≈ 10⁷ characters.\n4. Code:\n\n```java\nStringBuilder sb =\n    new StringBuilder();\nfor (Row r : rows) {\n  sb.append(r.toCsv())\n    .append('\\n');\n}\nString csv = sb.toString();\n```",
+    "link": {
+      "title": "StringBuilder — Java SE 21 API",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/StringBuilder.html"
+    }
+  },
+  {
+    "id": "lin-strings-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Consider the single emoji 😀 (U+1F600). Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "In Python, `len(\"😀\")` is 1",
+        "explanation": "Correct. Python's str counts code points, and 😀 is one code point."
+      },
+      {
+        "text": "In Java, `\"😀\".length()` is 2",
+        "explanation": "Correct. Java Strings count UTF-16 code units. Code points above U+FFFF need a surrogate pair, i.e. two units."
+      },
+      {
+        "text": "It takes 4 bytes in UTF-8",
+        "explanation": "Correct. UTF-8 needs 4 bytes for code points from U+10000 to U+10FFFF."
+      },
+      {
+        "text": "It takes 2 bytes in UTF-8, the same as in UTF-16",
+        "explanation": "Incorrect. It takes 4 bytes in both: two 2-byte units in UTF-16, four bytes in UTF-8."
+      },
+      {
+        "text": "Adding it to a long ASCII-only Python string makes CPython store every character in that new string with 4 bytes",
+        "explanation": "Correct. Under PEP 393, a string uses the width needed by its widest code point, so one emoji pushes the whole string to 4 bytes per code point."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "1. Code point: U+1F600 = 128,512, above the 16-bit range (U+FFFF = 65,535).\n2. UTF-16: values above U+FFFF are encoded as a high + low surrogate. 2 units × 2 bytes = 4 bytes. Java's `length()` counts units: 2.\n3. UTF-8 byte counts by range:\n\n```\nU+0000-U+007F     1 byte\nU+0080-U+07FF     2 bytes\nU+0800-U+FFFF     3 bytes\nU+10000-U+10FFFF  4 bytes\n```\n\n4. Python counts code points: 1.\n5. PEP 393: `\"a\" * 1000` uses ~1 byte per char; `\"a\" * 1000 + \"😀\"` uses 4 bytes per char, about 4 KB of character data.",
+    "link": {
+      "title": "PEP 393 — Flexible String Representation",
+      "url": "https://peps.python.org/pep-0393/"
+    }
+  },
+  {
+    "id": "lin-strings-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is the time complexity of this palindrome check for a string of length n?\n\n```python\ndef is_pal(s):\n    if len(s) <= 1:\n        return True\n    if s[0] != s[-1]:\n        return False\n    return is_pal(s[1:-1])\n```",
+    "options": [
+      {
+        "text": "O(n²): about n/2 calls, each copying a slice of up to n − 2 characters",
+        "explanation": "Correct. The slices have lengths n − 2, n − 4, ..., so total copying ≈ n²/4. Passing indices `lo, hi` instead makes it O(n)."
+      },
+      {
+        "text": "O(n): it makes about n/2 calls, each doing O(1) comparisons",
+        "explanation": "The comparison is O(1), but `s[1:-1]` is not: slicing a Python str copies the characters into a new string."
+      },
+      {
+        "text": "O(log n), because the string shrinks each call",
+        "explanation": "It shrinks by 2 each call, not by half, so there are about n/2 calls, not log n."
+      },
+      {
+        "text": "O(2ⁿ), because it's recursive",
+        "explanation": "Recursion isn't exponential unless each call branches into several calls. This makes exactly one recursive call."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Calls: lengths n, n − 2, n − 4, ... → about n/2 calls.\n2. Each call builds `s[1:-1]`: a new str of length (current − 2). Copying cost is proportional to that length.\n3. Total copying = (n − 2) + (n − 4) + ... ≈ n²/4 → O(n²).\n4. Also O(n²) memory traffic, and for n above ~2,000 it hits Python's default recursion limit of 1,000.\n5. Index version, O(n) time and O(1) extra space:\n\n```python\ndef is_pal(s):\n    lo, hi = 0, len(s) - 1\n    while lo < hi:\n        if s[lo] != s[hi]:\n            return False\n        lo += 1\n        hi -= 1\n    return True\n```",
+    "link": {
+      "title": "TimeComplexity — Python Wiki",
+      "url": "https://wiki.python.org/moin/TimeComplexity"
+    }
+  },
+  {
+    "id": "lin-strings-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C function upper-cases a string of length n like this. What's its complexity (assume the compiler does not hoist the call)?\n\n```c\nfor (size_t i = 0;\n     i < strlen(s); i++)\n  s[i] = toupper(s[i]);\n```",
+    "options": [
+      {
+        "text": "O(n), one pass over the string",
+        "explanation": "The body is one pass, but the loop condition calls `strlen` on every iteration, and `strlen` itself scans the string."
+      },
+      {
+        "text": "O(1) per character, because C strings store their length",
+        "explanation": "C strings don't store a length. They end with a zero byte, and `strlen` scans to find it."
+      },
+      {
+        "text": "O(n²): `strlen` is O(n) and runs n + 1 times",
+        "explanation": "Correct. Each condition check rescans to the terminator. Compute the length once before the loop, or loop `while (s[i])`."
+      },
+      {
+        "text": "O(n log n)",
+        "explanation": "Nothing halves here. Each of the n condition checks scans all n characters: n × n."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `strlen(s)` walks from `s[0]` until it finds `'\\0'`: n steps.\n2. The loop condition is evaluated n + 1 times.\n3. Total ≈ n × n = O(n²). For a 1 MB string that's about 10¹² byte reads.\n4. Compilers can sometimes prove the length doesn't change and hoist the call, but here the loop writes to `s`, which makes that proof harder; don't rely on it.\n5. Fix:\n\n```c\nsize_t n = strlen(s);\nfor (size_t i = 0; i < n; i++)\n  s[i] = toupper(s[i]);\n```",
+    "link": {
+      "title": "String (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/String_(computer_science)"
+    }
+  },
+  {
+    "id": "lin-strings-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service truncates dessert names to fit a 10-**byte** database field with `name.encode(\"utf-8\")[:10].decode(\"utf-8\")`. What happens for `\"crème brûlée\"`?",
+    "options": [
+      {
+        "text": "It returns `\"crème brûl\"`, the first 10 characters",
+        "explanation": "This treats bytes as characters. è and û take 2 bytes each in UTF-8, so 10 bytes hold fewer than 10 characters."
+      },
+      {
+        "text": "It raises `UnicodeDecodeError`, because byte 10 cuts û in half",
+        "explanation": "Correct. c, r, è(2), m, e, space, b, r use bytes 0–8. û occupies bytes 9–10, so the slice ends with only û's first byte, which is not valid UTF-8 on its own."
+      },
+      {
+        "text": "It returns `\"crème br\"`",
+        "explanation": "That's what you'd get with `decode(errors=\"ignore\")`, which drops the partial trailing character. Plain `decode` is strict and doesn't silently drop bytes."
+      },
+      {
+        "text": "It returns `\"crème brû\"`, because Python rounds the cut up to the next character boundary",
+        "explanation": "Byte slicing knows nothing about characters. `bytes[:10]` takes exactly 10 bytes, whatever they contain."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Lay out the UTF-8 bytes (index: char):\n\n```\n0 c   1 r   2-3 è   4 m   5 e\n6 _   7 b   8 r     9-10 û ...\n```\n\n2. `[:10]` keeps bytes 0–9. Byte 9 is `0xC3`, the lead byte of û, without its continuation byte `0xBB`.\n3. A strict decode sees an incomplete sequence and raises `UnicodeDecodeError: unexpected end of data`.\n4. The total is 15 bytes for 12 characters, so the field overflows even though the text looks short.\n5. Correct approaches: truncate by characters while tracking the encoded length, or decode with `errors=\"ignore\"` to drop a partial trailing character (giving `\"crème br\"`). For user-facing text, truncate on grapheme clusters so you don't split a base letter from its accent.",
+    "link": {
+      "title": "UTF-8 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  },
+  {
+    "id": "lin-strings-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which are genuine benefits of making strings immutable, as Java and Python do? Select all that apply.",
+    "options": [
+      {
+        "text": "A string's hash code can be computed once and cached, making repeated map lookups cheaper",
+        "explanation": "Correct. Java's `String.hashCode()` and CPython's str hash are cached on the object because the contents can never change."
+      },
+      {
+        "text": "Strings can be shared between threads without locks",
+        "explanation": "Correct. No thread can modify a shared string, so there are no data races on its contents."
+      },
+      {
+        "text": "Concatenation in a loop becomes O(n)",
+        "explanation": "Incorrect. Immutability is exactly why naive concatenation is O(n²): each `+` must copy into a new object."
+      },
+      {
+        "text": "Identical strings can be interned so that many references share one object",
+        "explanation": "Correct. Interning is only safe because nobody can change the shared object out from under the other users."
+      },
+      {
+        "text": "It allows O(1) indexing in UTF-8",
+        "explanation": "Incorrect. Immutability says nothing about encoding. O(1) indexing comes from fixed-width storage (Latin-1, UTF-16 units, PEP 393), not from immutability; UTF-8 indexing by code point is O(n) either way."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Think about what each benefit requires:\n\n1. **Hash caching** requires that the contents never change after the first `hashCode()` call. Immutability guarantees that.\n2. **Lock-free sharing** requires no writers. Immutability means there are none.\n3. **Interning** requires that changing one 'copy' can't affect another. With immutability there's no changing.\n4. **Concatenation** is the price you pay: every edit allocates. Use builders.\n5. **Indexing speed** is a storage-layout question. A mutable UTF-8 string would still need an O(n) scan to find code point i.",
+    "link": {
+      "title": "String interning — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/String_interning"
+    }
+  },
+  {
+    "id": "lin-strings-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Before Java 7u6, `String.substring` returned a view sharing the parent's `char[]`. A service read 50 MB log files into Strings, kept a 20-character `substring` of each as an ID in a long-lived cache, and discarded the rest. What happened?",
+    "options": [
+      {
+        "text": "Each cached ID kept its whole 50 MB backing array alive, causing a memory leak",
+        "explanation": "Correct. The GC can't free the parent array while any substring still references it. This is why Java 7u6 changed `substring` to copy: O(k) time but no hidden retention."
+      },
+      {
+        "text": "Memory use stayed small, since each ID was only 20 characters",
+        "explanation": "That's the post-7u6 behaviour, where substring copies. With sharing, each tiny ID kept a reference to the entire 50 MB array."
+      },
+      {
+        "text": "The IDs became corrupted when the original Strings were garbage-collected",
+        "explanation": "The GC never frees memory that's still reachable. The shared array stayed alive precisely because the substrings referenced it, so nothing was corrupted."
+      },
+      {
+        "text": "`substring` threw an exception for strings over 2 GB",
+        "explanation": "The files were 50 MB each, well within array limits. The problem was retention, not size."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Old design: `String` held `(char[] value, int offset, int count)`. `substring` made a new String with the same `value` and a different offset/count: O(1) time, no copying.\n2. Downside: the 20-character ID still references the 50 MB `char[]` (about 100 MB, since Java chars were 2 bytes).\n3. 1,000 cached IDs → up to ~100 GB of arrays that can't be collected.\n4. Workaround then: `new String(s.substring(a, b))` forced a copy.\n5. Since 7u6, `substring` copies the k characters. Python slicing has always copied. The trade-off: sharing makes slicing O(1) but risks retention; copying makes it O(k) but predictable.",
+    "link": {
+      "title": "String (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/String_(computer_science)"
+    }
+  }
+]

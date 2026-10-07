@@ -1,0 +1,345 @@
+[
+  {
+    "id": "io-uring-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In io_uring, which side writes entries into the **completion queue (CQ)**?",
+    "options": [
+      {
+        "text": "The kernel, one CQE per finished operation",
+        "explanation": "Correct. The kernel is the CQ's producer: it writes a 16-byte CQE with `user_data`, `res` and `flags`, then advances the CQ tail."
+      },
+      {
+        "text": "The application, after it finishes processing a request",
+        "explanation": "The application only consumes the CQ (advancing its head). Writing results is the kernel's job; the application writes to the SQ."
+      },
+      {
+        "text": "liburing, by copying results out of the SQ",
+        "explanation": "liburing is a thin user-space wrapper. It does not produce completions; the SQ holds requests, not results."
+      },
+      {
+        "text": "Both sides, protected by a shared mutex",
+        "explanation": "Each ring has exactly one producer and one consumer, which is why no lock is needed, only memory barriers."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Think producer and consumer per ring:\n\n| Ring | Producer | Consumer |\n|---|---|---|\n| SQ | application | kernel |\n| CQ | kernel | application |\n\nThe application writes SQEs and bumps the SQ tail. The kernel performs the work and writes CQEs, bumping the CQ tail. The application reads CQEs and advances the CQ head. One writer per index means no locks.",
+    "link": {
+      "title": "io_uring(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
+    }
+  },
+  {
+    "id": "io-uring-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A completion arrives with `cqe->res == -2`. What does it mean?",
+    "options": [
+      {
+        "text": "2 bytes were transferred",
+        "explanation": "Byte counts are non-negative. A negative `res` always signals an error."
+      },
+      {
+        "text": "Check the global `errno` for the real error",
+        "explanation": "io_uring does not set `errno` for per-operation results; the error is encoded in `res` itself. (`errno` is only relevant if a liburing call itself fails.)"
+      },
+      {
+        "text": "The operation failed with errno 2 (`ENOENT`)",
+        "explanation": "Correct. io_uring reports errors as negative errno values in `res`, so -2 is `-ENOENT`, e.g. an `openat` on a missing path."
+      },
+      {
+        "text": "The CQ overflowed and 2 completions were lost",
+        "explanation": "Overflow is signalled through ring flags and the kernel's backlog, not through a single CQE's `res`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `res` behaves like a syscall return value.\n2. Success: `res >= 0` (bytes read, new fd, etc.).\n3. Failure: `res = -errno`.\n4. -2 → errno 2 → `ENOENT` (no such file or directory).\n\nSo `report(r, -cqe->res)` turns it back into a positive errno for `strerror`.",
+    "link": {
+      "title": "io_uring(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
+    }
+  },
+  {
+    "id": "io-uring-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does every SQE carry a 64-bit `user_data` field?",
+    "options": [
+      {
+        "text": "It tells the kernel which CPU to run the operation on",
+        "explanation": "CPU placement isn't controlled per SQE this way; `user_data` is opaque to the kernel."
+      },
+      {
+        "text": "It is a checksum the kernel uses to validate the entry",
+        "explanation": "The kernel does not interpret `user_data` at all; it just copies it to the CQE."
+      },
+      {
+        "text": "It sets the operation's priority in the queue",
+        "explanation": "Priority uses a separate `ioprio` field; `user_data` is purely for the application."
+      },
+      {
+        "text": "So the application can match each CQE to its request, because completions may arrive out of order",
+        "explanation": "Correct. The kernel copies `user_data` unchanged into the CQE. Typically it holds a pointer to your request struct."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Submit three reads A, B, C in order. A misses the page cache and goes to disk; B and C are cached.\n\n```\nCQ order: B, C, A\n```\n\nWithout a tag you couldn't tell which result belongs to which buffer. Set `user_data = (u64)req` on submit and read it back with `io_uring_cqe_get_data(cqe)`.",
+    "link": {
+      "title": "Lord of the io_uring (tutorial)",
+      "url": "https://unixism.net/loti/"
+    }
+  },
+  {
+    "id": "io-uring-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An epoll server handles a burst where 100 sockets become readable at once. Roughly how many system calls does it make to read them, versus an io_uring server that has 100 receive SQEs queued (no SQPOLL)?",
+    "options": [
+      {
+        "text": "epoll: 2; io_uring: 100",
+        "explanation": "epoll needs one `read` per socket after the single `epoll_wait`, so it's far more than 2. And io_uring batches, so it's not 100."
+      },
+      {
+        "text": "epoll: 101; io_uring: about 1",
+        "explanation": "Correct. epoll: 1 `epoll_wait` + 100 `read`. io_uring: the 100 SQEs go in one `io_uring_enter`, which can also wait for completions."
+      },
+      {
+        "text": "Both about 101: io_uring still needs one syscall per operation",
+        "explanation": "That's the misconception io_uring was built to fix. Submissions are batched through the shared ring."
+      },
+      {
+        "text": "epoll: 100; io_uring: 0",
+        "explanation": "Without SQPOLL, io_uring still needs `io_uring_enter` to submit and/or wait. Zero syscalls requires a kernel polling thread."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "epoll (readiness):\n1. `epoll_wait` → 100 ready fds (1 call).\n2. `read` each one (100 calls).\nTotal 101.\n\nio_uring (completion):\n1. Write 100 SQEs into shared memory (0 calls).\n2. `io_uring_enter(fd, 100, 1, GETEVENTS)` submits all and waits (1 call).\n3. Reap CQEs from shared memory (0 calls).\nTotal about 1.",
+    "link": {
+      "title": "Ringing in a new asynchronous I/O API — LWN.net",
+      "url": "https://lwn.net/Articles/776703/"
+    }
+  },
+  {
+    "id": "io-uring-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With `IORING_SETUP_SQPOLL`, the application submits nothing for a few seconds, then writes a new SQE and bumps the SQ tail. Nothing happens. Why?",
+    "options": [
+      {
+        "text": "SQPOLL only works for files opened with `O_DIRECT`",
+        "explanation": "SQPOLL works for any operation type; `O_DIRECT` is unrelated."
+      },
+      {
+        "text": "The SQ is full and the entry was dropped",
+        "explanation": "An idle ring isn't full. And a full SQ means `io_uring_get_sqe` returns NULL; it doesn't drop silently."
+      },
+      {
+        "text": "The kernel polling thread went to sleep after `sq_thread_idle`; the app must check `IORING_SQ_NEED_WAKEUP` and call `io_uring_enter` to wake it",
+        "explanation": "Correct. The poller sleeps when idle to stop burning a CPU. liburing's `io_uring_submit` checks the flag and wakes it for you."
+      },
+      {
+        "text": "SQPOLL requires a syscall for every SQE",
+        "explanation": "The point of SQPOLL is that steady-state submissions need no syscall at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "SQPOLL is a polling trade-off:\n\n1. Busy: a kernel thread spins on the SQ tail, picking up SQEs with no syscalls.\n2. Idle for `sq_thread_idle` ms: the thread sleeps and sets `IORING_SQ_NEED_WAKEUP` in the SQ flags.\n3. New work: the app must see the flag and call `io_uring_enter` with `IORING_ENTER_SQ_WAKEUP`.\n\nIf you hand-roll the ring and skip step 3, submissions sit there unprocessed.",
+    "link": {
+      "title": "io_uring_setup(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/io_uring_setup.2.html"
+    }
+  },
+  {
+    "id": "io-uring-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are real sources of io_uring's speed advantage over epoll plus `read`? Select all that apply.",
+    "options": [
+      {
+        "text": "Many operations submitted in one `io_uring_enter`",
+        "explanation": "Correct. Batching amortises the fixed syscall cost, which grew after the Spectre/Meltdown mitigations."
+      },
+      {
+        "text": "Registered (fixed) files skip the per-operation file-table lookup and refcount",
+        "explanation": "Correct. Fixed files are referenced by index, avoiding the lookup and reference take/drop on every op."
+      },
+      {
+        "text": "Registered buffers are pinned once rather than per operation",
+        "explanation": "Correct. `READ_FIXED`/`WRITE_FIXED` reuse pre-pinned pages."
+      },
+      {
+        "text": "The kernel skips the copy from kernel to user space for every read",
+        "explanation": "Ordinary io_uring reads still copy data into your buffer. Zero-copy needs specific features (e.g. `SEND_ZC` for sends); it isn't the default."
+      },
+      {
+        "text": "SQPOLL can remove syscalls entirely in steady state",
+        "explanation": "Correct, at the cost of a kernel thread spinning on a CPU."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Go through each claim:\n\n1. Batching: yes, N ops per syscall.\n2. Fixed files: yes, no fdget/fdput per op.\n3. Fixed buffers: yes, no page pinning per op.\n4. No copy: no. A plain `IORING_OP_READ` still copies kernel → user, just like `read()`. What's saved is overhead around the copy.\n5. SQPOLL: yes, zero syscalls when busy.",
+    "link": {
+      "title": "Ringing in a new asynchronous I/O API — LWN.net",
+      "url": "https://lwn.net/Articles/776703/"
+    }
+  },
+  {
+    "id": "io-uring-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why can io_uring do truly asynchronous **buffered file reads** when epoll cannot?",
+    "options": [
+      {
+        "text": "epoll returns an error for regular files, but io_uring converts them to sockets",
+        "explanation": "Nothing is converted. (In fact epoll rejects regular files with `EPERM`.)"
+      },
+      {
+        "text": "io_uring reads files with `O_DIRECT` automatically",
+        "explanation": "io_uring supports both buffered and `O_DIRECT` I/O; it doesn't force `O_DIRECT`."
+      },
+      {
+        "text": "epoll is slower on files because of the 1024-fd limit",
+        "explanation": "The 1024 limit belongs to `select`, not epoll, and it's unrelated to files versus sockets."
+      },
+      {
+        "text": "Regular files are always 'ready' for readiness APIs, so epoll can't tell you a read would block; io_uring is completion-based and can hand blocking work to its io-wq workers",
+        "explanation": "Correct. Readiness has no meaning for disk files. io_uring tries inline, and if the read would block it punts to io-wq, then posts a CQE."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Readiness model: 'tell me when a read won't block'. A disk file is always considered readable, even if the page isn't cached, so the read can still block.\n2. Completion model: 'do this read and tell me when it's done'.\n3. io_uring's path: try non-blocking inline → if it would block on a pollable fd, arm poll → otherwise queue to io-wq → post a CQE when done.\n\nThat's why Node.js historically needed a thread pool for files.",
+    "link": {
+      "title": "Lord of the io_uring (tutorial)",
+      "url": "https://unixism.net/loti/"
+    }
+  },
+  {
+    "id": "io-uring-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this code risk?\n\n```c\nchar buf[4096];\nsqe = io_uring_get_sqe(&ring);\nio_uring_prep_recv(sqe, fd,\n    buf, sizeof buf, 0);\nio_uring_submit(&ring);\nreturn;  /* buf goes out of scope */\n```",
+    "options": [
+      {
+        "text": "Nothing: the kernel copied `buf` into the SQE at submit",
+        "explanation": "The SQE holds only the buffer's address and length, not its contents. Data is written there later."
+      },
+      {
+        "text": "Memory corruption: the kernel may write received data into that stack memory after the function returns",
+        "explanation": "Correct. The buffer must stay valid until the matching CQE arrives. Use heap memory owned by the request struct."
+      },
+      {
+        "text": "A compile error, because `buf` is on the stack",
+        "explanation": "It compiles fine; that's what makes the bug dangerous."
+      },
+      {
+        "text": "The recv fails with `EFAULT` immediately",
+        "explanation": "The address is valid at submit time, so it won't fail immediately. The problem appears when data arrives later."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Timeline:\n\n```\nt0 submit recv(buf=0x7ffd..)\nt1 function returns; stack reused\nt2 packet arrives\nt3 kernel writes into 0x7ffd..\n```\n\nAt t3 the kernel scribbles over whatever now lives at that address. Rule: a buffer belongs to the kernel from submit until its CQE is reaped.",
+    "link": {
+      "title": "io_uring(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
+    }
+  },
+  {
+    "id": "io-uring-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A chat server with 50,000 mostly idle WebSocket connections switches from epoll to io_uring with one 16 KB buffer attached to each pending receive. Memory jumps by about 800 MB. Which feature fixes this?",
+    "options": [
+      {
+        "text": "SQPOLL",
+        "explanation": "SQPOLL removes submission syscalls; it doesn't change how many buffers are committed."
+      },
+      {
+        "text": "Linked SQEs",
+        "explanation": "Links chain dependent operations; they don't reduce buffer memory."
+      },
+      {
+        "text": "Provided buffer rings, so the kernel picks a buffer from a shared pool only when data actually arrives",
+        "explanation": "Correct. With completion I/O each pending recv normally pins a buffer. A provided pool needs only as many buffers as connections actually sending at once."
+      },
+      {
+        "text": "Registered files",
+        "explanation": "Fixed files save the fd lookup cost, not buffer memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. 50,000 × 16 KB = 800,000 KB ≈ 800 MB, committed even though almost nobody is talking.\n2. epoll didn't have this problem: you only allocate a buffer when a socket is readable.\n3. Provided buffers restore that: register a pool of, say, 1,024 buffers (16 MB). The recv SQE says 'pick from group G'; the CQE's `flags` tells you which buffer id was used, and you return it to the ring afterwards.",
+    "link": {
+      "title": "Lord of the io_uring (tutorial)",
+      "url": "https://unixism.net/loti/"
+    }
+  },
+  {
+    "id": "io-uring-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your security team asks why the platform's container runtime blocks io_uring. Which reasons are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "Docker's default seccomp profile blocks the io_uring syscalls",
+        "explanation": "Correct. Containers can't use it unless the profile is relaxed."
+      },
+      {
+        "text": "Syscall-based monitoring sees only `io_uring_enter`, not the individual opens, reads and sends done through the ring",
+        "explanation": "Correct. Researchers have shown rootkits that do their I/O through io_uring to evade such tools."
+      },
+      {
+        "text": "Google reported that about 60% of kCTF kernel exploit submissions in the prior year used io_uring",
+        "explanation": "Correct. Google then disabled it on ChromeOS and its production servers."
+      },
+      {
+        "text": "io_uring requires root, so containers would need privileged mode",
+        "explanation": "By default unprivileged processes can create rings. Linux 6.6's `kernel.io_uring_disabled=1` can restrict it, but that's opt-in."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each:\n\n1. Docker seccomp: blocks `io_uring_setup`, `io_uring_enter`, `io_uring_register`. True.\n2. Monitoring blind spot: true; one `io_uring_enter` can perform hundreds of operations.\n3. Google kCTF: 60% of submissions, about $1M in payouts. True.\n4. Root: false. The attack-surface worry exists precisely because unprivileged code can use it.",
+    "link": {
+      "title": "Learnings from kCTF VRP's 42 Linux kernel exploits — Google Security Blog",
+      "url": "https://security.googleblog.com/2023/06/learnings-from-kctf-vrps-42-linux.html"
+    }
+  },
+  {
+    "id": "io-uring-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A storage engine submits 1,000 reads per `io_uring_enter` but reaps completions only every few seconds. On a modern kernel with `IORING_FEAT_NODROP`, what happens when the CQ (sized 2× the SQ) fills up?",
+    "options": [
+      {
+        "text": "New completions are silently dropped",
+        "explanation": "That was the risk on old kernels. With `NODROP` the kernel keeps overflowed CQEs."
+      },
+      {
+        "text": "The kernel enlarges the CQ ring automatically",
+        "explanation": "Ring sizes are fixed at setup; they're `mmap`ped shared memory."
+      },
+      {
+        "text": "The process receives `SIGSEGV`",
+        "explanation": "Overflow is handled in the kernel, not with a signal."
+      },
+      {
+        "text": "The kernel parks overflowed CQEs in an internal backlog and flushes them later, costing extra memory and slowing things down",
+        "explanation": "Correct. Nothing is lost, but the overflow list is slower and uses kernel memory; `io_uring_enter` can return `-EBUSY` if the backlog can't be flushed."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. CQ entries = 2 × SQ entries by default, giving headroom for in-flight work.\n2. If completions outrun reaping, the CQ fills.\n3. With `IORING_FEAT_NODROP` (Linux 5.5+), extra CQEs go to an overflow list and the `IORING_SQ_CQ_OVERFLOW` flag is set.\n4. They're flushed back when space appears.\n\nFix: reap regularly, or size the CQ larger with `IORING_SETUP_CQSIZE`.",
+    "link": {
+      "title": "io_uring_setup(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/io_uring_setup.2.html"
+    }
+  }
+]

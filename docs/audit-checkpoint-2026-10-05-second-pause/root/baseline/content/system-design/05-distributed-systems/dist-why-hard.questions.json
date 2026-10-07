@@ -1,0 +1,379 @@
+[
+  {
+    "id": "dist-why-hard-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your payment service calls a card processor and the call times out after 5 seconds. What can the payment service conclude?",
+    "options": [
+      {
+        "text": "The card was not charged, so it is safe to retry blindly.",
+        "explanation": "Wrong. The processor might have charged the card and only the reply was lost. A blind retry could charge the customer twice."
+      },
+      {
+        "text": "The processor is down and should be removed from rotation.",
+        "explanation": "Wrong. A timeout can't distinguish a dead node from a slow one or a lost packet. Removing it on one timeout is a guess, not a conclusion."
+      },
+      {
+        "text": "Nothing certain: the request may or may not have been processed.",
+        "explanation": "Correct. The request could have been lost, the processor could be slow or paused, or it processed the charge and the reply was lost. All look identical from the caller's side."
+      },
+      {
+        "text": "The card was charged, because the processor must have received the request.",
+        "explanation": "Wrong. The request itself may have been dropped before arriving, in which case no charge happened."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "List the possibilities a timeout hides:\n\n1. Request lost on the way: no charge.\n2. Processor crashed or paused: maybe no charge, maybe partway.\n3. Charge done, reply lost: **charged**.\n4. Processor slow: will charge, reply arrives late.\n\nAll four look identical to the caller, and cases 1 and 3 have opposite side effects. So the only safe conclusion is uncertainty. The practical fix is an **idempotency key**: send the same key on retry, and the processor returns the original result instead of charging again.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "dist-why-hard-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A page makes 40 **sequential** calls to a backend. Each call does 1 ms of work. The backend moves from the same data centre (0.5 ms round trip) to another region (70 ms round trip). Roughly how long does the page now spend on these calls?",
+    "options": [
+      {
+        "text": "About 2.8 seconds",
+        "explanation": "Correct. 40 × (70 + 1) = 2,840 ms. Each sequential call pays the full round trip, so latency multiplies by call count."
+      },
+      {
+        "text": "About 60 ms",
+        "explanation": "Wrong. This is the old figure: 40 × (1 + 0.5) = 60 ms. It ignores the new round-trip time."
+      },
+      {
+        "text": "About 110 ms",
+        "explanation": "Wrong. This adds one 70 ms round trip to the old total, as if all calls shared one round trip. Sequential calls each pay the full latency."
+      },
+      {
+        "text": "About 28 seconds",
+        "explanation": "Wrong by a factor of 10; it treats each round trip as 700 ms."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Per call time = round trip + work.\n\n- Before: 0.5 + 1 = 1.5 ms, × 40 = **60 ms**.\n- After: 70 + 1 = 71 ms, × 40 = **2,840 ms**.\n\nThat is the fallacy \"latency is zero\" in action. Fixes: batch the 40 calls into one, run them in parallel (total ≈ 71 ms), or keep chatty services co-located.",
+    "link": {
+      "title": "Fallacies of distributed computing",
+      "url": "https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing"
+    }
+  },
+  {
+    "id": "dist-why-hard-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the Two Generals problem, why doesn't adding an \"ack of the ack\" (and so on) solve it?",
+    "options": [
+      {
+        "text": "Because the generals might lie about receiving messages.",
+        "explanation": "Wrong. That is the Byzantine Generals problem. In Two Generals both parties are honest; only the messenger is unreliable."
+      },
+      {
+        "text": "Because messages take too long, and the attack time passes.",
+        "explanation": "Wrong. The impossibility holds even with unlimited time. The issue is loss, not delay."
+      },
+      {
+        "text": "Because it can be solved, but needs exactly three acknowledgements.",
+        "explanation": "Wrong. No finite number of acknowledgements works; the proof shows any finite protocol can be shortened until it fails."
+      },
+      {
+        "text": "Because the last message sent can always be lost, and its sender can't know whether it arrived.",
+        "explanation": "Correct. Whatever message is last, its sender is uncertain about it, so the decision can't depend on it. Removing it gives a shorter protocol with the same problem, all the way down to zero messages."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Proof by contradiction:\n\n1. Assume a protocol exists; take its shortest successful run of *k* messages.\n2. The *k*th message might be captured. Its sender acts the same whether or not it arrived (they can't tell).\n3. For agreement to be guaranteed, the receiver must also act the same without it. So *k − 1* messages suffice.\n4. Repeat until *k = 0*: no messages can't coordinate an attack. Contradiction.\n\nIn practice systems accept probabilistic agreement (many messengers) or idempotent retries.",
+    "link": {
+      "title": "Two Generals' Problem",
+      "url": "https://en.wikipedia.org/wiki/Two_Generals%27_Problem"
+    }
+  },
+  {
+    "id": "dist-why-hard-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can cause a healthy node to *appear* dead to its peers? Select all that apply.",
+    "options": [
+      {
+        "text": "A 20-second stop-the-world GC pause",
+        "explanation": "Correct. The process can't send heartbeats during the pause, so peers time out, even though it will resume normally."
+      },
+      {
+        "text": "A network partition between it and the peers",
+        "explanation": "Correct. The node is running and serving whichever side it can reach, but the other side hears nothing."
+      },
+      {
+        "text": "A saturated switch queue delaying heartbeats",
+        "explanation": "Correct. Delay beyond the timeout is indistinguishable from death; the heartbeat arrives too late."
+      },
+      {
+        "text": "The node using TCP instead of UDP",
+        "explanation": "Wrong. The transport protocol doesn't make a node look dead. TCP still suffers delays, but choosing it over UDP isn't a cause of false suspicion."
+      },
+      {
+        "text": "Its VM's hypervisor stealing CPU for a live migration",
+        "explanation": "Correct. The guest is frozen during migration, much like a GC pause, and misses heartbeats."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "A peer decides \"dead\" when it hasn't heard from a node within a timeout. Anything that stops or slows messages for longer than that timeout causes a false positive:\n\n- **Pauses** (GC, VM migration, swapping) stop the sender.\n- **Partitions** stop the path.\n- **Queueing** delays the path.\n\nTransport choice isn't the issue. The lesson: failure detection is always a guess, which is why protocols must stay safe when the guess is wrong.",
+    "link": {
+      "title": "Fallacies of distributed computing",
+      "url": "https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing"
+    }
+  },
+  {
+    "id": "dist-why-hard-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must tolerate up to **2** simultaneously faulty nodes. How many nodes do you need under a crash-fault model versus a Byzantine model?",
+    "options": [
+      {
+        "text": "Crash: 3, Byzantine: 5",
+        "explanation": "Wrong. 3 nodes with 2 crashed leaves 1, which isn't a majority. Crash tolerance needs 2f + 1."
+      },
+      {
+        "text": "Crash: 5, Byzantine: 7",
+        "explanation": "Correct. Crash faults need 2f + 1 = 5 so a majority (3) survives. Byzantine faults need 3f + 1 = 7 so honest nodes outvote liars even when some honest nodes are slow."
+      },
+      {
+        "text": "Crash: 4, Byzantine: 6",
+        "explanation": "Wrong. Even sizes don't improve fault tolerance for majorities, and these miss the 2f + 1 and 3f + 1 bounds."
+      },
+      {
+        "text": "Crash: 5, Byzantine: 5",
+        "explanation": "Wrong. Byzantine nodes can send conflicting messages to different peers, so you need extra honest nodes: 3f + 1 = 7."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With f = 2:\n\n- **Crash**: n = 2f + 1 = 5. If 2 crash, 3 remain, and 3 is a majority of 5, so quorums can still form and any two quorums overlap.\n- **Byzantine**: n = 3f + 1 = 7. Quorums are 2f + 1 = 5. Two quorums overlap in at least 3 nodes, and at most 2 are traitors, so at least one honest node is in both.\n\nThis is why Raft clusters are 3 or 5 nodes and BFT systems are 4, 7, 10...",
+    "link": {
+      "title": "Byzantine fault",
+      "url": "https://en.wikipedia.org/wiki/Byzantine_fault"
+    }
+  },
+  {
+    "id": "dist-why-hard-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A leader holds a 10-second lease. It checks the lease (8 s left), then hits a 15-second GC pause, then writes to storage. What is the problem, and what does it illustrate?",
+    "options": [
+      {
+        "text": "A stale leader may write after a new leader was elected: a process can't rely on its own sense of elapsed time.",
+        "explanation": "Correct. The paused process doesn't notice time passing, so it acts on an expired lease. Storage must reject stale writers, e.g. with fencing tokens."
+      },
+      {
+        "text": "No problem: it checked the lease before writing.",
+        "explanation": "Wrong. The check and the write are separated by the pause. By the time it writes, the lease expired 7 seconds earlier and another node may be leader."
+      },
+      {
+        "text": "The write is rejected automatically because GC pauses abort I/O.",
+        "explanation": "Wrong. GC pauses don't abort anything; the thread resumes exactly where it left off and performs the write."
+      },
+      {
+        "text": "The problem is clock skew between the leader and storage.",
+        "explanation": "Wrong. Clocks could be perfectly synchronised and this still happens; the issue is the pause between check and use."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nt=0   lease granted (to t=10)\nt=2   check: 8 s left, OK\nt=2   GC pause starts\nt=10  lease expires; n2 elected\nt=17  pause ends; old leader writes\n```\n\nAt t=17 two nodes believe they are leader. This is a check-then-act race made worse by unbounded pauses. The defence (lesson 6) is a **fencing token**: storage remembers the highest token it has seen and rejects the old leader's lower one.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-why-hard-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Raft is described as never violating safety under any network timing, but needing a \"well-behaved\" network for liveness. Which timing model is this?",
+    "options": [
+      {
+        "text": "Synchronous",
+        "explanation": "Wrong. A synchronous model assumes known bounds always hold; Raft explicitly stays safe when they don't."
+      },
+      {
+        "text": "Fully asynchronous with guaranteed termination",
+        "explanation": "Wrong. FLP shows deterministic consensus can't guarantee termination in a fully asynchronous model with even one crash."
+      },
+      {
+        "text": "Partially synchronous",
+        "explanation": "Correct. The system is usually timely but sometimes isn't. Safety holds always; progress happens once delays settle back within bounds, which matches real networks."
+      },
+      {
+        "text": "Byzantine",
+        "explanation": "Wrong. Byzantine is a fault model (nodes lie), not a timing model, and Raft doesn't tolerate Byzantine nodes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate two properties:\n\n- **Safety**: nothing bad happens (no two leaders commit conflicting entries). Raft guarantees this with terms and majority votes, regardless of timing.\n- **Liveness**: something good eventually happens (a leader is elected). This needs timeouts to work, i.e. messages arriving within bounds *most* of the time.\n\nThat split is exactly the partially synchronous model, and it sidesteps FLP: termination is only promised in periods of good behaviour.",
+    "link": {
+      "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  },
+  {
+    "id": "dist-why-hard-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Raft assumes a **crash-recovery** fault model with durable storage. Which of these failures fall **outside** that model, so Raft gives no safety guarantee if they happen? Select all that apply.",
+    "options": [
+      {
+        "text": "A node reboots after a power cut with its fsynced log intact.",
+        "explanation": "Inside the model. Crash-recovery means exactly this: the node halts, restarts and still has everything it made durable. Raft handles it."
+      },
+      {
+        "text": "A node comes back on a fresh VM with an empty disk but the same identity.",
+        "explanation": "Outside the model. This is amnesia: the node has forgotten its vote and its log, so it can vote twice in one term or help elect a leader missing committed entries."
+      },
+      {
+        "text": "A disk silently flips bits in a stored log entry.",
+        "explanation": "Outside the model. Silent corruption makes a node report data it never received, which is closer to a Byzantine fault. Systems add checksums to turn it back into a detectable crash."
+      },
+      {
+        "text": "A node is paused for 30 seconds by the hypervisor.",
+        "explanation": "Inside the model. A pause looks like a slow or temporarily crashed node. Raft stays safe; the node simply rejoins and learns about any newer term."
+      },
+      {
+        "text": "A disk controller acknowledges fsync but loses the write on power failure.",
+        "explanation": "Outside the model. The node believes its vote or log entry is durable when it is not, so after a restart it can contradict what it promised. This is a known cause of real data loss."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Ask of each failure: \"does the node behave as a crashed node that restarts with all its durable state?\"\n\n| Failure | Behaves like |\n|---|---|\n| Reboot, disk intact | crash-recovery |\n| Fresh disk, same id | amnesia |\n| Bit flip | arbitrary (Byzantine-ish) |\n| 30 s pause | slow node |\n| Lying fsync | amnesia |\n\nOnly the first and fourth fit the model. The lesson: the fault model is a contract with your hardware and operations. If you replace a node, give it a **new identity** and add it through a membership change, rather than reusing the old one with an empty disk.",
+    "link": {
+      "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  },
+  {
+    "id": "dist-why-hard-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your cluster manager marks a node dead after **1 second** without a heartbeat and immediately moves its shards elsewhere. Nodes run a JVM that has occasional 2-second GC pauses under load. What is the most likely result during a traffic spike?",
+    "options": [
+      {
+        "text": "Faster recovery, because failures are detected within a second.",
+        "explanation": "Wrong. Most of the \"failures\" detected are healthy nodes in a GC pause. Detecting them quickly just triggers needless work."
+      },
+      {
+        "text": "Nothing unusual: heartbeats are sent on a separate thread, so GC can't affect them.",
+        "explanation": "Wrong. A stop-the-world pause halts every application thread, including the heartbeat sender."
+      },
+      {
+        "text": "Split brain is impossible because the timeout is short.",
+        "explanation": "Wrong. A short timeout makes false suspicion more likely, not less. It does nothing to prevent two nodes acting on the same shard."
+      },
+      {
+        "text": "Flapping: healthy nodes are repeatedly declared dead, shards move back and forth, and the extra load causes more pauses.",
+        "explanation": "Correct. A timeout shorter than normal pauses produces false positives. Each one triggers rebalancing work, which adds load, which causes more GC, a classic feedback loop."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Under load, a node pauses for 2 s.\n2. After 1 s the manager declares it dead and starts moving its shards (copying data, redirecting traffic).\n3. At 2 s the node resumes, healthy, and finds its shards gone or contested.\n4. The rebalancing traffic loads the surviving nodes, which then pause too.\n\nFixes:\n\n- Set the timeout above normal pause and latency behaviour (measure it), or use an **adaptive** detector such as phi accrual.\n- Add a grace period or a \"suspect\" state before acting.\n- Rate-limit rebalancing so a burst of suspicions can't move everything at once.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "dist-why-hard-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Node n1's network card starts dropping **inbound** packets but still sends outbound ones. n1 sends heartbeats to n2 and n3 as normal. What does each side conclude?",
+    "options": [
+      {
+        "text": "Everyone agrees n1 is down, because its network card is faulty.",
+        "explanation": "Wrong. n2 and n3 keep receiving n1's heartbeats, so from their side n1 looks perfectly healthy."
+      },
+      {
+        "text": "n1 suspects n2 and n3 are dead, while n2 and n3 believe n1 is alive.",
+        "explanation": "Correct. This is an asymmetric partition. n1 hears nothing, so it suspects everyone else. The others hear n1 fine, so they see no problem, even though n1 cannot receive their requests or replies."
+      },
+      {
+        "text": "n2 and n3 suspect n1, while n1 believes everything is fine.",
+        "explanation": "Wrong, it's the other way round. Outbound traffic from n1 still works, so n2 and n3 hear it; n1 is the one hearing nothing."
+      },
+      {
+        "text": "Nobody notices anything, because TCP retransmits the lost packets.",
+        "explanation": "Wrong. TCP retransmits, but every retransmission is dropped too. Connections into n1 stall and eventually time out."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Draw the two directions separately:\n\n```\nn1 --> n2, n3   works\nn1 <-- n2, n3   dropped\n```\n\n- n1: no heartbeats or replies arrive, so it times out on everyone.\n- n2, n3: n1's heartbeats arrive on time, so it looks alive, yet requests they send to it never get answered.\n\nWhy it matters: if n1 is a leader, it may keep sending heartbeats that suppress elections while being unable to receive acknowledgements, so nothing commits. Partial and asymmetric failures (sometimes called **gray failures**) are why systems use end-to-end health checks (can you actually do work?) and indirect probes, rather than \"did I hear a heartbeat?\".",
+    "link": {
+      "title": "Jepsen analyses of real databases under partition",
+      "url": "https://jepsen.io/analyses"
+    }
+  },
+  {
+    "id": "dist-why-hard-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A checkout client sends `POST /charges` with an idempotency key, times out, and retries. Which client design actually prevents double charges?",
+    "options": [
+      {
+        "text": "Generate a new random key on each attempt so the server can tell attempts apart.",
+        "explanation": "Wrong. A new key makes every retry look like a brand-new charge, so the server will happily process it again. The key must identify the operation, not the attempt."
+      },
+      {
+        "text": "Generate one key per checkout, store it with the order, and reuse it on every retry.",
+        "explanation": "Correct. The server stores the result against the key. A retry with the same key returns the original result instead of charging again, even if the first attempt did succeed."
+      },
+      {
+        "text": "Use the current timestamp as the key.",
+        "explanation": "Wrong. Each retry happens at a different time, so the key changes, which is the same mistake as a random key per attempt."
+      },
+      {
+        "text": "Skip the key and wait longer before retrying.",
+        "explanation": "Wrong. However long you wait, a timeout still can't tell you whether the first charge happened. Waiting only reduces how often the problem shows up."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The key must be **the same for every attempt at the same logical operation**:\n\n```\nkey = order.id + \":charge\"\nattempt 1 -> timeout (charged!)\nattempt 2 -> server: seen key,\n             return first result\n```\n\nStore the key with the order *before* the first attempt, so even a client crash and restart reuses it. On the server, record the key and the result atomically with the charge, otherwise a crash between them reopens the gap.",
+    "link": {
+      "title": "Making retries safe with idempotent APIs (AWS)",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    }
+  },
+  {
+    "id": "dist-why-hard-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A request passes through a web tier, an API tier and a database tier. Each tier makes **up to 3 attempts** on failure. The database starts timing out on every call. How many database calls can one user request now trigger, and what's the usual fix?",
+    "options": [
+      {
+        "text": "9 calls; add jitter to the backoff.",
+        "explanation": "Wrong count. 9 is the API tier's total (3 web attempts × 3 API attempts). Each of those makes 3 database attempts, giving 27. Jitter spreads retries out but doesn't reduce their number."
+      },
+      {
+        "text": "3 calls; nothing needs fixing because only the database retries.",
+        "explanation": "Wrong. Every tier retries independently, so the attempts multiply rather than add."
+      },
+      {
+        "text": "27 calls; retry at a single layer and use retry budgets or circuit breakers.",
+        "explanation": "Correct. 3 × 3 × 3 = 27. Retrying at one layer caps amplification at 3×, and a retry budget or circuit breaker stops retries entirely when the failure rate is high."
+      },
+      {
+        "text": "81 calls; remove all retries.",
+        "explanation": "Wrong. 81 would be four tiers. Removing every retry also throws away the benefit for brief, transient errors; the aim is to bound retries, not ban them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Multiply attempts down the stack:\n\n| Tier | Attempts | Running total |\n|---|---|---|\n| Web | 3 | 3 |\n| API | 3 each | 9 |\n| DB | 3 each | **27** |\n\nSo a database that is already struggling receives 27× its normal load from the retries alone, which keeps it down. Standard practice:\n\n1. Retry at **one** layer.\n2. Exponential backoff with jitter.\n3. A **retry budget** (e.g. retries may add at most 10% extra load) or a circuit breaker that fails fast when errors are widespread.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  }
+]

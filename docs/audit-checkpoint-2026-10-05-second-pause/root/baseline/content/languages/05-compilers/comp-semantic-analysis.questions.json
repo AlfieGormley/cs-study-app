@@ -1,0 +1,377 @@
+[
+  {
+    "id": "comp-semantic-analysis-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What AST does Calc's parser produce for the source `((7))`?",
+    "options": [
+      {
+        "text": "`Paren(Paren(Num(7)))`",
+        "explanation": "Calc has no `Paren` node. Brackets only shape the tree during parsing; once the structure is captured they carry no meaning, so the AST drops them."
+      },
+      {
+        "text": "`Num(7)`",
+        "explanation": "Correct. `atom` sees `(`, parses the inner expression and returns it directly, so each pair of brackets disappears. The AST keeps only what affects meaning."
+      },
+      {
+        "text": "`expr(term(factor(Num(7))))`",
+        "explanation": "That is closer to a concrete parse tree, which records every grammar rule. The AST collapses single-child chains."
+      },
+      {
+        "text": "A syntax error, because brackets around a single number are redundant",
+        "explanation": "Redundant brackets are valid in the grammar: `atom = \"(\" expr \")\"` accepts any expression, including a number."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `atom` reads `(` and calls `expr()`.\n2. That `expr` reaches `atom` again, reads the second `(`, and calls `expr()`.\n3. The innermost call returns `Num(7)`.\n4. Each `atom` checks for `)` and returns the inner node unchanged.\n\nSo the result is `Num(7)`. A concrete syntax tree would keep both pairs of brackets, which is what a code formatter needs but a compiler does not.",
+    "link": {
+      "title": "Abstract syntax tree — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Abstract_syntax_tree"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does Calc's checker report for `let x = 5 in y + 1`?",
+    "options": [
+      {
+        "text": "Nothing: the program is syntactically valid",
+        "explanation": "Valid syntax is the parser's concern. The checker looks for meaning problems, and there are two here."
+      },
+      {
+        "text": "One warning: `x` is never used",
+        "explanation": "That warning does appear, but it misses the more serious problem: `y` is used and never defined."
+      },
+      {
+        "text": "An error for undefined `y`, and a warning that `x` is never used",
+        "explanation": "Correct. `lookup('y')` finds nothing in any scope, which is an error. After the body is checked, `x`'s `used` flag is still false, which is a warning."
+      },
+      {
+        "text": "An error for undefined `x`",
+        "explanation": "`x` is defined by the `let`; it is just never referenced."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check the value `5`: nothing to do.\n2. Push a scope and define `x` (slot 0).\n3. Check the body `y + 1`. `lookup('y')` searches the inner scope, then the global scope: not found. Record `undefined name 'y'`.\n4. Pop the scope. `x.used` is still `False`: record the warning.\n\nThe real output is `[\"13: undefined name 'y'\"]` and `[\"0: 'x' is never used\"]`.",
+    "link": {
+      "title": "Symbol table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Symbol_table"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does `evaluate(parse(\"let x = 2 in (let x = 10 in x) + x\"), {})` return?",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "This assumes the inner `x = 10` leaks out and replaces the outer one. The inner binding only lasts for its own body."
+      },
+      {
+        "text": "12",
+        "explanation": "Correct. The bracketed `let` sees its own `x` (10). Once it ends, its environment is discarded, and the second `x` sees the outer binding (2). 10 + 2 = 12."
+      },
+      {
+        "text": "4",
+        "explanation": "This ignores the inner binding entirely; inside the brackets, `x` refers to the nearest enclosing definition, which is 10."
+      },
+      {
+        "text": "A `KeyError`",
+        "explanation": "Both uses of `x` are inside the outer `let`'s body, so `x` is always defined."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Outer `let`: env = `{x: 2}`.\n2. Left operand: inner `let` makes a *new* dict `{x: 10}` and evaluates `x` → 10.\n3. The inner dict is never stored anywhere, so the outer env is still `{x: 2}`.\n4. Right operand: `x` → 2.\n5. 10 + 2 = 12.\n\nThe checker would also warn that the inner `x` shadows the outer one.",
+    "link": {
+      "title": "Resolving and Binding — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/resolving-and-binding.html"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "There is no outer `x`. Why does the checker report `undefined name 'x'` for `let x = x + 1 in x`?",
+    "options": [
+      {
+        "text": "Because `check_Let` checks the value `x + 1` before it defines `x`, so the inner `x` is looked up in the enclosing scopes and not found",
+        "explanation": "Correct. Calc's rule is that a `let`'s name is visible only in the body. The order of the two lines in `check_Let` is what implements that rule."
+      },
+      {
+        "text": "Because a name cannot appear on both sides of `=`",
+        "explanation": "There is no such rule. With an outer `x` in scope, `let x = 1 in let x = x + 1 in x` is valid and gives 2."
+      },
+      {
+        "text": "Because the parser rejects it first",
+        "explanation": "The parser happily accepts it: syntactically, `x + 1` is a valid expression. This is a semantic error."
+      },
+      {
+        "text": "Because the body `x` is checked before the value",
+        "explanation": "The body is checked last, after `x` is defined, and that `x` is fine. The failing lookup is the one in the value."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `check_Let` calls `self.check(node.value)` first. The scope stack is still `[{}]`.\n2. Checking `x + 1` looks up `x`: not found. Error at position 8.\n3. Only then does it push a scope and define `x`.\n4. The body `x` is found in the new scope and is fine.\n\nReversing steps 1 and 3 would give `let rec` semantics, letting a binding refer to itself.",
+    "link": {
+      "title": "Resolving and Binding — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/resolving-and-binding.html"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A teammate moves `self.check(node.value)` to *after* `self.scopes.define(...)` in `check_Let`. What happens with `let x = x + 1 in x` (no outer `x`)?",
+    "options": [
+      {
+        "text": "The checker still reports `undefined name 'x'`",
+        "explanation": "After the change, `x` is already defined when `x + 1` is checked, so `lookup` succeeds and no error is recorded."
+      },
+      {
+        "text": "The checker reports nothing, but `evaluate` raises `KeyError` because the value is computed before `x` exists at runtime",
+        "explanation": "Correct. The checker and the evaluator now disagree about scoping. The checker approves a program that the evaluator cannot run; this is exactly the kind of bug a test like `let x = x in x` must catch."
+      },
+      {
+        "text": "The program now evaluates to 1, treating the missing `x` as 0",
+        "explanation": "Nothing in Calc defaults names to 0. The evaluator looks `x` up in a dict that does not contain it."
+      },
+      {
+        "text": "It loops forever, because `x` is defined in terms of itself",
+        "explanation": "Neither the checker nor the evaluator iterates to a fixed point; the evaluator simply fails to find `x`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. New order: push scope, define `x`, check `x + 1`, check body.\n2. Checking `x + 1` now finds `x` in the inner scope. No error. Its `used` flag is set.\n3. At runtime, `evaluate` still computes the value *before* extending the environment (`v = evaluate(value, env)` with the old env).\n4. `env['x']` raises `KeyError`.\n\nThe checker's job is to reject exactly the programs the runtime cannot handle, so its scoping must mirror the evaluator's.",
+    "link": {
+      "title": "Resolving and Binding — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/resolving-and-binding.html"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Someone deletes the `self.scopes.pop()` line in `check_Let`. Which program is now wrongly accepted?",
+    "options": [
+      {
+        "text": "`let x = 1 in x`",
+        "explanation": "This program is valid with or without the bug."
+      },
+      {
+        "text": "`let x = 1 in let y = 2 in x + y`",
+        "explanation": "Valid either way: both names are used inside their scopes."
+      },
+      {
+        "text": "`y + 1`",
+        "explanation": "No `let` runs, so no scope is pushed or popped; `y` is still undefined and reported."
+      },
+      {
+        "text": "`(let x = 1 in x) + x`",
+        "explanation": "Correct. Without the pop, `x` stays in scope after its `let` ends, so the final `x` is found. The correct checker reports `undefined name 'x'` at position 19, and the evaluator would raise `KeyError`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The left operand defines `x` in a new scope and uses it.\n2. With the bug, that scope is never popped.\n3. The right operand `x` is then looked up and found in the leaked scope.\n4. No error, but at runtime the evaluator's environment for the right operand has no `x`, so it fails.\n\nScope bugs like this are why compilers test the *end* of every scope, not just its beginning.",
+    "link": {
+      "title": "Symbol table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Symbol_table"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these problems does Calc's checker report as an error before the program runs? Select all that apply.",
+    "options": [
+      {
+        "text": "`y + 1` with `y` never defined",
+        "explanation": "Correct. `lookup` fails and the checker records `undefined name 'y'`."
+      },
+      {
+        "text": "`3 / 0`",
+        "explanation": "Correct. The right operand is the literal `Num(0)`, which `check_BinOp` compares against directly."
+      },
+      {
+        "text": "`1 / (2 - 2)`",
+        "explanation": "Not caught. The checker only recognises a literal zero; `2 - 2` is a `BinOp`. Deciding whether an arbitrary expression is zero is undecidable in general, though constant folding would catch this case."
+      },
+      {
+        "text": "`2 ^ (1 - 2)`, a negative exponent",
+        "explanation": "Not caught. Calc only discovers the negative exponent at runtime, when `power` raises `ArithmeticError`."
+      },
+      {
+        "text": "`let x = 1 in let x = 2 in x`",
+        "explanation": "Shadowing is legal in Calc; the checker records a *warning*, not an error."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Run each through the checker mentally:\n\n1. `y + 1`: Var lookup fails → error.\n2. `3 / 0`: `node.right == Num(0)` → error.\n3. `1 / (2 - 2)`: right is `BinOp('-', 2, 2)`, not `Num(0)` → passes.\n4. `2 ^ (1 - 2)`: no check for `^` → passes; fails at runtime.\n5. Shadowing → warning only.\n\nRunning the real checker on `1/(2-2) + 2^(1-2) + 3/0` reports a single error, for the `3/0` at position 21.",
+    "link": {
+      "title": "Symbol table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Symbol_table"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This Python code raises `UnboundLocalError` on the `print` line. Why?\n\n```python\nx = 1\ndef g():\n    print(x)\n    x = 2\ng()\n```",
+    "options": [
+      {
+        "text": "Python reads the global `x`, then fails when assigning because globals are read-only",
+        "explanation": "Assigning inside a function does not touch the global; it creates a local. And the error happens at the `print`, before the assignment runs."
+      },
+      {
+        "text": "Python executes functions bottom-up",
+        "explanation": "Statements run top to bottom. The issue is a decision made at compile time, before anything runs."
+      },
+      {
+        "text": "The compiler's symbol table marks `x` as local to `g` because it is assigned anywhere in `g`, so `print(x)` reads an empty local slot",
+        "explanation": "Correct. CPython builds the symbol table when it compiles `g`. One assignment makes `x` local for the whole function, so the `print` compiles to a fast local load of a slot that has not been filled."
+      },
+      {
+        "text": "`print` cannot take a global argument",
+        "explanation": "`print(x)` works fine if `g` contains no assignment to `x`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compiling `g`, CPython's symtable pass sees `x = 2` and classifies `x` as local to `g`.\n2. Every use of `x` in `g` therefore compiles to a local-slot load, not `LOAD_GLOBAL`.\n3. At runtime the `print` executes first, and the slot is empty.\n4. CPython raises `UnboundLocalError: cannot access local variable 'x' where it is not associated with a value`.\n\nFix: `global x` (to assign the global), or rename the local. This is the same compile-time scope resolution Calc's checker does.",
+    "link": {
+      "title": "Why am I getting an UnboundLocalError? — Python FAQ",
+      "url": "https://docs.python.org/3/faq/programming.html#why-am-i-getting-an-unboundlocalerror-when-the-variable-has-a-value"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Calc's `Scopes` gives every binding a fresh slot number and never reuses one. How many slots does `(let x = 1 in x) + (let y = 2 in y)` get, and what could a smarter compiler do?",
+    "options": [
+      {
+        "text": "1 slot, because the checker already reuses slots",
+        "explanation": "`define` always uses `self.nslots` and increments it; nothing ever decrements it. The real checker reports 2."
+      },
+      {
+        "text": "2 slots, and they can never share because names differ",
+        "explanation": "Names do not matter for storage. What matters is whether the values are needed at the same time, and here they are not."
+      },
+      {
+        "text": "0 slots, because the values are constants and are folded away",
+        "explanation": "The checker does not fold constants; it assigns a slot to every `let`. An optimiser might later remove them, but that is a separate pass."
+      },
+      {
+        "text": "2 slots; since `x` and `y` are never alive at the same time, a smarter compiler could give both slot 0",
+        "explanation": "Correct. `nslots` is 2. The two scopes do not overlap, so their bindings could share storage. Reusing slots when lifetimes are disjoint is the same idea as register allocation in lesson 6."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Left `let` defines `x` with slot 0; `nslots` becomes 1.\n2. Its scope is popped, but `nslots` stays 1.\n3. Right `let` defines `y` with slot 1; `nslots` becomes 2.\n4. `x` is dead before `y` is born, so a compiler could set `nslots` back when a scope closes (slot = current depth), using 1 slot.\n\nCPython does not reuse slots for different local names, but register allocators and JVM bytecode compilers routinely share storage between variables with disjoint lifetimes.",
+    "link": {
+      "title": "Symbol table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Symbol_table"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You implement the symbol table as a *dictionary of stacks*: `table[name]` is a stack of symbols, and lookup reads the top. What extra bookkeeping is needed when a scope closes?",
+    "options": [
+      {
+        "text": "None: the garbage collector removes symbols that are out of scope",
+        "explanation": "The symbols are still referenced from `table[name]`; nothing becomes garbage until you pop them explicitly."
+      },
+      {
+        "text": "Clear the whole dictionary and rebuild it from the outer scopes",
+        "explanation": "That would be correct but costs O(all names) per scope exit, throwing away the design's whole advantage."
+      },
+      {
+        "text": "Each scope must remember which names it defined, so that on exit it can pop exactly those names' stacks",
+        "explanation": "Correct. Lookup becomes a single hash probe, O(1) regardless of depth, but closing a scope needs a list of the names it introduced. That is the trade."
+      },
+      {
+        "text": "Lookups must now search every stack from bottom to top",
+        "explanation": "The point of the design is that the innermost binding is always on top of its name's stack, so lookup reads one element."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the two designs:\n\n```\nstack of dicts:   lookup O(depth)\n                  exit   O(1): pop dict\ndict of stacks:   lookup O(1): top\n                  exit   O(k): pop k\n                         names defined\n```\n\nSo each scope keeps a list of the names it defined. On exit, for each name, `table[name].pop()`, deleting the key if the stack empties. This wins when nesting is deep or the global scope is huge, such as C translation units that include thousands of declarations from headers.",
+    "link": {
+      "title": "Symbol table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Symbol_table"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Using the lesson's `type_of` checker (with `Bool` and `If` added), which expressions are rejected with a type error? Select all that apply. Assume `x` has type `int`.",
+    "options": [
+      {
+        "text": "`if 1 then 2 else 3`",
+        "explanation": "Correct. `need(c, \"bool\", env)` sees `int` for the condition."
+      },
+      {
+        "text": "`if true then 1 else false`",
+        "explanation": "Correct. The `then` branch is `int`, so `need(b, \"int\", env)` rejects the `bool` else-branch. Both branches must agree so the `if` has a single type."
+      },
+      {
+        "text": "`if true then 1 else 2 + x`",
+        "explanation": "Accepted: condition is `bool`, both branches are `int` (`2 + x` is `int` because `x` is `int`)."
+      },
+      {
+        "text": "`1 + true`",
+        "explanation": "Correct. The `+` case requires both operands to be `int`, and `true` is `bool`."
+      },
+      {
+        "text": "`if true then x else x`",
+        "explanation": "Accepted: both branches have type `int`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Apply the rules case by case:\n\n| Expression | Check that fails |\n|---|---|\n| `if 1 ...` | cond: int ≠ bool |\n| `... else false` | else: bool ≠ int |\n| `... else 2 + x` | none: int, int |\n| `1 + true` | right: bool ≠ int |\n| `... x else x` | none |\n\nNote that the checker never evaluates anything. `if true then 1 else false` would *run* fine (it always picks 1), but a static type system rejects it because it reasons about all paths, not the one taken.",
+    "link": {
+      "title": "Hindley–Milner type system — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A checker finds that `y` in `let z = y + 1 in z * 2 + z` is undefined. A naive implementation then reports four more errors about `z`, `+` and `*`. What technique stops this cascade?",
+    "options": [
+      {
+        "text": "Stop compiling at the first error",
+        "explanation": "This avoids cascades but throws away the ability to report several genuine, independent errors in one compile, which users rely on."
+      },
+      {
+        "text": "Give the failing node a special *error type* that is silently compatible with every check, so later checks involving it stay quiet",
+        "explanation": "Correct. `y` gets type `<error>`; `y + 1` then also gets `<error>` without a new message, and so does `z`. Only the root cause is reported. Clang, rustc and TypeScript all do this."
+      },
+      {
+        "text": "Report errors in reverse order so the root cause is last",
+        "explanation": "Ordering does not remove the bogus messages; they would still all appear."
+      },
+      {
+        "text": "Treat undefined names as global variables",
+        "explanation": "This hides a real error. The user wants to hear about `y`, just only once."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Lookup of `y` fails: report one error, and return the type `<error>` for that node.\n2. `y + 1`: one operand is `<error>`. Rule: if any operand is `<error>`, the result is `<error>` and no message is printed.\n3. `z` is bound with type `<error>`.\n4. `z * 2 + z`: every check involves `<error>`, so nothing is reported.\n\nResult: one accurate message instead of five. The same idea appears in parsers as panic-mode recovery.",
+    "link": {
+      "title": "Abstract syntax tree — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Abstract_syntax_tree"
+    }
+  }
+]

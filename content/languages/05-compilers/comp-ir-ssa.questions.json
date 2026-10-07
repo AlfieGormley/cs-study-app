@@ -1,0 +1,373 @@
+[
+  {
+    "id": "comp-ir-ssa-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "With `x` as an input, how many instructions does `to_ir` emit for `2 * x + 1` (not counting `ret`)?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "Three-address code allows only one operator per instruction, and there are two operators here, `*` and `+`."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. `t1 = 2 * x`, then `t2 = t1 + 1`, then `ret t2`. Constants and inputs are operands, not instructions."
+      },
+      {
+        "text": "3",
+        "explanation": "The number `2`, the input `x` and the number `1` do not need their own instructions; they appear directly as operands."
+      },
+      {
+        "text": "5",
+        "explanation": "This counts every AST node. Only operator nodes produce instructions; `Num` and `Var` just return an operand."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `lower(BinOp('+', BinOp('*', 2, x), 1))` first lowers the left side.\n2. `BinOp('*', 2, x)`: lower `2` → operand `2`; lower `x` → operand `'x'`; emit `t1 = 2 * x`.\n3. Lower `1` → operand `1`.\n4. Emit `t2 = t1 + 1`. Result operand: `t2`.\n\n```\nt1 = 2 * x\nt2 = t1 + 1\nret t2\n```",
+    "link": {
+      "title": "Static single-assignment form — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_single-assignment_form"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these snippets is in SSA form?",
+    "options": [
+      {
+        "text": "`x = 1; x = x + 1; return x`",
+        "explanation": "`x` is assigned twice, which SSA forbids. Renaming gives `x1 = 1; x2 = x1 + 1; return x2`."
+      },
+      {
+        "text": "`a = 1; b = a + 1; a = b * 2; return a`",
+        "explanation": "`a` has two assignments."
+      },
+      {
+        "text": "`a = 1; b = a + 1; c = b * 2; return c`",
+        "explanation": "Correct. Each name is assigned exactly once in the program text, so every use refers to one known definition."
+      },
+      {
+        "text": "`for i in range(3): s = s + i`",
+        "explanation": "Repeated execution alone does not violate static single assignment. Here s has no initial reaching definition and the loop-carried value needs an explicit phi and renamed definitions."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "SSA's rule is *static*: in the program text, each variable has exactly one assignment.\n\n1. Option A: two assignments to `x`. Not SSA.\n2. Option B: two to `a`. Not SSA.\n3. Option C: `a`, `b`, `c` once each. SSA.\n4. Option D: a loop body is one textual assignment that runs many times, and its value merges with the initial one at the loop header, which requires `s1 = phi(s0, s2)`. As written, not SSA.",
+    "link": {
+      "title": "Static single-assignment form — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_single-assignment_form"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does `show(*optimise(*to_ir(parse(\"let a = 4 in a * a - 6\"))))` print?",
+    "options": [
+      {
+        "text": "`t1 = 4 * 4` / `t2 = t1 - 6` / `ret t2`",
+        "explanation": "That is the unoptimised IR. `const_fold` sees two constant operands and computes both instructions."
+      },
+      {
+        "text": "`t2 = 16 - 6` / `ret t2`",
+        "explanation": "`const_fold` propagates `t1 = 16` and then folds `16 - 6` in the same pass, so nothing remains."
+      },
+      {
+        "text": "`ret 10`",
+        "explanation": "Correct. `let` turns `a` into the constant 4, `4 * 4` folds to 16, `16 - 6` folds to 10, and the result operand becomes the constant 10."
+      },
+      {
+        "text": "`ret a * a - 6`",
+        "explanation": "Calc eliminates let-binding names here; input parameter names can remain; `let` replaces `a` by its operand during lowering."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Lowering: `a` maps to operand 4, so we get `t1 = 4 * 4`, `t2 = t1 - 6`, `ret t2`.\n2. `const_fold`: `t1` has constant args → known[t1] = 16.\n3. `t2`: args become (16, 6) → known[t2] = 10.\n4. Result `t2` is known, so the result becomes 10 and no instructions remain.\n5. The next round changes nothing, so `optimise` returns `ret 10`.",
+    "link": {
+      "title": "Static single-assignment form — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_single-assignment_form"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You remove the commutative sorting from `cse`. How many instructions (excluding `ret`) remain after optimising `(x + y) * (y + x)`?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "Even with perfect CSE you still need `x + y` and the multiply: two instructions."
+      },
+      {
+        "text": "2",
+        "explanation": "That is the result *with* sorting, where `y + x` is recognised as `x + y`."
+      },
+      {
+        "text": "0",
+        "explanation": "The value depends on the inputs `x` and `y`, so it cannot be folded to a constant."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. Without sorting, the keys `('+', ('x','y'))` and `('+', ('y','x'))` differ, so `t2 = y + x` survives and `t3 = t1 * t2` cannot become `t1 * t1`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Lowered: `t1 = x + y`, `t2 = y + x`, `t3 = t1 * t2`.\n2. Without sorting, CSE's dictionary has `('+', ('x', 'y'))` for `t1`. `t2`'s key is `('+', ('y', 'x'))`: not found, so it is kept.\n3. No other pass helps: nothing is constant, there is no identity, and every instruction is used.\n4. Three instructions remain.\n\nThis is why value-numbering implementations canonicalise commutative operations, for example by ordering operands by value number.",
+    "link": {
+      "title": "Value numbering — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Value_numbering"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Someone simplifies `dce` by deleting the `may_trap` check. In an IR-only test that bypasses the checker, what happens to the IR for (1/0)*0?",
+    "options": [
+      {
+        "text": "Nothing changes: `optimise` still keeps `t1 = 1 / 0`",
+        "explanation": "The only thing keeping `t1` alive was `may_trap`; once `t1 * 0` simplifies to 0, `t1` is no longer used."
+      },
+      {
+        "text": "The compiler crashes with `ZeroDivisionError`",
+        "explanation": "`fold` refuses to fold division by zero, so the compiler never evaluates `1 / 0`."
+      },
+      {
+        "text": "The optimised program returns 0 instead of failing with division by zero",
+        "explanation": "Correct. `simplify` turns `t2 = t1 * 0` into 0, then DCE sees nothing using `t1` and deletes the division. The program's behaviour changes, which an optimiser must never do."
+      },
+      {
+        "text": "The checker now rejects the program",
+        "explanation": "The checker runs before optimisation and does report `division by zero` here, but that does not change what the optimiser does to the IR."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. IR: `t1 = 1 / 0`, `t2 = t1 * 0`, `ret t2`.\n2. `const_fold`: `fold('/', 1, 0)` returns `None`, so `t1` stays.\n3. `simplify`: `t1 * 0` → 0, so the result becomes `0`.\n4. `dce` without `may_trap`: live = {0}; `t1` is not live → deleted.\n5. Output: `ret 0`.\n\nOriginal program: raises. Optimised: returns 0. In C this would be allowed (division by zero is undefined behaviour); in Calc and Python it is a miscompilation.",
+    "link": {
+      "title": "What Every C Programmer Should Know About Undefined Behavior — LLVM Blog",
+      "url": "https://blog.llvm.org/2011/05/what-every-c-programmer-should-know.html"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Convert this loop to SSA. Where does a phi function for `i` go?\n\n```\ni = 0\nwhile i < n:\n    i = i + 1\nreturn i\n```",
+    "options": [
+      {
+        "text": "At the start of the loop body, `i1 = phi(i0, i2)`",
+        "explanation": "The body is entered only from the loop test, which already has the merged value. The merge must happen where the two incoming edges meet."
+      },
+      {
+        "text": "At the loop header (the `i < n` test), `i1 = phi(i0 from entry, i2 from body)`",
+        "explanation": "Correct. The header has two predecessors: entry, where `i` is `i0 = 0`, and the end of the body, where it is `i2 = i1 + 1`. That merge point is in the dominance frontier of the body's assignment."
+      },
+      {
+        "text": "After `return i`",
+        "explanation": "Nothing executes after `return`; phis must appear at the top of a block where paths merge."
+      },
+      {
+        "text": "No phi is needed: `i` is assigned once inside the loop",
+        "explanation": "Textually `i` has two assignments (`i = 0` and `i = i + 1`), and their values meet at the header."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Blocks: entry (`i0 = 0`), header (`i < n`?), body (`i2 = i1 + 1`), exit (`return i1`).\n2. The header has two incoming edges: from entry and from body.\n3. Each edge brings a different version of `i`, so the header needs `i1 = phi(i0, i2)`.\n4. The test, the body and the return all use `i1`.\n\n```\nheader:\n  i1 = phi [i0, entry],\n           [i2, body]\n  if i1 < n goto body\n  else goto exit\nbody:\n  i2 = i1 + 1\n  goto header\nexit:\n  return i1\n```",
+    "link": {
+      "title": "Efficiently Computing SSA Form — Cytron et al.",
+      "url": "https://www.cs.utexas.edu/~pingali/CS380C/2010/papers/ssaCytron.pdf"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Why do optimisers prefer SSA? Select all that apply.",
+    "options": [
+      {
+        "text": "Each use of a value has exactly one definition, so def-use chains are trivial",
+        "explanation": "Correct. Finding where `t5` came from is a lookup, not a data-flow analysis."
+      },
+      {
+        "text": "An unconditional fact proved about a value, such as \"`t3` is 16\", holds at every use",
+        "explanation": "Correct. Nothing can reassign `t3`, so constant propagation can substitute everywhere without checking for intervening writes."
+      },
+      {
+        "text": "SSA programs run faster, because phi functions are cheap CPU instructions",
+        "explanation": "Phis are not machine instructions. They are removed before code generation and turned into copies, so SSA itself does not make code faster."
+      },
+      {
+        "text": "Two deterministic pure arithmetic instructions in one block with the same operator and operand names compute the same value",
+        "explanation": "Correct. This is what makes value numbering (CSE) simple: same names mean same values."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each claim:\n\n1. **One definition per name.** That is the definition of SSA. True.\n2. **Facts hold everywhere.** Follows from 1: no later assignment can invalidate them. True.\n3. **Phis are fast instructions?** LLVM phi semantics are lowered into target operations, often edge copies that coalescing can remove. False.\n4. **Same names, same values.** Without SSA, `a + b` twice could differ if `a` was reassigned between them. With SSA it cannot. True.",
+    "link": {
+      "title": "Static single-assignment form — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_single-assignment_form"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With input `x`, what does Calc's optimiser produce for `let a = x * 1 in let b = a + 0 in b * b - x * x`?",
+    "options": [
+      {
+        "text": "`ret 0`",
+        "explanation": "Correct. `simplify` reduces `a` and `b` to `x`, so `b * b` becomes `x * x`. CSE then sees two identical `x * x`, `simplify` turns `t - t` into 0, and DCE removes the rest."
+      },
+      {
+        "text": "`t3 = x * x` / `t5 = t3 - t3` / `ret t5`",
+        "explanation": "This stops before the second round. `optimise` repeats until nothing changes, and `t3 - t3` simplifies to 0."
+      },
+      {
+        "text": "`t1 = x * 1` / `t3 = t1 * t1` / `t4 = x * x` / `t5 = t3 - t4` / `ret t5`",
+        "explanation": "This ignores `simplify`: `x * 1` is just `x`, and `t2 = t1 + 0` is just `t1`."
+      },
+      {
+        "text": "`ret x * x - x * x`",
+        "explanation": "The IR has no nested expressions; and in any case the passes reduce this to a constant."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Lowered:\n\n```\nt1 = x * 1\nt2 = t1 + 0\nt3 = t2 * t2\nt4 = x * x\nt5 = t3 - t4\n```\n\nRound 1: `simplify` aliases t1 → x and t2 → x, so `t3 = x * x`. `cse` finds `t4` has the same key, aliases t4 → t3, giving `t5 = t3 - t3`.\n\nRound 2: `simplify` sees `a == b` for `-`, so t5 → 0. `dce` deletes `t3`.\n\nRound 3: no change. Result: `ret 0`.",
+    "link": {
+      "title": "Value numbering — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Value_numbering"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With inputs `x` and `y`, which instructions remain after optimising `x / 2 + 0 * (y / x)`?",
+    "options": [
+      {
+        "text": "Only `ret 0`",
+        "explanation": "`x / 2` is needed for the result, so the answer cannot be the constant 0."
+      },
+      {
+        "text": "`t1 = x / 2`, then `ret t1`",
+        "explanation": "This deletes `y / x`. Its result is unused, but `x` might be 0, and deleting it would turn an error into a normal return."
+      },
+      {
+        "text": "All four instructions remain",
+        "explanation": "`t3 = 0 * t2` and `t4 = t1 + t3` are simplified away; only side effects keep instructions alive."
+      },
+      {
+        "text": "`t1 = x / 2`, `t2 = y / x`, then `ret t1`",
+        "explanation": "Correct. `0 * t2` simplifies to 0 and `t1 + 0` to `t1`. `t2` is now unused, but `may_trap` keeps it because its divisor `x` is not a known non-zero constant."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Lowered: `t1 = x / 2`, `t2 = y / x`, `t3 = 0 * t2`, `t4 = t1 + t3`.\n2. `simplify`: `t3` → 0 (`0 in (a, b)` for `*`), then `t4 = t1 + 0` → `t1`. Result is `t1`.\n3. `dce` walking backwards from live = {t1}:\n   - `t2 = y / x`: not live, but `may_trap`: divisor `x` is a temp → keep.\n   - `t1 = x / 2`: live → keep. (Divisor 2 cannot trap.)\n4. Output: `t1 = x / 2`, `t2 = y / x`, `ret t1`.\n\nIf `x` is 0, the program still raises, as the original did.",
+    "link": {
+      "title": "What Every C Programmer Should Know About Undefined Behavior — LLVM Blog",
+      "url": "https://blog.llvm.org/2011/05/what-every-c-programmer-should-know.html"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Clang at `-O2` compiles `int gt(int x) { return x + 1 > x; }` to an instruction that simply returns 1. Why is that legal?",
+    "options": [
+      {
+        "text": "Because `x + 1 > x` is true for every `int`",
+        "explanation": "C does not define this expression when signed addition overflows; hardware wrapping does not define C semantics."
+      },
+      {
+        "text": "Because signed overflow is undefined behaviour in C, the compiler may assume `x + 1` never overflows, and then the comparison is always true",
+        "explanation": "Correct. The C standard places no requirements on a program that overflows a signed int, so the optimiser reasons as if overflow never happens. With `unsigned`, wrapping is defined and the compiler must preserve the wraparound case, possibly rewriting it as x != UINT_MAX."
+      },
+      {
+        "text": "Because Clang treats `int` as a 64-bit type",
+        "explanation": "int is 32 bits on the shown target, but its width is implementation-dependent, and overflow would still be possible with 64 bits."
+      },
+      {
+        "text": "It is a compiler bug",
+        "explanation": "It is intended and documented behaviour, and GCC does the same."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Mathematically, x + 1 > x always. A 32-bit wrapping addition would produce a negative result at INT_MAX; C signed addition does not guarantee that behavior.\n2. The C standard says signed overflow is undefined behaviour: the program has no meaning if it happens.\n3. So the compiler may assume it never happens, and under that assumption `x + 1 > x` is always true.\n4. Fold to `1`.\n\nCalc is the opposite: its errors are defined, so its optimiser must preserve them (the `may_trap` rule). Choosing what is undefined is a language design decision with big optimisation consequences.",
+    "link": {
+      "title": "What Every C Programmer Should Know About Undefined Behavior — LLVM Blog",
+      "url": "https://blog.llvm.org/2011/05/what-every-c-programmer-should-know.html"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Calc's `simplify` rules are valid for integers. Which of them remain valid for IEEE 754 doubles (using round-to-nearest, ignoring signalling NaNs, NaN payload details and floating-point status flags)? Select all that apply.",
+    "options": [
+      {
+        "text": "`x * 1` → `x`",
+        "explanation": "Correct. Multiplying by 1 returns `x` exactly for every value, including −0.0, infinities and NaN."
+      },
+      {
+        "text": "`x + 0` → `x`",
+        "explanation": "Invalid. `-0.0 + 0.0` is `+0.0`, so the sign of zero changes. (Compilers can use `x + -0.0` → `x`, which is valid.)"
+      },
+      {
+        "text": "`x * 0` → `0`",
+        "explanation": "Invalid. `inf * 0` and `NaN * 0` are NaN, and `-1.5 * 0` is `-0.0`."
+      },
+      {
+        "text": "`x - x` → `0`",
+        "explanation": "Invalid. `inf - inf` and `NaN - NaN` are NaN."
+      },
+      {
+        "text": "`x / 1` → `x`",
+        "explanation": "Correct. Dividing by 1 is exact for every double, including special values."
+      }
+    ],
+    "answer": [
+      0,
+      4
+    ],
+    "workedExample": "Test each rule on the awkward values −0.0, ∞ and NaN (results measured in Python):\n\n| x | x+0 | x*0 | x-x |\n|---|---|---|---|\n| -0.0 | 0.0 | -0.0 | 0.0 |\n| inf | inf | nan | nan |\n| nan | nan | nan | nan |\n\n`x * 1` and `x / 1` returned `x` in every case. The others each fail somewhere, which is why GCC and Clang apply them only under `-ffast-math` (or flags like `-fno-signed-zeros` and `-ffinite-math-only`).",
+    "link": {
+      "title": "Static single-assignment form — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_single-assignment_form"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`optimise` needed two rounds of its four passes to reduce `a - b + y * (k - 4)` (with k = 5 and a and b both equal to x * 5) to `ret y`. What made the second round necessary?",
+    "options": [
+      {
+        "text": "`const_fold` must always run twice",
+        "explanation": "`const_fold` folds every constant expression in one forward pass; nothing new for it to do appeared in round 2."
+      },
+      {
+        "text": "`dce` deleted an instruction that `simplify` needed",
+        "explanation": "DCE only removes unused instructions, which by definition nothing needs."
+      },
+      {
+        "text": "CSE ran after `simplify` and created `t2 - t2`, which only `simplify` can reduce to 0",
+        "explanation": "Correct. Before CSE, the subtraction was `t2 - t3`, with different names. Once CSE renamed `t3` to `t2`, the `x - x` identity applied, but `simplify` had already run that round."
+      },
+      {
+        "text": "SSA forbids optimising an instruction twice in one round",
+        "explanation": "SSA restricts assignments, not optimisations. Passes may rewrite instructions as often as they like."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Round 1:\n1. `const_fold`: k = 5, `k - 4` = 1, so `t2 = x * 5`, `t3 = x * 5`, `t6 = y * 1`.\n2. `simplify`: `y * 1` → y. `t2 - t3` has different operand names, so no rule fires.\n3. `cse`: `t3` has the same key as `t2` → alias, giving `t4 = t2 - t2`.\n\nRound 2:\n4. `simplify`: `t2 - t2` → 0, then `0 + y` → y.\n5. `dce` deletes `t2`.\n\nRound 3 changes nothing, so it stops. Running `cse` before `simplify` would have needed one fewer round here, which shows why pass ordering is tuned.",
+    "link": {
+      "title": "Value numbering — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Value_numbering"
+    }
+  }
+]

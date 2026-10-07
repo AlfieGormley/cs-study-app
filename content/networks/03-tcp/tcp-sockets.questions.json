@@ -1,0 +1,378 @@
+[
+  {
+    "id": "tcp-sockets-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On a blocking TCP socket with no local receive shutdown, recv(4096) returns b\"\" after all preceding data has been consumed. What does this indicate?",
+    "options": [
+      {
+        "text": "No data has arrived yet; call recv() again shortly",
+        "explanation": "A blocking recv() waits until data arrives; it never returns empty just because nothing is there yet. (A non-blocking socket raises BlockingIOError instead.)"
+      },
+      {
+        "text": "The peer has closed its sending side (sent FIN); there will be no more data",
+        "explanation": "Correct. An empty read is end-of-stream. Your code should stop reading and, usually, close the socket."
+      },
+      {
+        "text": "The peer sent an RST",
+        "explanation": "An RST surfaces as an exception, ConnectionResetError, not as an empty read."
+      },
+      {
+        "text": "The receive buffer is full",
+        "explanation": "A full buffer means there's plenty to read; recv() would return data immediately."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For this positive-length read, an empty result indicates end of the peer’s sending stream. Stop waiting for further input. A half-closed connection may still be usable for sending a response; then close or shut down according to the protocol. Forgetting EOF handling can create a busy loop, but the exact TCP state also depends on local shutdown history.",
+    "link": {
+      "title": "Socket Programming HOWTO — Python docs",
+      "url": "https://docs.python.org/3/howto/sockets.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An ordinary Linux TCP listener has room in its pending queues, the path is working, and no Fast Open is in use. Its process pauses in a debugger after listen(128), before accept(). Can a client’s blocking connect() succeed?",
+    "options": [
+      {
+        "text": "connect() succeeds: the kernel completes the handshake and queues the connection for accept()",
+        "explanation": "Correct. Handshakes are handled by the kernel. The connection sits in the accept queue, and the client can even send data, which waits in the server's receive buffer."
+      },
+      {
+        "text": "connect() blocks until the server calls accept()",
+        "explanation": "The kernel can perform the ordinary TCP handshake without the application accepting. The peer may even half-close before the server eventually accepts."
+      },
+      {
+        "text": "connect() fails with ConnectionRefusedError",
+        "explanation": "Refusal (RST) happens when nothing is listening. A socket in LISTEN accepts handshakes even when its process is stuck."
+      },
+      {
+        "text": "connect() times out after about two minutes",
+        "explanation": "The supplied conditions do not require waiting for acceptance or a timeout. Timeout durations are configuration-dependent."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The kernel listener can process SYN and ACK traffic while the application is paused. The client can complete its local handshake and queue data before the server calls accept(). The requested backlog is subject to platform limits and does not establish an exact universal 128-connection failure threshold.",
+    "link": {
+      "title": "SYN packet handling in the wild — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/syn-packet-handling-in-the-wild/"
+    }
+  },
+  {
+    "id": "tcp-sockets-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a TCP application that needs to distinguish messages need a framing rule, such as a length prefix, delimiter or a defined EOF boundary?",
+    "options": [
+      {
+        "text": "Because TCP may reorder bytes, and framing puts them back in order",
+        "explanation": "TCP already guarantees in-order delivery. Framing is about where messages begin and end, not order."
+      },
+      {
+        "text": "Because TCP limits each send() to one MSS",
+        "explanation": "send() is not restricted to one MSS; it can accept more, or only part of the supplied buffer. Segmentation is separate from application framing."
+      },
+      {
+        "text": "Because TCP is a byte stream and doesn't preserve the boundaries of send() calls",
+        "explanation": "Correct. The receiver may get two messages in one recv() or half a message, so it needs a rule for finding message boundaries."
+      },
+      {
+        "text": "Because framing is needed to compute TCP's checksum",
+        "explanation": "TCP checksums cover segments, independently of application message framing. They may be computed by the protocol stack or hardware offload; a kernel implementation is not required."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "TCP preserves byte order but not write boundaries. A receiver may obtain part of a message or several messages in one read. A protocol must define how to recognise its boundaries, which may include EOF. Ordinary UDP preserves the boundary of each delivered datagram, but datagrams can be lost, duplicated or truncated by an undersized receive buffer.",
+    "link": {
+      "title": "Socket Programming HOWTO — Python docs",
+      "url": "https://docs.python.org/3/howto/sockets.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "On a fresh TCP stream with no other reader, a client successfully sends b\"hello\" then b\"world\". No local receive shutdown or connection failure occurs. Which results could the server’s first recv(1024) return? Select all that apply.",
+    "options": [
+      {
+        "text": "`b\"helloworld\"`",
+        "explanation": "Possible. Both writes may arrive (or be coalesced into one segment) before the server reads."
+      },
+      {
+        "text": "`b\"hel\"`",
+        "explanation": "Possible. recv() returns whatever has arrived so far, which may be a fragment of the first write."
+      },
+      {
+        "text": "`b\"hello\"`",
+        "explanation": "Possible, and common in testing, which is why the bug of assuming it is easy to miss."
+      },
+      {
+        "text": "`b\"world\"`",
+        "explanation": "Impossible. TCP delivers bytes in order, so the first bytes returned must start with \"h\"."
+      },
+      {
+        "text": "`b\"worldhello\"`",
+        "explanation": "Impossible. Reordering is never visible through a TCP socket."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "TCP delivers received stream bytes in order; it does not preserve write boundaries or promise that a connection can never fail.\n\n1. The byte stream is `helloworld`.\n2. The first `recv()` returns some non-empty **prefix** of the bytes that have arrived: `h`, `hel`, `hello`, `hellowor`, `helloworld`...\n3. Anything that doesn't start at the first byte (`world`, `worldhello`) is impossible.\n\nSo A, B and C are possible.",
+    "link": {
+      "title": "Python socket module documentation",
+      "url": "https://docs.python.org/3/library/socket.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This code works in local tests but occasionally raises `struct.error: unpack requires a buffer of 4 bytes` in production. Why?\n\n```python\nhdr = sock.recv(4)\n(n,) = struct.unpack(\"!I\", hdr)\nbody = sock.recv(n)\n```",
+    "options": [
+      {
+        "text": "Network byte order is little-endian, so `!I` is wrong",
+        "explanation": "Network byte order is big-endian, which is exactly what `!` means. The format is fine."
+      },
+      {
+        "text": "recv(4) can return fewer than 4 bytes, for example when the header is split across segments",
+        "explanation": "Correct. recv(n) returns up to n bytes, whatever is available. The fix is a recv_exact loop. The same bug also affects `sock.recv(n)` for the body."
+      },
+      {
+        "text": "The sender's Nagle algorithm drops the header",
+        "explanation": "Nagle may delay or coalesce data, but it never drops bytes."
+      },
+      {
+        "text": "recv() must always be called with a buffer of at least 4,096 bytes",
+        "explanation": "A positive receive size smaller than 4,096 is valid. The bug is assuming the result always fills the requested length."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `recv(4)` means 'give me **at most** 4 bytes'.\n2. A local test may happen to return the complete header, but short reads are possible even on localhost.\n3. Over a real network, the 4-byte header may straddle two segments, or the peer may write it in pieces. Then `recv(4)` returns, say, 2 bytes, and `unpack` fails.\n4. `recv(n)` for the body has the same flaw, but fails silently by returning a short body.\n5. Fix: use the lesson’s recv_exact and MAX_MSG, handling EOF/errors and bounding the decoded size before reading the body.\n\n```python\nhdr = recv_exact(sock, 4)\n(n,) = struct.unpack(\"!I\", hdr)\nif n > MAX_MSG:\n    raise ValueError(\"too large\")\nbody = recv_exact(sock, n)\n```",
+    "link": {
+      "title": "Socket Programming HOWTO — Python docs",
+      "url": "https://docs.python.org/3/howto/sockets.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a POSIX system, diagnostics show that retained TIME_WAIT connections prevent an immediate listener rebind, with no competing listener. Which option should a restartable server configure before bind(), subject to that platform’s old/new socket reuse rules?",
+    "options": [
+      {
+        "text": "The old process is still running; kill it with kill -9",
+        "explanation": "The question says nothing is listening. The port is held by connection state, not by a process."
+      },
+      {
+        "text": "Port 8080 is reserved for root; run the server as root",
+        "explanation": "This is an address-reuse problem, not a permission error. Privileged-port thresholds are platform/configuration-dependent."
+      },
+      {
+        "text": "SO_REUSEADDR; Python socket.create_server enables it on POSIX",
+        "explanation": "Correct. Configure appropriate reuse before binding. On Linux the relevant reuse case generally requires it on both the old and new sockets; exact rules differ across systems."
+      },
+      {
+        "text": "The ephemeral port range has been exhausted",
+        "explanation": "Exhaustion of automatically selected local ports is a different failure mode. Here the supplied diagnostics identify retained TIME_WAIT state affecting an explicit bind; an existing conflicting allocation can also matter when a chosen fixed port overlaps the automatic range."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "TIME_WAIT retains TCP state after orderly closure and can affect rebinding. SO_REUSEADDR relaxes relevant address-reuse checks, subject to platform rules; it does not permit arbitrary sharing with an active listener. Set it before bind(), and configure the original listener appropriately too.\n\n```python\ns = socket.socket()\ns.setsockopt(socket.SOL_SOCKET,\n             socket.SO_REUSEADDR, 1)\ns.bind((\"127.0.0.1\", 8080))\n```\n\nThe caller must close s when finished. Port reuse does not mean new connections necessarily have different tuples; TCP’s retained state and sequence rules still matter.",
+    "link": {
+      "title": "Python socket module documentation",
+      "url": "https://docs.python.org/3/library/socket.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `recv_msg`, a peer sends these 10 bytes in one segment:\n\n```\n00 00 00 03 61 62 63 64 65 66\n```\n\n(0x61 to 0x66 are `a` to `f`.) What does the first `recv_msg(sock)` call return?",
+    "options": [
+      {
+        "text": "`b\"abcdef\"`",
+        "explanation": "The header says the body is 3 bytes. recv_exact asks for exactly 3, so the last three stay in the buffer for the next call."
+      },
+      {
+        "text": "`b\"abc\"`",
+        "explanation": "Correct. The header 00 00 00 03 decodes as 3, so recv_exact(sock, 3) returns b\"abc\". The bytes def remain unread."
+      },
+      {
+        "text": "`b\"\\x00\\x00\\x00\\x03abcdef\"`",
+        "explanation": "recv_msg strips the 4-byte header and uses it as a length; it doesn't return it."
+      },
+      {
+        "text": "It raises EOFError because the message is incomplete",
+        "explanation": "The 3-byte body is complete. EOFError only occurs if the peer closes before enough bytes arrive."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `recv_exact(sock, 4)` reads `00 00 00 03`.\n2. `struct.unpack(\"!I\", ...)` reads a big-endian 32-bit unsigned integer: 3.\n3. `recv_exact(sock, 3)` reads `61 62 63` = `b\"abc\"`.\n4. `64 65 66` (`def`) remains in the socket buffer. The **next** `recv_msg` would take those three bytes plus one more as its header: an incomplete next header. It could be malformed input or part of a later message; the three bytes alone do not prove the peer uses another protocol. The lesson’s size limit rejects an oversized decoded next length.",
+    "link": {
+      "title": "Python struct module documentation",
+      "url": "https://docs.python.org/3/library/struct.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A thread-per-connection Python server handles 50 clients well. You need to hold 50,000 mostly idle WebSocket-style connections. Why is the threaded design likely to struggle, and what's the standard alternative?",
+    "options": [
+      {
+        "text": "Python threads can't call recv(); use processes instead",
+        "explanation": "Threads can call recv(); in CPython’s usual GIL-enabled build, blocking socket I/O releases the GIL. Replacing each native thread with a process adds separate process-management costs and does not remove the need to measure resource limits."
+      },
+      {
+        "text": "TCP limits a server to 65,535 connections per port",
+        "explanation": "A listener can serve more than 65,535 connections when peer endpoint tuples differ sufficiently. Resource and tuple limits still apply."
+      },
+      {
+        "text": "Each thread needs its own listening port",
+        "explanation": "All connections are accepted from one listening socket; each thread only uses its accepted socket."
+      },
+      {
+        "text": "Native threads have stack and scheduling costs; a multiplexed runtime can serve many idle sockets with fewer threads",
+        "explanation": "Correct. Backend and runtime details vary; a benchmark and resource limits determine actual capacity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "One native thread per connection adds stack reservations, task limits and scheduling overhead. A readiness or completion-based runtime can multiplex many waiting operations onto fewer threads. Connections still consume kernel buffers, application state, descriptors and runtime tasks. No fixed 50,000-connection capacity follows from choosing an event loop.",
+    "link": {
+      "title": "The C10K problem — Dan Kegel",
+      "url": "http://www.kegel.com/c10k.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux service shows rising TcpExtListenOverflows and occasional delayed connection setup or first requests. With tcp_abort_on_overflow = 0, which explanation is consistent with these observations and should be investigated using captures and queue measurements?",
+    "options": [
+      {
+        "text": "The accept queue is overloaded; some handshakes may be deferred or dropped while the listener catches up",
+        "explanation": "Correct. One overflow path ignores the final ACK and can recover after SYN+ACK retransmission. Other paths and causes exist; this counter alone does not prove that exact trace."
+      },
+      {
+        "text": "A SYN flood is filling the SYN queue",
+        "explanation": "A SYN-queue problem alone is not established by this accept-overflow counter. Attack traffic can still contribute to several types of overload, so do not exclude it solely from one counter."
+      },
+      {
+        "text": "Nagle's algorithm is delaying the first request",
+        "explanation": "Nagle is not the mechanism counted by a listen-queue overflow counter. Its delay is not universally bounded to a fixed millisecond range."
+      },
+      {
+        "text": "TIME_WAIT sockets are blocking new connections",
+        "explanation": "TIME_WAIT on the server's port doesn't block new connections from different client tuples, and isn't counted by ListenOverflows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Inspect backlog limits, arrival bursts, acceptance rate, blocked workers and resource limits. Linux can ignore a final ACK on an overflow path when abort-on-overflow is disabled, while the client already believes setup succeeded. Retries can then add delay, but exact timing and behaviour require capture/configuration evidence. A larger backlog absorbs some bursts; it does not fix sustained service-capacity shortfalls.",
+    "link": {
+      "title": "SYN packet handling in the wild — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/syn-packet-handling-in-the-wild/"
+    }
+  },
+  {
+    "id": "tcp-sockets-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Consider the lesson's `selectors` echo server, which calls `s.send(data)` once on a non-blocking socket. A client sends a lot of data quickly but reads its replies very slowly. Which problems can occur? Select all that apply.",
+    "options": [
+      {
+        "text": "send() may accept only part of `data`, and the rest is silently lost from the echo",
+        "explanation": "Correct. A non-blocking send() returns how many bytes it took; the code ignores the return value, so any remainder is never sent."
+      },
+      {
+        "text": "send() may raise BlockingIOError when the socket's send buffer is completely full",
+        "explanation": "Correct. Once the slow client's receive window and our send buffer are full, a non-blocking send can't accept anything, and the code doesn't catch it, so the loop crashes."
+      },
+      {
+        "text": "The non-blocking send call itself waits for the slow client to read",
+        "explanation": "False. It returns a count or an error rather than waiting for writability. However, an unhandled exception can terminate this toy loop and interrupt service for every client."
+      },
+      {
+        "text": "Correct handling needs retained unsent output and write readiness, plus queue bounds, read backpressure and error handling",
+        "explanation": "Correct. Account for partial writes and handle would-block, disconnection and cleanup; an unbounded output buffer merely moves the resource problem."
+      },
+      {
+        "text": "Switching to sendall() on the non-blocking socket fully solves it",
+        "explanation": "On a non-blocking socket, sendall() can still raise BlockingIOError partway through, leaving an unknown amount sent. It doesn't replace proper output buffering."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "The deliberately faulty loop ignores send()’s partial count and does not handle would-block. It can lose bytes or terminate. A non-blocking call does not wait for the slow peer, but loop termination affects all clients. Retain pending output, register write interest only while needed, bound queues and stop reading when output pressure is high. Handle stale readiness for accept/read/write and flush pending output on input half-close. sendall() alone does not solve non-blocking buffering.",
+    "link": {
+      "title": "Python selectors module documentation",
+      "url": "https://docs.python.org/3/library/selectors.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the asyncio echo example, suppose the peer keeps uploading but never reads responses. With no output-size policy or total deadline added, what risk is introduced by deleting await writer.drain()?",
+    "options": [
+      {
+        "text": "Nothing; asyncio writes everything immediately",
+        "explanation": "write() may send immediately or buffer unsent data. It does not wait for the receiving application to consume it."
+      },
+      {
+        "text": "The server crashes with BrokenPipeError immediately",
+        "explanation": "Not reading replies does not itself require an immediate BrokenPipeError. Queued output can grow while the connection remains usable; independent failures or later endpoint closure are still possible."
+      },
+      {
+        "text": "TCP drops the responses, and the client receives them later via retransmission",
+        "explanation": "Retransmission does not replace application backpressure. Data can accumulate in the asyncio transport’s output buffer."
+      },
+      {
+        "text": "Unsent output can grow excessively because the coroutine no longer waits for the transport’s backpressure",
+        "explanation": "Correct. drain() waits when writing is paused at the high watermark until the buffer drains to the low watermark. Other failures or limits may stop growth; unlimited growth is a risk, not an inevitable trace."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "If incoming data continues while output cannot drain, write() can accumulate unsent output in user space. drain() makes the coroutine cooperate with transport flow control, indirectly slowing further reads. Its watermarks concern the transport buffer, not a direct test for a zero TCP receive window. Removing it risks memory exhaustion; exact growth and termination depend on the runtime, peer and other limits.",
+    "link": {
+      "title": "asyncio Streams — Python docs",
+      "url": "https://docs.python.org/3/library/asyncio-stream.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An Nginx-style server runs 8 worker processes. In design A they all accept from one shared listening socket. In design B each worker opens its own listening socket on port 443 with `SO_REUSEPORT`. What is the main effect of design B on Linux?",
+    "options": [
+      {
+        "text": "The kernel selects among separate eligible listening sockets, each with its own accept queue, which can reduce shared-listener contention",
+        "explanation": "Correct. Linux’s default selection uses flow-related hashing, but optional BPF policies and implementation details vary. Neither perfect balancing nor removal of all locking is guaranteed."
+      },
+      {
+        "text": "It lets the server bind port 443 while old connections are in TIME_WAIT",
+        "explanation": "That's what SO_REUSEADDR does. SO_REUSEPORT is about multiple simultaneous listeners."
+      },
+      {
+        "text": "Each worker receives a copy of every incoming connection",
+        "explanation": "A connection is delivered to exactly one of the listening sockets; copying would make no sense for TCP."
+      },
+      {
+        "text": "It allows more than 65,535 connections to port 443",
+        "explanation": "One listening socket can already have far more connections than that; connections are told apart by the client's address and port."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "With one shared listener, workers take connections from one accept queue. An eligible SO_REUSEPORT group has separate listeners and queues; set the option before bind() and satisfy Linux’s effective-UID and binding requirements. Selection can distribute new connections without every worker sharing one accept queue. A stalled worker can still accumulate work, and measured workload balance is not guaranteed.",
+    "link": {
+      "title": "Python socket module documentation",
+      "url": "https://docs.python.org/3/library/socket.html"
+    }
+  }
+]

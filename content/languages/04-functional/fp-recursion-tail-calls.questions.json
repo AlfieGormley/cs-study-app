@@ -1,0 +1,344 @@
+[
+  {
+    "id": "fp-recursion-tail-calls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In which function is the recursive call a **tail call**?",
+    "options": [
+      {
+        "text": "```python\ndef a(n):\n    if n == 0: return 1\n    return n * a(n - 1)\n```",
+        "explanation": "After `a(n - 1)` returns, the function still has to multiply by `n`. The call is not the last action, so it isn't in tail position."
+      },
+      {
+        "text": "```python\ndef b(n, acc=1):\n    if n == 0: return acc\n    return b(n - 1, acc * n)\n```",
+        "explanation": "Correct. The multiplication happens *before* the call, as an argument. The call's result is returned unchanged, so nothing is left to do afterwards."
+      },
+      {
+        "text": "```python\ndef c(n):\n    if n == 0: return 0\n    return 1 + c(n - 1)\n```",
+        "explanation": "The `1 +` is applied after the recursive call returns, so the frame must be kept. Not a tail call."
+      },
+      {
+        "text": "```python\ndef d(n):\n    if n == 0: return []\n    return [n] + d(n - 1)\n```",
+        "explanation": "List concatenation happens after `d(n - 1)` returns. Any work wrapped around the call, however small, breaks tail position."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask one question of each recursive call: *after it returns, does this function do anything else with the result?*\n\n- `a`: multiplies by `n`. Not a tail call.\n- `b`: returns it as is. Tail call.\n- `c`: adds 1. Not a tail call.\n- `d`: concatenates. Not a tail call.\n\n`b` is the accumulator version of `a`: the pending multiplications are carried in `acc` instead of on the stack.",
+    "link": {
+      "title": "Tail call — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tail_call"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "With CPython's usual default recursion limit near 1000, what happens when countdown(5) is called?\n\n```python\ndef countdown(n):\n    if n == 0:\n        return \"done\"\n    return countdown(n - 2)\n```",
+    "options": [
+      {
+        "text": "It returns `\"done\"` after three calls",
+        "explanation": "The sequence is 5, 3, 1, -1, -3... It never equals 0, so the base case is never reached."
+      },
+      {
+        "text": "It loops forever without error, because the call is in tail position",
+        "explanation": "CPython doesn't eliminate tail calls, so each call still pushes a frame. It can't run forever in constant space."
+      },
+      {
+        "text": "It raises `RecursionError` after about 1,000 calls",
+        "explanation": "Correct. The odd sequence skips 0, so the recursion never stops. CPython's default limit of 1,000 frames is hit and it raises `RecursionError`."
+      },
+      {
+        "text": "It returns `None` when `n` becomes negative",
+        "explanation": "There's no branch for negative `n`; the function always takes the recursive path when `n != 0`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Trace: `countdown(5)` → `3` → `1` → `-1` → `-3` → ...\n2. `n == 0` is never true, so there's no exit.\n3. Each call adds a frame. CPython's default limit (`sys.getrecursionlimit()`) is 1,000.\n4. Around depth 1,000 it raises `RecursionError: maximum recursion depth exceeded`.\n\nFix: make the base case cover every way the input can shrink past it, e.g. `if n <= 0`.",
+    "link": {
+      "title": "sys.getrecursionlimit — Python docs",
+      "url": "https://docs.python.org/3/library/sys.html#sys.getrecursionlimit"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume strict numeric addition and the straightforward evaluation of this Haskell recursion, without optimizations that change its pending-work representation. What is the asymptotic maximum pending-call depth for n elements?\n\n```haskell\nsumList []     = 0\nsumList (x:xs) = x + sumList xs\n```",
+    "options": [
+      {
+        "text": "O(1)",
+        "explanation": "This straightforward non-tail evaluation retains additions; a different implementation might transform it. Here `x +` is still pending when `sumList xs` is called."
+      },
+      {
+        "text": "O(log n)",
+        "explanation": "Logarithmic depth comes from halving the problem (as in binary search or balanced trees). This recursion only removes one element per call."
+      },
+      {
+        "text": "O(n)",
+        "explanation": "Correct. Every element leaves a pending `x + _` that can't be resolved until the recursion bottoms out, so there are *n* nested pending additions at the deepest point."
+      },
+      {
+        "text": "O(n²)",
+        "explanation": "Each level holds a constant amount of pending work, so total stack is proportional to depth, which is *n*."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Expand `sumList [1, 2, 3]`:\n\n```\n1 + sumList [2,3]\n1 + (2 + sumList [3])\n1 + (2 + (3 + sumList []))\n1 + (2 + (3 + 0))\n```\n\nThe nesting depth equals the list length. Each level is waiting for the one below, so the stack grows linearly: O(n).",
+    "link": {
+      "title": "Recursion — Learn You a Haskell",
+      "url": "https://learnyouahaskell.github.io/recursion.html"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using CPython with its usual default recursion limit, you rewrite a list sum using an accumulator so it is tail-recursive, then call it on a list of 50,000 numbers. What happens?\n\n```python\ndef total(xs, i=0, acc=0):\n    if i == len(xs):\n        return acc\n    return total(xs, i + 1, acc + xs[i])\n```",
+    "options": [
+      {
+        "text": "It runs in constant stack and returns the sum",
+        "explanation": "A runtime with proper tail calls and a strict accumulator could do that. CPython does not perform tail call optimisation, so each call still gets a new frame."
+      },
+      {
+        "text": "It raises `RecursionError`",
+        "explanation": "Correct. Tail position doesn't help in CPython, which does not eliminate these recursive Python calls. 50,000 nested calls exceed the default limit of 1,000."
+      },
+      {
+        "text": "It returns the sum but takes O(n²) time because of `xs[i]`",
+        "explanation": "Indexing a Python list is O(1), so time would be O(n). The real problem is the stack depth, which fails long before time matters."
+      },
+      {
+        "text": "Python detects the tail call and converts it to a loop automatically",
+        "explanation": "Python deliberately doesn't. Guido van Rossum rejected TCO partly because it would erase frames from tracebacks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The function is genuinely tail-recursive: the call is returned unchanged.\n2. But tail-call *optimisation* is a language/implementation feature. CPython doesn't have it.\n3. So depth = number of elements = 50,000 > 1,000.\n4. Result: `RecursionError`.\n\nIn Python, convert the tail recursion to a loop mechanically:\n\n```python\ndef total(xs):\n    acc = 0\n    for x in xs:\n        acc += x\n    return acc\n```",
+    "link": {
+      "title": "Tail Recursion Elimination — Guido van Rossum",
+      "url": "https://neopythonic.blogspot.com/2009/04/tail-recursion-elimination.html"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "How many times is `fib` called in total (including the first call) when evaluating `fib(5)`?\n\n```python\ndef fib(n):\n    if n < 2:\n        return n\n    return fib(n - 1) + fib(n - 2)\n```",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "Memoization would execute the body for six distinct n values, 0 through 5, not five. Without it, the same values are recomputed many times."
+      },
+      {
+        "text": "9",
+        "explanation": "This undercounts the tree. Note the leaf calls `fib(1)` and `fib(0)` each count as calls too."
+      },
+      {
+        "text": "15",
+        "explanation": "Correct. Let C(n) be the calls for `fib(n)`: C(0) = C(1) = 1 and C(n) = 1 + C(n-1) + C(n-2). That gives C(2)=3, C(3)=5, C(4)=9, C(5)=15."
+      },
+      {
+        "text": "32",
+        "explanation": "2⁵ = 32 is a rough upper bound for a binary tree of depth 5, but the tree is lopsided (the `n - 2` branch is shallower), so the real count is lower."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each call to `fib(n)` with n ≥ 2 makes itself plus the calls of its two children:\n\n```\nC(0) = 1\nC(1) = 1\nC(2) = 1 + C(1) + C(0) = 3\nC(3) = 1 + C(2) + C(1) = 5\nC(4) = 1 + C(3) + C(2) = 9\nC(5) = 1 + C(4) + C(3) = 15\n```\n\nThe count grows like φⁿ: C(30) is about 2.7 million. With `@functools.cache` each `fib(k)` runs once, so six cache misses/body executions for fib(5); cache-hit wrapper calls still occur.",
+    "link": {
+      "title": "Memoization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memoization"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does `rev([1, 2, 3])` return?\n\n```python\ndef rev(xs, acc=()):\n    if not xs:\n        return list(acc)\n    return rev(xs[1:], (xs[0],) + acc)\n```",
+    "options": [
+      {
+        "text": "`[1, 2, 3]`",
+        "explanation": "Each step puts the current head at the *front* of the accumulator, which reverses the order rather than preserving it."
+      },
+      {
+        "text": "`[3, 2, 1]`",
+        "explanation": "Correct. The head of the input is pushed onto the front of `acc` each time, so the last element seen ends up first."
+      },
+      {
+        "text": "`[3]`",
+        "explanation": "The accumulator keeps every element; `(xs[0],) + acc` prepends, it doesn't replace."
+      },
+      {
+        "text": "`[(3, 2, 1)]`",
+        "explanation": "`list(acc)` converts the tuple's *elements* into a list; it doesn't wrap the tuple."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the arguments:\n\n```\nrev([1,2,3], ())\nrev([2,3],   (1,))\nrev([3],     (2, 1))\nrev([],      (3, 2, 1))\n-> [3, 2, 1]\n```\n\nPrepending each new item to this accumulator reverses order; accumulators in general need not do so. That's why many tail-recursive list functions in functional languages build the result backwards and reverse it once at the end.",
+    "link": {
+      "title": "Tail call — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tail_call"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In which of these environments can you rely on a tail-recursive loop running for millions of iterations in constant stack? Select all that apply.",
+    "options": [
+      {
+        "text": "Scheme",
+        "explanation": "Correct. The Scheme standard requires proper tail calls, so every conforming implementation must run them in constant space."
+      },
+      {
+        "text": "Erlang / Elixir on the BEAM",
+        "explanation": "Correct. Long-running processes like GenServers are tail-recursive receive loops; the VM eliminates the frames."
+      },
+      {
+        "text": "CPython",
+        "explanation": "CPython never eliminates tail calls; it hits `RecursionError` at about 1,000 frames by default."
+      },
+      {
+        "text": "The Node.js/V8 build tested for this audit (ordinary recursive functions)",
+        "explanation": "ES2015 specifies proper tail calls in strict mode, but V8 doesn't implement them. WebKit documents JavaScriptCore support; no exhaustive current engine-support claim is made here."
+      },
+      {
+        "text": "Haskell (GHC)",
+        "explanation": "Correct. GHC compiles tail calls as jumps. (Beware lazy accumulators, which can still build up thunks; force them with `seq` or `foldl'`.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Separate *being* a tail call from the runtime *optimising* it:\n\n| Runtime | Eliminates? |\n|---|---|\n| Scheme | Required by spec |\n| BEAM | Yes |\n| GHC | Yes (jumps) |\n| CPython | No, by design |\n| V8 | No, though in spec |\n\nThe JavaScript case catches people out: the language spec says yes, but the tested Node runtime does not eliminate this tail recursion.",
+    "link": {
+      "title": "Tail call — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tail_call"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to sum every node's value in a tree that can be 200,000 levels deep (a degenerate, list-like tree) in Python. Which approach is safest?",
+    "options": [
+      {
+        "text": "Recursive function plus `sys.setrecursionlimit(1_000_000)`",
+        "explanation": "Raising the limit increases allowed Python recursion but does not establish safe resource use. Since CPython 3.11 many Python calls avoid recursive C calls; native paths and memory exhaustion still matter."
+      },
+      {
+        "text": "Rewrite the recursion in tail form with an accumulator",
+        "explanation": "A traversal also needs to track pending children, and CPython would not eliminate these recursive Python calls."
+      },
+      {
+        "text": "Iterate with an explicit stack (a Python list) holding nodes still to visit",
+        "explanation": "Correct. The list lives on the heap, which can hold millions of entries. Depth no longer depends on the call stack."
+      },
+      {
+        "text": "Use `@functools.cache` on the recursive function",
+        "explanation": "Caching avoids repeat work, but each node is visited once anyway. It does nothing to reduce stack depth."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Recursion depth = tree height = 200,000. CPython's default limit is 1,000; raising it risks a hard crash.\n2. The work is a traversal, not repeated subproblems, so caching doesn't help.\n3. Move the pending work from the call stack to a heap-allocated list:\n\n```python\ntotal, stack = 0, [root]\nwhile stack:\n    n = stack.pop()\n    total += n.value\n    stack.extend(n.children)\n```\n\n4. The list may grow large, but its required size depends on the pending traversal frontier and available memory; no universal stack/heap capacity is assumed.",
+    "link": {
+      "title": "Tree traversal — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tree_traversal"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In GHCi (no optimisation), `foldl (+) 0 [1..10^8]` uses a huge amount of memory (and may overflow), while `foldl' (+) 0 [1..10^8]` avoids the linear chain of accumulator thunks. Why?",
+    "options": [
+      {
+        "text": "`foldl` is not tail-recursive, so it builds stack frames",
+        "explanation": "`foldl` *is* tail-recursive. The problem is what the accumulator contains, not the shape of the recursion."
+      },
+      {
+        "text": "Laziness makes `foldl` build a chain of unevaluated thunks `(((0+1)+2)+3)...`; `foldl'` forces the accumulator at every step",
+        "explanation": "Correct. Each step wraps the old accumulator in a new suspended addition instead of computing a number. 10⁸ thunks fill the heap, and evaluating the chain can overflow the stack. `foldl'` evaluates the sum as it goes."
+      },
+      {
+        "text": "`foldl'` uses machine integers while `foldl` uses arbitrary-precision integers",
+        "explanation": "Both use whatever numeric type is inferred. The prime means 'strict', not a different number type."
+      },
+      {
+        "text": "`[1..10^8]` is fully materialised by `foldl` but streamed by `foldl'`",
+        "explanation": "Both consume the list lazily as they go. The leak is in the accumulator, not the list."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `foldl f z (x:xs) = foldl f (f z x) xs`. The call is in tail position.\n2. But Haskell doesn't evaluate `f z x` until needed. So the accumulator becomes:\n\n```\n0\n(0+1)\n((0+1)+2)\n(((0+1)+2)+3)\n...\n```\n\n3. After 10⁸ steps there are 10⁸ suspended additions on the heap.\n4. `foldl'` uses `seq` to force `f z x` to a value before recursing, so the accumulator is forced to WHNF each step. Its numeric storage still depends on the inferred type and magnitude.\n\nWith `-O`, GHC's strictness analysis often rescues `foldl` for `Int`, which is why the problem shows up most in GHCi.",
+    "link": {
+      "title": "Foldr Foldl Foldl' — Haskell Wiki",
+      "url": "https://wiki.haskell.org/Foldr_Foldl_Foldl%27"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does this trampoline avoid stack overflow in JavaScript?\n\n```javascript\nconst run = f => (...a) => {\n  let r = f(...a);\n  while (typeof r === \"function\")\n    r = r();\n  return r;\n};\nconst even = n =>\n  n === 0 ? true : () => odd(n - 1);\nconst odd = n =>\n  n === 0 ? false : () => even(n - 1);\nrun(even)(1e6);\n```",
+    "options": [
+      {
+        "text": "Arrow functions are optimised for tail calls in V8",
+        "explanation": "V8 doesn't perform tail call elimination for any kind of function, arrow or not."
+      },
+      {
+        "text": "Each step returns a thunk instead of calling the next function, so the driver loop makes one call at a time and the stack never grows",
+        "explanation": "Correct. `even` and `odd` return immediately with a function describing the next step. The `while` loop calls it, gets another thunk, and repeats. Call depth stays bounded independently of n."
+      },
+      {
+        "text": "`1e6` is converted to a float, which short-circuits the recursion",
+        "explanation": "JavaScript Number values use binary64 (BigInt is a separate type); `1e6` is exactly 1,000,000 and the recursion runs its full length."
+      },
+      {
+        "text": "The `while` loop runs the calls in parallel",
+        "explanation": "JavaScript runs this on a single thread. The thunks are called one after another."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Without the trampoline, `even(1e6)` calls `odd(999999)` calls `even(999998)`... 10⁶ nested frames: `RangeError`.\n2. With it, `even(1e6)` returns `() => odd(999999)` without calling it.\n3. The driver calls that thunk; `odd(999999)` returns `() => even(999998)`; and so on.\n4. Each thunk call returns before the next begins, so stack depth is constant.\n5. Finally `even(0)` returns `true`, which isn't a function, so the loop exits. 10⁶ is even, so the answer is `true`.\n\nThe source creates a closure per step; actual allocation and speed depend on optimization.",
+    "link": {
+      "title": "Trampoline (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Trampoline_(computing)"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about tail calls are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Eliminating tail calls removes caller frames from ordinary stack traces, a documented concern in Python's TCO discussion",
+        "explanation": "Correct. Debuggability was a key objection. When frames are reused, a traceback no longer shows how you got there."
+      },
+      {
+        "text": "A tail-recursive function can be translated mechanically into a `while` loop",
+        "explanation": "Correct. Parameters become loop variables, the base case becomes the exit condition, and the tail call becomes 'reassign and loop'."
+      },
+      {
+        "text": "Tail call optimisation reduces naive Fibonacci from exponential to linear time",
+        "explanation": "TCO saves *stack space*, not time. Naive `fib` isn't tail-recursive anyway, and its exponential cost comes from recomputation, which memoisation fixes."
+      },
+      {
+        "text": "Clojure requires you to write `recur` explicitly because the JVM has no general tail-call instruction",
+        "explanation": "Correct. `recur` compiles to a loop, and the compiler rejects it if it isn't in tail position, so you know the optimisation happened."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "- A: Guido's Python discussion raises loss of traceback information. True.\n- B: `f(x, acc)` → `while not base: x, acc = next_x, next_acc`. True.\n- C: TCO changes O(n) stack to O(1). It doesn't change the number of calls. Naive fib makes about φⁿ calls regardless. False.\n- D: Clojure targets the JVM, which can't guarantee frame reuse, so it uses an explicit `recur` form. True.",
+    "link": {
+      "title": "Clojure special forms: recur",
+      "url": "https://clojure.org/reference/special_forms#recur"
+    }
+  }
+]

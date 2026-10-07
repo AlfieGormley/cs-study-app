@@ -1,0 +1,342 @@
+[
+  {
+    "id": "app-http-wire-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A chunked response body arrives as:\n\n```\n4\\r\\nWiki\\r\\n\n6\\r\\npedia \\r\\n\nE\\r\\nin \\r\\n\\r\\nchunks.\\r\\n\n0\\r\\n\\r\\n\n```\n\nHow many bytes long is the decoded body?",
+    "options": [
+      {
+        "text": "14",
+        "explanation": "That treats `E` as 14 correctly but forgets to add the first two chunks. The body is the concatenation of every chunk."
+      },
+      {
+        "text": "24",
+        "explanation": "Correct. 4 + 6 + 14 = 24. The chunk size `E` is hexadecimal for 14, and the CRLFs after each chunk's data are framing, not content (but the CRLF *inside* the third chunk's data is content)."
+      },
+      {
+        "text": "20",
+        "explanation": "This misreads `E` as decimal-ish or drops the embedded CRLF. Chunk sizes are hex: `E` = 14, and the third chunk's 14 bytes include the `\\r\\n` in its data."
+      },
+      {
+        "text": "34",
+        "explanation": "This counts the framing CRLFs after each chunk as body bytes. They are delimiters and are discarded by the decoder."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Read each size line as **hex**:\n   - `4` = 4 bytes: `Wiki`\n   - `6` = 6 bytes: `pedia ` (with trailing space)\n   - `E` = 14 bytes: `in \\r\\n\\r\\nchunks.`\n2. Check the third chunk: `in ` (3) + `\\r\\n\\r\\n` (4) + `chunks.` (7) = 14. The CRLFs here are *data*.\n3. `0` ends the body.\n4. Total: 4 + 6 + 14 = **24 bytes**.\n\nThe decoder never confuses data CRLFs with framing because it reads exactly `size` bytes, then expects one CRLF.",
+    "link": {
+      "title": "Transfer-Encoding — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Transfer-Encoding"
+    }
+  },
+  {
+    "id": "app-http-wire-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You hand-write an HTTP/1.1 client that sends a `GET` without `Connection: close`, then loops on `recv()` until it returns no data. The response arrives quickly but your program hangs for a long time. Why?",
+    "options": [
+      {
+        "text": "The server is waiting for you to send a request body",
+        "explanation": "A GET with no `Content-Length` or `Transfer-Encoding` has no body, so the server is not waiting for one. It has already responded."
+      },
+      {
+        "text": "You forgot the `Host` header, so the server never replies",
+        "explanation": "A missing `Host` gets a prompt `400 Bad Request`, not silence. And the question says the response arrived."
+      },
+      {
+        "text": "TCP buffers the last segment until the window fills",
+        "explanation": "TCP delivers data as it arrives; the bytes are already in your process. The hang is the server holding the persistent connection open."
+      },
+      {
+        "text": "HTTP/1.1 connections are persistent by default, so the server keeps the socket open and `recv` blocks until an idle timeout",
+        "explanation": "Correct. The server sent a complete, framed response and is waiting for your next request. You should use `Content-Length` or chunked framing to know when the response ends, not connection close."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. HTTP/1.0 closed after each response, so \"read until EOF\" worked.\n2. HTTP/1.1 made connections persistent by default.\n3. The server sends `Content-Length: 1256` and 1256 bytes, then waits for another request on the same socket.\n4. Your loop calls `recv()` again; no bytes are coming and the socket is not closed, so it blocks.\n5. Eventually the server's keep-alive timeout (often 5 to 60 seconds) closes the connection and your loop ends.\n\nFix: parse the headers and read exactly `Content-Length` bytes (or decode chunks), or send `Connection: close`.",
+    "link": {
+      "title": "RFC 9112: HTTP/1.1 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9112"
+    }
+  },
+  {
+    "id": "app-http-wire-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A page on `https://app.example.com` sets `Set-Cookie: sid=abc; Secure; HttpOnly` with **no** `Domain` attribute. Which hosts will the browser send this cookie to?",
+    "options": [
+      {
+        "text": "`example.com` and all its subdomains",
+        "explanation": "That is what `Domain=example.com` does. Omitting `Domain` is stricter, not broader."
+      },
+      {
+        "text": "`app.example.com` and its subdomains, such as `x.app.example.com`",
+        "explanation": "Subdomains are included only when `Domain` is set explicitly. Without it the cookie is host-only."
+      },
+      {
+        "text": "Only `app.example.com`",
+        "explanation": "Correct. With no `Domain` attribute the cookie is host-only: it is returned to exactly the host that set it."
+      },
+      {
+        "text": "Any site, because no SameSite attribute was given",
+        "explanation": "SameSite controls whether the cookie is attached to *cross-site requests to app.example.com*, not which hosts receive it. Scope is set by Domain and Path."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Look for a `Domain` attribute. There is none.\n2. RFC 6265: no Domain means the **host-only** flag is set; the cookie matches only the exact host.\n3. So `api.example.com`, `example.com` and `x.app.example.com` never see it.\n4. If you instead wrote `Domain=example.com`, every subdomain of example.com would receive it.\n\nMany developers add `Domain=` thinking it restricts the cookie; it does the opposite.",
+    "link": {
+      "title": "Using HTTP cookies — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies"
+    }
+  },
+  {
+    "id": "app-http-wire-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reverse proxy forwards a `HEAD /big.iso` response from the origin with header `Content-Length: 4700000000`. A hand-written client then waits to read 4.7 GB of body. What is the correct behaviour?",
+    "options": [
+      {
+        "text": "The response has no body; the client must know it sent HEAD and stop at the blank line",
+        "explanation": "Correct. Responses to HEAD (and all 1xx, 204 and 304 responses) never have a body, regardless of framing headers. The client must remember which method it sent."
+      },
+      {
+        "text": "The client should read 4.7 GB because Content-Length is authoritative",
+        "explanation": "Content-Length is overridden by the rule that HEAD responses never carry a body; it describes what a GET would return."
+      },
+      {
+        "text": "The proxy is wrong to forward Content-Length on a HEAD response",
+        "explanation": "Sending Content-Length on HEAD is correct and useful: it tells the client the size of the resource without downloading it."
+      },
+      {
+        "text": "The client should switch to reading until the connection closes",
+        "explanation": "Close-delimited reading would hang on a persistent connection and is unnecessary: the message already ended at the blank line."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "RFC 9112's body-length rules are applied in order:\n\n1. HEAD response, 1xx, 204 or 304? **No body.** Stop here.\n2. Transfer-Encoding chunked?\n3. Content-Length?\n4. Close-delimited (responses only).\n\nRule 1 fires before Content-Length is even consulted. That is why a response parser needs to know the request method: the same bytes mean different things after GET and after HEAD.",
+    "link": {
+      "title": "RFC 9112: HTTP/1.1 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9112"
+    }
+  },
+  {
+    "id": "app-http-wire-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are good reasons for a server to use `Transfer-Encoding: chunked` rather than `Content-Length`? Select all that apply.",
+    "options": [
+      {
+        "text": "It is streaming a CSV export whose total size is not known when the first row is ready",
+        "explanation": "Correct. Content-Length must be sent before the body; chunked lets the server start sending immediately."
+      },
+      {
+        "text": "It wants to keep the connection persistent without buffering the whole response",
+        "explanation": "Correct. Without a length, the only other way to end the body is closing the connection, which loses persistence."
+      },
+      {
+        "text": "It wants to append a checksum header computed over the body after sending it",
+        "explanation": "Correct. Trailers after the final `0` chunk can carry values computed during streaming (though many clients ignore them)."
+      },
+      {
+        "text": "It is speaking HTTP/2 and wants to stream",
+        "explanation": "HTTP/2 forbids `Transfer-Encoding: chunked`. DATA frames carry their own lengths and END_STREAM flag, so streaming needs no extra encoding."
+      },
+      {
+        "text": "Chunked encoding compresses the body",
+        "explanation": "Chunking only frames the body; it adds a few bytes of overhead per chunk. Compression is `Content-Encoding: gzip` (or `br`)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask what problem chunking solves: **framing a body of unknown length on a persistent connection**.\n\n- Unknown size (CSV export): yes.\n- Persistence without buffering: yes, that is the core reason.\n- Trailers: yes, a feature of chunked framing.\n- HTTP/2: no, it has binary framing and bans the header.\n- Compression: no, that is Content-Encoding, a different layer.",
+    "link": {
+      "title": "Transfer-Encoding — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Transfer-Encoding"
+    }
+  },
+  {
+    "id": "app-http-wire-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your bank's session cookie is `SameSite=Lax`. An attacker's page at `evil.example` contains an auto-submitting `<form method=POST action=https://bank.example/transfer>`. Does the browser attach the session cookie?",
+    "options": [
+      {
+        "text": "Yes, because form submissions are top-level navigations",
+        "explanation": "Lax allows top-level navigations only with safe methods such as GET. A cross-site POST is excluded, which is exactly the CSRF case Lax was designed to stop."
+      },
+      {
+        "text": "Yes, unless the cookie is also HttpOnly",
+        "explanation": "HttpOnly only hides the cookie from JavaScript. It has no effect on which requests carry the cookie."
+      },
+      {
+        "text": "No, because the request is a cross-site POST, which Lax excludes",
+        "explanation": "Correct. Lax sends cookies on cross-site top-level GET navigations (following a link) but not on cross-site POSTs, iframes, images or fetches."
+      },
+      {
+        "text": "No, because cookies are never sent to a different origin than the current page",
+        "explanation": "Cookies are attached by destination, not by the page's origin. With `SameSite=None; Secure` this POST would carry the cookie."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Is the request cross-site? Page site: `https://evil.example`; target site: `https://bank.example`. Different registrable domains, so yes.\n2. SameSite=Lax rule: attach on cross-site requests only if it is a top-level navigation **and** the method is safe (GET, HEAD).\n3. The method is POST, so the cookie is withheld.\n4. The bank receives an unauthenticated request and the CSRF fails.\n\nCaveat: if the bank changed state on a GET, a simple cross-site link could still trigger it under Lax.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  },
+  {
+    "id": "app-http-wire-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want to delete a cookie that was set with `Set-Cookie: pref=1; Domain=example.com; Path=/app`. Which response header deletes it?",
+    "options": [
+      {
+        "text": "`Set-Cookie: pref=; Domain=example.com; Path=/app; Max-Age=0`",
+        "explanation": "Correct. A cookie is identified by name, domain and path. Re-setting all three with Max-Age=0 replaces it with an expired one, so the browser removes it."
+      },
+      {
+        "text": "`Set-Cookie: pref=; Max-Age=0`",
+        "explanation": "Without matching Domain and Path, this creates (and immediately expires) a different, host-only cookie at the default path. The original is untouched."
+      },
+      {
+        "text": "`Clear-Cookie: pref`",
+        "explanation": "There is no such header. (`Clear-Site-Data: \"cookies\"` exists, but clears all cookies for the origin, not one.)"
+      },
+      {
+        "text": "`Cookie: pref=deleted`",
+        "explanation": "`Cookie` is a request header sent by the browser. Servers change cookies only with `Set-Cookie`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The browser stores cookies keyed by (name, domain, path).\n2. The existing cookie's key: (`pref`, `example.com` domain cookie, `/app`).\n3. A `Set-Cookie` with the same key overwrites it.\n4. `Max-Age=0` (or an `Expires` date in the past) makes the overwrite already expired, so it is deleted.\n5. Get any part of the key wrong and you create a second cookie instead, which is a common \"logout doesn't work\" bug.",
+    "link": {
+      "title": "RFC 6265: HTTP State Management Mechanism — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc6265"
+    }
+  },
+  {
+    "id": "app-http-wire-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each page on your site loads 60 images from the same host. Users carry cookies totalling 2,500 bytes for that host. Roughly how much extra upload does one page view cost from cookies alone?",
+    "options": [
+      {
+        "text": "About 2.5 KB, because cookies are sent once per connection",
+        "explanation": "HTTP/1.1 cookies are sent on every request, not once per connection. (HTTP/2's HPACK can compress repeats, but this question is about the raw header bytes.)"
+      },
+      {
+        "text": "Nothing, because browsers don't send cookies on image requests",
+        "explanation": "Same-site image requests carry cookies in scope. Only cross-site requests may be restricted by SameSite."
+      },
+      {
+        "text": "About 15 MB",
+        "explanation": "That is 100 times too big: 61 × 2,500 B is about 152,500 bytes, not 15 million."
+      },
+      {
+        "text": "About 150 KB",
+        "explanation": "Correct. 61 requests (page plus 60 images) × 2,500 bytes ≈ 152 KB of upload, which matters on slow mobile uplinks."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Requests per page: 1 HTML + 60 images = 61.\n2. Every request to the host carries the `Cookie` header: 2,500 B each.\n3. 61 × 2,500 = 152,500 B ≈ **150 KB**.\n4. At a 1 Mbit/s uplink that is about 1.2 s of upload.\n\nFixes: serve static assets from a cookieless domain (or CDN host), trim cookies, or use HTTP/2 or HTTP/3, whose header compression sends repeated cookies as small table references.",
+    "link": {
+      "title": "Using HTTP cookies — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies"
+    }
+  },
+  {
+    "id": "app-http-wire-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A front-end proxy uses `Content-Length` and ignores `Transfer-Encoding`; the back end honours chunked. An attacker sends:\n\n```\nPOST / HTTP/1.1\nHost: shop.example\nContent-Length: 13\nTransfer-Encoding: chunked\n\n0\n\nSMUGGLED\n```\n\n(lines end in CRLF). What does the back end do?",
+    "options": [
+      {
+        "text": "Rejects the whole thing because chunked bodies cannot follow Content-Length",
+        "explanation": "A strict server should reject it, but this back end, as described, decodes chunked and processes it. That gap is the vulnerability."
+      },
+      {
+        "text": "Ends the first request's body at the `0` chunk and treats `SMUGGLED` as the start of the next request on the connection",
+        "explanation": "Correct. The back end sees an empty chunked body (5 bytes). The leftover 8 bytes are prepended to whatever request comes next on the shared connection, possibly another user's."
+      },
+      {
+        "text": "Reads a 13-byte body and sees one request",
+        "explanation": "That is the front end's view. The back end uses chunked framing, so it disagrees about where the body ends."
+      },
+      {
+        "text": "Waits forever for more chunks",
+        "explanation": "The `0` chunk and final CRLF terminate a chunked body cleanly, so the back end does not wait."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the body bytes after the blank line:\n\n```\n0\\r\\n          3 bytes\n\\r\\n            2 bytes\nSMUGGLED       8 bytes\n               = 13\n```\n\n1. Front end: Content-Length 13, so all 13 bytes belong to this request. It forwards them.\n2. Back end: chunked. Reads `0\\r\\n` (last chunk) then `\\r\\n` (end of trailers). Body ends after **5** bytes.\n3. `SMUGGLED` sits in the back end's buffer and is parsed as the beginning of the next request.\n\nThis is CL.TE smuggling. Fix: reject requests with both headers and close the connection on framing errors.",
+    "link": {
+      "title": "HTTP request smuggling — PortSwigger Web Security Academy",
+      "url": "https://portswigger.net/web-security/request-smuggling"
+    }
+  },
+  {
+    "id": "app-http-wire-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your app runs at `https://www.example.com`. An old marketing microsite at `promo.example.com` is hosted by a third party and could be compromised. Which session-cookie choices stop the microsite from **overwriting or reading** your session cookie? Select all that apply.",
+    "options": [
+      {
+        "text": "Name it `__Host-sid` and set `Path=/; Secure` with no `Domain`",
+        "explanation": "Correct. The browser only accepts a `__Host-` cookie that is host-only, Secure and Path=/, so `promo.example.com` cannot set one that would be sent to `www`, nor will it receive yours."
+      },
+      {
+        "text": "Set `Domain=example.com` so the scope is explicit",
+        "explanation": "This is the worst option: it sends your session cookie to `promo.example.com` too."
+      },
+      {
+        "text": "Set `HttpOnly`",
+        "explanation": "HttpOnly hides the cookie from scripts on your own pages. It does not stop a sibling subdomain setting a `Domain=example.com` cookie with the same name (cookie tossing)."
+      },
+      {
+        "text": "Set `SameSite=Strict`",
+        "explanation": "`promo.example.com` and `www.example.com` are the **same site** (same eTLD+1), so SameSite gives no protection between them."
+      }
+    ],
+    "answer": [
+      0
+    ],
+    "workedExample": "Two threats from a sibling subdomain:\n\n1. **Reading**: happens only if your cookie's scope includes the sibling, i.e. if you set `Domain=example.com`. Host-only cookies avoid this.\n2. **Overwriting (cookie tossing)**: the sibling sets `sid=attacker; Domain=example.com`. Your browser now sends two `sid` cookies to `www`, and many servers take the first.\n\nThe `__Host-` prefix fixes (2): the server can trust that a `__Host-sid` cookie was set by `www` itself, because the browser rejects any `__Host-` cookie that has a Domain attribute.\n\nSameSite does not help: \"site\" is eTLD+1, so the two hosts are same-site.",
+    "link": {
+      "title": "Set-Cookie (cookie prefixes) — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie"
+    }
+  },
+  {
+    "id": "app-http-wire-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An HTTP/1.1 client pipelines three GETs on one connection: `/slow` (takes 2 s), `/a` and `/b` (10 ms each). When does the client receive `/b`'s response?",
+    "options": [
+      {
+        "text": "After about 10 ms, because the server handles requests in parallel",
+        "explanation": "Even if the server computes all three in parallel, HTTP/1.1 has no request IDs, so responses must be sent in request order."
+      },
+      {
+        "text": "After about 4 s, because each request waits for the previous one to be sent",
+        "explanation": "Pipelining sends all requests immediately. The responses wait only on `/slow`, so total is about 2 s plus a few ms."
+      },
+      {
+        "text": "After about 2 s, behind `/slow`, because pipelined responses must come back in order",
+        "explanation": "Correct. This is application-level head-of-line blocking: `/a` and `/b` are ready early but must wait for `/slow` to finish."
+      },
+      {
+        "text": "Never; the server drops pipelined requests",
+        "explanation": "Compliant servers must accept pipelined requests (some buggy intermediaries mishandled them, which is why browsers avoided pipelining)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Client sends `/slow`, `/a`, `/b` back to back.\n2. A response carries no ID; the client matches responses to requests purely by order.\n3. So the server must send `/slow`'s response first, at ~2 s.\n4. `/a` and `/b` follow immediately, arriving at ~2.0 s.\n\nThis head-of-line blocking is why browsers used ~6 parallel connections instead, and why HTTP/2 introduced stream IDs (next lesson).",
+    "link": {
+      "title": "HTTP pipelining — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/HTTP_pipelining"
+    }
+  }
+]

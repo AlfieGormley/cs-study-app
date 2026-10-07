@@ -1,0 +1,373 @@
+[
+  {
+    "id": "wm-debugging-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`curl https://10.0.4.20:8443/health` fails immediately with **Connection refused**. What does that tell you?",
+    "options": [
+      {
+        "text": "The host is unreachable: there is no route to it",
+        "explanation": "Immediate refusal reports explicit rejection of the attempt, not proof of route failure. A local stack or intermediate device may reject it, so no response from the intended host is established."
+      },
+      {
+        "text": "The connection attempt was explicitly refused, commonly by a reset or rejection; check the listener and path policies",
+        "explanation": "Correct. The error alone does not prove that the intended destination host generated a RST. Captures and server checks can establish the source."
+      },
+      {
+        "text": "A firewall silently dropped the SYN",
+        "explanation": "Silent drops cause a **timeout** after SYN retransmissions, not an immediate refusal."
+      },
+      {
+        "text": "The TLS certificate is invalid",
+        "explanation": "A certificate problem appears only after TCP connects, as a TLS error. Refused happens before any TLS."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Immediate refusal differs from waiting for a deadline, but it does not identify a unique cause. Check the intended service address/port and listening sockets, then inspect host/path rejection rules and capture evidence. A timeout can reflect loss, overload, routing or a deadline that was too short; it does not prove silent firewall dropping.",
+    "link": {
+      "title": "ss(8) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man8/ss.8.html"
+    }
+  },
+  {
+    "id": "wm-debugging-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How does `traceroute` discover the routers on a path?",
+    "options": [
+      {
+        "text": "It asks each router for its routing table",
+        "explanation": "Routers do not hand out routing tables to arbitrary hosts; traceroute uses an ICMP side effect."
+      },
+      {
+        "text": "It sends probes with TTL 1, 2, 3, ...; each router that decrements a probe's TTL to zero drops it and replies with ICMP Time Exceeded, revealing its address",
+        "explanation": "Correct as the basic technique. Reply suppression, filtering, tunnels and different probe paths can leave missing or ambiguous hops."
+      },
+      {
+        "text": "It records the route in an IP option that every router fills in",
+        "explanation": "The IP Record Route option exists, but it holds only nine addresses and is widely ignored; traceroute does not rely on it."
+      },
+      {
+        "text": "It reads the path from DNS",
+        "explanation": "DNS maps names to addresses; it knows nothing about the routers between you and a host. Traceroute may *reverse-resolve* hop addresses for display, nothing more."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. TTL 1: the first router decrements to 0, drops the probe, and sends ICMP Time Exceeded. Now you know hop 1 and its RTT.\n2. TTL 2: the first router forwards; the second drops and replies. Hop 2.\n3. Continue until the destination answers (ICMP port unreachable for UDP probes, an echo reply for ICMP, or a SYN-ACK/RST for TCP).\n4. Usually three probes per hop, which is why you see three times per line, or `* * *` when a router does not reply.\n\nThe discovered interfaces need not form one immutable forward path, and displayed RTT includes each probe’s return path. Routers need not respond to every probe.",
+    "link": {
+      "title": "Traceroute — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Traceroute"
+    }
+  },
+  {
+    "id": "wm-debugging-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`curl -w` reports (in seconds, cumulative from start):\n\n```\ndns     0.010\nconnect 0.050\ntls     0.130\nttfb    0.180\ntotal   0.200\n```\n\nAssume one fresh direct TCP connection, no retries, proxies, address-racing delays or reuse, and negligible local overhead. What approximate RTT does the connect-minus-DNS interval suggest?",
+    "options": [
+      {
+        "text": "50 ms",
+        "explanation": "0.050 is the cumulative time at which the connection completed, including the 10 ms DNS lookup."
+      },
+      {
+        "text": "40 ms",
+        "explanation": "Correct. The TCP handshake takes about one RTT: 0.050 − 0.010 = 40 ms."
+      },
+      {
+        "text": "80 ms",
+        "explanation": "80 ms is the TLS phase (0.130 − 0.050), which here is about two round trips."
+      },
+      {
+        "text": "200 ms",
+        "explanation": "200 ms is the total request time, including DNS, TLS, server time and download."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Under the supplied idealisation, 0.050 − 0.010 = 0.040 seconds approximates handshake RTT. The TLS phase is 80 ms, but timing alone does not establish TLS version. The subsequent 50 ms to first byte includes request/network/server effects; it does not measure server CPU time. Body reception lasts another 20 ms.",
+    "link": {
+      "title": "Write out (curl -w) — Everything curl",
+      "url": "https://everything.curl.dev/usingcurl/verbose/writeout.html"
+    }
+  },
+  {
+    "id": "wm-debugging-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`mtr` to a server shows:\n\n```\nhop  host          loss   avg\n 3   isp-agg-1     0.0%   9 ms\n 4   isp-core-7   38.0%  41 ms\n 5   ix-peer-2     0.0%  12 ms\n 6   dc-edge-1     0.0%  13 ms\n 7   server        0.0%  14 ms\n```\n\nWhat should you conclude about hop 4?",
+    "options": [
+      {
+        "text": "Hop 4 is dropping 38% of your traffic; complain to the ISP",
+        "explanation": "Missing intermediate replies do not directly measure the loss rate of traffic forwarded to the destination. Separate probes may also take different paths."
+      },
+      {
+        "text": "Intermediate reply handling is a plausible explanation; these samples do not establish 38% end-to-end forwarding loss",
+        "explanation": "Correct. Rate limits, reply processing and return paths can explain the pattern. Further measurements are needed before claiming the whole forwarding path is fault-free."
+      },
+      {
+        "text": "The path is asymmetric, so the server's 0% is unreliable",
+        "explanation": "The final samples show no observed loss for those probes, but finite sampling and differing probe/application paths limit the conclusion. Asymmetry alone does not invalidate every measurement."
+      },
+      {
+        "text": "Hop 4 is the bottleneck, as shown by its 41 ms latency",
+        "explanation": "These are different probe and return-path samples. Hop 4’s reply RTT alone does not establish an equivalent transit delay or a bottleneck for application traffic."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Hop 4’s probes receive fewer/slower replies, while the displayed destination probes succeeded. That often points to intermediate response behaviour rather than persistent 38% transit loss. It is not proof of one cause: routing, timing and return paths can differ. Compare sustained end-to-end application tests and captures rather than declaring that only loss repeated at every later hop is real.",
+    "link": {
+      "title": "mtr on GitHub",
+      "url": "https://github.com/traviscross/mtr"
+    }
+  },
+  {
+    "id": "wm-debugging-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A new service (`client`, 10.0.1.9) can't reach its database (`db`, 10.0.2.5, port 5432). A capture on the client shows:\n\n```\n00.000 client.41822 > db.5432 [S]\n01.001 client.41822 > db.5432 [S]\n03.004 client.41822 > db.5432 [S]\n07.012 client.41822 > db.5432 [S]\n```\n\nWhich hypothesis is consistent with this capture and should be tested further?",
+    "options": [
+      {
+        "text": "The capture proves that the database has no listener on port 5432",
+        "explanation": "A reachable closed port often returns RST, but filtering, return-path loss or host conditions can hide it. Silence does not prove a listener exists."
+      },
+      {
+        "text": "Something between them silently drops the SYNs, such as a security group, NACL or host firewall, or there is no route back",
+        "explanation": "Correct as a plausible hypothesis. The capture only establishes that replies were not observed here; it does not locate the missing traffic or exclude host overload/unavailability."
+      },
+      {
+        "text": "The capture proves the database is responding normally and only the application accept call is slow",
+        "explanation": "False. A listener or resource overload can affect setup, but these client-side packets do not prove normal server response."
+      },
+      {
+        "text": "DNS returned the wrong IP for the database",
+        "explanation": "Possible in general, but the capture shows the intended IP 10.0.2.5. If it is the right address, DNS is not the issue."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The displayed SYN gaps are 1, 2 and 4 seconds, with no captured reply. That is a supplied trace, not every Linux version’s default schedule. Check both directions and the server: if SYNs arrive, inspect listener/resource state, policy and response transmission; if they do not, inspect upstream forwarding and capture coverage. Missing RST does not uniquely rule out a closed port.",
+    "link": {
+      "title": "tcpdump(1) manual page",
+      "url": "https://www.tcpdump.org/manpages/tcpdump.1.html"
+    }
+  },
+  {
+    "id": "wm-debugging-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After the office moved to a new site-to-site VPN, SSH to a remote server logs in fine, but `cat` of a large log file freezes. Web pages with small responses work; large downloads stall. Which listed test directly probes the suspected size-dependent path behaviour?",
+    "options": [
+      {
+        "text": "`dig` the server's hostname from the office",
+        "explanation": "A DNS query tests name resolution, not the specified packet-size behaviour. A successful login does not prove every DNS answer or address-family path is correct."
+      },
+      {
+        "text": "On Linux, compare ping -4 -M do -s 1472 server with smaller sizes, alongside captures and ICMP-policy checks",
+        "explanation": "Correct. This gathers PMTU-related evidence. Failure alone can also reflect ICMP filtering or local PMTU state; it does not prove blocked fragmentation-needed messages."
+      },
+      {
+        "text": "`traceroute server` to look for a slow hop",
+        "explanation": "Default small traceroute probes may miss a size-dependent issue. Configurable packet sizes and PMTU-oriented tools can offer additional evidence."
+      },
+      {
+        "text": "Restart the SSH server",
+        "explanation": "Restarting is not a direct measurement of size-dependent path behaviour and may destroy useful diagnostic state. First test the path hypothesis."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Small-success/large-failure after adding encapsulation supports an MTU hypothesis. Under IPv4 without options, 1,472 echo payload bytes produce 1,500 IP bytes and 1,372 produce 1,400. Establish the effective MTU, direction and missing error feedback with captures. Correct ICMP/MTU handling or a justified TCP MSS setting can help; a fixed MSS value is not a universal VPN repair.",
+    "link": {
+      "title": "RFC 2923: TCP Problems with Path MTU Discovery",
+      "url": "https://www.rfc-editor.org/rfc/rfc2923"
+    }
+  },
+  {
+    "id": "wm-debugging-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`curl -w` to a download endpoint reports (cumulative seconds):\n\n```\ndns     0.002\nconnect 0.150\ntls     0.452\nttfb    0.610\ntotal   3.610\n```\n\nAssume one new direct TCP/TLS connection, negligible local connect overhead and no proxy/retry/reuse. Which statements are justified? Select all that apply.",
+    "options": [
+      {
+        "text": "The RTT is about 148 ms",
+        "explanation": "Correct. TCP connect ≈ 1 RTT: 0.150 − 0.002 = 148 ms."
+      },
+      {
+        "text": "The measured TLS phase is 302 ms, roughly twice the ideal 148 ms connect-RTT estimate, but this does not identify TLS version",
+        "explanation": "Correct. Several protocol, processing and network effects can affect handshake duration."
+      },
+      {
+        "text": "The server is slow: it spent over 600 ms generating the response",
+        "explanation": "TTFB is cumulative and includes earlier setup. The 158 ms after TLS still contains network/request/server effects, so it does not isolate server execution time."
+      },
+      {
+        "text": "Most of the time is spent transferring the body (3 s), so look at response size and throughput",
+        "explanation": "Correct. The interval after first byte is 3 seconds. Check payload size, streaming/server pauses, path throughput and endpoint limits."
+      },
+      {
+        "text": "DNS is the bottleneck",
+        "explanation": "DNS took 2 ms."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "The intervals are DNS 2 ms, connect 148 ms, TLS 302 ms, post-TLS to first byte 158 ms and remaining transfer 3,000 ms. Under the supplied assumptions connect approximates RTT. Neither TLS version, geographic distance nor server processing time follows uniquely from these numbers. The body interval dominates this sample, but server streaming delays can contribute as well as network throughput.",
+    "link": {
+      "title": "Write out (curl -w) — Everything curl",
+      "url": "https://everything.curl.dev/usingcurl/verbose/writeout.html"
+    }
+  },
+  {
+    "id": "wm-debugging-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the ideal Reno Mathis model, use MSS 1,460 bytes, RTT 20 ms and p = 0.001 (0.1%), with rate ≈ (MSS/RTT) × 1.22/√p and byte-to-bit conversion. What rate does the formula return?",
+    "options": [
+      {
+        "text": "About 0.58 Mbit/s",
+        "explanation": "That is only MSS/RTT (one segment per round trip). The loss term 1.22/√p ≈ 38.6 still has to be multiplied in."
+      },
+      {
+        "text": "About 22.5 Mbit/s",
+        "explanation": "Correct. 1460 × 8 / 0.02 = 584,000 bit/s; × 1.22 / √0.001 = × 38.6 ≈ 22.5 Mbit/s."
+      },
+      {
+        "text": "About 712 Mbit/s",
+        "explanation": "This multiplies by 1.22/p instead of 1.22/√p."
+      },
+      {
+        "text": "About 2.2 Mbit/s",
+        "explanation": "About 2.25 Mbit/s would result from using p = 0.1 (10%), whose square root is ten times √0.001. Using 1% loss would give a different value, about 7.12 Mbit/s."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nMSS/RTT = 1460 x 8 / 0.020\n        = 584,000 bit/s\nsqrt(p) = sqrt(0.001) = 0.0316\n1.22 / 0.0316 = 38.6\nrate = 584,000 x 38.6\n     = ~22.5 Mbit/s\n```\n\nThis is a model result for the supplied Reno assumptions, not a universal loss-based TCP ceiling or a prediction obtained from ping alone.",
+    "link": {
+      "title": "TCP congestion control — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/TCP_congestion_control"
+    }
+  },
+  {
+    "id": "wm-debugging-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A single backlogged TCP flow has a measured effective flight-window limit of 4,000,000 bytes and a fixed 80 ms RTT. Assume sufficient link capacity and no tighter bottleneck. What limit does the window/RTT model give?",
+    "options": [
+      {
+        "text": "10 Gbit/s, since there is no loss",
+        "explanation": "Without loss, the limit is window / RTT. A 4 MB window cannot keep a 10 Gbit/s × 80 ms pipe full."
+      },
+      {
+        "text": "About 400 Mbit/s",
+        "explanation": "Correct. 4 MB × 8 = 32 Mbit per round trip; 32 Mbit / 0.08 s = 400 Mbit/s."
+      },
+      {
+        "text": "About 50 Mbit/s",
+        "explanation": "This forgets to convert bytes to bits (4 MB / 0.08 s = 50 MB/s = 400 Mbit/s)."
+      },
+      {
+        "text": "About 4 Gbit/s",
+        "explanation": "This divides by 8 ms rather than 80 ms."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A sender can have at most one window of unacknowledged data in flight per round trip.\n\n```\nwindow = 4 MB = 32e6 bits\nrate   = 32e6 / 0.080 s\n       = 400e6 bit/s = 400 Mbit/s\n```\n\n2. To fill the link you need the bandwidth-delay product:\n\n```\n10e9 x 0.080 / 8 = 100 MB\n```\n\n3. Identify which measured limit is binding before changing configuration. Socket-memory settings, advertised receive window and cwnd are distinct. The model alone does not prescribe a buffer increase or parallel streams.",
+    "link": {
+      "title": "TCP congestion control — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/TCP_congestion_control"
+    }
+  },
+  {
+    "id": "wm-debugging-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A capture of a slow file upload shows the **server** repeatedly advertising a TCP window of 0, the client sending window probes, then a burst of data each time the window opens. RTT is low and there are no retransmissions. Which constraint is directly evidenced, and where should investigation start?",
+    "options": [
+      {
+        "text": "Packet loss on the network",
+        "explanation": "The supplied trace directly establishes advertised receive-window closure. It does not establish packet loss as its cause; lack of observed retransmissions alone cannot exclude every loss elsewhere."
+      },
+      {
+        "text": "The client's congestion window is too small",
+        "explanation": "The congestion window limits the sender, but here the *receiver* is explicitly saying it has no room."
+      },
+      {
+        "text": "Receiver flow control is stopping new data; investigate application consumption and receive-side resource/window policy",
+        "explanation": "Correct. A zero advertised window is not a raw free-memory reading and does not prove slow disk or a blocked application is the only cause."
+      },
+      {
+        "text": "An MTU black hole",
+        "explanation": "The advertised zero window directly constrains new data. A separate PMTU issue may coexist, but it is not what the specified window advertisements establish."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A zero advertised receive window permits no further ordinary new data in that window. The sender’s probes and later bursts are consistent with flow-control stalls. Inspect receive queues, memory limits, window behaviour and application consumption. The trace does not uniquely identify the server’s disk, nor prove there are no other network problems.",
+    "link": {
+      "title": "ss(8) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man8/ss.8.html"
+    }
+  },
+  {
+    "id": "wm-debugging-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An API gateway fails to allocate resources for new outbound TCP connections while established traffic continues. OS diagnostics point to new-flow resource pressure rather than a path-wide outage. Which are direct resource-exhaustion candidates? Select all that apply.",
+    "options": [
+      {
+        "text": "The connection-tracking (conntrack) or NAT table on the host or a NAT gateway is full",
+        "explanation": "Correct as a candidate. New tracked flows require capacity. Linux conntrack may emit a rate-limited table-full message; a remote NAT gateway has its own telemetry, and logging is not guaranteed for every failure."
+      },
+      {
+        "text": "Ephemeral port exhaustion: many short connections to the same backend address leave sockets in TIME_WAIT, so no source ports are free",
+        "explanation": "Correct as a candidate. Automatic source-port allocation and reusable tuples are finite; TIME_WAIT and active connections can consume them. Pooling or reuse may reduce pressure, while actual remedies depend on the measured allocation policy and limit."
+      },
+      {
+        "text": "An MTU black hole on the path to the backends",
+        "explanation": "A PMTU problem is a path/packet-size issue, not direct exhaustion of the new-flow allocation resources specified here. It can affect setup or later protocol data in other circumstances."
+      },
+      {
+        "text": "Long RTT to the backends",
+        "explanation": "RTT alone is not an exhausted allocation resource, though long connection lifetimes and short application deadlines can contribute to pressure or failures."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Inspect conntrack/NAT capacity, socket/descriptor limits and usable source tuples. A simplified single-destination model with 28,232 ephemeral ports, a 60-second TIME_WAIT hold, no reuse and negligible active lifetime gives 28,232/60 ≈ 470.5 new connections per second. This is not a universal Linux limit: configuration, tuple reuse, source addresses and active connection lifetime alter it. Use errors and counters to establish the actual limit.",
+    "link": {
+      "title": "The USE Method — Brendan Gregg",
+      "url": "https://www.brendangregg.com/usemethod.html"
+    }
+  },
+  {
+    "id": "wm-debugging-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A client's `connect()` is hanging. A capture shows SYNs at t = 0, 1, 3, 7 and 15 s with no replies. If the kernel keeps retrying with the same backoff, when is the next SYN sent?",
+    "options": [
+      {
+        "text": "t = 16 s",
+        "explanation": "This assumes a fixed 1 s interval. The gaps double each time."
+      },
+      {
+        "text": "t = 23 s",
+        "explanation": "This adds 8 s, repeating the previous gap rather than doubling it."
+      },
+      {
+        "text": "t = 31 s",
+        "explanation": "Correct. The gaps are 1, 2, 4, 8 s, so the next is 16 s: 15 + 16 = 31 s."
+      },
+      {
+        "text": "t = 30 s",
+        "explanation": "This doubles the timestamp rather than the gap between attempts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The supplied gaps are 1, 2, 4 and 8 seconds. Continuing that exact rule gives a 16-second next gap, so the next SYN is at 15 + 16 = 31 seconds. This is arithmetic for the specified trace, not a universal current Linux retry schedule. Set application deadlines based on requirements and measured behaviour; no fixed 1–5 second recommendation follows.",
+    "link": {
+      "title": "tcpdump(1) manual page",
+      "url": "https://www.tcpdump.org/manpages/tcpdump.1.html"
+    }
+  }
+]

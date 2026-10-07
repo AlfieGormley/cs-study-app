@@ -1,0 +1,347 @@
+[
+  {
+    "id": "qp-index-tuning-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The \"recent orders\" widget runs this query thousands of times a minute:\n\n```sql\nSELECT * FROM orders\nWHERE customer_id = $1\nORDER BY ordered_on DESC\nLIMIT 5;\n```\n\nWhich single index serves it best?",
+    "options": [
+      {
+        "text": "`(ordered_on, customer_id)`",
+        "explanation": "With the date first, one customer's entries are scattered across every date. The illustrative example uses 1,031 index descents via skip scan and was about 100x slower."
+      },
+      {
+        "text": "`(customer_id, ordered_on)`",
+        "explanation": "Correct. The customer's entries sit together, already sorted by date, so Postgres descends once, reads backwards and stops after 5. No Sort node is needed."
+      },
+      {
+        "text": "Separate indexes on `customer_id` and on `ordered_on`",
+        "explanation": "Postgres could combine them with a bitmap, but bitmaps lose index order, so it would still need to sort. One composite index does both jobs."
+      },
+      {
+        "text": "`(ordered_on)` alone",
+        "explanation": "Postgres would walk the whole table's orders newest first, checking each for customer 42, until it found 5. For an infrequent customer that's most of the index."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the rule: equality columns first, then the sort column.\n\n1. Equality: `customer_id = $1` -> first column.\n2. Sort: `ordered_on DESC` -> second column (a B-tree can be read backwards).\n3. LIMIT 5: with rows already in order, the scan stops early.\n\nAn illustrative plan:\n\n```\nLimit\n-> Index Scan Backward using\n     orders_cust_date_idx\n     Index Cond: (customer_id = 42)\n     Index Searches: 1\nExecution Time: 0.032 ms\n```\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Multicolumn indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "There is an index on `orders(ordered_on)`, but `SELECT * FROM orders WHERE ordered_on >= '2021-01-01'` uses a Seq Scan. The filter matches 847,258 of 1,000,000 rows. Why?",
+    "options": [
+      {
+        "text": "The index is corrupt and needs REINDEX",
+        "explanation": "The same index was used for narrower date ranges. The planner simply chose not to use it for this one."
+      },
+      {
+        "text": "Postgres can't use B-tree indexes for `>=`",
+        "explanation": "B-trees support range comparisons; the index served a one-quarter range in the same lesson."
+      },
+      {
+        "text": "Statistics are stale",
+        "explanation": "The estimate was 846,113 rows against 847,258 actual, which is very accurate. The planner knew exactly how many rows would match."
+      },
+      {
+        "text": "With 85% of rows matching, reading the whole table sequentially is cheaper than an index walk plus heap fetches",
+        "explanation": "Correct. An index would read most of the index and then nearly every heap page anyway, at higher cost per page. The seq scan reads 7,353 pages once, in order."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Matching rows: 85%.\n2. An index scan would read ~85% of the index entries and fetch rows from virtually every heap page (each page holds ~136 rows).\n3. A seq scan reads every page once, sequentially, at `seq_page_cost = 1` instead of `random_page_cost = 4`.\n\nSo the planner picks the seq scan. That's the right decision: indexes are for selective queries.",
+    "link": {
+      "title": "Combining multiple indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-bitmap-scans.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`customers` has a B-tree index on `email`. The login query is `WHERE lower(email) = lower($1)` and EXPLAIN shows a Seq Scan. What's the right fix?",
+    "options": [
+      {
+        "text": "Create an index on the expression: `CREATE INDEX ON customers (lower(email))`",
+        "explanation": "Correct. The index then stores `lower(email)` values, so the condition matches it exactly. In the illustrative comparison the lookup goes from 17 ms to 0.02 ms."
+      },
+      {
+        "text": "Run ANALYZE so the planner notices the existing index",
+        "explanation": "The planner already knows the index exists. It can't use it because the index stores `email`, not `lower(email)`."
+      },
+      {
+        "text": "Add `/*+ INDEX(email) */` as a hint",
+        "explanation": "Core Postgres has no optimiser hints, and no hint can make an index of `email` answer a question about `lower(email)`."
+      },
+      {
+        "text": "Make the index UNIQUE",
+        "explanation": "Uniqueness doesn't change which expression is indexed, so it still can't be used."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "For a selective search using this equality condition, the indexed expression must match (or have a supported equivalent):\n\n| Indexed | Query uses | Usable? |\n|---|---|---|\n| `email` | `email = ...` | Yes |\n| `email` | `lower(email) = ...` | No |\n| `lower(email)` | `lower(email) = ...` | Yes |\n\nBonus: ANALYZE then collects statistics on `lower(email)`, so the estimate changes from the 0.5% default (500 rows) to 1.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Indexes on expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-expressional.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A dashboard runs `WHERE status = 'cancelled' AND ordered_on >= now() - interval '7 days'`. Which composite index puts these conditions into a single contiguous B-tree range, without relying on skip scan?",
+    "options": [
+      {
+        "text": "`(ordered_on, status)`",
+        "explanation": "With the range column first, the scan reads every order of the last week and checks `status` entry by entry. Without skip scan, status does not reduce the initial contiguous date range. PostgreSQL 18 may use skip scan to avoid some irrelevant entries."
+      },
+      {
+        "text": "Either order is identical; B-trees treat columns symmetrically",
+        "explanation": "A B-tree sorts by the first column, then the second within ties. The order decides which conditions bound the scan."
+      },
+      {
+        "text": "`(status, ordered_on)`",
+        "explanation": "Correct. Equality first: all cancelled orders are together, sorted by date, so the scan starts at the first cancelled order from 7 days ago and stops at the last. Both conditions bound it."
+      },
+      {
+        "text": "`(status)` alone",
+        "explanation": "That finds all ~70,000 cancelled orders and checks each date. The date range doesn't narrow the scan."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Picture the sorted index entries:\n\n```\n(status, ordered_on):\n cancelled 2020-01-01\n ...\n cancelled 2026-07-20  <- start\n cancelled 2026-07-27  <- stop\n pending   2020-01-01\n ...\n```\n\nOne contiguous slice. With `(ordered_on, status)` the last 7 days are contiguous, but cancelled, pending and shipped entries are interleaved within them, so about 90% of the slice is skipped entry by entry. Rule: equality, then sort, then range.",
+    "link": {
+      "title": "Use The Index, Luke: ranges and access predicates",
+      "url": "https://use-the-index-luke.com/sql/where-clause/searching-for-ranges/greater-less-between-tuning-sql-access-filter-predicates"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reporting query uses a covering index and normally shows `Index Only Scan ... Heap Fetches: 0` in about 1 ms. Right after a nightly job updates 2% of the table, the same plan shows `Heap Fetches: 20592` and takes 27 ms. What's going on?",
+    "options": [
+      {
+        "text": "The index became bloated and needs REINDEX",
+        "explanation": "Bloat would make the index bigger, but it doesn't explain heap fetches. Those come from visibility checks."
+      },
+      {
+        "text": "The updates cleared all-visible bits in the visibility map, so Postgres must check the heap for row visibility until VACUUM runs",
+        "explanation": "Correct. An index-only scan skips the heap only for pages marked all-visible. The scattered updates touched nearly every page, so nearly every row needed a heap check. After VACUUM it was back to 0 heap fetches and 1.1 ms."
+      },
+      {
+        "text": "The planner switched to a different plan",
+        "explanation": "It's the same Index Only Scan. The node type didn't change; the amount of heap work did."
+      },
+      {
+        "text": "The INCLUDE columns were dropped from the index",
+        "explanation": "Updates don't change an index's definition. If columns were missing, it couldn't be an index-only scan at all."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index entries don't record transaction visibility; the heap does.\n2. The visibility map has a bit per heap page: \"every row here is visible to everyone\".\n3. An UPDATE writes a new row version and clears that bit for the page.\n4. 20,000 updated rows over 7,353 pages (~136 rows each) clears the bit on nearly every page.\n5. So the index-only scan fetches the heap for almost every row: 20,592 heap fetches, 20,661 buffers.\n6. VACUUM can set all-visible bits when every relevant tuple is visible to all transactions; long-running snapshots can delay this.\n\nFix: let autovacuum run sooner on that table, or run `VACUUM` straight after the nightly job.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Index-only scans and covering indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-index-only-scans.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Given `CREATE INDEX orders_pending_idx ON orders (ordered_on) WHERE status = 'pending';`, which queries can use it? Select all that apply.",
+    "options": [
+      {
+        "text": "`WHERE status = 'pending' ORDER BY ordered_on LIMIT 20`",
+        "explanation": "Correct. The WHERE matches the index predicate, and the index supplies `ordered_on` order. An illustrative runtime is 0.049 ms."
+      },
+      {
+        "text": "`WHERE status = 'pending' AND ordered_on < '2021-01-01'`",
+        "explanation": "Correct. The predicate is implied, and the date range is an index condition on the key column."
+      },
+      {
+        "text": "`WHERE ordered_on < '2021-01-01'` (any status)",
+        "explanation": "No. The index only contains pending orders, so using it would miss shipped and cancelled ones."
+      },
+      {
+        "text": "`WHERE status IN ('pending', 'cancelled')`",
+        "explanation": "No. The query asks for cancelled orders too, which aren't in the index."
+      },
+      {
+        "text": "A prepared statement `WHERE status = $1` executed with a generic plan",
+        "explanation": "No. With a generic plan, the planner can't prove `$1` equals 'pending', so it can't assume every row the query needs is in the index."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "The test is: does the query's WHERE clause *logically imply* `status = 'pending'`?\n\n| Query condition | Implies it? |\n|---|---|\n| status = 'pending' AND ... | Yes |\n| ordered_on < ... only | No |\n| status IN (pending, cancelled) | No |\n| status = $1 (generic) | Can't prove |\n\nOnly when it's implied can the planner be sure every row the query needs is in the index.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Partial indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-partial.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each heap page holds about 136 rows, and the rows matching a filter are spread randomly through the table. The filter matches 3.7% of rows. Roughly what fraction of pages contain at least one matching row?",
+    "options": [
+      {
+        "text": "About 3.7%",
+        "explanation": "That would be true only if matching rows were clustered together on the same pages, i.e. high correlation. Randomly spread, they land on most pages."
+      },
+      {
+        "text": "About 37%",
+        "explanation": "That's off by a factor of ten in the wrong direction. With 136 rows per page, a typical page holds about 5 matches."
+      },
+      {
+        "text": "About 50%",
+        "explanation": "There's no reason for a half. Compute the probability that a page has no matches: 0.963 to the power 136."
+      },
+      {
+        "text": "About 99%",
+        "explanation": "Correct. P(page has no match) = 0.963^136, about 0.006, so about 99.4% of pages have at least one. For illustration, 7,306 of 7,353 pages would be about 99.4%."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nP(row misses)   = 1 - 0.037 = 0.963\nP(page misses)  = 0.963 ^ 136\n                = e^(136 x ln 0.963)\n                = e^(-5.13) ~ 0.006\nP(page has one) ~ 0.994\n```\n\nEach page has on average 136 x 0.037 = 5 matches. This is why `correlation` matters so much to the cost of an index scan: with data clustered by the filtered column, the same 3.7% of rows would occupy about 3.7% of the pages.",
+    "link": {
+      "title": "Statistics used by the planner — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/planner-stats.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your database uses the `en_US.UTF-8` collation. A plain B-tree index on `customers(email)` isn't used for `WHERE email LIKE 'c42@%'`. What will let an index serve this query?",
+    "options": [
+      {
+        "text": "Nothing; B-trees can never serve LIKE",
+        "explanation": "B-trees can serve prefix LIKE patterns when the operator class compares byte-wise (the `C` collation or `text_pattern_ops`)."
+      },
+      {
+        "text": "A B-tree index with the `text_pattern_ops` operator class",
+        "explanation": "Correct. It orders values byte by byte, so a prefix becomes a range (`>= 'c42@'` and `< 'c42A'`). This supports the illustrated Index Cond; actual runtime must be measured."
+      },
+      {
+        "text": "A hash index on `email`",
+        "explanation": "Hash indexes support only equality. They have no notion of prefixes or ranges."
+      },
+      {
+        "text": "Rewriting the pattern as `LIKE '%c42@%'`",
+        "explanation": "A leading wildcard makes it worse: no B-tree can serve that. It needs a trigram (pg_trgm) GIN or GiST index."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Locale collations like `en_US` sort with linguistic rules (case and punctuation handled specially), so strings sharing a byte prefix aren't guaranteed to be contiguous in the index.\n2. `text_pattern_ops` sorts by raw bytes, so all strings starting `c42@` are contiguous.\n3. Postgres rewrites the LIKE into a range:\n\n```\nIndex Cond:\n  ((email ~>=~ 'c42@'::text)\n   AND (email ~<~ 'c42A'::text))\nFilter: (email ~~ 'c42@%'::text)\n```\n\n(`A` is the byte after `@`.) It then rechecks the LIKE as a filter.",
+    "link": {
+      "title": "Operator classes and families — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-opclass.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On Postgres 18, with only an index on `(ordered_on, customer_id)`, `WHERE customer_id = 42` shows:\n\n```\nIndex Scan using\n  orders_date_cust_idx\n  Index Cond: (customer_id = 42)\n  Index Searches: 2400\nExecution Time: 6.351 ms\n```\n\nThe table has 2,400 distinct dates. What happened?",
+    "options": [
+      {
+        "text": "Skip scan: Postgres descended the index once per distinct `ordered_on` value, looking for customer 42 within each date",
+        "explanation": "Correct. Postgres 18's B-tree skip scan treats the missing leading column as \"every distinct value\" and probes each, giving 2,400 descents. It works because there are only 2,400 dates."
+      },
+      {
+        "text": "The index was scanned 2,400 times because the query ran in a loop",
+        "explanation": "There's no outer loop here; `Index Searches` counts descents within a single execution of the node."
+      },
+      {
+        "text": "Postgres read the whole table 2,400 times",
+        "explanation": "It's an Index Scan, not a Seq Scan, and each search touches only a few index pages."
+      },
+      {
+        "text": "It's a bug: an index whose first column isn't in the WHERE clause can never be used",
+        "explanation": "That was effectively true for B-trees before Postgres 18 (apart from a full index scan). Skip scan changed it for leading columns with few distinct values."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The index is sorted by date, then customer. Customer 42 may have zero, one or multiple orders within each date.\n2. Skip scan: for each distinct date d, descend to `(d, 42)` and read matches.\n3. Cost grows with the number of distinct leading values: 2,400 descents, 6.4 ms.\n4. With `(customer_id, ordered_on)` it's one descent and about 0.03 ms.\n\nIf the leading column had 1,000,000 distinct values, skip scan would be useless and the planner wouldn't pick it. Design the index for the query.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "PostgreSQL 18 release notes",
+      "url": "https://www.postgresql.org/docs/18/release-18.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`orders.total` is updated frequently as items are added. To make a report index-only, someone changes the index on `customer_id` to `(customer_id) INCLUDE (ordered_on, total)`. Write latency on `orders` rises noticeably. What's the most likely mechanism?",
+    "options": [
+      {
+        "text": "INCLUDE columns are sorted, so every update re-sorts the index",
+        "explanation": "INCLUDE columns aren't part of the key and aren't sorted. That's what distinguishes them from key columns."
+      },
+      {
+        "text": "The index is now larger than the table, so writes go to disk",
+        "explanation": "The covering index (30 MB) is still smaller than the table (59 MB). Size alone isn't the main mechanism here."
+      },
+      {
+        "text": "Updates to `total` can no longer use HOT because this B-tree INCLUDE column changed, increasing index maintenance",
+        "explanation": "Correct for the ordinary B-tree indexes in this example. Changing an INCLUDE column prevents HOT and requires index maintenance. In general, BRIN summarising indexes are an exception, and partial indexes only hold matching rows."
+      },
+      {
+        "text": "The planner now uses the index for the UPDATE's WHERE clause, which is slower",
+        "explanation": "Using an index to find rows to update is usually faster. The extra cost is in maintaining indexes, not finding rows."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "How a HOT update works:\n\n1. If no indexed column changes and the page has free space, the new row version goes on the same page, chained from the old one.\n2. Indexes still point to the old version and follow the chain. No index writes.\n\nOnce `total` is in an index (even as INCLUDE), changing it means:\n\n1. Not HOT-eligible.\n2. New entries in applicable ordinary indexes, plus more WAL; partial indexes omit nonmatching rows and summarising indexes such as BRIN behave differently.\n\nCheck `n_tup_hot_upd` vs `n_tup_upd` in `pg_stat_user_tables` before and after. Only cover columns that rarely change.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Heap-only tuples (HOT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/storage-hot.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're auditing the indexes on a busy table. Which of these statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "An index on `(customer_id)` is usually redundant if there's also one on `(customer_id, ordered_on)`",
+        "explanation": "Correct. The composite index serves any lookup on `customer_id` alone, because it's the leading column. The single-column one adds write cost for little gain (it may be slightly smaller and faster to scan)."
+      },
+      {
+        "text": "`idx_scan = 0` in `pg_stat_user_indexes` on the primary proves an index is safe to drop",
+        "explanation": "Not on its own. Statistics are per server, so replicas may use it. It may serve a monthly job, or enforce a UNIQUE constraint without ever being scanned."
+      },
+      {
+        "text": "If `CREATE INDEX CONCURRENTLY` fails, it can leave an INVALID index that can still add write overhead and needs cleanup or rebuilding",
+        "explanation": "Correct. Depending on the failure stage, an invalid index may still be maintained on writes while being ignored for queries. Drop and retry, or use a supported rebuild procedure."
+      },
+      {
+        "text": "Adding more indexes always makes reads faster and has no effect on reads that don't use them",
+        "explanation": "Indexes compete for cache memory and add planning work. Writes slow down too, which can hurt reads through locks and I/O contention."
+      },
+      {
+        "text": "A B-tree on a low-cardinality column can be much smaller than one on a unique column, thanks to deduplication",
+        "explanation": "Correct. Since Postgres 13, duplicates are stored once with a list of row pointers. In the lesson the date index (2,400 values) was 6.9 MB against 21 MB for the unique primary key."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Leftmost prefix: `(customer_id, ordered_on)` answers `customer_id = ?`. True.\n2. Index usage stats are per instance and reset on stats reset; unique indexes enforce constraints without scans. False.\n3. Concurrent builds can fail on deadlocks or uniqueness violations and leave `INVALID` indexes. True.\n4. Indexes cost cache, planning and write time. False.\n5. Deduplication shrinks indexes with many repeated keys. True.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "CREATE INDEX — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-createindex.html"
+    }
+  }
+]

@@ -1,0 +1,169 @@
+[
+  {
+    "id": "tcp-performance-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A browser opens a brand-new HTTPS connection (TCP plus TLS 1.3) to a server 50 ms away (RTT) and fetches a 10 KB object, which fits in the initial congestion window. Ignoring server processing time, roughly when has the whole response arrived?",
+    "options": [
+      { "text": "After about 50 ms", "explanation": "One RTT is only enough for the TCP handshake. TLS and the request itself each need another round trip." },
+      { "text": "After about 150 ms", "explanation": "Correct. 1 RTT for TCP, 1 RTT for TLS 1.3, then 1 RTT for the request and the response, which fits in one window." },
+      { "text": "After about 250 ms", "explanation": "That would fit TLS 1.2 (two handshake RTTs) plus slow start for a larger object. With TLS 1.3 and a 10 KB object, it's three RTTs." },
+      { "text": "It depends mainly on the link bandwidth", "explanation": "A 10 KB object takes well under a millisecond to transmit on any broadband link; round trips dominate." }
+    ],
+    "answer": 1,
+    "workedExample": "1. TCP handshake: SYN, SYN+ACK. **1 RTT** (the ACK can carry the ClientHello).\n2. TLS 1.3: ClientHello, ServerHello...Finished. **1 RTT**.\n3. HTTP request and response: 10 KB ≈ 7 segments, within the 10-segment initial window. **1 RTT**.\n\n```\n3 RTT x 50 ms = 150 ms\n```\n\nBandwidth barely appears. Reusing the connection would cut it to 50 ms.",
+    "link": { "title": "RFC 9000: QUIC", "url": "https://www.rfc-editor.org/rfc/rfc9000" }
+  },
+  {
+    "id": "tcp-performance-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Whenever someone in a house uploads a large video, everyone's video calls stutter and web pages load slowly, even though download bandwidth is plentiful. Ping times jump from 20 ms to over a second. What is the most likely cause?",
+    "options": [
+      { "text": "The upload is using UDP, which has no congestion control", "explanation": "Most uploads use TCP. And the symptom, huge added delay with the link fully used, comes from a queue, not from the protocol type." },
+      { "text": "The ISP is throttling the household", "explanation": "Throttling caps throughput; it doesn't by itself add a second of delay to every packet. A huge standing queue does." },
+      { "text": "Bufferbloat: the upload fills an oversized buffer at the uplink, and every other packet waits behind it", "explanation": "Correct. A loss-based sender keeps the bottleneck queue full, so queueing delay equals buffer size ÷ uplink rate, which can be a second or more." },
+      { "text": "TCP's receive window on the video-call server is too small", "explanation": "That would limit the call's own throughput, not make pings to everywhere slow. The shared uplink queue affects all traffic." }
+    ],
+    "answer": 2,
+    "workedExample": "1. The uplink is the bottleneck (it's usually far slower than the downlink).\n2. TCP/CUBIC keeps increasing cwnd until it overflows the buffer there, so the buffer stays nearly full.\n3. Every packet, including pings and call audio, waits for the whole queue to drain:\n\n```\ndelay = buffer / uplink rate\n```\n\n4. Fix: active queue management (fq_codel, CAKE) on the home router, ideally with rate shaping just below the uplink speed so the queue forms where it can be managed.",
+    "link": { "title": "Introduction to bufferbloat — bufferbloat.net", "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/" }
+  },
+  {
+    "id": "tcp-performance-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A page loads 20 resources over a single HTTP/2 connection on TCP. One segment carrying part of a JavaScript file is lost. What happens to the other 19 resources' data that arrives just after it?",
+    "options": [
+      { "text": "It waits in the receiver's TCP buffer until the lost segment is retransmitted, because TCP delivers bytes strictly in order", "explanation": "Correct. TCP doesn't know about HTTP/2 streams; it only sees one byte stream, and it can't deliver later bytes past a hole. This is transport-level head-of-line blocking." },
+      { "text": "It is delivered immediately; only the JavaScript stream waits", "explanation": "That's how QUIC behaves, because it knows about streams. TCP has a single sequence space." },
+      { "text": "It is discarded and must be resent too", "explanation": "TCP keeps out-of-order data (and SACKs it); only the missing segment is resent." },
+      { "text": "The browser opens a new connection for the remaining resources", "explanation": "Browsers don't react to individual losses like this; the data is already on its way on the existing connection." }
+    ],
+    "answer": 0,
+    "workedExample": "1. HTTP/2 interleaves frames from many streams into one TCP byte stream.\n2. A loss creates a hole in that byte stream.\n3. The kernel holds all later bytes until the hole is filled, then delivers them in order.\n4. So 19 unrelated resources wait at least one RTT (or an RTO, if it's a tail loss).\n5. QUIC fixes this by giving each stream its own ordering, so only the JavaScript stream waits.",
+    "link": { "title": "RFC 9000: QUIC", "url": "https://www.rfc-editor.org/rfc/rfc9000" }
+  },
+  {
+    "id": "tcp-performance-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the Mathis formula with C = 1.22, what is the approximate throughput ceiling for one Reno-style flow with MSS 1,460 bytes, RTT 20 ms and a loss rate of 0.01%?",
+    "options": [
+      { "text": "About 14 Mbit/s", "explanation": "That's the result for a 100 ms RTT. With 20 ms, the ceiling is five times higher." },
+      { "text": "About 7 Mbit/s", "explanation": "This uses p directly rather than √p, or otherwise mis-scales. √0.0001 = 0.01." },
+      { "text": "About 710 Mbit/s", "explanation": "This is ten times too high, as if √p were 0.001. The square root of 0.0001 is 0.01." },
+      { "text": "About 71 Mbit/s", "explanation": "Correct. 1,460 × 8 / 0.02 = 584,000 bit/s; × 1.22 / 0.01 ≈ 71.2 Mbit/s." }
+    ],
+    "answer": 3,
+    "workedExample": "```\nMSS/RTT = 1460 x 8 / 0.02\n        = 584,000 bit/s\nsqrt(p) = sqrt(0.0001) = 0.01\nrate = 584,000 x 1.22 / 0.01\n     = 71,248,000 bit/s\n     = ~71 Mbit/s\n```\n\nSo even a 1 Gbit/s link gives one such flow only ~71 Mbit/s at this loss rate.",
+    "link": { "title": "The Macroscopic Behavior of the TCP Congestion Avoidance Algorithm", "url": "http://ccr.sigcomm.org/archive/1997/jul97/ccr-9707-mathis.pdf" }
+  },
+  {
+    "id": "tcp-performance-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Reno-style flow gets 71 Mbit/s at RTT 20 ms and 0.01% loss. The same flow is moved to a path with RTT 80 ms and 0.04% loss. According to the Mathis formula, roughly what throughput should you expect?",
+    "options": [
+      { "text": "About 4.5 Mbit/s", "explanation": "This divides by 4 for the loss and by 4 for the RTT. The loss only enters through its square root, so 4× loss costs a factor of 2." },
+      { "text": "About 8.9 Mbit/s", "explanation": "Correct. 4× the RTT divides by 4; 4× the loss divides by √4 = 2. 71 ÷ 8 ≈ 8.9 Mbit/s." },
+      { "text": "About 17.8 Mbit/s", "explanation": "This accounts for the RTT but forgets the higher loss rate." },
+      { "text": "About 35.6 Mbit/s", "explanation": "This accounts for the loss but forgets that throughput is inversely proportional to RTT." }
+    ],
+    "answer": 1,
+    "workedExample": "Mathis: `rate ∝ 1 / (RTT × √p)`.\n\n1. RTT: 20 → 80 ms, a factor of 4. Rate ÷ 4.\n2. Loss: 0.01% → 0.04%, a factor of 4. √4 = 2, so rate ÷ 2.\n3. Combined: ÷ 8.\n\n```\n71.2 / 8 = ~8.9 Mbit/s\n```\n\nDistance and loss compound. This is a core reason CDNs put servers near users.",
+    "link": { "title": "The Macroscopic Behavior of the TCP Congestion Avoidance Algorithm", "url": "http://ccr.sigcomm.org/archive/1997/jul97/ccr-9707-mathis.pdf" }
+  },
+  {
+    "id": "tcp-performance-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A cable modem has a 500 KB upstream buffer and a 10 Mbit/s uplink. A single CUBIC upload keeps that buffer full. How much queueing delay does every other upstream packet see?",
+    "options": [
+      { "text": "About 50 ms", "explanation": "This treats 500 KB as 500 kilobits. Convert bytes to bits first: 500 KB is 4 Mbit." },
+      { "text": "About 4 ms", "explanation": "This is off by a factor of 100. 4 Mbit at 10 Mbit/s takes 0.4 s to drain." },
+      { "text": "About 0.4 s", "explanation": "Correct. 500,000 B × 8 = 4,000,000 bits; ÷ 10,000,000 bit/s = 0.4 s." },
+      { "text": "None, because CUBIC avoids filling buffers", "explanation": "CUBIC is loss-based: it grows until the buffer overflows. Avoiding standing queues is BBR's and AQM's goal." }
+    ],
+    "answer": 2,
+    "workedExample": "```\nbuffer = 500,000 B x 8\n       = 4,000,000 bit\ndelay  = 4e6 / 10e6 bit/s\n       = 0.4 s\n```\n\n400 ms of added latency on every packet is enough to ruin calls and games. CoDel would aim to keep this at around 5 ms.",
+    "link": { "title": "Introduction to bufferbloat — bufferbloat.net", "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/" }
+  },
+  {
+    "id": "tcp-performance-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine features of QUIC compared with TCP plus TLS? Select all that apply.",
+    "options": [
+      { "text": "The transport and TLS 1.3 handshakes are combined, so a new connection needs one round trip, and resumed ones can send 0-RTT data", "explanation": "Correct. QUIC carries the TLS handshake in its own packets rather than layering TLS on an already-established connection." },
+      { "text": "A lost packet only delays the streams whose data it carried", "explanation": "Correct. Each stream has its own ordering, which removes cross-stream head-of-line blocking." },
+      { "text": "A connection survives a client IP address change, because it's identified by connection IDs", "explanation": "Correct. TCP connections are tied to the 4-tuple; QUIC lets the client continue from a new address after path validation." },
+      { "text": "It delivers all streams' data in one global order, like TCP", "explanation": "That would reintroduce head-of-line blocking. Ordering is per stream only." },
+      { "text": "It is implemented in the OS kernel, which makes it faster to deploy", "explanation": "Most QUIC implementations are user-space libraries, and that is exactly what makes deployment fast: no kernel upgrade needed." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "Map each claim to QUIC's design:\n\n1. Combined handshake (RFC 9001 carries TLS in QUIC CRYPTO frames): **true**.\n2. Per-stream ordering: **true**.\n3. Connection IDs enable migration: **true**.\n4. Global ordering: **false**; that's TCP's behaviour.\n5. Kernel implementation: **false**; QUIC lives in libraries like those in Chrome, quiche or msquic, shipped with applications.",
+    "link": { "title": "RFC 9000: QUIC", "url": "https://www.rfc-editor.org/rfc/rfc9000" }
+  },
+  {
+    "id": "tcp-performance-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A router runs CoDel (target 5 ms, interval 100 ms). In case A, a burst arrives and the queue delay spikes to 40 ms but drains within 20 ms. In case B, a bulk upload keeps queue delay between 30 and 40 ms for several seconds. How does CoDel treat them?",
+    "options": [
+      { "text": "It drops packets in both cases, because delay exceeded 5 ms", "explanation": "CoDel deliberately tolerates short spikes. It acts on the **minimum** delay over an interval, so a burst that drains quickly never triggers it." },
+      { "text": "It drops in case A only, because sudden spikes are the problem", "explanation": "Bursts are what buffers exist for. The harmful case is the standing queue in B, which adds delay without adding throughput." },
+      { "text": "It doesn't drop in either case; CoDel only drops when the buffer is full", "explanation": "That describes tail drop, the behaviour CoDel replaces. CoDel acts on delay, long before the buffer is full." },
+      { "text": "It leaves case A alone, and in case B starts dropping (or ECN-marking), at increasing frequency while the delay stays above target", "explanation": "Correct. In B, the minimum delay over every 100 ms interval stays above 5 ms, which signals a standing queue. The senders' congestion control then shrinks their windows." }
+    ],
+    "answer": 3,
+    "workedExample": "1. CoDel measures each packet's **sojourn time** in the queue.\n2. It asks: over the last **interval** (100 ms), was the **minimum** sojourn time above **target** (5 ms)?\n3. Case A: after 20 ms the queue is empty, so the minimum within the interval drops near 0. No action. The burst was absorbed, as intended.\n4. Case B: delay never falls below 30 ms, so the minimum stays above 5 ms. CoDel enters dropping state, and the time between drops shrinks (by the square root of the drop count) until the delay falls.\n5. The result: bursts pass, standing queues are drained.",
+    "link": { "title": "RFC 8289: Controlled Delay Active Queue Management", "url": "https://www.rfc-editor.org/rfc/rfc8289" }
+  },
+  {
+    "id": "tcp-performance-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In TCP, a retransmitted segment reuses the original's sequence numbers. In QUIC, every packet, including one carrying retransmitted data, gets a new, strictly increasing packet number. What is the main benefit?",
+    "options": [
+      { "text": "Packets are smaller, because packet numbers are shorter than sequence numbers", "explanation": "Size isn't the point; QUIC packet numbers can be encoded compactly, but the real gain is unambiguous acknowledgements." },
+      { "text": "Every ACK identifies exactly which transmission arrived, so RTT samples and loss detection are never ambiguous", "explanation": "Correct. TCP needs Karn's rule (or timestamps) because an ACK of a retransmitted segment could refer to either copy. QUIC's ACKs name packet numbers, so this ambiguity disappears." },
+      { "text": "Data never needs to be retransmitted", "explanation": "Lost data must still be resent; it is simply sent in a new packet with a new number, with stream offsets keeping the data's position." },
+      { "text": "It allows middleboxes to reorder packets correctly", "explanation": "Packet numbers are encrypted in QUIC (header protection), so middleboxes can't see them at all." }
+    ],
+    "answer": 1,
+    "workedExample": "1. TCP: the ACK says 'next byte expected', which is the same for the original and the retransmission. Which one took the measured time? Unknown, so TCP discards the sample (Karn) or relies on timestamps.\n2. QUIC separates **what data** (stream ID + offset, inside frames) from **which transmission** (packet number).\n3. A retransmission travels in a fresh packet number. When the ACK arrives naming packet 57, it can only mean that transmission.\n4. Benefits: clean RTT samples after loss, simpler detection of lost retransmissions, and spurious-retransmission detection for free.",
+    "link": { "title": "RFC 9002: QUIC Loss Detection and Congestion Control", "url": "https://www.rfc-editor.org/rfc/rfc9002" }
+  },
+  {
+    "id": "tcp-performance-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Why have useful TCP extensions such as TCP Fast Open struggled to deploy widely, while QUIC deployed quickly? Select all that apply.",
+    "options": [
+      { "text": "Middleboxes drop or strip TCP segments with unfamiliar options or data on a SYN", "explanation": "Correct. Firewalls, NATs and normalisers built around old TCP behaviour interfere with new features, so clients need fallbacks and gains shrink." },
+      { "text": "TCP lives in OS kernels, and kernel updates reach phones and servers slowly", "explanation": "Correct. A new TCP feature needs both ends' kernels updated; QUIC ships inside browsers and server libraries." },
+      { "text": "QUIC encrypts nearly all of its headers, so middleboxes can't come to depend on (or interfere with) its details", "explanation": "Correct. Encryption is QUIC's defence against ossification: there's little for a middlebox to parse." },
+      { "text": "The TCP header has no room for any options", "explanation": "TCP has up to 40 bytes of options. The problem is that the network interferes with new ones, not that there's no space." },
+      { "text": "The IETF has forbidden new TCP extensions since QUIC was standardised", "explanation": "TCP is still being extended (for example RACK-TLP in 2021 and AccECN work). Deployment, not permission, is the barrier." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "The question is about **ossification**:\n\n1. Middleboxes encode assumptions about TCP: new options or SYN data trigger drops. **True.**\n2. Kernel-resident transports change slowly. **True.**\n3. QUIC's response: encrypt everything middleboxes might latch onto, and ship in user space. **True.**\n4. TCP has 40 bytes for options. **False.**\n5. TCP standards work continues. **False.**",
+    "link": { "title": "The QUIC Transport Protocol: Design and Internet-Scale Deployment", "url": "https://research.google/pubs/the-quic-transport-protocol-design-and-internet-scale-deployment/" }
+  },
+  {
+    "id": "tcp-performance-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user on a train is downloading a large file when their phone switches from station Wi-Fi to 5G, getting a new IP address. Compare what happens over HTTP/2 on TCP and over HTTP/3 on QUIC.",
+    "options": [
+      { "text": "Both continue seamlessly, because the server recognises the device", "explanation": "TCP has no concept of a device; a connection is its 4-tuple. A new client IP is a different connection as far as TCP is concerned." },
+      { "text": "Both break; the application must resume the download in either case", "explanation": "QUIC is designed to survive this: the connection ID still matches, so the server accepts packets from the new address after validating the path." },
+      { "text": "The TCP connection breaks because its 4-tuple changed; the QUIC connection continues, because it is identified by connection IDs", "explanation": "Correct. TCP must time out or be reset and the application must reconnect (with new handshakes and slow start). QUIC migrates, validating the new path first." },
+      { "text": "The QUIC connection breaks but TCP continues, because TCP retransmits to the new address", "explanation": "TCP has no way to change a connection's addresses. Segments from the new IP don't match any existing connection." }
+    ],
+    "answer": 2,
+    "workedExample": "1. TCP: the server's socket is keyed on (client IP, client port, server IP, server port). Packets from the new IP match nothing; the old connection eventually times out. The client opens a new one, paying TCP and TLS handshakes plus slow start, and HTTP must resume (for example with a Range request).\n2. QUIC: packets carry a **connection ID**. The server finds the connection by ID, not address, performs **path validation** (a challenge/response to stop address spoofing), and carries on. Congestion control restarts its estimate for the new path, but no handshake is needed.\n\n(Multipath TCP can also handle this, but it requires support at both ends and has had limited deployment.)",
+    "link": { "title": "RFC 9000: QUIC", "url": "https://www.rfc-editor.org/rfc/rfc9000" }
+  }
+]

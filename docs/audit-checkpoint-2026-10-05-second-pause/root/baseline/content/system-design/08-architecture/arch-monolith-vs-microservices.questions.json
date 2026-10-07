@@ -1,0 +1,378 @@
+[
+  {
+    "id": "arch-monolith-vs-microservices-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement about a monolithic architecture is accurate?",
+    "options": [
+      {
+        "text": "A monolith can only ever run as a single server instance.",
+        "explanation": "Wrong. 'Monolith' describes the deployment unit (one build, one process type), not the instance count. Stateless monoliths routinely run as dozens of identical copies behind a load balancer."
+      },
+      {
+        "text": "Modules in a monolith communicate over HTTP, just like microservices.",
+        "explanation": "Wrong. Inside a monolith, modules call each other with in-process function calls. That is one of its big advantages: no network latency, no partial failures."
+      },
+      {
+        "text": "A monolith is deployed as one unit, and its modules can share a single ACID transaction.",
+        "explanation": "Correct. One deployable with one database means placing an order and decrementing stock can be a single transaction, which is much harder once those live in separate services with separate databases."
+      },
+      {
+        "text": "A monolith cannot be split into internal modules with enforced boundaries.",
+        "explanation": "Wrong. That is exactly what a modular monolith is: one deployable with modules that own their own tables and expose explicit interfaces, as Shopify does with its Rails core."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Separate two ideas: *how many deployables* and *how many instances*.\n2. A monolith has one deployable. You can still run 50 copies of it.\n3. Within the process, calls are function calls, and all modules can share one database.\n4. Sharing one database means a single transaction can span features: `BEGIN; INSERT order; UPDATE stock; COMMIT;`.\n5. So the accurate statement is the one about a single deployable plus cross-module ACID transactions.",
+    "link": {
+      "title": "microservices.io: Monolithic architecture pattern",
+      "url": "https://microservices.io/patterns/monolithic.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A company has four teams who barely communicate with each other. According to **Conway's law**, what is the most likely outcome when they build a product together?",
+    "options": [
+      {
+        "text": "The system will end up with roughly four major components whose interfaces mirror how those teams communicate.",
+        "explanation": "Correct. Conway's law says a system's structure copies the communication structure of the organisation that built it. Four weakly connected teams tend to produce four components with awkward, minimal interfaces between them."
+      },
+      {
+        "text": "The system will be a single, tightly integrated component, because they share one product.",
+        "explanation": "Wrong. Sharing a product goal doesn't override communication structure. Tight integration requires frequent communication, which these teams lack."
+      },
+      {
+        "text": "The system's structure will be determined purely by the technology stack chosen.",
+        "explanation": "Wrong. Conway's observation is precisely that organisational structure, not technology choice, drives system structure."
+      },
+      {
+        "text": "Conway's law only applies to compilers, so it says nothing here.",
+        "explanation": "Wrong. Conway's paper used compilers as an example, but the law is a general observation about any system designed by an organisation."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Conway's law: *system structure mirrors the organisation's communication structure*.\n2. Here: four teams, little communication between them.\n3. Each team will build what it can own without negotiating with others, so you get about four components.\n4. Where teams rarely talk, the interfaces between their components will be thin and hard to change.\n5. Practical lesson (the inverse Conway manoeuvre): if you want a different architecture, change the team structure to match it.",
+    "link": {
+      "title": "Martin Fowler: Conway's Law",
+      "url": "https://martinfowler.com/bliki/ConwaysLaw.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user request passes synchronously through 6 microservices in sequence. Each service is independently 99.9% available, and there are no retries or fallbacks. Approximately what availability will users see for this request?",
+    "options": [
+      {
+        "text": "99.9%, because availability is determined by the weakest single service.",
+        "explanation": "Wrong. All six must succeed, so failures compound. The chain is less available than any single link."
+      },
+      {
+        "text": "About 99.4%.",
+        "explanation": "Correct. For a serial chain, multiply the availabilities: 0.999^6 ≈ 0.994. That is about 52 hours of failed requests a year instead of about 9."
+      },
+      {
+        "text": "About 94%.",
+        "explanation": "Wrong. That would be 0.99^6, i.e. treating each service as 99% available. With 99.9% each, the product is about 99.4%."
+      },
+      {
+        "text": "99.99%, because having more services adds redundancy.",
+        "explanation": "Wrong. Redundancy comes from parallel replicas of the same thing. Different services in series are all required, which reduces availability."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In a serial chain, the request succeeds only if every hop succeeds.\n2. Assuming independence: P(success) = 0.999 × 0.999 × ... (6 times) = 0.999^6.\n3. ln(0.999) ≈ -0.0010005, × 6 = -0.006003, so e^-0.006 ≈ 0.99401.\n4. Availability ≈ 99.4%, downtime ≈ 0.6% × 8,760 h ≈ 52.6 h/year.\n5. Compare one service at 99.9%: ≈ 8.8 h/year.\n6. Lesson: long synchronous chains are a hallmark of the distributed monolith. Use async messaging, caching, timeouts and fallbacks to break the chain.",
+    "link": {
+      "title": "Martin Fowler: Microservices",
+      "url": "https://martinfowler.com/articles/microservices.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are warning signs of a **distributed monolith**? Select all that apply.",
+    "options": [
+      {
+        "text": "Releasing the Orders service requires also releasing Inventory and Billing at the same time.",
+        "explanation": "Correct. Lockstep deploys mean the services are not independently deployable, which removes the main benefit of splitting them."
+      },
+      {
+        "text": "Several services read and write the same `customers` table directly.",
+        "explanation": "Correct. A shared database couples services at the schema level; any column change needs every team to coordinate, so they are effectively one service."
+      },
+      {
+        "text": "Each service publishes domain events that other services consume asynchronously.",
+        "explanation": "Wrong. Asynchronous events with owned data are a sign of loose coupling. Consumers can be down without blocking the publisher."
+      },
+      {
+        "text": "Every service depends on a shared `common-models` library that must be upgraded everywhere at once.",
+        "explanation": "Correct. A shared domain model library forces coordinated upgrades and leaks one team's model into everyone's code."
+      },
+      {
+        "text": "Services scale independently, with different instance counts.",
+        "explanation": "Wrong. Independent scaling is a benefit of a genuine microservice split, not a symptom of a distributed monolith."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Define the anti-pattern: services that are *physically* separate but *logically* coupled.\n2. Check each option for coupling:\n   - Lockstep deploys: coupled at release time. Sign.\n   - Shared table: coupled at the data level. Sign.\n   - Async events: decoupled in time and data. Healthy.\n   - Shared model library: coupled at build time. Sign.\n   - Independent scaling: healthy.\n3. Answer: options 0, 1 and 3.",
+    "link": {
+      "title": "microservices.io: Database per service",
+      "url": "https://microservices.io/patterns/data/database-per-service.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 12-engineer startup runs one Rails monolith. Deploys take 10 minutes and the team ships several times a day. The CTO wants to move to microservices \"to be ready for scale\". There's no specific pain today. What's the best recommendation?",
+    "options": [
+      {
+        "text": "Split into microservices now, one per database table, so each is small and simple.",
+        "explanation": "Wrong. Splitting by table creates services with very low cohesion that must call each other constantly, the textbook route to a distributed monolith."
+      },
+      {
+        "text": "Rewrite the whole system as microservices in a new codebase, then switch over in one go.",
+        "explanation": "Wrong. Big-bang rewrites are high risk: the old system keeps changing, the new one lags behind, and cut-over day is a single huge failure point."
+      },
+      {
+        "text": "Keep the monolith but enforce module boundaries (each module owns its tables and exposes an interface), and extract a service only when a concrete need appears.",
+        "explanation": "Correct. A modular monolith keeps the speed and simplicity the team has now, while making a future extraction cheap because boundaries already exist."
+      },
+      {
+        "text": "Keep the monolith exactly as it is; microservices never make sense.",
+        "explanation": "Wrong. Microservices do make sense under real pressures such as many teams or very different scaling needs. The advice is to prepare boundaries, not to rule splitting out."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. List the current pains: none. Deploys are fast and frequent with 12 engineers.\n2. List what microservices would add: network calls, distributed transactions, N pipelines, tracing, on-call for many services.\n3. The main benefit, independent team ownership, barely applies with one or two teams.\n4. But scale may come, so lower the future cost of splitting:\n   - Group code into modules by business capability.\n   - Give each module its own schema and public interface.\n   - Add lint or CI checks that block cross-module internals.\n5. When a concrete reason appears (say notifications needs burst scaling), extract that module with the strangler fig pattern.",
+    "link": {
+      "title": "Martin Fowler: Monolith First",
+      "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're extracting Billing from a monolith with the strangler fig pattern. Billing's tables are also read by the monolith's reporting code via SQL joins. What's the safest sequence?",
+    "options": [
+      {
+        "text": "Move the billing tables to the new service's database first, then fix whatever breaks in reporting.",
+        "explanation": "Wrong. Moving data first breaks every direct SQL reader at once with no fallback. It's a big-bang change disguised as an incremental one."
+      },
+      {
+        "text": "Leave billing tables shared permanently so both the service and the monolith can read and write them.",
+        "explanation": "Wrong. Permanent shared writable tables are the shared-database anti-pattern: the new service is not independently changeable, so you've built a distributed monolith."
+      },
+      {
+        "text": "Route all traffic to the new Billing service on day one and delete the monolith's billing code immediately.",
+        "explanation": "Wrong. This removes the ability to roll back and skips the step of migrating the other readers, so reporting breaks."
+      },
+      {
+        "text": "Put a routing layer in front, replace reporting's direct joins with calls to a billing interface, build the service behind that interface, migrate data, then route traffic and delete old code.",
+        "explanation": "Correct. Decoupling the readers first means the data can move without breaking them, and the routing layer lets you shift and roll back traffic gradually."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Identify every coupling to billing data: the HTTP endpoints *and* the SQL joins from reporting.\n2. Step 1: add a routing layer (gateway) so `/billing/*` can be redirected later.\n3. Step 2: inside the monolith, replace direct joins with calls to a billing interface (or a read model fed by billing events). Now only billing code touches billing tables.\n4. Step 3: build the Billing service implementing the same interface.\n5. Step 4: migrate data (often dual-write or change data capture, then verify).\n6. Step 5: shift traffic gradually (1% → 10% → 100%), keeping rollback available.\n7. Step 6: delete the monolith's billing code and tables.\n8. Rule of thumb: *break the data coupling before you move the data.*",
+    "link": {
+      "title": "Martin Fowler: Strangler Fig Application",
+      "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company with 300 engineers has 120 microservices. They notice that most features require changes to 4–5 services owned by different teams, and every feature needs cross-team meetings. What's the most likely root cause, and what fixes it?",
+    "options": [
+      {
+        "text": "Services are too large; split each into smaller services to reduce coordination.",
+        "explanation": "Wrong. Making services smaller would spread each feature across even more services and teams, increasing coordination."
+      },
+      {
+        "text": "Boundaries were drawn along technical layers or the wrong domain lines; redraw them along business capabilities and align team ownership to match.",
+        "explanation": "Correct. If most changes cut across many services, cohesion is low. Realigning services and teams to business capabilities (an inverse Conway manoeuvre) means most features touch one team's services."
+      },
+      {
+        "text": "The teams use different programming languages; standardising on one language fixes coordination.",
+        "explanation": "Wrong. Language diversity affects hiring and tooling, but it doesn't cause features to span services. The coupling is in the boundaries, not the language."
+      },
+      {
+        "text": "They need a faster network so synchronous calls between services are cheaper.",
+        "explanation": "Wrong. The problem is organisational and design coupling (who must change what), not network latency."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Symptom: a typical feature changes 4–5 services owned by different teams.\n2. A good boundary means *most changes stay inside one service*. Here they don't, so cohesion is low.\n3. Common causes: splitting by technical layer (an API service, a validation service, a data service) or by noun/table instead of capability.\n4. Conway's law says team structure and service structure reinforce each other, so fixing one without the other drifts back.\n5. Fix: map the business capabilities, merge or redraw services around them, and give each team end-to-end ownership.\n6. Measure success: the share of features that need more than one team should fall.",
+    "link": {
+      "title": "Martin Fowler: Microservices",
+      "url": "https://martinfowler.com/articles/microservices.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What distinguishes a **modular monolith** from an ordinary monolith?",
+    "options": [
+      {
+        "text": "It runs each module in a separate container.",
+        "explanation": "Wrong. Separate processes per module would make it microservices. A modular monolith is still one deployable."
+      },
+      {
+        "text": "Its modules have enforced boundaries: each owns its own tables and exposes a public interface, and other modules can't reach into its internals.",
+        "explanation": "Correct. It keeps one build and one deploy, but adds the discipline of service-like boundaries, often checked by tooling."
+      },
+      {
+        "text": "It uses a separate database server per module.",
+        "explanation": "Wrong. It may use a schema per module, but the defining feature is enforced code and data boundaries, not separate servers."
+      },
+      {
+        "text": "It can only be scaled vertically.",
+        "explanation": "Wrong. Like any monolith, it can run many identical copies behind a load balancer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ordinary monolith: one deployable, boundaries by convention only.\n2. Modular monolith: one deployable, boundaries enforced.\n   - Module owns its tables.\n   - Others use its public interface.\n   - Tooling fails the build on violations (Shopify built Packwerk for this).\n3. Payoff: extracting a module later is far easier, because its dependencies are already explicit.",
+    "link": {
+      "title": "Martin Fowler: Monolith First",
+      "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A 150-engineer company runs one monolith. Which of these are good, concrete reasons to extract a particular component into a service? Select all that apply.",
+    "options": [
+      {
+        "text": "Eight teams queue behind a single release train, and a bug in one team's code regularly blocks everyone's deploy.",
+        "explanation": "Correct. Team contention on deploys is the classic organisational reason to split."
+      },
+      {
+        "text": "A PDF rendering component needs 40 CPU-heavy instances at month end, while the rest of the app needs 6.",
+        "explanation": "Correct. Very different scaling profiles mean you're paying to run 40 copies of the whole app for one component's sake."
+      },
+      {
+        "text": "Card data handling must be isolated for PCI compliance, shrinking the audited surface.",
+        "explanation": "Correct. Different security or compliance needs justify a hard process and network boundary."
+      },
+      {
+        "text": "A conference talk said microservices are the modern way to build software.",
+        "explanation": "Wrong. Fashion isn't a concrete pain. You'd take on distributed-systems costs without a matching benefit."
+      },
+      {
+        "text": "Each database table should be its own service so that services are small.",
+        "explanation": "Wrong. Table-per-service creates chatty, tightly coupled services. Boundaries belong at business capabilities."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. For each option, ask: what pain does extraction remove?\n2. Release contention → independent deploys. Yes.\n3. PDF scaling: 40 whole-app copies vs 6 + 40 small workers. Yes.\n4. PCI: a smaller audited boundary. Yes.\n5. 'Modern': no pain named. No.\n6. Table-per-service: increases coupling. No.",
+    "link": {
+      "title": "Martin Fowler: Monolith First",
+      "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After splitting, Orders needs each customer's name and loyalty tier (owned by the Customers service) to render every order page, at 2,000 requests per second. Customer details change rarely. What's the usual choice, and its trade-off?",
+    "options": [
+      {
+        "text": "Let Orders query the Customers database directly with a SQL join.",
+        "explanation": "Wrong. Reading another service's tables couples the two schemas, which is the shared-database trap."
+      },
+      {
+        "text": "Call Customers synchronously on every order page.",
+        "explanation": "Wrong as the usual choice here. It works, but adds a hop and ties Orders' availability to Customers' at 2,000 req/s for data that rarely changes."
+      },
+      {
+        "text": "Merge Customers back into Orders.",
+        "explanation": "Wrong. Merging fixes genuinely over-split services, but customer data is used by many capabilities, so one consumer's need isn't a reason."
+      },
+      {
+        "text": "Keep a local copy of the fields Orders needs, updated from `CustomerUpdated` events; accept that it may be briefly stale.",
+        "explanation": "Correct. Orders stays fast and keeps working if Customers is down. The cost is eventual consistency: a name change takes a moment to appear."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Read path: 2,000 req/s, data rarely changes. That favours a local copy.\n2. Owner publishes `CustomerUpdated {id, name, tier}`.\n3. Orders consumes it and upserts its own `customer_view` table.\n4. Orders' page is a local read: no network hop, no dependency.\n5. Trade-off: staleness of seconds, plus another consumer to run and monitor.\n6. Use a synchronous call instead when you need the very latest value, for example a credit limit check.",
+    "link": {
+      "title": "Martin Fowler: Microservices",
+      "url": "https://martinfowler.com/articles/microservices.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a monolith, placing an order inserts the order and decrements stock in one transaction. After splitting into Orders and Inventory services with separate databases, what replaces that transaction?",
+    "options": [
+      {
+        "text": "A distributed lock held across both databases while each writes.",
+        "explanation": "Wrong. A lock doesn't give atomicity: if one write succeeds and the other fails, you still have inconsistent data."
+      },
+      {
+        "text": "A saga: Orders creates a pending order and emits an event; Inventory reserves stock; if reservation fails, a compensating action cancels the order. Events are published reliably, for example with an outbox.",
+        "explanation": "Correct. Each step is a local transaction, and failures are undone by compensating actions rather than rollback. The outbox makes 'commit then publish' atomic."
+      },
+      {
+        "text": "Nothing; network calls between services are reliable enough not to need it.",
+        "explanation": "Wrong. Partial failure is the defining property of distributed systems; without a plan you'll oversell stock or lose orders."
+      },
+      {
+        "text": "Have both services share one database so the transaction still works.",
+        "explanation": "Wrong. That recreates the shared-database trap: they're one service with a network call in the middle."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before: `BEGIN; INSERT order; UPDATE stock; COMMIT;` All or nothing.\n2. After: two databases, so no single ACID transaction.\n3. Saga:\n   - Orders: insert `PENDING` + outbox event in one local transaction.\n   - Inventory: reserve stock, emit `StockReserved` or `StockRejected`.\n   - Orders: `CONFIRMED`, or `CANCELLED` (compensation).\n4. In between, the order is visibly pending: the business must accept that state.\n5. This is the real price of the split.",
+    "link": {
+      "title": "microservices.io: Saga pattern",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    }
+  },
+  {
+    "id": "arch-monolith-vs-microservices-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A director proposes a two-year big-bang rewrite of a 10-year-old monolith into microservices, with the old system frozen until cut-over. Why do experienced engineers usually push for the strangler fig approach instead?",
+    "options": [
+      {
+        "text": "Strangler fig is faster to complete overall.",
+        "explanation": "Wrong. Incremental migration often takes as long or longer in total. Its value is reducing risk, not total time."
+      },
+      {
+        "text": "Big-bang rewrites aren't technically possible for systems over 10 years old.",
+        "explanation": "Wrong. They're possible; they're just very risky."
+      },
+      {
+        "text": "Strangler fig delivers value and feedback per extracted capability, keeps the old system running as a fallback, and avoids a long freeze where the rewrite chases a moving target.",
+        "explanation": "Correct. Each step is small and reversible via the routing layer, and real traffic validates the new service before the next step."
+      },
+      {
+        "text": "Strangler fig avoids having to migrate any data.",
+        "explanation": "Wrong. Each extracted capability still needs its data migrated. Strangler fig just does it one capability at a time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Big-bang risks: years without user value; business needs change during the freeze; the old system's undocumented behaviour is only discovered at cut-over; one huge risky switch.\n2. Strangler fig: router in front → extract one capability → shift traffic gradually (1%, 10%, 100%) → migrate its data → delete old code.\n3. Each step can be rolled back by changing the route.\n4. Total time may be similar, but risk is spread over many small steps.",
+    "link": {
+      "title": "Martin Fowler: Strangler Fig Application",
+      "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+    }
+  }
+]

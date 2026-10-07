@@ -1,0 +1,344 @@
+[
+  {
+    "id": "dl-detection-recovery-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do relational databases such as PostgreSQL and MySQL handle deadlock by **detection and recovery**, rather than by preventing it with a global lock order?",
+    "options": [
+      {
+        "text": "Detection is the only strategy that guarantees deadlocks never happen",
+        "explanation": "Detection does the opposite: it lets deadlocks happen and breaks them afterwards. Prevention is the strategy that guarantees they never occur."
+      },
+      {
+        "text": "Arbitrary SQL may acquire locks in different orders, while transactional database changes can be rolled back",
+        "explanation": "Correct. Detection supports diverse access orders; applications can still reduce deadlocks with consistent ordering. Transaction rollback is supported, although its cost varies."
+      },
+      {
+        "text": "Databases only ever lock one row at a time, so cycles are impossible",
+        "explanation": "Transactions routinely hold many row locks until commit; that's exactly why the transfer-style deadlock happens in SQL."
+      },
+      {
+        "text": "Detection has no run-time cost, unlike prevention",
+        "explanation": "Detection costs something: building and searching the wait-for graph. Databases limit that cost by checking only after a wait has lasted a while, or by bounding the search."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A globally enforced row order can restrict dynamically discovered SQL access patterns. Detection instead identifies a cycle and rolls back a victim using the engine's transaction machinery. This is attractive when the cost of occasional recovery is acceptable; applications should still keep transactions short and use consistent lock ordering where practical. External side effects are not automatically undone.",
+    "link": {
+      "title": "PostgreSQL docs: Explicit Locking",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "With single-instance resources (for example, row locks), a wait-for graph has an edge `Ti → Tj` when Ti waits for a lock Tj holds. What does a cycle in this graph tell you?",
+    "options": [
+      {
+        "text": "Deadlock is possible but not certain",
+        "explanation": "That's the rule for resources with *several* instances. With one instance per resource, there's no other holder who might release a unit, so a cycle is definite."
+      },
+      {
+        "text": "Nothing, unless the cycle has at least three transactions",
+        "explanation": "A two-transaction cycle is sufficient; even a self-dependency can deadlock a non-reentrant resource. Three transactions are not required."
+      },
+      {
+        "text": "Every transaction on the cycle is deadlocked",
+        "explanation": "Correct. Each waits for the next, and only the next can release what it needs, so none can ever proceed without outside intervention."
+      },
+      {
+        "text": "The graph is out of date and must be rebuilt",
+        "explanation": "A cycle is the very thing detection is looking for. A stale graph is a separate concern; real deadlocks don't resolve themselves, so the cycle persists."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. An edge `Ti → Tj` means Ti can't proceed until Tj releases a lock.\n2. Follow a cycle T1 → T2 → T3 → T1: T1 waits for T2, which waits for T3, which waits for T1.\n3. With one instance per resource, nobody outside the cycle holds what they need, so nothing can break it.\n4. So with single-instance resources, cycle ⇔ deadlock, and detection reduces to cycle detection (DFS, O(V + E)).",
+    "link": {
+      "title": "Wait-for graph — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wait-for_graph"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your Python service gets `psycopg.errors.DeadlockDetected` (SQLSTATE `40P01`) halfway through a top-level transaction that ran three `UPDATE`s. There are no savepoints or external side effects, and a bounded retry is allowed. What should it do?",
+    "options": [
+      {
+        "text": "Rerun just the statement that failed",
+        "explanation": "The whole transaction was rolled back when it was chosen as the victim. The first two updates are gone, so rerunning only the third would apply a partial change."
+      },
+      {
+        "text": "Commit what succeeded, then log the error",
+        "explanation": "There is nothing to commit. The transaction is aborted, and PostgreSQL rejects further statements in it until you roll back."
+      },
+      {
+        "text": "Treat it as a bug and crash, since deadlocks should never happen",
+        "explanation": "Under detection, deadlocks are an expected, recoverable event. Crashing turns a routine retry into an outage (although frequent deadlocks do signal a lock-order problem worth fixing)."
+      },
+      {
+        "text": "Roll back, wait a short random time, then rerun the whole transaction",
+        "explanation": "Correct. The database aborted the whole transaction to break the cycle; the fix is to run it again from the start, with jitter so it doesn't collide again immediately."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Detection breaks a deadlock by aborting one victim transaction and rolling back *all* its changes.\n2. So after `40P01` the database state is as if the transaction never started.\n3. The correct response is to retry the entire unit of work: `BEGIN`, all three updates, `COMMIT`.\n4. Add a small random back-off so the two transactions don't race into the same deadlock again.\n5. Cap the retries; a deadlock that repeats every time points to two code paths locking rows in opposite orders.",
+    "link": {
+      "title": "PostgreSQL docs: Explicit Locking",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print? (`find_cycle` is the DFS from the lesson, which returns the part of the current path from the repeated node onwards. Dicts iterate in insertion order.)\n\n```python\ng = {\"A\": {\"B\"}, \"B\": {\"C\"},\n     \"C\": {\"B\"}, \"D\": {\"A\"}}\nprint(find_cycle(g))\n```",
+    "options": [
+      {
+        "text": "`['A', 'B', 'C']`",
+        "explanation": "A is on the DFS path, but the back edge goes from C to B, not to A. The returned slice starts at B, so A isn't included; A waits on the cycle without being part of it."
+      },
+      {
+        "text": "`['B', 'C']`",
+        "explanation": "Correct. DFS goes A → B → C, then sees C → B with B still grey. It returns the path from B: `['B', 'C']`."
+      },
+      {
+        "text": "`['D', 'A', 'B', 'C']`",
+        "explanation": "D is never visited first: iteration starts at A, and the cycle is found before the loop reaches D. D isn't on the cycle anyway."
+      },
+      {
+        "text": "`None`",
+        "explanation": "There is a cycle, B → C → B. `None` is returned only when the DFS finds no back edge."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the DFS:\n\n```\ndfs(A): path [A]\n  dfs(B): path [A, B]\n    dfs(C): path [A, B, C]\n      C -> B: B is GREY\n      i = path.index(B) = 1\n      return path[1:] = [B, C]\n```\n\n1. A is visited first because it's the first key.\n2. The back edge C → B closes a cycle that starts at B.\n3. A (and D) are *waiting on* the cycle but aren't part of it. Aborting A or D would not release the locks sustaining this cycle; the victim must be B or C.",
+    "link": {
+      "title": "Wait-for graph — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wait-for_graph"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A system has resource types A and B, with 2 units of each, all allocated. Run the multi-instance detection algorithm.\n\n```\n     Alloc  Request\n     A B    A B\nP0   1 0    0 1\nP1   0 1    1 0\nP2   1 0    0 0\nP3   0 1    0 0\n```\n\nWhich processes are deadlocked?",
+    "options": [
+      {
+        "text": "P0 and P1, because each wants what the other holds",
+        "explanation": "P0 and P1 do form a cycle in the resource-allocation graph, but with two units per type a cycle isn't proof. Other holders (P2, P3) can release units."
+      },
+      {
+        "text": "All four, because Available is (0, 0)",
+        "explanation": "Zero available doesn't mean deadlock. P2 and P3 request nothing, so they can finish and release their units."
+      },
+      {
+        "text": "None of them",
+        "explanation": "Correct. P2 and P3 finish first, freeing (1, 1). That satisfies P0's (0, 1); P0 releases (1, 0), and P1's (1, 0) then fits."
+      },
+      {
+        "text": "P2 and P3, because they hold resources without requesting more",
+        "explanation": "Holding without requesting is the opposite of being stuck: a process with an empty request can run to completion."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Available = totals − allocated = (2 − 2, 2 − 2) = (0, 0).\n2. Work = (0, 0). Processes whose request fits:\n\n```\nWork  Run  +Alloc\n0 0   P2   1 0\n1 0   P3   0 1\n1 1   P0   1 0\n2 1   P1   0 1\n2 2   all done\n```\n\n3. Everyone finishes, so nobody is deadlocked.\n4. The lesson from lesson 1 again: with multiple instances, a cycle (P0 ↔ P1) means deadlock is *possible*, not certain.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "The wait-for graph contains `T1 → T2`, `T2 → T3`, `T3 → T1` and `T4 → T1`. Aborting which **single** transaction would break the deadlock? Select all that apply.",
+    "options": [
+      {
+        "text": "T1",
+        "explanation": "Correct. T1 is on the cycle. Aborting it releases its locks, so T3 (and T4) can proceed, and the chain unwinds."
+      },
+      {
+        "text": "T2",
+        "explanation": "Correct. T2 is on the cycle; aborting it lets T1 get its lock."
+      },
+      {
+        "text": "T3",
+        "explanation": "Correct. T3 is on the cycle; aborting it lets T2 proceed."
+      },
+      {
+        "text": "T4",
+        "explanation": "T4 is outside the cycle. Its abort may release unrelated locks, but not those blocking the cycle members."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Find the cycle: T1 → T2 → T3 → T1.\n2. Any member of the cycle holds a lock another member needs. Abort any one and the cycle has a gap.\n3. T4 has an edge *into* the cycle (it waits for T1) but no edge *from* the cycle to it. Nobody on the cycle is waiting for T4.\n4. So the victim must be T1, T2 or T3. Which one is chosen depends on cost: rows changed, work lost, priority and how often each has already been aborted. Once the cycle is broken, T4 will eventually get T1's lock too.",
+    "link": {
+      "title": "Wait-for graph — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Wait-for_graph"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "PostgreSQL, `deadlock_timeout = 1s`. At t = 0 s Session 1 starts waiting for a row Session 2 has locked. At t = 0.3 s Session 2 starts waiting for a row Session 1 has locked, completing a cycle. Roughly when is the deadlock first detected?",
+    "options": [
+      {
+        "text": "At t = 0.3 s, as soon as the cycle forms",
+        "explanation": "A cycle forming does not itself imply that PostgreSQL has run its check. This example's timer starts when each session begins waiting."
+      },
+      {
+        "text": "At t = 1.3 s, a second after the cycle forms",
+        "explanation": "The timer isn't tied to when the cycle forms. Each backend starts its own timer when *it* begins waiting, and Session 1 started at t = 0."
+      },
+      {
+        "text": "At about t = 1.0 s, when Session 1's wait reaches `deadlock_timeout`",
+        "explanation": "Correct. Session 1's timer fires at t = 1.0 s; it walks the wait-for graph, finds the cycle that has existed since t = 0.3 s, and the deadlock is broken."
+      },
+      {
+        "text": "Never, unless `lock_timeout` is also set",
+        "explanation": "PostgreSQL always runs deadlock detection after `deadlock_timeout`. `lock_timeout` is an extra, separate limit on any lock wait."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In PostgreSQL each backend that blocks on a lock arms a timer for `deadlock_timeout`.\n2. Session 1 blocked at t = 0, so its timer fires at t = 1.0 s.\n3. Session 2 blocked at t = 0.3 s; its timer would fire at 1.3 s.\n4. At 1.0 s Session 1 runs the check, finds the cycle S1 → S2 → S1, and the deadlock is resolved, typically by aborting Session 1's own transaction with `40P01`.\n5. So the cycle lasted about 0.7 s. That delay is the price of not checking every short-lived wait. The docs suggest setting the timeout above your typical transaction time.",
+    "link": {
+      "title": "PostgreSQL docs: Lock Management",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-locks.html"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A database uses **wound-wait**. Timestamps: T3 is older than T5, which is older than T7. T5 holds a lock. First T3 requests it, then (separately) T7 requests it. What happens?",
+    "options": [
+      {
+        "text": "T3 is aborted; T7 waits",
+        "explanation": "That's backwards for T3. In wound-wait, an *older* requester never aborts; it wounds the younger holder."
+      },
+      {
+        "text": "T3 waits; T7 is aborted",
+        "explanation": "That's **wait-die**: older requesters wait, younger requesters die. Wound-wait reverses which side gets aborted."
+      },
+      {
+        "text": "T5 is aborted when T3 requests; T7 waits",
+        "explanation": "Correct. Older T3 wounds (aborts) younger holder T5. Younger T7 is allowed to wait for older T5."
+      },
+      {
+        "text": "Both T3 and T7 wait",
+        "explanation": "If everyone may wait for everyone, a cycle can form. Each scheme lets waits go in only one direction of age, so one of these must not wait."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Wound-wait rule, when Ti requests a lock held by Tj:\n   - Ti older: Tj is aborted (wounded).\n   - Ti younger: Ti waits.\n2. T3 (older) requests from T5 (younger): T5 is wounded and rolled back, and T3 gets the lock.\n3. T7 (younger) requests from T5 (older): T7 waits.\n4. Waits only ever go young → old, so no cycle is possible.\n5. A wounded T5 restarts with its *original* timestamp, so newcomers cannot continually outrank it. Eventual success assumes older transactions finish and retries/scheduling are fair.",
+    "link": {
+      "title": "Deadlock prevention algorithms — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_prevention_algorithms"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "This retry wrapper is used for a checkout transaction. Under load you see occasional duplicate confirmation emails. Why?\n\n```python\ndef checkout(conn, order):\n    reserve_stock(conn, order)\n    send_email(order)\n    charge_ledger(conn, order)\n\nrun_txn(conn, lambda c:\n        checkout(c, order))\n```",
+    "options": [
+      {
+        "text": "`run_txn` commits the transaction twice when it retries",
+        "explanation": "Each attempt runs inside a fresh `conn.transaction()` that either commits once or rolls back. Database work isn't duplicated."
+      },
+      {
+        "text": "A deadlock in `charge_ledger` rolls back the database work, but the email has already gone; the retry sends it again",
+        "explanation": "Correct. Rollback undoes rows, not emails. Any side effect outside the database inside the retry loop happens once per attempt."
+      },
+      {
+        "text": "Deadlock detection aborts both transactions, so both send emails",
+        "explanation": "A detector can abort one or more victims as needed. Duplicate emails here come from rerunning the same order after a database rollback, regardless of other victims."
+      },
+      {
+        "text": "The random back-off is too short, so the email server receives the message twice",
+        "explanation": "Back-off timing affects whether transactions collide again, not whether an email already sent is resent. The duplicate comes from rerunning `send_email`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Attempt 1: `reserve_stock` updates rows, `send_email` sends an email, `charge_ledger` hits a deadlock and is chosen as victim.\n2. The database rolls back `reserve_stock`'s changes. The email can't be rolled back; it's left the building.\n3. `run_txn` retries: stock reserved again, *another* email, ledger charged.\n4. Fixes: send the email after commit (or write an outbox row inside the transaction and send it from a separate worker), or make the email idempotent with a dedup key.\n5. General rule: only database work belongs inside a retried transaction.",
+    "link": {
+      "title": "PostgreSQL docs: Explicit Locking",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An e-commerce MySQL primary handles thousands of concurrent transactions updating a few hot inventory rows. The team considers setting `innodb_deadlock_detect = OFF`. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With detection on, maintaining and searching wait dependencies can itself become a bottleneck when many transactions queue on the same rows",
+        "explanation": "Correct. The InnoDB manual documents detector overhead under high contention; exact triggering and scheduling are version-dependent."
+      },
+      {
+        "text": "With detection off, deadlocked transactions hang forever",
+        "explanation": "The waiting statement normally reaches its configured timeout, but its transaction can remain active and retain earlier locks. Application cleanup or whole-transaction timeout rollback is needed."
+      },
+      {
+        "text": "With detection off, lock wait timeouts end overlong waits; applications must handle rollback and choose an appropriate timeout",
+        "explanation": "Correct. InnoDB normally rolls back only the waiting statement on timeout, so explicitly roll back when abandoning the entire transaction. Earlier locks otherwise remain held."
+      },
+      {
+        "text": "A timeout can't distinguish a deadlock from a transaction that's merely slow to release its locks",
+        "explanation": "Correct. A timeout only measures waiting time. Too short and it aborts innocent waiters behind a slow holder; too long and deadlocks linger."
+      },
+      {
+        "text": "With detection off, InnoDB switches to wound-wait to prevent deadlocks",
+        "explanation": "InnoDB has no such fallback. Turning detection off leaves only the lock wait timeout."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Detection precisely identifies wait cycles but can add contention overhead. With it disabled, choose lock wait timeouts based on the workload and handle timeout errors explicitly. InnoDB normally rolls back only the failed statement; a whole-unit retry should first roll back the transaction. A timeout is not proof of deadlock, and no universal few-second value is justified. Shorter transactions and consistent ordering can reduce contention.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-detection-recovery-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A database always picks the transaction with the fewest rows changed as the deadlock victim. A small reporting transaction R keeps colliding with large batch updates and has been aborted 40 times in a row. What is the best fix?",
+    "options": [
+      {
+        "text": "Abort every transaction in the cycle instead of one",
+        "explanation": "That wastes the batch updates' work and doesn't help R: when everything restarts, the same collision and the same cheapest-victim rule apply."
+      },
+      {
+        "text": "Disable deadlock detection and rely on lock timeouts",
+        "explanation": "Timeouts abort whoever has waited too long, which is likely to be R again, and they add delay. It doesn't address the unfair choice."
+      },
+      {
+        "text": "Increase `deadlock_timeout` so detection runs less often",
+        "explanation": "Running detection less often only delays the abort; the same victim is still chosen every time."
+      },
+      {
+        "text": "Include the number of previous aborts (or transaction age) in the victim cost, so R eventually stops being chosen",
+        "explanation": "Correct. This is the standard defence against victim starvation; wait-die and wound-wait achieve the same thing by keeping a restarted transaction's original timestamp."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Repeatedly selecting the cheapest victim can starve a small transaction. A policy can increase protection with age or prior abort count, while assuming finite competing transactions and fair retries. SQL Server offers explicit DEADLOCK_PRIORITY as another control, but HIGH is not immunity: another participant can have equal or higher priority, and a victim still has to be chosen.",
+    "link": {
+      "title": "SQL Server deadlocks guide — Microsoft Learn",
+      "url": "https://learn.microsoft.com/en-us/sql/relational-databases/sql-server-deadlocks-guide"
+    }
+  }
+]

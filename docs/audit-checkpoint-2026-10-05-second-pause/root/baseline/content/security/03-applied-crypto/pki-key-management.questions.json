@@ -1,0 +1,377 @@
+[
+  {
+    "id": "pki-key-management-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A developer encrypts a customer database with AES-256-GCM and stores the key in `config.yaml` in the same repository as the application, deployed to the same server as the database. An attacker gets a shell on the server. What did the encryption achieve?",
+    "options": [
+      {
+        "text": "Full protection, because AES-256 cannot be brute-forced",
+        "explanation": "The cipher is fine; the attacker does not need to break it when the key is sitting next to the data."
+      },
+      {
+        "text": "Protection as long as the config file has restrictive permissions",
+        "explanation": "File permissions help against other local users, but a shell running as the application user (or root) can read it."
+      },
+      {
+        "text": "Very little against this attacker: they can read the key from the config file and decrypt everything",
+        "explanation": "Correct. Encryption moves the secret into the key. Keeping the key beside the data means one compromise yields both."
+      },
+      {
+        "text": "Protection because GCM authenticates the data",
+        "explanation": "Authentication detects tampering; it does not stop someone with the key from decrypting."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: what does the attacker need to read the data? Ciphertext plus key.\n2. Both are on the compromised server.\n3. So encryption only helps against threats that get the data *without* the server: a stolen disk or a leaked backup that excludes the config file.\n4. To protect against a server compromise, the key must live elsewhere (KMS/HSM), with each use authorised and logged, so an attacker must also get past that control.",
+    "link": {
+      "title": "Key Management Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Key_Management_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "pki-key-management-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the defining property of a hardware security module (HSM)?",
+    "options": [
+      {
+        "text": "Keys are generated and used inside tamper-resistant hardware and cannot be exported in plaintext",
+        "explanation": "Correct. Applications send data in and get results out; the key itself never leaves."
+      },
+      {
+        "text": "It performs AES much faster than a CPU",
+        "explanation": "Many HSMs are slower than a modern CPU with AES-NI. Speed is not the point."
+      },
+      {
+        "text": "It stores encrypted backups of your database",
+        "explanation": "HSMs hold keys, not bulk data."
+      },
+      {
+        "text": "It prevents anyone from using the keys without a password typed at the device",
+        "explanation": "HSMs authenticate callers, but authorised applications use keys programmatically. That is why misuse by a compromised caller is still a risk."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "An HSM is defined by key custody:\n\n- Generation inside the device, from its own RNG.\n- Keys flagged non-exportable.\n- Tamper detection that wipes keys if the casing is attacked (higher FIPS levels).\n\nIt does *not* make keys unusable: any caller the HSM authorises can still request signatures or decryptions.",
+    "link": {
+      "title": "Hardware security module — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hardware_security_module"
+    }
+  },
+  {
+    "id": "pki-key-management-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In envelope encryption, which key encrypts the actual file contents?",
+    "options": [
+      {
+        "text": "The KMS key (KEK), by sending the file to the KMS",
+        "explanation": "The KEK only wraps data keys. Sending bulk data to KMS is what envelope encryption avoids, and AWS KMS `Encrypt` accepts only 4 KB."
+      },
+      {
+        "text": "The TLS session key",
+        "explanation": "TLS protects data in transit and its keys vanish when the connection closes; it cannot protect stored files."
+      },
+      {
+        "text": "The user's password",
+        "explanation": "Passwords may be used to derive keys in some systems, but envelope encryption is about DEKs and KEKs."
+      },
+      {
+        "text": "A data encryption key (DEK), generated for that file and used locally",
+        "explanation": "Correct. The DEK encrypts the data on the client; the KEK encrypts the DEK."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nfile --AES-GCM(DEK)--> ciphertext\nDEK  --wrap(KEK)-----> wrapped DEK\nstore: ciphertext + wrapped DEK\n```\n\nThe KEK lives in the KMS. Only the 32-byte DEK ever goes to the KMS to be wrapped or unwrapped.",
+    "link": {
+      "title": "AWS KMS cryptography essentials — AWS docs",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"
+    }
+  },
+  {
+    "id": "pki-key-management-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `seal()` with a 32-byte DEK, 12-byte nonces and 16-byte GCM tags, how many bytes are the wrapped DEK and the data blob for a 1,000-byte record?",
+    "options": [
+      {
+        "text": "Wrapped DEK 32, blob 1,000",
+        "explanation": "This ignores the nonce and authentication tag, which AES-GCM always adds."
+      },
+      {
+        "text": "Wrapped DEK 60, blob 1,028",
+        "explanation": "Correct. Wrapped: 12 + 32 + 16 = 60. Blob: 12 + 1,000 + 16 = 1,028."
+      },
+      {
+        "text": "Wrapped DEK 48, blob 1,016",
+        "explanation": "This counts the tag but forgets the 12-byte nonce prepended to each."
+      },
+      {
+        "text": "Wrapped DEK 60, blob 1,060",
+        "explanation": "The data blob does not contain the DEK; only the nonce and tag are added to the record."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "AES-GCM ciphertext length = plaintext length + 16 (tag). `seal()` also prepends the 12-byte nonce.\n\n```\nwrapped = n2 + GCM(KEK, DEK)\n        = 12 + (32 + 16) = 60\nblob    = n1 + GCM(DEK, data)\n        = 12 + (1000 + 16) = 1028\n```\n\nOverhead per record: 28 bytes, plus 60 for the wrapped DEK if each record has its own key. (A real AWS KMS wrapped key is larger, because it includes key metadata.)",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "pki-key-management-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker with write access to your database copies user 99's encrypted SSN (and wrapped DEK) into user 42's row, then views their own profile as user 42. Your code uses KMS with encryption context `{\"user\": <row's user id>}`. What happens?",
+    "options": [
+      {
+        "text": "User 99's SSN is shown, because the DEK and ciphertext are valid",
+        "explanation": "This would happen without context binding. With encryption context, the wrapped DEK was sealed with `user=99` as associated data."
+      },
+      {
+        "text": "The KMS returns user 42's real SSN",
+        "explanation": "KMS has no idea what any SSN is. It only unwraps keys when the context matches."
+      },
+      {
+        "text": "Decryption fails, because the context `user=42` does not match the `user=99` the data key was wrapped with",
+        "explanation": "Correct. Encryption context is AEAD associated data: it must match exactly, or unwrapping fails."
+      },
+      {
+        "text": "The attacker gets the KEK",
+        "explanation": "The KEK never leaves the KMS, whatever happens to ciphertexts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. When user 99's SSN was written, the DEK was wrapped with context `user=99`.\n2. The attacker moves the bytes, not the context; the application supplies context from the row it is reading: `user=42`.\n3. KMS unwraps only if context matches. `user=42 ≠ user=99`, so the call fails with an error.\n4. This is the 'confused deputy / cut-and-paste' attack, and AAD binding is the fix. The failed decrypt also shows up in the audit log, which is a useful alert.",
+    "link": {
+      "title": "AWS KMS cryptography essentials — AWS docs",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"
+    }
+  },
+  {
+    "id": "pki-key-management-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Why do systems like S3 with KMS use envelope encryption instead of sending each object to the KMS to encrypt? Select all that apply.",
+    "options": [
+      {
+        "text": "The KMS has payload limits (4 KB for AWS KMS `Encrypt`), and objects can be gigabytes",
+        "explanation": "Correct. Only small values like keys fit."
+      },
+      {
+        "text": "Bulk data stays local, so only 32-byte keys cross the network to the KMS",
+        "explanation": "Correct. Encryption happens at local AES speed, avoiding network transfer of the data."
+      },
+      {
+        "text": "Rotating the KEK only requires re-wrapping small DEKs, not re-encrypting all the data",
+        "explanation": "Correct. With versioned KEKs, often nothing needs re-encrypting at all."
+      },
+      {
+        "text": "Envelope encryption makes the data quantum-safe",
+        "explanation": "AES-256 is already considered quantum-resistant and the envelope structure changes nothing about that."
+      },
+      {
+        "text": "It removes the need for access control on the KMS",
+        "explanation": "The opposite: KMS access control is the gatekeeper. Without permission to unwrap a DEK, data cannot be read."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each against what envelope encryption changes:\n\n1. KMS limits payloads, so large data cannot be sent. True.\n2. Data encrypted locally; only DEKs travel. True.\n3. KEK rotation is about wrapping keys, which are tiny. True.\n4. Quantum safety depends on algorithms, not structure. False.\n5. KMS IAM and audit are the reason it is secure. False.",
+    "link": {
+      "title": "AWS KMS cryptography essentials — AWS docs",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"
+    }
+  },
+  {
+    "id": "pki-key-management-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An application encrypts every row of a large table with one long-lived AES-256-GCM key and a fresh random 96-bit nonce per row. It writes about 10 million rows a day. Roughly when does it hit NIST's limit for random nonces, and why does the limit exist?",
+    "options": [
+      {
+        "text": "After about 430 days, at 2^32 encryptions, to keep the chance of a nonce collision negligible",
+        "explanation": "Correct. 2^32 ≈ 4.3 billion; at 10 million a day that is about 430 days. A repeated GCM nonce leaks plaintext XORs and the authentication key."
+      },
+      {
+        "text": "Never; 96-bit nonces have 2^96 possibilities",
+        "explanation": "The limit is set by the birthday bound, which is about the square root of the nonce space, and NIST adds a wide safety margin."
+      },
+      {
+        "text": "After 2^48 rows, when the key wears out",
+        "explanation": "Keys do not 'wear out'. The constraint is collision probability between random nonces."
+      },
+      {
+        "text": "After one day, because keys must be rotated daily",
+        "explanation": "There is no daily requirement; the bound depends on volume."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. NIST SP 800-38D: with random 96-bit IVs, use one key for at most 2^32 encryptions.\n2. 2^32 = 4,294,967,296.\n3. At 10,000,000 per day:\n\n```\n4.29e9 / 1e7 ≈ 429 days\n```\n\n4. Why: random nonces collide by the birthday bound. Staying at 2^32 keeps the collision probability around 2^-32.\n5. A collision under GCM reveals the XOR of two plaintexts and lets an attacker forge tags. Per-object DEKs (envelope encryption) avoid the issue entirely.",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "pki-key-management-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A KMS key that wraps all your DEKs is suspected to have been exposed (an insider exported old key material from a misconfigured backup HSM). You enable automatic key rotation. Is the data now safe?",
+    "options": [
+      {
+        "text": "Yes, rotation replaces the key material, so the leaked version is useless",
+        "explanation": "KMS keeps old versions so it can still unwrap old DEKs. The attacker holds one of those old versions and can unwrap them too."
+      },
+      {
+        "text": "No: old DEKs are still wrapped under the leaked version; you must re-wrap or re-encrypt data under key material the attacker never had",
+        "explanation": "Correct. Rotation protects data encrypted *after* rotation. Recovering from compromise means re-encryption, and if the DEKs themselves may have been unwrapped, fresh DEKs too."
+      },
+      {
+        "text": "Yes, because the data is encrypted with DEKs, not the KEK",
+        "explanation": "The DEKs are protected only by the KEK. Unwrap them with the leaked KEK and the data follows."
+      },
+      {
+        "text": "No, and nothing can be done; delete the data",
+        "explanation": "Re-encryption under new keys fixes the problem for future exposure. Deletion is not necessary."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Scheduled rotation adds a new key version for *new* wraps.\n2. Old wrapped DEKs reference the old version, which is retained so they can still be read.\n3. The attacker holds that old version, so they can unwrap every old DEK they can get.\n4. Recovery:\n  - Re-encrypt data with new DEKs, wrapped under a new key.\n  - Destroy the old key version once nothing depends on it.\n  - Assume data the attacker could already read is exposed.",
+    "link": {
+      "title": "NIST SP 800-57 Part 1: Recommendation for Key Management",
+      "url": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final"
+    }
+  },
+  {
+    "id": "pki-key-management-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A payments service keeps its signing key in an HSM, so it cannot be exported. An attacker compromises the application server, which is authorised to call the HSM's sign operation. What is the realistic impact and the most effective mitigation?",
+    "options": [
+      {
+        "text": "No impact: the HSM protects the key, so the attacker cannot sign",
+        "explanation": "The attacker cannot *copy* the key, but they can call sign through the compromised server, just as the application does."
+      },
+      {
+        "text": "Switching to Ed25519 inside the HSM prevents misuse",
+        "explanation": "The algorithm does not matter: any authorised sign call yields a valid signature."
+      },
+      {
+        "text": "The attacker can extract the key by timing the HSM",
+        "explanation": "Certified HSMs are designed against side channels; the far easier attack is to use the signing API."
+      },
+      {
+        "text": "The attacker can sign arbitrary messages while they control the server; limit what may be signed (policy, rate limits, quorum for high-value operations) and alert on unusual use",
+        "explanation": "Correct. HSMs prevent theft, not misuse. Restricting and monitoring the signing path limits the damage and shortens the window."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. HSM guarantee: the private key never leaves. After the attacker leaves, they have no key.\n2. While inside, they can do anything the application can: request signatures on arbitrary data.\n3. So the risk is a **signing oracle**.\n4. Mitigations:\n  - Sign only well-formed, policy-checked requests (amount limits, known payees).\n  - Rate-limit and log every operation; alert on anomalies.\n  - Require M-of-N approval for rare high-value operations.\n5. After the incident, signatures made during the compromise window must be treated as suspect.",
+    "link": {
+      "title": "Hardware security module — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hardware_security_module"
+    }
+  },
+  {
+    "id": "pki-key-management-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A SaaS product must honour GDPR erasure requests, but customer data also lives in immutable backups kept for a year. Which designs let you make a deleted customer's data unrecoverable? Select all that apply.",
+    "options": [
+      {
+        "text": "Encrypt each customer's data with a per-customer key and destroy that key on erasure (crypto-shredding)",
+        "explanation": "Correct. Backups still contain ciphertext, but without the key it is unreadable. This is the standard approach."
+      },
+      {
+        "text": "Encrypt all customers' data with one shared key and delete the customer's rows",
+        "explanation": "The rows in backups are still decryptable with the shared key, which you cannot destroy without losing everyone's data."
+      },
+      {
+        "text": "Keep per-customer DEKs wrapped by a KMS key, store the wrapped DEKs in a separate, mutable key table (not in the immutable backups), and delete the customer's entry",
+        "explanation": "Correct. Once the wrapped DEK is gone everywhere, the ciphertext in backups cannot be decrypted. The key store's own backups must expire."
+      },
+      {
+        "text": "Rotate the KMS key",
+        "explanation": "Rotation keeps old versions to decrypt old data, so nothing becomes unreadable."
+      },
+      {
+        "text": "Delete the customer's rows from the live database only",
+        "explanation": "Their data remains readable in a year of backups."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "1. You cannot edit immutable backups, so you must make their contents useless.\n2. Crypto-shredding: if each customer's data is encrypted under a key used only for them, destroying the key destroys the data.\n3. The key must not itself be in the immutable backups, or it can be restored. Keep keys in a separate store whose deletions propagate (and whose backups age out quickly).\n4. Shared keys and rotation leave data decryptable.\n5. Deleting live rows only is incomplete.",
+    "link": {
+      "title": "Crypto-shredding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Crypto-shredding"
+    }
+  },
+  {
+    "id": "pki-key-management-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Every API request to your service decrypts a DEK via KMS. Peak load is 20,000 requests per second, above your account's KMS quota, and a regional KMS incident last month caused a full outage. What is the standard fix, and what does it cost in security?",
+    "options": [
+      {
+        "text": "Cache unwrapped DEKs in process memory for a short time (minutes) and reuse them, accepting that a memory compromise exposes cached keys for that window",
+        "explanation": "Correct. Data-key caching cuts KMS calls by orders of magnitude and survives brief outages, at the cost of a bounded exposure window and less granular audit."
+      },
+      {
+        "text": "Store plaintext DEKs in the database next to the data",
+        "explanation": "This removes KMS from the read path but also removes the whole point: anyone with the database has the keys."
+      },
+      {
+        "text": "Switch from AES-256 to AES-128 to make KMS faster",
+        "explanation": "The KMS operation cost is in the network and HSM, not in unwrapping 16 versus 32 bytes."
+      },
+      {
+        "text": "Call KMS `Encrypt` directly on each response instead",
+        "explanation": "This doubles KMS calls and hits the 4 KB limit; it makes both problems worse."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Problem: KMS is a remote, quota-limited dependency on the hot path.\n2. Most requests reuse a small set of DEKs (per tenant, per table, per hour).\n3. Cache: `{wrapped_dek: (dek, expiry)}` in memory, max age a few minutes, max uses per entry.\n4. 20,000 req/s with 100 distinct DEKs and a 5-minute TTL is about 100 KMS calls per 5 minutes.\n5. Cost: plaintext DEKs live in memory longer, and the audit log shows one decrypt per cache fill, not one per request. The AWS Encryption SDK offers exactly this with configurable limits.",
+    "link": {
+      "title": "AWS KMS cryptography essentials — AWS docs",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"
+    }
+  },
+  {
+    "id": "pki-key-management-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why is the DNSSEC root signing key activated only in scheduled, filmed ceremonies requiring several independent smart-card holders, rather than by an automated system?",
+    "options": [
+      {
+        "text": "Because HSMs cannot be automated",
+        "explanation": "HSMs are routinely automated: every cloud KMS is. The ceremony is a deliberate choice for this key."
+      },
+      {
+        "text": "Because the key is used rarely, its compromise would be catastrophic and hard to recover from, so dual control and public transparency are worth the operational cost",
+        "explanation": "Correct. Requiring several independent people (M of N) means no single insider or compromised server can use the key, and filmed, scripted procedures make any deviation visible."
+      },
+      {
+        "text": "Because DNSSEC signatures must be generated by hand",
+        "explanation": "Signing is done by the HSM. The humans authorise its activation; they do not compute anything."
+      },
+      {
+        "text": "To make the key quantum-resistant",
+        "explanation": "Procedures say nothing about the algorithm's quantum resistance."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Match controls to the key's value and frequency of use.\n2. The root KSK signs the root zone's key set a few times a year. Rare use means humans in the loop is affordable.\n3. If it leaked, an attacker could forge DNS answers for the whole internet's DNSSEC, and replacing a root key takes years of coordination.\n4. Controls:\n  - M-of-N smart cards: no single person can activate the HSM.\n  - Two geographically separate facilities.\n  - Scripted, recorded, audited ceremonies.\n5. Contrast with a TLS server key used thousands of times a second: automation and short lifetimes are the right trade-off there.",
+    "link": {
+      "title": "Root KSK Ceremonies — IANA",
+      "url": "https://www.iana.org/dnssec/ceremonies"
+    }
+  }
+]

@@ -1,0 +1,385 @@
+[
+  {
+    "id": "db-transactions-isolation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Under PostgreSQL Read Committed with plain SELECT statements and no intervening writes by T1, transaction T1 reads a product's stock as 5. T2 then sets it to 3 and commits. T1 reads the stock again in the same transaction. What does T1 see, and what is this called?",
+    "options": [
+      {
+        "text": "5; Read Committed guarantees repeatable reads",
+        "explanation": "Wrong. Read Committed only guarantees you never see *uncommitted* data. It takes a fresh snapshot per statement, so committed changes become visible mid-transaction."
+      },
+      {
+        "text": "3; a dirty read",
+        "explanation": "Wrong. A dirty read means seeing *uncommitted* data. T2 had committed, so seeing 3 is not dirty."
+      },
+      {
+        "text": "3; a non-repeatable read",
+        "explanation": "Correct. The same row read twice in one transaction gives different values because another transaction committed in between. Read Committed allows this."
+      },
+      {
+        "text": "An error, because T2's write conflicts with T1's read",
+        "explanation": "Wrong. These plain Read Committed reads do not produce a serialization error merely because T2 changes the row between statements. Locking statements and stronger isolation have different conflict behavior."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Read Committed (the Postgres default) takes a new snapshot at the start of each *statement*.\n2. T1's first `SELECT` snapshot: T2 hasn't committed, so T1 sees 5.\n3. T2 commits stock = 3.\n4. T1's second `SELECT` takes a new snapshot, which includes T2's commit, so T1 sees 3.\n5. Same row, same transaction, different result: a non-repeatable read. Under Repeatable Read (snapshot isolation) T1 would see 5 both times.",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two web requests each run, under PostgreSQL Read Committed:\n```sql\nSELECT likes FROM posts\n WHERE id = 9;            -- 100\n-- app computes 100 + 1\nUPDATE posts SET likes = 101\n WHERE id = 9;\n```\nThey interleave so both read 100 before either writes. What's the final value, and what's the simplest correct fix?",
+    "options": [
+      {
+        "text": "101; use `UPDATE posts SET likes = likes + 1 WHERE id = 9`",
+        "explanation": "Correct. Both write 101, so one increment is lost (a lost update). An atomic `likes = likes + 1` makes the second update wait on the first's row lock and then re-read the committed value, giving 102."
+      },
+      {
+        "text": "102; the database serialises the two updates automatically",
+        "explanation": "Wrong. The database does serialise the two `UPDATE` statements via a row lock, but each writes the literal 101 computed in the app, so the result is still 101."
+      },
+      {
+        "text": "101; switch to Read Uncommitted so each sees the other's write",
+        "explanation": "Wrong. PostgreSQL treats Read Uncommitted as Read Committed, so it neither fixes this race nor adds dirty reads. Engines that implement dirty reads still do not thereby make the read-modify-write atomic."
+      },
+      {
+        "text": "The second update fails with a deadlock",
+        "explanation": "Wrong. There's only one row lock involved, so there's no cycle and no deadlock; the second update simply waits, then proceeds."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace the interleaving:\n\n| Step | T1 | T2 |\n|---|---|---|\n| 1 | read 100 | |\n| 2 | | read 100 |\n| 3 | write 101, commit | |\n| 4 | | write 101, commit |\n\nFinal value: 101, but two likes were added. That's a **lost update**.\n\nFixes, from simplest:\n1. Atomic update: `SET likes = likes + 1`. At step 4, T2's update waits for T1's lock, then (in Read Committed) re-evaluates against the latest committed row: 101 + 1 = 102.\n2. `SELECT ... FOR UPDATE` before computing.\n3. Repeatable Read: T2 would abort with a serialization error and retry.\n4. Optimistic concurrency: `UPDATE ... WHERE id = 9 AND likes = 100`, and retry if 0 rows updated.",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two transactions run concurrently under snapshot isolation (Postgres Repeatable Read). Rule: at least one doctor on call for shift 3; currently Alice and Bob are.\n```sql\n-- each transaction:\nSELECT count(*) FROM doctors\n WHERE shift=3 AND on_call;   -- 2\nUPDATE doctors SET on_call=false\n WHERE name = <self>;\nCOMMIT;\n```\nAlice's transaction updates Alice; Bob's updates Bob. What happens?",
+    "options": [
+      {
+        "text": "The second to commit aborts because both transactions touched the doctors table",
+        "explanation": "Wrong. Snapshot isolation detects conflicts per *row written*, not per table. They wrote different rows, so there's no write-write conflict."
+      },
+      {
+        "text": "Both commit, and nobody is on call: write skew",
+        "explanation": "Correct. Each transaction's snapshot shows 2 doctors on call; each updates a different row, so first-committer-wins never fires. Together they violate the invariant, which SI cannot detect."
+      },
+      {
+        "text": "The second transaction blocks until the first commits, then sees count = 1 and doesn't update",
+        "explanation": "Wrong. Plain SELECT under MVCC does not take row locks (it still takes table-level locks), and SI uses the transaction's starting snapshot anyway. Only `SELECT ... FOR UPDATE` would make one wait."
+      },
+      {
+        "text": "A deadlock is detected and one is aborted",
+        "explanation": "Wrong. Neither transaction waits for a lock held by the other, so there's no wait cycle to detect."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Step through it:\n\n1. Both transactions start; each snapshot shows Alice and Bob on call.\n2. Alice's `count` = 2 → safe to go off call. Bob's `count` = 2 → same conclusion.\n3. Alice updates row *Alice*; Bob updates row *Bob*. No row is written by both.\n4. SI's conflict rule (first committer wins) checks only *write-write* conflicts on the same row, so neither aborts.\n5. Both commit: zero doctors on call.\n\nThat's **write skew**. Fixes:\n- `SELECT ... FROM doctors WHERE shift=3 AND on_call FOR UPDATE` locks both rows, so Bob waits for Alice. Under Repeatable Read Bob then fails with a serialization error and retries (seeing count = 1); under Read Committed he re-checks and sees Alice is off call.\n- Run at `SERIALIZABLE`: Postgres SSI sees each transaction read what the other wrote and aborts one with SQLSTATE 40001.",
+    "link": {
+      "title": "Wikipedia: Snapshot isolation",
+      "url": "https://en.wikipedia.org/wiki/Snapshot_isolation"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A booking service checks for overlaps and then inserts:\n```sql\nBEGIN;\nSELECT 1 FROM bookings\n WHERE room=4 AND slot='09:00'\n FOR UPDATE;\n-- if no rows:\nINSERT INTO bookings(room,slot)\n VALUES (4,'09:00');\nCOMMIT;\n```\nUnder Read Committed, two requests run at once and double-book. Why didn't `FOR UPDATE` help?",
+    "options": [
+      {
+        "text": "`FOR UPDATE` is ignored under Read Committed",
+        "explanation": "Wrong. `FOR UPDATE` works at every level in Postgres; it locks the rows the query returns."
+      },
+      {
+        "text": "The `SELECT` found no rows, so there was nothing to lock: this is a phantom. Use a unique constraint on `(room, slot)` instead",
+        "explanation": "Correct. Row locks only lock rows that exist. With no existing booking, both transactions lock nothing, both see no rows and both insert. A unique index makes the second insert fail, which is the robust fix."
+      },
+      {
+        "text": "The two transactions deadlocked and the database chose to commit both",
+        "explanation": "Wrong. Deadlock resolution always aborts a transaction; it never commits both. And there were no conflicting locks here at all."
+      },
+      {
+        "text": "Read Committed allows dirty writes",
+        "explanation": "Wrong. Every Postgres level prevents dirty writes. The inserted rows are distinct rows, not overwrites of each other."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. T1 runs the `SELECT ... FOR UPDATE`: zero rows match, zero rows locked.\n2. T2 does the same: zero rows, zero locks. Nothing makes it wait.\n3. Both insert `(4, '09:00')` and commit. Double booking.\n4. The problem is a **phantom**: the row that would conflict doesn't exist yet, so it can't be locked.\n5. Fixes:\n   - `CREATE UNIQUE INDEX ON bookings(room, slot)`: T2's insert fails with a unique violation (it waits on T1's uncommitted index entry, then errors when T1 commits).\n   - For overlapping *ranges*, a Postgres exclusion constraint (`EXCLUDE USING gist (room WITH =, during WITH &&)`).\n   - Or run at `SERIALIZABLE` so SSI detects the predicate conflict.",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these statements about MVCC in Postgres are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A long-running plain SELECT without locking clauses does not take row locks that block concurrent UPDATEs of those rows.",
+        "explanation": "Correct. MVCC avoids row-level reader/writer blocking here. SELECT still takes table-level locks that can conflict with DDL."
+      },
+      {
+        "text": "An `UPDATE` overwrites the row in place and keeps the old value in a separate undo log",
+        "explanation": "Wrong for Postgres. Postgres writes a whole new tuple version in the heap and marks the old one with `xmax`. Undo-log designs are how InnoDB and Oracle do it."
+      },
+      {
+        "text": "A transaction left open for hours can cause table bloat by stopping vacuum from removing dead versions",
+        "explanation": "Correct when the transaction retains an old snapshot or transaction-id horizon. Merely issuing BEGIN without acquiring either does not necessarily pin dead tuples."
+      },
+      {
+        "text": "Two concurrent `UPDATE`s of the same row can both proceed without waiting",
+        "explanation": "Wrong. Writers to the *same* row still conflict: the second waits for the first's row lock (and under Repeatable Read may then abort)."
+      },
+      {
+        "text": "Under Repeatable Read, a transaction sees the same snapshot for all its statements",
+        "explanation": "Correct. Postgres takes the snapshot at the first non-transaction-control statement and reuses it, which is why non-repeatable reads and phantoms don't occur at this level."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each against how Postgres MVCC works:\n\n1. Each tuple has `xmin`/`xmax`. Readers filter by their snapshot, so no row-level read locks for a plain SELECT (table locks still apply): (1) true.\n2. `UPDATE` = mark old tuple's `xmax`, insert a new tuple. No in-place overwrite: (2) false.\n3. Vacuum removes a dead tuple only once no snapshot can see it. A session retaining an old snapshot or transaction-id horizon can prevent cleanup of tuple versions newer than that horizon: (3) true. Monitor `pg_stat_activity` and set `idle_in_transaction_session_timeout`.\n4. Same-row writes take a row lock: (4) false.\n5. Repeatable Read = one snapshot per transaction: (5) true.",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Under strict two-phase locking, T1 updates account A then tries to update account B. Concurrently, T2 updates B then tries to update A. What happens?",
+    "options": [
+      {
+        "text": "Both succeed because 2PL releases each lock right after the statement",
+        "explanation": "Wrong. In strict 2PL, exclusive write locks are held until commit or abort; releasing early would allow other transactions to see or overwrite uncommitted data."
+      },
+      {
+        "text": "T2 automatically waits for T1 to commit, then proceeds",
+        "explanation": "Wrong. T1 can't commit: it's waiting for B, which T2 holds. Neither can make progress."
+      },
+      {
+        "text": "Deadlock: each waits for a lock the other holds; the database detects the cycle and aborts one, which must retry",
+        "explanation": "Correct. T1 holds A and waits for B; T2 holds B and waits for A. Lock managers detect the wait-for cycle (or time out) and abort a victim."
+      },
+      {
+        "text": "The database merges the two transactions",
+        "explanation": "Wrong. Databases never merge transactions; each transaction is an independent unit that commits or aborts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. T1: lock A (exclusive). T2: lock B (exclusive).\n2. T1 requests B: held by T2, so T1 waits.\n3. T2 requests A: held by T1, so T2 waits.\n4. Wait-for graph: T1 → T2 → T1. A cycle: deadlock.\n5. The detector (Postgres checks after `deadlock_timeout`, 1 s by default) aborts one transaction; its locks are released and the other proceeds.\n6. Prevention: always acquire locks in a consistent order, e.g. update accounts in ascending id order. Then both transactions lock A first, and one simply waits for the other.",
+    "link": {
+      "title": "Wikipedia: Two-phase locking",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_locking"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You switch a high-traffic Postgres service to `SERIALIZABLE` (SSI). What new behaviour must the application handle?",
+    "options": [
+      {
+        "text": "Reads now block writes, so latency rises under load",
+        "explanation": "Wrong. SSI keeps MVCC's non-blocking reads; its SIREAD markers record what was read without blocking anyone. That's what distinguishes it from 2PL."
+      },
+      {
+        "text": "Transactions can fail with serialization errors (SQLSTATE 40001) at any statement or at commit, and must be retried",
+        "explanation": "Correct. SSI is optimistic: it lets transactions run and aborts one when it detects a dangerous pattern of read/write dependencies. The app needs a retry loop, and transactions should be short and free of external side effects."
+      },
+      {
+        "text": "Nothing: Serializable is just slower",
+        "explanation": "Wrong. Serialization failures are a behavioral change and their frequency and performance cost depend on the workload. Applications need bounded full-transaction retries or an explicit failure response."
+      },
+      {
+        "text": "Deadlocks become impossible",
+        "explanation": "Wrong. Rows written still take locks, so deadlocks between writers are still possible. Serialization failures are an *additional* failure mode."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. SSI tracks dependencies between reads and writes in addition to using snapshots.\n2. A dangerous dependency pattern can trigger SQLSTATE 40001 during a statement or at commit.\n3. Roll back the entire failed transaction, then retry its complete logic in a new transaction and snapshot with bounded backoff.\n```\nfor attempt in 1..5:\n  try:\n    run_complete_transaction()\n    return success\n  except SerializationFailure:\n    rollback_if_needed()\n    if attempt == 5: raise\n    sleep(backoff(attempt))\n```\n4. Keep nontransactional side effects out of retried transaction bodies. A transactional outbox plus an idempotent downstream protocol closes crash and duplicate windows better than a bare post-commit call.",
+    "link": {
+      "title": "Ports and Grittner: Serializable Snapshot Isolation in PostgreSQL",
+      "url": "https://arxiv.org/abs/1208.4179"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly report under Read Committed sums balances across 10 million accounts using one transaction that runs a separate `SELECT sum(...)` per branch, while transfers between branches keep running. Finance complains that the grand total occasionally doesn't match. Which anomaly explains it, and what level fixes it cheaply?",
+    "options": [
+      {
+        "text": "Dirty reads; use Read Committed",
+        "explanation": "Wrong. Read Committed already prevents dirty reads. The issue is seeing *committed* transfers at different points during the scan."
+      },
+      {
+        "text": "Read skew across separate statements; use Repeatable Read (snapshot isolation) so every statement uses one snapshot",
+        "explanation": "Correct. Each statement gets a fresh snapshot under Read Committed, so a transfer can be counted as debited in one branch's sum and not yet credited in another's. A single transaction-wide snapshot makes the totals match one instant in time, and plain snapshot reads do not block row updates, though their table locks can block DDL and old snapshots can delay cleanup."
+      },
+      {
+        "text": "Write skew; use Serializable",
+        "explanation": "Wrong. The report only reads, so there's no write skew. Serializable would work but is more than necessary."
+      },
+      {
+        "text": "Lost updates; add `FOR UPDATE` to the report",
+        "explanation": "Wrong. Locking 10 million rows would block every transfer for the duration of the report: a self-inflicted outage."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Under Read Committed, each *statement* sees a consistent snapshot, but different statements in one transaction can see different moments.\n2. Suppose the report sums branch A, then branch B in a second statement. A £500 transfer from a branch-B account to a branch-A account commits in between: the first sum missed the credit, the second sees the debit. The total is short by the transfer amount.\n3. This is **read skew** (a non-repeatable read across rows).\n4. `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;` gives one snapshot for the whole report.\n5. Bonus: Postgres's `SERIALIZABLE READ ONLY DEFERRABLE` waits for a safe snapshot and then runs with no risk of serialization failure, which is ideal for long reports.",
+    "link": {
+      "title": "Jepsen: Consistency models",
+      "url": "https://jepsen.io/consistency"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A likes counter uses read-then-write code, and you run it on two databases, both at **Repeatable Read**. Each request runs `BEGIN`, reads `likes` (100) with a plain `SELECT`, then runs `UPDATE posts SET likes = 101 WHERE id = 9` and commits. Both read before either writes. What happens on PostgreSQL and on MySQL InnoDB?",
+    "options": [
+      {
+        "text": "Postgres aborts the second transaction (40001), so a retry gives 102; MySQL commits both and ends with 101, a lost update",
+        "explanation": "Correct. Postgres sees that the row changed after the second transaction's snapshot and raises *could not serialize access due to concurrent update*. InnoDB's `UPDATE` is a *current read* of the latest committed row, so it simply writes 101 again."
+      },
+      {
+        "text": "Both databases end with 101 and both transactions commit",
+        "explanation": "Half right. That's what MySQL does, but Postgres Repeatable Read is snapshot isolation with a first-committer-wins check, so it won't let the second writer silently overwrite."
+      },
+      {
+        "text": "Both databases abort the second transaction with a serialization error",
+        "explanation": "Wrong for MySQL. InnoDB uses write locks, but this pattern does not raise PostgreSQL-style snapshot-change serialization errors: the second `UPDATE` waits for the row lock, then overwrites the latest committed row."
+      },
+      {
+        "text": "Postgres ends with 101; MySQL's gap locks block the second `SELECT`, so it reads 101 and writes 102",
+        "explanation": "Wrong. A plain `SELECT` in InnoDB is a non-locking snapshot read and takes no gap locks. Only `FOR UPDATE`/`FOR SHARE` reads lock."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Same level name, different engines. Check what each one actually does.\n2. **Postgres RR** = snapshot isolation.\n   - T1 updates row 9 and commits.\n   - T2's `UPDATE` waits on T1's lock, then sees the row was changed after T2's snapshot.\n   - T2 fails with SQLSTATE 40001. On retry it reads 101 and writes 102.\n3. **MySQL RR**: plain reads use a snapshot, but `UPDATE` reads the newest committed version.\n   - T2's `UPDATE` waits for T1, then writes the literal 101 over T1's 101.\n   - Both commit. Final value 101: a lost update.\n4. Portable fixes: `SET likes = likes + 1`, or `SELECT ... FOR UPDATE` before computing, or a version check:\n```sql\nUPDATE posts SET likes = 101\n WHERE id = 9 AND likes = 100;\n-- 0 rows updated? re-read, retry\n```",
+    "link": {
+      "title": "MySQL: Transaction isolation levels",
+      "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A team migrating from Oracle to Postgres says: \"We ran everything at `SERIALIZABLE` on Oracle, so our booking code was race-free.\" Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Oracle's Serializable is snapshot isolation, so write skew (such as the on-call doctors bug) could still have happened",
+        "explanation": "Correct. Oracle detects write-write conflicts on the same row (`ORA-08177`) but doesn't track read dependencies, so two transactions writing different rows on the basis of the same read can both commit."
+      },
+      {
+        "text": "Oracle offers only Read Committed and Serializable (plus Read Only); it has no Repeatable Read level",
+        "explanation": "Correct. Oracle's default is Read Committed, and its only stronger level is Serializable. Asking it for Repeatable Read isn't an option."
+      },
+      {
+        "text": "Postgres Serializable is also snapshot isolation, so nothing changes after the migration",
+        "explanation": "Wrong. Postgres Serializable is SSI: it adds read-dependency tracking on top of snapshots and aborts transactions that could produce write skew. It is genuinely serializable."
+      },
+      {
+        "text": "Oracle's Serializable takes shared read locks, which is why it was slow",
+        "explanation": "Wrong. Oracle uses multiversion reads at every level; readers don't take shared locks. That's why its Serializable is snapshot isolation rather than 2PL."
+      },
+      {
+        "text": "After moving to Postgres Serializable, the code needs to retry on SQLSTATE 40001",
+        "explanation": "Correct. SSI is optimistic and aborts one transaction of a dangerous pair. Without a retry loop, those aborts become user-facing errors."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Ask what each engine's \"Serializable\" actually is.\n\n| Engine | Serializable is | Write skew? |\n|---|---|---|\n| Oracle | Snapshot isolation | Possible |\n| Postgres | SSI | Prevented |\n\n1. Oracle: snapshot reads plus first-committer-wins on rows both transactions *wrote*. The doctors case writes different rows, so both commit. (1) true.\n2. Oracle's isolation levels are Read Committed (default) and Serializable; READ ONLY is a separate transaction mode. (2) true.\n3. Postgres Serializable is SSI, which is stronger, not the same. (3) false.\n4. Ordinary Oracle consistent reads do not take shared row locks; explicit locking queries are different. (4) false.\n5. SSI aborts with 40001, so retries are required. (5) true.\n\nSo the team's code may have had latent write-skew bugs on Oracle that Postgres will now surface as serialization failures.",
+    "link": {
+      "title": "Oracle: Data concurrency and consistency",
+      "url": "https://docs.oracle.com/en/database/oracle/oracle-database/19/cncpt/data-concurrency-and-consistency.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On MySQL InnoDB at the default Repeatable Read, T1 runs:\n```sql\nBEGIN;\nSELECT count(*) FROM jobs\n WHERE state = 'new';      -- 10\n```\nT2 then inserts one more `'new'` job and commits. T1 continues:\n```sql\nUPDATE jobs SET state = 'taken'\n WHERE state = 'new';\nSELECT count(*) FROM jobs\n WHERE state = 'taken';\n```\nHow many rows does the `UPDATE` change, and what does T1's last `SELECT` return (assuming no jobs were `'taken'` before)?",
+    "options": [
+      {
+        "text": "10 and 10: Repeatable Read freezes T1's view of the table",
+        "explanation": "Wrong. That's what Postgres's snapshot isolation would do. InnoDB's `UPDATE` is a *current read* of the latest committed rows, not a snapshot read."
+      },
+      {
+        "text": "10 and 11: the `UPDATE` uses the snapshot, but the final count sees T2's row",
+        "explanation": "Wrong on both. The `UPDATE` is not limited to the snapshot, and a plain `SELECT` doesn't see other transactions' newer commits; it sees the 11th row only because T1 itself modified it."
+      },
+      {
+        "text": "The `UPDATE` fails with a serialization error because T2 inserted a matching row",
+        "explanation": "Wrong. InnoDB uses write locks, but this pattern does not raise PostgreSQL-style snapshot-change serialization errors. It just locks and updates the current rows."
+      },
+      {
+        "text": "11 and 11: the `UPDATE` sees T2's committed row, and once T1 has modified it, that row becomes visible to T1's snapshot reads",
+        "explanation": "Correct. InnoDB plain reads use the snapshot, but `UPDATE` reads and locks the newest committed rows. T1's own changes are always visible to it, so the newly updated row appears in its later snapshot read."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. InnoDB has two kinds of read inside one Repeatable Read transaction:\n   - **Snapshot (consistent) read**: plain `SELECT`, as of T1's first read.\n   - **Current read**: `UPDATE`, `DELETE`, `FOR UPDATE`/`FOR SHARE`, against the latest committed data, with next-key locks.\n2. First `SELECT`: snapshot read, 10 rows.\n3. T2 commits an 11th `'new'` row.\n4. `UPDATE ... WHERE state = 'new'`: current read finds 11 rows and updates all 11.\n5. Final `SELECT`: snapshot read, but a transaction always sees its own writes. All 11 rows now carry T1's change, so it returns 11.\n6. Takeaway: InnoDB Repeatable Read is not pure snapshot isolation. A phantom row \"appears\" because T1 wrote to it. Postgres RR would update only 10 rows.",
+    "link": {
+      "title": "MySQL: Transaction isolation levels",
+      "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A transaction runs at Postgres **Repeatable Read**. For repeated-read comparisons, assume it makes no intervening writes of its own. Which of these can happen to it? Select all that apply.",
+    "options": [
+      {
+        "text": "It reads a row another transaction has written but not yet committed",
+        "explanation": "Wrong. That's a dirty read, and Postgres never allows dirty reads at any level, not even Read Uncommitted."
+      },
+      {
+        "text": "It commits concurrently with another transaction, and together they break an invariant neither broke alone",
+        "explanation": "Correct. That's write skew. Snapshot isolation only checks rows both transactions wrote, so the on-call doctors bug can happen here."
+      },
+      {
+        "text": "It runs the same range query twice and the second run includes a row another transaction inserted and committed in between",
+        "explanation": "Wrong in Postgres. Its Repeatable Read uses one snapshot for the whole transaction, so phantoms don't appear in reads. (The SQL standard would permit them at this level; Postgres is stricter.)"
+      },
+      {
+        "text": "It fails with SQLSTATE 40001 because it tried to update a row that a concurrent transaction changed and committed after its snapshot",
+        "explanation": "Correct. That's first-committer-wins. The application should retry the whole transaction."
+      },
+      {
+        "text": "It reads the same row twice and gets two different committed values",
+        "explanation": "Wrong. That's a non-repeatable read, which Repeatable Read prevents by reusing the transaction's snapshot."
+      }
+    ],
+    "answer": [
+      1,
+      3
+    ],
+    "workedExample": "Postgres Repeatable Read = snapshot isolation. Go through each:\n\n| Behaviour | At PG RR? |\n|---|---|\n| Dirty read | Never |\n| Write skew | Yes |\n| Phantom in reads | No |\n| 40001 on update conflict | Yes |\n| Non-repeatable read | No |\n\n1. Dirty reads are impossible at every Postgres level.\n2. Write skew slips through, because no row is written by both transactions.\n3. One snapshot per transaction, so neither changed rows nor new rows show up in later reads.\n4. Updating a row changed since the snapshot raises `could not serialize access due to concurrent update`.\n\nAnswer: write skew and the 40001 abort. To also rule out write skew, use Serializable (SSI).",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  }
+]

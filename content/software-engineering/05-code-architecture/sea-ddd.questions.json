@@ -1,0 +1,340 @@
+[
+  {
+    "id": "sea-ddd-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a hotel booking system, which concept is most naturally an **entity** rather than a value object?",
+    "options": [
+      {
+        "text": "A booking that guests can amend, cancel and check in to",
+        "explanation": "Correct. A booking keeps its identity (its reference number) while its dates, guests and status change. You must be able to say \"this is still the same booking\", which is what makes an entity."
+      },
+      {
+        "text": "A date range such as 3–7 March",
+        "explanation": "Two identical date ranges are interchangeable; nothing distinguishes \"this\" 3–7 March from another. That's a value object."
+      },
+      {
+        "text": "A price of £120",
+        "explanation": "Money amounts are the classic value object: any £120 is as good as another, and arithmetic produces new values."
+      },
+      {
+        "text": "A room type such as \"double, sea view\"",
+        "explanation": "As a description it's defined entirely by its attributes, so it's a value. (A specific *room*, number 214, would be an entity.)"
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask: **if all its attributes changed, would it still be the same thing?**\n\n| Concept | Same thing after change? | Kind |\n|---|---|---|\n| Date range | No, just a different range | Value |\n| Booking | Yes, same reference | Entity |\n| Price | No | Value |\n| Room type | No | Value |\n\nOnly the booking has an identity that persists through changes.",
+    "link": {
+      "title": "Value Object — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/ValueObject.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nfrom dataclasses import dataclass\n\n@dataclass(frozen=True)\nclass Money:\n    amount: int\n    currency: str\n\na = Money(10, \"GBP\")\nb = Money(10, \"GBP\")\nprint(a == b, a is b, len({a, b}))\n```",
+    "options": [
+      {
+        "text": "`False False 2`",
+        "explanation": "A dataclass generates `__eq__` comparing fields by default, so equal fields make equal objects."
+      },
+      {
+        "text": "`True True 1`",
+        "explanation": "`a` and `b` are created separately, so they are two distinct objects; `is` checks identity, not equality."
+      },
+      {
+        "text": "`True False 1`",
+        "explanation": "Correct. `==` compares fields (equal), `is` compares identity (two objects), and because `frozen=True` with default `eq=True` generates `__hash__` from the fields, the set collapses them into one element."
+      },
+      {
+        "text": "It raises `TypeError: unhashable type`",
+        "explanation": "This frozen dataclass has hashable int/string fields, so hashing succeeds. Frozen dataclasses containing an unhashable field such as a list can still raise TypeError when hashed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `@dataclass` with default `eq=True` generates `__eq__` comparing `(amount, currency)`. So `a == b` is `True`.\n2. `a is b` asks whether they are the same object in memory. Two constructor calls make two objects: `False`.\n3. With `eq=True` and `frozen=True`, dataclass generates `__hash__` from the fields. Equal values have equal hashes, so `{a, b}` has one element.\n\nThat is exactly value-object semantics: equality by value, immutability, safe to use as dict keys and set members.",
+    "link": {
+      "title": "dataclasses — Python documentation",
+      "url": "https://docs.python.org/3/library/dataclasses.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the **ubiquitous language** in DDD?",
+    "options": [
+      {
+        "text": "The UML notation used to draw domain models",
+        "explanation": "Diagrams can help, but the language is the words people and code share, not a drawing notation."
+      },
+      {
+        "text": "A single programming language used across all of a company's services",
+        "explanation": "DDD says nothing about programming languages. The \"language\" is the domain vocabulary."
+      },
+      {
+        "text": "A company-wide glossary that every team must use with identical meanings",
+        "explanation": "Ubiquitous language is scoped to a bounded context. The same word can legitimately mean different things in Sales and Billing."
+      },
+      {
+        "text": "A shared vocabulary used by developers and domain experts in conversation and in the code itself",
+        "explanation": "Correct. If the business says \"bind a policy\", the code has `policy.bind()`. Keeping terms identical removes translation errors between what experts mean and what the code does."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Look for the two key features in an answer:\n\n1. **Shared** between experts and developers, so conversations and code use the same words.\n2. **Bounded**: it's consistent *within a context*, not across the whole enterprise.\n\nOnly the \"shared vocabulary\" answer has the first feature without contradicting the second; the company-wide glossary fails the second.",
+    "link": {
+      "title": "Domain Driven Design — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DomainDrivenDesign.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An `Order` aggregate allows at most 50 lines. A developer writes `order.lines.append(OrderLine(...))` in a service because it's quicker. What principle does this violate, and what's the consequence?",
+    "options": [
+      {
+        "text": "Value objects must be immutable; `OrderLine` should be frozen",
+        "explanation": "Even with a frozen `OrderLine`, appending to the list from outside still bypasses the root. The issue is access to the aggregate's internals."
+      },
+      {
+        "text": "Only the aggregate root should be modified from outside; bypassing `add_line` lets the 50-line invariant (and draft-only rule) be broken",
+        "explanation": "Correct. The root exists to enforce invariants on the whole cluster. Exposing the internal list means any caller can skip the checks, so the invariant is no longer guaranteed."
+      },
+      {
+        "text": "One repository per aggregate; the service should use an `OrderLineRepository`",
+        "explanation": "A separate line repository would make the problem worse, letting lines be saved independently of the root's rules."
+      },
+      {
+        "text": "Reference other aggregates by id; `OrderLine` should hold an order id",
+        "explanation": "`OrderLine` is inside the `Order` aggregate, not a separate aggregate. Referencing by id applies *between* aggregates."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Invariants of the aggregate: ≤ 50 lines, lines only while `draft`.\n2. `Order.add_line` checks both before appending.\n3. `order.lines.append(...)` goes around it. Nothing stops a 51st line or a line on a shipped order.\n4. Fix: keep the list private (`_lines`), expose a read-only view (a tuple or property), and route all changes through root methods.",
+    "link": {
+      "title": "DDD Aggregate — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DDD_Aggregate.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two requests load order 42 (`version = 7`) at the same time. Request A adds a line and saves first. Then request B, which also added a line, runs:\n\n```sql\nUPDATE orders\nSET version = 8\nWHERE id = 42 AND version = 7;\n```\n\nWhat happens? Assume A committed the root version and child rows together, and B runs this statement against current committed data (for example PostgreSQL Read Committed).",
+    "options": [
+      {
+        "text": "B's update succeeds and both lines are kept",
+        "explanation": "A already moved the version to 8, so `version = 7` no longer matches. And if B overwrote the lines, A's line would be lost."
+      },
+      {
+        "text": "The database blocks B until A's transaction ends, then applies B",
+        "explanation": "Optimistic UPDATE statements also take database locks, but A has already committed in this scenario. With a concurrently running A, B could wait before detecting a conflict; stronger isolation can raise a serialization error."
+      },
+      {
+        "text": "B's update matches 0 rows, so the application detects a conflict and should reload and retry (or report it)",
+        "explanation": "Correct. That's optimistic concurrency. A bumped the version to 8, so B's `WHERE version = 7` matches nothing. The app treats 0 updated rows as a conflict, rather than silently overwriting A's change."
+      },
+      {
+        "text": "The database raises a unique-constraint violation",
+        "explanation": "Nothing here touches a unique constraint. The update simply affects zero rows, which the application must check for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Both read version 7.\n2. A writes with `WHERE version = 7` and sets version 8: 1 row updated.\n3. B writes with `WHERE version = 7`: the row now has version 8, so **0 rows updated**.\n4. The repository checks the row count, raises a `ConcurrencyError`, and the use case reloads the order (now with A's line), re-applies B's change and retries.\n\nOne version column on the **root** protects the whole aggregate, which is why the aggregate is also the unit of concurrency control.\nThis protects child rows only if every writer advances the root version and persists the child changes in the same transaction; check and roll back failed attempts.",
+    "link": {
+      "title": "Architecture Patterns with Python: Aggregates and Consistency Boundaries",
+      "url": "https://www.cosmicpython.com/book/chapter_07_aggregate.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team models `Customer` as an aggregate containing all of the customer's orders, addresses and invoices. Customers average 2,000 orders. Assume whole-graph loading and one shared root version for every write. What problems should they expect?",
+    "options": [
+      {
+        "text": "With whole-graph loading and one shared version, loading is large and unrelated order updates contend on that version.",
+        "explanation": "Correct. Large aggregates are slow to load and create contention: because the root's version protects everything inside, unrelated order edits collide. Make `Order` its own aggregate referencing `customer_id`."
+      },
+      {
+        "text": "None, as long as the database has indexes",
+        "explanation": "Indexes don't change the fact that the aggregate is loaded, locked and versioned as one unit."
+      },
+      {
+        "text": "Value objects can't be stored inside aggregates",
+        "explanation": "Aggregates commonly contain value objects (addresses, money). That isn't the problem."
+      },
+      {
+        "text": "Only that the code will be longer",
+        "explanation": "The serious costs are runtime ones: load time, memory and concurrency conflicts."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Every operation on any order goes through the `Customer` root and saves it, bumping its version.\n2. Two people editing different orders for the same customer both started at version *v*; the second save fails. Conflicts grow with activity.\n3. Every load fetches 2,000 orders plus lines.\n4. Ask which rules need **immediate** consistency across orders and the customer. Usually none, so split: `Order` aggregate with `customer_id`. A strict shared credit limit needs an atomic reservation protocol; an uncoordinated read/check or delayed event alone cannot prevent concurrent overspending.",
+    "link": {
+      "title": "Architecture Patterns with Python: Aggregates and Consistency Boundaries",
+      "url": "https://www.cosmicpython.com/book/chapter_07_aggregate.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Sales, Billing and Support all have a `Customer` concept with different fields and rules. Which statements reflect bounded-context thinking? Select all that apply.",
+    "options": [
+      {
+        "text": "Each context can have its own `Customer` model tailored to its needs",
+        "explanation": "Correct. A bounded context is precisely the boundary within which one model applies. Separate models avoid a bloated compromise class."
+      },
+      {
+        "text": "The contexts must share one canonical `Customer` class so data stays consistent",
+        "explanation": "That's the enterprise-wide canonical model that DDD warns against. Consistency of identity is achieved through a shared id, not one shared class."
+      },
+      {
+        "text": "The contexts need an agreed way to correlate records, such as a shared customer id",
+        "explanation": "Correct. Separate models still refer to the same real-world customer, so contexts agree on identifiers and on how changes are communicated."
+      },
+      {
+        "text": "The word \"customer\" may mean different things in each context, and that's acceptable",
+        "explanation": "Correct. Ubiquitous language is per context. Billing's customer is an account that pays; Sales' customer may still be a prospect."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Bounded contexts give each area **its own model and language**.\n2. They are not isolated: they still talk about the same people, so they share **identifiers** and integrate through events or APIs.\n3. A canonical model for everything tends to accumulate every field from every department; changes then need sign-off from all of them.\n\nSo: separate models, shared ids and different meanings are all bounded-context thinking; one canonical class is not.",
+    "link": {
+      "title": "Bounded Context — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/BoundedContext.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your shipping context must read customer data from a 20-year-old CRM whose records use fields like `CUST_NO`, `NM_FULL` and `ADDR_LN_3`, with status codes 1–9. What context-mapping pattern protects your model? In this example the documented CRM status mapping says 1 and 2 are active.",
+    "options": [
+      {
+        "text": "Conformist: adopt the CRM's model in your code",
+        "explanation": "Conforming means your model becomes the CRM's model, with its odd names and codes spreading through your code. That's the opposite of protection."
+      },
+      {
+        "text": "Shared kernel: co-own the CRM schema with its team",
+        "explanation": "A shared kernel needs two teams willing to evolve a small model together. A legacy CRM rarely fits, and you'd still be importing its model."
+      },
+      {
+        "text": "Open host service: publish your own API for the CRM to call",
+        "explanation": "An open host service is something an *upstream* provides for its consumers. Here you are downstream of the CRM."
+      },
+      {
+        "text": "Anti-corruption layer: an adapter that translates CRM records into your own `Customer` model",
+        "explanation": "Correct. The ACL sits at the boundary and maps `CUST_NO` to `customer_id`, decodes status codes, and so on. Only the ACL knows the CRM's model; the rest of your code never sees it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Identify the direction: the CRM is **upstream**, you are **downstream**.\n2. You can't change the CRM, and its model is poor, so you don't want to conform.\n3. Build an **anti-corruption layer**: a translation module at your edge.\n\n```python\ndef to_customer(rec):\n    return Customer(\n        customer_id=rec[\"CUST_NO\"],\n        name=rec[\"NM_FULL\"],\n        active=rec[\"STAT\"] in (1, 2),\n    )\n```\n\n4. Preserve personal names rather than applying lossy title casing. This snippet assumes a local Customer type with an active field. Replacing the CRM may remain adapter-local only if the new source provides compatible semantics.",
+    "link": {
+      "title": "Anti-corruption Layer pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/anti-corruption-layer"
+    }
+  },
+  {
+    "id": "sea-ddd-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "When an order is placed, stock must be reserved. `Order` and `StockItem` are separate aggregates. Both are stored in one transactional database. A developer writes one transaction that calls `order.place()` and `stock.reserve(qty)` for every line, then commits. What is the DDD-recommended alternative, and what does it trade?",
+    "options": [
+      {
+        "text": "Merge `Order` and `StockItem` into one aggregate so one transaction is legal",
+        "explanation": "Stock is shared across all orders; putting it in each order's aggregate is impossible, and one giant aggregate would serialise every order in the shop."
+      },
+      {
+        "text": "`order.place()` records an `OrderPlaced` event; after commit a handler reserves stock in its own transaction, accepting eventual consistency and adding compensation for failures",
+        "explanation": "This is a common design when temporary pending status and compensation are acceptable. Use reliable event publication and idempotent handlers; separating transactions does not eliminate hot-stock contention."
+      },
+      {
+        "text": "Use a distributed two-phase commit between the two aggregates",
+        "explanation": "A transaction in the one stated database does not need distributed two-phase commit. The question concerns consistency-boundary trade-offs."
+      },
+      {
+        "text": "Keep the single transaction; the one-aggregate rule only applies in microservices",
+        "explanation": "The rule is about consistency boundaries and contention, which exist inside a monolith too. Popular SKUs locked by every order transaction become a bottleneck."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Rule: **modify one aggregate per transaction**.\n2. Contention: in the single-transaction version, every order containing a popular SKU locks that `StockItem` row. At peak, orders queue behind each other.\n3. Event version:\n   - T1: `order.place()` → status `placed`, append `OrderPlaced`; commit.\n   - Commit the order plus durable outbox event atomically; a relay delivers it with retries and consumers deduplicate.\n   - T2 per SKU: atomically reserve idempotently; on partial failure release earlier reservations or apply the chosen compensation policy.\n   - On failure: publish `ReservationFailed` → mark order back-ordered or cancel, email customer.\n4. Trade: an inconsistency window whose duration needs monitoring and recovery and compensation logic, in exchange for small locks and independent aggregates.\n\nSome teams *do* knowingly break the rule for convenience when contention is low; the point is to make that a conscious choice.",
+    "link": {
+      "title": "Architecture Patterns with Python: Aggregates and Consistency Boundaries",
+      "url": "https://www.cosmicpython.com/book/chapter_07_aggregate.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A startup's core differentiator is a dynamic pricing engine for freight. It also needs user login, invoicing PDFs and an internal admin panel. Which applications of DDD are sensible? Select all that apply.",
+    "options": [
+      {
+        "text": "Invest in rich modelling, ubiquitous language and close expert collaboration for pricing",
+        "explanation": "Correct. Pricing is the core subdomain, where modelling effort produces competitive advantage."
+      },
+      {
+        "text": "Use an off-the-shelf identity provider or library for login rather than modelling it",
+        "explanation": "Correct. Authentication is a generic subdomain: solved, well understood, and not a differentiator. Buy or reuse."
+      },
+      {
+        "text": "Build entities, value objects and aggregates with domain events for the admin panel",
+        "explanation": "Full tactical DDD for a supporting CRUD tool spends effort where it earns little. Simple framework code is usually enough."
+      },
+      {
+        "text": "Treat pricing and invoicing as separate bounded contexts, each with its own model of a shipment",
+        "explanation": "Correct. Pricing cares about lanes, weights and market rates; invoicing cares about billable lines and tax. Separate models avoid one bloated `Shipment`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Classify the subdomains:\n\n| Area | Kind | Effort |\n|---|---|---|\n| Pricing | Core | Rich DDD |\n| Login | Generic | Buy/library |\n| Invoicing | Supporting | Moderate |\n| Admin panel | Supporting | Simple CRUD |\n\nStrategic DDD (contexts and subdomains) applies everywhere; tactical DDD (aggregates, events) is concentrated where the business complexity and value are.",
+    "link": {
+      "title": "Domain-driven design — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Domain-driven_design"
+    }
+  },
+  {
+    "id": "sea-ddd-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Consider this code:\n\n```python\ndef transfer(order, customer, amt):\n    order.total += amt\n    customer.credit -= amt\n    session.commit()\n```\n\n`Order` and `Customer` are separate aggregates. Which rule is broken, and what is the cleanest fix that keeps the credit rule immediately consistent?",
+    "options": [
+      {
+        "text": "The example crosses aggregate boundaries. Model an atomic credit-reservation owner or deliberately choose a suitable multi-aggregate transaction if immediate consistency requires it.",
+        "explanation": "A CreditAccount can atomically reserve rights for orders; alternatively a correct database transaction can enforce the invariant. One aggregate per transaction is a design guideline, not a prohibition on valid atomic transactions."
+      },
+      {
+        "text": "No rule; one function may touch as many objects as it likes",
+        "explanation": "DDD's aggregate rules exist exactly to stop transactions spanning aggregates casually."
+      },
+      {
+        "text": "Value objects must be immutable; `amt` should be a `Money`",
+        "explanation": "Using `Money` is a good idea but doesn't address modifying two aggregates in one transaction."
+      },
+      {
+        "text": "The repository pattern; `session.commit()` should be called twice, once per object",
+        "explanation": "Two commits would make the change non-atomic without any of the event-driven safeguards, which is worse than either option."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Two aggregates are modified and committed together: departs from the one-aggregate-per-transaction guideline.\n2. Ask the business: *must* the credit check be exact at all times, or is a few seconds of lag acceptable with a fallback?\n3. If exact: design the aggregate around the invariant. Something like `CreditAccount.reserve(order_id, amt)` that refuses when credit is exhausted; the order references the reservation by id, with an explicit protocol for pending orders, retries and release.\n4. If lag is fine: `order.place()` emits an event; a handler debits credit and cancels the order if it fails.\n\nThe principle (Vernon): **design aggregates around true invariants**, the rules that must be consistent immediately.",
+    "link": {
+      "title": "DDD Aggregate — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DDD_Aggregate.html"
+    }
+  }
+]

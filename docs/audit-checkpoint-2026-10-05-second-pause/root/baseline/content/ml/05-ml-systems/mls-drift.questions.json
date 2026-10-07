@@ -1,0 +1,345 @@
+[
+  {
+    "id": "mls-drift-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A spam filter's inputs look the same as last year: similar lengths, senders and word frequencies. But spammers now copy the wording of legitimate newsletters, so emails with those exact features are increasingly spam. What kind of drift is this?",
+    "options": [
+      {
+        "text": "Concept drift: P(y | x) changed",
+        "explanation": "Correct. The same inputs now map to a different label. Input monitoring cannot see this; only labels (or proxies such as user spam reports) reveal it."
+      },
+      {
+        "text": "Covariate drift: P(x) changed",
+        "explanation": "Incorrect. The scenario says the input distribution looks the same. Covariate drift would show up in input histograms."
+      },
+      {
+        "text": "Label shift: P(y) changed while P(x | y) stayed the same",
+        "explanation": "Incorrect. Label shift keeps the class-conditional inputs fixed and only changes the base rate; here the meaning of the same inputs has changed."
+      },
+      {
+        "text": "No drift; the model is simply overfitting",
+        "explanation": "Incorrect. The model's training fit has not changed. The world's input-to-label relationship has."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Factor the data: P(x, y) = P(y | x) P(x).\n\n1. Did P(x) change? No, the inputs look the same.\n2. Did P(y | x) change? Yes: newsletter-style wording used to mean \"not spam\" and now often means spam.\n3. That is concept drift.\n\nPractical consequence: dashboards of input distributions stay green. You need label feedback (\"mark as spam\" clicks) to detect it.",
+    "link": {
+      "title": "Concept drift — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Concept_drift"
+    }
+  },
+  {
+    "id": "mls-drift-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A binary feature was 50% / 50% in training. This week it is 30% / 70%. Compute the PSI and read it with the usual rule of thumb.",
+    "options": [
+      {
+        "text": "About 0.04: no significant change",
+        "explanation": "Incorrect. 0.04 is just (0.2)², a squared difference for one bin. PSI multiplies each difference by its log ratio and sums over both bins."
+      },
+      {
+        "text": "About 0.40: significant shift",
+        "explanation": "Incorrect. That is the sum of absolute differences (0.2 + 0.2), not PSI."
+      },
+      {
+        "text": "Negative, because one bin went down",
+        "explanation": "Incorrect. Each PSI term is non-negative: when A < E, both (A − E) and ln(A/E) are negative, so their product is positive."
+      },
+      {
+        "text": "About 0.17: moderate, investigate",
+        "explanation": "Correct. (0.3 − 0.5) ln(0.3/0.5) + (0.7 − 0.5) ln(0.7/0.5) = 0.102 + 0.067 ≈ 0.169, which falls in the 0.1 to 0.25 band."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nbin 1: (0.3-0.5) × ln(0.3/0.5)\n     = -0.2 × -0.511 = 0.102\nbin 2: (0.7-0.5) × ln(0.7/0.5)\n     =  0.2 ×  0.336 = 0.067\nPSI  ≈ 0.169\n```\n\nRule of thumb: < 0.1 stable, 0.1 to 0.25 investigate, > 0.25 significant. So: investigate. Remember these bands are conventions, not a hypothesis test.",
+    "link": {
+      "title": "Statistical properties of PSI (Yurdakul, 2018)",
+      "url": "https://scholarworks.wmich.edu/dissertations/3208"
+    }
+  },
+  {
+    "id": "mls-drift-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A PSI job crashes, or returns `inf`, whenever a new extreme value appears in production. Which implementation detail most likely fixes it?",
+    "options": [
+      {
+        "text": "Use more bins",
+        "explanation": "Incorrect. More bins make empty bins more likely, which makes the problem worse."
+      },
+      {
+        "text": "Make the outer bins open-ended (−∞, +∞) and clip empty-bin proportions to a small epsilon before taking ln(A/E)",
+        "explanation": "Correct. A zero proportion makes ln(A/E) infinite. Open outer bins ensure new extremes are counted, and epsilon clipping avoids ln(0) or division by zero."
+      },
+      {
+        "text": "Switch to fixed-width bins",
+        "explanation": "Incorrect. Fixed-width bins on skewed data leave many bins empty, increasing zero counts."
+      },
+      {
+        "text": "Drop the rows with extreme values",
+        "explanation": "Incorrect. Dropping them hides exactly the drift you want to detect."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. PSI term: (A − E) × ln(A / E).\n2. If E = 0 (the reference never had values in that bin), A/E is undefined. If A = 0, ln(0) = −∞.\n3. Fix both causes:\n   - open-ended edges so out-of-range values land in the outer bins rather than nowhere;\n   - `np.clip(p, eps, None)` so no proportion is exactly zero.\n4. With eps = 1e-4 the term for a bin that went from 0 to 5% is large but finite, correctly signalling a real change.",
+    "link": {
+      "title": "Statistical properties of PSI (Yurdakul, 2018)",
+      "url": "https://scholarworks.wmich.edu/dissertations/3208"
+    }
+  },
+  {
+    "id": "mls-drift-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Device type in training: mobile 0.6, desktop 0.3, tablet 0.1. Now: mobile 0.4, desktop 0.35, tablet 0.25. What is the PSI (to 2 d.p.) and which category contributes most?",
+    "options": [
+      {
+        "text": "0.23; mobile contributes most",
+        "explanation": "Incorrect. Mobile has the largest absolute change (0.2), but its log ratio ln(0.4/0.6) ≈ −0.405 is smaller in magnitude than tablet's ln(2.5) ≈ 0.916."
+      },
+      {
+        "text": "0.40; tablet contributes most",
+        "explanation": "Incorrect. 0.40 is half the sum of absolute differences (0.2 + 0.05 + 0.15 = 0.4), not PSI."
+      },
+      {
+        "text": "0.23; tablet contributes most",
+        "explanation": "Correct. Terms: mobile 0.081, desktop 0.008, tablet 0.137. Total ≈ 0.226. Tablet's proportion grew 2.5×, giving the largest log ratio."
+      },
+      {
+        "text": "0.08; mobile contributes most",
+        "explanation": "Incorrect. 0.08 is only the mobile term; the other two must be added."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nmobile:  (0.40-0.60)×ln(0.40/0.60)\n       = -0.20 × -0.405 = 0.081\ndesktop: (0.35-0.30)×ln(0.35/0.30)\n       =  0.05 ×  0.154 = 0.008\ntablet:  (0.25-0.10)×ln(0.25/0.10)\n       =  0.15 ×  0.916 = 0.137\nPSI    ≈ 0.226\n```\n\nJust under 0.25, so \"moderate, investigate\". Note PSI weights relative change: a small category that multiplies in size can dominate.",
+    "link": {
+      "title": "Statistical properties of PSI (Yurdakul, 2018)",
+      "url": "https://scholarworks.wmich.edu/dissertations/3208"
+    }
+  },
+  {
+    "id": "mls-drift-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Compute the two-sample KS statistic D for:\n\n```\nref = [10, 20, 30, 40]\ncur = [25, 35, 45, 55]\n```",
+    "options": [
+      {
+        "text": "0.25",
+        "explanation": "Incorrect. 0.25 is the gap at some points (e.g. x = 10 or x = 45), but D is the **maximum** gap over all x."
+      },
+      {
+        "text": "0.75",
+        "explanation": "Incorrect. The ECDFs never differ by 0.75; at x = 30 the current ECDF is already 0.25."
+      },
+      {
+        "text": "15, the difference in means",
+        "explanation": "Incorrect. KS compares cumulative probabilities, so D is always between 0 and 1, not in the variable's units."
+      },
+      {
+        "text": "0.5",
+        "explanation": "Correct. At x = 20 the reference ECDF is 0.5 and the current is 0; the gap stays 0.5 at x = 30 (0.75 vs 0.25) and x = 40 (1.0 vs 0.5). No point exceeds it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Evaluate both ECDFs at each data point:\n\n| x | F_ref | F_cur | Gap |\n|---|---|---|---|\n| 10 | 0.25 | 0 | 0.25 |\n| 20 | 0.50 | 0 | 0.50 |\n| 25 | 0.50 | 0.25 | 0.25 |\n| 30 | 0.75 | 0.25 | 0.50 |\n| 40 | 1.00 | 0.50 | 0.50 |\n| 45 | 1.00 | 0.75 | 0.25 |\n\nD = 0.5. SciPy agrees (`ks_2samp` gives 0.5, p ≈ 0.77): with 4 points each, this is unremarkable.",
+    "link": {
+      "title": "scipy.stats.ks_2samp — SciPy docs",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ks_2samp.html"
+    }
+  },
+  {
+    "id": "mls-drift-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You compare 500 reference and 500 current values and get D = 0.07. Using `D_crit = 1.358 × sqrt((n + m)/(n × m))` at α = 0.05, what do you conclude?",
+    "options": [
+      {
+        "text": "Do not reject: D_crit ≈ 0.086 and 0.07 < 0.086",
+        "explanation": "Correct. sqrt(1000/250,000) = sqrt(0.004) ≈ 0.0632; × 1.358 ≈ 0.086. D is below it."
+      },
+      {
+        "text": "Reject: the distributions differ, since D > 0.05",
+        "explanation": "Incorrect. α = 0.05 is the significance level, not the critical value of D. The two must not be compared directly."
+      },
+      {
+        "text": "Reject: D_crit ≈ 0.0019",
+        "explanation": "Incorrect. 0.0019 is the critical value for a million values per sample, not 500."
+      },
+      {
+        "text": "Cannot tell without binning the data",
+        "explanation": "Incorrect. KS works on raw values via ECDFs; no binning is needed."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\n(n+m)/(n·m) = 1000/250000\n            = 0.004\nsqrt(0.004) ≈ 0.0632\nD_crit = 1.358 × 0.0632\n       ≈ 0.086\n```\n\n0.07 < 0.086, so there is not enough evidence at α = 0.05. With 50,000 per side the same D = 0.07 would be overwhelmingly significant, which is why sample size matters so much in monitoring.",
+    "link": {
+      "title": "Kolmogorov–Smirnov test — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Kolmogorov%E2%80%93Smirnov_test"
+    }
+  },
+  {
+    "id": "mls-drift-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A mortgage-default model gets true labels about 18 months after each decision. Which monitoring signals are available **within days** of a problem starting? Select all that apply.",
+    "options": [
+      {
+        "text": "Data-quality checks: nulls, ranges, schema, new category values",
+        "explanation": "Correct. These run on inputs as they arrive and need no labels."
+      },
+      {
+        "text": "Input distribution drift (PSI/KS against the training reference)",
+        "explanation": "Correct. Feature distributions are observable immediately."
+      },
+      {
+        "text": "Prediction distribution: mean score and share above the approval threshold",
+        "explanation": "Correct. Outputs are observable immediately and catch problems in features you did not monitor directly."
+      },
+      {
+        "text": "Measured AUC on this month's applications",
+        "explanation": "Incorrect. AUC needs the true default labels, which arrive about 18 months later."
+      },
+      {
+        "text": "Early proxies such as missed first payments",
+        "explanation": "Correct, partly: first payments come due within about a month, so this is the fastest label-like signal. It is slower than input checks but far faster than full default labels."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Sort signals by when they become available:\n\n| Signal | Delay |\n|---|---|\n| Data quality | Immediate |\n| Input drift | Immediate |\n| Prediction drift | Immediate |\n| Early proxy | Weeks |\n| True AUC | ~18 months |\n\nWith slow labels you lean on the immediate layers and proxies; true performance confirms things much later.",
+    "link": {
+      "title": "Vertex AI Model Monitoring overview",
+      "url": "https://cloud.google.com/vertex-ai/docs/model-monitoring/overview"
+    }
+  },
+  {
+    "id": "mls-drift-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Comparing 2 million rows per side, a KS test on `session_length` gives D = 0.004 and p = 1e-12. The model's live accuracy is unchanged. What is the best interpretation?",
+    "options": [
+      {
+        "text": "Severe drift; retrain immediately because p is tiny",
+        "explanation": "Incorrect. A tiny p-value with huge samples only shows the difference is unlikely to be exactly zero. It says nothing about whether it matters."
+      },
+      {
+        "text": "A real but negligible difference: with millions of rows, KS detects trivial shifts, so judge by effect size (D = 0.4% max CDF gap) and model impact",
+        "explanation": "Correct. D = 0.004 is tiny. Alert thresholds should be set on effect size (D, PSI) tuned to what hurts the model, not on p-values."
+      },
+      {
+        "text": "The KS test is invalid for continuous features",
+        "explanation": "Incorrect. KS is designed for continuous variables."
+      },
+      {
+        "text": "Concept drift, since accuracy is unchanged",
+        "explanation": "Incorrect. Concept drift would tend to reduce accuracy; unchanged accuracy suggests nothing important changed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Critical D at 2 million each: 1.358 × sqrt(2/2e6) ≈ 1.358 × 0.001 ≈ 0.0014.\n2. D = 0.004 exceeds it, hence the small p.\n3. But 0.004 means the CDFs never differ by more than 0.4 percentage points.\n4. Accuracy is flat, confirming no practical impact.\n\nSo: set an effect-size threshold (e.g. D > 0.05 or PSI > 0.1, calibrated on past incidents), or subsample to a fixed size before testing.",
+    "link": {
+      "title": "scipy.stats.ks_2samp — SciPy docs",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.ks_2samp.html"
+    }
+  },
+  {
+    "id": "mls-drift-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run a drift test at α = 0.05 on each of 300 features every day. Assume no real drift and independent tests. About how many alerts per day do you expect, and what Bonferroni per-test threshold keeps the family-wide false-alarm rate near 5%?",
+    "options": [
+      {
+        "text": "About 1 alert; per-test α = 0.05 is already fine",
+        "explanation": "Incorrect. Each test independently has a 5% false-alarm chance; across 300 tests these add up to about 15."
+      },
+      {
+        "text": "About 15 alerts; per-test α = 0.15",
+        "explanation": "Incorrect. Raising α makes false alarms more frequent. The correction divides α, it does not multiply it."
+      },
+      {
+        "text": "About 15 alerts; per-test α ≈ 0.000167",
+        "explanation": "Correct. 300 × 0.05 = 15 expected false alarms. Bonferroni divides α by the number of tests: 0.05 / 300 ≈ 0.000167."
+      },
+      {
+        "text": "About 300 alerts; per-test α = 0.0005",
+        "explanation": "Incorrect. Only 5% of tests fire by chance, not all of them, and 0.05/300 is not 0.0005."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nexpected false alarms\n  = 300 × 0.05 = 15 per day\nP(at least one)\n  = 1 - 0.95^300 ≈ 1.0\nBonferroni per-test α\n  = 0.05 / 300 ≈ 0.000167\n```\n\nBonferroni is conservative, so in practice teams also weight by feature importance, require persistence over several windows, and watch the prediction distribution as a single summary signal.",
+    "link": {
+      "title": "Evidently documentation",
+      "url": "https://docs.evidentlyai.com/"
+    }
+  },
+  {
+    "id": "mls-drift-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "During a fraud wave, the fraud rate rises from 1% to 3%, but what fraudulent and genuine transactions look like has not changed. The model's AUC is stable, yet a fixed 0.5 probability threshold now misses many frauds. What is happening, and what helps?",
+    "options": [
+      {
+        "text": "Label (prior) shift; ranking is still good, but the predicted probabilities are calibrated to the old 1% base rate, so recalibrate or lower the threshold",
+        "explanation": "Correct. With P(y) changed and P(x | y) fixed, the model still ranks well (stable AUC) but underestimates probabilities. Adjusting for the new prior or retuning the threshold restores the decision quality."
+      },
+      {
+        "text": "Concept drift; the model must be retrained with new features",
+        "explanation": "Incorrect. P(x | y) is unchanged, so the relationship between features and labels has not changed in the concept-drift sense. New features are not required."
+      },
+      {
+        "text": "Covariate drift in transaction amounts",
+        "explanation": "Incorrect. The mix of inputs shifts somewhat because there are more frauds, but the root change is the base rate, and the fix targets calibration."
+      },
+      {
+        "text": "A data-quality bug in the label pipeline",
+        "explanation": "Incorrect. The scenario describes a genuine increase in fraud, not broken data."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. AUC measures ranking. It is unaffected by the base rate when P(x | y) is fixed, so a stable AUC fits label shift.\n2. Predicted probabilities embed the training prior (1%). Scores for real frauds are now too low, so fewer cross 0.5.\n3. Bayes' rule says the odds should be scaled by the prior ratio: (0.03/0.97) / (0.01/0.99) ≈ 3.06. Rescale the model's odds by about 3, or pick a new threshold using recent labelled data.\n4. Retraining on recent data also fixes it, but it is slower.",
+    "link": {
+      "title": "Concept drift — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Concept_drift"
+    }
+  },
+  {
+    "id": "mls-drift-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Overnight, PSI on `order_amount` jumps from 0.02 to 4.1; the new values are almost exactly 100× the old ones. Which responses are appropriate? Select all that apply.",
+    "options": [
+      {
+        "text": "First suspect a pipeline change, such as amounts now sent in pence instead of pounds",
+        "explanation": "Correct. An exact factor of 100 overnight is the signature of a unit change, not of customer behaviour."
+      },
+      {
+        "text": "Trigger automatic retraining on the new data immediately",
+        "explanation": "Incorrect. Retraining would teach the model the bug, and then break again when the bug is fixed. Fix the data first."
+      },
+      {
+        "text": "Check the prediction distribution to see how badly live decisions are affected, and consider a fallback or rollback while fixing",
+        "explanation": "Correct. You need to know the blast radius now: if scores have collapsed, switch to a safe fallback until the fix lands."
+      },
+      {
+        "text": "Add a data-quality range check on `order_amount` so this is caught before it reaches the model next time",
+        "explanation": "Correct. Schema and range validation catch unit errors faster and more precisely than drift statistics."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. PSI 4.1 is enormous; nearly everything moved to the top bin.\n2. An exact 100× factor overnight almost never comes from users. It comes from code: pounds to pence, a currency change, a scaling step removed.\n3. Contain: check how predictions changed, fall back if needed.\n4. Fix upstream, backfill if necessary, then add a validation rule (e.g. order_amount in a plausible range).\n5. Do not retrain on corrupted data.",
+    "link": {
+      "title": "Data Validation for ML — Google Research",
+      "url": "https://research.google/pubs/data-validation-for-machine-learning/"
+    }
+  }
+]

@@ -1,0 +1,343 @@
+[
+  {
+    "id": "cache-arch-locality-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a C loop `for (int i = 0; i < n; ++i) total += a[i];`, assume valid bounds and no arithmetic overflow. The scalar accumulator total is reused each iteration. Which kind of locality does that reuse illustrate?",
+    "options": [
+      {
+        "text": "Spatial locality",
+        "explanation": "Spatial locality is about touching *neighbouring* addresses. `total` is the same address every time, which is reuse, not neighbourliness. The walk over `a[i]` is the spatial part."
+      },
+      {
+        "text": "Temporal locality",
+        "explanation": "Correct. The same location is used again and again within a short time, so keeping it in a register or L1 pays off on every iteration."
+      },
+      {
+        "text": "No locality, because it changes value each iteration",
+        "explanation": "Locality is about *addresses*, not values. The value changes but the location is the same, which is exactly temporal locality."
+      },
+      {
+        "text": "Sequential locality only",
+        "explanation": "Sequential access is a special case of spatial locality (walking consecutive addresses). `total` does not move through memory at all."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The scalar accumulator is reused over a short interval: temporal locality. If kept in memory, its accesses revisit the same object; an optimiser may instead retain it in a register. The array walk separately illustrates spatial locality. This does not imply that a Python integer object stays at one fixed address during repeated addition.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A cold cache with 64-byte lines sits in front of a loop that reads an array of 4,096 `double`s (8 bytes each) once, in order. Assume the array starts on a line boundary, each read miss allocates a line, and there is no prefetching or interfering access. how many cache misses occur?",
+    "options": [
+      {
+        "text": "4,096",
+        "explanation": "That would be one miss per element, which ignores that each miss brings in a whole 64-byte line holding 8 doubles."
+      },
+      {
+        "text": "64",
+        "explanation": "64 is the line size in bytes, not the number of lines. The array is 32 KiB, which is many lines."
+      },
+      {
+        "text": "512",
+        "explanation": "Correct. 4,096 × 8 B = 32,768 B. 32,768 / 64 = 512 lines, and each line misses once (on its first element) then hits 7 times."
+      },
+      {
+        "text": "8",
+        "explanation": "8 is the number of doubles per line, i.e. the number of accesses each miss serves, not the miss count."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Array size: 4,096 × 8 B = 32,768 B (32 KiB).\n2. Lines touched: 32,768 / 64 = **512**.\n3. Each line misses on its first access (a compulsory miss) and the next 7 doubles in it hit.\n4. Miss rate = 512 / 4,096 = 1/8 = **12.5%**.\n\n```\nline 0: d0 MISS d1..d7 hit\nline 1: d8 MISS d9..d15 hit\n...\n512 lines -> 512 misses\n```\n\nWith 4-byte ints instead, each line would hold 16 values and the miss rate would halve to 6.25%.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which list puts these in order from fastest to slowest typical access latency?",
+    "options": [
+      {
+        "text": "L1, L2, DRAM, L3, SSD",
+        "explanation": "In the conventional hierarchy being compared, an L3 hit is normally quicker than a DRAM access."
+      },
+      {
+        "text": "Registers, L1, L2, L3, DRAM, SSD",
+        "explanation": "Correct for the conventional hierarchy: register operands, then increasingly distant cache levels, DRAM, and storage. Actual operation latencies are implementation-dependent; register-based operations do not all take zero cycles."
+      },
+      {
+        "text": "Registers, L2, L1, L3, DRAM, SSD",
+        "explanation": "L1 is the smallest cache and closest to the execution units; it is the fastest cache, not L2."
+      },
+      {
+        "text": "L1, registers, L2, L3, SSD, DRAM",
+        "explanation": "This reverses the conventional register/cache and DRAM/storage ordering. No fixed ratio applies to all systems."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The conventional ordering is registers → L1 → L2 → L3 → DRAM → SSD. Register access is part of instruction execution, not a universal zero-cycle memory load. Exact latency figures are absent because a specific processor, device and measurement have not been verified for this comparison.",
+    "link": {
+      "title": "Memory hierarchy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_hierarchy"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a repeatedly warmed array-sum benchmark, time per element is flat to roughly 1 MiB, then rises. The CPU has 48 KiB L1d, 1.25 MiB L2 and 30 MiB L3. Which cache-capacity hypothesis is most consistent with the location of this change, and should be checked with measurements?",
+    "options": [
+      {
+        "text": "Loss of effective L2 residency, increasing accesses served from lower levels",
+        "explanation": "Correct as a hypothesis. The change is near the stated L2 capacity; competing data and mapping can reduce effective residency. The curve alone does not prove the cause."
+      },
+      {
+        "text": "The array no longer fits in L1",
+        "explanation": "The change is much nearer the L2 size than the stated L1 size. Absence of a visible earlier transition does not prove L1 has no effect."
+      },
+      {
+        "text": "The array has started to spill to DRAM",
+        "explanation": "A simple whole-working-set L3 capacity explanation is less consistent with the stated sizes, though individual DRAM misses can occur even below nominal L3 capacity."
+      },
+      {
+        "text": "The loop has become CPU-bound because the array is longer",
+        "explanation": "Time *per element* normalises for array length. More elements alone would not change the per-element cost."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the change location with the nominal sizes: roughly 1 MiB is closest to 1.25 MiB L2. This suggests testing an L2-residency explanation using cache counters and controlled repeated runs. Cache conflicts, competing data, prefetching, frequency and loop implementation can affect the curve. No exact latency or later performance cliff follows from capacity alone.",
+    "link": {
+      "title": "Gallery of processor cache effects",
+      "url": "https://igoro.com/archive/gallery-of-processor-cache-effects/"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these changes would usually **improve spatial locality**? Select all that apply.",
+    "options": [
+      {
+        "text": "Replacing a linked list that is traversed often with a contiguous array",
+        "explanation": "Correct. Array elements sit next to each other, so each fetched line holds several useful elements; list nodes can be anywhere in the heap."
+      },
+      {
+        "text": "Storing a counter that is only `0..1000` as `int16` rather than `int64` in a large array",
+        "explanation": "Correct. Smaller elements mean four times as many values per 64-byte line, so a scan needs a quarter of the lines."
+      },
+      {
+        "text": "Visiting a 2D row-major array column by column instead of row by row",
+        "explanation": "This makes it worse. In row-major layout, consecutive elements of a *row* are adjacent; walking down a column jumps a whole row each step."
+      },
+      {
+        "text": "Caching the result of an expensive function call so it is reused",
+        "explanation": "That is reuse of the same data: temporal locality, not spatial."
+      },
+      {
+        "text": "Grouping the fields that are always read together into the same struct",
+        "explanation": "Correct. Nearby hot fields are more likely to share useful cache lines, although size, alignment and padding determine the actual placement."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Spatial locality = useful bytes that sit **next to each other**, so one 64-byte line serves several accesses.\n\n- Array instead of list: neighbours are adjacent. ✔\n- Smaller element type: more values per line (64/2 = 32 `int16` vs 64/8 = 8 `int64`). ✔\n- Column-wise walk of a row-major array: each step skips a whole row, so each access can need a new line. ✘\n- Memoising a function result: reuse of the same item, temporal. ✘\n- Hot fields together: they can share fetched lines, depending on layout. ✔",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A cold linked list has scattered nodes beyond the cache capacity. Traversal follows one next-pointer chain. Why can it have less memory-level parallelism than a contiguous array scan?",
+    "options": [
+      {
+        "text": "Linked lists use more instructions per element",
+        "explanation": "Extra instructions may contribute to runtime, but the key dependency in this question is that the next address comes from the current node."
+      },
+      {
+        "text": "Each next demand address depends on the previous node load, limiting overlap of demand misses",
+        "explanation": "Correct. A single chain exposes a serial dependency. Array addresses can be computed independently. Prefetch support varies; not every pointer dereference must reach DRAM."
+      },
+      {
+        "text": "The CPU cache cannot store pointers",
+        "explanation": "Caches can store pointer representations just as other bytes; pointer width is platform-dependent."
+      },
+      {
+        "text": "Linked lists are stored on disk rather than in RAM",
+        "explanation": "Both live in RAM (the heap). The difference is layout and predictability, not the storage device."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For an array with fixed-size elements, the next address can be calculated without waiting for the previous element value. For `node = node->next`, the next demand address depends on the current load. Under the cold scattered-node assumptions, that dependency can limit overlap. Cache hits, node placement and specialised hardware prefetching can change the result. No measured slowdown ratio is asserted.",
+    "link": {
+      "title": "What every programmer should know about memory (LWN)",
+      "url": "https://lwn.net/Articles/250967/"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why don't chip designers simply make the L1 cache 64 MiB so that almost everything hits?",
+    "options": [
+      {
+        "text": "SRAM cannot be manufactured in sizes above 1 MiB",
+        "explanation": "L3 caches are built from SRAM and reach tens or even ~100 MiB, so size alone is possible."
+      },
+      {
+        "text": "Large capacity competes with low hit latency, area and energy",
+        "explanation": "Correct. More storage and selection/interconnect work create physical design trade-offs; banking and other techniques can mitigate them, but capacity is not free."
+      },
+      {
+        "text": "Larger caches always have higher miss rates",
+        "explanation": "Bigger caches generally have *lower* miss rates. The problem is hit time, not miss rate."
+      },
+      {
+        "text": "The operating system limits L1 size",
+        "explanation": "Software can influence use or partitioning on some platforms, but an OS limit is not the fundamental reason for small low-latency L1 designs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "L1 aims to supply frequently needed operands quickly. Increasing capacity can increase wire distance, selection complexity, area and energy. Designers balance those costs against miss reduction, often using multiple levels. Exact cycle counts are absent because they depend on the concrete design; there is no universal mandatory 4–5-cycle L1 or 40–70-cycle large cache.",
+    "link": {
+      "title": "Memory hierarchy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memory_hierarchy"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A CPython function scans a large list of ints in index order and in a shuffled order. Which statement about performance is most accurate?",
+    "options": [
+      {
+        "text": "Both take exactly the same time because the same values are added",
+        "explanation": "Equal values and operation counts do not guarantee equal memory behaviour or runtime."
+      },
+      {
+        "text": "Shuffling can reduce locality and increase cache misses; the actual slowdown requires measurement",
+        "explanation": "Correct. CPython lists contain references, and a shuffled traversal can scatter both reference and object accesses. Object sharing, layout, caches and loop overhead affect the outcome."
+      },
+      {
+        "text": "The shuffled version is faster because random access spreads load across memory banks",
+        "explanation": "Spreading accesses across banks does not establish an overall speedup; locality and dependencies also matter."
+      },
+      {
+        "text": "The in-order version is slower because Python must check bounds sequentially",
+        "explanation": "Both forms must obey indexing semantics. There is no general sequential-only bounds-check penalty."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "CPython list storage contains references to objects, which may be shared rather than one allocation per list entry. Sequential reference accesses have spatial locality. A shuffled index stream can add misses and its own overhead. Pointer width, object size and interpreter cost depend on the build and values, so no fixed speedup or nanoseconds-per-iteration claim is made.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Loop A reads every element of an aligned cold 64 MiB int32 array; B reads every 16th element. Lines are 64 bytes. Assume each needed line reaches DRAM exactly once, both loops achieve the same effective DRAM bandwidth, and transfer time dominates all other costs. In this model, how does B's runtime compare with A's?",
+    "options": [
+      {
+        "text": "About 1/16 of A's time, because it does 1/16 of the loads",
+        "explanation": "The model makes transferred lines, rather than load count, determine time. Both touch every line."
+      },
+      {
+        "text": "About the same as A's, because both loops touch every cache line once",
+        "explanation": "Correct. 16 int32s × 4 B = 64 B, so B's stride is exactly one line. Both loops fetch all 1,048,576 lines; B just uses 4 bytes of each."
+      },
+      {
+        "text": "About 16 times longer than A, because strided access defeats caching",
+        "explanation": "Under the stated equal-bandwidth model both transfer the same bytes. Real code can differ if those assumptions fail."
+      },
+      {
+        "text": "About half of A's time, because the prefetcher fetches pairs of lines",
+        "explanation": "The model already specifies equal effective bandwidth and one transfer per needed line; pair prefetching does not halve B's required bytes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "There are 64 MiB / 64 B = 1,048,576 lines. A reads 16 ints per line; B's stride is 16 × 4 = 64 B, touching one int in every line. Both transfer 64 MiB. Equal effective bandwidth and transfer-dominated runtime therefore give approximately equal times. Without those explicit assumptions, equal line counts alone do not determine runtime.",
+    "link": {
+      "title": "Gallery of processor cache effects",
+      "url": "https://igoro.com/archive/gallery-of-processor-cache-effects/"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Compare model caches A with 128-byte lines and B with 64-byte lines. An aligned cold array of 1,000,000 eight-byte doubles is read sequentially. Assume each needed line is filled once, with no extra traffic. How many fills are required in A versus B?",
+    "options": [
+      {
+        "text": "62,500 vs 125,000",
+        "explanation": "Correct: 8,000,000 / 128 = 62,500 and 8,000,000 / 64 = 125,000. The alignment and one-fill assumptions make the count exact."
+      },
+      {
+        "text": "125,000 on both, since the data size is the same",
+        "explanation": "Line size changes how many lines the same bytes occupy. The bytes are the same; the number of fills is not."
+      },
+      {
+        "text": "1,000,000 on both, one per element",
+        "explanation": "Each fill brings in 16 doubles (128 B) or 8 doubles (64 B), so most loads hit."
+      },
+      {
+        "text": "125,000 vs 62,500",
+        "explanation": "This swaps them: the *larger* 128-byte line needs *fewer* fills."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The array occupies 8,000,000 bytes. Cache A needs 8,000,000 / 128 = 62,500 fills; B needs 8,000,000 / 64 = 125,000. Both transfer the same useful array bytes in this aligned model. Larger lines can waste bandwidth on sparse accesses and enlarge the region affected by false sharing. These are model line sizes, not claims about entire processor families.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A large RAM index is searched using either a balanced binary search tree with scattered nodes or a B-tree storing many keys per node. Which statements explain why the B-tree can improve cache behaviour? Select all that apply.",
+    "options": [
+      {
+        "text": "Larger fanout can reduce the number of nodes visited",
+        "explanation": "Correct. A well-filled B-tree has more children per node, so it can have fewer levels than a balanced binary tree with the same number of keys."
+      },
+      {
+        "text": "Scattered binary-tree nodes can require dependent line fetches during descent",
+        "explanation": "Correct. Each next node address depends on the current node; whether that access misses depends on cache state and placement."
+      },
+      {
+        "text": "Comparisons inside a B-tree node are free because they happen in DRAM",
+        "explanation": "Comparisons happen in the CPU, on data already loaded into cache. They are cheap because the node's keys arrived together, not because DRAM computes them."
+      },
+      {
+        "text": "A B-tree changes the big-O of search from O(log n) to O(1)",
+        "explanation": "Both balanced structures have logarithmic search depth. Layout, fanout and the cost per node affect practical performance."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "A balanced binary tree with 100 million keys has depth on the order of log2(10^8) ≈ 26.6. An idealised fanout of 32 suggests a scale of log32(10^8) ≈ 5.3 levels; actual integer height depends on occupancy and node structure. Each B-tree node can occupy multiple lines, including child pointers. Fewer nodes can reduce serial dependent misses, but neither an exact DRAM round-trip count nor a speedup is guaranteed.",
+    "link": {
+      "title": "What every programmer should know about memory (LWN)",
+      "url": "https://lwn.net/Articles/250967/"
+    }
+  }
+]

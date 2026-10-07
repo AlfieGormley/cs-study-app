@@ -1,0 +1,378 @@
+[
+  {
+    "id": "isa-compile-link-load-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In what order does `gcc main.c -o main` run its stages?",
+    "options": [
+      {
+        "text": "Compile, preprocess, link, assemble",
+        "explanation": "Preprocessing must come first: the compiler proper never sees `#include` or `#define`, only their expansion."
+      },
+      {
+        "text": "Preprocess, assemble, compile, link",
+        "explanation": "The assembler consumes the compiler's assembly output, so it can't run before compilation."
+      },
+      {
+        "text": "Preprocess, compile, assemble, link",
+        "explanation": "Correct. `cpp` expands macros and includes, `cc1` produces assembly, `as` produces a relocatable `.o`, and `ld` combines objects and libraries into an executable."
+      },
+      {
+        "text": "Link, then compile each function on demand",
+        "explanation": "C toolchains link after compilation. Compiling on demand at run time is what a JIT does, not `gcc`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `main.c` → **preprocessor** → `main.i` (pure C, macros expanded).\n2. `main.i` → **compiler** → `main.s` (assembly text).\n3. `main.s` → **assembler** → `main.o` (machine code with holes and relocations).\n4. `main.o` + `crt*.o` + libc → **linker** → `main`.\n\n`gcc -save-temps` keeps the `.i`, `.s` and `.o` files so you can inspect each stage; `gcc -v` shows the commands.",
+    "link": {
+      "title": "Linker (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Linker_(computing)"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A build fails with `undefined reference to 'parse_config'`. Which stage reported it, and what does it mean?",
+    "options": [
+      {
+        "text": "The preprocessor: a header file is missing",
+        "explanation": "A missing header gives a `No such file or directory` error from the preprocessor, before any code is compiled."
+      },
+      {
+        "text": "The compiler: `parse_config` was used without a declaration",
+        "explanation": "That gives an 'implicit declaration' warning or error at compile time. 'Undefined reference' means compilation already succeeded."
+      },
+      {
+        "text": "The dynamic loader at run time: the library wasn't found",
+        "explanation": "Run-time failures look like `error while loading shared libraries` or `symbol lookup error`; this program was never produced."
+      },
+      {
+        "text": "The linker: some object uses `parse_config`, but no object or library on the link line defines it",
+        "explanation": "Correct. Each `.o` compiled fine with an undefined symbol; at link time no definition was found. Usually a missing `.o`, a missing `-l` flag, or wrong library order."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Compilation treats each file separately. Calling a declared but undefined function is fine: the assembler leaves a hole and a relocation against the symbol.\n2. The linker must resolve every undefined symbol to a definition.\n3. If it searches every input and finds none, it reports `undefined reference`.\n4. Fixes: add the object or source file that defines it, add `-lname` for the library, or move the library after the objects that use it.",
+    "link": {
+      "title": "Linker (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Linker_(computing)"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does the **NX** (no-execute) bit in a page-table entry prevent?",
+    "options": [
+      {
+        "text": "Reading from the page",
+        "explanation": "Reads are governed by the page being present and readable. NX only affects instruction fetches."
+      },
+      {
+        "text": "The CPU fetching and executing instructions from that page",
+        "explanation": "Correct. A jump into an NX page faults, so bytes written into the stack, heap or `.data` can't run as code."
+      },
+      {
+        "text": "Writing to the page",
+        "explanation": "Write protection is a separate permission (the R/W bit). NX pages such as the stack are normally writable."
+      },
+      {
+        "text": "Other processes from mapping the page",
+        "explanation": "Sharing between processes is controlled by how pages are mapped, not by NX."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each page has independent permissions: present, writable, user-accessible, and on x86-64 the NX/XD bit (bit 63).\n2. With NX set, an instruction fetch from the page raises a fault.\n3. The OS sets NX on the stack, heap and data, and leaves `.text` executable but read-only: W^X.\n4. So a buffer overflow that writes bytes into the stack can't make the CPU run those bytes. It does not stop reuse of code that is already executable, which is why ASLR and canaries are also needed.",
+    "link": {
+      "title": "NX bit — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/NX_bit"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`main.o` calls `sqrt`. This link fails with an undefined reference to `sqrt`, but swapping the order fixes it. Why?\n\n```\ngcc -static -lm main.o -o app\n```",
+    "options": [
+      {
+        "text": "`-lm` must always come last because of a GCC parsing rule about flags",
+        "explanation": "It isn't a parsing rule about flags. The reason is how the linker scans archives."
+      },
+      {
+        "text": "`sqrt` is a compiler built-in, so it doesn't need linking at all",
+        "explanation": "Compilers sometimes inline `sqrt`, but here the error shows a real call remained. The question is why the library didn't satisfy it."
+      },
+      {
+        "text": "Static linking can't use the maths library",
+        "explanation": "`libm.a` exists for exactly this purpose. Static linking works fine with the right order."
+      },
+      {
+        "text": "The linker scans archives once, in order, pulling in only members that resolve symbols already undefined; when it saw `libm.a`, nothing needed `sqrt` yet",
+        "explanation": "Correct. By the time `main.o` introduced the undefined `sqrt`, `libm.a` had already been passed over."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The linker walks inputs left to right, keeping a set of undefined symbols.\n2. It reaches `libm.a` first: the set is empty (nothing has referenced `sqrt` yet), so it pulls in no members.\n3. It then reads `main.o`, which adds `sqrt` to the undefined set.\n4. No more inputs: `undefined reference to 'sqrt'`.\n5. With `main.o -lm`, `sqrt` is undefined when `libm.a` is scanned, so its `sqrt` member is pulled in.\n\nShared libraries are less sensitive, but `--as-needed` (default on some distributions) brings back similar order effects.",
+    "link": {
+      "title": "ld(1) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man1/ld.1.html"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`objdump -dr main.o` shows this. What is happening?\n\n```\ne8 00 00 00 00  call <main+0x9>\n  R_X86_64_PLT32  puts-0x4\n```",
+    "options": [
+      {
+        "text": "The assembler left a zero placeholder for the call's 32-bit displacement; the relocation tells the linker to fill in the distance to `puts` (via its PLT stub), adjusted by -4",
+        "explanation": "Correct. The displacement is relative to the end of the 5-byte instruction, hence the -4 addend from the start of the field."
+      },
+      {
+        "text": "The call is broken: it jumps to the next instruction",
+        "explanation": "In the `.o` file it would, but this isn't the final code. The zero bytes are a placeholder."
+      },
+      {
+        "text": "`puts` is located at address 0 and is called directly",
+        "explanation": "Nothing lives at address 0. The zeros are a hole to be patched, not an address."
+      },
+      {
+        "text": "The relocation will be patched by the CPU when the instruction first executes",
+        "explanation": "The CPU never processes relocations. The linker, or for some relocations the dynamic loader, does."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `e8` is `call rel32`: the next 4 bytes are a signed displacement from the address of the *next* instruction.\n2. The assembler doesn't know where `puts` is, so it writes `00 00 00 00`.\n3. It records a relocation at that 4-byte field: type `R_X86_64_PLT32`, symbol `puts`, addend -4.\n4. The linker computes `target + addend - field_address`. The field is 4 bytes before the end of the instruction, so the -4 makes the result relative to the instruction's end.\n5. In a dynamically linked program, `target` is `puts@plt`.",
+    "link": {
+      "title": "Relocation (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Relocation_(computing)"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A dynamically linked program uses lazy binding and calls `puts` twice. What happens on the **second** call?",
+    "options": [
+      {
+        "text": "The resolver runs again, because PLT stubs always call the dynamic loader",
+        "explanation": "The resolver runs only once per function: it writes the real address into the GOT so that it is never needed again."
+      },
+      {
+        "text": "The program's `.text` was patched on the first call, so it now calls `puts` directly",
+        "explanation": "Code pages are read-only and shared. Only the writable GOT is patched, which is the whole point of the GOT."
+      },
+      {
+        "text": "`call puts@plt`, the stub jumps through the GOT slot, which now holds `puts`'s real address, straight into libc",
+        "explanation": "Correct. The first call's resolver patched the GOT slot; the second call costs just one extra indirect jump."
+      },
+      {
+        "text": "The kernel intercepts the call and forwards it to libc",
+        "explanation": "The kernel isn't involved in calls between user-space modules at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "First call:\n1. `call puts@plt` → stub `jmp [puts@GOT]`.\n2. The GOT slot initially points back to the stub's `push`.\n3. Push the relocation index, jump to `.plt0`, enter the resolver.\n4. The resolver finds `puts` in libc, writes its address into the GOT slot, and jumps there.\n\nSecond call:\n1. `call puts@plt` → `jmp [puts@GOT]`, which is now `puts` itself.\n\nYou can watch this with `LD_DEBUG=bindings ./prog`.",
+    "link": {
+      "title": "All about Procedure Linkage Table — MaskRay",
+      "url": "https://maskray.me/blog/2021-09-19-all-about-procedure-linkage-table"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these does a relocatable ELF object file (`.o`) contain? Select all that apply.",
+    "options": [
+      {
+        "text": "Machine code in a `.text` section",
+        "explanation": "Correct. The instructions are already encoded, apart from the holes."
+      },
+      {
+        "text": "A symbol table listing defined and undefined symbols",
+        "explanation": "Correct. It names what this file provides (`main`) and what it needs (`puts`)."
+      },
+      {
+        "text": "Relocation entries describing where addresses must be patched",
+        "explanation": "Correct. These are the instructions for the linker's patching pass."
+      },
+      {
+        "text": "The final run-time addresses of libc functions",
+        "explanation": "Not known until link time for static linking, and not until load time (with ASLR) for dynamic linking."
+      },
+      {
+        "text": "A `PT_INTERP` program header naming the dynamic loader",
+        "explanation": "Program headers belong to executables and shared libraries. A `.o` is never loaded directly, so it has no segments."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. A `.o` is the assembler's output: code and data, already encoded, grouped into sections.\n2. It includes a symbol table so the linker can match uses with definitions across files.\n3. It includes relocations, one per hole, so the linker knows what to patch.\n4. It has no final addresses (nothing has been laid out) and no program headers (it isn't loadable).\n\n`readelf -S`, `readelf -s` and `readelf -r` show the sections, symbols and relocations respectively.",
+    "link": {
+      "title": "Executable and Linkable Format — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Executable_and_Linkable_Format"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 64-bit Linux service with full ASLR prints the address of a libc function in a verbose error message. Why do security reviewers treat this as serious?",
+    "options": [
+      {
+        "text": "Libc's internal layout is fixed, so one leaked address reveals where everything else in libc is for that process",
+        "explanation": "Correct. ASLR randomises a module's base, not its insides. Subtract the known offset of the leaked function and you have the base; every other function follows."
+      },
+      {
+        "text": "It doesn't matter: ASLR re-randomises libc's address after every function call",
+        "explanation": "ASLR picks addresses once, when the process starts (or the library is loaded). The layout then stays fixed for the life of the process."
+      },
+      {
+        "text": "It reveals the canary value",
+        "explanation": "The canary is a random number stored in thread-local storage, unrelated to libc's code addresses."
+      },
+      {
+        "text": "It disables NX for the libc pages",
+        "explanation": "Knowing an address doesn't change page permissions. The concern is that it undoes the protection ASLR provides."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. ASLR chooses one random base per module per process.\n2. Inside the module, offsets are fixed at link time: function A is always, say, 0x2a000 bytes after function B.\n3. So `base = leaked_address - offset_of_that_function`.\n4. With the base, every address in libc is known, which removes the main obstacle to code-reuse attacks.\n5. Mitigation: don't log raw pointers, or hash or redact them. The Linux kernel hashes pointers printed with `%p` for exactly this reason. And fix the underlying memory bug.",
+    "link": {
+      "title": "Address space layout randomization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A function has a local `char buf[64]` protected by a stack canary, laid out as in the lesson. Which bugs would the canary **not** detect? Select all that apply.",
+    "options": [
+      {
+        "text": "A `strcpy` of a 200-byte string into `buf`, which runs contiguously over the canary and the return address",
+        "explanation": "This is exactly what canaries catch: the copy must overwrite the canary to reach the return address, and the check at return fails."
+      },
+      {
+        "text": "A bug that writes 8 bytes to an attacker-chosen index `buf[i]` that lands directly on the return address, skipping the canary",
+        "explanation": "Correct. A non-contiguous write never touches the canary, so the check passes."
+      },
+      {
+        "text": "A heap buffer overflow that corrupts another object on the heap",
+        "explanation": "Correct. Stack canaries guard only the stack frame's saved registers and return address; the heap needs other defences."
+      },
+      {
+        "text": "An overflow that changes a function pointer stored among the locals, which is called before the function returns",
+        "explanation": "Correct. The canary is checked only in the epilogue, and the corrupted pointer is used before that. Compilers try to place arrays above other locals to reduce this risk."
+      },
+      {
+        "text": "An overflow that reaches the saved `rbx` but stops short of the return address",
+        "explanation": "This is detected: the saved `rbx` sits above the canary, so reaching it means passing through the canary."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "1. Recall the layout: buffer, then canary, then saved registers, then return address (moving to higher addresses).\n2. A canary works only when (a) the corruption is contiguous from the buffer upwards and (b) the damage is used after the epilogue check.\n3. The `strcpy` overflow and the saved-`rbx` overflow satisfy both: detected.\n4. The indexed write skips the canary: (a) fails.\n5. The function pointer is used before the check: (b) fails.\n6. The heap overflow is outside the stack frame entirely.\n\nThis is why canaries are one layer among several: CET shadow stacks or ARM PAC protect return addresses against non-contiguous writes too.",
+    "link": {
+      "title": "Buffer overflow protection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Buffer_overflow_protection"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does making the GOT read-only after start-up (full RELRO) also require `-z now`?",
+    "options": [
+      {
+        "text": "`-z now` makes the binary position-independent, which RELRO needs",
+        "explanation": "Position independence comes from `-fPIE`/`-pie`. `-z now` controls when symbols are bound."
+      },
+      {
+        "text": "`-z now` disables ASLR, which would otherwise move the GOT",
+        "explanation": "`-z now` has nothing to do with ASLR; the two coexist on most hardened binaries."
+      },
+      {
+        "text": "Without `-z now` the GOT is in the `.text` section, which is already read-only",
+        "explanation": "The GOT is always in a writable data segment initially; that's why it needs protecting."
+      },
+      {
+        "text": "With lazy binding, the resolver writes into the GOT during normal running, on each function's first call; the GOT can only be locked once all binding happens up front",
+        "explanation": "Correct. `-z now` resolves every symbol at load time, so the loader can `mprotect` the GOT read-only before `main` runs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Lazy binding fills GOT slots on demand: the first call to each function writes its slot.\n2. Therefore the GOT must stay writable for the whole run, and a memory-corruption bug could overwrite a slot to redirect a later library call.\n3. `-z now` (or `DT_BIND_NOW`) makes `ld.so` resolve every slot at start-up.\n4. With `-z relro` as well, `ld.so` then marks the `GNU_RELRO` region, including the GOT, read-only.\n5. Cost: slightly slower start-up for programs with many imports. Many distributions accept this and build packages with full RELRO.",
+    "link": {
+      "title": "All about Procedure Linkage Table — MaskRay",
+      "url": "https://maskray.me/blog/2021-09-19-all-about-procedure-linkage-table"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An address is randomised with 8 bits of entropy on an old 32-bit system and 28 bits on a 64-bit one. If someone must guess it and each wrong guess is detectable, how many guesses does it take **on average** in each case?",
+    "options": [
+      {
+        "text": "8 and 28",
+        "explanation": "This treats bits of entropy as the number of possibilities. n bits means 2^n possibilities."
+      },
+      {
+        "text": "256 and about 268 million",
+        "explanation": "These are the worst cases (2^8 and 2^28). On average the right value is found halfway through."
+      },
+      {
+        "text": "About 128 and about 134 million",
+        "explanation": "Correct. With N = 2^n equally likely values, the expected number of guesses is about N/2: 2^8/2 = 128 and 2^28/2 = 2^27 ≈ 134 million."
+      },
+      {
+        "text": "The same, because ASLR entropy doesn't depend on address width",
+        "explanation": "Address width limits how far things can be shifted. 32-bit systems had far less room, which is why their ASLR was weak."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. n bits of entropy gives N = 2^n equally likely positions.\n2. Searching N possibilities without repeats: expected guesses ≈ N/2 (worst case N).\n3. 8 bits: N = 256, average 128 guesses. Feasible in seconds against a service that restarts.\n4. 28 bits: N = 268,435,456, average about 134 million. Every wrong guess usually crashes the process, which monitoring notices.\n5. This is the reasoning behind 64-bit ASLR being strong, and behind the advice to alert on repeated crashes of the same service.",
+    "link": {
+      "title": "Address space layout randomization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "glibc forces the lowest byte of the stack canary on little-endian x86-64 to zero. What is the defensive reason?",
+    "options": [
+      {
+        "text": "It makes the canary easier to compare in one instruction",
+        "explanation": "Any 64-bit value compares in one instruction; the zero byte has nothing to do with speed."
+      },
+      {
+        "text": "Zero bytes improve the randomness of the other 7 bytes",
+        "explanation": "It does the opposite: it gives up 8 bits of entropy. That cost is accepted for the benefit below."
+      },
+      {
+        "text": "String functions stop at a zero byte, so a string-based overflow can't copy a correct canary back, and a string-based leak stops before revealing the rest",
+        "explanation": "Correct. On little-endian the lowest byte is first in memory, so a `strcpy`-style overflow or a `%s`-style read hits the terminator immediately."
+      },
+      {
+        "text": "It marks the canary's page as non-executable",
+        "explanation": "Page permissions are set per page in the page tables, not by data values on the stack."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. On little-endian, the least significant byte is stored at the lowest address, which is the first byte a buffer overflow or over-read reaches.\n2. C string functions treat 0x00 as the end of the string.\n3. Overwrite case: a string copy can't write a 0x00 in the middle of its data, so it can't reproduce a canary that starts with one.\n4. Leak case: printing an unterminated buffer as a string stops at the canary's first byte, revealing nothing.\n5. Trade-off: 56 bits of randomness instead of 64, still far too many to guess.",
+    "link": {
+      "title": "GCC instrumentation options (-fstack-protector)",
+      "url": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+    }
+  }
+]

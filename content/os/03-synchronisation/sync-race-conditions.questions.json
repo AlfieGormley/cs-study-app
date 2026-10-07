@@ -1,0 +1,342 @@
+[
+  {
+    "id": "sync-race-conditions-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Use a sequentially consistent toy model with indivisible loads/stores and preserved per-thread order, not the semantics of data-racing C. `counter` starts at 10. Two threads each run `counter++` once, compiled to load / add / store. The scheduler produces this interleaving:\n\n```\nA: load  (rA = 10)\nA: add   (rA = 11)\nB: load  (rB = 10)\nA: store (counter = 11)\nB: add   (rB = 11)\nB: store\n```\n\nWhat is the final value of `counter`?",
+    "options": [
+      {
+        "text": "12",
+        "explanation": "12 is what you get when the increments do not overlap. Here B loaded before A stored, so B never saw A's update."
+      },
+      {
+        "text": "11",
+        "explanation": "Correct. B read 10 before A's store landed, computed 11 from that stale value and overwrote A's 11 with its own 11. One update is lost."
+      },
+      {
+        "text": "10",
+        "explanation": "Both threads did store a value of 11; the counter cannot go back to 10. The bug loses an increment, it does not undo both."
+      },
+      {
+        "text": "It is undefined, so no value can be predicted",
+        "explanation": "The stipulated toy trace has a determined result. A plain C implementation with unsynchronized conflicting accesses instead has undefined behavior, so this trace is not a language-level output guarantee."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow the shared value and each private register:\n\n```\nstep        rA  rB  counter\nA load      10   -   10\nA add       11   -   10\nB load      11  10   10\nA store     11  10   11\nB add       11  11   11\nB store     11  11   11\n```\n\nThe key step is B's load: it happened before A's store, so B worked from 10. Its store of 11 overwrites A's 11. Final value 11, one lost update.",
+    "link": {
+      "title": "OSTEP: Concurrency, an introduction (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does `counter++` on a shared `int` lose updates when run by several threads at once?",
+    "options": [
+      {
+        "text": "Because `int` is too small and overflows under concurrent access",
+        "explanation": "Overflow has nothing to do with it; the bug appears with small counts. The problem is the gap between reading and writing the value."
+      },
+      {
+        "text": "Because each thread has its own copy of global variables",
+        "explanation": "Threads share globals; that sharing is exactly why they can interfere. Thread-local copies would never lose each other's updates, they would just never see them."
+      },
+      {
+        "text": "Because it is a read-modify-write: another thread can run between the load and the store and its update gets overwritten",
+        "explanation": "Correct. The load, add and store are separate steps. If two threads both load the same old value, the second store overwrites the first."
+      },
+      {
+        "text": "Because the C compiler reorders the increment to after the loop",
+        "explanation": "Compilers can transform loops, but the lost-update bug exists even at -O0 with no reordering. The root cause is non-atomic read-modify-write."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Write out what the CPU does: `load counter → reg`, `reg + 1`, `store reg → counter`.\n2. Ask: can another thread run between those steps? Yes: it can be on another core, or the scheduler can preempt in between.\n3. If two threads both load 5, both compute 6 and both store 6, one increment vanished.\n4. So the fix must make load-add-store indivisible: a lock around it, or an atomic instruction like `lock xadd` (C11 `atomic_fetch_add`).",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Treat the code as pseudocode with sequentially consistent atomic access to turn. Two threads use **strict alternation** to guard a critical section:\n\n```c\n// thread i (0 or 1)\nwhile (turn != i) ;  // spin\n/* critical section */\nturn = 1 - i;\n```\n\nThread 0 leaves the critical section, sets `turn = 1`, and then spends an hour in its remainder section. Thread 1 enters, exits (setting `turn = 0`) and immediately wants to enter again. Which requirement is violated?",
+    "options": [
+      {
+        "text": "Mutual exclusion",
+        "explanation": "Mutual exclusion holds: only the thread whose turn it is can be inside. The problem is that a thread is kept out when nobody is inside."
+      },
+      {
+        "text": "Progress",
+        "explanation": "Correct. The critical section is empty and thread 1 wants in, yet it must wait for thread 0, which is not even trying to enter. A thread in its remainder section is blocking the decision."
+      },
+      {
+        "text": "Bounded waiting",
+        "explanation": "Strict alternation actually bounds waiting tightly: the other thread can enter at most once ahead of you. The failure here is that entry depends on a thread that does not want in."
+      },
+      {
+        "text": "None; the scheme is correct",
+        "explanation": "It is safe but not live: thread 1 is stuck for an hour with the critical section free, which a correct solution must not allow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Check each requirement against the scenario:\n\n1. **Mutual exclusion**: entry requires `turn == i`, and `turn` has one value, so at most one thread is inside. Holds.\n2. **Progress**: after thread 1 exits, `turn == 0`. The section is empty, thread 1 wants in, but only thread 0 can flip `turn` back, and it is busy elsewhere. Only threads *trying to enter* should take part in the decision. Violated.\n3. **Bounded waiting**: each thread enters at most once before the other gets a turn. Holds.\n\nPeterson's algorithm fixes this by adding per-thread `flag`s, so a thread that is not interested does not block the other.",
+    "link": {
+      "title": "Critical section — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Critical_section"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume withdraw subtracts unconditionally and performs no balance validation. A bank account class takes an internal lock in every method. Balance is 150. Two threads each run:\n\n```python\nif acct.balance() >= 100:\n    acct.withdraw(100)\n```\n\nWhat is the worst final balance, and what kind of bug is this?",
+    "options": [
+      {
+        "text": "50; the locks prevent anything worse",
+        "explanation": "The locks protect each call separately. Nothing stops both threads from passing the check before either withdraws."
+      },
+      {
+        "text": "-50; it is a data race on the balance field",
+        "explanation": "The amount is right but the label is wrong: every access to the field is under the lock, so there is no data race. The bug is in the logic spanning two calls."
+      },
+      {
+        "text": "-50; it is a check-then-act race condition with no data race",
+        "explanation": "Correct. Both threads can read 150, both pass the check, and both withdraw, leaving -50. Each method is thread-safe; the sequence is not."
+      },
+      {
+        "text": "The program deadlocks because both threads hold the lock",
+        "explanation": "Each method takes and releases the lock before returning, so no thread holds it while waiting for another. There is no deadlock, just a wrong answer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A calls `balance()` → 150 (lock taken, released).\n2. B calls `balance()` → 150.\n3. A: 150 >= 100, calls `withdraw(100)` → 50.\n4. B: its check already passed, calls `withdraw(100)` → -50.\n\nEvery read and write of the field was locked, so by the C/C++ definition there is no data race. The bug is that the decision (check) and the action are not one atomic unit. Fix: hold the lock across both, or provide `withdraw_if_at_least(100)` that does the check inside the lock.",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague says: \"CPython has a GIL, so only one thread runs Python code at a time. Therefore `counter += 1` from several threads is safe.\" What is wrong with this argument?",
+    "options": [
+      {
+        "text": "Nothing; the GIL makes every Python statement atomic",
+        "explanation": "The GIL protects interpreter execution but is not a promise that arbitrary statements or bytecodes are indivisible. User-defined operations and extensions can introduce interleavings."
+      },
+      {
+        "text": "The GIL is not a portable guarantee that a compound read-modify-write such as += is atomic",
+        "explanation": "Correct. Compound updates need explicit synchronisation. A bytecode can invoke user code, extensions can release the GIL, and free-threaded builds have no GIL. Exact switching points vary by CPython version."
+      },
+      {
+        "text": "The GIL only applies to I/O, not arithmetic",
+        "explanation": "Backwards: the GIL is held while running bytecode, including arithmetic, and is typically released around blocking I/O."
+      },
+      {
+        "text": "Integers in Python are immutable, so `+=` always creates a new object and cannot race",
+        "explanation": "Immutability means `+=` rebinds the name to a new int, but reading the old binding and writing the new one are still separate steps, so two threads can both read the same old value."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. An increment must read the old value, compute a new one and publish it.\n2. A GIL serialises execution only while held; it does not provide a portable atomicity contract for this whole operation.\n3. User-defined operators and extension calls can introduce interleavings, and free-threaded Python allows parallel execution.\n4. Recent GIL-enabled CPython may consistently finish this particular plain-integer loop without a lost update. That observation is not a general thread-safety guarantee.\n5. Use a threading.Lock around shared compound updates.",
+    "link": {
+      "title": "dis: disassembler for Python bytecode",
+      "url": "https://docs.python.org/3/library/dis.html"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are **data races** under the C11/C++11 definition? Select all that apply.",
+    "options": [
+      {
+        "text": "Two threads both call `counter++` on a plain `int` with no lock",
+        "explanation": "Correct. Conflicting accesses (both write), same location, not atomic, not ordered. Textbook data race, and undefined behaviour."
+      },
+      {
+        "text": "Two threads both read a plain `int` config value that nobody writes after startup",
+        "explanation": "Not a race. A data race needs at least one write. Concurrent reads of unchanging data are safe (as long as the write happened before the threads were started)."
+      },
+      {
+        "text": "One thread sets a plain `bool done = true`; another loops `while (!done)` with no lock",
+        "explanation": "Correct. One write and one read of the same location, neither atomic, nothing ordering them. It looks harmless but it is undefined behaviour, and in practice the compiler may hoist the load out of the loop so it spins forever."
+      },
+      {
+        "text": "Two threads call `atomic_fetch_add(&c, 1)` on an `atomic_int`",
+        "explanation": "Both accesses are atomic, so this operation has no data race. Whether the overall application is correct still depends on its protocol and numeric requirements."
+      },
+      {
+        "text": "Two threads each lock the same mutex, then write the same plain variable, then unlock",
+        "explanation": "Not a data race: the mutex orders the two writes (one unlock happens before the other's lock)."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Apply the four-part test to each option: same location? at least one write? not both atomic? not ordered by synchronisation?\n\n| Option | Write? | Atomic? | Ordered? | Race? |\n|---|---|---|---|---|\n| A | yes | no | no | yes |\n| B | no | no | n/a | no |\n| C | yes | no | no | yes |\n| D | yes | yes | n/a | no |\n| E | yes | no | mutex | no |\n\nOption C is the one people get wrong: a 'benign' flag is still a data race. Make it `atomic_bool`.",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Use a sequentially consistent toy model with indivisible loads/stores and preserved per-thread order, not the semantics of data-racing C. `counter` starts at 0. Two threads each execute `counter++` exactly **once** (load, add, store) with no synchronisation. Which set lists every possible final value?",
+    "options": [
+      {
+        "text": "{2}",
+        "explanation": "2 happens only if one thread's store lands before the other's load. If both load 0 first, both store 1."
+      },
+      {
+        "text": "{0, 1, 2}",
+        "explanation": "0 is impossible: whichever store happens last writes a value computed as (something loaded) + 1, which is at least 1."
+      },
+      {
+        "text": "{1, 2}",
+        "explanation": "Correct. Non-overlapping execution gives 2; overlapping loads give 1. Nothing else is reachable."
+      },
+      {
+        "text": "Any integer, because the behaviour is undefined",
+        "explanation": "The question explicitly stipulates a sequentially consistent trace model. Its outcomes are 1 or 2; a data-racing plain C program has no corresponding output guarantee."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Enumerate by what each thread loads:\n\n1. If B loads after A stores: B sees 1, stores 2. Final 2 (same the other way round).\n2. If both load before either stores: both see 0, both store 1. Final 1.\n3. Every store writes `loaded + 1 >= 1`, and at least one store happens, so 0 is impossible.\n\nSo the outcome set is {1, 2}. With more increments the range grows, which the next question explores.",
+    "link": {
+      "title": "OSTEP: Concurrency, an introduction (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Use a sequentially consistent toy model with indivisible loads/stores and preserved per-thread order, not the semantics of data-racing C. `counter` starts at 0. Two threads each run `counter++` **3 times** in a loop, with each increment being a separate load, add and store, and no synchronisation. What is the **smallest** possible final value?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "Impossible. The last store comes from some thread's final iteration, and that iteration's load happened after that thread had already stored at least once, when counter was already at least 1. So the last store writes at least 2."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. The trace arranges for the final store overall to write 2. The two threads need not both finish by storing 2."
+      },
+      {
+        "text": "3",
+        "explanation": "3 is reachable but not the minimum. Losing updates can be far worse than just dropping one thread's work."
+      },
+      {
+        "text": "6",
+        "explanation": "6 is the maximum (no overlap at all), not the minimum."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Construct the schedule:\n\n```\nA: load 0, stall             c=0\nB: inc, inc (fully)          c=2\nA: add, store 1              c=1\nB: 3rd iter: load 1, stall   c=1\nA: inc, inc (its 2nd, 3rd)   c=3\nB: add, store 2              c=2\n```\n\nA did 3 increments, B did 3, final value 2.\n\nWhy not 1? Take the last store overall, by thread X in its final iteration. That iteration's load came after X's own first store, and every store writes at least 1, so X loaded at least 1 and stores at least 2.",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At -O2, a compiler turns `counter++` into a single x86 instruction: `incl counter(%rip)`. Is the increment now safe across threads on a multicore machine?",
+    "options": [
+      {
+        "text": "Yes: a single instruction cannot be interrupted, so it is atomic",
+        "explanation": "Interrupts only arrive between instructions, which protects you on a single core. On multicore, another core can read the same cache line in the middle of this instruction's internal read and write."
+      },
+      {
+        "text": "No: without the `lock` prefix the read-modify-write is not atomic across cores, and in C it is still a data race",
+        "explanation": "Correct. `lock incl` (what `atomic_fetch_add` compiles to) holds the cache line exclusively for the whole operation. Plain `incl` does not. And at the language level the compiler is free to emit anything, since a data race is UB."
+      },
+      {
+        "text": "Yes, because x86 has a strong memory model",
+        "explanation": "x86's relatively strong ordering (TSO) is about the order stores become visible, not about making read-modify-write sequences atomic. Lost updates still happen."
+      },
+      {
+        "text": "Only if `counter` is declared `volatile`",
+        "explanation": "`volatile` stops the compiler caching the value in a register, but it does not make the increment atomic. In C, `volatile` is not a threading tool."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Single-core view: an interrupt cannot split one instruction, so on a uniprocessor `inc [mem]` would be safe from preemption.\n2. Multicore view: internally `inc [mem]` reads the line, adds, writes back. Another core can do the same in parallel, and both write the same result.\n3. The `lock` prefix makes the core hold the cache line in exclusive state for the whole read-modify-write, so no other core can interleave.\n4. In C, the only portable way to get that is `atomic_fetch_add` (or a mutex). The compiler choosing `incl` today is not a guarantee it will tomorrow.",
+    "link": {
+      "title": "Mutual exclusion — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Mutual_exclusion"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You implement Peterson's algorithm exactly as in the lesson, with plain `int` variables, and run it on a modern x86 machine. Occasionally both threads are inside the critical section at once. Why?",
+    "options": [
+      {
+        "text": "Peterson's algorithm is only proven correct for a single CPU core",
+        "explanation": "Its proof assumes sequential consistency, not a single core. On an idealised sequentially consistent multiprocessor it is correct."
+      },
+      {
+        "text": "The `turn` variable overflows",
+        "explanation": "`turn` only ever holds 0 or 1, so there is nothing to overflow. This guesses at an arithmetic bug when the real failure is about the order in which memory operations become visible."
+      },
+      {
+        "text": "The CPU (and compiler) may let a thread's load of `flag[other]` happen before its own store to `flag[me]` becomes visible, so both threads read 0",
+        "explanation": "Correct as a hardware explanation, but the plain C variables also create undefined behaviour. Use suitable C atomics (for example sequentially consistent atomics for this teaching algorithm) or a real mutex; adding a fence alone does not make non-atomic racing accesses valid C."
+      },
+      {
+        "text": "Two threads cannot both spin on the same variable",
+        "explanation": "They can; spinning on a shared variable is fine. The issue is the order in which the stores and loads become visible."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The plain C implementation already has undefined behavior. In a separate literal machine-code model, stores can remain buffered while each core reads the other flag as zero; both may then enter. Sequentially consistent C atomics provide a valid teaching implementation. A hardware fence by itself does not repair non-atomic C data races.",
+    "link": {
+      "title": "Peterson's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Peterson%27s_algorithm"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You build your C service with ThreadSanitizer (`-fsanitize=thread`) and run the test suite. Which bugs could it report? Select all that apply.",
+    "options": [
+      {
+        "text": "Two threads incrementing a plain global without a lock, when the tests exercise that path",
+        "explanation": "Correct. Unsynchronised conflicting accesses are exactly what TSan detects, as long as the racing code actually runs during the test."
+      },
+      {
+        "text": "A check-then-act bug where `balance()` and `withdraw()` each take the lock correctly",
+        "explanation": "Not detectable by TSan: every access is synchronised, so there is no data race. It is a logic-level race condition."
+      },
+      {
+        "text": "A data race in a code path the tests never execute",
+        "explanation": "TSan is a dynamic tool; it only sees accesses that happen at run time. Unexecuted code cannot be reported."
+      },
+      {
+        "text": "A flag written by one thread and polled by another as a plain `bool`",
+        "explanation": "This is a data race and may be reported when the conflicting path is executed and instrumented. A detector run does not guarantee every possible race is found."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "1. TSan instruments memory accesses and tracks happens-before between threads (locks, atomics, thread create and join).\n2. It reports when two accesses conflict and are not ordered: options A and D.\n3. It cannot reason about intent, so a sequence of individually locked calls (B) looks fine.\n4. It only checks what runs (C). Coverage matters: race detectors are a complement to review and design, not a proof of correctness.",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  }
+]

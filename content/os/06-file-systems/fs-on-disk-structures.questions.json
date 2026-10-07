@@ -1,0 +1,352 @@
+[
+  {
+    "id": "fs-on-disk-structures-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is **not** stored in a file's inode on ext4?",
+    "options": [
+      {
+        "text": "The file's size in bytes",
+        "explanation": "Size is core inode metadata; `stat` reads it from the inode."
+      },
+      {
+        "text": "The link count",
+        "explanation": "The link count lives in the inode. It's how the kernel knows when no names remain."
+      },
+      {
+        "text": "The file's name",
+        "explanation": "Correct. Names live in directory entries, which map name → inode number. That's what makes hard links possible: several names, one inode."
+      },
+      {
+        "text": "Where the file's data blocks are",
+        "explanation": "The block map (extents on ext4) is the inode's most important job."
+      },
+      {
+        "text": "The permission bits",
+        "explanation": "Mode bits such as `0644` live in the inode, so every hard link to a file has the same permissions."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask what the inode is for: it describes *one file*, independent of how it's named.\n\n1. Size, owner, permissions, timestamps, link count and the block map are all properties of the file itself, so they belong in the inode.\n2. A name is a property of a *directory entry*. A file with 3 hard links has 3 names but 1 inode.\n3. `ls -i` shows that two hard-linked names report the same inode number, which shows the name isn't inside it.",
+    "link": {
+      "title": "inode(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Starting with no files, you run:\n\n```\necho hi > a\nln a b\nln b c\nrm a\n```\n\nWhat is the link count of `c` now?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "This assumes `c` is a link to `b` only. Hard links point at the inode, not at another name, so all three names counted towards the same inode."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. The inode had 3 names (`a`, `b`, `c`) and therefore link count 3. Removing `a` drops it to 2."
+      },
+      {
+        "text": "3",
+        "explanation": "`rm a` really does remove a name and decrement the count; nothing else is keeping that third reference."
+      },
+      {
+        "text": "0, and `c` is now broken",
+        "explanation": "That's how a *symlink* to a deleted target behaves. Hard links are equal peers; the data survives while any name remains."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nstep        names        nlink\necho > a    a            1\nln a b      a b          2\nln b c      a b c        3\nrm a        b c          2\n```\n\n`ln b c` resolves `b` to its inode and adds another directory entry for that inode. No name is \"the original\". Storage becomes reclaimable after links and retaining references, including mappings, disappear; filesystem features can retain underlying blocks further.",
+    "link": {
+      "title": "Hard link — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hard_link"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A mail server's spool partition shows `df -h` at 35% used, but every attempt to create a file fails with `No space left on device`. On a fixed-size ext4 filesystem, which listed resource shortage should you check with df -i?",
+    "options": [
+      {
+        "text": "The disk is failing and reporting the wrong free space",
+        "explanation": "I/O errors commonly indicate device problems, but error text alone cannot rule out every storage-stack issue. The question specifically asks about the inode resource check."
+      },
+      {
+        "text": "The configured inode slots may be exhausted by many small files even while data blocks remain free",
+        "explanation": "Correct. Confirm inode usage with df -i. Cleanup, migration, filesystem growth where supported, or recreating with a different inode density are possible approaches."
+      },
+      {
+        "text": "The partition needs defragmenting",
+        "explanation": "Fragmentation can constrain particular allocations, but inode exhaustion is the specific resource checked by df -i. Defragmentation does not create more inode slots in existing groups."
+      },
+      {
+        "text": "The directory has hit its maximum number of entries",
+        "explanation": "ext4's htree directories can hold millions of entries, and that would affect only one directory, not the whole partition."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Creation needs an inode and may need directory/data metadata blocks; a newly empty regular file need not allocate a payload block. df -h and df -i report different resources. In fixed-size ext4, inode density comes from format/configuration, so many small files can exhaust slots first. Existing groups do not grow arbitrary inode tables; filesystem expansion can add groups and inodes. Verify actual counters before selecting cleanup, growth or migration.",
+    "link": {
+      "title": "inode(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What do the two `cat` commands print?\n\n```\necho old > target\nln -s target s\nln target h\nrm target\necho new > target\ncat s\ncat h\n```",
+    "options": [
+      {
+        "text": "`old` then `old`",
+        "explanation": "The symlink stores a *path*, not an inode. It resolves `target` again at the moment you use it, and that name now refers to a new file."
+      },
+      {
+        "text": "`new` then `new`",
+        "explanation": "The hard link `h` names the original inode directly, and that inode still holds `old`. Creating a new `target` makes a different inode."
+      },
+      {
+        "text": "`new` then `old`",
+        "explanation": "Correct. `s` follows the path `target`, which now names the new file. `h` is bound to the old inode, which survived `rm target` because `h` still referenced it."
+      },
+      {
+        "text": "An error for `s` (dangling), then `old`",
+        "explanation": "`s` was dangling only between `rm target` and `echo new > target`. Once a file called `target` exists again, the symlink resolves."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Track the inodes:\n\n```\necho old > target   target -> #100\nln -s target s      s: path \"target\"\nln target h         h -> #100 (nlink 2)\nrm target           #100 nlink 1 (h)\necho new > target   target -> #200\n```\n\n- `cat s`: resolve \"target\" → #200 → `new`.\n- `cat h`: #100 → `old`.\n\nThe key difference: a hard link binds to *a file*, a symlink binds to *a name*.",
+    "link": {
+      "title": "symlink(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/symlink.7.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A teaching file system uses 1 KiB blocks, 4-byte block pointers and inodes with 12 direct pointers, one single-indirect and one double-indirect pointer (no triple). What is the largest file it can hold?",
+    "options": [
+      {
+        "text": "About 268 KiB",
+        "explanation": "That counts only the 12 direct blocks and the single-indirect block (12 + 256). The double-indirect pointer adds far more."
+      },
+      {
+        "text": "About 64 MiB",
+        "explanation": "Correct. Each 1 KiB block holds 256 pointers: 12 + 256 + 256² = 65,804 blocks × 1 KiB ≈ 64.3 MiB."
+      },
+      {
+        "text": "About 16 GiB",
+        "explanation": "That includes a triple-indirect level (256³ blocks). This design stops at double-indirect."
+      },
+      {
+        "text": "About 4 TiB",
+        "explanation": "That's the figure for 4 KiB blocks with triple-indirect pointers (ext2/3 style), not for this configuration."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Pointers per block = block size ÷ pointer size = 1024 ÷ 4 = **256**.\n2. Count the data blocks each level reaches:\n\n```\ndirect          12\nsingle-indirect 256\ndouble-indirect 256 x 256 = 65,536\ntotal           65,804 blocks\n```\n\n3. Multiply by the block size: 65,804 KiB ≈ 64.3 MiB.\n\nThe double-indirect level dominates. Each extra level of indirection multiplies capacity by 256 here (by 1,024 with 4 KiB blocks), which is why ext2/3 needed a triple level to reach terabytes.",
+    "link": {
+      "title": "ext4: the inode block map — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An ext3-style file system has 4 KiB blocks, 12 direct pointers and 1,024 pointers per indirect block. The file's inode is already cached in memory, but no other blocks are. How many disk reads does it take to read the byte at offset 100 KiB? Use a toy uncached block-read model with allocated data, no holes, readahead or other cache effects.",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "One read would be enough only if the byte were in the first 12 blocks (0–48 KiB), which direct pointers cover."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. Offset 100 KiB is in file block 25. Blocks 12–1,035 go through the single-indirect pointer, so you read the indirect block, then the data block."
+      },
+      {
+        "text": "3",
+        "explanation": "Three reads would mean the double-indirect level, which only starts at file block 1,036 (about 4 MiB in)."
+      },
+      {
+        "text": "4",
+        "explanation": "Four reads are needed only for the triple-indirect range, past about 4 GiB."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. File block number = 100 KiB ÷ 4 KiB = **25** (blocks are numbered from 0).\n2. Map it to the pointer level:\n\n```\nblocks 0..11       direct\nblocks 12..1035    single-indirect\nblocks 1036..      double-indirect\n```\n\n3. Block 25 is in the single-indirect range.\n4. Reads: the indirect block (to get pointer 25 − 12 = 13), then the data block. That's **2**.\n\nAn extent-mapped ext4 file whose extents fit in the inode needs just 1 read here.",
+    "link": {
+      "title": "ext4: the inode block map — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On ext4 you run:\n\n```\nmkdir proj\nmkdir proj/src proj/docs\ntouch proj/README\n```\n\nWhat is the link count of `proj`?",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "That's the count for an *empty* directory: its name in the parent plus its own `.`. The two subdirectories each add a reference."
+      },
+      {
+        "text": "3",
+        "explanation": "This counts just one subdirectory, or counts README instead of a subdirectory."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. The name `proj` in the parent, `proj/.`, `src/..` and `docs/..` are four directory entries that all point at `proj`'s inode. README is a separate file and points elsewhere."
+      },
+      {
+        "text": "5",
+        "explanation": "This counts README as a link to `proj`. A regular file's entry points at the file's own inode, not the directory's."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count every directory entry whose inode number is `proj`'s:\n\n```\nentry               points to\nparent/proj         proj\nproj/.              proj\nproj/src/..         proj\nproj/docs/..        proj\nproj/README         README's inode\n```\n\nThat's 4. For the small ordinary directory here, the count is 2 plus subdirectories. Large ext4 directories using dir_nlink can instead report an unknown-count marker of 1. (Some file systems, such as Btrfs, report 1 for directories instead, so don't rely on this in scripts.)",
+    "link": {
+      "title": "inode(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`report.txt` and `copy.txt` are hard links to the same file. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "They must be on the same file system",
+        "explanation": "Correct. A directory entry stores an inode number, which is only meaningful within one file system."
+      },
+      {
+        "text": "Neither is the \"original\"; both are equal names for one inode",
+        "explanation": "Correct. After `ln`, the kernel keeps no record of which name came first."
+      },
+      {
+        "text": "Deleting `report.txt` makes `copy.txt` a dangling link",
+        "explanation": "That's symlink behaviour. With hard links the inode survives until the last name is removed."
+      },
+      {
+        "text": "`chmod 600 copy.txt` also changes the permissions seen through `report.txt`",
+        "explanation": "Correct. Permissions are in the shared inode, so there's only one set."
+      },
+      {
+        "text": "Each has its own inode, which `ls -i` will show",
+        "explanation": "Hard links share one inode; `ls -i` prints the same number for both. A symlink is what gets its own inode."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Picture it:\n\n```\nreport.txt --+\n             +--> inode 7342\ncopy.txt ----+     mode, size,\n                   blocks...\n```\n\n- Same file system: required, since inode numbers are per file system. True.\n- Equal peers: true.\n- Dangling after deleting one: false; nlink goes 2 → 1.\n- Shared permissions: true; one inode, one mode.\n- Separate inodes: false.",
+    "link": {
+      "title": "Hard link — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hard_link"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A perfectly contiguous 10 GiB file is written on ext4 with 4 KiB blocks. Each extent covers at most 32,768 blocks, the inode holds 4 extents, and a 4 KiB tree block holds about 340 extents. Assume the initialized data is coalesced into maximum-length extent records. What compact mapping suffices?",
+    "options": [
+      {
+        "text": "One extent stored in the inode",
+        "explanation": "A single extent can cover at most 32,768 × 4 KiB = 128 MiB, so 10 GiB needs many."
+      },
+      {
+        "text": "80 extents, which fit in the inode",
+        "explanation": "The inode has room for only 4 extent entries (60 bytes), so 80 can't fit."
+      },
+      {
+        "text": "80 extents in a depth-1 extent tree: the inode points to one leaf block holding all 80",
+        "explanation": "Correct. 10 GiB ÷ 128 MiB = 80 extents, more than the inode's 4 slots but well within one 340-entry leaf."
+      },
+      {
+        "text": "2.6 million block pointers in indirect blocks",
+        "explanation": "That's how ext3 (indirect mapping) would do it: 10 GiB ÷ 4 KiB = 2,621,440 pointers, about 10 MiB of indirect blocks. ext4 uses extents."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Maximum extent size: 32,768 blocks × 4 KiB = **128 MiB**.\n2. Extents needed: 10 GiB ÷ 128 MiB = 10,240 MiB ÷ 128 MiB = **80**.\n3. The inode's 60-byte `i_block` area holds a 12-byte header plus 4 × 12-byte entries, so 80 won't fit.\n4. ext4 turns the inode's entries into index entries pointing at leaf blocks. One 4 KiB leaf holds (4096 − 12) ÷ 12 ≈ 340 extents.\n5. So: inode → 1 index entry → 1 leaf → 80 extents. Depth 1.\n\nCompare with ext3: 2.6 million 4-byte pointers, about 10 MiB of metadata, against one 4 KiB leaf.",
+    "link": {
+      "title": "ext4: the inode block map — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`du -h vm.img` says 6 GB, but `ls -lh vm.img` says 50 GB. You copy it to a backup server with a plain byte-for-byte stream copy and the destination's 40 GB disk fills up. What happened? Assume an ordinary uncompressed sparse file and a destination that allocates explicitly written zero ranges.",
+    "options": [
+      {
+        "text": "The backup server's file system uses bigger blocks, which inflated the file",
+        "explanation": "Simple tail-block rounding of an ordinary contiguous file cannot explain this difference. Special allocation features can add complexity, but this question specifies sparse-file expansion."
+      },
+      {
+        "text": "`du` is wrong; the image always used 50 GB",
+        "explanation": "`du` reports blocks actually allocated. 6 GB is real: the rest are holes."
+      },
+      {
+        "text": "The image is sparse; the copy read the holes as zeros and wrote them out as real data blocks",
+        "explanation": "Correct. Holes read back as zeros, and a naive copy writes those zeros explicitly, allocating 50 GB. Use a sparse-aware tool (`cp --sparse=always`, `rsync -S`, `tar -S`)."
+      },
+      {
+        "text": "The copy duplicated the hard links inside the image",
+        "explanation": "The image is one file; hard links inside a VM's own file system are just bytes to the host."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `ls -l` shows the logical byte length (one beyond the last byte offset for a nonempty file): 50 GB.\n2. `du` shows allocated blocks: 6 GB. The remaining 44 GB are **holes**: ranges with no blocks in the extent map.\n3. Reading a hole returns zeros, without allocating payload blocks for that hole (metadata still exists).\n4. A plain copy reads 50 GB of bytes, zeros included, and `write`s them all. The destination allocates blocks for every zero: 50 GB > 40 GB.\n5. Sparse-aware tools detect runs of zeros (or ask the file system with `SEEK_HOLE`/`SEEK_DATA`) and skip them, recreating the holes.",
+    "link": {
+      "title": "Extent (file systems) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Extent_(file_systems)"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about block allocation strategies are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Contiguous allocation suffers from external fragmentation: free space breaks into holes too small for new files",
+        "explanation": "Correct. As files are created and deleted, free space becomes scattered gaps. That's why contiguous allocation suits write-once media like CDs."
+      },
+      {
+        "text": "In an uncached FAT chain model, finding a far cluster by starting at the first cluster requires following next-cluster entries",
+        "explanation": "Correct for that model. Implementations can cache discovered positions or extents, so not every repeated seek must restart from the first cluster."
+      },
+      {
+        "text": "Delayed allocation helps ext4 build longer extents, because it picks blocks when data is flushed and more of the file's size is known",
+        "explanation": "Correct. Choosing blocks at write-back time lets the allocator reserve one large run instead of many small ones."
+      },
+      {
+        "text": "Extents always need less metadata than block pointers, even for a badly fragmented file",
+        "explanation": "For a file fragmented into single-block pieces, each 12-byte extent maps only one block, so it costs more than a 4-byte pointer. Extents win only when runs are long."
+      },
+      {
+        "text": "The indirect-pointer scheme makes small files slow, because every block access goes through an indirect block",
+        "explanation": "The 12 direct pointers exist precisely so small files (up to 48 KiB with 4 KiB blocks) need no indirect blocks at all."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each against the mechanics:\n\n1. Contiguous: files need one unbroken run, so scattered free space is unusable. True.\n2. FAT: next-cluster pointers form a chain, so an uncached traversal from the beginning takes work proportional to the target cluster index. True.\n3. Delayed allocation: the allocator can see larger dirty ranges at writeback time, without necessarily knowing the complete final file size. True.\n4. Extents vs pointers: an extent is (logical start, length, physical start), 12 bytes in ext4. Worst case, 1 block per extent, that's 3× the cost of a 4-byte pointer. False.\n5. Small files: direct pointers cover the first 12 blocks. False.",
+    "link": {
+      "title": "OSTEP: File System Implementation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-implementation.pdf"
+    }
+  }
+]

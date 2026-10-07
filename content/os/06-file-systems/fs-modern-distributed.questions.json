@@ -1,0 +1,373 @@
+[
+  {
+    "id": "fs-modern-distributed-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which filesystem has especially restricted, version-dependent shrink support: the current upstream manual describes shrinking only its last allocation group without removing that group?",
+    "options": [
+      {
+        "text": "ext4",
+        "explanation": "ext4 can be shrunk with `resize2fs`, though only while unmounted."
+      },
+      {
+        "text": "Btrfs",
+        "explanation": "Btrfs supports online shrinking with `btrfs filesystem resize`."
+      },
+      {
+        "text": "XFS",
+        "explanation": "Correct. Current upstream XFS tooling documents this limited operation, with additional single-allocation-group restrictions. It is not general arbitrary shrinking; installed kernel/tooling support and geometry matter."
+      },
+      {
+        "text": "All Linux file systems can shrink online",
+        "explanation": "False. ext4 shrinking requires an unmounted filesystem, and XFS has restricted, version-dependent shrink support."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. ext4 supports online growth and offline shrinking.\n2. Btrfs supports online resizing, subject to space and layout constraints.\n3. XFS has historically lacked general shrink support. The current upstream `xfs_growfs` manual describes shrinking only the last allocation group without removing it; it also excludes shrinking a one-group filesystem or reducing one to a single group.\n4. Check the installed versions and exact geometry before making a resize plan. Do not treat this limited capability as arbitrary volume shrinking.",
+    "link": {
+      "title": "xfs_growfs(8) — upstream manual",
+      "url": "https://man7.org/linux/man-pages/man8/xfs_growfs.8.html"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a log-structured file system, why is an **inode map** needed?",
+    "options": [
+      {
+        "text": "Because inodes are rewritten to a new location at the end of the log every time they change, so inode number → disk address can't be computed from a fixed table",
+        "explanation": "Correct. In ext-style systems an inode's address is computed from its number. In LFS inodes move, so the imap tracks where each one currently lives."
+      },
+      {
+        "text": "To record which disk blocks are free, like a bitmap",
+        "explanation": "LFS doesn't use a free-block bitmap in that way: free space is reclaimed whole segments at a time by the cleaner."
+      },
+      {
+        "text": "To map file names to inode numbers",
+        "explanation": "That's what directories do, in LFS as everywhere else."
+      },
+      {
+        "text": "To encrypt inodes so other users can't read them",
+        "explanation": "The imap is purely a location index; it has nothing to do with security."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In ext4, for inode N and I inodes per group, group = (N − 1) // I and index = (N − 1) % I. Its byte offset within that group's inode table is index × inode_size.\n2. LFS writes changed inodes to new log locations instead.\n3. The inode map records the current location of each inode.\n4. Imap pieces are logged too, and checkpoint information provides the recovery starting point.",
+    "link": {
+      "title": "OSTEP: Log-structured File Systems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-lfs.pdf"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An HDFS client reads a 10 GiB replicated file with 128 MiB blocks. How does the data travel?",
+    "options": [
+      {
+        "text": "All 10 GiB stream through the NameNode, which fetches blocks from DataNodes",
+        "explanation": "This is the bottleneck GFS and HDFS were designed to avoid. The master handles metadata only."
+      },
+      {
+        "text": "The client broadcasts a request to every DataNode and takes the first answer",
+        "explanation": "There is no broadcast in this path. The NameNode maintains reported replica locations; failures can make those reports stale, so clients may need another replica."
+      },
+      {
+        "text": "The NameNode copies the file to the client's local disk first",
+        "explanation": "No copy is staged anywhere. The client streams blocks from DataNodes."
+      },
+      {
+        "text": "The client asks the NameNode for block locations, then reads each block directly from a DataNode holding a replica",
+        "explanation": "Correct. The NameNode returns which DataNodes hold each block; the bulk data flows between client and DataNodes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. 10 GiB / 128 MiB = 80 blocks, numbered 0–79.\n2. The client obtains block locations from the NameNode, potentially in batches.\n3. It reads payload directly from suitable DataNodes, preferring nearby replicas and retrying alternatives when necessary.\n4. The NameNode handles metadata RPCs; DataNodes deliver the 10 GiB payload.",
+    "link": {
+      "title": "HDFS Architecture — Apache Hadoop",
+      "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two Linux machines mount the same NFSv3 export with default options. On machine A, a program writes a new line to `status.txt` and keeps the file open. Two seconds later, on machine B, a program opens `status.txt` and reads it. What does B see?",
+    "options": [
+      {
+        "text": "Always the new line, because NFS is a shared disk",
+        "explanation": "NFS clients cache writes locally. Nothing forces A's data to the server until it closes, fsyncs or the cache flushes."
+      },
+      {
+        "text": "Possibly the old contents: close-to-open consistency only promises B sees A's writes if A has closed (or fsynced) the file before B opens it",
+        "explanation": "Correct. A's dirty data may still be local. With close-to-open enabled, successful writeback and no intervening writer, B's later open revalidates A's changes. Check write, fsync and close errors."
+      },
+      {
+        "text": "An `ESTALE` error, because the file is open on another client",
+        "explanation": "`ESTALE` happens when the file handle no longer refers to a file, for example after deletion on the server, not because someone else has it open."
+      },
+      {
+        "text": "Nothing: B blocks until A closes the file",
+        "explanation": "NFSv3 has no such coordination between clients."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "One possible execution is:\n\n1. A writes into its local dirty cache.\n2. A has not closed or fsynced; background writeback has not sent these bytes yet.\n3. B opens and revalidates against the server, which still has the old data.\n4. B reads old contents. Other timings can expose the new data sooner.\n\nApplications coordinating through close-to-open must successfully flush/close before signalling the reader, check errors, and account for other concurrent writers.",
+    "link": {
+      "title": "OSTEP: Sun's Network File System (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For an explicitly simplified arithmetic model, assume **150 bytes** per file object and per block object, ignoring all other heap costs. An HDFS namespace has **100 million nonempty files**, each using one block. What modeled heap cost results?",
+    "options": [
+      {
+        "text": "About 15 GB",
+        "explanation": "This counts only the files. Each file also has a block object, doubling the count."
+      },
+      {
+        "text": "About 150 MB",
+        "explanation": "This is off by a factor of 200: it uses 1 million objects."
+      },
+      {
+        "text": "About 30 GB",
+        "explanation": "Correct. 100 million files + 100 million blocks = 200 million objects × 150 B = 30 GB."
+      },
+      {
+        "text": "Almost nothing, because metadata lives on the DataNodes",
+        "explanation": "The NameNode keeps namespace and block-management metadata in memory. DataNodes also keep local block information and checksums, but that does not eliminate NameNode heap use."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Model objects: 100 million file objects + 100 million block objects = 200 million.\n2. Assumed cost: 200,000,000 × 150 bytes = 30,000,000,000 bytes = 30 GB (decimal).\n3. Packing small payloads into fewer larger files reduces the modeled file/block object count. Actual memory also depends on directories, replicas, strings, JVM representation and Hadoop version.\n\nThe 150-byte figure is a teaching assumption. No measured heap profile is provided, so this is not a production sizing estimate.",
+    "link": {
+      "title": "HDFS Architecture — Apache Hadoop",
+      "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An eligible writer DataNode on rack R1 writes a replicated HDFS block with replication factor 3. Assume the default policy, enough eligible nodes on R1 and another rack, and a healthy completed pipeline. Where are replicas placed and how many cross-rack payload hops are used?",
+    "options": [
+      {
+        "text": "One on the writer's node in R1, and two on different nodes in one other rack; one cross-rack transfer in the pipeline",
+        "explanation": "Correct. The pipeline goes R1 → R2 (crossing once), then R2 → R2 within the remote rack. Losing any one rack still leaves a replica."
+      },
+      {
+        "text": "All three replicas on R1; zero cross-rack transfers",
+        "explanation": "That's fast to write but loses every replica if R1's switch or power fails."
+      },
+      {
+        "text": "One replica each on three different racks; two cross-rack transfers",
+        "explanation": "That maximises spread, but the default policy deliberately uses only two racks to cut cross-rack write traffic."
+      },
+      {
+        "text": "Two on R1 and one on another rack; two cross-rack transfers",
+        "explanation": "The policy puts two replicas on the *remote* rack, so that the second hop of the pipeline stays inside that rack."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Default policy with replication 3:\n   - replica 1: the writer's own node (if it's a DataNode), on R1\n   - replica 2: a node on a different rack, R2\n   - replica 3: a different node on R2\n2. The write is pipelined: client → node1 → node2 → node3.\n\n```\nnode1 (R1) --cross-rack--> node2 (R2)\nnode2 (R2) --same rack---> node3 (R2)\n```\n\n3. One cross-rack hop, and any single rack failure leaves at least one replica.\n4. The trade-off: reads can only spread over two racks, not three.",
+    "link": {
+      "title": "HDFS Architecture — Apache Hadoop",
+      "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For ordinary file payload read from storage, which configured setups use filesystem data checksums to detect checksum mismatches and can repair them when a valid redundant copy exists? Assume checksums are enabled, and exclude malicious checksum collisions. Select all that apply.",
+    "options": [
+      {
+        "text": "ZFS on a mirror, with file-data checksums enabled",
+        "explanation": "Yes. Protected reads are checked against their stored checksums; a valid mirror copy can allow recovery and repair."
+      },
+      {
+        "text": "Btrfs with RAID 1 and checksummed file data",
+        "explanation": "Yes. With data checksums enabled, Btrfs can detect a mismatch and repair from a valid redundant copy. NOCOW/nodatasum files are excluded here."
+      },
+      {
+        "text": "ext4 with metadata checksums enabled",
+        "explanation": "Doesn't. ext4's checksums cover metadata (inodes, bitmaps, journal), not file data."
+      },
+      {
+        "text": "XFS on Linux md RAID 5",
+        "explanation": "No end-to-end file-data checksum is supplied by this combination. Ordinary md RAID 5 reads do not verify a checksum against the expected file bytes; parity also supports reconstruction and scrubbing, not just replacement of failed disks."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Ask whether the filesystem stores and checks a checksum covering the actual payload.\n2. Configured ZFS and Btrfs data checksums do so. A valid redundant copy is needed for repair.\n3. ext4 metadata checksums alone do not protect mutable file payload.\n4. XFS metadata checksums plus md parity do not provide the same file-data integrity check. A parity scrub can expose inconsistency without necessarily identifying which member has the correct bytes.\n5. Checksums are not a mathematical guarantee against every corruption pattern, and a cache hit is not necessarily a new storage read.",
+    "link": {
+      "title": "OpenZFS documentation",
+      "url": "https://openzfs.github.io/openzfs-docs/"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a steady-state LFS cleaning model that ignores metadata writes, cleaned segments are **80% live**. Per segment of new payload, how many segments of total writes are needed, including copied live data but excluding reads?",
+    "options": [
+      {
+        "text": "1.25",
+        "explanation": "This is 1 / 0.8, inverting the wrong fraction. Each cleaned segment yields only 20% free space."
+      },
+      {
+        "text": "1.8",
+        "explanation": "This adds the 80% copying cost once, but you must clean five segments to free one segment's worth of space."
+      },
+      {
+        "text": "0.2",
+        "explanation": "That's the free fraction per cleaned segment, not the write cost."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. Cleaning gains 0.2 of a segment per segment cleaned, so freeing 1 segment means cleaning 5 and rewriting 4 segments of live data: 1 new + 4 copied = 5."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Cleaning one segment copies 0.8 segment and yields 0.2 segment of net capacity.\n2. Clean 1 / 0.2 = 5 segments to make room for one segment of new payload.\n3. Copying writes total 5 × 0.8 = 4 segments; add one new segment: total writes = 5.\n4. Thus write amplification is 1 / (1 − u) = 5 in this model. Cleaner reads are additional I/O, excluded from this write-only measure. Age and utilization both affect LFS cleaning policy.",
+    "link": {
+      "title": "OSTEP: Log-structured File Systems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-lfs.pdf"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An NFSv3 server executes `REMOVE(dirfh, \"tmp.lock\")`, but its success reply is lost. Assume the retry is re-executed without duplicate suppression, nobody recreates the name, and the client does not normalize the second error. What reply reaches the application?",
+    "options": [
+      {
+        "text": "Success, because all NFS operations are idempotent",
+        "explanation": "False. A repeated REMOVE can find that the name has already disappeared. Even repeated reads can return different bytes if another client modifies the file."
+      },
+      {
+        "text": "`ENOENT` (no such file), even though its delete succeeded; servers keep a duplicate request cache to replay the first reply instead",
+        "explanation": "Correct under the stated assumptions. A duplicate-request cache can instead recognize the retransmission using RPC/client identity and replay a remembered success. Such a cache has bounded lifetime and capacity."
+      },
+      {
+        "text": "The file is deleted twice, corrupting the directory",
+        "explanation": "Deleting a name that's already gone doesn't corrupt anything; it just fails."
+      },
+      {
+        "text": "The client hangs forever because hard mounts never retry",
+        "explanation": "Hard mounts retry indefinitely; that's how the retry happened at all."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. First REMOVE deletes the name and returns success, but that reply is lost.\n2. A re-executed REMOVE finds no name and returns ENOENT in this scenario.\n3. A duplicate-request cache can replay the first reply rather than execute again; it must distinguish clients as well as requests.\n4. NFSv3 EXCLUSIVE CREATE has a verifier specifically supporting retransmission, so not every exclusive-create retry simply fails.\n5. NFSv4.1 sessions add replay controls within defined session/slot/cache rules; they are not an unbounded guarantee of exactly-once application effects.",
+    "link": {
+      "title": "OSTEP: Sun's Network File System (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Hadoop cluster stores **600 TB** of payload with 3× replication. Assume full RS-6-3 stripes and ignore metadata, padding and other overhead. What modeled raw payload capacity and per-group erasure tolerance follow after conversion?",
+    "options": [
+      {
+        "text": "900 TB raw, down from 1,800 TB; survives any 3 lost cells per group instead of any 2 lost replicas",
+        "explanation": "Correct. RS-6-3 stores 9 cells per 6 of data (1.5×): 600 × 1.5 = 900 TB. It tolerates 3 losses per stripe group; 3× replication tolerates 2."
+      },
+      {
+        "text": "1,200 TB raw; same fault tolerance",
+        "explanation": "That's 2× overhead. RS-6-3 adds 3 parity cells per 6 data cells, which is 50% overhead."
+      },
+      {
+        "text": "600 TB raw, because parity is computed on the fly and not stored",
+        "explanation": "Parity cells are stored, on separate DataNodes; that's what makes recovery possible."
+      },
+      {
+        "text": "900 TB raw, but it can now survive only 1 failure",
+        "explanation": "Reed–Solomon with 3 parity cells can reconstruct any 3 missing cells out of 9, more than replication's 2."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Replication stores 600 × 3 = 1,800 TB of payload copies. Each block remains available with two lost replicas if its third survives.\n2. RS-6-3 stores nine cells for six data cells: 600 × 9 / 6 = 900 TB in this full-stripe model.\n3. Any six of a stripe's nine cells suffice; three missing cells are recoverable. This is a per-stripe condition, not a promise about arbitrary rack topology.\n4. Access to missing data requires reconstruction reads and CPU. Healthy cells can still be read directly; not every read after a node failure requires decoding.\n5. Short files and metadata affect actual storage use. The cited Hadoop 3.3.5 documentation also restricts append/truncate and sync behavior for striped files.",
+    "link": {
+      "title": "HDFS Erasure Coding — Apache Hadoop",
+      "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HDFSErasureCoding.html"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A GFS client uses **record append** to add log records to a shared file that many producers write at once. Which statements about what readers may encounter are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Each record that was reported successful appears at least once, written atomically as a contiguous unit",
+        "explanation": "True. GFS guarantees the record is appended atomically at least once, at an offset GFS chooses."
+      },
+      {
+        "text": "The same record may appear more than once, because a failed attempt on one replica is retried on all",
+        "explanation": "True. A retry after a partial failure can leave duplicates in replicas where the first attempt succeeded."
+      },
+      {
+        "text": "There may be padding or garbage regions between records",
+        "explanation": "True. Failed attempts and chunk-boundary padding leave inconsistent regions, so readers use checksums and record IDs to skip them."
+      },
+      {
+        "text": "Records appear exactly once and in the order producers called append",
+        "explanation": "False. Exactly-once and producer invocation order are not promised. The primary does assign a consistent mutation order for its chunk, which differs from ordering by when distributed producers called append."
+      },
+      {
+        "text": "All record data passes through the master, which assigns offsets",
+        "explanation": "False. The primary replica (holding a lease from the master) chooses offsets; data flows client → chunkservers, never through the master."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. The primary chooses an append offset and coordinates secondary mutations.\n2. A failure can cause the client to retry the record, potentially at a later offset.\n3. A replica where the first attempt succeeded may then contain a duplicate; other regions can contain padding or inconsistent bytes.\n\n```\nreplica A: R1 R2 R2 R3\nreplica B: R1 ?? R2 R3\n```\n\n4. This is an illustrative layout, not a trace from a live cluster. Applications use record checksums and unique IDs to skip invalid regions and deduplicate.",
+    "link": {
+      "title": "The Google File System — SOSP 2003 (PDF)",
+      "url": "https://storage.googleapis.com/gweb-research2023-media/pubtools/4446.pdf"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical ZFS RAID-Z2 HDD pool serving VMs over NFS, tracing identifies durable ZIL commit I/O as the synchronous-write bottleneck. Which change directly targets that bottleneck while retaining durability, assuming compatible devices and sufficient main-pool throughput?",
+    "options": [
+      {
+        "text": "Add an L2ARC SSD",
+        "explanation": "L2ARC caches reads; it does not directly move the durable ZIL commit path identified as the bottleneck."
+      },
+      {
+        "text": "Set `sync=disabled` on the dataset",
+        "explanation": "This would make sync writes fast by acknowledging them before they're durable. A crash would lose data the guests believe is safe. Not a safe fix."
+      },
+      {
+        "text": "Add a SLOG: a fast SSD with power-loss protection, mirrored, to hold the ZFS intent log",
+        "explanation": "Correct as a candidate to validate. A suitably low-latency, durable SLOG can accelerate ZIL commits. Normal transaction-group writes still place the data in the main pool; no universal sub-millisecond latency follows."
+      },
+      {
+        "text": "Turn on deduplication to reduce the amount written",
+        "explanation": "Deduplication changes storage and lookup work depending on duplicate content; it does not directly replace the slow durable log device identified here."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A successful synchronous operation must satisfy the configured durability contract.\n2. If ZIL commit I/O on the HDD pool is the bottleneck, a separate suitable log device can shorten that path.\n3. Logged operations are later incorporated into normal main-pool transaction groups. The SLOG is a log, not a general write-back cache that permanently stores the dataset.\n4. The device must honor persistence requests. Power-loss protection can support that with low latency; mirroring protects against loss of a single log device. Log replay is needed after an unclean interruption when committed log operations have not reached their normal main-pool form.\n5. Measure the actual result: no identified device or reproducible benchmark supports fixed microsecond/millisecond guarantees here. `sync=disabled` weakens the contract rather than fixing durable commit performance.",
+    "link": {
+      "title": "OpenZFS documentation",
+      "url": "https://openzfs.github.io/openzfs-docs/"
+    }
+  }
+]

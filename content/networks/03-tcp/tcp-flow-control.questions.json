@@ -1,0 +1,348 @@
+[
+  {
+    "id": "tcp-flow-control-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A connection has no window scaling, so the receive window is at most 65,535 bytes. The RTT is 50 ms and the link is 1 Gbit/s. Roughly what is the maximum throughput? Use the steady-state window/RTT payload model, with the full receive window available and no tighter congestion or application limit.",
+    "options": [
+      {
+        "text": "1 Gbit/s, the link speed",
+        "explanation": "The link could carry that, but the sender may only have one window unacknowledged per round trip, which caps it far lower."
+      },
+      {
+        "text": "About 10.5 Mbit/s",
+        "explanation": "Correct. 65,535 B / 0.05 s ≈ 1.31 MB/s, and × 8 ≈ 10.5 Mbit/s."
+      },
+      {
+        "text": "About 1.3 Mbit/s",
+        "explanation": "This forgets to convert bytes to bits. 1.31 is megabytes per second; multiply by 8 for megabits."
+      },
+      {
+        "text": "About 3.3 Gbit/s",
+        "explanation": "3.3 Gbit/s does not follow from the stated window/RTT model and also exceeds the supplied 1 Gbit/s link capacity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. At most one window can be in flight before the first ACK returns, one RTT later.\n2. So:\n\n```\nthroughput <= window / RTT\n= 65,535 B / 0.05 s\n= 1,310,700 B/s\n= ~10.5 Mbit/s\n```\n\n3. That is about 1% of the link. The fix is window scaling plus large enough buffers.",
+    "link": {
+      "title": "Bandwidth-delay product — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bandwidth-delay_product"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the TCP receive window (rwnd) designed to protect against?",
+    "options": [
+      {
+        "text": "Overloading routers in the middle of the network",
+        "explanation": "That is congestion control's job, using the sender's own congestion window (cwnd). The receive window knows nothing about the network."
+      },
+      {
+        "text": "Packets being reordered in transit",
+        "explanation": "Reordering is handled by sequence numbers and the receiver's out-of-order buffer, not by the window."
+      },
+      {
+        "text": "A fast sender overflowing a slow receiver's buffer",
+        "explanation": "Correct. The advertised receive window constrains the sequence range of new data the receiver is willing to accept. It reflects buffer and update policy, rather than exactly equalling unused memory."
+      },
+      {
+        "text": "An attacker injecting forged segments",
+        "explanation": "Window and sequence checks can reject some injected segments, but they are not cryptographic authentication. The purpose of rwnd is receiver flow control."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The receiver advertises an acceptable sequence range, reflecting buffering and update policy rather than exactly reporting free memory.\n2. In the simplified ordinary new-data model, the remaining budget is `max(0, min(rwnd, cwnd) - flight)`.\n3. rwnd provides receiver flow control; cwnd controls network congestion. Recovery, probes and window shrinkage require additional rules.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A capture shows repeated zero receive windows during an upload. Server instrumentation also shows a full receive queue and its receiving thread blocked on disk I/O instead of reading. Which explanation matches both observations?",
+    "options": [
+      {
+        "text": "The application on the server is not reading from its socket fast enough",
+        "explanation": "Correct. Here the capture and server instrumentation together establish that the blocked reader is not draining the queue. A zero window alone would not identify this unique cause."
+      },
+      {
+        "text": "The network is congested and dropping packets",
+        "explanation": "Network congestion may coexist, but it does not explain the independently observed blocked receiving thread and full queue. Zero windows specifically advertise receiver-side flow-control restriction."
+      },
+      {
+        "text": "The client's congestion window is too small",
+        "explanation": "A small cwnd can coexist with a zero receive window, but it does not explain the independently observed blocked receiving thread and full receive queue."
+      },
+      {
+        "text": "Nagle's algorithm on the client is batching writes",
+        "explanation": "Nagle affects how small writes are packaged, not whether the receiver has buffer space."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The capture establishes receiver-side flow-control restriction.\n2. Server instrumentation supplies the cause in this scenario: the thread is blocked and the receive queue is full.\n3. Persist probes can obtain later window updates, but do not fix the blocked application.\n4. Investigate the disk/reader pipeline; do not infer this diagnosis from a zero window alone in every deployment.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need a single TCP flow to fill a 10 Gbit/s path with an 80 ms RTT. What is the smallest window scale shift count that allows a large enough window? Treat 10 Gbit/s as the target payload rate, ignore protocol overhead, and assume buffer and congestion-window capacity can be provisioned.",
+    "options": [
+      {
+        "text": "7",
+        "explanation": "65,535 × 2^7 ≈ 8.4 MB, far below the 100 MB the path holds."
+      },
+      {
+        "text": "10",
+        "explanation": "65,535 × 2^10 ≈ 67 MB, still short of the 100 MB bandwidth-delay product."
+      },
+      {
+        "text": "14",
+        "explanation": "14 is the maximum allowed and would work (about 1 GiB), but it isn't the smallest that does."
+      },
+      {
+        "text": "11",
+        "explanation": "Correct. 65,535 × 2^11 ≈ 134 MB, which covers the 100 MB BDP; 2^10 would not."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Bandwidth-delay product:\n\n```\n10e9 bit/s x 0.08 s = 8e8 bit\n= 100 MB\n```\n\n2. Scale factor needed:\n\n```\n100,000,000 / 65,535 = ~1,526\n```\n\n3. Smallest power of two ≥ 1,526 is 2^11 = 2,048 (2^10 = 1,024 is too small).\n4. Check: 65,535 × 2,048 ≈ 134 MB ≥ 100 MB.\n\nThis requires roughly 100 MB of usable in-flight payload capacity, with enough implementation-specific buffer memory and congestion window. There is no universal Linux 6 MB maximum.",
+    "link": {
+      "title": "RFC 7323: TCP Extensions for High Performance",
+      "url": "https://www.rfc-editor.org/rfc/rfc7323"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On an established connection, a trace confirms a short header leaves immediately, its ACK is delayed by the server for 40 ms, and a separately written sub-MSS body remains in the client’s TCP send queue until that ACK arrives. Nagle is enabled, both windows are open and the server awaits the full request. Which mechanism explains this trace?",
+    "options": [
+      {
+        "text": "The server's receive window is zero",
+        "explanation": "The prompt says both advertised and congestion windows allow sending, so a zero window is not this trace’s cause."
+      },
+      {
+        "text": "Slow start is restarting on every request",
+        "explanation": "The stated trace identifies waiting for the header ACK with capacity available, rather than a congestion-window limit. Response duration alone would not establish that distinction."
+      },
+      {
+        "text": "Nagle holds the body until the header is ACKed, and the server delays that ACK until its ~40 ms delayed-ACK timer fires",
+        "explanation": "Correct. This is the write-write-read interaction. The server can't piggyback the ACK on a response because it doesn't have the whole request yet."
+      },
+      {
+        "text": "The server's SYN queue is full, so each connection waits",
+        "explanation": "This is an established connection, so the listener’s SYN backlog does not explain the observed body hold."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `send(header)`: nothing is in flight, so Nagle lets it go immediately.\n2. `send(body)`: the header is still unACKed and the body is smaller than an MSS, so **Nagle holds it**.\n3. The server got the header but not the full request. It has nothing to send back, so it **delays the ACK**, hoping to piggyback it.\n4. In the stated measured trace, after 40 ms the delayed-ACK timer fires; the ACK arrives; Nagle releases the body; the server responds.\n5. This confirmed interaction adds a wait; it is not a universal timer or outcome for every request. Possible remedies: `sendall(header + body)`, or `TCP_NODELAY`.",
+    "link": {
+      "title": "Nagle's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Nagle%27s_algorithm"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Nagle's algorithm are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Under the simplified classic rule, a short new-data send waits while data is outstanding unless a full segment can be formed",
+        "explanation": "Correct. This scopes the teaching rule to ordinary new-data sending; TCP variants and special control/retransmission paths require more detail."
+      },
+      {
+        "text": "It must delay every full-sized ready segment in a bulk file transfer",
+        "explanation": "False. Nagle’s small-segment condition does not hold a full-sized ready segment. Partial tails and incremental small writes during a file transfer can still be affected."
+      },
+      {
+        "text": "It was designed to stop interactive traffic like Telnet sending one-byte-payload packets",
+        "explanation": "Correct. RFC 896 (1984) addressed 41-byte packets carrying single keystrokes congesting slow links."
+      },
+      {
+        "text": "It is disabled per socket with the TCP_NODELAY option",
+        "explanation": "Correct. TCP_NODELAY disables Nagle’s small-segment waiting condition. Other limits and buffering can still delay transmission."
+      },
+      {
+        "text": "It runs on the receiver and decides when to send ACKs",
+        "explanation": "That describes delayed ACK. Nagle is a sender-side rule about when to transmit data."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The stated classic rule buffers short new-data sends while earlier data remains outstanding, unless enough data forms a full segment. It was motivated by inefficient small interactive packets. TCP_NODELAY disables this condition per socket; receiver ACK scheduling is separate. This does not promise immediate wire transmission or no delays anywhere in a bulk transfer.",
+    "link": {
+      "title": "RFC 896: Congestion Control in IP/TCP Internetworks",
+      "url": "https://www.rfc-editor.org/rfc/rfc896"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Linux backup receiver explicitly sets SO_RCVBUF, disabling receive autotuning. Captures then show an effective advertised window near 65,536 bytes; RTT is 120 ms and no other bottleneck is observed. Why can throughput be limited to roughly 4.4 Mbit/s?",
+    "options": [
+      {
+        "text": "The explicit buffer policy prevents automatic growth, and the measured usable window gives a window/RTT ceiling near 4.4 Mbit/s",
+        "explanation": "Correct. Use the measured advertised window for this arithmetic. Linux doubles SO_RCVBUF requests for accounting; the request value alone does not establish the payload window."
+      },
+      {
+        "text": "64 KB buffers cause more packet loss in the network",
+        "explanation": "The evidence here identifies a receive-window limit. Buffer policy can affect overall traffic dynamics, so this is not a universal claim that buffers never influence loss."
+      },
+      {
+        "text": "SO_RCVBUF disables window scaling entirely",
+        "explanation": "Window scaling may still be negotiated, but the window is limited by the buffer size anyway. The cause is the buffer, not the option."
+      },
+      {
+        "text": "Nagle's algorithm is triggered by small buffers",
+        "explanation": "Nagle depends on write sizes and outstanding data on the sender, not on the receiver's buffer setting."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. An explicit SO_RCVBUF setting disables Linux receive autotuning for that socket.\n2. The prompt separately supplies the measured usable window: 65,536 bytes.\n3. 65,536 / 0.12 × 8 ≈ 4.369 Mbit/s under the steady-state model.\n4. Linux’s doubled accounting and overhead mean SO_RCVBUF itself is not the correct direct window measurement.\n5. Reconsider the explicit limit or allow autotuning, then measure again; sufficient memory, scaling and congestion window are also needed.",
+    "link": {
+      "title": "Linux ip-sysctl documentation",
+      "url": "https://docs.kernel.org/networking/ip-sysctl.html"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A receiver advertises a zero window. Its application then reads the buffer, and the receiver sends a window update (a pure ACK with a window of 64 KB), but that ACK is lost. What stops the connection from hanging forever? Assume queued data still needs sending and a later probe/reply exchange is successfully delivered.",
+    "options": [
+      {
+        "text": "The receiver retransmits the window update after an RTO",
+        "explanation": "TCP does not retransmit pure ACKs; they carry no sequence space to acknowledge. That's precisely why the deadlock is possible."
+      },
+      {
+        "text": "The sender's persist timer fires and sends a window probe; the receiver's reply carries the current window",
+        "explanation": "Correct under those delivery assumptions. A zero-window probe elicits a current-window acknowledgement; probes cannot guarantee progress through permanent loss or endpoint failure."
+      },
+      {
+        "text": "The keepalive timer sends a probe after 2 seconds",
+        "explanation": "Keepalive is a separate mechanism with configurable policy and timing. It is not a universal two-second replacement for zero-window probing."
+      },
+      {
+        "text": "Nothing; the application must detect the stall and reconnect",
+        "explanation": "TCP includes zero-window probing to recover a lost window update. Applications can still observe blocking/timeouts if the window remains closed or probes cannot complete."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A zero advertised window prevents ordinary new-data sending while data remains queued.\n2. The pure window-update ACK is not tracked for ordinary data retransmission.\n3. Persist/zero-window probing solicits a fresh advertisement.\n4. Under the question’s successful delivery assumption, the reply reveals the reopened window and permits progress.\n5. Probe scheduling/backoff and failure policy depend on the TCP implementation; zero-window probing is distinct from idle keepalive.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A download plateaus near 5.2 Mbit/s at 100 ms RTT. Captures on both sides of a newly installed firewall confirm the peers offer window scaling but the option is removed in transit, leaving unscaled operation. Why is that rate plausible in the steady-state window/RTT model?",
+    "options": [
+      {
+        "text": "Congestion control (CUBIC) is too conservative",
+        "explanation": "The rate alone would not exclude congestion or other limits. Here the captures separately establish the lack of window scaling."
+      },
+      {
+        "text": "The server's CPU can't keep up",
+        "explanation": "CPU limits can produce stable plateaus too. The supplied handshake evidence, rather than a rate pattern alone, identifies this scenario’s window constraint."
+      },
+      {
+        "text": "Nagle's algorithm is delaying segments",
+        "explanation": "Full-sized ready segments are not held by Nagle’s small-segment rule, although partial tails and incremental writes can be affected. The supplied captures establish the window-scaling problem in this scenario."
+      },
+      {
+        "text": "The firewall is stripping the window scale option from SYNs, capping the window at 65,535 bytes",
+        "explanation": "Correct. The captures establish unscaled operation, and 65,535 / 0.1 × 8 ≈ 5.243 Mbit/s matches the model. Throughput alone would not prove option stripping."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Unscaled windows are at most 65,535 bytes.\n2. 65,535 / 0.1 × 8 = 5,242,800 bit/s.\n3. Endpoint and on-path captures establish that scaling was removed; the numerical match is supporting evidence, not a unique diagnosis.\n4. Inspect both handshake directions because inconsistent option rewriting can also produce disagreement or packet drops, not merely a clean throughput cap.",
+    "link": {
+      "title": "RFC 7323: TCP Extensions for High Performance",
+      "url": "https://www.rfc-editor.org/rfc/rfc7323"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A client sends a 200-byte header and 300-byte body in separate calls and a trace confirms the Nagle/delayed-ACK interaction. Which client changes can remove that specific dependency? For batching choices assume an empty send queue, both pieces supplied before packetisation, a 500-byte message below MSS and sufficient windows/buffer space. Select all that apply.",
+    "options": [
+      {
+        "text": "Send header and body together with one `sendall(header + body)`",
+        "explanation": "Correct under the batching assumptions: supplying the complete message avoids waiting for the first partial message’s ACK before supplying its remainder. sendall still does not guarantee one packet in general."
+      },
+      {
+        "text": "Use `socket.sendmsg([header, body])` (scatter/gather, like writev)",
+        "explanation": "Correct under the stated assumptions: both buffers are supplied together. sendmsg may return a partial byte count, which the caller must handle; one call does not universally imply one packet."
+      },
+      {
+        "text": "Set `TCP_NODELAY` on the client socket",
+        "explanation": "Correct. This removes Nagle’s hold of the body. Other send constraints still apply, so it does not guarantee immediate transmission."
+      },
+      {
+        "text": "Set `TCP_QUICKACK` on the client socket",
+        "explanation": "QUICKACK changes when the client sends ACKs. The stall comes from the **server** delaying its ACK, so this does nothing here."
+      },
+      {
+        "text": "Increase the client's SO_SNDBUF to 1 MB",
+        "explanation": "The send buffer already has room; Nagle is holding the body because the header is unACKed, not because of a lack of buffer."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Batching can avoid the split-message dependency under the explicit assumptions; TCP_NODELAY removes Nagle’s waiting condition. Client-side QUICKACK changes the wrong endpoint’s ACK behaviour for this trace, and a larger send buffer does not override Nagle when capacity already exists. Neither batching nor NODELAY guarantees one write per packet or eliminates all possible transport delays.",
+    "link": {
+      "title": "Nagle's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Nagle%27s_algorithm"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A sender has MSS 1,460 bytes, cwnd = 40 segments, the receiver advertises rwnd = 256 KiB (262,144 bytes), and 30,000 bytes are currently unacknowledged. How many more bytes may it send right now? Use the simplified new-data budget, with consistent ACK/window origins, no recovery/probe exceptions, and sufficient queued data; ignore pacing and packetisation.",
+    "options": [
+      {
+        "text": "232,144 bytes",
+        "explanation": "This uses rwnd as the limit. The sender must respect the smaller of rwnd and cwnd, and cwnd is far smaller here."
+      },
+      {
+        "text": "58,400 bytes",
+        "explanation": "That's the whole congestion window, but 30,000 bytes of it are already in flight."
+      },
+      {
+        "text": "28,400 bytes",
+        "explanation": "Correct. The usable window is min(262,144, 40 × 1,460 = 58,400) = 58,400; subtract the 30,000 in flight to get 28,400."
+      },
+      {
+        "text": "0 bytes, because rwnd must be reached first",
+        "explanation": "There's no such rule. The sender may send whenever in-flight data is below min(rwnd, cwnd)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Congestion window in bytes:\n\n```\n40 x 1,460 = 58,400 B\n```\n\n2. Effective window:\n\n```\nmin(262,144, 58,400) = 58,400\n```\n\n3. Remaining:\n\n```\n58,400 - 30,000 = 28,400 B\n```\n\nThat's about 19 full segments. Here the sender’s congestion window is the tighter modelled constraint. That alone does not prove current network congestion, and the byte budget does not require immediate transmission.",
+    "link": {
+      "title": "RFC 5681: TCP Congestion Control",
+      "url": "https://www.rfc-editor.org/rfc/rfc5681"
+    }
+  }
+]

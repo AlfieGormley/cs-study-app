@@ -1,0 +1,348 @@
+[
+  {
+    "id": "gc-rust-ownership-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Does this compile?\n\n```rust\nlet a = String::from(\"hi\");\nlet b = a;\nprintln!(\"{a} {b}\");\n```",
+    "options": [
+      {
+        "text": "No: `a` was moved into `b`, so using `a` is error E0382",
+        "explanation": "Correct. `String` owns a heap buffer and isn't `Copy`, so assignment moves it. Using a moved-from variable is rejected at compile time."
+      },
+      {
+        "text": "Yes, and it prints `hi hi`",
+        "explanation": "That would need `a` to still own its string. `let b = a;` moves ownership to `b`, so `a` can't be used."
+      },
+      {
+        "text": "Yes, but it double-frees at run time",
+        "explanation": "Rust prevents exactly this double free by refusing to compile the use of `a`."
+      },
+      {
+        "text": "No, because `println!` can't print two values",
+        "explanation": "`println!` happily formats several arguments. The problem is the moved variable."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `a` owns a heap buffer containing `hi`.\n2. `let b = a;` copies the pointer, length and capacity into `b` and marks `a` as moved.\n3. If both stayed valid, both would free the buffer at the end of scope.\n4. So the compiler rejects any later use of `a`:\n\n```\nerror[E0382]: borrow of moved\nvalue: `a`\n```\n\nFixes: `let b = a.clone();` (two buffers) or `let b = &a;` (a borrow).",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Does this compile, and if so what does it print?\n\n```rust\nlet x = 5;\nlet y = x;\nprintln!(\"{x} {y}\");\n```",
+    "options": [
+      {
+        "text": "No: `x` was moved into `y`",
+        "explanation": "Integers implement Copy, allowing implicit duplication. They can be stored on the heap or in registers too; placement does not determine Copy."
+      },
+      {
+        "text": "Yes, it prints `5 5`",
+        "explanation": "Correct. `i32` implements `Copy`, so `let y = x;` duplicates the value instead of moving it."
+      },
+      {
+        "text": "Yes, it prints `5` then a blank",
+        "explanation": "Both variables hold 5; neither has been invalidated."
+      },
+      {
+        "text": "No: integers must be cloned explicitly",
+        "explanation": "`.clone()` would work, but it's unnecessary for `Copy` types."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Is the type `Copy`? `i32` is: no heap data, no destructor.\n2. For `Copy` types, assignment is a bitwise copy and the source stays usable.\n3. So `x = 5`, `y = 5`, and the output is `5 5`.\n\nCompare `String` (owns a heap buffer, not `Copy`): the same code would be a move and fail with E0382.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement best summarises Rust's borrowing rule?",
+    "options": [
+      {
+        "text": "You may have any number of `&mut` references as long as you don't have a `&`",
+        "explanation": "Two `&mut` to the same value at once is forbidden (E0499); mutable borrows must be exclusive."
+      },
+      {
+        "text": "References are counted at run time and freed when the count hits zero",
+        "explanation": "That's `Rc`. Ordinary borrows are checked entirely at compile time and cost nothing at run time."
+      },
+      {
+        "text": "A value can only be borrowed once in its lifetime",
+        "explanation": "You can borrow as many times as you like, as long as the borrows that overlap obey the rule."
+      },
+      {
+        "text": "At any time you may have either many shared `&T` references or exactly one `&mut T`, but not both",
+        "explanation": "Correct. Aliasing XOR mutation: many readers or one writer."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Shared borrow `&T`: read-only; any number at once.\n2. Mutable borrow `&mut T`: read-write; exclusive while in use.\n3. Never both overlapping.\n\n```\n&v, &v, &v   ok\n&mut v       ok\n&v + &mut v  error E0502\n&mut, &mut   error E0499\n```\n\nThis prevents iterator invalidation and data races.\n\nThese are ordinary overlapping borrows of the same value. Shared references can provide mutation through interior-mutability abstractions such as Cell, RefCell or Mutex; their own rules preserve safety.",
+    "link": {
+      "title": "References and borrowing — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```rust\nstruct D(&'static str);\nimpl Drop for D {\n  fn drop(&mut self) {\n    println!(\"{}\", self.0);\n  }\n}\nfn main() {\n  let _x = D(\"x\");\n  let _y = D(\"y\");\n  { let _z = D(\"z\"); }\n  println!(\"main\");\n}\n```",
+    "options": [
+      {
+        "text": "`x`, `y`, `z`, `main`",
+        "explanation": "Values aren't dropped when they're created; they're dropped when their scope ends."
+      },
+      {
+        "text": "`z`, `main`, `x`, `y`",
+        "explanation": "Within a scope, values are dropped in *reverse* order of declaration, so `y` before `x`."
+      },
+      {
+        "text": "`z`, `main`, `y`, `x`",
+        "explanation": "Correct. `_z` is dropped at the end of its inner block. At the end of `main`, `_y` and `_x` drop in reverse declaration order."
+      },
+      {
+        "text": "`main`, `z`, `y`, `x`",
+        "explanation": "The inner block ends before `println!(\"main\")` runs, so `z` is dropped first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Inner block `{ let _z = ...; }` ends: drop `_z`, print `z`.\n2. `println!(\"main\")`.\n3. End of `main`: drop locals in reverse order of declaration: `_y` then `_x`.\n\n```\nz\nmain\ny\nx\n```\n\nReverse order matters: later values may borrow from earlier ones, so they must go first.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does this fail to compile, and what bug is it preventing?\n\n```rust\nlet mut v = vec![1, 2, 3];\nlet first = &v[0];\nv.push(4);\nprintln!(\"{first}\");\n```",
+    "options": [
+      {
+        "text": "`push` requires a `&mut v` while `first` still borrows `v`; `push` may reallocate, which would leave `first` dangling",
+        "explanation": "Correct. E0502. If the vector's capacity is full, `push` moves the elements to a new buffer and frees the old one. `first` would then point at freed memory: a use-after-free."
+      },
+      {
+        "text": "Vectors in Rust are immutable",
+        "explanation": "`v` is declared `mut`, and `push` is the normal way to grow a `Vec`."
+      },
+      {
+        "text": "`&v[0]` copies the integer, so `first` is not a reference",
+        "explanation": "`&v[0]` is a reference into the vector's buffer. `let first = v[0];` would copy it."
+      },
+      {
+        "text": "`println!` can't print references",
+        "explanation": "It prints through references fine; the conflict is between the borrows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "first borrows an element and is used after push. push requires an exclusive borrow of v, so the overlap is rejected. If growth requires reallocation, element addresses may be invalidated; the borrow rule is enforced whether or not this particular allocator could grow in place. Removing the later use lets non-lexical lifetimes end the borrow before push.",
+    "link": {
+      "title": "References and borrowing — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does this function need a lifetime annotation?\n\n```rust\nfn longest(a: &str, b: &str)\n    -> &str {\n  if a.len() > b.len() { a } else { b }\n}\n```",
+    "options": [
+      {
+        "text": "Because all functions taking references need explicit lifetimes",
+        "explanation": "Most don't: elision rules fill them in. For example, `fn first(s: &str) -> &str` compiles fine because there is only one input reference."
+      },
+      {
+        "text": "Because `&str` values live on the heap",
+        "explanation": "Where the bytes live is irrelevant; lifetimes are about how long a borrow is valid."
+      },
+      {
+        "text": "Because the returned reference could come from either `a` or `b`, so the compiler can't infer how long it is valid",
+        "explanation": "Correct. With two input references and a reference returned, elision can't decide. `fn longest<'a>(a: &'a str, b: &'a str) -> &'a str` says the result lives as long as both inputs."
+      },
+      {
+        "text": "Because lifetimes make the function run faster",
+        "explanation": "Lifetimes are erased after checking and generate no code."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Elision rule: if there is exactly one input lifetime, the output gets it. Here there are two.\n2. The caller needs to know: may I keep the result after `a` is dropped? After `b`?\n3. Annotate:\n\n```rust\nfn longest<'a>(a: &'a str,\n  b: &'a str) -> &'a str\n```\n\n4. Now the result is valid only where both `a` and `b` still are. The compiler checks every call site against this.",
+    "link": {
+      "title": "Validating references with lifetimes — Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can happen in **safe** Rust? Select all that apply. Assume a sound compiler and sound library/FFI implementations.",
+    "options": [
+      {
+        "text": "A memory leak from two `Rc` values that point at each other",
+        "explanation": "Correct. `Rc` is reference counting, so a cycle never reaches zero. The Rust Book shows exactly this; use `Weak` to break it."
+      },
+      {
+        "text": "A use-after-free through a dangling reference",
+        "explanation": "The borrow checker and lifetimes prevent references from outliving their values in safe code."
+      },
+      {
+        "text": "A panic from calling `borrow_mut()` on a `RefCell` that is already borrowed",
+        "explanation": "Correct. `RefCell` moves the borrow check to run time; violating it panics rather than causing undefined behaviour."
+      },
+      {
+        "text": "Leaking a value deliberately with `std::mem::forget` or `Box::leak`",
+        "explanation": "Correct. These are safe functions; leaking can't cause undefined behaviour, so Rust allows it."
+      },
+      {
+        "text": "A data race between two threads writing the same `Vec`",
+        "explanation": "Safe Rust forbids it: you'd need `&mut` in two threads, which the type system (`Send`/`Sync`, exclusive borrows) rejects. You must use `Mutex` or similar."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Rust's guarantee is no **undefined behaviour** in safe code, not no bugs.\n\n1. `Rc` cycle leak: allowed, it's just memory never freed.\n2. Use-after-free: undefined behaviour; prevented.\n3. `RefCell` double borrow: a defined panic; allowed.\n4. `mem::forget`: allowed; leaking is safe.\n5. Data race: undefined behaviour; prevented.\n\nSo leaks and panics are possible; memory corruption isn't.",
+    "link": {
+      "title": "Rc and reference cycles — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch15-06-reference-cycles.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need several parts of a single-threaded program to share and modify one configuration object. Which type is the idiomatic choice?",
+    "options": [
+      {
+        "text": "`&mut Config` passed to every part",
+        "explanation": "Only one `&mut` can exist at a time, so you can't hand it to several long-lived parts at once."
+      },
+      {
+        "text": "`Arc<Mutex<Config>>`",
+        "explanation": "This works, but pays for atomic counts and locking that a single-threaded program doesn't need."
+      },
+      {
+        "text": "`Rc<RefCell<Config>>`",
+        "explanation": "Correct. `Rc` gives shared ownership with cheap non-atomic counts; `RefCell` allows mutation through a shared handle, checking borrows at run time."
+      },
+      {
+        "text": "`Box<Config>` cloned into each part",
+        "explanation": "Cloning Box creates a separate allocation and clones Config. Nested Rc/Arc fields can still share data; Clone is not universally deep. It does not by itself give all parts one shared Config allocation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Two needs:\n\n1. **Shared ownership**: several owners. Single thread → `Rc<T>` (multi-thread would be `Arc<T>`).\n2. **Mutation through a shared handle**: `Rc` only gives `&T`. Single thread → `RefCell<T>` (multi-thread would be `Mutex<T>`).\n\n```rust\nlet cfg = Rc::new(RefCell::new(c));\nlet a = Rc::clone(&cfg);\na.borrow_mut().verbose = true;\n```\n\nTrade-off: a `RefCell` borrow conflict is a run-time panic, not a compile error.",
+    "link": {
+      "title": "RefCell and interior mutability — Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch15-05-interior-mutability.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In this code, when is the `Guard` dropped?\n\n```rust\nfn main() {\n  let _ = Guard::new(\"a\");\n  let _g = Guard::new(\"b\");\n  work();\n}\n```",
+    "options": [
+      {
+        "text": "Both at the end of `main`, `b` then `a`",
+        "explanation": "`let _ = expr;` doesn't bind the value to anything, so it isn't kept until the end of the scope."
+      },
+      {
+        "text": "`a` immediately at the end of its statement, before `work()`; `b` at the end of `main`",
+        "explanation": "Correct. The `_` pattern discards the value, so the temporary is dropped at the end of the `let` statement. `_g` is a real binding (just one the compiler won't warn about), so it lives until the end of `main`."
+      },
+      {
+        "text": "Neither is ever dropped, because they're unused",
+        "explanation": "In this normal scope-exit example both initialized temporary/binding values are dropped. Rust does permit intentional leaks and does not guarantee destructors on abort/process exit."
+      },
+      {
+        "text": "Both immediately, because names starting with `_` are discarded",
+        "explanation": "`_g` is an ordinary variable; only the bare `_` pattern discards. The prefix just silences the unused-variable warning."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Guard::new(\"a\") creates a temporary not retained by the wildcard, so it is dropped at the statement end. _g is a binding retaining its guard until main ends. Thus the order is drop a, work(), drop b. A wildcard applied to an existing variable does not necessarily move/drop it. Current rustc denies let _ = mutex.lock() by default via let_underscore_lock; use a named guard binding.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Compared with C++'s `std::unique_ptr` and `std::move`, what is the key extra guarantee Rust's ownership system gives?",
+    "options": [
+      {
+        "text": "Rust frees memory at the end of scope, and C++ doesn't",
+        "explanation": "Both free at the end of scope via destructors (RAII); that part is the same."
+      },
+      {
+        "text": "Rust's moves deep-copy the heap data, so there is no aliasing",
+        "explanation": "A Rust move is a shallow copy of the stack part, like a C++ move; no heap data is copied."
+      },
+      {
+        "text": "Rust uses a garbage collector behind `Box`",
+        "explanation": "`Box` is single ownership with deterministic drop; no collector is involved."
+      },
+      {
+        "text": "Rust rejects reading an uninitialized moved value and statically restricts references from outliving referents",
+        "explanation": "Correct. Reinitialization and unmoved fields of a partially moved value can still be valid. C++ lacks equivalent general borrow checking; moving unique_ptr empties its source."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Shared ground: both tie freeing to scope (destructors / `Drop`) and both support moves.\n2. C++:\n\n```cpp\nauto p = std::make_unique<W>();\nW *raw = p.get();\nauto q = std::move(p); // p null\np->f();    // compiles, UB\nq.reset(); // frees W\nraw->f();  // compiles, UB\n```\n\n3. Rust: using `p` after the move is E0382; holding a reference past the owner's drop is E0597 or E0505.\n4. So the difference isn't *when* memory is freed, it's that the compiler proves no one can touch it afterwards.\n\nstd::move itself is a cast enabling a move constructor/assignment; it does not itself transfer ownership. Physical memory-copy behavior can be optimized in either language.",
+    "link": {
+      "title": "References and borrowing — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team is implementing a graph with arbitrary edges (including cycles) in Rust. Which approaches are reasonable? Select all that apply.",
+    "options": [
+      {
+        "text": "Store nodes in a `Vec<Node>` and represent edges as indices (`usize`)",
+        "explanation": "Correct. The `Vec` owns all nodes; indices aren't borrows, so there are no lifetime conflicts. The cost: a stale index is a logic bug (not memory unsafety)."
+      },
+      {
+        "text": "Use `Rc<RefCell<Node>>` for nodes, with `Weak` for back-edges",
+        "explanation": "Correct if the ownership design ensures every strong cycle is broken and keeps needed nodes strongly owned. Adding arbitrary weak edges is not sufficient."
+      },
+      {
+        "text": "Give every node a `&mut` reference to each neighbour",
+        "explanation": "Many nodes holding `&mut` to the same neighbour violates exclusivity, and the lifetimes are unworkable. This won't compile."
+      },
+      {
+        "text": "Allocate nodes in an arena that lives as long as the graph, with `&'arena Node` edges",
+        "explanation": "Correct for an arena providing stable addresses and suitable borrow APIs. A growable Vec alone cannot provide this guarantee while retaining references across reallocations."
+      },
+      {
+        "text": "Use `Rc` for every edge and rely on the compiler to free cycles",
+        "explanation": "Rust doesn't collect cycles. All-strong `Rc` edges in a cyclic graph leak."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Single ownership is a tree; a graph is not. Options:\n\n1. Index-based (`Vec` + indices): simplest, fast, common (used by petgraph). Reasonable.\n2. `Rc<RefCell>` + `Weak`: closest to a GC language's object graph, with run-time costs. Reasonable.\n3. `&mut` everywhere: violates aliasing XOR mutation. Not possible.\n4. Arena with shared references: one lifetime for the whole graph; mirrors arena allocation in C (lesson 2). Reasonable.\n5. All-strong `Rc`: leaks cycles (lesson 3). Not reasonable.",
+    "link": {
+      "title": "Rc and reference cycles — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch15-06-reference-cycles.html"
+    }
+  }
+]

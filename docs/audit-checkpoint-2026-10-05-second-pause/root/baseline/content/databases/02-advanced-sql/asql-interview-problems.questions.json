@@ -1,0 +1,347 @@
+[
+  {
+    "id": "asql-interview-problems-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Totals are 200, 120, 90, 60, 60, 45, 45, 30. What does each query return?\n\n```sql\n-- A\nSELECT total FROM orders\nORDER BY total DESC\nLIMIT 1 OFFSET 4;\n\n-- B\nSELECT DISTINCT total\nFROM orders\nORDER BY total DESC\nLIMIT 1 OFFSET 4;\n```",
+    "options": [
+      {
+        "text": "A: 60, B: 45",
+        "explanation": "Correct. A skips four *rows* (200, 120, 90, 60) and lands on the second 60. B skips four *distinct values* (200, 120, 90, 60) and lands on 45."
+      },
+      {
+        "text": "A: 45, B: 45",
+        "explanation": "A has no DISTINCT, so the duplicate 60 occupies its own position and A returns 60."
+      },
+      {
+        "text": "A: 60, B: 60",
+        "explanation": "B deduplicates before the offset, so there's only one 60 to skip past."
+      },
+      {
+        "text": "A: 45, B: 30",
+        "explanation": "Count positions from zero: OFFSET 4 returns the 5th row. B's 5th distinct value is 45, not 30."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A's sorted rows: 200, 120, 90, 60, **60**, 45, 45, 30. OFFSET 4 skips the first four, so it returns the second 60.\n2. B's distinct values: 200, 120, 90, 60, **45**, 30. OFFSET 4 skips four, returning 45.\n3. \"5th highest total\" almost always means the distinct version. Clarify with the interviewer, then use DISTINCT or DENSE_RANK.",
+    "link": {
+      "title": "LIMIT and OFFSET — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-limit.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using `WHERE total < (SELECT MAX(total) ...)` to find the second-highest order for **Dev**, who has a single order of 45, what is returned?\n\n```sql\nSELECT MAX(total) FROM orders\nWHERE customer_id = 4\n  AND total < (\n    SELECT MAX(total) FROM orders\n    WHERE customer_id = 4);\n```",
+    "options": [
+      {
+        "text": "No rows",
+        "explanation": "An aggregate without GROUP BY always returns exactly one row, even over empty input. Only the LIMIT/OFFSET and ranking versions return no rows."
+      },
+      {
+        "text": "45",
+        "explanation": "45 is Dev's highest order. The filter `total < 45` excludes it, leaving nothing to take the MAX of."
+      },
+      {
+        "text": "An error",
+        "explanation": "Nothing is invalid here; the empty case just produces NULL."
+      },
+      {
+        "text": "One row containing NULL",
+        "explanation": "Correct. The WHERE leaves zero rows, and MAX over zero rows returns NULL in a single result row."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Inner query: Dev's MAX is 45.\n2. Outer WHERE: Dev's orders with total < 45: none.\n3. `MAX` over no rows is NULL, and an ungrouped aggregate always produces one row.\n4. So the result is a single NULL, which is often exactly what an interview spec asks for (\"return NULL if there's no second-highest\").\n5. `LIMIT 1 OFFSET 1` would instead return zero rows; wrap it in a scalar subquery to get NULL.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want every customer listed with their number of orders over 50, including 0 for customers with none. Which query does that?",
+    "options": [
+      {
+        "text": "`LEFT JOIN orders o ON o.customer_id = c.id WHERE o.total > 50`, then `COUNT(o.id)`",
+        "explanation": "The WHERE runs after the join and rejects every NULL-padded row, so Dev and Eve vanish: the LEFT JOIN has become an inner join."
+      },
+      {
+        "text": "`LEFT JOIN orders o ON o.customer_id = c.id AND o.total > 50`, then `COUNT(o.id)`",
+        "explanation": "Correct. With the filter in ON, customers without a qualifying order keep one NULL-padded row, which COUNT(o.id) counts as 0."
+      },
+      {
+        "text": "`JOIN orders o ON o.customer_id = c.id AND o.total > 50`, then `COUNT(*)`",
+        "explanation": "An inner join drops customers with no qualifying orders entirely."
+      },
+      {
+        "text": "`LEFT JOIN orders o ON o.customer_id = c.id AND o.total > 50`, then `COUNT(*)`",
+        "explanation": "COUNT(*) counts the NULL-padded row, so Dev and Eve would show 1 instead of 0."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Run each against Dev (one order of 45) and Eve (none):\n\n| version | Dev | Eve |\n|---|---|---|\n| filter in WHERE | missing | missing |\n| filter in ON, COUNT(o.id) | 0 | 0 |\n| inner join | missing | missing |\n| filter in ON, COUNT(*) | 1 | 1 |\n\nRule: conditions on the optional (right-hand) table of a LEFT JOIN go in `ON`. The correct query gives Ana 3, Ben 1, Cat 1, Dev 0, Eve 0.",
+    "link": {
+      "title": "SELECT — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Ana's orders include Rug+Kettle (order 101) and Kettle (order 103). Cat bought a Rug (104) and a Kettle (108). Ben bought only a Rug. Who does this return?\n\n```sql\nSELECT c.name FROM customers c\nJOIN orders o\n  ON o.customer_id = c.id\nJOIN order_items i\n  ON i.order_id = o.id\nJOIN products p\n  ON p.id = i.product_id\nWHERE p.name IN ('Kettle', 'Rug')\nGROUP BY c.id\nHAVING COUNT(*) = 2;\n```",
+    "options": [
+      {
+        "text": "Ana and Cat",
+        "explanation": "That's the right answer to \"bought both\", but this query counts *lines*, not distinct products. Ana has three matching lines."
+      },
+      {
+        "text": "Ana, Ben and Cat",
+        "explanation": "Ben has only one matching line (his Rug), so his count is 1."
+      },
+      {
+        "text": "Ana only",
+        "explanation": "Ana's count is 3 (Rug, Kettle, Kettle), so she fails `= 2`."
+      },
+      {
+        "text": "Cat only",
+        "explanation": "Correct. Ana has 3 matching lines and fails the check; Cat has exactly 2. Using `COUNT(DISTINCT p.name) = 2` would return Ana and Cat."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Matching lines after the WHERE:\n   - Ana: Rug (101), Kettle (101), Kettle (103) = 3.\n   - Ben: Rug (106) = 1.\n   - Cat: Rug (104), Kettle (108) = 2.\n2. `HAVING COUNT(*) = 2` keeps only Cat.\n3. The question is \"bought both products\", which is about **distinct** products: `COUNT(DISTINCT p.name) = 2` gives Ana 2, Ben 1, Cat 2, so Ana and Cat.\n4. Plain COUNT is wrong both ways: it rejects repeat buyers and would accept someone who bought Kettle twice and no Rug.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "User 2 logged in on days 10, 11, 13, 14, 15 and 20 of a month (one row per day). Using the \"date minus ROW_NUMBER\" trick, how many islands are there, and how long is the longest?",
+    "options": [
+      {
+        "text": "3 islands, longest 3",
+        "explanation": "Correct. day - rn gives 9, 9, 10, 10, 10, 14: three groups, of lengths 2, 3 and 1."
+      },
+      {
+        "text": "2 islands, longest 3",
+        "explanation": "Day 20 is isolated, but it's still an island of length 1."
+      },
+      {
+        "text": "3 islands, longest 2",
+        "explanation": "Days 13, 14 and 15 are consecutive, so that island has length 3."
+      },
+      {
+        "text": "6 islands, longest 1",
+        "explanation": "That would be the case if no days were consecutive. Consecutive days share the same day - rn value."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Number the rows in date order and subtract:\n\n| day | rn | day - rn |\n|---|---|---|\n| 10 | 1 | 9 |\n| 11 | 2 | 9 |\n| 13 | 3 | 10 |\n| 14 | 4 | 10 |\n| 15 | 5 | 10 |\n| 20 | 6 | 14 |\n\nGroup by `day - rn`: {10, 11} length 2, {13, 14, 15} length 3, {20} length 1. That's **3 islands**, the longest **3**. Within a run, day and rn both rise by 1, so the difference stays put; every gap bumps it up.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Orders by date have totals 120, 45, 60, 200, 45, 90, 60, 30 on 01-05, 01-09, 02-11, 02-14, 02-20, 03-02, 03-15 and 03-28. On what date does cumulative revenue first reach 500?",
+    "options": [
+      {
+        "text": "2026-02-20",
+        "explanation": "Running total on 02-20 is 470, still below 500."
+      },
+      {
+        "text": "2026-03-15",
+        "explanation": "The total already passed 500 on the previous order date."
+      },
+      {
+        "text": "2026-03-02",
+        "explanation": "Correct. Running totals: 120, 165, 225, 425, 470, 560. The 03-02 order takes it from 470 to 560."
+      },
+      {
+        "text": "2026-02-14",
+        "explanation": "02-14 is when it passes 400 (reaching 425), not 500."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compute the running sum in date order:\n\n| date | total | running |\n|---|---|---|\n| 01-05 | 120 | 120 |\n| 01-09 | 45 | 165 |\n| 02-11 | 60 | 225 |\n| 02-14 | 200 | 425 |\n| 02-20 | 45 | 470 |\n| 03-02 | 90 | 560 |\n\n2. The first row with running >= 500 is 03-02.\n3. In SQL, compute `SUM(total) OVER (ORDER BY ordered_on)` in a CTE, then `SELECT MIN(ordered_on) ... WHERE running >= 500`. You can't filter on the window in the same query level.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, which queries return exactly one row per customer: the customer's most recent order (assume no two orders for a customer share a date)?",
+    "options": [
+      {
+        "text": "`SELECT DISTINCT ON (customer_id) customer_id, id FROM orders ORDER BY customer_id, ordered_on DESC`",
+        "explanation": "Correct. DISTINCT ON keeps the first row per customer in the ORDER BY, which is the latest date."
+      },
+      {
+        "text": "A subquery with `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY ordered_on DESC) AS rn`, filtered by `rn = 1` outside",
+        "explanation": "Correct. The portable form, and it guarantees one row even if dates did tie."
+      },
+      {
+        "text": "`SELECT customer_id, id, MAX(ordered_on) FROM orders GROUP BY customer_id`",
+        "explanation": "Postgres rejects this because `id` is neither grouped nor aggregated. (SQLite accepts it and happens to pick the row with the MAX, a SQLite-specific quirk.)"
+      },
+      {
+        "text": "`SELECT customer_id, id FROM orders ORDER BY ordered_on DESC LIMIT 4`",
+        "explanation": "That gives the 4 most recent orders overall, which could include two from one customer and none from another."
+      },
+      {
+        "text": "A correlated `WHERE ordered_on = (SELECT MAX(o2.ordered_on) FROM orders o2 WHERE o2.customer_id = o.customer_id)`",
+        "explanation": "Correct, given the stated assumption. If dates could tie, this would return every tied row for that customer."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Check each approach's guarantee:\n\n1. DISTINCT ON: one row per distinct `customer_id`, chosen by the ORDER BY. One row each.\n2. ROW_NUMBER = 1: exactly one row per partition, by construction.\n3. GROUP BY with bare `id`: invalid in Postgres (\"must appear in the GROUP BY clause or be used in an aggregate function\").\n4. Global LIMIT: not per customer at all. The latest four orders are 108, 107, 106, 105, which happens to be one per customer here only by luck.\n5. Correlated MAX: one row per customer *if* dates are unique per customer; ties would yield several.",
+    "link": {
+      "title": "SELECT — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "There are 7 orders with totals 30, 45, 45, 60, 90, 120, 200. What does the portable median query return?\n\n```sql\nWITH s AS (\n  SELECT total,\n    ROW_NUMBER() OVER (\n      ORDER BY total) AS rn,\n    COUNT(*) OVER () AS n\n  FROM orders)\nSELECT AVG(total) FROM s\nWHERE rn IN ((n + 1) / 2,\n             (n + 2) / 2);\n```",
+    "options": [
+      {
+        "text": "52.5",
+        "explanation": "That averages positions 3 and 4 (45 and 60). With n = 7, integer division gives 4 for both expressions, so only position 4 is used."
+      },
+      {
+        "text": "60",
+        "explanation": "Correct. (7 + 1) / 2 = 4 and (7 + 2) / 2 = 4 (integer division), so only the 4th value, 60, is averaged."
+      },
+      {
+        "text": "84.29",
+        "explanation": "That's the mean of all seven values (590 / 7), not the median."
+      },
+      {
+        "text": "75",
+        "explanation": "That averages 60 and 90, positions 4 and 5. (n + 2) / 2 is 4 when n = 7, not 5."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. n = 7.\n2. (n + 1) / 2 = 8 / 2 = 4.\n3. (n + 2) / 2 = 9 / 2 = 4 in integer arithmetic.\n4. So `rn IN (4, 4)` selects the single middle row: 60.\n5. For an even n, say 8: (9) / 2 = 4 and (10) / 2 = 5, so the two middle rows are averaged.\n\nIn Postgres, `percentile_cont(0.5) WITHIN GROUP (ORDER BY total)` gives the same result directly.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`signups(id PRIMARY KEY, email)` has duplicates. After running this in Postgres, then adding `UNIQUE (email)`, what has changed?\n\n```sql\nDELETE FROM signups a\nUSING signups b\nWHERE a.email = b.email\n  AND a.id > b.id;\n```",
+    "options": [
+      {
+        "text": "Every email that had duplicates is removed entirely",
+        "explanation": "Only rows with a lower-id twin are deleted. The lowest id per email has no `b` row with a smaller id, so it survives."
+      },
+      {
+        "text": "Only the newest row per email is kept",
+        "explanation": "It's the reverse: `a.id > b.id` deletes the higher ids, keeping the lowest (usually the earliest)."
+      },
+      {
+        "text": "The lowest-id row per email is kept, and the constraint prevents new duplicates even under concurrent inserts",
+        "explanation": "Correct. The self-join deletes any row that has a same-email row with a smaller id. The UNIQUE constraint then enforces the rule in the database, where races can't slip past it."
+      },
+      {
+        "text": "Rows are deleted twice when an email appears three times, causing an error",
+        "explanation": "A row matched by several `b` rows is still deleted once. Postgres doesn't error on that."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Take a@x.io with ids 1, 3, 6.\n   - id 1: no b with a smaller id, so kept.\n   - id 3: b = 1 matches, so deleted.\n   - id 6: b = 1 and b = 3 both match; deleted once.\n2. Result: ids 1, 2, 4 remain (one per email).\n3. Without a constraint, two concurrent sign-ups with the same email can both pass an application check and both insert. `UNIQUE (email)` makes the second insert fail, which the app can turn into \"email already registered\" or an upsert.",
+    "link": {
+      "title": "SELECT — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A `products` table has 20 categories and 50 million rows, with an index on `(category, revenue DESC)`. Which top-3-per-category query is likely to be fastest in Postgres?",
+    "options": [
+      {
+        "text": "`ROW_NUMBER() OVER (PARTITION BY category ORDER BY revenue DESC)` in a subquery, filtered by `rn <= 3`",
+        "explanation": "This is correct but numbers all 50 million rows before filtering, even if it reads them in index order."
+      },
+      {
+        "text": "`SELECT DISTINCT ON (category) ...`",
+        "explanation": "DISTINCT ON returns one row per group, not three."
+      },
+      {
+        "text": "A correlated `WHERE (SELECT COUNT(*) FROM products p2 WHERE p2.category = p.category AND p2.revenue > p.revenue) < 3`",
+        "explanation": "Correct in result, but runs a count for each of the 50 million rows: far slower."
+      },
+      {
+        "text": "A list of the 20 categories `CROSS JOIN LATERAL (SELECT ... WHERE category = c.category ORDER BY revenue DESC LIMIT 3)`",
+        "explanation": "Correct. Each of the 20 lateral subqueries reads three entries from the index: about 60 index reads in total, instead of touching every row."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Estimate rows touched:\n\n| approach | rows touched |\n|---|---|\n| ROW_NUMBER | ~50,000,000 |\n| correlated COUNT | 50M x group size |\n| LATERAL + LIMIT 3 | ~20 x 3 = 60 |\n\n1. The LATERAL subquery is planned once and executed per category.\n2. With `(category, revenue DESC)` indexed, `WHERE category = ? ORDER BY revenue DESC LIMIT 3` is an index scan that stops after three entries.\n3. You need the category list cheaply too: a small `categories` table, or a recursive \"loose index scan\" if categories live only in `products`.\n4. ROW_NUMBER is the right default when groups are many and small; LATERAL wins when groups are few and large.",
+    "link": {
+      "title": "Top-N queries — Use The Index, Luke",
+      "url": "https://use-the-index-luke.com/sql/partial-results/top-n-queries"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "The task: \"return the 2nd highest *distinct* order total, or NULL if there isn't one\". Which queries meet the spec exactly, on any data?",
+    "options": [
+      {
+        "text": "`SELECT MAX(total) FROM orders WHERE total < (SELECT MAX(total) FROM orders)`",
+        "explanation": "Correct. It returns one row; when there's no second value, the MAX over nothing is NULL."
+      },
+      {
+        "text": "`SELECT DISTINCT total FROM orders ORDER BY total DESC LIMIT 1 OFFSET 1`",
+        "explanation": "Distinct and correctly positioned, but it returns *no rows* rather than NULL when there's no second value."
+      },
+      {
+        "text": "`SELECT (SELECT DISTINCT total FROM orders ORDER BY total DESC LIMIT 1 OFFSET 1) AS second`",
+        "explanation": "Correct. Wrapping it as a scalar subquery turns \"no row\" into a single NULL."
+      },
+      {
+        "text": "`SELECT total FROM orders ORDER BY total DESC LIMIT 1 OFFSET 1`",
+        "explanation": "Without DISTINCT, a tie at the top (two orders of 200) would return 200 as the 'second highest'."
+      },
+      {
+        "text": "A CTE with `ROW_NUMBER() OVER (ORDER BY total DESC) AS rn`, then `SELECT total FROM cte WHERE rn = 2`",
+        "explanation": "ROW_NUMBER numbers ties separately, so a tie at the top returns the top value. It also returns no row rather than NULL."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Test each against two tricky inputs: totals {200, 200} (no distinct second) and {200, 200, 90}.\n\n| query | {200, 200} | {200, 200, 90} |\n|---|---|---|\n| nested MAX | NULL | 90 |\n| DISTINCT OFFSET | no row | 90 |\n| scalar wrap | NULL | 90 |\n| plain OFFSET | 200 | 200 |\n| ROW_NUMBER | 200 | 200 |\n\nOnly the nested MAX and the scalar-wrapped DISTINCT version handle both ties and the empty case. A `DENSE_RANK() = 2` version would also need the scalar wrap to return NULL.",
+    "link": {
+      "title": "LIMIT and OFFSET — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-limit.html"
+    }
+  }
+]

@@ -1,0 +1,348 @@
+[
+  {
+    "id": "test-unit-testing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does pytest report for this test?\n\n```python\ndef test_sum():\n    assert 0.1 + 0.2 == 0.3\n```",
+    "options": [
+      {
+        "text": "Fail: `assert 0.30000000000000004 == 0.3`",
+        "explanation": "Correct. Neither 0.1 nor 0.2 is exactly representable in binary, and the rounding errors leave the sum just above 0.3. Use `pytest.approx(0.3)`."
+      },
+      {
+        "text": "Pass",
+        "explanation": "In binary floating point `0.1 + 0.2` is `0.30000000000000004`, which is not exactly equal to `0.3`."
+      },
+      {
+        "text": "Error: pytest cannot compare floats",
+        "explanation": "pytest compares floats with `==` like any other values; the comparison is simply false."
+      },
+      {
+        "text": "Pass, with a warning about float comparison",
+        "explanation": "pytest does not warn here. The assertion is evaluated and it is false."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `0.1` and `0.2` are stored as the nearest binary fractions, each slightly off.\n2. Their sum is `0.30000000000000004`.\n3. `0.3` is stored as `0.299999999999999988...`, a different float.\n4. `==` compares exactly, so it is `False` and the test fails.\n\nFix: `assert 0.1 + 0.2 == pytest.approx(0.3)`, which allows a relative tolerance of about one part in a million by default.",
+    "link": {
+      "title": "pytest.approx — pytest API reference",
+      "url": "https://docs.pytest.org/en/stable/reference/reference.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How many tests does pytest collect from this?\n\n```python\n@pytest.mark.parametrize(\"a\", [1, 2, 3])\n@pytest.mark.parametrize(\"b\", [10, 20])\ndef test_grid(a, b):\n    assert a < b\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "That counts only the inner decorator's values."
+      },
+      {
+        "text": "5",
+        "explanation": "Stacked parametrize decorators multiply, they do not add."
+      },
+      {
+        "text": "1, run six times internally",
+        "explanation": "Each combination is a separately collected and reported test, with an id like `test_grid[10-1]`."
+      },
+      {
+        "text": "6",
+        "explanation": "Correct. Stacking produces the cross product: 3 values of `a` × 2 values of `b` = 6 separate tests, all passing here."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Each `parametrize` decorator multiplies the number of generated tests:\n\n```\nb=10: a=1, a=2, a=3\nb=20: a=1, a=2, a=3\n```\n\n3 × 2 = 6 tests. Every pair has `a < b`, so all six pass. Because each is reported separately, one failing combination would not hide the others.",
+    "link": {
+      "title": "How to parametrize tests — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/parametrize.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A teammate writes:\n\n```python\ndef test_register():\n    register(\"ada@x.io\", \"pw\")\n```\n\nWhat is wrong with it?",
+    "options": [
+      {
+        "text": "Nothing; if `register` misbehaves the test fails",
+        "explanation": "Only if it raises. If it returns the wrong value, stores nothing or sends no email, this test still passes."
+      },
+      {
+        "text": "It has no assertion, so it only checks that no exception escapes",
+        "explanation": "Correct. It contributes to coverage while verifying almost nothing. Assert the observable result, such as the user existing afterwards."
+      },
+      {
+        "text": "pytest requires at least one `assert`, so it errors",
+        "explanation": "pytest accepts tests without asserts; it just passes them if nothing raises, which is exactly the danger."
+      },
+      {
+        "text": "Test names must describe the expected result, so pytest skips it",
+        "explanation": "Naming is a convention for humans; pytest collects any function starting with `test`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask: what bug would make this test fail?\n\n- `register` crashes: fails. Good.\n- `register` silently does nothing: **passes**.\n- `register` stores the wrong email: **passes**.\n\nSo the test catches only crashes. Add the 'assert' step: e.g. `assert users.get_by_email(\"ada@x.io\") is not None`.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Does this test pass or fail?\n\n```python\ndef parse_age(s):\n    n = int(s)\n    if n < 0:\n        raise ValueError(\n          f\"age must be >= 0, got {n}\")\n    return n\n\ndef test_bad():\n    with pytest.raises(\n        ValueError,\n        match=\"must be >= 0\"):\n        parse_age(\"abc\")\n```",
+    "options": [
+      {
+        "text": "Pass, because a ValueError is raised",
+        "explanation": "A ValueError is raised, but by `int(\"abc\")`, and its message does not match the pattern, so `raises` fails the test."
+      },
+      {
+        "text": "Fail, because nothing is raised",
+        "explanation": "`int(\"abc\")` does raise; the problem is the message."
+      },
+      {
+        "text": "Fail, because the ValueError's message does not match `must be >= 0`",
+        "explanation": "Correct. `int()` raises `ValueError: invalid literal for int() with base 10: 'abc'`, so `match` fails and pytest reports a regex mismatch."
+      },
+      {
+        "text": "Error, because `match` only works with custom exceptions",
+        "explanation": "`match` works with any exception type; it runs `re.search` on `str(exc)`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace it:\n\n1. `parse_age(\"abc\")` calls `int(\"abc\")`.\n2. That raises `ValueError(\"invalid literal for int() with base 10: 'abc'\")` before the `n < 0` check is reached.\n3. `pytest.raises` sees the right type, then runs `re.search(\"must be >= 0\", message)`.\n4. No match, so the test fails with \"Regex pattern did not match\".\n\nThis is why `match` is valuable: without it, this test would pass even though the negative-age rule was never exercised.",
+    "link": {
+      "title": "How to write and report assertions — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/assert.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does pytest report for this test?\n\n```python\ndef test_total():\n    total = 5\n    assert (total == 6,\n            \"wrong total\")\n```",
+    "options": [
+      {
+        "text": "Pass, with a warning that the assertion is always true",
+        "explanation": "Correct. A non-empty tuple is truthy, so `assert` never fails. pytest emits `PytestAssertRewriteWarning: assertion is always true`."
+      },
+      {
+        "text": "Fail with message 'wrong total'",
+        "explanation": "The brackets turn the condition and message into a two-element tuple, which is evaluated as a single value."
+      },
+      {
+        "text": "SyntaxError",
+        "explanation": "It is valid Python: an assert on a tuple expression."
+      },
+      {
+        "text": "Fail with `assert False`",
+        "explanation": "The tuple `(False, 'wrong total')` is truthy, not false."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "`assert (x, msg)` asserts the tuple, not `x`:\n\n```\n(total == 6, \"wrong total\")\n= (False, \"wrong total\")\nbool(...) -> True\n```\n\nThe assertion passes. The correct form is `assert total == 6, \"wrong total\"`, with no brackets around both parts. pytest's warning helps, but only if someone reads it.",
+    "link": {
+      "title": "How to write and report assertions — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/assert.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After these tests run in order, what is in `log`?\n\n```python\nlog = []\n\n@pytest.fixture(scope=\"module\")\ndef conn():\n    log.append(\"open\")\n    yield 1\n    log.append(\"close\")\n\n@pytest.fixture\ndef tx(conn):\n    log.append(\"begin\")\n    yield conn\n    log.append(\"rollback\")\n\ndef test_a(tx): pass\ndef test_b(tx): pass\ndef test_c(conn): pass\n```\n\n(Assume we inspect `log` just after `test_c`, before the module finishes.)",
+    "options": [
+      {
+        "text": "open, begin, rollback, close, open, begin, rollback, close, open",
+        "explanation": "That would be function scope for `conn`. Module scope creates it once per file."
+      },
+      {
+        "text": "open, begin, begin, rollback, rollback",
+        "explanation": "Function-scoped teardown runs right after each test, not batched at the end."
+      },
+      {
+        "text": "open, begin, rollback, begin, rollback, close",
+        "explanation": "`close` runs only when the module's tests are all finished, which is after the point we inspect."
+      },
+      {
+        "text": "open, begin, rollback, begin, rollback",
+        "explanation": "Correct. `conn` is module-scoped, so it opens once and stays open; `tx` is function-scoped, so it begins and rolls back around each of `test_a` and `test_b`. `test_c` reuses the open `conn`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk through each test:\n\n```\ntest_a: conn (new)  -> open\n        tx          -> begin\n        teardown tx -> rollback\ntest_b: conn reused\n        tx          -> begin\n        teardown tx -> rollback\ntest_c: conn reused, no tx\n```\n\n`close` is appended only after the last test in the module. This pattern (expensive connection once, cheap transaction per test) is how many suites keep database tests both fast and isolated.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A test asserts `'ABC' in svc._cache` after calling `svc.price('ABC')`. A colleague replaces the dict with `functools.lru_cache`; prices are identical. What has happened?",
+    "options": [
+      {
+        "text": "A real regression was caught",
+        "explanation": "Callers see exactly the same prices. Nothing observable changed."
+      },
+      {
+        "text": "A false alarm: the test was coupled to an implementation detail and broke on a pure refactor",
+        "explanation": "Correct. Tests should check behaviour through the public interface; this one checked a private attribute."
+      },
+      {
+        "text": "The refactor must be reverted to keep the suite green",
+        "explanation": "Reverting a valid refactor to satisfy a brittle test is the wrong way round. Fix the test."
+      },
+      {
+        "text": "The test should be deleted and caching left untested",
+        "explanation": "If caching matters, test it observably, e.g. that the backing price source is called once for two lookups."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the rule: if a pure refactor breaks a test, the test was coupled to implementation.\n\n1. Behaviour before: `price('ABC')` returns X.\n2. Behaviour after: `price('ABC')` returns X.\n3. Test result changed from pass to fail.\n\nSo the test measured *how*, not *what*. Rewrite it against public behaviour; if the caching itself is a requirement, give `PriceService` a fake price source and assert it was queried only once.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these make a unit test **non-repeatable**? Select all that apply.",
+    "options": [
+      {
+        "text": "Calling `datetime.now()` inside the code under test and asserting on the result",
+        "explanation": "Correct. The result changes with the wall clock, so the test may pass at 11:59 and fail at 12:00."
+      },
+      {
+        "text": "Using `random.random()` without a fixed seed or injected generator",
+        "explanation": "Correct. Different values on each run mean different outcomes."
+      },
+      {
+        "text": "Using `pytest.mark.parametrize` with ten literal cases",
+        "explanation": "Literal parameters are identical every run; this is perfectly repeatable."
+      },
+      {
+        "text": "Reading from a module-level list that other tests append to",
+        "explanation": "Correct. The result depends on which tests ran first, so it changes with order and selection."
+      },
+      {
+        "text": "Using the `tmp_path` fixture to write files",
+        "explanation": "`tmp_path` gives each test its own fresh directory, which is what makes file tests repeatable."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A repeatable test gives the same result on every run, on every machine, in any order. Check each for a hidden input:\n\n- A: hidden input is the clock.\n- B: hidden input is the random state.\n- C: no hidden input.\n- D: hidden input is other tests' side effects.\n- E: isolated per test, no hidden input.\n\nFix the hidden inputs by injecting them (a `now` parameter, a seeded `random.Random`) or by giving each test fresh state.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A suite's database fixture was changed from `scope=\"function\"` to `scope=\"session\"` to save time. Now `test_list_users` passes alone but fails in the full run. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Session-scoped fixtures run after the tests",
+        "explanation": "Fixtures always set up before the tests that use them, whatever the scope."
+      },
+      {
+        "text": "pytest runs session fixtures in a separate process",
+        "explanation": "They run in the same process; that is how they can be shared."
+      },
+      {
+        "text": "Other tests now share the same database and leave rows behind, so the listing sees extra users",
+        "explanation": "Correct. Wider scope trades isolation for speed. Without per-test cleanup (e.g. a transaction rolled back after each test), state leaks between tests."
+      },
+      {
+        "text": "`test_list_users` must be marked `@pytest.mark.session`",
+        "explanation": "No such marker is needed. Scope is set on the fixture, not the test."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "'Passes alone, fails in the suite' is the signature of shared state.\n\n1. Before: each test got a fresh database, so no leaks.\n2. After: one database for the whole run.\n3. `test_create_user` inserts 'ada'; nothing removes it.\n4. `test_list_users` expects 2 users but finds 3.\n\nKeep the expensive part session-scoped, but add a function-scoped fixture that opens a transaction and rolls it back after each test.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which test best follows the 'DAMP' advice for tests?",
+    "options": [
+      {
+        "text": "A test that loops over a list of 20 cases with an `if` choosing the expected value for each",
+        "explanation": "Logic in tests can be wrong itself. Prefer `parametrize` with literal expected values."
+      },
+      {
+        "text": "A test that inherits setup from three base classes so no line is ever repeated",
+        "explanation": "That is DRY taken too far: understanding one failure means reading four files."
+      },
+      {
+        "text": "A test that compares the full JSON response against a 40-field snapshot",
+        "explanation": "Over-specified: 39 unrelated fields can break it, and the reader cannot tell which field the test is about."
+      },
+      {
+        "text": "A test whose inputs and expected outputs are visible in its body, with irrelevant setup hidden in a small factory such as `make_user(age=17)`",
+        "explanation": "Correct. The reader sees what matters (age 17) and nothing that doesn't, and understands the test without leaving it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "DAMP (descriptive and meaningful phrases) means optimising tests for the reader:\n\n- Show the values that drive this test's outcome.\n- Hide incidental details behind well-named helpers.\n- Avoid control flow, inheritance chains and huge snapshots.\n\n`make_user(age=17)` followed by `assert not can_rent(user)` reads like a sentence. Some duplication across tests is a fair price for that clarity.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are reviewing a test file. Which of these are genuine problems worth flagging? Select all that apply.",
+    "options": [
+      {
+        "text": "A test with three asserts checking the first name, last name and title returned by one `parse_name` call",
+        "explanation": "Several asserts about one behaviour are fine. 'One assert per test' is a myth; one *behaviour* per test is the goal."
+      },
+      {
+        "text": "A single test that registers a user, logs in, changes the password and deletes the account",
+        "explanation": "Correct. Four behaviours in one test: when it fails you do not know which broke, and later steps never run."
+      },
+      {
+        "text": "A test that calls a private method `_normalise()` directly",
+        "explanation": "Correct. It couples the test to internals; test through the public method, or extract the helper as its own unit."
+      },
+      {
+        "text": "A test that uses `monkeypatch.setenv` to set `DB_URL`",
+        "explanation": "That is the right tool: the change is undone automatically after the test."
+      },
+      {
+        "text": "A test that sleeps for 2 seconds waiting for a background thread",
+        "explanation": "Correct. It is slow and still flaky if the thread takes 2.1 s. Make the work synchronous in tests or wait on an explicit signal."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Judge each against 'fast, independent, repeatable, one behaviour, public interface':\n\n- A: one behaviour, several asserts. Fine.\n- B: many behaviours in one test. Split it.\n- C: tests a private method. Brittle.\n- D: correct use of a built-in fixture.\n- E: sleeps are slow and nondeterministic.\n\nSo B, C and E are worth flagging.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  }
+]

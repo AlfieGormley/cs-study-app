@@ -1,0 +1,378 @@
+[
+  {
+    "id": "snd-sampling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How many distinct values can a 16-bit sample take?",
+    "options": [
+      {
+        "text": "16",
+        "explanation": "16 is the number of bits. Each bit doubles the number of combinations."
+      },
+      {
+        "text": "32,767",
+        "explanation": "That's the largest *positive* value of a signed 16-bit integer, not the count of values."
+      },
+      {
+        "text": "65,536",
+        "explanation": "Correct. 2¹⁶ = 65,536 values, from −32,768 to +32,767 for signed samples."
+      },
+      {
+        "text": "16,777,216",
+        "explanation": "That's 2²⁴, the number of levels for 24-bit audio."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. N bits give 2^N combinations.\n2. 2¹⁶ = **65,536**.\n3. Signed audio uses −32,768 … +32,767: 32,768 negative values, zero, and 32,767 positive values.\n\nThat one-value asymmetry is why int16 full scale isn't quite symmetric.",
+    "link": {
+      "title": "Audio bit depth — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Audio_bit_depth"
+    }
+  },
+  {
+    "id": "snd-sampling-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A friend says their synth sounds \"more hi-fi\" because they turned the output volume up. Which setting actually determines the highest frequency a digital signal can represent?",
+    "options": [
+      {
+        "text": "Sample rate",
+        "explanation": "Correct. The sample rate sets how often the signal is measured, and the highest representable frequency is half of it."
+      },
+      {
+        "text": "Bit depth",
+        "explanation": "Bit depth sets how finely each sample's value is recorded, which affects the noise floor, not the frequency limit."
+      },
+      {
+        "text": "The output volume",
+        "explanation": "Volume scales the sample values; it changes neither the frequency limit nor the resolution of the format."
+      },
+      {
+        "text": "The block size",
+        "explanation": "Block size affects how often the audio callback runs and the processing deadline, not the frequency content."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Keep three settings apart:\n\n| Setting | Controls |\n|---|---|\n| Sample rate | How often: frequency limit (fs/2) |\n| Bit depth | How finely: noise floor |\n| Level | How big relative to full scale |\n\nThe frequency limit is fs/2: 24 kHz at 48 kHz. Lesson 4 explains why.",
+    "link": {
+      "title": "Sampling (signal processing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sampling_(signal_processing)"
+    }
+  },
+  {
+    "id": "snd-sampling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using SQNR ≈ 6.02N + 1.76 dB, what is the theoretical signal-to-quantisation-noise ratio of a full-scale sine stored at 20 bits?",
+    "options": [
+      {
+        "text": "About 120 dB",
+        "explanation": "Close, but this uses 6 dB per bit and drops the +1.76 dB. The formula gives 122.16 dB."
+      },
+      {
+        "text": "About 98 dB",
+        "explanation": "That's the figure for 16 bits."
+      },
+      {
+        "text": "About 146 dB",
+        "explanation": "That's the figure for 24 bits."
+      },
+      {
+        "text": "About 122 dB",
+        "explanation": "Correct. 6.02 × 20 + 1.76 = 120.4 + 1.76 = 122.16 dB."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. 6.02 × 20 = 120.4 dB.\n2. + 1.76 dB = **122.16 dB**.\n\nThe 6.02 comes from 20·log10(2): each bit halves the step size. The 1.76 dB comes from the ratio between a full-scale sine's RMS (A/√2) and the RMS of uniform quantisation error (step/√12). This is a theoretical figure for a perfect converter and a full-scale sine.",
+    "link": {
+      "title": "MT-001: SNR = 6.02N + 1.76dB — Analog Devices",
+      "url": "https://www.analog.com/media/en/training-seminars/tutorials/MT-001.pdf"
+    }
+  },
+  {
+    "id": "snd-sampling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your audio callback is given blocks of 128 samples at 48 kHz. What is the maximum time the callback can spend on each block, on average, without the audio breaking up?",
+    "options": [
+      {
+        "text": "128 ms",
+        "explanation": "This divides 128 by 1,000 instead of by 48,000. Each block covers only 128 of the 48,000 samples in a second."
+      },
+      {
+        "text": "About 2.67 ms",
+        "explanation": "Correct. Block duration = 128 / 48,000 s ≈ 2.667 ms. The hardware consumes one block in that time, so producing it must take less (in practice, with a safety margin)."
+      },
+      {
+        "text": "About 0.021 ms",
+        "explanation": "That's the duration of one sample (1/48,000 s). The callback has a whole block's worth of time."
+      },
+      {
+        "text": "375 ms",
+        "explanation": "48,000 / 128 = 375 is the number of callbacks per *second*, not a duration."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Duration = block size / fs.\n2. 128 / 48,000 = 0.002667 s ≈ **2.67 ms**.\n3. Callbacks per second = 375.\n\nThis is a processing budget, not the end-to-end latency, which also includes converter and buffering delays. If processing ever takes longer than 2.67 ms, the output runs dry and you hear a click or dropout.",
+    "link": {
+      "title": "Sampling (signal processing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sampling_(signal_processing)"
+    }
+  },
+  {
+    "id": "snd-sampling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Samples are floats in −1..+1 and are quantised to 8 bits. What is the quantisation step size, and the largest possible rounding error?",
+    "options": [
+      {
+        "text": "Step 1/256 ≈ 0.0039; max error ≈ 0.00195",
+        "explanation": "This assumes full scale spans 1, not 2. The range −1..+1 has width 2."
+      },
+      {
+        "text": "Step 2/256 ≈ 0.0078; max error ≈ 0.0039",
+        "explanation": "Correct. 256 levels across a range of width 2 gives a step of 0.0078125. Rounding to the nearest level is wrong by at most half a step."
+      },
+      {
+        "text": "Step 2/8 = 0.25; max error = 0.125",
+        "explanation": "This uses 8 levels instead of 2⁸ = 256."
+      },
+      {
+        "text": "Step 2/256 ≈ 0.0078; max error ≈ 0.0078",
+        "explanation": "Rounding to the *nearest* level is never more than half a step out. A full step would be the worst case for truncation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Levels = 2⁸ = 256.\n2. Width of range = 1 − (−1) = 2.\n3. Step Δ = 2/256 = **0.0078125**.\n4. Rounding error lies within ±Δ/2 = **±0.0039**.\n\nFor 16 bits the same calculation gives Δ ≈ 0.0000305.",
+    "link": {
+      "title": "Quantization (signal processing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Quantization_(signal_processing)"
+    }
+  },
+  {
+    "id": "snd-sampling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport numpy as np\nx = np.array([0.3, -0.3, 0.9, -1.0])\nscale = 4             # 3-bit signed\nq = np.clip(np.round(x * scale),\n            -scale, scale - 1)\nprint((q / scale).tolist())\n```",
+    "options": [
+      {
+        "text": "[0.25, -0.25, 1.0, -1.0]",
+        "explanation": "0.9 × 4 = 3.6 rounds to 4, but the clip limits it to scale − 1 = 3, so it comes out as 0.75. A 3-bit signed integer can't hold +4."
+      },
+      {
+        "text": "[0.3, -0.3, 0.9, -1.0]",
+        "explanation": "Quantisation changes the values: each one snaps to a multiple of 1/4."
+      },
+      {
+        "text": "[0.5, -0.5, 0.75, -1.0]",
+        "explanation": "0.3 × 4 = 1.2 rounds to 1, not 2, so the result is 0.25."
+      },
+      {
+        "text": "[0.25, -0.25, 0.75, -1.0]",
+        "explanation": "Correct. 1.2 → 1, −1.2 → −1, 3.6 → 4 → clipped to 3, −4 stays −4. Dividing by 4 gives 0.25, −0.25, 0.75, −1.0."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace each value:\n\n| x | x·4 | round | clip | /4 |\n|---|---|---|---|---|\n| 0.3 | 1.2 | 1 | 1 | 0.25 |\n| −0.3 | −1.2 | −1 | −1 | −0.25 |\n| 0.9 | 3.6 | 4 | 3 | 0.75 |\n| −1.0 | −4 | −4 | −4 | −1.0 |\n\nA 3-bit signed integer holds −4 … +3, so +1.0 is not reachable but −1.0 is. That's the integer asymmetry again.",
+    "link": {
+      "title": "Quantization (signal processing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Quantization_(signal_processing)"
+    }
+  },
+  {
+    "id": "snd-sampling-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which are genuine advantages of processing audio as 32-bit floats with ±1.0 as full scale? Select all that apply.",
+    "options": [
+      {
+        "text": "Intermediate values can exceed 1.0 (for example when summing voices) and be scaled down later without being clipped",
+        "explanation": "Correct. Floats have an exponent, so 3.7 is as representable as 0.37. Clipping only happens when converting to the converter's fixed format."
+      },
+      {
+        "text": "Quiet signals keep their relative precision, because the exponent scales with the value",
+        "explanation": "Correct. A float32 keeps 24 significant bits at any magnitude within its normal range."
+      },
+      {
+        "text": "Floats remove the need for a sample rate",
+        "explanation": "Sample format and sample rate are independent. A float stream still has a rate."
+      },
+      {
+        "text": "Code is independent of the converter's bit depth, because the conversion happens only at the edge",
+        "explanation": "Correct. Whether the codec takes 16 or 24 bits, the processing code works in ±1.0 and one conversion function handles the rest."
+      },
+      {
+        "text": "Floating point eliminates quantisation error entirely",
+        "explanation": "Floats are still finite-precision; each operation rounds to the nearest representable value. The error is just tiny and relative to the value's size."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Headroom above 1.0: ✓. Integer formats would wrap or clip.\n2. Relative precision: float32 = sign, 8-bit exponent, 24-bit significand. ✓\n3. Sample rate: unrelated. ✗\n4. Bit-depth independence: ✓, a big practical benefit.\n5. No rounding: ✗. 0.1 isn't exactly representable, and every multiply rounds. The errors are usually far below audibility.",
+    "link": {
+      "title": "Single-precision floating-point format — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format"
+    }
+  },
+  {
+    "id": "snd-sampling-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The lesson's experiment measured 23.3 dB SQNR at 4 bits, while 6.02N + 1.76 predicts 25.8 dB. At 16 bits the two agreed. Why does the formula fail at 4 bits?",
+    "options": [
+      {
+        "text": "The formula assumes the error is like random noise unrelated to the signal; with only 16 levels the error follows the waveform, behaving as distortion",
+        "explanation": "Correct. The derivation models the error as uniformly distributed and uncorrelated. With very coarse steps that assumption breaks down."
+      },
+      {
+        "text": "numpy's `round` is inaccurate for small integers",
+        "explanation": "`np.round` is exact here. The deviation comes from the error's statistics, not arithmetic mistakes."
+      },
+      {
+        "text": "The formula only applies to 16 bits and above",
+        "explanation": "There is no hard threshold. It applies whenever the signal spans many steps and the error is effectively random."
+      },
+      {
+        "text": "A 997 Hz test tone is too low for 4-bit audio",
+        "explanation": "Bit depth doesn't limit frequency; sample rate does."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The 6.02N + 1.76 derivation assumes the error is uniformly distributed over ±Δ/2 and uncorrelated with the signal (RMS Δ/√12).\n2. With 16 levels, a sine's error repeats a pattern tied to the waveform's shape. Its power differs from Δ²/12 and lands in harmonics.\n3. As N grows, the signal crosses many levels per cycle, the error decorrelates, and the formula fits (74.0 dB at 12 bits, 98.1 at 16).\n\nVery quiet signals at any bit depth hit the same problem; that's what dither is for.",
+    "link": {
+      "title": "MT-001: SNR = 6.02N + 1.76dB — Analog Devices",
+      "url": "https://www.analog.com/media/en/training-seminars/tutorials/MT-001.pdf"
+    }
+  },
+  {
+    "id": "snd-sampling-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You plan a stereo delay with a maximum delay of 1.5 seconds at 48 kHz, storing float32 samples. How much RAM does the delay buffer need?",
+    "options": [
+      {
+        "text": "72 kB",
+        "explanation": "This is 1.5 × 48,000 samples, one channel, at 1 byte each. Float32 is 4 bytes per sample and you need two channels."
+      },
+      {
+        "text": "288 kB",
+        "explanation": "That's one channel only: 1.5 × 48,000 × 4 = 288,000 bytes."
+      },
+      {
+        "text": "576 kB",
+        "explanation": "Correct. 1.5 s × 48,000 samples/s × 4 bytes × 2 channels = 576,000 bytes."
+      },
+      {
+        "text": "4.6 MB",
+        "explanation": "This multiplies by 32 (bits) instead of 4 (bytes) per sample."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Samples per channel = 1.5 × 48,000 = 72,000.\n2. Bytes per sample (float32) = 4.\n3. Per channel = 288,000 bytes.\n4. Stereo = **576,000 bytes ≈ 576 kB**.\n\nOn a desktop that's nothing. On a microcontroller with a few hundred kB of internal RAM, it may not fit, or may need external memory. Check the board's datasheet before designing time-based effects.",
+    "link": {
+      "title": "Audio bit depth — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Audio_bit_depth"
+    }
+  },
+  {
+    "id": "snd-sampling-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're exporting a synth recording from 32-bit float to a 16-bit WAV. Which statements about dither are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Without dither, a fade-out's final few bits can sound gritty because the rounding error follows the signal",
+        "explanation": "Correct. At very low levels, quantisation error becomes correlated with the signal and turns into distortion."
+      },
+      {
+        "text": "Dither adds a small amount of noise before quantising so that the error becomes random and unrelated to the signal",
+        "explanation": "Correct. That's the mechanism: trade a slight rise in noise for the removal of distortion."
+      },
+      {
+        "text": "Plain (unshaped) dither lowers the noise floor, giving an SQNR better than 6.02N + 1.76 dB",
+        "explanation": "Plain dither slightly *raises* the noise floor (for the common TPDF type, by about 4.8 dB). What it buys is that very quiet details remain audible inside the noise instead of vanishing or distorting."
+      },
+      {
+        "text": "A sine whose amplitude is less than half a step can survive (buried in noise) only if dither is used",
+        "explanation": "Correct. Without dither it rounds to zero at every sample and disappears."
+      },
+      {
+        "text": "Dither is mainly needed when converting from 16-bit to 32-bit float",
+        "explanation": "Going to a higher-resolution format loses nothing, so there's nothing to dither. It's for *reducing* bit depth."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Gritty fade: correlated error = distortion. ✓\n2. Mechanism: random noise ≈ 1 LSB in size, added before rounding. ✓\n3. Noise floor: plain dither adds noise, costing a few dB of SQNR; it doesn't beat the formula. ✗\n4. Sub-LSB sine: without dither, round(0.4·sin) = 0 always. With dither, the probability of rounding up or down follows the sine, so it survives on average. ✓\n5. Direction: only reductions in bit depth need dither. ✗",
+    "link": {
+      "title": "Dither — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dither"
+    }
+  },
+  {
+    "id": "snd-sampling-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 16-bit recording of your synth peaks at only 1/32 of full scale and stays there. Roughly what SQNR does the recording have relative to a full-scale sine's 98 dB, and why?",
+    "options": [
+      {
+        "text": "Still about 98 dB, because the format is 16-bit",
+        "explanation": "The noise floor is fixed by the step size. A signal 32 times smaller sits 32 times closer to that floor, so the ratio shrinks."
+      },
+      {
+        "text": "About 3 dB, because 98/32 ≈ 3",
+        "explanation": "Decibels are logarithmic, so you don't divide them by a level ratio. A ratio of 32 is about 30 dB."
+      },
+      {
+        "text": "About 68 dB, because 1/32 = 2⁻⁵ wastes 5 bits, leaving roughly 11 effective bits",
+        "explanation": "Correct. Each halving of level costs about 6 dB: 5 × 6.02 ≈ 30 dB, so ≈ 98 − 30 = 68 dB, equivalent to 6.02 × 11 + 1.76 ≈ 68 dB."
+      },
+      {
+        "text": "About 128 dB, because quieter signals have less noise",
+        "explanation": "Quantisation noise doesn't shrink with the signal; it's set by the step size."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. 1/32 = 2⁻⁵, so the signal uses 5 fewer bits of the integer range.\n2. Each bit is worth ≈ 6.02 dB → 5 × 6.02 ≈ 30.1 dB lost.\n3. 98.1 − 30.1 ≈ **68 dB**. Check: 6.02 × 11 + 1.76 = 67.98 dB.\n\nThis is why integer and fixed-point systems care about keeping levels healthy. In 32-bit float processing, a quiet signal keeps its relative precision, so it matters much less until the final conversion.",
+    "link": {
+      "title": "MT-001: SNR = 6.02N + 1.76dB — Analog Devices",
+      "url": "https://www.analog.com/media/en/training-seminars/tutorials/MT-001.pdf"
+    }
+  },
+  {
+    "id": "snd-sampling-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Suppose a 24-bit audio codec's datasheet lists a dynamic range of 114 dB. Treating that as an SNR, how many *effective* bits does it correspond to?",
+    "options": [
+      {
+        "text": "About 18.6 bits",
+        "explanation": "Correct. Rearranging SNR = 6.02N + 1.76 gives N = (114 − 1.76)/6.02 ≈ 18.6."
+      },
+      {
+        "text": "24 bits, because it's a 24-bit codec",
+        "explanation": "The word length is 24 bits, but analogue noise in the converter sets a floor far above 24-bit quantisation noise (≈ 146 dB)."
+      },
+      {
+        "text": "About 19 bits, because 114/6 = 19",
+        "explanation": "Close, but this ignores the 1.76 dB term and uses 6 instead of 6.02. The usual formula gives ≈ 18.6."
+      },
+      {
+        "text": "About 5.4 bits",
+        "explanation": "(146 − 114)/6.02 ≈ 5.4 is roughly how many bits are *lost* compared with an ideal 24-bit converter, not how many remain."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Effective number of bits (ENOB) inverts the SQNR formula:\n\n1. N = (SNR − 1.76) / 6.02.\n2. (114 − 1.76) / 6.02 = 112.24 / 6.02 ≈ **18.6 bits**.\n\nSo the bottom five or so bits of each 24-bit word are below the converter's own analogue noise. That's normal and fine: it means converter noise, not quantisation, sets the floor. Datasheets measure dynamic range in specific ways (often A-weighted, with a −60 dBFS signal), so treat this as an estimate.",
+    "link": {
+      "title": "MT-001: SNR = 6.02N + 1.76dB — Analog Devices",
+      "url": "https://www.analog.com/media/en/training-seminars/tutorials/MT-001.pdf"
+    }
+  }
+]

@@ -1,0 +1,953 @@
+[
+  {
+    "id": "dns-resolution",
+    "source": "App -> Stub -> Recursive resolver\n                 |\n   1 \"www.example.com?\"   -> Root\n     \"ask .com servers\"   <-\n   2 \"www.example.com?\"   -> .com TLD\n     \"ask ns1.example.com\"<-\n   3 \"www.example.com?\"   -> ns1.example\n     \"A 192.0.2.10\"       <-\n                 |\n          cache + return",
+    "title": "DNS resolution · successful uncached example, without QNAME minimisation",
+    "diagram": {
+      "type": "sequence",
+      "participants": [
+        {
+          "id": "app",
+          "label": "App + stub resolver"
+        },
+        {
+          "id": "resolver",
+          "label": "Recursive resolver"
+        },
+        {
+          "id": "root",
+          "label": "Root server"
+        },
+        {
+          "id": "tld",
+          "label": ".com TLD server"
+        },
+        {
+          "id": "auth",
+          "label": "ns1.example.com"
+        }
+      ],
+      "messages": [
+        {
+          "from": "app",
+          "to": "resolver",
+          "label": "www.example.com?"
+        },
+        {
+          "from": "resolver",
+          "to": "root",
+          "label": "www.example.com?"
+        },
+        {
+          "from": "root",
+          "to": "resolver",
+          "label": "Referral: ask .com servers",
+          "kind": "return"
+        },
+        {
+          "from": "resolver",
+          "to": "tld",
+          "label": "www.example.com?"
+        },
+        {
+          "from": "tld",
+          "to": "resolver",
+          "label": "Referral: ask ns1.example.com",
+          "kind": "return"
+        },
+        {
+          "from": "resolver",
+          "to": "auth",
+          "label": "www.example.com?"
+        },
+        {
+          "from": "auth",
+          "to": "resolver",
+          "label": "A 192.0.2.10",
+          "kind": "return"
+        },
+        {
+          "from": "resolver",
+          "to": "resolver",
+          "label": "Cache the answer"
+        },
+        {
+          "from": "resolver",
+          "to": "app",
+          "label": "Return A 192.0.2.10",
+          "kind": "return"
+        }
+      ],
+      "description": "A successful teaching example with no usable cached answer or delegation and no QNAME minimisation. Referrals identify authoritative servers; address/glue resolution and additional validation steps are omitted. Cache retention depends on TTL and policy."
+    }
+  },
+  {
+    "id": "system-request-path",
+    "source": " client\n   |\n   v\n+--------+    +-----------+    +--------+\n|  load  |--->|  app tier |--->|   DB   |\n|balancer|    | stateless |    |primary |\n+--------+    +-----------+    +--------+\n                    |              |\n                    v              v\n                 +-----+      +--------+\n                 |cache|      |replicas|\n                 +-----+      +--------+",
+    "title": "Request path and storage tiers",
+    "diagram": {
+      "type": "graph",
+      "nodes": [
+        {
+          "id": "client",
+          "label": "Client",
+          "x": 24,
+          "y": 24,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "lb",
+          "label": "Load balancer",
+          "x": 24,
+          "y": 164,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "app",
+          "label": "App tier\nStateless",
+          "x": 254,
+          "y": 164,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "db",
+          "label": "Database\nPrimary",
+          "x": 484,
+          "y": 164,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "cache",
+          "label": "Cache",
+          "x": 254,
+          "y": 314,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "replicas",
+          "label": "Replicas",
+          "x": 484,
+          "y": 314,
+          "width": 160,
+          "height": 70
+        }
+      ],
+      "edges": [
+        {
+          "from": "client",
+          "to": "lb"
+        },
+        {
+          "from": "lb",
+          "to": "app"
+        },
+        {
+          "from": "app",
+          "to": "db"
+        },
+        {
+          "from": "app",
+          "to": "cache"
+        },
+        {
+          "from": "db",
+          "to": "replicas"
+        }
+      ]
+    }
+  },
+  {
+    "id": "competing-consumers",
+    "source": "           ┌──▶ worker A\nproducer ─▶[ m5 m4 m3 m2 m1 ]──▶ worker B\n           └──▶ worker C",
+    "title": "One queue, multiple workers",
+    "diagram": {
+      "type": "graph",
+      "nodes": [
+        {
+          "id": "producer",
+          "label": "Producer",
+          "x": 24,
+          "y": 164,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "queue",
+          "label": "Queue\nm5 · m4 · m3 · m2 · m1",
+          "x": 244,
+          "y": 164,
+          "width": 224,
+          "height": 70
+        },
+        {
+          "id": "a",
+          "label": "Worker A",
+          "x": 538,
+          "y": 24,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "b",
+          "label": "Worker B",
+          "x": 538,
+          "y": 164,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "c",
+          "label": "Worker C",
+          "x": 538,
+          "y": 304,
+          "width": 160,
+          "height": 70
+        }
+      ],
+      "edges": [
+        {
+          "from": "producer",
+          "to": "queue"
+        },
+        {
+          "from": "queue",
+          "to": "a",
+          "fromPort": "right",
+          "toPort": "left"
+        },
+        {
+          "from": "queue",
+          "to": "b"
+        },
+        {
+          "from": "queue",
+          "to": "c",
+          "fromPort": "right",
+          "toPort": "left"
+        }
+      ]
+    }
+  },
+  {
+    "id": "dead-letter-queue",
+    "source": "main queue ──fail×5──▶ DLQ\n    │                   │\n    ▼                   ▼\n workers           alert + inspect",
+    "title": "Dead-letter routing · configured five-failure example",
+    "diagram": {
+      "type": "graph",
+      "nodes": [
+        {
+          "id": "main",
+          "label": "Main queue",
+          "x": 24,
+          "y": 24,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "dlq",
+          "label": "Dead-letter queue",
+          "x": 324,
+          "y": 24,
+          "width": 190,
+          "height": 70
+        },
+        {
+          "id": "workers",
+          "label": "Workers",
+          "x": 24,
+          "y": 184,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "inspect",
+          "label": "Alert + inspect",
+          "x": 324,
+          "y": 184,
+          "width": 190,
+          "height": 70
+        }
+      ],
+      "edges": [
+        {
+          "from": "main",
+          "to": "dlq",
+          "label": "Fail ×5"
+        },
+        {
+          "from": "main",
+          "to": "workers"
+        },
+        {
+          "from": "dlq",
+          "to": "inspect"
+        }
+      ],
+      "description": "Illustrative retry policy with a five-failure threshold, not a universal broker default. Actual routing counts and retry/dead-letter guarantees depend on broker configuration."
+    }
+  },
+  {
+    "id": "queue-acknowledgement",
+    "source": "1. receive   broker ──m1──▶ worker\n2. process   worker does the work\n3. ack       worker ──ack──▶ broker\n4. delete    broker removes m1",
+    "title": "Queue acknowledgement · successful processing example",
+    "diagram": {
+      "type": "sequence",
+      "participants": [
+        {
+          "id": "broker",
+          "label": "Broker"
+        },
+        {
+          "id": "worker",
+          "label": "Worker"
+        }
+      ],
+      "messages": [
+        {
+          "from": "broker",
+          "to": "worker",
+          "label": "Receive message m1"
+        },
+        {
+          "from": "worker",
+          "to": "worker",
+          "label": "Process the message"
+        },
+        {
+          "from": "worker",
+          "to": "broker",
+          "label": "Acknowledge m1",
+          "kind": "return"
+        },
+        {
+          "from": "broker",
+          "to": "broker",
+          "label": "Delete m1"
+        }
+      ],
+      "description": "Illustrative work-queue acknowledgement path. Acknowledgement lets this broker discard the message under its queue semantics; retained logs use different consumption/retention rules. Failures and redelivery paths are omitted."
+    }
+  },
+  {
+    "id": "cache-write-behind",
+    "source": " write --> Cache (ack)\n             |  later, batched\n             v\n             DB",
+    "title": "Write-behind caching",
+    "diagram": {
+      "type": "graph",
+      "nodes": [
+        {
+          "id": "write",
+          "label": "Write",
+          "x": 24,
+          "y": 24,
+          "width": 160,
+          "height": 70
+        },
+        {
+          "id": "cache",
+          "label": "Cache\nAcknowledge write",
+          "x": 264,
+          "y": 24,
+          "width": 194,
+          "height": 70
+        },
+        {
+          "id": "db",
+          "label": "Database",
+          "x": 264,
+          "y": 204,
+          "width": 194,
+          "height": 70
+        }
+      ],
+      "edges": [
+        {
+          "from": "write",
+          "to": "cache"
+        },
+        {
+          "from": "cache",
+          "to": "db",
+          "label": "Later, batched",
+          "labelX": 366,
+          "labelY": 156
+        }
+      ]
+    }
+  },
+  {
+    "id": "cache-read-through",
+    "source": " App --> Cache --miss--> DB\n     <--       <--------",
+    "title": "Read-through cache: miss path",
+    "diagram": {
+      "type": "sequence",
+      "participants": [
+        {
+          "id": "app",
+          "label": "Application"
+        },
+        {
+          "id": "cache",
+          "label": "Cache"
+        },
+        {
+          "id": "db",
+          "label": "Database"
+        }
+      ],
+      "messages": [
+        {
+          "from": "app",
+          "to": "cache",
+          "label": "Read"
+        },
+        {
+          "from": "cache",
+          "to": "db",
+          "label": "Cache miss: read from DB"
+        },
+        {
+          "from": "db",
+          "to": "cache",
+          "label": "Return value",
+          "kind": "return"
+        },
+        {
+          "from": "cache",
+          "to": "app",
+          "label": "Return value",
+          "kind": "return"
+        }
+      ]
+    }
+  },
+  {
+    "id": "encapsulation",
+    "source": "App            [   HTTP data   ]\nTransport  [TCP][   HTTP data   ]\nNetwork [IP][TCP][   HTTP data   ]\nLink [Eth][IP][TCP][ HTTP data ][FCS]",
+    "title": "Encapsulation · HTTP over TCP/IP/Ethernet example",
+    "diagram": {
+      "type": "memory",
+      "width": 780,
+      "rows": [
+        {
+          "label": "Application",
+          "cells": [
+            {
+              "label": "HTTP data",
+              "weight": 3
+            }
+          ],
+          "offset": 3
+        },
+        {
+          "label": "Transport",
+          "cells": [
+            {
+              "label": "TCP",
+              "weight": 1
+            },
+            {
+              "label": "HTTP data",
+              "weight": 3
+            }
+          ],
+          "offset": 2
+        },
+        {
+          "label": "Network",
+          "cells": [
+            {
+              "label": "IP",
+              "weight": 1
+            },
+            {
+              "label": "TCP",
+              "weight": 1
+            },
+            {
+              "label": "HTTP data",
+              "weight": 3
+            }
+          ],
+          "offset": 1
+        },
+        {
+          "label": "Link",
+          "cells": [
+            {
+              "label": "Ethernet",
+              "weight": 1
+            },
+            {
+              "label": "IP",
+              "weight": 1
+            },
+            {
+              "label": "TCP",
+              "weight": 1
+            },
+            {
+              "label": "HTTP data",
+              "weight": 3
+            },
+            {
+              "label": "FCS",
+              "weight": 1
+            }
+          ],
+          "offset": 0
+        }
+      ],
+      "sharedScale": true,
+      "description": "Illustrative plaintext HTTP-over-TCP encapsulation. TLS, QUIC, options and fragmentation are omitted. Cell widths are schematic rather than byte counts."
+    }
+  },
+  {
+    "id": "ethernet-wire",
+    "source": " 8      14      20   20   1460      4  12\n|pre|  eth  | IP |TCP| data ... |FCS|gap|",
+    "title": "Ethernet wire layout · illustrative untagged IPv4/TCP packet",
+    "diagram": {
+      "type": "memory",
+      "width": 840,
+      "rows": [
+        {
+          "label": "On the wire",
+          "cells": [
+            {
+              "label": "Preamble + SFD\n8 B"
+            },
+            {
+              "label": "Ethernet\n14 B"
+            },
+            {
+              "label": "IP\n20 B"
+            },
+            {
+              "label": "TCP\n20 B"
+            },
+            {
+              "label": "Data\n1460 B"
+            },
+            {
+              "label": "FCS\n4 B"
+            },
+            {
+              "label": "Gap\n12 byte-times"
+            }
+          ]
+        }
+      ],
+      "description": "Schematic, not proportional: untagged Ethernet, IPv4 and TCP without options, 1460-byte payload. Preamble plus SFD 8 bytes; Ethernet header 14; IP 20; TCP 20; FCS 4. Interpacket gap is 12 byte-times, not transmitted frame data."
+    }
+  },
+  {
+    "id": "expression-tree",
+    "source": "      *\n     / \\\n    2   +\n       / \\\n      3   4",
+    "title": "Syntax tree: 2 × (3 + 4)",
+    "diagram": {
+      "type": "tree",
+      "nodes": [
+        {
+          "id": "mul",
+          "label": "×",
+          "x": 174,
+          "y": 24,
+          "width": 72,
+          "height": 56
+        },
+        {
+          "id": "two",
+          "label": "2",
+          "x": 64,
+          "y": 144,
+          "width": 72,
+          "height": 56
+        },
+        {
+          "id": "add",
+          "label": "+",
+          "x": 284,
+          "y": 144,
+          "width": 72,
+          "height": 56
+        },
+        {
+          "id": "three",
+          "label": "3",
+          "x": 214,
+          "y": 264,
+          "width": 72,
+          "height": 56
+        },
+        {
+          "id": "four",
+          "label": "4",
+          "x": 354,
+          "y": 264,
+          "width": 72,
+          "height": 56
+        }
+      ],
+      "edges": [
+        {
+          "from": "mul",
+          "to": "two",
+          "fromPort": "bottom",
+          "toPort": "top",
+          "directed": false
+        },
+        {
+          "from": "mul",
+          "to": "add",
+          "fromPort": "bottom",
+          "toPort": "top",
+          "directed": false
+        },
+        {
+          "from": "add",
+          "to": "three",
+          "fromPort": "bottom",
+          "toPort": "top",
+          "directed": false
+        },
+        {
+          "from": "add",
+          "to": "four",
+          "fromPort": "bottom",
+          "toPort": "top",
+          "directed": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "layered-architecture",
+    "source": " +--------------------------------+\n | Presentation                   |\n | HTTP views, CLI, templates     |\n +--------------------------------+\n | Application / service          |\n | use cases, transactions, auth  |\n +--------------------------------+\n | Domain                         |\n | business rules and concepts    |\n +--------------------------------+\n | Data / infrastructure          |\n | SQL, ORM, files, external APIs |\n +--------------------------------+\n   calls go downwards only",
+    "title": "Traditional layering · downward dependencies in this example",
+    "diagram": {
+      "type": "flow",
+      "steps": [
+        "Presentation\nHTTP views, CLI, templates",
+        "Application / service\nUse cases, transactions, auth",
+        "Domain\nBusiness rules and concepts",
+        "Data / infrastructure\nSQL, ORM, files, external APIs"
+      ]
+    }
+  },
+  {
+    "id": "truth-table",
+    "source": "p q | ¬p  p∧q  p∨q  p→q  p↔q\n----+-------------------------\nT T |  F   T    T    T    T\nT F |  F   F    T    F    F\nF T |  T   F    T    T    F\nF F |  T   F    F    T    T",
+    "title": "Propositional logic: truth table",
+    "diagram": {
+      "type": "matrix",
+      "columns": [
+        "¬p",
+        "p ∧ q",
+        "p ∨ q",
+        "p → q",
+        "p ↔ q"
+      ],
+      "rows": [
+        "p=T, q=T",
+        "p=T, q=F",
+        "p=F, q=T",
+        "p=F, q=F"
+      ],
+      "cells": [
+        [
+          "F",
+          "T",
+          "T",
+          "T",
+          "T"
+        ],
+        [
+          "F",
+          "F",
+          "T",
+          "F",
+          "F"
+        ],
+        [
+          "T",
+          "F",
+          "T",
+          "T",
+          "F"
+        ],
+        [
+          "T",
+          "F",
+          "F",
+          "T",
+          "T"
+        ]
+      ]
+    }
+  },
+  {
+    "id": "virtual-memory-regions",
+    "source": " 0x7fff_ffff_ffff  lower canonical limit\n +-----------------+\n | stack           |  grows down\n |      ...        |\n | mmap region     |  libraries, mmap()\n |      ...        |\n | heap            |  grows up (brk)\n | .bss / .data    |  globals\n | .text           |  code, read-only\n +-----------------+\n 0x0000_0000_0000  (normally unmapped)",
+    "title": "Virtual address space · x86-64 four-level paging schematic",
+    "diagram": {
+      "type": "memory",
+      "width": 690,
+      "rows": [
+        {
+          "label": "High addresses",
+          "cells": [
+            {
+              "label": "0x7fff_ffff_ffff · lower canonical limit"
+            }
+          ]
+        },
+        {
+          "label": "Stack",
+          "cells": [
+            {
+              "label": "Grows down"
+            }
+          ]
+        },
+        {
+          "label": "Mapped region",
+          "cells": [
+            {
+              "label": "Libraries and mmap() · gaps between regions"
+            }
+          ]
+        },
+        {
+          "label": "Heap",
+          "cells": [
+            {
+              "label": "Grows up (brk)"
+            }
+          ]
+        },
+        {
+          "label": "Globals",
+          "cells": [
+            {
+              "label": ".bss / .data"
+            }
+          ]
+        },
+        {
+          "label": "Code",
+          "cells": [
+            {
+              "label": ".text · read-only"
+            }
+          ]
+        },
+        {
+          "label": "Low addresses",
+          "cells": [
+            {
+              "label": "0x0000_0000_0000 · normally unmapped"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "safe-unsafe-deadlock",
+    "source": "+-------------------------------+\n|  all states                   |\n|  +-------------------------+  |\n|  |  unsafe                 |  |\n|  |   +-----------------+   |  |\n|  |   |   deadlocked    |   |  |\n|  |   +-----------------+   |  |\n|  +-------------------------+  |\n|  safe (everything outside)    |\n+-------------------------------+",
+    "title": "Banker model · deadlocked states are a subset of unsafe states",
+    "diagram": {
+      "type": "layout",
+      "width": 520,
+      "height": 340,
+      "primitives": [
+        {
+          "kind": "box",
+          "x": 24,
+          "y": 24,
+          "width": 472,
+          "height": 290
+        },
+        {
+          "kind": "box",
+          "x": 90,
+          "y": 90,
+          "width": 350,
+          "height": 174
+        },
+        {
+          "kind": "box",
+          "x": 164,
+          "y": 151,
+          "width": 204,
+          "height": 72
+        }
+      ],
+      "labels": [
+        {
+          "x": 42,
+          "y": 55,
+          "text": "All states"
+        },
+        {
+          "x": 109,
+          "y": 120,
+          "text": "Unsafe"
+        },
+        {
+          "x": 187,
+          "y": 194,
+          "text": "Deadlocked"
+        },
+        {
+          "x": 42,
+          "y": 294,
+          "text": "Safe: outside unsafe region"
+        }
+      ]
+    }
+  },
+  {
+    "id": "reviewed-fund-latency-throughput-1",
+    "source": " latency = length of pipe\n throughput = width of pipe\n\n in  ==============================  out\n     <---------- 100 ms ---------->\n         carries 1,000 req/s",
+    "title": "Latency and throughput · illustrative pipe analogy",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-net-tls-3",
+    "source": "Edge termination:\nClient ==TLS==> LB --HTTP--> App\n\nRe-encryption:\nClient ==TLS==> LB ==TLS==> App\n\nPassthrough:\nClient ==========TLS========> App\n           (LB forwards TCP)",
+    "title": "TLS termination, re-encryption and passthrough",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-cache-invalidation-3",
+    "source": " Reader R                Writer W\n GET -> miss\n SELECT -> old value\n                         UPDATE -> new\n                         DEL key\n SET key = old value",
+    "title": "Cache invalidation race: reader versus writer",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-dist-why-hard-2",
+    "source": "web (3 tries)\n -> api (3 tries each)  = 9\n   -> db (3 tries each) = 27",
+    "title": "Retry amplification across services",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-dist-quorums-1",
+    "source": "        A\n     F     B     key k hashes here\n               <- replicas: B, C, D\n     E     C        (N = 3)\n        D",
+    "title": "Hash-ring placement: replicas B, C and D",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-cs2-key-value-store-3",
+    "source": "        ring (hash space)\n           A1\n       C2      B1\n     B3          A2\n       A3      C1\n           B2\n key k -> hash -> walk clockwise\n -> first 3 distinct nodes = replicas",
+    "title": "Virtual nodes around a hash ring",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-cs2-key-value-store-4",
+    "source": "write -> commit log (append; sync policy)\n      -> memtable (sorted, in RAM)\n      -> flush when full -> SSTable\n         (immutable, sorted file)\nread  -> memtable, then SSTables\n         newest -> oldest, using\n         Bloom filter + index per SSTable",
+    "title": "Commit log, memtable and SSTable paths",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-lin-list-techniques-3",
+    "source": "start   prev=None  cur=1   1->2->3\niter 1  None<-1    prev=1  cur=2\niter 2  None<-1<-2 prev=2  cur=3\niter 3  None<-1<-2<-3\n        prev=3     cur=None\nreturn 3:  3->2->1",
+    "title": "Reversing a linked list",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-lin-list-techniques-6",
+    "source": "1 -> 2 -> 3 -> 4 -> 5\nstep 0: slow=1 fast=1\nstep 1: slow=2 fast=3\nstep 2: slow=3 fast=5  (stop)\nmiddle = 3",
+    "title": "Finding the middle with slow and fast pointers",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-hash-probabilistic-1",
+    "source": "m = 16, k = 3\nadd \"cat\": bits 2, 7, 11\nadd \"dog\": bits 4, 7, 13\n\nidx  0123456789012345\n     0010100100010100\n\nquery \"eel\": bits 2, 4, 13 -> all 1\n             -> \"maybe\" (false positive)\nquery \"fox\": bits 3, 7, 11 -> bit 3 is 0\n             -> \"definitely not\"",
+    "title": "Bloom filter: set bits and membership queries",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-hash-probabilistic-7",
+    "source": "w = 8, d = 3 (counts after a stream)\n\nrow 0: 0 5 0 2 0 9 0 1\nrow 1: 3 0 0 7 1 0 0 6\nrow 2: 0 0 4 0 8 0 2 3\n\nx hashes to row0[5], row1[3], row2[4]\ncounters: 9, 7, 8  -> estimate 7",
+    "title": "Count-min sketch: lookup the smallest counter",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-pat-heaps-3",
+    "source": "nums = [3, 2, 1, 5, 6, 4], k = 2\n3  heap [3]\n2  heap [2,3]\n1  1 < 2: ignore\n5  5 > 2: replace -> [3,5]\n6  6 > 3: replace -> [5,6]\n4  4 < 5: ignore\n2nd largest = heap[0] = 5",
+    "title": "Keeping the largest two values in a min-heap",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-adv-designing-structures-3",
+    "source": "min_f = 1\nby_f[1]: D -> E       (D older)\nby_f[2]: B\nby_f[5]: A -> C\nevict: oldest in by_f[min_f] = D",
+    "title": "LFU buckets and eviction order",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-mem-paging-6",
+    "source": "CR3 -> PML4 table\n       entry 255 -> PDPT table\n         entry 501 -> PD table\n           entry 81 -> PT table\n             entry 434 -> PFN 0x1a2b3\nphysical = (0x1a2b3 << 12) | 0xc18\n         = 0x1a2b3c18",
+    "title": "Walking the page-table hierarchy",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-fs-on-disk-structures-7",
+    "source": " dir entry: \"CAT.JPG\" start=4\n FAT:  idx  next\n        4 -> 7\n        7 -> 2\n        2 -> EOF\n file = clusters 4, 7, 2",
+    "title": "FAT: following the cluster chain",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-virt-hypervisors-2",
+    "source": "guest kernel    hypervisor\n------------    ----------\n add  r1,r2     (never sees it)\n cli   ---trap--> vcpu.if = 0\n       <-resume-- skip insn\n mov  r3,[x]    (never sees it)",
+    "title": "Trap-and-emulate · selected instruction paths in a simplified model",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-nf-ethernet-1",
+    "source": "first byte 0x3c = 0011 1100\n                         ^^\n             U/L = 0 ----+|\n             I/G = 0 -----+\n-> universal, unicast",
+    "title": "MAC address flags: universal and unicast",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-nf-arp-switching-1",
+    "source": "laptop 192.168.1.20/24 -> 93.184.215.14\n\nframe:  dst = router's MAC\npacket: dst = 93.184.215.14",
+    "title": "Frame destination versus packet destination",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-gc-refcounting-1",
+    "source": " a = Obj()        Obj  rc=1  <- a\n b = a            Obj  rc=2  <- a, b\n del a            Obj  rc=1  <- b\n b = None         Obj  rc=0  -> freed",
+    "title": "Reference counting · simple immediate-reclamation model",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-crypto-key-exchange-1",
+    "source": "Alice           public          Bob\nsecret: red     yellow       secret: blue\n\nred+yellow  ---orange--->\n            <---green---  blue+yellow\n\norange+blue = brown = green+red",
+    "title": "Diffie–Hellman: the colour analogy",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-crypto-key-exchange-5",
+    "source": "Alice --A=8-->  Mallory  --M=10--> Bob\nAlice <-M=10--  Mallory  <-B=19--  Bob\n\nM = 5^3 mod 23 = 10\n\nAlice's key: 10^6 mod 23 = 6\n  (Mallory: 8^3 mod 23 = 6)\nBob's key:   10^15 mod 23 = 5\n  (Mallory: 19^3 mod 23 = 5)",
+    "title": "Man-in-the-middle key exchange",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-pki-e2ee-3",
+    "source": "Alice's view, root key chain:\n DH(a1, B0) -> send chain 1\n DH(a1, B1) -> recv chain 1\n DH(a2, B1) -> send chain 2\n DH(a2, B2) -> recv chain 2\n ...\na1, a2 = Alice's ratchet keys\nB1, B2 = Bob's ratchet keys\nB0 = Bob's signed prekey",
+    "title": "Double ratchet · DH outputs feed the root KDF and chain keys",
+    "mode": "layout"
+  },
+  {
+    "id": "reviewed-rel-th-normal-forms-7",
+    "source": "ABCDE   A -> B violates (A not a key)\n        A+ = ABC\n  -> ABC, ADE\nABC     B -> C violates (B not a key)\n  -> BC, AB\nADE     only AD -> E: AD is its key, ok\n\nResult: AB, BC, ADE",
+    "title": "BCNF decomposition and functional dependencies",
+    "mode": "layout"
+  }
+]

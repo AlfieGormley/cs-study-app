@@ -1,0 +1,378 @@
+[
+  {
+    "id": "msg-event-driven-architecture-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An `OrderService` handler runs `db.commit(order)` and then `kafka.send(OrderPlaced)`. The process is killed between the two calls. What is the result?",
+    "options": [
+      {
+        "text": "Kafka rolls back the database commit",
+        "explanation": "Wrong. Kafka and the database share no transaction. Kafka does not even know the commit happened, so it cannot roll anything back."
+      },
+      {
+        "text": "Nothing is saved, because both steps are in the same transaction",
+        "explanation": "Wrong. They look adjacent in code but are separate operations against separate systems. The database transaction ended at commit()."
+      },
+      {
+        "text": "The Kafka producer automatically resends on restart",
+        "explanation": "Wrong. The producer's in-memory buffer died with the process. There is no record anywhere that a send was intended."
+      },
+      {
+        "text": "The order is saved but no OrderPlaced event is ever published",
+        "explanation": "Correct. This is the dual-write problem. The database commit is durable, but the send never happened, and nothing will retry it, so downstream services never learn about the order."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Step 1 commits to Postgres: durable.\n2. Crash.\n3. Step 2 never runs; the intent to publish existed only in memory.\n4. On restart there is no trace of the missing event.\n5. **Fix**: write the event to an `outbox` table **in the same transaction** as the order. A relay (polling or CDC) publishes it later, at least once.",
+    "link": {
+      "title": "Pattern: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The shipping service needs a customer's delivery address when an order arrives. Today it receives `CustomerAddressChanged {customerId}` and then calls the customer service's API. During customer-service outages, shipping stalls. Which pattern change addresses this directly?",
+    "options": [
+      {
+        "text": "Add retries with backoff to the API call",
+        "explanation": "Wrong. Retries help with brief blips but shipping still cannot work during a real outage. The structural dependency remains."
+      },
+      {
+        "text": "Move to event-carried state transfer: include the new address in the event and let shipping keep a local copy",
+        "explanation": "Correct. With the state in the event, shipping maintains its own copy of addresses and can serve from its initialized local projection without a callback for each event, removing the availability dependency."
+      },
+      {
+        "text": "Switch the customer service to event sourcing",
+        "explanation": "Wrong. Event sourcing changes how the customer service stores its own data; shipping would still call back for the address unless the published events carry it."
+      },
+      {
+        "text": "Use CQRS inside the shipping service",
+        "explanation": "Wrong. CQRS splits read and write models; it does not by itself give shipping the address data. The missing piece is the data in the event."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Current design is **event notification**: the event says 'something changed' and consumers call back for details.\n2. The callback is a synchronous runtime dependency, so a customer-service outage stalls shipping.\n3. **Event-carried state transfer** puts `address` in the event. Shipping applies versioned address snapshots locally. For an actual shipment, retain the address agreed for that order rather than blindly using a later profile address.\n4. Trade-offs accepted:\n   - Data is duplicated and eventually consistent (lag depends on delivery and processing).\n   - The event schema is now a contract, so evolve it compatibly.",
+    "link": {
+      "title": "What do you mean by Event-Driven? (Martin Fowler)",
+      "url": "https://martinfowler.com/articles/201701-event-driven.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An event-sourced `Account` aggregate has streams of up to 2 million events. Loading an account now takes several seconds. What is the standard fix?",
+    "options": [
+      {
+        "text": "Store periodic snapshots of the aggregate's state and replay only events after the latest snapshot",
+        "explanation": "Correct. A snapshot at, say, every 1,000 events means loading replays at most 1,000 events instead of 2 million. Snapshots are a cache; they can be rebuilt from events."
+      },
+      {
+        "text": "Delete events older than 30 days",
+        "explanation": "Wrong. In event sourcing the events are the source of truth. Deleting them loses the audit history and makes state impossible to rebuild correctly."
+      },
+      {
+        "text": "Switch to CQRS so reads do not touch the event store",
+        "explanation": "Wrong. CQRS helps queries, but command handling still needs the aggregate's current state to validate a command. The write side would still replay 2 million events."
+      },
+      {
+        "text": "Replay the events in parallel across many threads",
+        "explanation": "Wrong. Applying events is inherently sequential: each depends on the state after the previous one. You cannot parallelise a fold over an ordered stream like this in general."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Cost today: replay 2,000,000 events. At ~1 µs per apply plus deserialisation, several seconds.\n2. Snapshot every 1,000 events: `snapshot(v=1,999,000, state)`.\n3. Load = read snapshot + replay events 1,999,001 onwards → ≤ 1,000 events, far fewer events; actual load latency still depends on storage, deserialisation and snapshot freshness.\n4. Snapshots are **derived data**: if a snapshot's schema changes, discard it and rebuild from the events.\n5. Also question the model: a stream with 2 million events may indicate an aggregate boundary that is too large (for example, split by month or by sub-account).",
+    "link": {
+      "title": "Event Sourcing (Martin Fowler)",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You implement a transactional outbox with a single PostgreSQL Debezium connector in its at-least-once mode, stable aggregate-key partitioning and ordered relay processing. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Consumers must handle duplicate events, because the relay is at-least-once",
+        "explanation": "Correct. If the connector publishes to Kafka and then restarts before recording its log position, it republishes from the last recorded position. Consumers should dedup on the outbox row ID."
+      },
+      {
+        "text": "The outbox insert and the business update commit atomically",
+        "explanation": "Correct. They are in the same local database transaction, which is the whole point: the event exists if and only if the state change happened."
+      },
+      {
+        "text": "The application must call Kafka directly after committing",
+        "explanation": "Wrong. The application only writes to its database. Debezium reads committed outbox rows from the database log and publishes them."
+      },
+      {
+        "text": "Events for one aggregate are published in commit order if keyed by aggregate ID",
+        "explanation": "Correct. Debezium reads the log in commit order, and the outbox router keys records by aggregate ID, so all events for one aggregate land in one partition in commit order."
+      },
+      {
+        "text": "If Debezium is down for a long time, Postgres is unaffected",
+        "explanation": "Wrong. The replication slot forces Postgres to retain WAL until the connector confirms it. A long outage can fill the disk unless slot size is capped and monitored."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk the data path:\n\n```\nTX: orders + outbox → WAL\nDebezium ← WAL (slot)\nDebezium → Kafka (key=aggregateid)\n```\n\n1. Atomicity is local: ✓ statement 2.\n2. App never talks to Kafka: ✗ statement 3.\n3. Connector restarts replay from last committed source offset → duplicates: ✓ statement 1.\n4. Logical decoding produces committed transaction changes; physical WAL also interleaves uncommitted record activity. This configured relay and keying preserve per-aggregate order in a partition: ✓ statement 4.\n5. Slot retains WAL while the connector is down: ✗ statement 5. Monitor `pg_replication_slots` and set `max_slot_wal_keep_size`.",
+    "link": {
+      "title": "Reliable microservices data exchange with the outbox pattern (Debezium)",
+      "url": "https://debezium.io/blog/2019/02/19/reliable-microservices-data-exchange-with-the-outbox-pattern/"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team wants to feed their `products` table into Elasticsearch for search **and** let other teams react to product changes. They plan to point Debezium at the raw `products` table for both. What is the strongest objection to using raw table CDC for the service-to-service events?",
+    "options": [
+      {
+        "text": "Debezium cannot capture updates, only inserts",
+        "explanation": "Wrong. Debezium captures inserts, updates and deletes, with before and after images where the database provides them."
+      },
+      {
+        "text": "CDC events arrive out of commit order",
+        "explanation": "Wrong. The connector can preserve source transaction order for a given stream; topic partitioning and downstream concurrency still determine observed order."
+      },
+      {
+        "text": "Raw CDC makes the internal table schema a public contract and emits row changes rather than meaningful business events",
+        "explanation": "Correct. Every column rename or table split would break other teams, and consumers have to infer intent ('was this a price change or a restock?') from diffs. An outbox lets the team publish deliberate, versioned events while still using CDC for delivery."
+      },
+      {
+        "text": "Raw CDC adds significant write load to the database",
+        "explanation": "Wrong. Log-based CDC reads the replication log the database already writes; logical decoding, snapshots, WAL retention and network transmission add workload-dependent overhead. It can be material; schema coupling remains the central objection here. The objection is about coupling, not performance."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate the two use cases:\n\n| Use | Consumer | Raw CDC? |\n|---|---|---|\n| Search index | Same team | Good fit |\n| Other teams | External | Use outbox |\n\n1. For Elasticsearch, the consumer is owned by the same team and wants the full row: raw CDC is ideal.\n2. For other teams, events are an API. Raw table CDC leaks internal schema and carries no intent.\n3. Outbox events like `ProductPriceChanged {productId, oldPrice, newPrice, v2}` are explicit and versioned.\n4. Both can run on the same Debezium deployment: one connector for the table, the outbox event router for the outbox table.",
+    "link": {
+      "title": "Reliable microservices data exchange with the outbox pattern (Debezium)",
+      "url": "https://debezium.io/blog/2019/02/19/reliable-microservices-data-exchange-with-the-outbox-pattern/"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With CQRS, a user updates their display name; the command succeeds, and the page reloads from the read model, which still shows the **old** name for about 500 ms. Which approach fixes the user experience **without** giving up the separate read model?",
+    "options": [
+      {
+        "text": "Have the command return the new version number, and have the client read with 'at least version N', waiting briefly or reading the write side until the projection catches up",
+        "explanation": "Correct. This gives read-your-own-writes for the user who made the change, while other readers still use the eventually consistent projection. It targets the actual problem with minimal coupling."
+      },
+      {
+        "text": "Write to the read model synchronously inside the command handler using a distributed transaction",
+        "explanation": "Wrong. This couples the write and read stores tightly and reintroduces distributed transactions, adding avoidable coupling for this asynchronous projection design. CQRS itself does not prohibit synchronous projections or a shared database."
+      },
+      {
+        "text": "Add a 2-second sleep after every command",
+        "explanation": "Wrong. A fixed delay is slow for everyone and still wrong when the projection lags by more than 2 seconds under load."
+      },
+      {
+        "text": "Cache the old name in the browser so it does not flicker",
+        "explanation": "Wrong. This shows even staler data. The user wants to see their new name, not a stable old one."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Root cause: projection lag (event → projector → read DB) of ~500 ms.\n2. This question requires read-your-own-writes for the writer; whether other readers can tolerate staleness is a separate product requirement.\n3. Approach:\n   - Command returns `{version: 42}`.\n   - Client sends `GET /profile?minVersion=42`.\n   - Read API checks the projection's version; if < 42, waits up to ~1 s for it or falls back to the write model.\n4. Simpler alternative: the UI applies the change optimistically from the command response.\n5. Result: correct UX, separate models preserved.",
+    "link": {
+      "title": "CQRS (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/CQRS.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An append-only event log already stores personal fields encrypted with a dedicated per-customer key. Which technique can make those encrypted fields computationally inaccessible without rewriting the log, assuming all usable key copies are irreversibly destroyed?",
+    "options": [
+      {
+        "text": "Append CustomerDeleted while leaving the keys usable",
+        "explanation": "Wrong. Hiding a projection does not prevent decryption of historical ciphertext."
+      },
+      {
+        "text": "Rewrite plaintext fields in every historical event",
+        "explanation": "Wrong for this question: it asks for a technique preserving the append-only log, whose personal fields are already encrypted."
+      },
+      {
+        "text": "Crypto-shredding: irreversibly destroy all usable copies of the per-customer decryption key",
+        "explanation": "Correct under the stated cryptographic/key-management assumptions. Plaintext projections, exports, cached keys and backups require separate handling."
+      },
+      {
+        "text": "Keep the keys because encrypted logs contain no personal information",
+        "explanation": "Wrong. Encryption with available keys does not make the data irrecoverable."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Encrypt personal fields before they enter the log; this does not retroactively erase previously stored plaintext.\n2. Destroy every usable decryption-key copy, including recoverable backups and cached key material. AWS KMS scheduled deletion has a waiting period; scheduling is not immediate irreversible destruction.\n3. Handle plaintext projections, exports and other identifying metadata separately.\n4. Replay code must explicitly handle erased fields; every historical projection may no longer be reconstructible.\n\nA conclusion that this design satisfies a particular GDPR erasure obligation is absent because this audit has not established the deployment-specific legal and technical conditions.",
+    "link": {
+      "title": "Delete an AWS KMS key",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/deleting-keys.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An outbox relay runs `SELECT * FROM outbox WHERE seq > :last ORDER BY seq LIMIT 500` every 200 ms, where `seq` is a `BIGSERIAL`, and then saves the highest `seq` it published as `:last`. Under heavy write load, a few events are **never published**, although their outbox rows exist. Why?",
+    "options": [
+      {
+        "text": "`LIMIT 500` silently drops rows beyond the first 500",
+        "explanation": "Wrong. Rows beyond the limit are picked up by the next poll, because the cursor only advances to the highest seq actually published."
+      },
+      {
+        "text": "The relay is at-least-once, which can lose events",
+        "explanation": "Wrong. At-least-once means possible duplicates, never loss. The loss here comes from the cursor logic."
+      },
+      {
+        "text": "Sequence values are assigned at insert, not commit; a transaction holding a lower seq can commit after the relay has already moved past it",
+        "explanation": "Correct. Transaction A takes seq 41 and B takes 42; B commits first. The relay publishes 42 and sets `:last = 42`. When A commits, row 41 is below the cursor and is never selected."
+      },
+      {
+        "text": "`BIGSERIAL` values wrap around under heavy load",
+        "explanation": "Wrong. A 64-bit sequence would take hundreds of thousands of years to exhaust at millions of inserts per second. Wrap-around is not the issue."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nt1 A: INSERT outbox → seq 41\nt2 B: INSERT outbox → seq 42\nt3 B: COMMIT\nt4 relay: seq > 40 → sees 42\n         :last = 42\nt5 A: COMMIT (row 41 now visible)\nt6 relay: seq > 42 → 41 never seen\n```\n\n1. An ordinary non-cycling sequence allocates distinct values until exhaustion; it does not encode commit order. A table constraint enforces row uniqueness.\n2. A high-water-mark cursor assumes commit order, so it can skip.\n3. Fixes:\n   - Mark rows as sent (`sent_at`) or delete them after publishing, and select unsent rows rather than `seq > :last`.\n   - Use log-based CDC, which reads in commit order.\n   - A time delay is not a substitute for a proven transaction bound; prefer unsent-state polling or a durable log cursor.",
+    "link": {
+      "title": "Pattern: Transactional outbox (microservices.io)",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are reviewing a team's event design guidelines for events published to other services. Which are sound practices? Select all that apply.",
+    "options": [
+      {
+        "text": "Include an event ID, type, schema version, timestamp and aggregate ID in every event",
+        "explanation": "Correct. The ID enables deduplication, type and version enable routing and safe evolution, the timestamp supports event-time processing, and the aggregate ID gives a partition key. CloudEvents requires id, source, specversion and type; time is optional, and payload schema version and aggregate ID need deliberate conventions."
+      },
+      {
+        "text": "Name state-change events as commands, such as `UpdateOrder`",
+        "explanation": "Wrong. Facts should be named in the past tense (`OrderUpdated`, or better, `OrderAddressChanged`). A command-style name implies an instruction to one handler, which confuses who owns the decision."
+      },
+      {
+        "text": "Evolve schemas by adding optional fields",
+        "explanation": "Correct. This is often compatible when the format and readers tolerate unknown fields and missing values/defaults. Validate backward and forward compatibility for the actual schema format and retained versions."
+      },
+      {
+        "text": "Remove a required field once no consumer seems to read it",
+        "explanation": "Wrong. You rarely know every consumer of a published event, and old events in a retained log still lack the new shape. Removing or repurposing required fields breaks compatibility; deprecate instead, and let a schema registry enforce the rules."
+      },
+      {
+        "text": "Key events by aggregate ID",
+        "explanation": "Correct. In a partitioned log this keeps every event for one order or account in one partition, so per-entity ordering holds."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each guideline against two questions: **can consumers process it safely?** and **can it evolve without breaking them?**\n\n| Guideline | Verdict |\n|---|---|\n| ID, type, version, time, aggregate | ✓ |\n| Command-style names for facts | ✗ |\n| Add optional fields | ✓ |\n| Remove required fields | ✗ |\n| Key by aggregate ID | ✓ |\n\nPublished events are an API. Treat schema changes with the same care as a public REST endpoint, with compatibility checks in CI.",
+    "link": {
+      "title": "What do you mean by \"Event-Driven\"? (Martin Fowler)",
+      "url": "https://martinfowler.com/articles/201701-event-driven.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Event-sourced account `acct-42` has a balance of £100, and its stream is at version 7. Two requests to withdraw £80 arrive at the same moment. Each handler loads the stream, checks the balance, and appends `Withdrew {80}` with `expectedVersion = 7`. What should happen?",
+    "options": [
+      {
+        "text": "Both events are appended and the balance becomes −£60",
+        "explanation": "Wrong. That is what happens without concurrency control, and it is why event stores check the expected version on append."
+      },
+      {
+        "text": "The first append succeeds; the second fails with a version conflict, so its handler reloads the stream (version 8, balance £20), re-checks and rejects the withdrawal",
+        "explanation": "Correct. Optimistic concurrency makes the append conditional on the stream not having changed since it was read. The loser retries against the new state, and the business rule is enforced."
+      },
+      {
+        "text": "The event store merges the two withdrawals into one event",
+        "explanation": "Wrong. Event stores never merge events. Each append is either accepted as is or rejected."
+      },
+      {
+        "text": "Both appends fail, because two writers conflicted",
+        "explanation": "Wrong. The first writer's append matched the expected version and succeeds. Only the writer whose expectation is now stale is rejected."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Both handlers read version 7 and balance £100. Both validate £80 ≤ £100 ✓.\n2. Handler A: `append(acct-42, expected=7, Withdrew 80)` → stream at 7 ✓ → now version 8.\n3. Handler B: `append(acct-42, expected=7, ...)` → stream is at 8 ✗ → **concurrency conflict**.\n4. B reloads: balance = £100 − £80 = £20. Validate £80 ≤ £20 ✗ → reject: insufficient funds.\n5. This is the same idea as `UPDATE ... WHERE version = 7` in a relational table: no locks are held while the handler thinks, only a check at write time.",
+    "link": {
+      "title": "Event Sourcing (Martin Fowler)",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q11",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A thin `ProductUpdated {productId}` event goes to 40 subscribing services, and each calls `GET /products/{id}` to fetch the details. A bulk price change updates 200,000 products in about a minute; assume subscribers immediately fetch and the product API cannot sustain 133,000 requests/s. What is the likely result, and the best fix?",
+    "options": [
+      {
+        "text": "Nothing unusual; each service just processes events a little more slowly",
+        "explanation": "Wrong. Every event triggers a callback from every subscriber, so the load on the product API multiplies by 40."
+      },
+      {
+        "text": "The event bus will throttle and drop most of the events",
+        "explanation": "Wrong. 200,000 events in a minute is modest for most brokers. The pressure falls on the product API that every subscriber calls back."
+      },
+      {
+        "text": "Subscribers should retry their callbacks more aggressively",
+        "explanation": "Wrong. Aggressive retries add load to an API that is already overloaded, turning a spike into a retry storm."
+      },
+      {
+        "text": "The product API receives about 8 million calls in a minute and is overwhelmed; carry the changed state in the event so subscribers need not call back",
+        "explanation": "Correct. Event notification creates a callback storm proportional to events × subscribers. Event-carried state transfer puts the data consumers need in the event itself."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Callbacks = events × subscribers = 200,000 × 40 = **8,000,000**.\n2. Over about 60 seconds: 8,000,000 ÷ 60 ≈ **133,000 requests per second** on the product API.\n3. That is the thundering herd the lesson warns about with event notification.\n4. Fix: event-carried state transfer:\n\n```json\n{\"type\":\"ProductPriceChanged\",\n \"productId\":\"p-9\",\"price\":1299,\n \"currency\":\"GBP\",\"version\":17}\n```\n\n5. Subscribers update local copies with no callback. Include a version so out-of-order or duplicate events can be ignored.",
+    "link": {
+      "title": "What do you mean by \"Event-Driven\"? (Martin Fowler)",
+      "url": "https://martinfowler.com/articles/201701-event-driven.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An event-sourced payments service has stored `PaymentTaken v1 {amount: 12.5}` (pounds, as a float) for three years. New code uses `PaymentTaken v2 {amountPence: 1250, currency: \"GBP\"}`. What is the best way to handle the old events?",
+    "options": [
+      {
+        "text": "Write an upcaster that converts v1 events to v2 as they are read, so handlers only ever deal with v2",
+        "explanation": "Correct. Upcasting keeps the stored history immutable and puts the conversion in one place. Replays, projections and new read models all see a consistent v2 shape."
+      },
+      {
+        "text": "Rewrite every historical v1 event in the store as v2",
+        "explanation": "Wrong. This breaks the immutability that event sourcing relies on, is risky to run on three years of history, and leaves copies elsewhere (downstream topics, backups) inconsistent."
+      },
+      {
+        "text": "Keep v1 and v2 handling in every handler, branching on the version",
+        "explanation": "Wrong. It works, but every handler and projection must know every historical version forever. An upcaster does this once."
+      },
+      {
+        "text": "Take a snapshot of current state and delete the v1 events",
+        "explanation": "Wrong. Deleting events loses the audit trail and the ability to rebuild new read models from history, which are the main reasons to event-source."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Events are immutable facts about the past, so the stored v1 records stay as they are.\n2. An **upcaster** sits between the store and the handlers:\n\n```python\ndef upcast(e):\n    if e[\"v\"] == 1:\n        return {\"v\": 2,\n          \"amountPence\":\n            round(e[\"amount\"] * 100),\n          \"currency\": \"GBP\"}\n    return e\n```\n\n3. This illustrative conversion assumes original amounts had at most two decimal places and GBP was implicit. A production migration must define decimal rounding, preserve other event fields/IDs and validate historical precision; rounding cannot recover information already lost to floats. Note the `round`: `12.5 * 100` is safe, but values such as `0.29 * 100` give `28.999…` in floating point, which is exactly why v2 uses integer pence.\n4. Chain upcasters (v1→v2→v3) as the schema evolves, and test them against samples of real historical events.",
+    "link": {
+      "title": "Event Sourcing (Martin Fowler)",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  }
+]

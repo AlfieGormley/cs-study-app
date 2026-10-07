@@ -1,0 +1,373 @@
+[
+  {
+    "id": "dist-time-ordering-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A service measures a request's duration as `end_wall_time - start_wall_time` and occasionally logs negative durations. What's the most likely cause?",
+    "options": [
+      {
+        "text": "NTP stepped the time-of-day clock backwards during the request.",
+        "explanation": "Correct. The time-of-day clock can jump when NTP corrects a large offset. Durations should use the monotonic clock, which never goes backwards."
+      },
+      {
+        "text": "The CPU executed instructions out of order.",
+        "explanation": "Wrong. CPU reordering is invisible at this level and can't make a clock read go backwards by milliseconds."
+      },
+      {
+        "text": "The request was served by two different servers.",
+        "explanation": "Wrong. Both readings were taken on the same machine; cross-machine skew isn't involved here."
+      },
+      {
+        "text": "Integer overflow in the timestamp.",
+        "explanation": "Wrong. 64-bit nanosecond timestamps won't overflow for centuries; overflow would also give enormous, not slightly negative, values."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Start reads wall clock = 12:00:00.500.\n2. NTP decides the clock is 300 ms fast and **steps** it back.\n3. End reads 12:00:00.250.\n4. Duration = −250 ms.\n\nFix: use `CLOCK_MONOTONIC` (`System.nanoTime()` in Java, `performance.now()` in JS, `time.monotonic()` in Python). It only measures elapsed time and is unaffected by NTP steps.",
+    "link": {
+      "title": "Network Time Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Process P1 has Lamport clock 7 and P2 has Lamport clock 3. P1 sends a message to P2. What is P2's clock value for the receive event?",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "Wrong. That's P2's own counter + 1, ignoring the incoming timestamp. Lamport's rule takes the max first."
+      },
+      {
+        "text": "8",
+        "explanation": "Wrong. 8 is the timestamp on the message itself (P1 increments to 8 before sending). The receiver must then go strictly higher."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. P1 increments to 8 and stamps the message 8. P2 sets max(3, 8) + 1 = 9."
+      },
+      {
+        "text": "11",
+        "explanation": "Wrong. That adds the two clocks (3 + 8), which isn't part of the algorithm."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Send is an event on P1: L1 = 7 + 1 = **8**, message carries 8.\n2. Receive on P2: L2 = max(3, 8) + 1 = **9**.\n\nCheck the guarantee: send (8) → receive (9), and 8 < 9 as required.",
+    "link": {
+      "title": "Lamport timestamp (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two versions of a key have vector clocks **A = [2, 1, 0]** and **B = [1, 2, 0]** (entries for replicas R1, R2, R3). What should a Dynamo-style store do?",
+    "options": [
+      {
+        "text": "Keep A, because its first entry is larger.",
+        "explanation": "Wrong. Comparing one entry isn't meaningful. A is ahead on R1 but behind on R2."
+      },
+      {
+        "text": "Keep B, because its sum is the same and it was written later.",
+        "explanation": "Wrong. Vector clocks carry no wall-clock time, and equal sums mean nothing. You can't tell which was 'later'."
+      },
+      {
+        "text": "Discard both; the data is corrupt.",
+        "explanation": "Wrong. Concurrency is normal after a partition or simultaneous writes; it's exactly what vector clocks are designed to detect."
+      },
+      {
+        "text": "Keep both as siblings: they are concurrent.",
+        "explanation": "Correct. Neither vector is ≤ the other in every position, so neither happened before the other. The store keeps both and lets the client or a merge function resolve them."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Compare element-wise:\n\n| | R1 | R2 | R3 |\n|---|---|---|---|\n| A | 2 | 1 | 0 |\n| B | 1 | 2 | 0 |\n\n- A ≤ B? No (2 > 1 at R1).\n- B ≤ A? No (2 > 1 at R2).\n\nSo A ∥ B. In Riak these become **siblings**; the next read returns both, and the client writes back a merged value with clock [2, 2, 0] incremented on its coordinator.",
+    "link": {
+      "title": "Vector clock (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Vector_clock"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An NTP client records t0 = 100 ms, t1 = 160 ms (server receive), t2 = 161 ms (server send), t3 = 120 ms (all on each side's own clock). What is the estimated offset of the server relative to the client?",
+    "options": [
+      {
+        "text": "+60 ms",
+        "explanation": "Wrong. That's just t1 − t0, which includes the one-way network delay as well as the offset."
+      },
+      {
+        "text": "+50.5 ms (server ahead)",
+        "explanation": "Correct. offset = ((t1 − t0) + (t2 − t3)) / 2 = (60 + 41) / 2 = 50.5 ms."
+      },
+      {
+        "text": "−50.5 ms (server behind)",
+        "explanation": "Wrong sign. The server's timestamps are larger than the client's for the same moments, so the server is ahead."
+      },
+      {
+        "text": "19 ms",
+        "explanation": "Wrong. 19 ms is the round-trip delay: (t3 − t0) − (t2 − t1) = 20 − 1. It's not the offset."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Round-trip delay δ = (t3 − t0) − (t2 − t1) = (120 − 100) − (161 − 160) = 19 ms.\n2. Offset θ = ((t1 − t0) + (t2 − t3)) / 2 = ((160 − 100) + (161 − 120)) / 2 = (60 + 41) / 2 = **50.5 ms**.\n3. Sanity check: one-way delay ≈ 9.5 ms. Client time 100 + 9.5 = 109.5 corresponds to server 160, so server is ≈ 50.5 ahead. ✓\n\nThe formula assumes symmetric paths; if the outbound path really took 15 ms and return 4 ms, the estimate is off by (15 − 4) / 2 = 5.5 ms.",
+    "link": {
+      "title": "Network Time Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "TrueTime reports ε = 4 ms. A Spanner transaction picks commit timestamp s = TT.now().latest. Roughly how long does commit wait take, and why is it needed?",
+    "options": [
+      {
+        "text": "0 ms: the timestamp is already in the past.",
+        "explanation": "Wrong. s is the *latest* possible current time, so real time may still be before s. Exposing the commit now could let a later transaction get a smaller timestamp."
+      },
+      {
+        "text": "About 4 ms, to let replication finish.",
+        "explanation": "Wrong on both counts. The wait is about 2ε (the full interval width), and its purpose is timestamp ordering, not replication, which happens via Paxos in parallel."
+      },
+      {
+        "text": "About 8 ms, so that s is guaranteed to be in the past before the commit becomes visible.",
+        "explanation": "Correct. The wait lasts until TT.now().earliest > s, about 2ε. Afterwards any transaction starting later gets a larger timestamp, giving external consistency."
+      },
+      {
+        "text": "Until NTP resynchronises all clocks.",
+        "explanation": "Wrong. Spanner doesn't wait for clock sync; it waits out the known uncertainty bound."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. TT.now() = [t − 4, t + 4]. Pick s = t + 4.\n2. Wait until TT.now().earliest > s, i.e. until real time ≥ t + 4 is certain everywhere. Earliest = now − 4 > t + 4 → now > t + 8. That's ~**8 ms** (2ε).\n3. Now s is in the past on every server.\n4. Any transaction T2 starting after T1's commit is visible picks s2 ≥ TT.now().latest > s.\n\nSo timestamp order matches real-time order. Spanner overlaps the wait with Paxos replication, so the real cost is often less.",
+    "link": {
+      "title": "Spanner (OSDI 2012)",
+      "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about hybrid logical clocks (HLC) are true? Select all that apply.",
+    "options": [
+      {
+        "text": "If a → b then HLC(a) < HLC(b).",
+        "explanation": "Correct. HLC preserves happens-before, just like a Lamport clock, by taking the max of incoming and local values and bumping the counter."
+      },
+      {
+        "text": "HLC can tell you whether two events are concurrent.",
+        "explanation": "Wrong. HLC is a scalar timestamp like Lamport's; it gives a total order but can't distinguish concurrency from causality. You need vector clocks for that."
+      },
+      {
+        "text": "The physical component stays within the clock-skew bound of real time.",
+        "explanation": "Correct. l only takes values that some node's physical clock has reported, so it never drifts further than the skew bound from true time."
+      },
+      {
+        "text": "HLC removes the need to bound clock skew in CockroachDB.",
+        "explanation": "Wrong. CockroachDB still relies on a maximum offset (default 500 ms) for its uncertainty interval, and nodes that exceed it shut down."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Walk through each:\n\n1. **Causality**: on receive, l = max(l, l_msg, pt), and c increments if l didn't advance, so the receive is strictly greater. ✓\n2. **Concurrency detection**: a single (l, c) pair can't encode \"neither before the other\". ✗\n3. **Close to real time**: l is the max physical time seen, bounded by ε. ✓\n4. **Skew bound**: CockroachDB needs it for read uncertainty restarts. ✗",
+    "link": {
+      "title": "Logical Physical Clocks (HLC paper)",
+      "url": "https://cse.buffalo.edu/tech-reports/2014-04.pdf"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In CockroachDB (max offset 500 ms), a read at timestamp 10.000 s finds a value written at 10.200 s by another node. What happens?",
+    "options": [
+      {
+        "text": "The read restarts at a higher timestamp, because 10.200 is inside the uncertainty interval.",
+        "explanation": "Correct. The interval is [10.000, 10.500]. A value inside it might have happened before the read, so CockroachDB bumps the read timestamp past it and retries."
+      },
+      {
+        "text": "The value is ignored because it's in the future.",
+        "explanation": "Wrong. Ignoring it would be unsafe: due to skew, the write may really have happened before the read in real time."
+      },
+      {
+        "text": "The value is returned because it's the newest.",
+        "explanation": "Wrong. Returning a value with a timestamp above the read's would break snapshot semantics for MVCC reads."
+      },
+      {
+        "text": "The writing node is shut down for excessive clock skew.",
+        "explanation": "Wrong. 200 ms is within the 500 ms bound. Nodes are only shut down when they detect offset beyond the configured maximum."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Read timestamp r = 10.000; uncertainty window = (r, r + 500 ms] = (10.000, 10.500].\n2. Found a write at w = 10.200, inside the window.\n3. Because clocks may differ by up to 500 ms, the writer's 10.200 could correspond to real time before the reader's 10.000.\n4. Ambiguous → **uncertainty restart**: re-read at 10.200 (or above), which then includes the value.\n\nThis is CockroachDB's price for not having TrueTime: occasional read restarts rather than a commit wait on every write.",
+    "link": {
+      "title": "Living without atomic clocks (Cockroach Labs)",
+      "url": "https://www.cockroachlabs.com/blog/living-without-atomic-clocks/"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Three processes use vector clocks `[P1, P2, P3]`. P2's clock is **[1, 4, 2]**. It receives a message from P1 stamped **[3, 1, 0]**. What is P2's clock after the receive event?",
+    "options": [
+      {
+        "text": "[3, 4, 2]",
+        "explanation": "Wrong. That's the element-wise max, but the receive is itself an event on P2, so P2 must then increment its own entry."
+      },
+      {
+        "text": "[4, 5, 2]",
+        "explanation": "Wrong. Only the receiver's own entry is incremented. P1's entry is taken from the message as-is (max of 1 and 3)."
+      },
+      {
+        "text": "[3, 5, 2]",
+        "explanation": "Correct. Take the element-wise max, [max(1,3), max(4,1), max(2,0)] = [3, 4, 2], then increment P2's own entry: [3, 5, 2]."
+      },
+      {
+        "text": "[3, 5, 3]",
+        "explanation": "Wrong. Only the receiving process increments its own entry. P3 did nothing new, so its entry stays at max(2, 0) = 2."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Element-wise max of local [1, 4, 2] and message [3, 1, 0]:\n\n| | P1 | P2 | P3 |\n|---|---|---|---|\n| local | 1 | 4 | 2 |\n| msg | 3 | 1 | 0 |\n| max | 3 | 4 | 2 |\n\n2. Increment own entry (P2): **[3, 5, 2]**.\n\nCheck: the send [3, 1, 0] ≤ [3, 5, 2] in every entry and they differ, so send → receive, as it must be.",
+    "link": {
+      "title": "Vector clock (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Vector_clock"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these should use the **monotonic** clock rather than the time-of-day clock? Select all that apply.",
+    "options": [
+      {
+        "text": "Measuring how long a database query took",
+        "explanation": "Correct. It's a duration on one machine. An NTP step during the query would corrupt a wall-clock measurement."
+      },
+      {
+        "text": "Counting down how long a lease holder may still act",
+        "explanation": "Correct. The holder needs elapsed time since it acquired the lease; a clock jump forward or back must not change it."
+      },
+      {
+        "text": "The timestamp shown to users on an audit log entry",
+        "explanation": "Wrong. Humans need a calendar time, which only the time-of-day clock provides. A monotonic clock's value is an arbitrary count, such as time since boot."
+      },
+      {
+        "text": "Timing the backoff before a retry",
+        "explanation": "Correct. It's a duration. If the wall clock steps back an hour, a wall-clock timer could wait an hour."
+      },
+      {
+        "text": "Deciding which of two events on different machines happened first",
+        "explanation": "Wrong. Monotonic clocks on different machines have unrelated starting points, so their values can't be compared. That needs logical clocks or a bounded-uncertainty clock like TrueTime."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Rule of thumb:\n\n- **Duration on one machine** → monotonic (`time.monotonic()` in Python, `CLOCK_MONOTONIC` in Linux).\n- **A point in calendar time** for humans or other systems → time-of-day.\n- **Ordering across machines** → neither on its own; use logical clocks, HLC or TrueTime.\n\nSo the query timer, lease countdown and backoff are monotonic; the audit timestamp is wall-clock; cross-machine ordering needs something else.",
+    "link": {
+      "title": "Network Time Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A last-write-wins store has two coordinators. Node A's clock is **80 ms fast**; node B's is accurate. A client writes v1 through A, and later (in real time) another client writes v2 through B. When can the later write v2 be silently lost?",
+    "options": [
+      {
+        "text": "Never: NTP keeps clocks close enough.",
+        "explanation": "Wrong. The scenario says A is 80 ms off. NTP keeps clocks near each other most of the time, but skew of tens of milliseconds is common, and LWW has no safety margin at all."
+      },
+      {
+        "text": "Only if both writes happen in the same millisecond.",
+        "explanation": "Wrong. The danger window is the size of the skew, not one millisecond. v1 is stamped 80 ms into the future, so any v2 within those 80 ms loses."
+      },
+      {
+        "text": "Whenever v2 arrives less than 80 ms after v1 in real time.",
+        "explanation": "Correct. v1 at real time t is stamped t + 80 ms. v2 at real time t + d is stamped t + d. If d < 80 ms, v1 has the higher timestamp and wins, discarding v2."
+      },
+      {
+        "text": "Whenever v2 arrives more than 80 ms after v1.",
+        "explanation": "Wrong, it's the opposite. Once d > 80 ms, v2's timestamp exceeds v1's, so v2 correctly wins."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Let v1 happen at real time t through A, and v2 at t + d through B.\n\n```\nts(v1) = t + 80 ms   (A is fast)\nts(v2) = t + d       (B accurate)\n```\n\nv2 loses when ts(v1) > ts(v2), i.e. 80 > d.\n\nSo every pair of writes less than 80 ms apart is at risk. For a busy key (a counter, a cart) that's a lot of writes. Options: avoid LWW for data that matters (use version vectors and merges, or CRDTs), route each key's writes through one leader, or at least monitor clock offset and alert well below the skew you can tolerate.",
+    "link": {
+      "title": "Living without atomic clocks (Cockroach Labs)",
+      "url": "https://www.cockroachlabs.com/blog/living-without-atomic-clocks/"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You have Lamport timestamps for four events: a on P1 has L = 5, b on P2 has L = 5, c on P1 has L = 3, d on P3 has L = 7. Which conclusion is **valid**?",
+    "options": [
+      {
+        "text": "a and b are concurrent.",
+        "explanation": "Correct. If either happened before the other, its timestamp would be strictly smaller. Equal timestamps on different processes therefore rule out a causal link."
+      },
+      {
+        "text": "c happened before d, because 3 < 7.",
+        "explanation": "Wrong. L(c) < L(d) is consistent with c → d, but also with c and d being concurrent. The guarantee only runs one way."
+      },
+      {
+        "text": "d happened after a, because 7 > 5.",
+        "explanation": "Wrong for the same reason. A larger Lamport timestamp doesn't prove causality; you'd need vector clocks for that."
+      },
+      {
+        "text": "Nothing at all can be concluded from Lamport timestamps.",
+        "explanation": "Wrong. You can conclude what *didn't* happen: if L(x) ≥ L(y), then x did not happen before y. That is enough to show a and b are concurrent."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The only rule is: **a → b implies L(a) < L(b)**. Its contrapositive: L(a) ≥ L(b) implies a did **not** happen before b.\n\n1. a, b: L(a) = L(b). So a ↛ b and b ↛ a. **Concurrent.** ✓\n2. c, d: 3 < 7. Could be c → d or c ∥ d. Unknown.\n3. a, d: 5 < 7. Same, unknown.\n\n(c and a are on the same process with 3 < 5, so c → a by program order, but that comes from knowing they share a process, not from the timestamps alone.)",
+    "link": {
+      "title": "Lamport timestamp (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Spanner data centre temporarily loses contact with its time masters, and TrueTime's error bound ε grows from about 4 ms to **50 ms**. What happens to read-write transactions there?",
+    "options": [
+      {
+        "text": "They keep committing with the same latency; ε only affects reads.",
+        "explanation": "Wrong. Commit wait lasts about 2ε, so a larger ε directly lengthens every commit."
+      },
+      {
+        "text": "They may commit out of real-time order until the time masters return.",
+        "explanation": "Wrong. TrueTime's interval still contains true time, just a wider interval. Waiting it out keeps timestamps in real-time order; correctness doesn't depend on ε being small."
+      },
+      {
+        "text": "They are rejected until ε returns below 7 ms.",
+        "explanation": "Wrong. There's no hard cut-off in the design; Spanner keeps working and pays the larger wait."
+      },
+      {
+        "text": "They stay correct, but each commit waits about 2ε, roughly 100 ms, instead of about 8 ms.",
+        "explanation": "Correct. Commit wait is \"wait until TT.now().earliest > s\". With a wider interval that takes longer, so latency rises while external consistency is preserved."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Commit wait ≈ 2ε (the interval's full width).\n2. Normal: 2 × 4 = **8 ms**.\n3. Degraded: 2 × 50 = **100 ms**.\n4. Safety: TT.now() still brackets real time, so after the wait the commit timestamp is definitely in the past.\n\nThis is the core idea behind TrueTime: express clock uncertainty explicitly and pay for it in **latency**, rather than risk correctness when clocks get worse. Contrast an LWW store, which silently misorders writes when skew grows.",
+    "link": {
+      "title": "Spanner: Google's Globally-Distributed Database (OSDI 2012)",
+      "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"
+    }
+  }
+]

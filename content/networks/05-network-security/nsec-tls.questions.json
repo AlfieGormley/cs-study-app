@@ -1,0 +1,348 @@
+[
+  {
+    "id": "nsec-tls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user browses `https://clinic.example/appointments` over TLS 1.3 without ECH. What can a passive observer who can observe the underlying IP/TLS packets (for example, at the café access point), with clear SNI and no additional tunnel learn?",
+    "options": [
+      {
+        "text": "Nothing at all; TLS hides everything",
+        "explanation": "TLS protects the content, but addresses, sizes, timing and (without ECH) the SNI hostname are visible."
+      },
+      {
+        "text": "The full URL including `/appointments`",
+        "explanation": "The path is inside the encrypted HTTP request; only the hostname leaks, via SNI and usually DNS."
+      },
+      {
+        "text": "The server's IP address and the hostname `clinic.example`, but not the path or page contents",
+        "explanation": "Correct. IPs are in the IP header and the hostname is in the clear SNI field. The path, headers and body are encrypted."
+      },
+      {
+        "text": "The server's certificate and therefore its organisation name",
+        "explanation": "In TLS 1.3 the Certificate message is encrypted, unlike TLS 1.2."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Go through what is on the wire:\n\n| Item | Visible? |\n|---|---|\n| IP addresses, ports | Yes, headers |\n| ClientHello SNI | Yes, without ECH |\n| Certificate | No in 1.3 |\n| URL path, cookies | No, encrypted |\n| Sizes, timing | Yes |\n\nSo the observer learns *which site*, not *which page*, although traffic sizes can sometimes hint at the page.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "nsec-tls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Ignoring TCP setup, loss, HelloRetryRequest and TLS 1.2 False Start, how many TLS round trips does a full TLS 1.3 handshake need before the client can send application data, compared with a full TLS 1.2 handshake?",
+    "options": [
+      {
+        "text": "1 in TLS 1.3, 2 in TLS 1.2",
+        "explanation": "Correct. The client sends its key share in the ClientHello, so after one round trip both sides have the keys. TLS 1.2 needed a second round trip for the key exchange."
+      },
+      {
+        "text": "0 in TLS 1.3, 1 in TLS 1.2",
+        "explanation": "Zero round trips is only possible with 0-RTT early data on a resumed connection, not a full handshake."
+      },
+      {
+        "text": "2 in both",
+        "explanation": "TLS 1.3 removed a round trip by having the client guess the key-exchange group up front."
+      },
+      {
+        "text": "3 in TLS 1.3, because of the extra encrypted messages",
+        "explanation": "EncryptedExtensions, Certificate, CertificateVerify and Finished all travel in the server's single flight."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**TLS 1.3:**\n1. Client → ClientHello + key share.\n2. Server → ServerHello + key share + encrypted certificate, CertificateVerify, Finished.\n3. Client → Finished + application data.\n\nOne round trip (plus TCP's own handshake).\n\n**TLS 1.2:** ClientHello / ServerHello+Certificate, then ClientKeyExchange+Finished / Finished, then data: two round trips.\n\nIf the server rejects the client's group guess (HelloRetryRequest), 1.3 also costs two.",
+    "link": {
+      "title": "The Illustrated TLS 1.3 Connection",
+      "url": "https://tls13.xargs.org/"
+    }
+  },
+  {
+    "id": "nsec-tls-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does **forward secrecy** mean for a certificate-authenticated TLS 1.3 handshake with ephemeral DH and erased session/ephemeral secrets?",
+    "options": [
+      {
+        "text": "Certificates are renewed before they expire",
+        "explanation": "That is good operational practice, not forward secrecy."
+      },
+      {
+        "text": "The client checks the certificate chain forward from root to leaf",
+        "explanation": "Chain direction has nothing to do with it."
+      },
+      {
+        "text": "Data is encrypted before it is forwarded by proxies",
+        "explanation": "This confuses the word \"forward\" with traffic forwarding."
+      },
+      {
+        "text": "If the server's long-term private key is stolen later, previously recorded sessions still cannot be decrypted",
+        "explanation": "Correct. Session keys come from ephemeral Diffie-Hellman values that are discarded; the certificate key only signs the handshake."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. In TLS 1.2 with RSA key transport, the client encrypted the session secret with the server's RSA key. Steal that key later, and every recorded session decrypts.\n2. In the specified TLS 1.3 mode, both sides generate fresh (ephemeral) DH key shares per connection and delete them afterwards.\n3. The certificate key is used only to sign (CertificateVerify).\n4. Stealing it lets an attacker impersonate the server in future, but not decrypt the past.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "nsec-tls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API works in Chrome but `curl` and a Python client fail with \"unable to get local issuer certificate\". The certificate is valid and issued by a well-known CA. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The server sends only the leaf certificate, not the intermediate",
+        "explanation": "Correct. Browsers often fill the gap from a cache or by fetching the intermediate; behavior in curl and Python depends on their TLS backend and configuration. Configure the server to send leaf plus intermediates."
+      },
+      {
+        "text": "curl does not support TLS 1.3",
+        "explanation": "Modern curl supports TLS 1.3, and a version mismatch gives a handshake error, not an issuer error."
+      },
+      {
+        "text": "The certificate's Common Name does not match",
+        "explanation": "A name mismatch gives a hostname verification error, not a missing issuer."
+      },
+      {
+        "text": "The root CA has expired",
+        "explanation": "Trust stores and alternate paths differ, so an anchor-related problem can affect clients differently. The missing-issuer symptom makes an omitted intermediate a useful first hypothesis, not a proven diagnosis."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The error says the client cannot find the **issuer** of a certificate: it cannot build a path to a root.\n2. The client has roots, but the leaf was signed by an intermediate the server did not send.\n3. Chrome succeeds because it may already have the intermediate cached, or fetches it via the AIA URL in the leaf.\n4. Test it:\n\n```\nopenssl s_client -connect api:443 \\\n  -servername api.example\n```\n\nand look for a single `0 s:` entry with no `1 s:`.\n5. Fix: serve the full chain file.",
+    "link": {
+      "title": "The Illustrated TLS 1.3 Connection",
+      "url": "https://tls13.xargs.org/"
+    }
+  },
+  {
+    "id": "nsec-tls-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the TLS 1.3 handshake, what does the server's **CertificateVerify** message achieve?",
+    "options": [
+      {
+        "text": "It lets the client download the CA's root certificate",
+        "explanation": "Roots are pre-installed in the client's root store and are never trusted because a server sent them."
+      },
+      {
+        "text": "It proves the server holds the certificate's private key by signing the handshake transcript, binding the key exchange to that identity",
+        "explanation": "Correct. A MITM can replay someone's certificate, but cannot produce this signature without the private key."
+      },
+      {
+        "text": "It checks the certificate has not been revoked",
+        "explanation": "Revocation is checked by the client via CRLs, OCSP or stapling; CertificateVerify is unrelated."
+      },
+      {
+        "text": "It encrypts the session key with the server's public key",
+        "explanation": "That is TLS 1.2 RSA key transport, removed in 1.3."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Certificates are public; anyone can send the bank's certificate.\n2. What an impostor cannot do is sign with the bank's private key.\n3. CertificateVerify signs a fixed prefix and role-specific context plus the transcript hash, binding both key shares in this full handshake.\n4. So the signature says: \"I, the holder of this certificate's key, took part in *this* key exchange.\"\n5. A MITM who did separate key exchanges has different transcripts and cannot sign either.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "nsec-tls-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shop enables TLS 1.3 0-RTT on its CDN. Assume the listed GET and HEAD endpoints have replay-safe read-only semantics and checkout has no duplicate-execution protection. Which request is it unsafe to accept as early data?",
+    "options": [
+      {
+        "text": "`GET /products?page=2`",
+        "explanation": "A repeated product listing changes nothing; safe GETs are what 0-RTT is for."
+      },
+      {
+        "text": "`GET /logo.png`",
+        "explanation": "Static assets are idempotent; replaying them is harmless."
+      },
+      {
+        "text": "`POST /checkout` placing an order",
+        "explanation": "Correct. Replaying early data can duplicate the unprotected order. Reject unsafe early requests with 425; an origin behind a CDN must respect Early-Data signalling rather than assume its own completed handshake makes the earlier hop replay-safe."
+      },
+      {
+        "text": "`HEAD /` health check",
+        "explanation": "HEAD is safe and idempotent."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. 0-RTT data is sent before the server has seen anything fresh from the client.\n2. An attacker who captured the flight can resend it; the accepted early-data keys derive from the resumption PSK. Server anti-replay state may reject copies, but the protocol does not inherently guarantee once-only application execution.\n3. So any request in early data may be executed more than once.\n4. Safe: GET/HEAD with no side effects.\n5. Unsafe: POST that charges, orders or changes state.\n6. RFC 8470: servers can reject such requests with **425 Too Early**, and the client retries after the handshake completes.",
+    "link": {
+      "title": "RFC 8470: Using Early Data in HTTP",
+      "url": "https://www.rfc-editor.org/rfc/rfc8470"
+    }
+  },
+  {
+    "id": "nsec-tls-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these does a client check when validating a DNS-named server's leaf and intermediate validation path under the stated Web PKI model (excluding trust-anchor handling)? Select all that apply.",
+    "options": [
+      {
+        "text": "The leaf's Subject Alternative Name matches the hostname it connected to",
+        "explanation": "Correct. Without this, any valid certificate for any domain would be accepted."
+      },
+      {
+        "text": "Every leaf and intermediate certificate in the validation path is within its validity period",
+        "explanation": "Correct. An expired intermediate breaks the chain as surely as an expired leaf."
+      },
+      {
+        "text": "The server's IP address appears in the certificate",
+        "explanation": "Incorrect for this DNS-name reference identity: the relevant SAN must match the name. For an IP-address reference identity, an appropriate IP SAN is required."
+      },
+      {
+        "text": "Each certificate is signed by the next one up, ending at a root in the client's trust store",
+        "explanation": "Correct. This is the chain of signatures."
+      },
+      {
+        "text": "The root certificate was sent by the server",
+        "explanation": "Incorrect. A root is trusted because it is in the local store; one sent by the server proves nothing and is usually ignored."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "The core checks:\n\n1. Signatures chain from leaf to a **locally trusted** root.\n2. Dates are valid for the leaf and intermediates; anchor policy is separate.\n3. The hostname matches the leaf's SAN.\n4. Intermediates are CAs; the leaf is allowed for server auth.\n5. Applicable public-trust browser policies also require CT evidence, such as valid SCTs (promises of log inclusion).\n\nIf the server could supply its own root, an attacker could too. Trust has to come from the client's store.",
+    "link": {
+      "title": "Certificate Transparency — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency"
+    }
+  },
+  {
+    "id": "nsec-tls-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does TLS 1.3 send `0x0303` (the TLS 1.2 number) in its ClientHello `legacy_version` field and put the real version in a `supported_versions` extension?",
+    "options": [
+      {
+        "text": "To let TLS 1.2 servers accept TLS 1.3 clients",
+        "explanation": "A 1.2 server would just negotiate 1.2; the field trick is about something else."
+      },
+      {
+        "text": "Because the version field is too short to hold 1.3",
+        "explanation": "The field is two bytes; `0x0304` fits fine."
+      },
+      {
+        "text": "For downgrade protection",
+        "explanation": "Downgrade protection uses the `DOWNGRD` sentinel in the server random and the Finished transcript MAC."
+      },
+      {
+        "text": "Because middleboxes broke on unfamiliar version numbers; looking like TLS 1.2 got 1.3 through deployed networks",
+        "explanation": "Correct. This is protocol ossification: early 1.3 tests failed through some firewalls and proxies, so 1.3 was disguised to look like 1.2 session resumption."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. During TLS 1.3 development, real-world tests showed that some middleboxes dropped or broke connections with unexpected version numbers or message orders.\n2. Fix: put `0x0303` in the legacy field, signal 1.3 inside an extension older boxes ignore, and add dummy ChangeCipherSpec messages (\"middlebox compatibility mode\").\n3. Lesson: anything unencrypted on the wire gets depended on and frozen.\n4. QUIC encrypts payloads and protects selected header bits; several routing and version fields remain exposed.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "nsec-tls-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume a client successfully uses ECH through a CDN sharing one configuration/public name across several sites. A corporate firewall that blocks gambling sites by reading the SNI field now sees what?",
+    "options": [
+      {
+        "text": "The CDN's public name in the outer ClientHello, not the real site",
+        "explanation": "Correct. The real SNI is inside the encrypted inner ClientHello. The outer one carries the provider's public name, shared by many sites."
+      },
+      {
+        "text": "The real hostname, because SNI is never encrypted",
+        "explanation": "That was true before ECH; ECH exists to encrypt it."
+      },
+      {
+        "text": "Nothing at all; ECH removes the ClientHello",
+        "explanation": "There is still an outer ClientHello in clear, with a public name and the encrypted inner hello."
+      },
+      {
+        "text": "The real hostname in the server's certificate",
+        "explanation": "In TLS 1.3 the certificate is encrypted, so it is not visible either."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The client fetched the site's `ECHConfig` from its DNS HTTPS record.\n2. It encrypted the real ClientHello (SNI = gambling site) with HPKE under the CDN's key.\n3. The outer ClientHello says SNI = CDN's public name.\n4. The firewall sees the same outer name for the configured set of sites on that CDN.\n5. Visibility and enforcement depend on deployment. Managed-endpoint policy can provide a different control point; DNS manipulation does not guarantee a silent downgrade of a client already attempting authenticated ECH.",
+    "link": {
+      "title": "RFC 9849: TLS Encrypted Client Hello",
+      "url": "https://www.rfc-editor.org/rfc/rfc9849.html"
+    }
+  },
+  {
+    "id": "nsec-tls-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Consider full TLS 1.3 handshakes using certificates for mutual authentication between internal services. A mesh may manage this, or a trusted load balancer may terminate the client session. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Each service proves its identity with a certificate and a CertificateVerify signature",
+        "explanation": "Correct. The server sends CertificateRequest and the client responds with its own Certificate and CertificateVerify."
+      },
+      {
+        "text": "Once mTLS is on, any service with a valid certificate should be allowed to call any endpoint",
+        "explanation": "Incorrect. A certificate proves who the caller is, not what it may do. Authorisation policy is still needed."
+      },
+      {
+        "text": "Short-lived certificates with automatic rotation reduce the need for revocation",
+        "explanation": "Correct. A compromised private key and still-valid certificate may enable impersonation until expiry. Short lifetimes limit that interval but do not remove the need to revoke access or handle compromised renewal credentials."
+      },
+      {
+        "text": "If TLS terminates at a load balancer, the backend loses the cryptographic proof and must trust the balancer's forwarded identity",
+        "explanation": "Correct. The mTLS session ended at the balancer; any identity header must be set only by it and stripped from client input."
+      },
+      {
+        "text": "mTLS removes the need to verify the server's certificate",
+        "explanation": "Incorrect. It is mutual: both sides verify each other."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "| Claim | Verdict |\n|---|---|\n| Both sides sign | True |\n| Cert = permission | False: authn ≠ authz |\n| Short-lived certs | True |\n| Termination at LB | True, trust boundary moves |\n| Skip server check | False |\n\nMeshes like Istio pair mTLS (identity) with authorisation policies (\"`checkout` may call `payments`\"). That pairing implements part of a zero-trust design; policy scope, device/workload identity, monitoring and credential management still matter.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "nsec-tls-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your organisation issues public TLS certificates once a year by hand. Under the CA/Browser Forum schedule, the maximum lifetime of a certificate issued on 1 June 2027 is 100 days. Starting with no certificate at day 0, how many consecutive non-overlapping 100-day certificates are needed to cover the next 365 days, and what operational approach helps?",
+    "options": [
+      {
+        "text": "About 2 per year; manual renewal is still fine",
+        "explanation": "At 100 days you need more than 3 per year, and the 47-day stage is coming."
+      },
+      {
+        "text": "4 certificates cover the 365-day interval; automated renewal and monitoring help keep coverage continuous",
+        "explanation": "Correct for this fresh 365-day coverage interval: ceil(365/100)=4. Earlier renewal increases issuance frequency; calendar-year counts can differ because of carryover, and one certificate may cover several names."
+      },
+      {
+        "text": "Only 3 certificates cover the whole 365-day interval",
+        "explanation": "Three 100-day certificates cover at most 300 days. Four certificates are needed: one initial issuance and three replacements in the ideal non-overlapping model."
+      },
+      {
+        "text": "1 per year, because existing certificates are grandfathered",
+        "explanation": "Only certificates issued before each deadline keep their original lifetime; new issuances follow the new limit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Lifetime: 100 days.\n\n```\n365 / 100 = 3.65\n-> 4 certificates for this interval\n```\n\n2. Renewing at about two-thirds of lifetime (to leave room for failures):\n\n```\n365 / 67 ≈ 5.4 -> about 6\n```\n\n3. From March 2029 (47 days): 365 / 47 ≈ 7.8, so 8 certificates cover a fresh 365-day interval at that lifetime.\n4. Manual renewal at scale increases the opportunity for missed expiry deadlines. Automate with ACME (Let's Encrypt, or your CA's ACME endpoint) and monitor expiry.",
+    "link": {
+      "title": "Ballot SC081v3 — CA/Browser Forum",
+      "url": "https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/"
+    }
+  }
+]

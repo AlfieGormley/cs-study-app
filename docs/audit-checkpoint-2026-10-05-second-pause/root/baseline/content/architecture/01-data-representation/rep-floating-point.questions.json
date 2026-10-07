@@ -1,0 +1,184 @@
+[
+  {
+    "id": "rep-floating-point-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "5.0 is `1.01₂ × 2²`. What value is stored in the 8-bit exponent field of its IEEE 754 single-precision encoding?",
+    "options": [
+      { "text": "2", "explanation": "2 is the true exponent. The field stores it with the bias of 127 added." },
+      { "text": "129", "explanation": "Correct. 2 + 127 = 129 = `10000001`." },
+      { "text": "125", "explanation": "This subtracts the bias instead of adding it. Encoding adds the bias; decoding subtracts it." },
+      { "text": "1025", "explanation": "That uses the double-precision bias (1023), and 1025 does not even fit in 8 bits." }
+    ],
+    "answer": 1,
+    "workedExample": "1. 5 = `101₂` = `1.01₂ × 2²`, so the true exponent is 2.\n2. Single precision stores exponent + 127: 2 + 127 = **129**.\n3. 129 = 128 + 1 = `10000001`.\n\nThe full encoding is `0 10000001 01000000000000000000000` = `0x40A00000`. Notice the leading 1 of `1.01` is not stored; the fraction field starts with `01`.",
+    "link": { "title": "Single-precision floating-point format — Wikipedia", "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format" }
+  },
+  {
+    "id": "rep-floating-point-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does `0.1 + 0.2 == 0.3` evaluate to `False` in Python?",
+    "options": [
+      { "text": "Python's float addition has a known bug that other languages fix", "explanation": "JavaScript, Java, C and Rust all give the same `0.30000000000000004`. It is the correct IEEE 754 result, not a Python quirk." },
+      { "text": "Python floats are only 32 bits wide", "explanation": "Python's `float` is a 64-bit double. Even more bits would not help: 0.1 has no finite binary expansion at any width." },
+      { "text": "0.1, 0.2 and 0.3 cannot be represented exactly in binary, so each is rounded, and the rounded sum differs from the rounded 0.3", "explanation": "Correct. The sum of the stored 0.1 and 0.2 rounds to the double just above the stored 0.3." },
+      { "text": "`==` compares object identity for floats", "explanation": "`==` compares values; `is` compares identity. The values really are different." }
+    ],
+    "answer": 2,
+    "workedExample": "1. 1/10 = `0.000110011...₂`, repeating forever, so it is rounded to 53 significant bits.\n2. Stored 0.1 ≈ 0.1000000000000000055511, stored 0.2 ≈ 0.2000000000000000111022.\n3. Their exact sum is about 0.3000000000000000166533, which rounds to the double 0.3000000000000000444089 (printed as `0.30000000000000004`).\n4. Stored 0.3 ≈ 0.2999999999999999888978, a different double.\n\nSo compare with a tolerance: `math.isclose(0.1 + 0.2, 0.3)` is `True`.",
+    "link": { "title": "Floating-point arithmetic: issues and limitations — Python docs", "url": "https://docs.python.org/3/tutorial/floatingpoint.html" }
+  },
+  {
+    "id": "rep-floating-point-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nx = float('nan')\nprint(x == x, x != x)\n```",
+    "options": [
+      { "text": "`True False`", "explanation": "This assumes every value equals itself. IEEE 754 deliberately makes NaN unequal to everything, including itself." },
+      { "text": "`False False`", "explanation": "`!=` is the exact negation of `==` for NaN too, so if `==` is False, `!=` must be True." },
+      { "text": "It raises `ValueError`", "explanation": "Creating and comparing NaN is allowed; it is a normal float value." },
+      { "text": "`False True`", "explanation": "Correct. NaN compares unequal to everything, so `x == x` is False and `x != x` is True. That is why `x != x` is the classic NaN test." }
+    ],
+    "answer": 3,
+    "workedExample": "IEEE 754 defines comparisons involving NaN as **unordered**: `<`, `>`, `<=`, `>=` and `==` are all false, and `!=` is true.\n\nSo:\n- `x == x` → `False`\n- `x != x` → `True`\n\nPrefer `math.isnan(x)` for readability. Beware: Python's `list.__contains__` checks identity first, so `x in [x]` is `True` even though `x == x` is `False`.",
+    "link": { "title": "NaN — Wikipedia", "url": "https://en.wikipedia.org/wiki/NaN" }
+  },
+  {
+    "id": "rep-floating-point-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is −20.5 as an IEEE 754 single-precision value in hex?",
+    "options": [
+      { "text": "`0xC1A40000`", "explanation": "Correct. Sign 1, exponent 4 + 127 = 131 = `10000011`, fraction `01001` followed by zeros." },
+      { "text": "`0x41A40000`", "explanation": "This is +20.5. The sign bit (bit 31) must be 1 for a negative number." },
+      { "text": "`0xC1C80000`", "explanation": "This stores the leading 1 in the fraction field (`10100 1...`). The hidden bit is not stored, so the fraction starts after `1.`." },
+      { "text": "`0xC2240000`", "explanation": "This uses exponent 132, as if 20.5 were `1.01001 × 2⁵`. 20.5 is between 16 and 32, so the exponent is 4." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Sign: negative → 1.\n2. 20.5 = 16 + 4 + 0.5 = `10100.1₂`.\n3. Normalise: `1.01001₂ × 2⁴`.\n4. Exponent field: 4 + 127 = 131 = `10000011`.\n5. Fraction: `01001` then 18 zeros.\n\n```\n1 10000011 01001000000000000000000\n1100 0001 1010 0100 0000 ...\n   C    1    A    4 0000\n```\n\nResult: `0xC1A40000`. Check: `struct.pack('>f', -20.5).hex()` → `'c1a40000'`.",
+    "link": { "title": "Single-precision floating-point format — Wikipedia", "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format" }
+  },
+  {
+    "id": "rep-floating-point-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A memory dump shows the single-precision float `0x3F200000`. What value is it?",
+    "options": [
+      { "text": "2.5", "explanation": "This reads the exponent as +1. The exponent field is 126, so the true exponent is 126 − 127 = −1." },
+      { "text": "0.625", "explanation": "Correct. Exponent field 126 → 2⁻¹; significand `1.01₂` = 1.25; 1.25 × 0.5 = 0.625." },
+      { "text": "0.25", "explanation": "This ignores the fraction bits (treating the significand as exactly 1). The fraction `01` adds 1/4 to the hidden 1." },
+      { "text": "1.25", "explanation": "1.25 is the significand alone. You still need to multiply by 2^(126 − 127) = 1/2." }
+    ],
+    "answer": 1,
+    "workedExample": "```\n3    F    2    0    0 0 0 0\n0011 1111 0010 0000 0000 ...\n0 01111110 01000000000000000000000\n```\n\n- Sign 0 → positive.\n- Exponent `01111110` = 126 → 126 − 127 = **−1**.\n- Significand: `1.01₂` = 1 + 1/4 = **1.25**.\n- Value: 1.25 × 2⁻¹ = **0.625**.\n\nThis matches lesson 1: 0.625 = `0.101₂` = `1.01₂ × 2⁻¹`.",
+    "link": { "title": "Float Toy — interactive bit editor", "url": "https://evanw.github.io/float-toy/" }
+  },
+  {
+    "id": "rep-floating-point-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A game engine tracks total frames rendered in a C `float` and adds `1.0f` each frame. What happens once the counter reaches 16,777,216 (2²⁴)?",
+    "options": [
+      { "text": "It overflows to negative values, like a 32-bit `int`", "explanation": "Floats do not wrap. The float range goes up to about 3.4 × 10³⁸; the problem here is precision, not range." },
+      { "text": "It becomes infinity", "explanation": "Infinity only appears when values exceed about 3.4 × 10³⁸. 2²⁴ is nowhere near." },
+      { "text": "It keeps counting correctly up to about 3.4 × 10³⁸", "explanation": "That confuses range with precision. A float has only 24 significant bits, so above 2²⁴ it cannot represent every integer." },
+      { "text": "It stops increasing: 16,777,216 + 1 rounds back to 16,777,216", "explanation": "Correct. Above 2²⁴, neighbouring floats are 2 apart, and 16,777,217 is a tie that rounds to the even neighbour, 16,777,216." }
+    ],
+    "answer": 3,
+    "workedExample": "1. A float has 24 significant bits (23 stored + the hidden 1).\n2. From 2²⁴ to 2²⁵ the exponent is 24, so the gap between floats is 2^(24 − 23) = **2**.\n3. 16,777,216 + 1 = 16,777,217 lies exactly halfway between 16,777,216 and 16,777,218.\n4. Round-to-nearest-even picks 16,777,216 (its last significand bit is 0).\n5. So the counter is stuck forever.\n\nAt 60 frames per second this happens after about 3.2 days. Use a 64-bit integer for counters.",
+    "link": { "title": "Single-precision floating-point format — Wikipedia", "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format" }
+  },
+  {
+    "id": "rep-floating-point-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these values can be stored **exactly** as a 64-bit double? Select all that apply.",
+    "options": [
+      { "text": "0.75", "explanation": "Correct. 0.75 = 3/4 = `1.1₂ × 2⁻¹`." },
+      { "text": "0.2", "explanation": "0.2 = 1/5 has a non-power-of-two denominator, so its binary expansion repeats and must be rounded." },
+      { "text": "2⁵³ + 1", "explanation": "A double has 53 significant bits. 2⁵³ + 1 needs 54, so it rounds to 2⁵³." },
+      { "text": "3.0", "explanation": "Correct. Every integer up to 2⁵³ is exact; 3 = `1.1₂ × 2¹`." },
+      { "text": "1/1024", "explanation": "Correct. 1/1024 = 2⁻¹⁰ is a power of two: significand 1.0, exponent −10." }
+    ],
+    "answer": [0, 3, 4],
+    "workedExample": "A value is exact if it equals (integer up to 53 bits) × (power of two) within the exponent range.\n\n| Value | Form | Exact? |\n|---|---|---|\n| 0.75 | 3 × 2⁻² | yes |\n| 0.2 | 1/5 | no |\n| 2⁵³ + 1 | needs 54 bits | no |\n| 3.0 | 3 × 2⁰ | yes |\n| 1/1024 | 1 × 2⁻¹⁰ | yes |\n\nIn Python, `float(2**53 + 1) == 2**53` is `True`.",
+    "link": { "title": "Double-precision floating-point format — Wikipedia", "url": "https://en.wikipedia.org/wiki/Double-precision_floating-point_format" }
+  },
+  {
+    "id": "rep-floating-point-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What single-precision value has the bit pattern `0xFF800000`?",
+    "options": [
+      { "text": "−infinity", "explanation": "Correct. Sign 1, exponent all ones (255), fraction all zeros: negative infinity." },
+      { "text": "NaN", "explanation": "NaN needs a **non-zero** fraction with the all-ones exponent. Here the fraction is zero." },
+      { "text": "The most negative finite float, about −3.4 × 10³⁸", "explanation": "That is `0xFF7FFFFF`, with exponent 254. Exponent 255 is reserved for infinities and NaNs." },
+      { "text": "−0", "explanation": "−0 is `0x80000000`: sign 1 with an all-zeros exponent, not all ones." }
+    ],
+    "answer": 0,
+    "workedExample": "```\nF    F    8    0    0 0 0 0\n1111 1111 1000 0000 0000 ...\n1 11111111 00000000000000000000000\n```\n\n- Sign: 1 (negative).\n- Exponent: `11111111` = 255, the reserved value.\n- Fraction: 0 → **infinity** (non-zero would be NaN).\n\nSo it is −∞, the result of, for example, `-1e38f * 10.0f`. +∞ is `0x7F800000`, and a typical quiet NaN is `0x7FC00000`.",
+    "link": { "title": "IEEE 754 — Wikipedia", "url": "https://en.wikipedia.org/wiki/IEEE_754" }
+  },
+  {
+    "id": "rep-floating-point-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does `print(1e16 + 1.0 - 1e16)` output in Python?",
+    "options": [
+      { "text": "`1.0`", "explanation": "That's the mathematical answer, but it assumes 10¹⁶ + 1 is representable. Near 10¹⁶, doubles are spaced 2 apart." },
+      { "text": "`0.0`", "explanation": "Correct. 10¹⁶ + 1 rounds back to 10¹⁶ (the 1 is lost), and then 10¹⁶ − 10¹⁶ = 0." },
+      { "text": "`2.0`", "explanation": "Rounding goes to the nearest representable value. 10¹⁶ + 1 is a tie between 10¹⁶ and 10¹⁶ + 2, and ties go to the even significand, which is 10¹⁶." },
+      { "text": "`1e-16`", "explanation": "There is no division here. The error is in absolute units of the spacing near 10¹⁶, not relative." }
+    ],
+    "answer": 1,
+    "workedExample": "1. 10¹⁶ is between 2⁵³ ≈ 9.007 × 10¹⁵ and 2⁵⁴.\n2. In that range the gap between doubles is 2^(53 − 52) = **2**.\n3. 10¹⁶ + 1 sits exactly halfway between 10¹⁶ and 10¹⁶ + 2. Ties-to-even chooses 10¹⁶.\n4. Evaluation is left to right: (10¹⁶ + 1) − 10¹⁶ = 10¹⁶ − 10¹⁶ = **0.0**.\n\nReordering fixes it: `1e16 - 1e16 + 1.0` gives 1.0. This is why float addition is not associative.",
+    "link": { "title": "What Every Computer Scientist Should Know About Floating-Point Arithmetic", "url": "https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html" }
+  },
+  {
+    "id": "rep-floating-point-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An invoicing service totals line items with `total += price` using Python floats. A customer buys ten items at £0.10, and a check `total == 1.00` fails. What is the best fix?",
+    "options": [
+      { "text": "Round `total` to 2 decimal places before every comparison", "explanation": "That hides this symptom but leaves errors in stored totals, tax calculations and sums of thousands of lines, and rounding floats has its own surprises (`round(2.675, 2)` is 2.67)." },
+      { "text": "Switch from float to a 128-bit float type", "explanation": "More bits reduce the error but cannot remove it: 0.10 is still a repeating binary fraction at any width." },
+      { "text": "Store amounts as integer pence (or use `decimal.Decimal`)", "explanation": "Correct. Integers add exactly, and `Decimal` works in base 10 so 0.10 is exact. This is how payment systems and SQL `NUMERIC` columns handle money." },
+      { "text": "Use `sum()` instead of a loop, which fixes it permanently", "explanation": "Since Python 3.12 `sum()` uses compensated summation, so this example gives 1.0, but the individual amounts are still inexact and later arithmetic (tax, discounts) can still drift." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each £0.10 is stored as 0.1000000000000000055511...\n2. Ten `+=` steps, each rounded, give `0.9999999999999999`.\n3. `0.9999999999999999 == 1.0` is False.\n\nWith integer pence:\n\n```python\ntotal = 0\nfor _ in range(10):\n    total += 10      # pence\ntotal == 100         # True\n```\n\nOr `Decimal('0.10') * 10 == Decimal('1.00')`, which is True. Note `Decimal(0.1)` from a float would copy the error; build Decimals from strings.",
+    "link": { "title": "decimal — Python docs", "url": "https://docs.python.org/3/library/decimal.html" }
+  },
+  {
+    "id": "rep-floating-point-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about IEEE 754 doubles are true? Select all that apply.",
+    "options": [
+      { "text": "`x != x` is true only when x is NaN", "explanation": "Correct. Every other value, including infinities and both zeros, equals itself." },
+      { "text": "`0.0 == -0.0` is true, even though their bit patterns differ", "explanation": "Correct. +0 is all zeros and −0 has only the sign bit set, but the standard says they compare equal." },
+      { "text": "Arithmetic on subnormal numbers can be much slower than on normal numbers on many CPUs", "explanation": "Correct. Many processors handle subnormals with microcode assists, which is why audio and ML code often enables flush-to-zero." },
+      { "text": "In C, `1.0 / 0.0` crashes the program with a divide-by-zero trap by default", "explanation": "Floating-point division by zero returns +∞ by default (the exception is only flagged, not trapped). Integer division by zero is the one that is undefined and usually traps." },
+      { "text": "Float addition is associative, so `(a + b) + c == a + (b + c)`", "explanation": "Each addition rounds, so grouping changes the result: `(0.1 + 0.2) + 0.3` is 0.6000000000000001 but `0.1 + (0.2 + 0.3)` is 0.6." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. NaN is the only value unequal to itself: true.\n2. Signed zeros compare equal but are distinguishable (`math.copysign(1, -0.0)` is −1.0, and in C `1/-0.0` is −∞): true.\n3. Subnormals can cost tens of times more cycles on many x86 chips without FTZ/DAZ: true.\n4. `1.0 / 0.0` → `inf`, no trap by default: false. (Python raises `ZeroDivisionError` as a language choice, but C and the hardware do not.)\n5. Not associative: false, as the counterexample shows.",
+    "link": { "title": "IEEE 754 — Wikipedia", "url": "https://en.wikipedia.org/wiki/IEEE_754" }
+  },
+  {
+    "id": "rep-floating-point-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You switch a neural network's training from float32 to 16-bit floats to save memory. With FP16, some activations exceed 70,000 and become infinity, and training diverges. Which change most directly fixes this while staying at 16 bits?",
+    "options": [
+      { "text": "Use bfloat16, which has the same 8-bit exponent as float32 and so the same range", "explanation": "Correct. bfloat16 (1/8/7 bits) trades significand bits for float32's range (about 3.4 × 10³⁸), so 70,000 is easily representable." },
+      { "text": "Use FP16 with subnormals enabled", "explanation": "Subnormals extend the range near **zero**, not at the top. FP16's maximum is still 65,504." },
+      { "text": "Use a 16-bit integer instead", "explanation": "`int16` maxes out at 32,767, which is worse, and loses all fractional precision." },
+      { "text": "Switch to round-towards-zero mode", "explanation": "Rounding mode does not change the largest finite value. Anything above 65,504 still cannot be represented in FP16." }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the two 16-bit formats:\n\n| Format | Exp | Frac | Max |\n|---|---|---|---|\n| FP16 | 5 | 10 | 65,504 |\n| bfloat16 | 8 | 7 | ≈ 3.4e38 |\n\n1. FP16 max = (2 − 2⁻¹⁰) × 2¹⁵ = 65,504, so 70,000 overflows to ∞.\n2. bfloat16 is the top half of a float32: same exponent field, bias 127, so its range matches float32.\n3. The price is precision: 8 significant bits (about 2–3 decimal digits), which training usually tolerates.\n\nThe FP16 alternative is loss scaling plus keeping master weights in float32.",
+    "link": { "title": "Bfloat16 floating-point format — Wikipedia", "url": "https://en.wikipedia.org/wiki/Bfloat16_floating-point_format" }
+  }
+]

@@ -1,0 +1,377 @@
+[
+  {
+    "id": "cache-http-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A response carries `Cache-Control: no-cache`. What may a browser do with it?",
+    "options": [
+      {
+        "text": "Store it, but revalidate with the origin (for example using its ETag) before every reuse",
+        "explanation": "Correct. `no-cache` means \"cache, but don't trust it without asking\". A 304 reply lets the browser reuse the stored body."
+      },
+      {
+        "text": "Nothing: it must not store the response at all",
+        "explanation": "That is `no-store`. `no-cache` allows storage; it just forbids using the copy without checking first."
+      },
+      {
+        "text": "Serve it from cache for up to 60 seconds by default",
+        "explanation": "There is no default lifetime implied by `no-cache`; it requires revalidation on every use."
+      },
+      {
+        "text": "Store it only in shared caches such as CDNs",
+        "explanation": "Wrong. Unqualified no-cache requires validation by both private and shared caches. private restricts shared storage; s-maxage changes shared-cache freshness, not private-cache storage permission."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Separate the two ideas: **storing** a response and **reusing** it without asking.\n2. `no-store`: don't store. `no-cache`: store, but always ask before reuse.\n3. With an ETag, reuse looks like: `If-None-Match: \"v5\"` → `304 Not Modified` (no body).\n4. This is ideal for HTML: users always get the latest page, but unchanged pages cost only a tiny 304.",
+    "link": {
+      "title": "Cache-Control — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control"
+    }
+  },
+  {
+    "id": "cache-http-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 50 KB product JSON has `Cache-Control: max-age=60` and `ETag: \"p9-v3\"`. 90 seconds later the browser requests it again and the product hasn't changed. Assume the browser retains the response, is online, sends a conditional request, and the server preserves this freshness policy in its validation response. What happens?",
+    "options": [
+      {
+        "text": "The browser serves the cached copy without contacting the server",
+        "explanation": "At 90 s the copy is older than `max-age=60`, so it is stale and can't be used without validation (no stale-while-revalidate is set)."
+      },
+      {
+        "text": "The browser downloads the full 50 KB again with a 200",
+        "explanation": "It would only do so if the ETag no longer matched. Because the product is unchanged, the server can answer 304."
+      },
+      {
+        "text": "The browser sends `If-None-Match: \"p9-v3\"`; the server replies `304 Not Modified` with no body, and the browser reuses its copy for another 60 s",
+        "explanation": "Correct. Validation costs a round trip but transfers only headers instead of 50 KB, and the 304 refreshes the stored copy's freshness."
+      },
+      {
+        "text": "The browser sends `If-Modified-Since` using the ETag value",
+        "explanation": "`If-Modified-Since` takes a date from `Last-Modified`. The ETag is sent in `If-None-Match`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Age = 90 s, max-age = 60 s → stale.\n2. The stored response has a validator (ETag), so the browser makes a conditional request:\n```\nGET /products/9\nIf-None-Match: \"p9-v3\"\n```\n3. The server computes the current ETag, gets `\"p9-v3\"`, and replies `304 Not Modified`.\n4. Bytes saved ≈ 50 KB; latency paid = one round trip.\n5. The cached copy is fresh again for 60 s.",
+    "link": {
+      "title": "ETag — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag"
+    }
+  },
+  {
+    "id": "cache-http-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After adding `Vary: User-Agent` to your homepage responses, the CDN's hit ratio falls from 95% to 20%. Why?",
+    "options": [
+      {
+        "text": "CDNs refuse to cache responses that vary on any header",
+        "explanation": "CDNs handle `Vary: Accept-Encoding` all the time. The problem is the specific header chosen."
+      },
+      {
+        "text": "`Vary` makes every response private",
+        "explanation": "`Vary` changes the cache key, not who may store the response. That's what `private` does."
+      },
+      {
+        "text": "The CDN now revalidates every request",
+        "explanation": "`Vary` doesn't force revalidation. Requests miss because no stored copy matches their exact User-Agent."
+      },
+      {
+        "text": "Each distinct User-Agent string gets its own cached copy; there are thousands of them, so most requests miss",
+        "explanation": "Correct. User-Agent strings vary by browser, version, OS and device, so the cache fragments into many low-traffic entries. Normalise to a small device class, or vary the page another way."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Cache key becomes `URL + User-Agent`.\n2. Suppose 1,000 homepage requests per second across 3,000 distinct User-Agent strings at an edge.\n3. Each variant is requested rarely, so by the time it is requested again it may have expired or been evicted.\n4. Hit ratio collapses.\n5. Fix: have the CDN derive a normalised header like `X-Device: mobile|desktop` and vary on that (2 variants), or use responsive HTML with no Vary at all.",
+    "link": {
+      "title": "Vary — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary"
+    }
+  },
+  {
+    "id": "cache-http-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A news site's article API sends `Cache-Control: public, max-age=30, stale-while-revalidate=120, stale-if-error=3600`. Assume this CDN honors both optional stale directives and no request directive changes their behavior. Which statements are true for a shared CDN cache? Select all that apply.",
+    "options": [
+      {
+        "text": "At age 20 s, the CDN serves the stored copy without contacting the origin",
+        "explanation": "Correct. 20 < 30, so the response is fresh."
+      },
+      {
+        "text": "At age 100 s, the CDN makes the user wait while it fetches a new copy",
+        "explanation": "Incorrect. 100 s is within 30 + 120 = 150 s, so the CDN serves the stale copy immediately and refreshes in the background."
+      },
+      {
+        "text": "At age 200 s with a healthy origin, the CDN must fetch or revalidate before responding",
+        "explanation": "Correct. 200 s is beyond the 150 s stale-while-revalidate window, so the user waits for the origin."
+      },
+      {
+        "text": "At age 1,000 s with the origin returning 503s, the CDN may serve the stale copy",
+        "explanation": "Correct. `stale-if-error=3600` allows serving stale content for up to an hour beyond freshness when the origin errors."
+      },
+      {
+        "text": "The `public` directive means browsers will not cache this response",
+        "explanation": "Incorrect. `public` allows any cache, including browsers and shared caches, to store it."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Lay out the timeline:\n\n```\n0 ----- 30 ---------- 150 -------\n fresh   SWR (stale,    must\n         bg refresh)    revalidate\n```\n\n- 20 s → fresh → hit.\n- 100 s → in SWR → serve stale now, refresh async.\n- 200 s → past SWR → synchronous fetch.\n- 1,000 s, origin failing → `stale-if-error` (3,600 s) allows stale.\n\n`public` permits every cache to store it.",
+    "link": {
+      "title": "RFC 5861: stale-while-revalidate and stale-if-error",
+      "url": "https://www.rfc-editor.org/rfc/rfc5861"
+    }
+  },
+  {
+    "id": "cache-http-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After an incident, users report seeing **other people's** account pages. The API sets `Cache-Control: public, max-age=60` on `/account` to \"improve performance\". The CDN keys on URL only. What happened, and what is the correct header?",
+    "options": [
+      {
+        "text": "The browser cache leaked data between tabs; use `max-age=0`",
+        "explanation": "max-age=0 does not prohibit shared storage. A browser profile can also be shared by people or switch application accounts, so private browser caching is not itself an account-isolation guarantee; the stated CDN configuration is the immediate cause here."
+      },
+      {
+        "text": "The CDN stored the first user's personalised response under `/account` and served it to everyone for 60 s; use `private` (or `no-store`) so shared caches never store it",
+        "explanation": "Correct. `public` explicitly permits shared caches to store the response, even for authenticated requests. Personalised responses must be `private`."
+      },
+      {
+        "text": "The ETag was weak, so the CDN mixed up versions",
+        "explanation": "ETag strength affects validation comparisons, not whose data a cache serves."
+      },
+      {
+        "text": "The CDN should add `Vary: Accept-Encoding`",
+        "explanation": "Varying on encoding still gives every user the same key, so it would not stop the leak."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. User A requests `/account` with a session cookie. Origin responds with A's details and `public, max-age=60`.\n2. `public` tells the CDN it may store this, even though the request was authenticated.\n3. The CDN keys on `GET /account` only. User B's request matches and gets A's page.\n4. Fix: `Cache-Control: private, max-age=0` (browser only, revalidate) or `no-store` for sensitive data.\n5. Then purge the CDN to remove already-cached copies.",
+    "link": {
+      "title": "HTTP caching — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+    }
+  },
+  {
+    "id": "cache-http-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Behind a load balancer, your 6 web servers generate ETags from file inode and modification time. Monitoring shows that conditional requests return `200` (full body) about 5 times in 6, even for unchanged files. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Browsers don't send `If-None-Match` to load-balanced sites",
+        "explanation": "Browsers send the conditional header regardless; it's the server's comparison that fails."
+      },
+      {
+        "text": "The ETags should be weak",
+        "explanation": "Weak vs strong changes the comparison rules, but the values themselves still differ across servers, so they still wouldn't match."
+      },
+      {
+        "text": "Each server computes a different ETag for the same file, so a request validated against another server's ETag doesn't match; derive ETags from a content hash or version instead",
+        "explanation": "Correct. Inodes differ across machines. With 6 servers, a request reaches the original server only 1 time in 6, so 5 in 6 revalidations fail. Content-based ETags are identical everywhere."
+      },
+      {
+        "text": "The `max-age` is too short",
+        "explanation": "A longer max-age reduces how often revalidation happens, but each revalidation would still fail 5 times in 6."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Server 1's ETag for `logo.png`: `\"8f2-12a-...\"` (inode 8f2). Server 4's: `\"3c1-12a-...\"` (inode 3c1).\n2. The browser stores server 1's ETag.\n3. Next request goes to a random server: chance of server 1 = 1/6.\n4. On the other 5/6, the ETag doesn't match → `200` with full body.\n5. Fix: ETag = hash of content (or DB row version). Every server computes the same value, and the 304 rate for unchanged files goes to ~100%.",
+    "link": {
+      "title": "ETag — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag"
+    }
+  },
+  {
+    "id": "cache-http-q7",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want browsers to always check for new HTML, but you want your CDN to keep each page for 5 minutes (and you'll purge it on publish). Which header achieves this?",
+    "options": [
+      {
+        "text": "`Cache-Control: public, max-age=0, s-maxage=300, must-revalidate`",
+        "explanation": "Correct. `s-maxage` overrides `max-age` for shared caches only, so the CDN keeps it 5 minutes while browsers treat it as immediately stale and revalidate."
+      },
+      {
+        "text": "`Cache-Control: max-age=300`",
+        "explanation": "This applies to browsers too, so they would keep the HTML for 5 minutes without checking."
+      },
+      {
+        "text": "`Cache-Control: private, s-maxage=300`",
+        "explanation": "`private` forbids shared caches from storing it, so the CDN wouldn't cache it at all."
+      },
+      {
+        "text": "`Cache-Control: no-store, s-maxage=300`",
+        "explanation": "`no-store` forbids every cache from storing it, which overrides `s-maxage`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Two audiences: browsers (private caches) and the CDN (shared).\n2. `max-age` applies to both; `s-maxage` applies to shared caches and overrides `max-age` there.\n3. Browsers: `max-age=0` → stale immediately → revalidate each time (cheap with an ETag).\n4. CDN: `s-maxage=300` → serve for 5 minutes, purged early on publish.\n5. `public` makes the shared-cache permission explicit.\nmust-revalidate removes disconnected stale reuse once the browser copy is stale. Browser validation can be answered by a fresh CDN copy; it need not reach the origin on every request.",
+    "link": {
+      "title": "RFC 9111: HTTP Caching",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111"
+    }
+  },
+  {
+    "id": "cache-http-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A CDN holds a copy of `/prices` sent with `Cache-Control: max-age=60, must-revalidate`. The copy is now 90 s old and the origin is unreachable. What should the CDN return?",
+    "options": [
+      {
+        "text": "The stale copy, because serving something is better than nothing",
+        "explanation": "Without `must-revalidate`, a disconnected cache may sometimes serve stale content. `must-revalidate` exists precisely to forbid that."
+      },
+      {
+        "text": "An error, typically `504 Gateway Timeout`, because a stale response marked `must-revalidate` may not be reused without successful validation",
+        "explanation": "Correct. RFC 9111 says a disconnected cache must generate an error rather than reuse the stale response. The origin has chosen \"error\" over \"wrong price\"."
+      },
+      {
+        "text": "The stale copy with a `Warning` header",
+        "explanation": "Adding a warning does not make reuse allowed. `must-revalidate` forbids reusing it at all once stale and unvalidated."
+      },
+      {
+        "text": "A `304 Not Modified`",
+        "explanation": "Caches can generate 304 responses in appropriate validated/fresh cases, but this cache has only a stale must-revalidate response and cannot successfully validate it while disconnected."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Age 90 s > `max-age` 60 s, so the copy is **stale**.\n2. Stale copies normally need validation, but HTTP lets caches serve stale in a few cases, such as being disconnected.\n3. `must-revalidate` removes that leeway:\n\n```\nstale + must-revalidate\n  -> validate with origin\n  -> origin down -> 504\n```\n\n4. Contrast `stale-if-error=600`, which would explicitly permit the stale copy during an outage. Choose between them by asking whether stale data or an error is worse for this resource. Prices: error. A news article: stale.",
+    "link": {
+      "title": "RFC 9111: HTTP Caching",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111"
+    }
+  },
+  {
+    "id": "cache-http-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A legacy server sends a `200` for `/terms.html` with `Last-Modified` set 30 days ago and **no** `Cache-Control` or `Expires`. You publish a new version. Some users keep seeing the old page for days. Why?",
+    "options": [
+      {
+        "text": "Browsers cache any page for 30 days by default",
+        "explanation": "There is no fixed 30-day default. A cache may choose a heuristic, often informed by Last-Modified; that timestamp is not the only possible heuristic input."
+      },
+      {
+        "text": "The server's ETag is weak",
+        "explanation": "No ETag is involved here, and weak ETags affect validation comparisons, not how long a copy stays fresh."
+      },
+      {
+        "text": "Without an explicit lifetime, caches may use **heuristic freshness**, often around 10% of the time since `Last-Modified`, so a page last changed 30 days ago may be treated as fresh for about 3 days",
+        "explanation": "Correct. RFC 9111 allows heuristic lifetimes for responses that are cacheable by default, and suggests 10% as typical. Setting `Cache-Control` explicitly removes the guesswork."
+      },
+      {
+        "text": "The page is `no-cache` by default, so the browser shows its stored copy",
+        "explanation": "Responses are not `no-cache` by default, and `no-cache` would force revalidation, which would find the new version."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. No `Cache-Control`, no `Expires`: no explicit freshness lifetime.\n2. A `200` to a `GET` is heuristically cacheable, so the cache may pick its own lifetime.\n3. The typical heuristic is a fraction of the time since last modification:\n\n```\n10% * 30 days = 3 days\n```\n\n4. For up to ~3 days, caches serve the old copy without asking.\n5. Fix: send `Cache-Control: no-cache` for HTML (or a short `max-age`), so caches revalidate and find the new version.",
+    "link": {
+      "title": "RFC 9111: HTTP Caching",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111"
+    }
+  },
+  {
+    "id": "cache-http-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Assume otherwise cacheable successful GET responses, no conflicting directives and no Vary dimensions distinguishing users. Which of these responses may a **shared** CDN cache store and reuse for other users? Select all that apply.",
+    "options": [
+      {
+        "text": "Request had an `Authorization` header; response has `Cache-Control: max-age=60`",
+        "explanation": "Incorrect. A response to an authorised request may only be reused by a shared cache if it carries `public`, `s-maxage` or `must-revalidate`. `max-age` alone is not enough."
+      },
+      {
+        "text": "Request had an `Authorization` header; response has `Cache-Control: s-maxage=60`",
+        "explanation": "Correct. `s-maxage` is one of the directives that explicitly allows shared caching of authorised responses, so make sure the content really is the same for everyone."
+      },
+      {
+        "text": "Request carried a session cookie; response has `Cache-Control: max-age=300` and no `private`",
+        "explanation": "Correct, and dangerous. HTTP gives cookies no special protection, so if the CDN keys on URL alone, one user's personalised page can be served to others."
+      },
+      {
+        "text": "Response has `Cache-Control: private, max-age=300`",
+        "explanation": "Incorrect. `private` restricts storage to private caches such as the browser. A shared cache must not store it."
+      },
+      {
+        "text": "Response has `Cache-Control: no-store`",
+        "explanation": "Incorrect. `no-store` forbids every cache, private or shared, from storing the response."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "Work through the rules in order:\n\n1. `no-store` → nobody stores (E out).\n2. `private` → only private caches (D out).\n3. Request had `Authorization` → shared caches need `public`, `s-maxage` or `must-revalidate` (A out, B in).\n4. Anything else that is cacheable may be stored by a shared cache, **including cookie-authenticated pages** (C in).\n\nThe trap is C: teams assume \"logged-in\" responses are protected, but only the `Authorization` header gets that safeguard. Personalised responses should say `private` explicitly.",
+    "link": {
+      "title": "Cache-Control — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control"
+    }
+  },
+  {
+    "id": "cache-http-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A browser receives a response from a CDN with `Cache-Control: max-age=300` and `Age: 250`. For how much longer may the browser treat its copy as fresh?",
+    "options": [
+      {
+        "text": "300 seconds, because the browser's clock starts when it receives the response",
+        "explanation": "The `Age` header tells the browser the response has already spent 250 s in upstream caches. Ignoring it would make the total lifetime 550 s."
+      },
+      {
+        "text": "About 50 seconds",
+        "explanation": "Correct. Freshness is measured from when the origin generated the response. It is already 250 s old, so `300 − 250 = 50` s of freshness remain."
+      },
+      {
+        "text": "0 seconds: an `Age` header means the copy is already stale",
+        "explanation": "A non-zero `Age` only says the response came from a cache. It is stale only once its age reaches the freshness lifetime."
+      },
+      {
+        "text": "550 seconds",
+        "explanation": "This adds the age to the lifetime instead of subtracting it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Freshness lifetime = `max-age` = 300 s.\n2. Current age on arrival = `Age` header = 250 s (plus any transit time).\n3. Remaining freshness:\n\n```\n300 - 250 = 50 s\n```\n\n4. After ~50 s the browser must revalidate.\n5. This is why a CDN copy fetched late in its life gives browsers only a short window, and why `s-maxage` and `max-age` are often set separately.",
+    "link": {
+      "title": "HTTP caching — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+    }
+  },
+  {
+    "id": "cache-http-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your marketing homepage is identical for every anonymous visitor, but every browser carries a few analytics cookies. The origin sends `Vary: Cookie` \"to be safe\", and the CDN hit ratio is close to zero. What is the best fix?",
+    "options": [
+      {
+        "text": "Add `Vary: User-Agent` as well, so the cache key is more precise",
+        "explanation": "More `Vary` headers fragment the cache further. The problem is already that the key is too specific."
+      },
+      {
+        "text": "Set `Cache-Control: no-store` so the CDN stops trying",
+        "explanation": "That gives up on caching entirely for a page that is ideal to cache."
+      },
+      {
+        "text": "Increase `s-maxage` to a day",
+        "explanation": "A longer lifetime cannot help when nearly every request has a different cache key and never matches a stored copy."
+      },
+      {
+        "text": "Have the CDN strip or ignore cookies for this page and drop `Vary: Cookie`, so all anonymous visitors share one cached copy",
+        "explanation": "Correct. Analytics cookies don't change the page, so they shouldn't be in the key. Keep personalised pages separate and mark them `private`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `Vary: Cookie` makes the full `Cookie` header part of the cache key.\n2. Analytics cookies contain per-visitor IDs, so nearly every visitor has a unique value.\n3. Each request misses: the hit ratio collapses, even though the page bytes are identical.\n4. Fix the key, not the lifetime:\n   - Strip cookies at the CDN for anonymous, non-personalised paths.\n   - Remove `Vary: Cookie` from those responses.\n   - For personalised paths, use `private` so the CDN never stores them.\n5. Result: one cached homepage served to everyone.",
+    "link": {
+      "title": "Vary — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary"
+    }
+  }
+]

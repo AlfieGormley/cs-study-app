@@ -1,0 +1,378 @@
+[
+  {
+    "id": "api-idempotency-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A client calls `POST /payments` and gets a timeout after 30 seconds. What does the client actually know about whether the payment happened?",
+    "options": [
+      {
+        "text": "It didn't happen, because the client never received a success response",
+        "explanation": "The request may have succeeded on the server, with only the response being lost. Absence of a response isn't evidence of failure."
+      },
+      {
+        "text": "It happened, because the server must have received the request",
+        "explanation": "The request might have been lost on the way, or the server may have crashed before processing. Receipt isn't guaranteed either."
+      },
+      {
+        "text": "Nothing: the outcome is unknown. It may have been processed, partly processed, or never received",
+        "explanation": "Correct. A timeout is the third outcome of every remote call alongside success and failure. That ambiguity is why retries plus idempotency are needed."
+      },
+      {
+        "text": "It happened only if the server returned a 5xx",
+        "explanation": "The client received no status code at all; that's what a timeout means."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "List where the timeout could have occurred:\n\n1. Request lost before reaching the server → not charged.\n2. Server crashed mid-processing → maybe charged, maybe not.\n3. Server finished; response lost → charged.\n\nThe client sees the same symptom (timeout) in all three cases, so it can't distinguish them. The safe recovery is to **retry with the same idempotency key**: in case 1 the payment happens now; in case 3 the server replays the original result.",
+    "link": {
+      "title": "AWS Builders' Library: Making retries safe with idempotent APIs",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    }
+  },
+  {
+    "id": "api-idempotency-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer writes this retry loop for a payment call:\n\n```\nfor attempt in 1..3:\n  key = uuid4()\n  resp = post(\"/payments\", body,\n    headers={\"Idempotency-Key\": key})\n  if resp.ok: break\n```\n\nWhat's wrong?",
+    "options": [
+      {
+        "text": "Nothing; each attempt has an idempotency key",
+        "explanation": "Having *a* key isn't enough. The server deduplicates by key, so different keys on each attempt look like three separate payments."
+      },
+      {
+        "text": "UUIDv4 isn't random enough for idempotency keys",
+        "explanation": "UUIDv4 has 122 random bits, which is plenty to avoid collisions. Randomness isn't the problem."
+      },
+      {
+        "text": "Idempotency keys can only be sent on GET requests",
+        "explanation": "It's the reverse: idempotency keys exist for non-idempotent methods like POST. GET is already idempotent."
+      },
+      {
+        "text": "A new key is generated on every attempt, so if attempt 1 succeeded but its response was lost, attempt 2 creates a second payment",
+        "explanation": "Correct. The key must represent the logical operation and be generated *once*, before the loop, then reused for every attempt."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the failure case:\n\n1. Attempt 1, key K1 → server charges £50, response lost.\n2. Attempt 2, key **K2** → server has never seen K2 → charges £50 again.\n3. Customer charged £100.\n\nFix:\n\n```\nkey = uuid4()        # once\nfor attempt in 1..3:\n  resp = post(..., key)\n```\n\nNow attempt 2 carries K1 and the server replays the first result. If the app might crash between attempts, persist the key alongside the pending order.",
+    "link": {
+      "title": "Stripe API: Idempotent requests",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "api-idempotency-q3",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these operations are **naturally idempotent** without needing an idempotency key? Select all that apply.",
+    "options": [
+      {
+        "text": "`UPDATE accounts SET status = 'closed' WHERE id = 7`",
+        "explanation": "Correct. Setting an absolute value produces the same final state however many times it runs."
+      },
+      {
+        "text": "`UPDATE accounts SET balance = balance - 20 WHERE id = 7`",
+        "explanation": "Wrong. A relative change compounds: run it three times and £60 is deducted."
+      },
+      {
+        "text": "`PUT /orders/0c7e-... {full order}` where the client chose the id",
+        "explanation": "Correct. The client-chosen id makes creation idempotent: the second PUT replaces the order with an identical one instead of creating a duplicate."
+      },
+      {
+        "text": "Sending a 'your order shipped' email",
+        "explanation": "Wrong. Each execution sends another email. You need deduplication (e.g. a sent-log keyed by order id) to make it idempotent."
+      },
+      {
+        "text": "`INSERT INTO events (id, ...) VALUES ('evt_1', ...) ON CONFLICT (id) DO NOTHING`",
+        "explanation": "Correct. The unique constraint means only the first insert takes effect; later duplicates are no-ops."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Test each one by running it twice in your head and comparing the final state with running it once:\n\n| Operation | Once | Twice | Same? |\n|---|---|---|---|\n| set closed | closed | closed | Yes |\n| balance −20 | −20 | −40 | No |\n| PUT client id | 1 order | 1 order | Yes |\n| send email | 1 email | 2 emails | No |\n| insert on conflict | 1 row | 1 row | Yes |",
+    "link": {
+      "title": "MDN: Idempotent",
+      "url": "https://developer.mozilla.org/en-US/docs/Glossary/Idempotent"
+    }
+  },
+  {
+    "id": "api-idempotency-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client retries `POST /payments` with `Idempotency-Key: K` but, due to a bug, changes `amount` from 5000 to 7000 on the retry. The first request with K succeeded. How does Stripe's idempotency layer respond?",
+    "options": [
+      {
+        "text": "It returns an idempotency error, because the parameters don't match the original request made with that key",
+        "explanation": "Correct. Stripe compares the incoming parameters with the original. Silently returning the old 5000 result would hide the client bug; charging 7000 would break the key's promise. Erroring makes the bug visible."
+      },
+      {
+        "text": "It charges 7000, because the parameters are new",
+        "explanation": "That would defeat the purpose of the key: the client would get a second charge for what it claims is the same operation."
+      },
+      {
+        "text": "It silently returns the original 5000 result",
+        "explanation": "That would hide a real bug: the client believes it charged 7000. Stripe deliberately errors instead."
+      },
+      {
+        "text": "It refunds the first charge and charges 7000",
+        "explanation": "Idempotency layers never take compensating actions on their own. They either replay or reject."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The server stores, per key: `(request hash, status, response)`.\n\n1. Retry arrives with K.\n2. Lookup finds K → stored hash = hash(amount=5000,...).\n3. Incoming hash = hash(amount=7000,...) → **mismatch**.\n4. Return an error (Stripe uses an `idempotency_error`; the IETF draft suggests `422`).\n\nThis is why implementations store a hash of the request body, not just the key.",
+    "link": {
+      "title": "Stripe API: Idempotent requests",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "api-idempotency-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your idempotency layer does: (1) `SELECT` the key; (2) if absent, charge the card; (3) `INSERT` the key with the result. Two identical retries hit two API servers within 5 ms of each other. What happens, and what's the fix?",
+    "options": [
+      {
+        "text": "The database serialises the two SELECTs, so only one charges",
+        "explanation": "Under the default Read Committed isolation, both SELECTs can run before either INSERT and both see 'absent'. Nothing serialises them."
+      },
+      {
+        "text": "Both see the key absent and both charge the card. Fix: atomically claim the key first with an INSERT against a unique constraint (status 'started'), and only the winner does the work",
+        "explanation": "Correct. Check-then-act is a race. Making the claim itself the atomic step means the second request gets a unique-constraint conflict and responds with 409 (in progress) or replays the result once it's done."
+      },
+      {
+        "text": "Both charge, but that's fine because the card network deduplicates",
+        "explanation": "Card networks don't deduplicate on your behalf unless you pass an idempotency key downstream. Relying on that without doing so means double charges."
+      },
+      {
+        "text": "Only the first charges because HTTP/2 orders requests",
+        "explanation": "The two requests are on different servers and possibly different connections. HTTP/2 stream ordering doesn't coordinate separate servers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Interleave the two requests:\n\n```\nt0  A: SELECT K -> none\nt1  B: SELECT K -> none\nt2  A: charge card  (£50)\nt3  B: charge card  (£50)\nt4  A: INSERT K\nt5  B: INSERT K -> dup error\n     (too late, already charged)\n```\n\nFix: claim first.\n\n```\nt0  A: INSERT K 'started' -> ok\nt1  B: INSERT K -> conflict\n       -> 409, retry later\nt2  A: charge, UPDATE K 'done'\n```\n\nThe unique index on `(account_id, key)` does the coordination.",
+    "link": {
+      "title": "Brandur Leach: Implementing Stripe-like idempotency keys in Postgres",
+      "url": "https://brandur.org/idempotency-keys"
+    }
+  },
+  {
+    "id": "api-idempotency-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A client uses exponential backoff with base 100 ms, a cap of 10 s, and **full jitter** (`sleep = random(0, min(cap, base × 2^attempt))`). What's the maximum possible wait before attempt 5 (i.e. after the 4th failure, attempt = 4), and what's the expected wait?",
+    "options": [
+      {
+        "text": "Max 1.6 s, expected 0.8 s",
+        "explanation": "Correct. base × 2⁴ = 100 ms × 16 = 1,600 ms, below the 10 s cap. Full jitter samples uniformly from 0 to 1.6 s, so the mean is 0.8 s."
+      },
+      {
+        "text": "Max 1.6 s, expected 1.6 s",
+        "explanation": "That's plain exponential backoff without jitter. Full jitter picks a random value in [0, 1.6 s], so the expected wait is half the maximum."
+      },
+      {
+        "text": "Max 10 s, expected 5 s",
+        "explanation": "The 10 s cap only applies once base × 2^attempt exceeds it, which happens at attempt 7 (12.8 s). At attempt 4 we're well below it."
+      },
+      {
+        "text": "Max 0.8 s, expected 0.4 s",
+        "explanation": "This uses 2³ rather than 2⁴. With attempt = 4, the multiplier is 16, not 8."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Exponential term: 100 ms × 2⁴ = 100 × 16 = **1,600 ms**.\n2. Apply the cap: min(10,000, 1,600) = 1,600 ms.\n3. Full jitter: uniform on [0, 1,600] ms.\n4. Expected value of a uniform [0, M] is M/2 = **800 ms**.\n\nWhy jitter? If 10,000 clients failed together, without jitter they'd all retry at exactly t + 1.6 s. With full jitter they spread evenly over 1.6 s: about 6,250 per second instead of 10,000 in a single instant.",
+    "link": {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "api-idempotency-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A mobile app, gateway and Orders service each allow three total attempts in a nested retry chain ending at Payments. Assume all attempts fail and no deadline, breaker or retry budget stops them. What is the maximum number of attempts directed at Payments for one action?",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That would be true if only one layer retried. Here three layers retry, and their attempts multiply."
+      },
+      {
+        "text": "9",
+        "explanation": "This counts two retrying layers (3 × 3). There are three: the app, the gateway and Orders."
+      },
+      {
+        "text": "27",
+        "explanation": "Correct. Orders makes 3 attempts to Payments for each call it receives; the gateway calls Orders 3 times; the app calls the gateway 3 times. 3 × 3 × 3 = 27 requests hit an already-failing service."
+      },
+      {
+        "text": "Unlimited, because retries never stop",
+        "explanation": "Every layer has a cap of 3 attempts, so the total is bounded. It's just much larger than intuition suggests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Multiply attempts through the layers:\n\n```\napp      x3 -> gateway\ngateway  x3 -> Orders\nOrders   x3 -> Payments\n```\n\nPayments sees 3 × 3 × 3 = **27** calls per user action. At 1,000 actions/s that's 27,000 requests/s of pure retry traffic during an outage, which can stop it recovering.\n\nFixes:\n- Retry at **one** layer (usually the one closest to the failing call).\n- Use a **retry budget** (e.g. retries ≤ 10% of requests).\n- Add a **circuit breaker** so Orders stops calling Payments when it's clearly down.",
+    "link": {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "api-idempotency-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API deliberately adopts the expired IETF Idempotency-Key draft’s proposed 409/422 convention. Two identical payment requests share a key; the second arrives while the first is in progress. Which response follows this convention?",
+    "options": [
+      {
+        "text": "`201 Created` immediately, copied from the first request",
+        "explanation": "There's nothing to copy yet: the first request hasn't finished, so no result has been stored."
+      },
+      {
+        "text": "`422`, because the key has been used already",
+        "explanation": "In the draft, 422 is for reusing a key with a *different* request body. Here the body is identical; the problem is timing, not a mismatch."
+      },
+      {
+        "text": "`409 Conflict`, meaning 'a request with this key is in progress'; the client backs off and retries with the same key, and then gets the stored result replayed",
+        "explanation": "Correct. The 409 isn't stored as the key's result, so a later retry with the same key sees the finished first request and gets its response."
+      },
+      {
+        "text": "Run the second request too; the card network will deduplicate",
+        "explanation": "You can't assume every downstream deduplicates, and it would defeat the point of claiming the key atomically. The unique-key insert should already have made the second request lose the race."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Follow the claim-first algorithm:\n\n1. Request 1 inserts `(account, K, status='started')`. Succeeds.\n2. Request 2 tries the same insert 50 ms later. Unique constraint conflict.\n3. Request 2 reads the existing row: same body hash, status `started`. Return **409**.\n4. Request 1 finishes: status `done`, code 201, body stored.\n5. The client retries request 2 after a short backoff. The row is now `done`, so it gets the **replayed 201**.\n\nResult: one charge, and both taps end with the same success response.",
+    "link": {
+      "title": "IETF draft: The Idempotency-Key HTTP header field",
+      "url": "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+    }
+  },
+  {
+    "id": "api-idempotency-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your server claims key K (`status='started'`), charges the card, then crashes **before** recording the result. The row sits in `started` for ever and retries get 409. Which recovery strategies are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "After a timeout, ask the card network whether a charge for K exists, then mark the row done (with that result) or let the retry proceed",
+        "explanation": "Sound only when the downstream offers authoritative status for the operation key and its contract rules out a still-pending operation later succeeding. A transient not-found response from an eventually consistent lookup is not permission to charge again."
+      },
+      {
+        "text": "Forward K (or a key derived from it) to the card network, so re-running the charge step is itself idempotent",
+        "explanation": "Correct. If the downstream call deduplicates on the same key, the retry can simply resume and redo the step without a second charge. This is the atomic-phases approach."
+      },
+      {
+        "text": "Delete stuck `started` rows after 30 seconds so the next retry starts fresh",
+        "explanation": "Unsafe. The card may already have been charged; starting fresh without any downstream deduplication charges it again."
+      },
+      {
+        "text": "Mark stuck rows `done` with a `201` after a timeout",
+        "explanation": "Unsafe. You'd be telling the client 'paid' without knowing whether the charge happened. If it didn't, you've shipped goods for free."
+      },
+      {
+        "text": "Use durable local recovery points together with downstream idempotency or authoritative reconciliation for the external charge step",
+        "explanation": "Correct with the added external-step protection. Local recovery points cannot by themselves close the crash window between a remote charge and recording its result; downstream deduplication or reconciliation is still necessary."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. A crash after the remote charge but before a local result write creates an unknown outcome.\n2. Retry the remote step with the same key only within a downstream idempotency contract, or reconcile using authoritative operation status that accounts for pending work.\n3. Local recovery points let the workflow resume, but do not atomically commit a remote charge and local database record. Combine them with step 2.\n4. Deleting the claim or inventing success after a timeout guesses the result and is unsafe.",
+    "link": {
+      "title": "Brandur Leach: Implementing Stripe-like idempotency keys in Postgres",
+      "url": "https://brandur.org/idempotency-keys"
+    }
+  },
+  {
+    "id": "api-idempotency-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service normally receives 1,000 requests/s. Its dependency goes fully down. Compare two client policies: (A) up to 3 retries per request; (B) the same, but with a **retry budget** that caps retries at 10% of normal traffic. Roughly what load does the dependency see under each?",
+    "options": [
+      {
+        "text": "A: 3,000/s; B: 1,000/s",
+        "explanation": "A undercounts: each request makes 1 original attempt *plus* 3 retries. B ignores the 10% of retries the budget still allows."
+      },
+      {
+        "text": "A: 4,000/s; B: 1,100/s",
+        "explanation": "Correct. Without a budget every request becomes 4 attempts. With the budget, retries are capped at 100/s on top of the 1,000/s of originals."
+      },
+      {
+        "text": "A: 1,000/s; B: 100/s",
+        "explanation": "Retries add load; they don't replace the original attempts. And the budget limits *extra* load, not total load."
+      },
+      {
+        "text": "Both about 1,000/s, because backoff spreads the retries out",
+        "explanation": "Backoff changes *when* retries happen, not how many. In a sustained outage, the steady-state rate is still originals plus all their retries."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "**Policy A** (no budget), sustained outage, every attempt fails:\n\n```\noriginals   1,000/s\nretries   3 x 1,000/s\ntotal       4,000/s  (4x)\n```\n\n**Policy B** (10% budget):\n\n```\noriginals   1,000/s\nretries       100/s  (cap)\ntotal       1,100/s  (1.1x)\n```\n\nA quadruples the load on a service that's already failing, which can stop it ever recovering. B still retries during brief blips, when few requests fail and the budget has plenty of room, but stops amplifying a real outage.",
+    "link": {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "api-idempotency-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A database blips and 10,000 clients get an error at the same instant. Each waits before retrying: policy A uses plain exponential backoff, so every client waits exactly 2 s; policy B uses full jitter, so each waits a uniformly random time between 0 and 2 s. What does the database see?",
+    "options": [
+      {
+        "text": "Both deliver 10,000 retries, so the load is the same",
+        "explanation": "The *total* is the same, but the *peak* isn't. A database copes with a steady rate far better than with everything arriving in the same instant."
+      },
+      {
+        "text": "A: about 5,000/s for two seconds; B: all 10,000 at t = 2 s",
+        "explanation": "This is the right pair of outcomes attached to the wrong policies. The fixed wait is what synchronises clients."
+      },
+      {
+        "text": "B is worse, because some clients retry almost immediately",
+        "explanation": "A few early retries are cheap. Spreading arrivals across the window is exactly what keeps the peak low."
+      },
+      {
+        "text": "A: all 10,000 retries arrive together at t = 2 s; B: roughly 5,000/s spread across the 2 s window",
+        "explanation": "Correct. Without jitter the clients stay in lockstep, a thundering herd on every retry round. Full jitter spreads 10,000 retries over 2 s, about 5 per millisecond."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "**Policy A** (no jitter): every client computes the same wait.\n\n```\nt=0.0  10,000 fail\nt=2.0  10,000 retry at once\nt=6.0  10,000 retry at once\n```\n\nThe herd stays synchronised for every round.\n\n**Policy B** (full jitter): waits are uniform on [0, 2 s].\n\n- Rate = 10,000 ÷ 2 s = **5,000/s**, about **5 per ms**.\n- Next round, the window doubles to 4 s, so remaining failures spread out even further.\n\nAWS's analysis found full jitter cuts both total work and completion time compared with no jitter.",
+    "link": {
+      "title": "AWS Architecture Blog: Exponential backoff and jitter",
+      "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
+    }
+  },
+  {
+    "id": "api-idempotency-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker reads an SQS message 'credit account 7 with £20', applies the credit, then crashes before deleting the message. SQS redelivers it after the visibility timeout. How do you get an effectively-once credit?",
+    "options": [
+      {
+        "text": "Increase the visibility timeout so redelivery never happens",
+        "explanation": "A longer timeout delays redelivery but doesn't prevent it. After a crash, the message is redelivered whenever the timeout expires, however long it is."
+      },
+      {
+        "text": "Delete the message *before* applying the credit",
+        "explanation": "That swaps duplicates for losses: if the worker crashes after deleting but before crediting, the £20 is never applied. That's at-most-once."
+      },
+      {
+        "text": "Record the message id in a `processed` table in the **same database transaction** as the credit, and skip messages whose id is already there",
+        "explanation": "Correct. The credit and the 'seen it' marker commit together or not at all, so a redelivered message is recognised and skipped. At-least-once delivery plus an idempotent receiver."
+      },
+      {
+        "text": "Nothing: SQS standard queues guarantee exactly-once delivery",
+        "explanation": "Standard queues are at-least-once and can deliver duplicates. FIFO queues deduplicate within a 5-minute window, but that doesn't help if your *consumer* crashes after applying the effect."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Delivery can be at most once (delete first) or at least once (delete after). Neither alone is exactly once.\n2. Choose at-least-once, then make the receiver idempotent:\n\n```\nBEGIN;\nINSERT INTO processed(msg_id)\n  VALUES ('m-81');  -- unique\nUPDATE accounts\n  SET balance = balance + 20\n  WHERE id = 7;\nCOMMIT;\n```\n\n3. On redelivery, the insert hits the unique constraint, the transaction rolls back, and the worker just deletes the message.\n4. The non-idempotent `balance + 20` is now safe, because it's guarded by the dedup record in the same transaction.",
+    "link": {
+      "title": "AWS Builders' Library: Making retries safe with idempotent APIs",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    }
+  }
+]

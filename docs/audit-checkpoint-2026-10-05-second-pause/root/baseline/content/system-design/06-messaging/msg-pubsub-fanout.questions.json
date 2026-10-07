@@ -1,0 +1,385 @@
+[
+  {
+    "id": "msg-pubsub-fanout-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An `OrderPlaced` message is published to an SNS topic with three SQS queue subscriptions (billing, shipping, email). Each queue has 4 workers. How many times is the message processed in normal operation?",
+    "options": [
+      {
+        "text": "Once in total, by whichever of the 12 workers is fastest",
+        "explanation": "Wrong. That is how a single queue behaves. A topic copies the message into every subscription, so each of the three queues gets its own copy."
+      },
+      {
+        "text": "12 times, once per worker",
+        "explanation": "Wrong. Within each SQS queue the 4 workers compete for messages, so only one of them processes each copy. Copies are made per subscription, not per worker."
+      },
+      {
+        "text": "3 times, once per subscription",
+        "explanation": "Correct. SNS delivers one copy to each of the three queues, and in each queue one of the competing workers processes it: pub/sub between subscriptions, competing consumers within one."
+      },
+      {
+        "text": "4 times, once per worker in a single queue",
+        "explanation": "Wrong. This mixes up the two levels. The number of workers per queue changes throughput, not how many copies are processed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate the two levels:\n\n1. **Topic to subscriptions** (pub/sub): SNS copies the message into each of the 3 queues. 3 copies.\n2. **Queue to workers** (point-to-point): within a queue, one of the 4 workers receives each copy. 1 processing per copy.\n3. Total: 3 × 1 = **3** processings (plus possible duplicates under failure, since both SNS and SQS standard are at-least-once).",
+    "link": {
+      "title": "Fanout SNS notifications to SQS queues",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team subscribes their service directly to an SNS topic via HTTPS. During a 3-hour outage of their service, what is the main risk compared with putting an SQS queue between SNS and the service?",
+    "options": [
+      {
+        "text": "There is no difference; SNS stores messages for 14 days for every subscriber",
+        "explanation": "Wrong. That retention is a property of SQS queues, not SNS topics. Confusing the two is exactly why the fan-out pattern puts a queue in front of each subscriber."
+      },
+      {
+        "text": "SNS will deliver messages out of order",
+        "explanation": "Wrong. Standard SNS does not guarantee ordering in either design, so this is not a difference caused by the outage or by adding a queue."
+      },
+      {
+        "text": "The publisher will be blocked until the service recovers",
+        "explanation": "Wrong. SNS accepts the publish independently of subscriber health. The publisher is unaffected; the risk is on the subscriber side."
+      },
+      {
+        "text": "Messages published during the outage may be lost once SNS exhausts its delivery retries",
+        "explanation": "Correct. SNS retries HTTP/S endpoints according to a delivery policy, but it is not a long-term store. After retries are exhausted the message is dropped (or sent to a subscription DLQ if one is configured). An SQS queue would hold it for up to 14 days."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. SNS is a **router**, not a store. It pushes each message to each subscription and retries failures for a bounded period.\n2. A 3-hour outage outlasts typical HTTP retry policies, so messages can be dropped.\n3. With `SNS → SQS → service`, SNS delivers successfully to SQS (which is up), and SQS holds messages until the service returns.\n4. On recovery, the service drains the backlog at its own pace.\n\nThis is the main reason the fan-out pattern uses a queue per subscriber.",
+    "link": {
+      "title": "Fanout SNS notifications to SQS queues",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your SQS consumer, subscribed to an SNS topic, fails to parse messages: the body looks like `{\"Type\":\"Notification\",\"MessageId\":...,\"Message\":\"{\\\"orderId\\\":...}\"}`. What is the cleanest fix?",
+    "options": [
+      {
+        "text": "Change the publisher to send plain text instead of JSON",
+        "explanation": "Wrong. The wrapping is added by SNS regardless of payload format. Changing the publisher does not remove the envelope and may break other subscribers."
+      },
+      {
+        "text": "Enable raw message delivery on the SNS subscription",
+        "explanation": "Correct. By default SNS wraps the payload in a JSON envelope with metadata. Raw message delivery passes the original payload straight through as the SQS message body."
+      },
+      {
+        "text": "Switch the queue to FIFO",
+        "explanation": "Wrong. FIFO affects ordering and deduplication, not the message envelope. The envelope would still be there."
+      },
+      {
+        "text": "Add a filter policy so only well-formed messages are delivered",
+        "explanation": "Wrong. Every message is well formed; it is just wrapped. Filter policies decide which messages are delivered, not their format."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Recognise the shape: `Type`, `MessageId`, `TopicArn`, `Message` is the SNS **notification envelope**.\n2. Your actual payload is the string in `Message`, JSON-encoded a second time (hence the escaped quotes).\n3. Two options:\n   - Unwrap in code: `JSON.parse(JSON.parse(body).Message)`.\n   - Set `RawMessageDelivery=true` on the subscription so the body is the original payload.\n4. Raw delivery is cleaner and smaller. If you need metadata, send it as message attributes, which SQS also receives.",
+    "link": {
+      "title": "Fanout SNS notifications to SQS queues",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about **pull** consumers compared with **push** delivery are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Pull consumers get natural backpressure, because they request messages only when they have capacity",
+        "explanation": "Correct. A slow pull consumer simply asks less often. The backlog accumulates in the broker, where it is durable and visible as queue depth or consumer lag."
+      },
+      {
+        "text": "Push delivery requires the consumer to expose an endpoint the broker can reach",
+        "explanation": "Correct. For SNS HTTPS or Pub/Sub push, the broker makes inbound requests, so the endpoint must be publicly reachable or otherwise routable from the broker."
+      },
+      {
+        "text": "Push always gives lower throughput than pull",
+        "explanation": "Wrong. Push can be very fast and RabbitMQ pushes at high rates. The difference is who controls the rate, not an inherent throughput ceiling."
+      },
+      {
+        "text": "Pull consumers can run inside a private network with only outbound connectivity",
+        "explanation": "Correct. Pull consumers initiate connections to the broker, so they work behind firewalls and NAT without opening inbound ports."
+      },
+      {
+        "text": "With push, the broker can never adapt its rate to the consumer",
+        "explanation": "Wrong. Push systems do adapt, but indirectly: Google Pub/Sub push uses slow start and backs off on errors, and RabbitMQ limits in-flight messages with prefetch."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Frame it as **who initiates** and **who controls flow**:\n\n| | Push | Pull |\n|---|---|---|\n| Initiator | Broker | Consumer |\n| Network | Inbound to consumer | Outbound only |\n| Flow control | Inferred by broker | Explicit, by consumer |\n\n1. Backpressure: pull is explicit, so statement 1 is true.\n2. Reachability: push needs an endpoint, so statement 2 is true.\n3. Private networks: pull works outbound-only, so statement 4 is true.\n4. 'Always lower throughput' and 'never adapts' are absolutes that real systems (RabbitMQ prefetch, Pub/Sub slow start) contradict.",
+    "link": {
+      "title": "Push subscriptions (Google Cloud Pub/Sub)",
+      "url": "https://cloud.google.com/pubsub/docs/push"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Publishers attach `eventType` and `region` as SNS **message attributes**. The EU fulfilment service should receive only `OrderPlaced` events for region `eu`. Which subscription filter policy achieves that?",
+    "options": [
+      {
+        "text": "`{\"eventType\": [\"OrderPlaced\", \"eu\"]}`",
+        "explanation": "Wrong. Values in one array are OR'd for the same attribute, so this matches eventType OrderPlaced or eventType eu. It does not check region at all."
+      },
+      {
+        "text": "`{\"region\": [\"eu\"]}`",
+        "explanation": "Wrong. This matches every EU event, including cancellations and refunds, so the service would receive far more than OrderPlaced."
+      },
+      {
+        "text": "`{\"eventType\": [\"OrderPlaced\"], \"region\": [\"eu\"]}`",
+        "explanation": "Correct. Different keys are AND'd, so a message must have eventType OrderPlaced and region eu. This is exactly the requirement."
+      },
+      {
+        "text": "`{\"eventType\": [{\"anything-but\": [\"OrderPlaced\"]}], \"region\": [\"eu\"]}`",
+        "explanation": "Wrong. anything-but inverts the match, so this delivers every EU event **except** OrderPlaced: the opposite of what is wanted."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "SNS filter policy semantics:\n\n1. **Across keys: AND.** Every key in the policy must match.\n2. **Within a key's array: OR.** Any listed value matches.\n3. Requirement: eventType = OrderPlaced **and** region = eu.\n4. So: two keys, one value each: `{\"eventType\":[\"OrderPlaced\"],\"region\":[\"eu\"]}`.\n\nSince the data is in attributes, the default filter policy scope (`MessageAttributes`) applies. If the fields were in the JSON body, you would set the scope to `MessageBody`.",
+    "link": {
+      "title": "Amazon SNS message filtering",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A new fraud-analysis team wants to start consuming order events and, on day one, process the **last 7 days of history** before continuing live. Events currently flow through SNS topics fanned out to SQS queues. What is the most important constraint they face?",
+    "options": [
+      {
+        "text": "A new SQS subscription only receives messages published after it was created, so history must come from elsewhere",
+        "explanation": "Correct. SNS does not retain messages for future subscribers (outside the separate SNS FIFO archive and replay feature). In a log such as Kafka, a new consumer group could just start from the earliest retained offset."
+      },
+      {
+        "text": "SNS FIFO topics are required before any new subscriber can be added",
+        "explanation": "Wrong. New subscriptions can be added to standard topics at any time. FIFO is about ordering, not about adding subscribers."
+      },
+      {
+        "text": "The fraud team must share an existing queue with billing to see past messages",
+        "explanation": "Wrong. Sharing a queue makes the teams competing consumers, so each would see only some of the messages, and messages already processed by billing were deleted."
+      },
+      {
+        "text": "SQS cannot hold 7 days of messages",
+        "explanation": "Wrong. SQS retention can be set up to 14 days. The problem is not how long the new queue can hold messages but that messages published before it existed were never delivered to it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In SNS + SQS, copies are made **at publish time**, only into subscriptions that exist then.\n2. Each copy is deleted from its queue once that subscriber acknowledges it.\n3. So there is no shared history for a newcomer to read.\n4. Options for the fraud team:\n   - Backfill from the source database or a data lake.\n   - Use SNS FIFO's archive and replay, if the topic is FIFO and archiving was enabled beforehand.\n   - Longer term, put events on a retained log (Kafka, Kinesis) where a new consumer group can start from `earliest`.\n\nThis replayability is one of the strongest reasons teams adopt log-based streaming.",
+    "link": {
+      "title": "Apache Kafka introduction",
+      "url": "https://kafka.apache.org/intro"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An SNS topic receives 4,000 messages per second and fans out to 6 SQS queues. Each consumer receives and deletes in batches of 10. Roughly how many SQS API calls per second does the consumer side make, and how does that compare with no batching?",
+    "options": [
+      {
+        "text": "About 400 per second, versus 4,000 without batching",
+        "explanation": "Wrong. This forgets the fan-out: each of the 6 queues gets all 4,000 messages per second, so the counts must be multiplied by 6."
+      },
+      {
+        "text": "About 48,000 per second either way, because batching does not reduce request count",
+        "explanation": "Wrong. ReceiveMessage can return up to 10 messages and DeleteMessageBatch deletes up to 10, so a full batch replaces 10 requests with 1."
+      },
+      {
+        "text": "About 2,400 per second, versus 24,000 without batching",
+        "explanation": "Wrong. This counts receives only. Each message must also be deleted after processing, which doubles the number of calls."
+      },
+      {
+        "text": "About 4,800 per second, versus 48,000 without batching",
+        "explanation": "Correct. 6 × 4,000 = 24,000 messages per second reach consumers. Unbatched, that is 24,000 receives plus 24,000 deletes = 48,000 calls. Batches of 10 cut each to 2,400, so 4,800 in total."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Fan-out multiplies volume**: 4,000 msg/s × 6 queues = 24,000 msg/s delivered.\n2. **Each message needs a receive and a delete.**\n3. Unbatched: 24,000 + 24,000 = **48,000 calls/s**.\n4. Batched (10 per call): 2,400 receives + 2,400 deletes = **4,800 calls/s**.\n5. Over a 30-day month at $0.40 per million, that is roughly $49,800 versus $4,980 for the consumer side alone.\n\nIn practice batches are not always full at low traffic, so measure the real average batch size.",
+    "link": {
+      "title": "Fanout SNS notifications to SQS queues",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q8",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "A RabbitMQ topic exchange receives a message with routing key `order.uk.physical`. Which of these bindings deliver it to their queue? Select all that apply.",
+    "options": [
+      {
+        "text": "`order.#`",
+        "explanation": "Correct. `#` matches zero or more words, so it matches `uk.physical` after `order.`."
+      },
+      {
+        "text": "`order.*`",
+        "explanation": "Wrong. `*` matches exactly one word. `order.*` matches `order.uk` but not the three-word key `order.uk.physical`."
+      },
+      {
+        "text": "`*.uk.*`",
+        "explanation": "Correct. Each `*` matches one word: `order` and `physical`, with `uk` matched literally."
+      },
+      {
+        "text": "`*.physical`",
+        "explanation": "Wrong. This pattern has two words and the key has three. `*` cannot stretch to cover `order.uk`."
+      },
+      {
+        "text": "`#.digital`",
+        "explanation": "Wrong. `#` could absorb `order.uk`, but the last word must be literally `digital`, and the key ends in `physical`."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Split the key into words: `order` · `uk` · `physical` (three words).\n\n| Pattern | Words | Match? |\n|---|---|---|\n| `order.#` | order + any | ✓ |\n| `order.*` | exactly 2 | ✗ |\n| `*.uk.*` | exactly 3 | ✓ |\n| `*.physical` | exactly 2 | ✗ |\n| `#.digital` | ends digital | ✗ |\n\nRules:\n1. `*` = exactly one word.\n2. `#` = zero or more words.\n3. Everything else must match literally.\n\nA message matching several bindings to **different** queues is copied to each; that is fan-out with filtering.",
+    "link": {
+      "title": "RabbitMQ tutorial: topics",
+      "url": "https://www.rabbitmq.com/tutorials/tutorial-five-python"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Billing and Email each consume `OrderPlaced` through their own SQS queue subscribed to one SNS topic. Email's handler calls Billing's API to fetch the invoice PDF. About 2% of confirmation emails fail with \"invoice not found\", then succeed on retry. What is happening, and what is the best fix?",
+    "options": [
+      {
+        "text": "SNS sometimes delivers to Email before Billing; use an SNS FIFO topic so Billing is always delivered first",
+        "explanation": "Wrong. FIFO orders messages within a message group; it says nothing about which **subscription** is processed first. Each subscriber's queue and workers run at their own pace."
+      },
+      {
+        "text": "The subscribers are independent, so Email sometimes runs before Billing has created the invoice; have Email react to an `InvoiceIssued` event that Billing publishes once the invoice exists",
+        "explanation": "Correct. Fan-out gives each subscriber its own pace, so there is no ordering between them. If Email depends on Billing's result, the dependency should be explicit: Billing publishes a fact when the invoice is ready and Email consumes that."
+      },
+      {
+        "text": "Email is processing duplicate deliveries of OrderPlaced",
+        "explanation": "Wrong. A duplicate would arrive after the original, by which time the invoice is more likely to exist, not less. The failure is about timing between two subscribers."
+      },
+      {
+        "text": "Email's visibility timeout is too short",
+        "explanation": "Wrong. A short visibility timeout causes redelivery during processing, not a missing invoice. The symptom comes from Billing not having finished yet."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With fan-out, each subscription is a separate stream with its own backlog, workers and retries.\n2. So for any one order, \"Billing has processed OrderPlaced\" and \"Email has processed OrderPlaced\" happen in either order.\n3. Email assumed Billing was always first: an **implicit** dependency between subscribers. It holds 98% of the time, which makes it dangerous.\n4. Make the dependency explicit:\n\n```\nOrderPlaced ─▶ Billing\nBilling ─▶ InvoiceIssued ─▶ Email\n```\n\n5. Alternative: put the data Email needs in the event (event-carried state transfer), if it does not truly depend on Billing's output.",
+    "link": {
+      "title": "What do you mean by \"Event-Driven\"? (Martin Fowler)",
+      "url": "https://martinfowler.com/articles/201701-event-driven.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Google Pub/Sub **push** subscription delivers to an HTTPS endpoint that writes each message to a database. During a database slowdown the endpoint holds each request for up to 60 seconds before failing, the service runs out of connections, and the outage spreads. What should the endpoint do?",
+    "options": [
+      {
+        "text": "Return `200` immediately and do the database write in a background thread",
+        "explanation": "Wrong. Acknowledging before the work is done turns delivery into at-most-once: if the process crashes, the message is gone. It also removes the only signal Pub/Sub has that you are overloaded."
+      },
+      {
+        "text": "Raise the subscription's acknowledgement deadline to 10 minutes",
+        "explanation": "Wrong. Holding requests even longer ties up more connections and memory. The problem is that the endpoint accepts work it cannot do, not that it is given too little time."
+      },
+      {
+        "text": "Fail fast with an error status such as 503 or 429 when it is overloaded, so Pub/Sub slows its push rate and retries later",
+        "explanation": "Correct. Push delivery has no explicit demand signal; the broker infers capacity from responses. Quick errors make Pub/Sub back off, while the unacknowledged messages wait safely in the subscription."
+      },
+      {
+        "text": "Disable retries on the subscription so failed messages do not come back",
+        "explanation": "Wrong. That converts a temporary slowdown into data loss. Retries with backoff are what let the backlog drain once the database recovers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With **push**, the broker controls the rate and guesses your capacity from success, failure and latency.\n2. A slow failure (60 s) is the worst signal: it consumes resources and tells the broker little.\n3. A fast `503`/`429` tells Pub/Sub to reduce its rate quickly; its push flow control backs off on failures.\n4. Messages stay unacknowledged in the subscription, durable and visible as backlog.\n5. If heavy processing is the norm, consider a **pull** subscription instead: the consumer then asks only when it has capacity, which is explicit backpressure.",
+    "link": {
+      "title": "Push subscriptions (Google Cloud Pub/Sub)",
+      "url": "https://cloud.google.com/pubsub/docs/push"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An SNS **standard** topic fans out to three SQS standard queues (billing, shipping, email). Which statements about duplicates and ordering are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Because SNS assigns one MessageId per publish, at most one subscriber can ever receive a duplicate",
+        "explanation": "Wrong. Delivery to each subscription is independent and at-least-once, so any or all of the subscribers can receive a copy more than once."
+      },
+      {
+        "text": "Each subscriber must deduplicate independently, keyed on a stable event ID",
+        "explanation": "Correct. Each subscriber has its own processing and its own effects, so each needs its own record of what it has already applied."
+      },
+      {
+        "text": "A duplicate may reach billing while email receives the message exactly once",
+        "explanation": "Correct. Retries and redeliveries happen per subscription and per queue, so subscribers can see different numbers of copies of the same event."
+      },
+      {
+        "text": "An SNS FIFO topic with SQS FIFO queues would give each subscriber ordering within a message group",
+        "explanation": "Correct. SNS FIFO topics can fan out to SQS FIFO queues and preserve order (and deduplication) per message group for each subscription."
+      },
+      {
+        "text": "One shared deduplication table for all three subscribers is the simplest correct design",
+        "explanation": "Wrong. If billing records the event ID first, shipping and email would see it as already processed and skip their own work. Dedup state must be per subscriber, for example keyed on (subscriber, eventId)."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "1. Fan-out creates **independent** deliveries. Think of three separate at-least-once channels that share only a source.\n2. So duplicates are per channel: billing might see 2 copies, shipping 1, email 1.\n3. Therefore dedup is per subscriber. A shared table would let the first subscriber's success suppress everyone else's work.\n4. Ordering: standard SNS and SQS give none. If order within an entity matters, use SNS FIFO → SQS FIFO with `MessageGroupId = entityId`.",
+    "link": {
+      "title": "Fanout Amazon SNS notifications to Amazon SQS queues (AWS docs)",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company has two needs: (a) route about 50 business events per second between 40 internal services and SaaS integrations using content-based rules, and (b) ingest **400,000 clickstream events per second** that data scientists replay from the start whenever a model changes. Which combination fits best?",
+    "options": [
+      {
+        "text": "An event bus such as EventBridge for both",
+        "explanation": "Wrong. An event bus is designed for integration at moderate volume. It is not built for sustained hundreds of thousands of events per second, nor for repeated replays of large history by many readers."
+      },
+      {
+        "text": "SNS + SQS for (b), with a new queue for each replay",
+        "explanation": "Wrong. A new SQS subscription only receives messages published after it was created, so it cannot replay history at all."
+      },
+      {
+        "text": "Kafka for (a) and an event bus for (b)",
+        "explanation": "Wrong. This is the wrong way round. Kafka could handle (a), but the event bus is the weak choice for the high-volume, replay-heavy stream."
+      },
+      {
+        "text": "An event bus for (a), and a retained log such as Kafka or Kinesis for (b)",
+        "explanation": "Correct. Low-volume integration benefits from managed routing rules and built-in targets. High-throughput clickstream with replay needs a partitioned, retained log where each consumer group can start from the earliest offset."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Match each workload to the tool's strengths:\n\n| Need | Volume | Replay? | Fit |\n|---|---|---|---|\n| (a) integration | ~50/s | No | Event bus |\n| (b) clickstream | 400k/s | Yes | Log |\n\n1. (a) is about **routing**: many targets, content-based rules, low operational effort.\n2. (b) is about **throughput and history**: append-only partitions, retention measured in days, consumers that rewind.\n3. SNS + SQS cannot rewind; messages exist only in subscriptions that existed when they were published.\n4. Using two tools is normal. Pick per workload, not one tool for everything.",
+    "link": {
+      "title": "What is Amazon EventBridge? (AWS docs)",
+      "url": "https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-what-is.html"
+    }
+  }
+]

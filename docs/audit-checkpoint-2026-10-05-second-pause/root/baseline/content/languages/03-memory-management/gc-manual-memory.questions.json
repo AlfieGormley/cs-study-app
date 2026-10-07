@@ -1,0 +1,348 @@
+[
+  {
+    "id": "gc-manual-memory-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is wrong with this C function?\n\n```c\nchar *copy(const char *src) {\n  char *s = malloc(strlen(src));\n  strcpy(s, src);\n  return s;\n}\n```",
+    "options": [
+      {
+        "text": "Nothing; `strlen` counts every byte the string needs",
+        "explanation": "`strlen` counts the characters but not the terminating NUL byte, so the buffer is one byte short."
+      },
+      {
+        "text": "It leaks memory because it never calls `free`",
+        "explanation": "Returning the pointer hands ownership to the caller, which is the normal pattern. Not freeing inside `copy` is correct; the caller must free it."
+      },
+      {
+        "text": "It writes one byte past the end of the block",
+        "explanation": "Correct. `strcpy` copies the characters plus the NUL terminator, which is `strlen(src) + 1` bytes, into a block of `strlen(src)` bytes: a one-byte heap overflow."
+      },
+      {
+        "text": "It returns the address of a stack variable",
+        "explanation": "`s` itself is a local, but it holds a heap address from `malloc`. Returning the value of a pointer to heap memory is fine."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `src = \"hi\"` has `strlen` 2, but occupies 3 bytes: `h`, `i`, `\\0`.\n2. `malloc(2)` returns a 2-byte block.\n3. `strcpy` writes 3 bytes, so the NUL lands one byte past the end.\n\n```\nblock:  [ h ][ i ] | \\0  <- overflow\n```\n\n4. The fix is `malloc(strlen(src) + 1)`, or simply `strdup(src)`.\n\nOff-by-one overflows like this often corrupt the allocator's metadata for the next block and crash much later, far from the bug.",
+    "link": {
+      "title": "AddressSanitizer — Clang documentation",
+      "url": "https://clang.llvm.org/docs/AddressSanitizer.html"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A pointer still holds the address of a block that has been passed to `free`. What is that pointer called, and what is using it?",
+    "options": [
+      {
+        "text": "A dangling pointer; using it is a use-after-free",
+        "explanation": "Correct. The pointer refers to memory the program no longer owns. Reading or writing through it is undefined behaviour and a common exploit primitive."
+      },
+      {
+        "text": "A null pointer; using it is a null dereference",
+        "explanation": "`free` does not change the pointer's value. It still holds the old, non-null address, which is exactly what makes it dangerous."
+      },
+      {
+        "text": "A wild pointer; using it is a memory leak",
+        "explanation": "A leak is memory still allocated with no pointer to it, the opposite situation. Here the pointer survives but the memory has gone."
+      },
+      {
+        "text": "A smart pointer; using it is safe because the allocator tracks it",
+        "explanation": "C's allocator does not track your pointers at all. Nothing stops you using a freed address."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `free(p)` returns the block to the allocator but leaves `p` unchanged.\n2. `p` now **dangles**: it points to memory you no longer own.\n3. The allocator may hand that memory to the next `malloc` of a similar size.\n4. Writing through `p` then corrupts someone else's object; reading through `p` returns their data.\n\nSetting `p = NULL` after `free` turns a later accidental use into a clean crash, but it only fixes that one copy of the pointer, not any others.",
+    "link": {
+      "title": "CWE-416: Use After Free — MITRE",
+      "url": "https://cwe.mitre.org/data/definitions/416.html"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A small command-line tool runs for 200 ms, allocates a few megabytes and never calls `free`. A long-running server leaks 4 KB on every request at 1,000 requests a second. Which statement is right?",
+    "options": [
+      {
+        "text": "Both are equally serious because every leak eventually crashes",
+        "explanation": "A process's memory is reclaimed by the OS when it exits, so a short-lived tool never accumulates enough leaked memory to matter."
+      },
+      {
+        "text": "Neither matters, because the OS frees leaked memory periodically",
+        "explanation": "The OS only reclaims a process's memory when the process exits. It cannot know which blocks a running program still intends to use."
+      },
+      {
+        "text": "The server is fine because 4 KB is less than a page",
+        "explanation": "Small leaks add up. Size per leak matters far less than the rate multiplied by uptime."
+      },
+      {
+        "text": "The tool's leak is harmless in practice; the server leaks around 350 GB a day and will be killed",
+        "explanation": "Correct. The OS reclaims everything at exit, so the tool is fine. The server leaks 4 KB × 1,000 × 86,400 s, about 354 GB a day, and will hit the out-of-memory killer within hours."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Leaked memory is only a problem while the process is alive. At exit the OS reclaims the whole address space.\n2. Server leak rate:\n\n```\n4 KB x 1,000 req/s = 4 MB/s\n4 MB/s x 86,400 s  = 345,600 MB\n                   ~ 350 GB/day\n```\n\n3. Even a machine with 64 GB of RAM runs out in a few hours.\n\nSome tools (compilers, for example) deliberately skip freeing at exit because it is faster to let the OS do it in one go.",
+    "link": {
+      "title": "Valgrind quick start guide",
+      "url": "https://valgrind.org/docs/manual/quick-start.html"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What happens when this runs?\n\n```c\nstruct user *u = malloc(sizeof *u);\nu->name = \"ann\";\nfree(u);\nstruct msg *m = malloc(sizeof *m);\nstrcpy(m->text, \"evil\");\nprintf(\"%s\\n\", u->name);\n```\n\nAssume `struct msg` is the same size as `struct user`.",
+    "options": [
+      {
+        "text": "It always prints `ann`, because `free` does not erase memory",
+        "explanation": "It might print `ann`, but nothing guarantees it. The freed slot may already have been reused by the next allocation."
+      },
+      {
+        "text": "The second `malloc` fails because the memory is still referenced by `u`",
+        "explanation": "The allocator has no idea `u` still exists. Once freed, the block is fair game for any allocation."
+      },
+      {
+        "text": "It is undefined behaviour; with typical allocators `m` may reuse `u`'s slot, so `u->name` reads bytes that now belong to `m`",
+        "explanation": "Correct. This is a use-after-free. Many allocators hand a just-freed block of the same size straight back, so `u` and `m` alias, and `u->name` is now whatever bytes `m` put there."
+      },
+      {
+        "text": "It prints an empty string because `free` zeroes the block",
+        "explanation": "Standard `free` does not zero memory. Some debugging allocators poison freed memory, but that is not the C contract."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `free(u)` returns the block to the allocator. `u` still holds its address.\n2. Allocators keep per-size free lists. A request for the same size often gets the most recently freed block back.\n3. So `m` may equal `u`. Writing `m->text` overwrites the bytes where `u->name` used to be.\n4. `u->name` is now interpreted from those bytes: garbage, a crash, or attacker-chosen data.\n\nThis is the core of many real exploits: free an object, get attacker-controlled data allocated into the same slot, then use the dangling pointer. AddressSanitizer reports it as `heap-use-after-free`.",
+    "link": {
+      "title": "CWE-416: Use After Free — MITRE",
+      "url": "https://cwe.mitre.org/data/definitions/416.html"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are memory leaks in a garbage-collected language such as Java, Python or Go? Select all that apply.",
+    "options": [
+      {
+        "text": "A module-level dict used as a cache that is never evicted",
+        "explanation": "Correct. Every entry stays reachable from a global, so the GC can never free it, even if it will never be read again."
+      },
+      {
+        "text": "An event listener registered on a long-lived object and never removed",
+        "explanation": "Correct. The long-lived object holds a reference to the listener, and through it everything the listener captures."
+      },
+      {
+        "text": "A goroutine blocked forever receiving on a channel nobody sends to",
+        "explanation": "Correct. A blocked goroutine is never collected, and its stack keeps everything it references alive."
+      },
+      {
+        "text": "A local list created inside a function and not returned",
+        "explanation": "Once the function returns, nothing refers to the list, so it becomes unreachable and the GC reclaims it. That is the normal case GC handles."
+      },
+      {
+        "text": "Two objects that refer only to each other, in Java",
+        "explanation": "Java's tracing collector frees anything unreachable from the roots, cycles included. (CPython's reference counting alone could not, but its cycle collector does.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "A GC frees memory that is **unreachable**. A leak in a GC language is memory that is still **reachable** but will never be used.\n\n1. Global cache: reachable from a module global. Leak.\n2. Listener: reachable from the long-lived subject's listener list. Leak.\n3. Blocked goroutine: goroutines are roots; its stack keeps its data alive. Leak.\n4. Local list: no references after return. Collected.\n5. Cycle in Java: unreachable from roots, so a tracing GC collects it.\n\nThe fix is the same in each leaky case: bound the structure (an LRU cache), unregister, or give the goroutine a way to exit (a `context` or a closed channel).",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does this code free `buf` correctly on every path?\n\n```c\nint f(void) {\n  int rc = -1;\n  char *buf = NULL;\n  FILE *fp = fopen(\"x\", \"r\");\n  if (!fp) goto out;\n  buf = malloc(64);\n  if (!buf) goto out;\n  rc = 0;\nout:\n  free(buf);\n  if (fp) fclose(fp);\n  return rc;\n}\n```",
+    "options": [
+      {
+        "text": "Because `goto` automatically frees memory allocated before it",
+        "explanation": "`goto` is just a jump. It frees nothing by itself."
+      },
+      {
+        "text": "Because `buf` starts as `NULL`, every path reaches `out:`, and `free(NULL)` is defined to do nothing",
+        "explanation": "Correct. Initialising to `NULL` means the early `goto` on a failed `fopen` reaches `free(buf)` with `buf == NULL`, which the C standard defines as a no-op."
+      },
+      {
+        "text": "Because the compiler inserts `free` calls at every `return`",
+        "explanation": "C compilers never insert `free` calls. That is what RAII does in C++, not C."
+      },
+      {
+        "text": "It doesn't: when `fopen` fails, `free(buf)` is undefined behaviour",
+        "explanation": "It would be if `buf` were uninitialised. Because it is set to `NULL` first, `free(NULL)` is well defined and harmless."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace each path:\n\n1. `fopen` fails: `buf` is `NULL`, jump to `out`. `free(NULL)` does nothing; `fp` is `NULL`, so no `fclose`. Return -1.\n2. `malloc` fails: `fp` is open, `buf` is `NULL`. `free(NULL)` is a no-op; `fclose(fp)` runs. Return -1.\n3. Success: both acquired, both released. Return 0.\n\nEvery path runs one cleanup block, so nothing leaks and nothing is freed twice. This single-exit pattern is used throughout the Linux kernel.",
+    "link": {
+      "title": "Resource acquisition is initialization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C++ function creates `auto p = std::make_unique<Widget>();` and then calls a function that throws an exception. What happens to the `Widget`?",
+    "options": [
+      {
+        "text": "It is freed when the exception unwinds the stack, because `p`'s destructor runs",
+        "explanation": "Correct. Stack unwinding runs the destructors of every local object in the abandoned frames. `~unique_ptr` deletes the `Widget`. This is RAII."
+      },
+      {
+        "text": "It leaks, because the `delete` line after the call is skipped",
+        "explanation": "That is what happens with a raw `new` and a manual `delete`. `unique_ptr` exists precisely to avoid it."
+      },
+      {
+        "text": "It is freed later by the C++ garbage collector",
+        "explanation": "Standard C++ has no garbage collector. Memory is released deterministically by destructors."
+      },
+      {
+        "text": "The program terminates immediately, so it doesn't matter",
+        "explanation": "An exception that is caught higher up does not terminate the program, and the destructors run during unwinding."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. RAII ties a resource to an object's lifetime.\n2. `p` is a local object; its destructor runs whenever its scope ends, by normal return **or** by an exception.\n3. During unwinding, C++ calls `~unique_ptr()`, which calls `delete` on the `Widget`.\n\nCompare the raw version:\n\n```cpp\nWidget *w = new Widget;\nmayThrow();     // throws\ndelete w;       // never reached: leak\n```\n\nThe same idea frees locks (`std::lock_guard`), files and sockets.",
+    "link": {
+      "title": "Resource acquisition is initialization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Resource_acquisition_is_initialization"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A compiler allocates millions of small AST nodes during one compilation pass and frees them all at the end. Which strategy is most appropriate, and why?",
+    "options": [
+      {
+        "text": "`malloc` and `free` each node individually, so memory is returned as early as possible",
+        "explanation": "This works but pays the allocator cost millions of times and invites use-after-free and double-free bugs as nodes are shared across the tree."
+      },
+      {
+        "text": "An arena: bump-allocate nodes from large blocks and free the whole arena when the pass ends",
+        "explanation": "Correct. Allocation is a pointer bump, there are no individual frees to get wrong, and the whole region goes in one call. This fits objects that share one lifetime."
+      },
+      {
+        "text": "Reference count each node so they free themselves",
+        "explanation": "Reference counting adds a count update on every pointer copy and cannot free cycles (such as parent pointers) without help. It is overkill when every node dies at the same moment."
+      },
+      {
+        "text": "Put the nodes on the stack, since the pass is a single function call",
+        "explanation": "Millions of nodes would overflow a stack of a few megabytes, and the pass is many nested calls, not one frame."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Note the lifetime pattern: every node is born during the pass and dies at its end.\n2. When objects share a lifetime, tracking them individually is wasted effort.\n3. An arena grabs big chunks and hands out memory by bumping a pointer:\n\n```\n[node|node|node|node|  free...  ]\n                    ^ next\n```\n\n4. At the end, free the chunks. No per-node bookkeeping, no dangling pointers within the pass.\n\nClang, Rust's compiler, game engines (per-frame arenas) and nginx (per-request pools) all use this.",
+    "link": {
+      "title": "Region-based memory management — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Region-based_memory_management"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your team runs its C test suite under AddressSanitizer and it reports no errors. Which conclusions are justified? Select all that apply.",
+    "options": [
+      {
+        "text": "The code paths the tests executed had no detected overflows or use-after-free bugs",
+        "explanation": "Correct. ASan checks the accesses that actually happen while it runs."
+      },
+      {
+        "text": "The program is now free of memory-safety bugs",
+        "explanation": "Sanitizers are dynamic: they only see the paths you exercise. Bugs in untested branches or on unusual inputs remain."
+      },
+      {
+        "text": "Fuzzing the parser under ASan is a sensible next step",
+        "explanation": "Correct. Fuzzers generate the odd inputs that reach untested paths, and ASan turns silent corruption into a crash with a stack trace."
+      },
+      {
+        "text": "Running under ASan in production is free, so you should leave it on",
+        "explanation": "ASan typically roughly doubles run time and uses noticeably more memory. Most teams use it in testing and fuzzing, not production."
+      },
+      {
+        "text": "A memory-safe language would rule out these bug classes statically, which sanitizers cannot",
+        "explanation": "Correct. Testing finds bugs; a memory-safe language (or Rust's compile-time checks) prevents the whole class."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. ASan instruments loads and stores and keeps redzones around allocations. It reports errors **only when they happen** during a run.\n2. A clean run says: no errors on these inputs and paths.\n3. To widen coverage, combine it with fuzzers (libFuzzer, AFL), which is how many memory-safety bugs in large C/C++ projects are found.\n4. Cost: about 2x slowdown plus extra memory, so it is a testing tool.\n5. Absence of evidence is not proof; that gap is what memory-safe languages close.",
+    "link": {
+      "title": "AddressSanitizer — Clang documentation",
+      "url": "https://clang.llvm.org/docs/AddressSanitizer.html"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker can make a server free an object containing a function pointer while a dangling pointer to it survives, and can then send a packet whose payload is copied into a newly allocated buffer of the same size. Why is this so dangerous?",
+    "options": [
+      {
+        "text": "It only causes a crash, because freed memory is unmapped from the process",
+        "explanation": "Small freed blocks stay mapped and are recycled by the allocator. They are not unmapped, so they can be reused with new contents."
+      },
+      {
+        "text": "It leaks the old object's memory, eventually exhausting the heap",
+        "explanation": "The memory is reused, not leaked. The problem is aliasing, not growth."
+      },
+      {
+        "text": "It is harmless if the server uses `calloc`, which zeroes memory",
+        "explanation": "`calloc` zeroes the new block at allocation, but the attacker then fills it with their payload. Zeroing does not stop the aliasing."
+      },
+      {
+        "text": "The new buffer can occupy the freed slot, so the next call through the dangling pointer jumps to an address the attacker chose",
+        "explanation": "Correct. This is the classic use-after-free exploitation pattern: reclaim the slot with controlled bytes, then let the program use its stale pointer to call or write somewhere useful to the attacker."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Object `A` with a function pointer at offset 0 is freed; `p` still points at it.\n2. The attacker sends a packet; the server does `malloc(sizeof A)` and copies the payload in.\n3. Same size, so the allocator returns `A`'s old slot.\n4. Offset 0 now holds attacker bytes, for example the address of code they want run.\n5. The server calls `p->callback()`, jumping there.\n\n```\nbefore: [cb=&log |data...]\nafter:  [cb=0x41414141 |..]\n```\n\nChromium reports around 70% of its high-severity bugs are memory-safety issues, with use-after-free about half of those, which is why browsers invest heavily in hardened allocators and memory-safe languages.",
+    "link": {
+      "title": "Memory safety — Chromium security",
+      "url": "https://www.chromium.org/Home/chromium-security/memory-safety/"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You must choose a tool to find a suspected use-after-free in a third-party Linux binary for which you have no source code. Which is the better first choice?",
+    "options": [
+      {
+        "text": "Valgrind Memcheck, because it runs unmodified binaries on a simulated CPU",
+        "explanation": "Correct. Memcheck intercepts `malloc` and `free` and checks every access at run time without recompiling. The price is speed: roughly 20 to 30 times slower."
+      },
+      {
+        "text": "AddressSanitizer, because it is faster",
+        "explanation": "ASan works by compile-time instrumentation, so it needs the source (or at least a rebuild). It cannot check an existing binary."
+      },
+      {
+        "text": "LeakSanitizer, because use-after-free is a kind of leak",
+        "explanation": "Use-after-free is the opposite of a leak: the memory was freed too early, not never freed. LeakSanitizer also needs a sanitizer build."
+      },
+      {
+        "text": "Neither; use-after-free can only be found by code review",
+        "explanation": "Dynamic tools find these routinely, with stack traces of the allocation, the free and the bad access."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Constraint: no source, so you cannot recompile with `-fsanitize=address`.\n2. Valgrind translates the binary's machine code as it runs, adding checks to each memory access.\n3. Trade-off table:\n\n| | ASan | Memcheck |\n|---|---|---|\n| Rebuild | yes | no |\n| Slowdown | ~2x | ~20-30x |\n\n4. So Memcheck is the pragmatic first choice here. If you could rebuild, ASan's speed lets you run far more tests and fuzzing.",
+    "link": {
+      "title": "Valgrind quick start guide",
+      "url": "https://valgrind.org/docs/manual/quick-start.html"
+    }
+  }
+]

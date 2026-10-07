@@ -1,0 +1,386 @@
+[
+  {
+    "id": "cs1-url-shortener-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You expect to create **50 billion** short links over the life of the service. What is the shortest base62 code length that can hold them all with at least twice the required namespace capacity?",
+    "options": [
+      {
+        "text": "7 characters",
+        "explanation": "Correct. 62^7 ≈ 3.5 trillion, about 70x the requirement. That headroom tolerates wasted ID ranges, reserved formats and growth beyond the forecast."
+      },
+      {
+        "text": "6 characters",
+        "explanation": "Wrong. 62^6 ≈ 56.8 billion, barely above 50 billion. At 50 billion allocated codes you would be about 88% full; waste or further growth could exhaust the remaining space."
+      },
+      {
+        "text": "5 characters",
+        "explanation": "Wrong. 62^5 ≈ 916 million codes, which is less than 2% of what you need."
+      },
+      {
+        "text": "11 characters",
+        "explanation": "Wrong. 11 characters is what a 64-bit Snowflake ID needs, giving ~5 × 10^19 codes. It works but makes links needlessly long for a service whose whole point is shortness."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compute powers of 62:\n\n```\n62^5 ≈ 9.2 x 10^8   (916 million)\n62^6 ≈ 5.7 x 10^10  (56.8 billion)\n62^7 ≈ 3.5 x 10^12  (3.5 trillion)\n```\n\nCompare with 5 × 10^10 needed. Six characters gives a ratio of only 1.1x; seven gives 70x. You want headroom because range allocation wastes IDs when servers crash, and forecasts are usually wrong, so choose **7**.",
+    "link": {
+      "title": "Base62 (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Base62"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague proposes generating codes by taking the first 7 base62 characters of `SHA-256(longUrl)`. The service will hold hundreds of billions of links. What is the main problem?",
+    "options": [
+      {
+        "text": "SHA-256 is too slow to compute at 3,000 writes per second.",
+        "explanation": "Wrong. No hardware benchmark is supplied; the demonstrated problem is namespace collisions, not an established hashing bottleneck."
+      },
+      {
+        "text": "Hash-based codes can't be stored in a key-value store.",
+        "explanation": "Wrong. A hash-derived code is just a string key; any KV store handles it. The issue is uniqueness, not storage."
+      },
+      {
+        "text": "Truncated hashes collide frequently at this scale, so every write needs an existence check and retry, and identical URLs from different users map to the same code.",
+        "explanation": "Correct. With a 3.5-trillion space, the birthday bound puts a 50% chance of at least one collision at ~2.2 million links. At hundreds of billions, a meaningful fraction of new inserts will collide, and dedup by URL breaks per-user ownership, expiry and analytics."
+      },
+      {
+        "text": "Hashes are reversible, so attackers can recover the long URL from the code.",
+        "explanation": "Wrong. Cryptographic hashes are one-way, and truncating makes reversal even less possible. Predictable input URLs can still be guessed and hashed, and a densely occupied short namespace can be probed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Apply the birthday problem. For a space of N codes, a 50% collision chance arrives at about `1.18 × √N` items.\n\n```\nN = 62^7 ≈ 3.5 x 10^12\n√N ≈ 1.87 x 10^6\n50% point ≈ 2.2 million links\n```\n\nOnce you hold, say, 350 billion links, the chance that a fresh random 7-char code is already taken is `350B / 3.5T = 10%`. So one write in ten collides and needs a retry, each requiring an atomic conditional insert, not a racy read-before-write. Add the dedup problem (same URL → same code for every user) and a counter-based scheme is much simpler.",
+    "link": {
+      "title": "Birthday problem (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Birthday_problem"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your product manager wants accurate click counts and the ability to disable malicious links instantly. Which redirect status should the service return?",
+    "options": [
+      {
+        "text": "301 Moved Permanently, because it is the standard for URL redirects.",
+        "explanation": "Wrong as stated. Without cache headers, browsers may cache a 301 indefinitely, so repeat clicks never reach you and you can't reliably disable the link. Provider-wide header claims require current representative response captures, which are not supplied."
+      },
+      {
+        "text": "404 Not Found, then let the browser search for the URL.",
+        "explanation": "Wrong. 404 means the resource doesn't exist. It would break every link."
+      },
+      {
+        "text": "200 OK with a page containing a JavaScript redirect.",
+        "explanation": "Wrong. It works, but adds a full page load, breaks non-browser clients (curl, bots, some email clients) and harms SEO. Use a proper HTTP redirect."
+      },
+      {
+        "text": "302 Found (or 307) with Cache-Control: no-store; enforce blocking on the redirect path and measure analytics delivery separately.",
+        "explanation": "Correct. Explicit no-store avoids retaining this redirect in compliant HTTP caches. It does not revoke already-resolved destinations, guarantee click-event delivery, or instantly invalidate your own cache layers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Choose an explicit cache policy. A 301 is heuristically cacheable; temporary redirects can also be cached with explicit freshness. For the stated control requirement, use 302/307 with `Cache-Control: no-store`, and make origin/edge blocking checks sufficiently fresh. Requests already redirected cannot be recalled. Click analytics also need delivery, deduplication and bot-counting rules; HTTP status alone cannot guarantee accurate counts. Exact provider cache settings are omitted because no reproducible dated captures are available.",
+    "link": {
+      "title": "MDN: 302 Found",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/302"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You use range allocation: a coordinator hands each write server a block of **1,000,000** IDs. Peak write rate is **3,000 links/s** across 10 servers. Roughly how often does the coordinator receive a block request, and what happens if a server crashes mid-block?",
+    "options": [
+      {
+        "text": "About 3,000 times per second; the crash corrupts the counter.",
+        "explanation": "Wrong. That would be the rate with no batching at all. With 1M-ID blocks the coordinator is consulted once per million IDs, and a crash cannot corrupt a counter that has already moved past the block."
+      },
+      {
+        "text": "About once every 5–6 minutes in total; the unused IDs in the crashed server's block are simply skipped.",
+        "explanation": "Correct. 1M / 3,000 ≈ 333 s between block requests overall. Unused IDs are wasted, but with 3.5 trillion codes, losing a million per crash is negligible, and no ID is ever issued twice."
+      },
+      {
+        "text": "About once per day; the crashed block is reassigned to another server.",
+        "explanation": "Wrong on both counts. At 3,000/s you consume 1M IDs in ~5.5 minutes, not a day. Reassigning a partially used block is dangerous because you don't know which IDs were already issued."
+      },
+      {
+        "text": "Never; each server generates IDs from its own clock.",
+        "explanation": "Wrong. That describes Snowflake-style generation, which needs no coordinator, not range allocation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nIDs per block:         1,000,000\nGlobal write rate:     3,000/s\nTime to use 1 block:   1M / 3k ≈ 333 s\n```\n\nSo the coordinator handles roughly one request every ~5.5 minutes in aggregate (each of 10 servers asks about once an hour). That's why it isn't a bottleneck.\n\nOn a crash, the coordinator has already advanced past the block, so the remaining IDs are never handed out again. Waste per crash ≤ 1M; even 1,000 crashes waste 1 billion, under 0.03% of 62^7.",
+    "link": {
+      "title": "System Design Primer: design Bit.ly",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A usability review flags that your counter-based codes are sequential: `aZ3kQ9x` is followed by `aZ3kQ9y`, revealing sequential allocation. Private-link access control is handled separately. What algebraic approach that keeps codes collision-free and 7 characters long?",
+    "options": [
+      {
+        "text": "Switch to random 7-character codes and retry on collision.",
+        "explanation": "Partly works but reintroduces the collision problem: at 10% fill, one write in ten collides and needs a read-before-write retry. You've traded a security problem for a correctness and latency one."
+      },
+      {
+        "text": "Use Snowflake IDs instead.",
+        "explanation": "Wrong. Snowflake IDs are also time-ordered and largely predictable (timestamp plus machine plus sequence), and they need about 11 base62 characters, breaking the 7-character requirement."
+      },
+      {
+        "text": "Apply a bijective permutation to the counter (e.g. multiply by a constant coprime with 62^7, mod 62^7, with the explicit understanding that this multiplication is only obfuscation) before base62-encoding.",
+        "explanation": "Correct. A bijection on [0, 62^7) maps each counter value to a unique code, so it stays collision-free, but consecutive counters produce unrelated-looking codes. This guarantees uniqueness, not secrecy: at 10% occupancy random probes hit valid links about 10% of the time."
+      },
+      {
+        "text": "Rate limit the redirect endpoint so enumeration takes longer.",
+        "explanation": "Wrong as the main fix. Rate limiting slows a single attacker, but distributed scrapers bypass it easily. It's a useful defence in depth, not a substitute for unpredictable codes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "You want a function `f` such that:\n\n1. `f` is one-to-one on [0, 62^7), so no collisions.\n2. `f(n)` and `f(n+1)` look unrelated.\n\nSimplest version: choose a constant `a` coprime with 62^7 (any odd number not divisible by 31 works, since 62 = 2 × 31). Then `f(n) = (a × n) mod 62^7` is a bijection, though two known codes reveal `a`. A custom four-round Feistel recipe is omitted because no reviewed cryptographic construction is supplied. For private links use authorization or a properly designed longer capability token; a dense seven-character namespace is not adequate secrecy.\n\n```\n1000001 -> f -> base62 -> \"Qx81bKa\"\n1000002 -> f -> base62 -> \"3mPz0Wd\"\n```\n\nCodes remain unique and 7 characters, with no extra database reads.",
+    "link": {
+      "title": "URL shortening (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/URL_shortening"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "The redirect path must hold **p99 under 50 ms at 30,000 req/s** while also recording click analytics. Which design choices help? Select all that apply.",
+    "options": [
+      {
+        "text": "Publish a click event to Kafka asynchronously and return the redirect without waiting for the acknowledgement.",
+        "explanation": "Correct. Decoupling analytics from the request path means the redirect's latency depends only on the lookup. If Kafka is slow, buffer or drop events rather than delay redirects."
+      },
+      {
+        "text": "Increment a `click_count` column in the links table on every redirect.",
+        "explanation": "Incorrect. A synchronous write per redirect adds latency and creates hot rows for viral links, causing lock contention exactly when traffic is highest."
+      },
+      {
+        "text": "Read-through cache in Redis plus a short-lived negative cache for unknown codes.",
+        "explanation": "Correct. Most lookups hit memory, and negative caching stops bots probing random codes from falling through to the database."
+      },
+      {
+        "text": "A small in-process LRU cache on each redirect server for the hottest links.",
+        "explanation": "Correct. It avoids a network hop for viral links and protects the Redis shard that owns a hot key from saturating."
+      },
+      {
+        "text": "Use a 2PC transaction across the links store and the analytics store so both are always consistent.",
+        "explanation": "Incorrect. Two-phase commit adds multiple round trips and blocks on the slowest participant. Analytics can be eventually consistent; a redirect must not wait on it."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Budget the 50 ms:\n\n| Step | Illustrative latency input, not a benchmark |\n|---|---|\n| In-process cache hit | < 0.1 ms |\n| Redis hit | ~0.5–1 ms |\n| KV store read | ~5–10 ms |\n| Sync DB write | +5–20 ms, worse under contention |\n\nKeep only reads on the critical path and push every write (analytics) off it. Layered caches handle hot keys; negative caching handles bots. Synchronous work can increase latency and contention; whether it violates 50 ms needs a representative load test.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Traffic grows 10x to **1 billion new links/day**, kept for 10 years, with 7-character codes. Which hard namespace-capacity problem follows directly from these numbers?",
+    "options": [
+      {
+        "text": "The ID coordinator can no longer keep up with block requests.",
+        "explanation": "Wrong. At 1B links/day the peak is about 30,000 writes/s, so 1M-ID blocks are requested about 0.03 times a second, roughly once every 33 s overall. You can also simply make blocks bigger."
+      },
+      {
+        "text": "Base62 encoding becomes too CPU-intensive.",
+        "explanation": "Wrong. Encoding takes a bounded number of divisions here; no measured CPU limit is supplied."
+      },
+      {
+        "text": "Redis can't hold the hot set.",
+        "explanation": "Daily request count does not specify the number of distinct hot keys or their memory footprint. Trace the working set and benchmark capacity; no fixed 1 TB hot set follows from this prompt."
+      },
+      {
+        "text": "The 7-character code space runs out: 3.65 trillion links needed vs ~3.5 trillion codes available.",
+        "explanation": "Correct. 1B × 365 × 10 = 3.65 × 10^12, slightly more than 62^7 ≈ 3.52 × 10^12, before counting wasted ranges. You need to move new links to 8 characters (218 trillion)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Recompute the key estimate with the new numbers:\n\n```\nLinks in 10 years = 1B/day x 365 x 10\n                  = 3.65 x 10^12\nCode space (7)    = 62^7 ≈ 3.52 x 10^12\n```\n\nYou'd exhaust 7-character codes in about 9.6 years, sooner with waste. Moving to 8 characters gives 62^8 ≈ 2.18 × 10^14, about 60x headroom. An 8-character string can never equal a 7-character one, so you can switch with no migration: new generated links use exactly eight characters, including left-padding, and old codes keep working. Revise alias rules or use conditional inserts because existing custom aliases may already have eight characters.\n\nThe lesson: always re-run your capacity maths when the scale changes; a constraint that was 10x away can become binding.",
+    "link": {
+      "title": "URL shortening (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/URL_shortening"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Peak redirect traffic is **30,000 req/s**. Your Redis cache hit rate is **95%**. A teammate wants to cut database cost by lowering the cache TTL, which drops the hit rate to **80%**. How does the database read load change?",
+    "options": [
+      {
+        "text": "From 1,500 to 6,000 reads/s: four times as much.",
+        "explanation": "Correct. Misses are what reach the database: 5% of 30k = 1,500/s, and 20% of 30k = 6,000/s. A 15-point drop in hit rate quadruples database load."
+      },
+      {
+        "text": "From 28,500 to 24,000 reads/s: slightly less.",
+        "explanation": "Wrong. Those are the cache hits, not the database reads. The database only sees misses."
+      },
+      {
+        "text": "It barely changes, because the hit rate fell by only 15%.",
+        "explanation": "Wrong. Think in miss rate, not hit rate: misses go from 5% to 20%, a 4x increase."
+      },
+      {
+        "text": "From 1,500 to 1,800 reads/s, because only the extra 15% of hits are lost.",
+        "explanation": "Wrong. 15% of 30,000 is 4,500 extra misses per second, not 300."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Database load = total × miss rate.\n\n```\n95% hit: 30,000 x 0.05 = 1,500/s\n80% hit: 30,000 x 0.20 = 6,000/s\n```\n\nThe miss rate is what matters, and it is very sensitive near the top: going from 99% to 98% hit rate *doubles* database load. Long TTLs save reads but can delay deletion or abuse blocking unless those states have a separate freshness mechanism. Choose the cache policy against both cost and correctness requirements.",
+    "link": {
+      "title": "System Design Primer: design Pastebin / Bit.ly",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Users report that links they've *just* created sometimes 404 for about a minute, then start working. Redirects read from async replicas, and unknown codes are negatively cached for 60 s. What is happening, and what is the best fix?",
+    "options": [
+      {
+        "text": "The ID allocator is issuing duplicate codes; switch to Snowflake IDs.",
+        "explanation": "Wrong. Duplicates would cause wrong redirects that never heal, not a 404 that fixes itself after a minute."
+      },
+      {
+        "text": "A click arrives before the replica has the new row, the 404 is negatively cached for 60 s, so the link looks broken until that entry expires. Write the mapping into the cache on create (clearing any negative entry), and check the primary before caching a 'not found'.",
+        "explanation": "Correct. The 60-second healing time matches the negative-cache TTL, which is the giveaway. Write-through on create plus a primary fallback on a miss helps, but requires conditional/versioned cache fills so an older miss cannot overwrite the freshly created mapping."
+      },
+      {
+        "text": "Browsers cached a 301 for the old URL; switch to 302.",
+        "explanation": "Wrong. The link is new, so no browser can have a cached redirect for it. The 404 comes from your own service."
+      },
+      {
+        "text": "Turn off negative caching altogether.",
+        "explanation": "Partly works but overcorrects. Bots probing random codes would then all fall through to the database. Keep negative caching, but stop it caching false negatives for fresh links."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Reconstruct the timeline:\n\n```\nt=0     create -> primary\nt=50ms  click -> replica: no row\n        cache 'not found' 60 s\nt=200ms replica receives row\nt=60s   negative entry expires\n```\n\nTwo ingredients help; neither alone proves correctness against all concurrent cache-fill races:\n\n1. **Write-through on create**: set `code → url` in Redis and delete any negative key.\n2. **Primary fallback**: on a replica miss, ask the primary before caching a negative result.\n\nIn interviews, linking a symptom's duration to a specific TTL is a strong debugging signal.",
+    "link": {
+      "title": "Hello Interview: design a URL shortener like Bit.ly",
+      "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're adding **custom aliases** (`sho.rt/summer-sale`) to a service that also issues generated 7-character codes from a counter. Which measures are needed? Select all that apply.",
+    "options": [
+      {
+        "text": "Insert the alias with a conditional write (insert-if-not-exists, or a primary key constraint), so two users racing for the same alias can't both win.",
+        "explanation": "Correct. A check-then-insert has a race window; the conditional write makes the store the arbiter, and the loser gets a clear 'alias taken' error."
+      },
+      {
+        "text": "Stop custom aliases from ever matching a future generated code, e.g. require 8+ characters or a hyphen, or have the generator skip taken codes.",
+        "explanation": "Correct. Otherwise someone can claim `aZ3kQ9x` today and the counter later produces it, causing a conflict on an automatic write that no user can resolve."
+      },
+      {
+        "text": "Block reserved and abusive words such as `api`, `login`, `admin` and brand names.",
+        "explanation": "Correct. Aliases that look like your own paths or impersonate brands are a phishing and routing risk. A denylist on creation is cheap."
+      },
+      {
+        "text": "Store custom aliases in a separate database so they can't collide.",
+        "explanation": "Incorrect. The redirect path still has to look up one namespace. Two stores means two lookups per redirect and doesn't remove the collision; it hides it."
+      },
+      {
+        "text": "Hash the alias with SHA-256 before storing it.",
+        "explanation": "Incorrect. The alias is the key users type. Hashing it adds nothing and makes listing and support harder."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Aliases share one namespace with generated codes, so three things can go wrong:\n\n1. **Two users race** for the same alias → conditional write.\n2. **Alias vs future generated code** → disjoint formats (aliases ≥ 8 chars or contain `-`), so the generator can never produce one.\n3. **Abuse** → denylist reserved paths and brand names.\n\nA single table keyed by `code` keeps the redirect path to one lookup.",
+    "link": {
+      "title": "Hello Interview: design a URL shortener like Bit.ly",
+      "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A link in a Super Bowl advert gets **200,000 clicks/s** for ten minutes. It lives on one Redis shard that handles about 100k ops/s. Analytics for the advertiser matter. What is the best mitigation?",
+    "options": [
+      {
+        "text": "Re-shard Redis with more nodes so the key gets more capacity.",
+        "explanation": "Wrong. Consistent hashing still places one key on one shard, so adding nodes doesn't spread a single hot key."
+      },
+      {
+        "text": "Return a 301 with no cache headers so browsers stop coming back.",
+        "explanation": "Wrong for this case. Each viewer clicks once, so browser caching saves little, and you'd lose control of the link. Most of the 200k/s are different people."
+      },
+      {
+        "text": "Serve the redirect from the CDN edge or an in-process cache on every redirect server with a short TTL, and emit click events from there in batches.",
+        "explanation": "Correct. Spreading the read across hundreds of edge locations or app servers takes it off the single shard, and a short TTL (seconds) keeps control. Batched click logs preserve analytics."
+      },
+      {
+        "text": "Rate limit the link to 100k clicks/s.",
+        "explanation": "Wrong. Dropping half the advertiser's traffic during their most expensive minute is the worst possible outcome."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The bottleneck is one key on one shard, so the fix must **replicate the read**, not partition it further.\n\n```\nEdge/in-process copies: hundreds\nLoad per copy: 200k / 300 ≈ 700/s\nTTL 5 s: nominal cache freshness 5 s\n```\n\nAnalytics can survive if batches are durably buffered/retried and duplicates handled; best-effort buffering can still lose events. In this design, edge workers or app servers log each click locally and ship counts in batches, rather than writing per click. The same idea (replicate hot keys, batch writes) applies to every hot-key question in this module.",
+    "link": {
+      "title": "Hello Interview: design a URL shortener like Bit.ly",
+      "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You expand to three regions so redirects are served locally. Generated-code link creation must remain available during a bounded partition while preallocated ID ranges remain; globally unique custom aliases are out of scope. Which choices fit? Select all that apply.",
+    "options": [
+      {
+        "text": "Give each region its own pre-allocated ID ranges, so regions generate codes without talking to each other.",
+        "explanation": "Correct. Disjoint ranges guarantee uniqueness with no cross-region coordination, so a partitioned region can still create links."
+      },
+      {
+        "text": "Replicate the links table asynchronously to all regions.",
+        "explanation": "Correct. Links are written once and never updated, so there are no conflicting writes to merge. Async replication keeps create latency local."
+      },
+      {
+        "text": "On a local miss, check the link's home region before returning 404.",
+        "explanation": "Correct. It covers replication lag only when the home region is reachable; it cannot resolve an unknown link during that region's isolation. The home region can be encoded in the ID range, so you know where to ask."
+      },
+      {
+        "text": "Use a single global counter with synchronous cross-region consensus for every create.",
+        "explanation": "Incorrect. Each create would pay a cross-region round trip (~100 ms), and a partitioned region couldn't create links at all, breaking the requirement."
+      },
+      {
+        "text": "Use 301 with an infinite cache so other regions are rarely asked.",
+        "explanation": "Incorrect. It doesn't help create availability, and it gives up analytics and the ability to disable abusive links."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Immutability is what makes this easy:\n\n1. **Uniqueness without coordination**: region-specific ID ranges.\n2. **Replication without conflicts**: rows never change, so last-writer-wins issues don't arise.\n3. **Lag handling**: fall back to the home region on a miss.\n\nAvoid putting anything cross-region and synchronous on the create path: it adds deployment-dependent network latency and may be unavailable in an isolated region. Disabling or deleting links still requires propagation rules even when destination mappings are immutable.",
+    "link": {
+      "title": "System Design Primer: design Pastebin / Bit.ly",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md"
+    }
+  }
+]

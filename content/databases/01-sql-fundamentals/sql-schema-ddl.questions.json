@@ -1,0 +1,379 @@
+[
+  {
+    "id": "sql-schema-ddl-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A developer stores prices in a `REAL` (floating-point) column. A basket check runs `SELECT 0.1 + 0.2 = 0.3;` and gets 0 (false). What is the best schema fix?",
+    "options": [
+      {
+        "text": "Round every result to 2 decimal places in the application",
+        "explanation": "Rounding hides the symptom in one place, but errors still build up in sums, and every query has to remember to round."
+      },
+      {
+        "text": "Store amounts as integer pence (or PostgreSQL `numeric`)",
+        "explanation": "Correct. Integers and decimal `numeric` represent amounts exactly, so 10 + 20 = 30 pence with no rounding error. Payment processors such as Stripe use integer minor units."
+      },
+      {
+        "text": "Use `double precision` instead of `real`",
+        "explanation": "More bits make the error smaller, not zero: 0.1 has no exact binary representation at any precision."
+      },
+      {
+        "text": "Use PostgreSQL's `money` type",
+        "explanation": "Its formatting and input depend on the server's locale setting, and the PostgreSQL wiki advises against it. `numeric` or integer pence is safer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 0.1 and 0.2 have no exact binary floating-point form. Their sum is 0.30000000000000004.\n2. That isn't equal to 0.3, so the comparison is false, and long sums drift.\n3. Integer pence: £10.99 is stored as 1099. Three of them are 3297, exactly £32.97.\n4. In PostgreSQL, `numeric(10,2)` is an exact decimal alternative.",
+    "link": {
+      "title": "Don't do this — PostgreSQL wiki",
+      "url": "https://wiki.postgresql.org/wiki/Don%27t_Do_This"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An order can contain many products and a product can appear in many orders. How should this be modelled?",
+    "options": [
+      {
+        "text": "Add a `product_ids` text column to orders holding '1,3,5'",
+        "explanation": "A list in one column can't have foreign keys, can't hold a quantity per product, and needs string parsing to query. It breaks first normal form."
+      },
+      {
+        "text": "Add an `order_id` column to products",
+        "explanation": "That allows each product to belong to only one order, which is one-to-many in the wrong direction."
+      },
+      {
+        "text": "A junction table such as `order_items(order_id, product_id, qty)` with foreign keys to both tables",
+        "explanation": "Correct. Each row links one order to one product and can carry facts about that pairing, such as quantity and price paid."
+      },
+      {
+        "text": "Add `product_id_1`, `product_id_2` and `product_id_3` columns to orders",
+        "explanation": "Repeating columns impose an arbitrary limit, waste space and make \"which orders contain a Lamp?\" check every column."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Many-to-many can't be stored with a single foreign key on either side.\n2. Introduce a table whose rows are the pairings:\n\n```sql\nCREATE TABLE order_items (\n  order_id INTEGER NOT NULL\n    REFERENCES orders(id),\n  product_id INTEGER NOT NULL\n    REFERENCES products(id),\n  qty INTEGER NOT NULL,\n  PRIMARY KEY (order_id,\n               product_id));\n```\n\n3. The composite primary key stops the same product appearing twice in one order.",
+    "link": {
+      "title": "Data definition — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In SQLite, with an ordinary (non-STRICT) table:\n\n```sql\nCREATE TABLE loose (n INTEGER);\nINSERT INTO loose VALUES ('abc');\nSELECT n, typeof(n) FROM loose;\n```\n\nWhat happens?",
+    "options": [
+      {
+        "text": "The insert fails with a type error",
+        "explanation": "That's PostgreSQL's behaviour, and that of SQLite STRICT tables. Ordinary SQLite tables use type affinity, which is only a preference."
+      },
+      {
+        "text": "It stores 0, with type integer",
+        "explanation": "SQLite doesn't invent a number. It converts only text that looks like a number."
+      },
+      {
+        "text": "It stores NULL",
+        "explanation": "The value isn't discarded; it is stored as given."
+      },
+      {
+        "text": "It returns `abc` with type `text`",
+        "explanation": "Correct. INTEGER affinity converts text only when it looks like a number. `'abc'` doesn't, so it is stored as text in an INTEGER column."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. SQLite columns have an *affinity*, not a strict type.\n2. On insert, SQLite tries to convert `'abc'` to an integer. It can't do so losslessly.\n3. It stores the text unchanged: `typeof(n)` is `text`.\n4. By contrast, `'42'` would become the integer 42.\n5. Declare the table `STRICT` (SQLite 3.37+) to get `cannot store TEXT value in INTEGER column`.",
+    "link": {
+      "title": "Datatypes in SQLite",
+      "url": "https://www.sqlite.org/datatype3.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the module's schema, an order's total is computed as `SUM(order_items.qty * products.price)`. The Kettle's price rises from £30 to £35. What happens to order 101 (one Kettle, four Mugs), placed in January?",
+    "options": [
+      {
+        "text": "Nothing; past orders are protected by the foreign key",
+        "explanation": "A foreign key only checks that the product exists. It doesn't freeze the product's price."
+      },
+      {
+        "text": "Its total changes from £62 to £67, so historical invoices are now wrong; fix it by storing the unit price on each order line",
+        "explanation": "Correct. The total depends on today's price. Copying the price at the time of sale into `order_items` records what the customer actually paid."
+      },
+      {
+        "text": "The update fails because orders reference the product",
+        "explanation": "This foreign key references the product ID, so changing price does not violate it. Other constraints or triggers could still reject a price update."
+      },
+      {
+        "text": "Its total changes, and that's correct because prices are normalised",
+        "explanation": "Normalisation avoids storing the same fact twice. \"Price paid in January\" and \"current price\" are different facts, so storing both isn't duplication."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Order 101: 1 × Kettle + 4 × Mug = 30 + 32 = £62.\n2. After the price change: 35 + 32 = £67. The January invoice has changed.\n3. The schema confuses two facts: what a product costs now, and what a customer paid then.\n4. Fix: add `unit_pence` to `order_items`, filled from `products` at checkout, and compute totals from it.\n5. Many \"duplicates\" in good schemas are snapshots like this: shipping addresses, tax rates, exchange rates.",
+    "link": {
+      "title": "Data definition — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A SQLite table has `id INTEGER PRIMARY KEY` (no AUTOINCREMENT) and rows with ids 1 to 5. You delete row 5 and insert a new row. What id does it get, and why might that matter?",
+    "options": [
+      {
+        "text": "6, because ids always increase",
+        "explanation": "Without AUTOINCREMENT, SQLite uses the current maximum + 1. After deleting 5, the maximum is 4."
+      },
+      {
+        "text": "1, because SQLite fills the first gap",
+        "explanation": "SQLite doesn't search for gaps; it takes the maximum id + 1."
+      },
+      {
+        "text": "5; anything that still refers to the old product 5 (a URL, a cache, a log) now points at a different row",
+        "explanation": "Correct. The new row reuses the deleted id. Declare `AUTOINCREMENT` if ids must never be reused."
+      },
+      {
+        "text": "NULL, because the sequence is broken",
+        "explanation": "An INTEGER PRIMARY KEY can't be NULL; SQLite always assigns a value."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `INTEGER PRIMARY KEY` normally aliases the rowid in a SQLite rowid table.\n2. Here max(rowid) is 5, then becomes 4 after the deletion.\n3. The next automatically generated ID is therefore 5.\n4. With `AUTOINCREMENT`, the recorded maximum from committed rows remains 5, so the next automatically generated ID is 6. Rolled-back IDs are not protected from reuse.\n5. PostgreSQL sequences normally advance independently of transaction rollback, but explicit resets or CYCLE can reuse values. Enforce row uniqueness with a primary key and do not assume gapless IDs.",
+    "link": {
+      "title": "SQLite autoincrement",
+      "url": "https://www.sqlite.org/autoinc.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, you create the schema from the lesson **without** any `CREATE INDEX` statements. Which columns are the **first key column** of an automatically created index? Select all that apply.",
+    "options": [
+      {
+        "text": "`customers.id` (the primary key)",
+        "explanation": "Correct. PostgreSQL creates a unique index to enforce every PRIMARY KEY."
+      },
+      {
+        "text": "`customers.email` (declared UNIQUE)",
+        "explanation": "Correct. A UNIQUE constraint is enforced with a unique index, created automatically."
+      },
+      {
+        "text": "`orders.customer_id` (a foreign key)",
+        "explanation": "Neither PostgreSQL nor SQLite indexes the referencing column of a foreign key automatically. You must create it, or lookups and parent deletes scan the table."
+      },
+      {
+        "text": "`order_items.order_id` (first column of the composite primary key)",
+        "explanation": "Correct. The primary key index on `(order_id, product_id)` can serve lookups by `order_id` alone, because it is the leading column."
+      },
+      {
+        "text": "`order_items.product_id` (second column of the primary key)",
+        "explanation": "It is included in the composite primary-key index, but is its second key column. It is not the first key of an automatically created index. A separate index may help product-only lookups; PostgreSQL can sometimes use a scan or skip scan of the composite index."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. PRIMARY KEY and UNIQUE constraints create indexes automatically.\n2. The indexes begin with customers.id, customers.email and order_items.order_id.\n3. orders.customer_id has no automatically created index here.\n4. order_items.product_id is the second key in (order_id, product_id), not its leading key. A product-only lookup may scan that index or, with a suitable PostgreSQL version and distribution, use skip scan.\n5. Consider a separate product_id index after examining the actual plan.",
+    "link": {
+      "title": "CREATE INDEX — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-createindex.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "To reject badly formatted dates in SQLite, a developer writes:\n\n```sql\nd TEXT CHECK (d = date(d))\n```\n\n`INSERT ... VALUES ('2026-3-9')` succeeds. Why?",
+    "options": [
+      {
+        "text": "SQLite ignores CHECK constraints unless a pragma is on",
+        "explanation": "CHECK constraints are enabled by default. They can be disabled with `PRAGMA ignore_check_constraints`, but this example succeeds because UNKNOWN satisfies CHECK, not because enforcement was disabled."
+      },
+      {
+        "text": "`date('2026-3-9')` returns NULL, so the CHECK is UNKNOWN, and a CHECK only fails on FALSE",
+        "explanation": "Correct. SQLite's `date()` returns NULL for input it can't parse. `d = NULL` is UNKNOWN, which passes. Use `CHECK (d IS date(d))` instead."
+      },
+      {
+        "text": "`date()` normalises '2026-3-9' to '2026-03-09', which equals the input",
+        "explanation": "If it returned '2026-03-09', the comparison would be FALSE (the strings differ) and the insert would fail. It actually returns NULL."
+      },
+      {
+        "text": "Text can't be compared with a date in SQLite",
+        "explanation": "SQLite has no date type; `date()` returns text, so it's a plain text comparison."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `date('2026-3-9')` → NULL, because it's not a format SQLite recognises.\n2. The check becomes `'2026-3-9' = NULL` → UNKNOWN.\n3. CHECK rejects only FALSE, so the row is accepted.\n4. Fix with the NULL-safe comparison:\n\n```sql\nd TEXT NOT NULL\n  CHECK (d IS date(d))\n```\n\nNow '2026-3-9' fails (text IS NULL is false), and '2026-02-30' fails too, because `date()` turns it into '2026-03-02'.",
+    "link": {
+      "title": "Datatypes in SQLite",
+      "url": "https://www.sqlite.org/datatype3.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team proposes making `email` the primary key of `customers`, since emails are unique. Orders and five other tables would reference it. What's the main problem?",
+    "options": [
+      {
+        "text": "Text primary keys aren't allowed in PostgreSQL",
+        "explanation": "Any type with equality can be a primary key, including text."
+      },
+      {
+        "text": "Emails are too long to index",
+        "explanation": "Emails index fine. Size is a minor cost compared with the real issue."
+      },
+      {
+        "text": "Customers change their email, and every referencing row in six tables must then be updated too; use a surrogate id with `email UNIQUE`",
+        "explanation": "Correct. A primary key is copied into every foreign key. Natural identifiers change, so a stable surrogate key plus a UNIQUE constraint gives you both identity and the business rule."
+      },
+      {
+        "text": "Emails can't be NULL",
+        "explanation": "That's a point in email's favour as a key. The trouble is that it changes, not that it's missing."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A primary key's job is to identify a row stably for its whole life.\n2. Emails change (new job, new provider), and sometimes need merging or correcting.\n3. With email as the PK, a change means updating orders and every other referencing table, or relying on `ON UPDATE CASCADE` across large tables.\n4. Pattern:\n\n```sql\nid bigint GENERATED ALWAYS\n   AS IDENTITY PRIMARY KEY,\nemail text NOT NULL UNIQUE\n```\n\n5. Also consider case: a unique index on `lower(email)` stops 'Asha@x.com' and 'asha@x.com' both registering.",
+    "link": {
+      "title": "Data definition — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your PostgreSQL 16 `orders` table has 500 million rows. Which change is a quick metadata-only operation, with no table rewrite or full scan?",
+    "options": [
+      {
+        "text": "`ALTER COLUMN id TYPE bigint` (from integer)",
+        "explanation": "Changing a column's type to one with a different storage format rewrites the whole table, holding an ACCESS EXCLUSIVE lock throughout."
+      },
+      {
+        "text": "`ADD COLUMN channel text NOT NULL DEFAULT 'web'`",
+        "explanation": "Correct. Since PostgreSQL 11, a non-volatile default is stored in the catalogue and returned for old rows, so no rewrite is needed."
+      },
+      {
+        "text": "`ADD COLUMN seen_at timestamptz DEFAULT clock_timestamp()`",
+        "explanation": "`clock_timestamp()` is volatile: each row needs its own value, so PostgreSQL must rewrite the table."
+      },
+      {
+        "text": "`ALTER COLUMN status SET NOT NULL`",
+        "explanation": "PostgreSQL must scan every row to prove there are no NULLs, unless a validated `CHECK (status IS NOT NULL)` already proves it (PG 12+)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Classify each change:\n\n| change | cost |\n|---|---|\n| int → bigint | rewrite |\n| add, constant default | metadata |\n| add, volatile default | rewrite |\n| SET NOT NULL | full scan |\n\n1. A constant like `'web'` is evaluated once and stored as the \"missing value\" for existing rows.\n2. `clock_timestamp()` differs per row, so every row must be physically written.\n3. Even the fast one takes an ACCESS EXCLUSIVE lock briefly, so run it with a `lock_timeout`.",
+    "link": {
+      "title": "ALTER TABLE — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A migration runs `ALTER TABLE orders ADD COLUMN note text;`, normally an instant change. This time the site goes down for 4 minutes. A reporting query had been reading `orders` for 4 minutes. What happened, and what prevents it?",
+    "options": [
+      {
+        "text": "The ALTER rewrote the table; use a default value",
+        "explanation": "Adding a nullable column with no default is metadata-only. No rewrite happened."
+      },
+      {
+        "text": "The report held a lock, so the ALTER queued for its ACCESS EXCLUSIVE lock, and every new query on orders queued behind the ALTER; set `lock_timeout` so the migration gives up and retries",
+        "explanation": "Correct. Lock requests queue in order. The waiting ALTER blocks even plain SELECTs that arrive after it. A short `lock_timeout` makes the ALTER fail fast instead of stalling everything."
+      },
+      {
+        "text": "ALTER TABLE always blocks for as long as the table is large",
+        "explanation": "The duration depends on the operation and on lock waits, not on table size, for metadata-only changes."
+      },
+      {
+        "text": "The report query was blocked by the new column",
+        "explanation": "The report started first and already held its lock. It was everything *after* the ALTER that was blocked."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The report holds an ACCESS SHARE lock on `orders` for 4 minutes.\n2. The ALTER needs ACCESS EXCLUSIVE, which conflicts, so it waits.\n3. New queries need ACCESS SHARE. That doesn't conflict with the report, but it does conflict with the *queued* ALTER, so they wait behind it.\n4. Result: every query on `orders` stalls until the report finishes.\n5. Prevention:\n\n```sql\nSET lock_timeout = '2s';\nALTER TABLE orders\n  ADD COLUMN note text;\n-- retry on failure\n```\n\nAlso cap long queries with `statement_timeout`.",
+    "link": {
+      "title": "ALTER TABLE — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A PostgreSQL table has `id integer GENERATED BY DEFAULT AS IDENTITY`. A data import inserts rows with explicit ids 1 to 1,000. The next normal insert fails with `duplicate key value violates unique constraint`. Why?",
+    "options": [
+      {
+        "text": "Identity columns can't accept explicit values",
+        "explanation": "`BY DEFAULT` accepts explicit values. `ALWAYS` would have rejected them unless the insert said `OVERRIDING SYSTEM VALUE`."
+      },
+      {
+        "text": "The import created duplicate ids",
+        "explanation": "The imported ids 1 to 1,000 were unique. The clash is between an imported id and a *newly generated* one."
+      },
+      {
+        "text": "Explicit ids don't advance the identity's sequence, so it still hands out 1, which already exists; reset it past the imported maximum",
+        "explanation": "Correct. The sequence only moves when it generates a value. After the import, restart it (for example `ALTER TABLE t ALTER COLUMN id RESTART WITH 1001`)."
+      },
+      {
+        "text": "The table needs `bigint` ids",
+        "explanation": "1,000 rows is nowhere near the 32-bit limit of about 2.1 billion. This is a sequence-position problem."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. An identity column is backed by a sequence that produces the next value only when asked.\n2. The import supplied ids 1 to 1,000 itself, so the sequence was never called and is still at its start.\n3. The next ordinary insert asks the sequence for a value, gets 1, and collides.\n4. Fix after any import with explicit ids:\n\n```sql\nALTER TABLE t ALTER COLUMN id\n  RESTART WITH 1001;\n```\n\n5. `GENERATED ALWAYS` makes accidental explicit ids an error in the first place, which is why it's the safer default.",
+    "link": {
+      "title": "CREATE TABLE — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-createtable.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You must rename `customers.city` to `town` in PostgreSQL with no downtime, while old and new application versions run side by side during the deploy. Which steps belong in a safe expand-and-contract plan? Select all that apply.",
+    "options": [
+      {
+        "text": "Add a new nullable `town` column",
+        "explanation": "Correct. Adding a nullable column is metadata-only and breaks nothing."
+      },
+      {
+        "text": "Deploy code that writes to both columns and reads from `city`",
+        "explanation": "Correct. Both old and new versions keep working, and new writes populate `town`."
+      },
+      {
+        "text": "Run `ALTER TABLE customers RENAME COLUMN city TO town` in the first deploy",
+        "explanation": "The rename is instant, but every running instance of the old code that still says `city` fails immediately. That's the outage you were trying to avoid."
+      },
+      {
+        "text": "Backfill `town` from `city` in small batches, then switch reads to `town`",
+        "explanation": "Correct. Small batches keep row locks and WAL bursts short, and reads switch only once the data is complete."
+      },
+      {
+        "text": "Drop `city` in a later release, once no running code uses it",
+        "explanation": "Correct. Contract last, when nothing depends on the old column."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Expand and contract, in order:\n\n1. **Expand**: add nullable `town` (metadata-only, but still lock-sensitive).\n2. Deploy code that writes both columns and continues reading `city`. Wait until all writers use it, or use a carefully designed synchronisation trigger for older writers.\n3. Backfill in batches while dual writes keep both columns current. Verify that values agree before switching reads.\n4. Switch reads to `town` but keep dual writes until every reader has migrated; then stop writing `city`.\n5. **Contract**: drop `city` only once no running code uses it.\n\nSwitching reads while old writers still update only `city` can expose stale values in `town`. Small batches and lock timeouts control operational impact.",
+    "link": {
+      "title": "ALTER TABLE — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  }
+]

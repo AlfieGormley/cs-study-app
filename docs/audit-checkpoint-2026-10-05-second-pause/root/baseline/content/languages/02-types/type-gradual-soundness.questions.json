@@ -1,0 +1,344 @@
+[
+  {
+    "id": "type-gradual-soundness-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Under `strict`, which line does TypeScript reject?\n\n```ts\nlet a: any = 3;\nlet s: string = a;   // 1\na.foo.bar();         // 2\nlet u: unknown = 3;\nlet t: string = u;   // 3\n```",
+    "options": [
+      {
+        "text": "Line 1",
+        "explanation": "`any` is assignable to every type, so a `number` stored in `any` can be assigned to `string` without complaint. That's exactly its danger."
+      },
+      {
+        "text": "Line 3",
+        "explanation": "Correct. `unknown` is a safe top type: anything can go in, but you must narrow it (with `typeof`, a type guard...) before using it as a `string`."
+      },
+      {
+        "text": "Line 2",
+        "explanation": "Any property access or call on an `any` value is allowed. It will crash at run time, but the checker has switched off."
+      },
+      {
+        "text": "None: `strict` doesn't affect `any` or `unknown`",
+        "explanation": "Line 3 is an error regardless of flags. `strict` affects *implicit* `any` (`noImplicitAny`), not explicit uses."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `any` is consistent with every type in **both** directions: values flow in and out freely, and every operation on it is allowed. Lines 1 and 2 compile (line 2 crashes at run time).\n2. `unknown` is a true **top type**. Every value can be assigned *to* it, but it can only be assigned to `unknown` or `any`, and you can't access properties on it.\n3. So line 3 is the only error.\n\nRule of thumb: use `unknown` for \"I don't know yet\", and narrow it before use.",
+    "link": {
+      "title": "Everyday types (any) — TypeScript handbook",
+      "url": "https://www.typescriptlang.org/docs/handbook/2/everyday-types.html"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "mypy reports no errors on this file. What does it print?\n\n```python\nimport json\nfrom typing import Any\n\ndef load() -> Any:\n    return json.loads('\"42\"')\n\ndef double(n: int) -> int:\n    return n * 2\n\nprint(double(load()))\n```",
+    "options": [
+      {
+        "text": "`84`",
+        "explanation": "That assumes `load()` returns the integer 42. The JSON text `\"42\"` (with quotes) decodes to the string `\"42\"`."
+      },
+      {
+        "text": "A `TypeError`, because `n` is annotated `int`",
+        "explanation": "Python never enforces annotations at run time. `n` happily receives a string."
+      },
+      {
+        "text": "`4242`",
+        "explanation": "Correct. `load()` returns the string `\"42\"`. `Any` lets it pass as an `int` statically, and at run time `\"42\" * 2` repeats the string."
+      },
+      {
+        "text": "mypy would actually reject the call",
+        "explanation": "`Any` is consistent with every type, including `int`, so mypy has no grounds to object."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `json.loads('\"42\"')` parses a JSON **string**: the result is the Python `str` `\"42\"`.\n2. `load` is annotated `-> Any`, so mypy treats the result as compatible with anything, including `int`.\n3. At run time nothing checks the `n: int` hint.\n4. `\"42\" * 2` is string repetition: `\"4242\"`.\n\nThe typed function silently did the wrong thing, and the bug entered through `Any`.",
+    "link": {
+      "title": "PEP 484: Type hints",
+      "url": "https://peps.python.org/pep-0484/"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does it mean for a type system to be **sound**?",
+    "options": [
+      {
+        "text": "It accepts every program that would run without type errors",
+        "explanation": "That's *completeness*. Sound checkers typically reject some good programs; the guarantee runs the other way."
+      },
+      {
+        "text": "It never reports errors that the programmer disagrees with",
+        "explanation": "Soundness is a mathematical property of the checker and language, not about developer experience."
+      },
+      {
+        "text": "Every value carries its type at run time",
+        "explanation": "That describes dynamic tagging. A sound static system may erase types entirely (as ML and Haskell compilers largely do)."
+      },
+      {
+        "text": "A program it accepts can never perform an operation on a value of the wrong type at run time",
+        "explanation": "Correct. Sound means no false negatives: if the checker says a variable is a `number`, it really is one in every execution."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think of the checker as a test for \"has type errors\":\n\n| | Has a type error | Doesn't |\n|---|---|---|\n| Rejected | correct | false alarm |\n| Accepted | **unsound** | correct |\n\n- **Sound**: the \"accepted but has a type error\" cell is empty.\n- **Complete**: the \"rejected but fine\" cell is empty.\n\nUndecidability means a useful checker can't be both, so mainstream systems aim for sound (or deliberately give it up, as TypeScript does) and accept some false alarms.",
+    "link": {
+      "title": "Type system (type safety) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Type_system"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "With `strict: true` and default settings otherwise, which of these TypeScript snippets type-check but can throw a `TypeError` at run time? Select all that apply.",
+    "options": [
+      {
+        "text": "`const xs: number[] = []; xs[0].toFixed();`",
+        "explanation": "Yes. Without `noUncheckedIndexedAccess` (not part of `strict`), `xs[0]` is typed `number` but is `undefined`."
+      },
+      {
+        "text": "`const u = JSON.parse(s) as User; u.name.trim();`",
+        "explanation": "Yes. `JSON.parse` returns `any` and `as` just asserts. If the JSON lacks `name`, `.trim()` throws."
+      },
+      {
+        "text": "`const d: Dog[] = [dog]; const a: Animal[] = d; a.push(cat); d[1].bark();`",
+        "explanation": "Yes. Arrays are covariant in TypeScript, so a `Cat` ends up in the dogs array."
+      },
+      {
+        "text": "`function f(x: string | null) { return x.length; }`",
+        "explanation": "No. `strictNullChecks` (part of `strict`) rejects `x.length` until `null` is ruled out. This one doesn't type-check."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each against TypeScript's known holes:\n\n1. **Unchecked indexing**: `xs[0]` has type `number`, value `undefined`. Compiles, throws.\n2. **`any` plus assertion**: `as User` isn't checked at run time. Compiles, may throw.\n3. **Covariant arrays**: compiles, throws `d[1].bark is not a function`.\n4. **Null**: under `strictNullChecks`, `x` might be `null`, so `x.length` is a compile error. Rejected, so it isn't an example of unsoundness.\n\nSo the first three.",
+    "link": {
+      "title": "Type compatibility and soundness — TypeScript handbook",
+      "url": "https://www.typescriptlang.org/docs/handbook/type-compatibility.html"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run `mypy app.py` with default settings. Does it report the bug?\n\n```python\ndef report(items):\n    count = len(items)\n    return \"Total: \" + count\n```",
+    "options": [
+      {
+        "text": "Yes: adding `str` and `int` is always caught",
+        "explanation": "It would be caught inside a checked function. The problem is that this function isn't checked at all by default."
+      },
+      {
+        "text": "No: `items` has no annotation, so mypy skips the function's body",
+        "explanation": "Correct. By default mypy doesn't type-check the bodies of unannotated functions, and treats their parameters and return as `Any`. `--check-untyped-defs` (part of `--strict`) changes this."
+      },
+      {
+        "text": "No: mypy only checks code that is run by tests",
+        "explanation": "mypy is a static checker; it never runs code. Whether it checks this body depends on annotations and flags."
+      },
+      {
+        "text": "Yes, but only as a warning",
+        "explanation": "mypy doesn't produce a warning here. With defaults it says nothing; with `--check-untyped-defs` it reports an error."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `report` has no annotations at all. (Even so, `len` returns `int`, so the body's error *would* be visible to a checker that looked.)\n2. mypy's default is to treat such a function as **untyped**: it doesn't check its body, and callers see `(Any) -> Any`.\n3. That's deliberate for gradual adoption: a legacy codebase passes on day one.\n4. To get the error, add an annotation (`def report(items: list[str]) -> str:`) or enable `--check-untyped-defs`.\n\nThen mypy reports `Unsupported operand types for + (\"str\" and \"int\")`. Lesson: a clean mypy run says less than you might think.",
+    "link": {
+      "title": "Using mypy with an existing codebase — mypy docs",
+      "url": "https://mypy.readthedocs.io/en/stable/existing_code.html"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In Siek and Taha's gradual typing, the dynamic type `?` is consistent with every type: `int ~ ?` and `? ~ string`. Why must consistency **not** be transitive?",
+    "options": [
+      {
+        "text": "If it were, `int ~ ?` and `? ~ string` would give `int ~ string`, so every type would be compatible with every other",
+        "explanation": "Correct. Transitivity through `?` would collapse the type system: the checker could never reject anything."
+      },
+      {
+        "text": "Because transitivity is too expensive to compute",
+        "explanation": "Cost isn't the issue; checking a transitive relation is no harder. It's that transitivity would make the relation meaningless."
+      },
+      {
+        "text": "It is transitive; subtyping is the relation that isn't",
+        "explanation": "Subtyping *is* transitive (`Dog <: Animal <: Object`). It's consistency that deliberately isn't."
+      },
+      {
+        "text": "To allow `int` to be used where `float` is expected",
+        "explanation": "Numeric promotion is unrelated; that's a separate subtyping or coercion rule."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Consistency (`~`) replaces equality or subtyping when checking assignments in a gradual system.\n2. `?` must be consistent with everything, or untyped code couldn't call typed code.\n3. Suppose `~` were transitive. From `int ~ ?` and `? ~ string` we'd get `int ~ string`.\n4. Repeat for any two types: everything is consistent with everything, and the checker accepts every program.\n5. So `~` is reflexive and symmetric but **not** transitive: you can pass through `?` once, at a point the checker can see, not chain through it.",
+    "link": {
+      "title": "What is gradual typing — Jeremy Siek",
+      "url": "https://jsiek.github.io/home/WhatIsGradualTyping.html"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your TypeScript service does this:\n\n```ts\nconst res = await fetch(url);\nconst user = (await res.json()) as User;\nsendEmail(user.email.toLowerCase());\n```\n\nA partner API change drops the `email` field. When is the problem detected?",
+    "options": [
+      {
+        "text": "At compile time, because `User` requires `email`",
+        "explanation": "The compiler only sees `as User`, an assertion it trusts. It has no idea what the API returns."
+      },
+      {
+        "text": "When `res.json()` runs, because TypeScript validates the parsed object against `User`",
+        "explanation": "TypeScript emits no run-time checks; types are erased. `res.json()` returns whatever the JSON contains."
+      },
+      {
+        "text": "At the `toLowerCase()` call, as a `TypeError` on `undefined`",
+        "explanation": "Correct. Nothing checks the shape, so `user.email` is `undefined` and calling a method on it throws, possibly far from the real cause."
+      },
+      {
+        "text": "Never: TypeScript converts the missing field to an empty string",
+        "explanation": "TypeScript never inserts conversions or defaults."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `res.json()` returns `Promise<any>`. `as User` asserts the shape without checking.\n2. Types are erased, so the compiled JavaScript just reads `user.email`, which is `undefined`.\n3. `undefined.toLowerCase()` throws `TypeError` at that line.\n\nFix: **validate at the boundary**. Parse with a schema library:\n\n```ts\nconst user = UserSchema.parse(\n  await res.json());\n```\n\nNow a bad payload fails immediately, with a message naming the missing field, and the result really is a `User`.",
+    "link": {
+      "title": "Type compatibility and soundness — TypeScript handbook",
+      "url": "https://www.typescriptlang.org/docs/handbook/type-compatibility.html"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Typed Racket enforces types at the boundary between typed and untyped modules. When an untyped module passes a *function* to a typed module expecting `(Integer -> Integer)`, why can't the check be done once, at the moment of crossing?",
+    "options": [
+      {
+        "text": "Because Racket functions don't carry their arity",
+        "explanation": "Arity is known, but arity isn't the type. The issue is what the function returns for each input."
+      },
+      {
+        "text": "Because checking would require running the function on every possible input; instead it's wrapped in a contract that checks each call's argument and result",
+        "explanation": "Correct. A function's type is a promise about all future calls, which can't be verified up front. The wrapper checks each call, and blames the side that broke the promise."
+      },
+      {
+        "text": "Because Typed Racket erases types like TypeScript",
+        "explanation": "Typed Racket is *sound* gradual typing: it deliberately doesn't erase checks at boundaries. That's what makes it slow in some configurations."
+      },
+      {
+        "text": "It can: Typed Racket infers the untyped function's type first",
+        "explanation": "Untyped code has no static types to infer reliably; that's why it's untyped. The guarantee must come from run-time checks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A first-order value like `42` can be checked once: is it an integer? Done.\n2. A function's type `(Integer -> Integer)` is a claim about **every** call, in the future.\n3. You can't test all inputs, so Typed Racket wraps the function in a **contract**: on each call, check the argument is an `Integer` and the result is an `Integer`.\n4. If the result isn't, the error **blames** the untyped module that supplied the function.\n5. Cost: every call through a busy boundary pays for the wrapper. Takikawa et al. (2016) found some mixed configurations many times slower than either fully typed or fully untyped code.",
+    "link": {
+      "title": "Is sound gradual typing dead? (Takikawa et al., POPL 2016, PDF)",
+      "url": "https://www2.ccs.neu.edu/racket/pubs/popl16-tfgnvf.pdf"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're leading a migration of a 1-million-line Python codebase to mypy. Which steps are sound practice? Select all that apply.",
+    "options": [
+      {
+        "text": "Start with permissive settings so CI passes, then tighten per module",
+        "explanation": "Good. A gradual system's strength is incremental adoption; a red build on day one gets the checker switched off."
+      },
+      {
+        "text": "Annotate shared libraries and data models first",
+        "explanation": "Good. Their types flow into every caller, so each annotation there improves checking across many modules."
+      },
+      {
+        "text": "Make new modules use `disallow_untyped_defs`, and stop old modules getting worse",
+        "explanation": "Good. A ratchet steadily grows the typed portion without a big-bang rewrite."
+      },
+      {
+        "text": "Use `cast()` liberally to clear errors, since it adds a run-time check",
+        "explanation": "Bad. `typing.cast` does nothing at run time; it only tells the checker to trust you. Overused, it hides real bugs."
+      },
+      {
+        "text": "Trust annotations on JSON-handling functions instead of validating payloads",
+        "explanation": "Bad. Annotations describe what *should* arrive. External data must be validated (for example with Pydantic) to produce a trustworthy typed value."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Judge each step by two tests: does it keep the migration incremental, and does it keep the types honest?\n\n| Step | Incremental? | Honest? |\n|---|---|---|\n| Permissive start | yes | yes |\n| Core first | yes | yes |\n| Ratchet | yes | yes |\n| `cast()` everywhere | yes | **no** |\n| Trust JSON hints | yes | **no** |\n\n`cast` and unvalidated boundaries both create values whose static type is a guess. Dropbox's write-up on type-checking 4 million lines describes the same incremental, core-first approach.",
+    "link": {
+      "title": "Using mypy with an existing codebase — mypy docs",
+      "url": "https://mypy.readthedocs.io/en/stable/existing_code.html"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Amin and Tate (2016) showed Java's type system is unsound: a program using `null` and wildcard bounds compiles, yet assigns an `Integer` to a `String` variable. What happens when it runs?",
+    "options": [
+      {
+        "text": "Memory corruption: the JVM reads the `Integer`'s bytes as a `String`",
+        "explanation": "The JVM doesn't trust the compiler blindly. Bytecode verification and checked casts stop it treating an object as the wrong class."
+      },
+      {
+        "text": "Nothing: the program runs normally and prints the integer",
+        "explanation": "Using the value as a `String` needs a checked cast in the bytecode, which fails."
+      },
+      {
+        "text": "The JVM refuses to load the class file",
+        "explanation": "The bytecode is valid; the unsoundness is in the source-level type system, not in the bytecode verifier."
+      },
+      {
+        "text": "It throws `ClassCastException`, because the erased generic code contains a checked cast",
+        "explanation": "Correct. Erasure inserts run-time casts where generic values are used at a specific type, so the unsound assignment is caught as an exception rather than corrupting memory."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Java source types are checked by `javac`. Amin and Tate found a combination (`null` inhabiting a type with contradictory wildcard bounds) that lets `javac` accept an unsafe coercion.\n2. Generics are **erased**, so the compiler inserts `checkcast` instructions where values come out of generic code at a concrete type.\n3. At run time, `checkcast String` on an `Integer` fails: `ClassCastException`.\n4. So the language is unsound, but the **platform** stays memory-safe.\n\nCompare C: an unsound cast there just reinterprets memory, with undefined behaviour.",
+    "link": {
+      "title": "Type system (type safety) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Type_system"
+    }
+  },
+  {
+    "id": "type-gradual-soundness-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your team turns on `noUncheckedIndexedAccess` in a strict TypeScript project. Which change in behaviour should you expect?",
+    "options": [
+      {
+        "text": "Array and record indexing now return `T | undefined`, so code must check before using the element",
+        "explanation": "Correct. That closes one soundness hole, at the cost of extra checks or `!` assertions in loops where the index is known to be valid."
+      },
+      {
+        "text": "Out-of-bounds accesses now throw at run time",
+        "explanation": "TypeScript emits no extra run-time checks; the flag only changes static types."
+      },
+      {
+        "text": "Nothing, since `strict` already includes it",
+        "explanation": "It's deliberately *not* part of `strict`, because it makes much existing code noisy."
+      },
+      {
+        "text": "Arrays become invariant",
+        "explanation": "Array variance is unaffected by this flag; covariant arrays remain a separate hole."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Without the flag, `xs[i]` has type `T`, even though it may be `undefined` at run time.\n2. With it, `xs[i]` has type `T | undefined`.\n3. Code like `xs[i].toFixed()` now fails to compile until you narrow: `const v = xs[i]; if (v !== undefined) ...`.\n4. Types are still erased; the generated JavaScript is identical.\n5. Trade-off: fewer \"undefined\" crashes, more boilerplate. That's why it's opt-in rather than part of `strict`. A `for...of` loop avoids most of the noise.",
+    "link": {
+      "title": "noUncheckedIndexedAccess — TSConfig reference",
+      "url": "https://www.typescriptlang.org/tsconfig/#noUncheckedIndexedAccess"
+    }
+  }
+]

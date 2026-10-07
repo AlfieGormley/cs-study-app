@@ -1,0 +1,168 @@
+[
+  {
+    "id": "sync-semaphores-condvars-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A semaphore guarding a pool of database connections is initialised to 3. Five threads call `wait` at roughly the same time and none has called `signal` yet. How many threads are blocked?",
+    "options": [
+      { "text": "0", "explanation": "Only 3 permits exist. The fourth and fifth `wait` calls find the count at 0 and must block." },
+      { "text": "2", "explanation": "Correct. The first three waits take the count 3 → 2 → 1 → 0 and proceed. The remaining two block until someone signals." },
+      { "text": "3", "explanation": "This confuses the number of permits with the number of blocked threads. Three threads get through; two wait." },
+      { "text": "4", "explanation": "That would be a binary semaphore (init 1). With init 3, three threads proceed concurrently." }
+    ],
+    "answer": 1,
+    "workedExample": "Count the permits down:\n\n```\nT1 wait: 3 -> 2  runs\nT2 wait: 2 -> 1  runs\nT3 wait: 1 -> 0  runs\nT4 wait: 0       blocks\nT5 wait: 0       blocks\n```\n\nWhen T1 finishes and signals, the count would go to 1, but a waiter exists, so one of T4/T5 is woken and takes it. At most 3 threads ever hold a connection.",
+    "link": { "title": "Semaphore (programming) — Wikipedia", "url": "https://en.wikipedia.org/wiki/Semaphore_(programming)" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A parent creates a child thread and then calls `sem_wait(&done)`, where `done` was initialised to 0. The child calls `sem_post(&done)` when it finishes. The child happens to finish **before** the parent reaches `sem_wait`. What happens?",
+    "options": [
+      { "text": "The parent blocks forever because the post happened before anyone was waiting", "explanation": "That is the behaviour of a condition variable signal with no waiter. A semaphore stores the post in its count." },
+      { "text": "The program crashes because you cannot post to a semaphore nobody is waiting on", "explanation": "Posting with no waiters is completely normal; it just increments the count." },
+      { "text": "The parent's `sem_wait` returns immediately, because the count is 1", "explanation": "Correct. The post raised the count from 0 to 1. The parent's wait decrements it to 0 and does not block. Semaphores remember signals." },
+      { "text": "The child blocks in `sem_post` until the parent waits", "explanation": "`sem_post` never blocks. It increments and, if there is a waiter, wakes one." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `done = 0`.\n2. Child finishes first: `sem_post` → `done = 1`. Nobody waiting, nothing to wake.\n3. Parent: `sem_wait` → count is 1 > 0, decrement to 0, return immediately.\n\nIf instead the parent waited first: count 0, parent blocks; child posts, waking it. Either order works, which is exactly why semaphores are good for one-off ordering.",
+    "link": { "title": "OSTEP: Semaphores (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should a thread call `pthread_cond_wait` inside `while (!condition)` rather than `if (!condition)`?",
+    "options": [
+      { "text": "Because `pthread_cond_wait` only waits for a fixed timeout", "explanation": "Plain `pthread_cond_wait` has no timeout (`pthread_cond_timedwait` does). The loop is about the condition, not timing." },
+      { "text": "Because the woken thread may find the condition false again (another thread got there first, under Mesa semantics), and spurious wakeups are allowed", "explanation": "Correct. Being woken means \"the state may have changed\", not \"the condition is true\". Re-checking under the mutex is the only safe approach." },
+      { "text": "Because `while` makes the wait faster", "explanation": "The loop usually runs once; it adds safety, not speed." },
+      { "text": "Because `if` does not hold the mutex", "explanation": "The mutex is held in both cases; the choice of `if` or `while` does not change locking. It changes whether the condition is checked again after waking." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Signal moves a waiter from the CV queue to runnable. It still has to re-acquire the mutex.\n2. Before it does, another thread can take the mutex and consume what the signal announced.\n3. POSIX also lets `pthread_cond_wait` return with no signal at all.\n4. In both cases the condition can be false when `wait` returns. `while` re-checks and waits again; `if` charges ahead on a false assumption.\n\nRule: **a condition variable wait always sits in a loop that tests the condition.**",
+    "link": { "title": "Spurious wakeup — Wikipedia", "url": "https://en.wikipedia.org/wiki/Spurious_wakeup" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport threading\ns = threading.Semaphore(0)\ns.release()\ns.release()\nr = [s.acquire(blocking=False)\n     for _ in range(3)]\nprint(r)\n```",
+    "options": [
+      { "text": "`[True, True, False]`", "explanation": "Correct. Two releases raise the count to 2. The first two non-blocking acquires succeed; the third finds 0 and returns False instead of blocking." },
+      { "text": "`[False, False, False]`", "explanation": "This assumes the releases are lost because nobody was waiting. Semaphores keep the count, so they are not." },
+      { "text": "`[True, False, False]`", "explanation": "This treats the semaphore as binary. A plain `Semaphore` counts each release." },
+      { "text": "It raises `ValueError` because the semaphore was released above its initial value", "explanation": "Only `BoundedSemaphore` raises that. A plain `Semaphore` may be released any number of times." }
+    ],
+    "answer": 0,
+    "workedExample": "```\nSemaphore(0)      count 0\nrelease()         count 1\nrelease()         count 2\nacquire(False)    True,  count 1\nacquire(False)    True,  count 0\nacquire(False)    False, count 0\n```\n\n`blocking=False` makes `acquire` return immediately with a bool rather than sleep. Had it been `BoundedSemaphore(0)`, the first `release()` would raise `ValueError`.",
+    "link": { "title": "threading — Python documentation", "url": "https://docs.python.org/3/library/threading.html" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer writes a join using only a condition variable, with no `done` flag:\n\n```c\nvoid thr_exit(void) {\n  lock(&m);\n  pthread_cond_signal(&c);\n  unlock(&m);\n}\nvoid thr_join(void) {\n  lock(&m);\n  pthread_cond_wait(&c, &m);\n  unlock(&m);\n}\n```\n\nThe child runs to completion before the parent calls `thr_join`. What happens?",
+    "options": [
+      { "text": "The join returns immediately", "explanation": "It would with a semaphore, which counts the post. A CV signal with no waiter is simply discarded." },
+      { "text": "The child blocks in `thr_exit` until the parent waits", "explanation": "`pthread_cond_signal` never blocks; with no waiters it is a no-op." },
+      { "text": "Undefined behaviour because you cannot signal an empty CV", "explanation": "Signalling an empty CV is well-defined: nothing happens." },
+      { "text": "The parent sleeps forever: the signal was sent when no one was waiting and condition variables do not remember signals", "explanation": "Correct. Without a state variable there is nothing for the parent to check, so it waits for a signal that already came and went (barring a lucky spurious wakeup)." }
+    ],
+    "answer": 3,
+    "workedExample": "1. Child: lock, signal (CV queue empty → nothing happens), unlock.\n2. Parent: lock, `wait` → sleeps on the CV.\n3. Nobody will ever signal again.\n\nFix: add `int done`. The child sets `done = 1` before signalling; the parent does `while (!done) wait(...)`. If the child already finished, the parent sees `done == 1` and never waits.",
+    "link": { "title": "OSTEP: Condition variables (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-cv.pdf" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The parent checks the flag **without** holding the mutex:\n\n```c\n// parent\nwhile (done == 0) {\n  lock(&m);\n  pthread_cond_wait(&c, &m);\n  unlock(&m);\n}\n// child\nlock(&m); done = 1;\nsignal(&c); unlock(&m);\n```\n\nWhat bad interleaving can occur?",
+    "options": [
+      { "text": "The parent reads `done == 0`, then the child sets `done = 1` and signals before the parent calls `wait`; the parent then sleeps forever", "explanation": "Correct. This is a lost wakeup. The check and the sleep must be atomic with respect to the signaller, which is why the check happens under the mutex and `wait` releases it atomically." },
+      { "text": "Both threads end up holding the mutex", "explanation": "The mutex itself still works. The bug is that the condition was checked outside it." },
+      { "text": "The child deadlocks because the parent holds the mutex while sleeping", "explanation": "`pthread_cond_wait` releases the mutex while sleeping, so the child can always acquire it." },
+      { "text": "None; the while loop makes it safe", "explanation": "The loop protects against waking with the condition false. It cannot help if the thread goes to sleep after the only signal has already been sent." }
+    ],
+    "answer": 0,
+    "workedExample": "```\nP: reads done == 0     (no lock)\nC: lock; done = 1\nC: signal -> no waiter\nC: unlock\nP: lock; wait -> sleeps\n```\n\nThe signal fell into the gap between P's check and P's wait. Correct version:\n\n```c\nlock(&m);\nwhile (done == 0)\n  pthread_cond_wait(&c, &m);\nunlock(&m);\n```\n\nNow the child cannot set `done` between the check and the sleep, because it needs `m`, and `wait` only releases `m` once P is on the queue.",
+    "link": { "title": "pthread_cond_wait — POSIX manual page", "url": "https://man7.org/linux/man-pages/man3/pthread_cond_wait.3p.html" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about semaphores and mutexes are true? Select all that apply.",
+    "options": [
+      { "text": "Any thread may post a semaphore, even one that never waited on it", "explanation": "Correct. Semaphores have no owner, which is what lets one thread signal another (the ordering pattern)." },
+      { "text": "A binary semaphore supports priority inheritance just like a mutex", "explanation": "Priority inheritance needs to know who holds the resource so it can boost them. A semaphore has no owner, so there is no one to boost." },
+      { "text": "A semaphore initialised to 0 can be used to make one thread wait until another has finished a step", "explanation": "Correct. The waiter blocks until the other thread posts, whichever runs first." },
+      { "text": "Python's `BoundedSemaphore` raises an error if it is released more times than it was acquired", "explanation": "Correct. It raises `ValueError` when a release would push the count above its initial value, catching double-release bugs." },
+      { "text": "Unlocking a default pthread mutex from a thread that does not own it is well-defined and simply releases it", "explanation": "For a default (normal) mutex this is undefined behaviour. Error-checking mutexes return `EPERM`." }
+    ],
+    "answer": [0, 2, 3],
+    "workedExample": "1. Ownership is the dividing line. Mutex: owner, so it can detect misuse, be re-entrant and support priority inheritance. Semaphore: no owner, so anyone may post.\n2. That lack of ownership is a feature for signalling (option C) and a hazard for mutual exclusion (stray posts).\n3. `BoundedSemaphore` puts back some safety by capping the count.\n4. So A, C and D are true; B and E describe mutex-only or undefined behaviour.",
+    "link": { "title": "Semaphore (programming) — Wikipedia", "url": "https://en.wikipedia.org/wiki/Semaphore_(programming)" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A queue's `get` uses `if` instead of `while`:\n\n```c\nlock(&m);\nif (count == 0)\n  pthread_cond_wait(&fill, &m);\nx = take();   // assumes count > 0\nunlock(&m);\n```\n\nConsumer C1 is waiting. Producer P adds one item and signals. Before C1 re-acquires the mutex, consumer C2 calls `get`. What can happen?",
+    "options": [
+      { "text": "C2 blocks because C1 has priority after being signalled", "explanation": "Under Mesa semantics the woken thread gets no priority; it competes for the mutex like everyone else." },
+      { "text": "Both consumers get a copy of the same item", "explanation": "`take()` runs under the mutex, so the item is removed by one thread only. The problem is that the second `take()` finds nothing." },
+      { "text": "Nothing bad: the signal guarantees C1 the item", "explanation": "That would be Hoare semantics, where the mutex is handed directly to the woken thread. POSIX uses Mesa semantics, where a signal is only a hint." },
+      { "text": "C2 takes the item; C1 then returns from `wait`, skips the re-check and calls `take()` on an empty queue", "explanation": "Correct. C2 saw `count == 1` and never waited. C1 was woken by a stale signal and, with `if`, does not re-check." }
+    ],
+    "answer": 3,
+    "workedExample": "```\nC1: lock; count==0; wait (unlocks)\nP:  lock; add (count=1); signal\n    C1 runnable, needs mutex\nP:  unlock\nC2: lock (wins race); count==1\nC2: take (count=0); unlock\nC1: gets mutex; returns from wait\nC1: take() on empty queue!\n```\n\nWith `while (count == 0)`, C1 re-checks after `wait`, sees 0 and goes back to sleep. That one-word change is the entire fix.",
+    "link": { "title": "OSTEP: Condition variables (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-cv.pdf" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A bounded buffer of size 1 has one producer and two consumers. Everyone uses a **single** condition variable `cv`, with correct `while` loops, and calls `pthread_cond_signal` (not broadcast) after changing the buffer. Can the program get stuck with all three threads asleep?",
+    "options": [
+      { "text": "No; while loops make every condition-variable program correct", "explanation": "While loops handle stale and spurious wakeups. They cannot fix waking the *wrong kind* of thread, which is what happens here." },
+      { "text": "Yes: a consumer that empties the buffer can signal the other consumer instead of the producer; that consumer finds the buffer empty and sleeps, and nobody wakes the producer", "explanation": "Correct. With one CV shared by producers and consumers, `signal` may wake a thread that cannot make progress. Use two CVs (`empty` for producers, `fill` for consumers) or `broadcast`." },
+      { "text": "Yes, but only if a spurious wakeup occurs", "explanation": "No spurious wakeup is needed. The hang comes from signal choosing the wrong waiter." },
+      { "text": "No, because the producer always runs first", "explanation": "Scheduling order is not guaranteed, and even if the producer starts first, it later waits on the full buffer like the trace shows." }
+    ],
+    "answer": 1,
+    "workedExample": "1. C1 and C2 both wait (buffer empty).\n2. P fills the buffer, signals (wakes C1), then loops, sees the buffer full, and waits.\n3. C1 runs, takes the item, signals. The CV now holds C2 and P. Signal wakes **C2**.\n4. C2 re-checks: buffer empty, waits again. C1 loops for its next item, finds the buffer empty and waits too.\n5. P is still asleep, waiting for 'not full', and nobody will signal.\n\nAll three sleep. Two CVs ensure consumers only wake producers and vice versa:\n\n```\nproducer: wait(empty) / signal(fill)\nconsumer: wait(fill)  / signal(empty)\n```",
+    "link": { "title": "OSTEP: Condition variables (PDF)", "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-cv.pdf" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In Python, what does `cond.wait_for(lambda: len(items) > 0)` do that a bare `cond.wait()` does not?",
+    "options": [
+      { "text": "It takes the lock for you, so you do not need `with cond:`", "explanation": "Like `wait()`, `wait_for` must be called with the condition's lock held; otherwise it raises `RuntimeError`." },
+      { "text": "It wakes the producer automatically", "explanation": "It only affects the waiting side. Someone still has to call `notify()` after changing `items`." },
+      { "text": "It checks the predicate first and re-checks it after every wakeup, returning only when it is true (or on timeout)", "explanation": "Correct. It is the `while (!condition) wait();` loop packaged as a method." },
+      { "text": "It busy-waits on the predicate without sleeping", "explanation": "It sleeps between checks via `wait()`; it only re-evaluates the predicate when woken (or on timeout)." }
+    ],
+    "answer": 2,
+    "workedExample": "`wait_for(pred)` is roughly:\n\n```python\nresult = pred()\nwhile not result:\n    self.wait()\n    result = pred()\nreturn result\n```\n\n(with timeout handling added). So it is exactly the Mesa-safe loop. You still need:\n\n1. `with cond:` around it, because waiting releases and re-acquires the lock.\n2. A `notify()` or `notify_all()` from whoever changes `items`.",
+    "link": { "title": "threading — Python documentation", "url": "https://docs.python.org/3/library/threading.html" }
+  },
+  {
+    "id": "sync-semaphores-condvars-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In which situations is `pthread_cond_broadcast` (or Java's `notifyAll`) the right call rather than `signal`? Select all that apply.",
+    "options": [
+      { "text": "Threads waiting on the same CV are waiting for different conditions, such as allocation requests of different sizes", "explanation": "Correct. `signal` might wake a thread whose condition is still false while one whose condition is true keeps sleeping. Broadcast lets every waiter re-check." },
+      { "text": "A Java object's single intrinsic condition is shared by producers and consumers", "explanation": "Correct. With one condition per object, `notify` can wake the wrong kind of thread (the hang from the previous question). `notifyAll` is the safe default for intrinsic locks." },
+      { "text": "A shutdown flag is set and every worker thread must notice and exit", "explanation": "Correct. Every waiter needs to wake and see the flag; `signal` would wake only one." },
+      { "text": "There are 200 identical consumer threads and one item has just been added", "explanation": "Only one consumer can take the item. Broadcast would wake 200 threads to fight for the mutex, 199 of which go back to sleep: a thundering herd. Use `signal`." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "Ask: **how many waiters could make progress, and can I target them?**\n\n1. Different conditions on one CV: you cannot target, so wake all and let the while loops sort it out.\n2. One shared Java condition: same problem, producers and consumers mixed.\n3. Shutdown: everyone must wake.\n4. One item, identical waiters: exactly one can proceed, so `signal`.\n\nBroadcast is never *incorrect* with while loops, only potentially wasteful. Signal is only correct when any single woken waiter is guaranteed to be one that can use the change.",
+    "link": { "title": "Monitor (synchronization) — Wikipedia", "url": "https://en.wikipedia.org/wiki/Monitor_(synchronization)" }
+  }
+]

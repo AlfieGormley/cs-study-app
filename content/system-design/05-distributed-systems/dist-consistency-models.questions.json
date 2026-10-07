@@ -1,0 +1,382 @@
+[
+  {
+    "id": "dist-consistency-models-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user updates their display name, the page reloads, and the old name appears. A second later it shows the new one. Which guarantee was violated?",
+    "options": [
+      {
+        "text": "Monotonic writes",
+        "explanation": "Wrong. Monotonic writes is about a client's own writes being applied in order. Only one write happened here."
+      },
+      {
+        "text": "Read-your-writes",
+        "explanation": "Correct. The user failed to see their own completed write, because the reload was served by a replica that hadn't yet received it."
+      },
+      {
+        "text": "Eventual consistency",
+        "explanation": "Wrong. Eventual consistency was honoured: the replicas converged a second later. It just doesn't promise anything about the interim."
+      },
+      {
+        "text": "Writes-follow-reads",
+        "explanation": "Wrong. That guarantee orders writes made after a read relative to what was read; this scenario is about reading after writing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The write went to the leader and succeeded.\n2. The reload read from an async replica with replication lag.\n3. The user saw a state older than their own write.\n\nThat is precisely a **read-your-writes** violation. Fixes: read the user's own data from the leader, or have the client send its last write position so the replica waits (or redirects) until it has caught up.",
+    "link": {
+      "title": "Read your writes (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/read-your-writes"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Client A writes x=1 from 10:00:00.000 to 10:00:00.300. Client B reads x from 10:00:00.100 to 10:00:00.150 and gets **1**. Client C reads x from 10:00:00.200 to 10:00:00.250. Under **linearizability**, what can C's read return?",
+    "options": [
+      {
+        "text": "Only 1",
+        "explanation": "Correct. B's read returned 1, so the write's linearization point is before 10:00:00.150. C starts at .200, after that point, so it must see 1 (or newer)."
+      },
+      {
+        "text": "Either 0 or 1, because C's read overlaps A's write.",
+        "explanation": "Wrong. Overlap alone would allow either, but B already observed 1 and finished before C started. Linearizability then forbids C going back to 0."
+      },
+      {
+        "text": "Only 0, because A's write hasn't finished yet.",
+        "explanation": "Wrong. A write can take effect at any instant between its start and end. B already saw it take effect."
+      },
+      {
+        "text": "Anything, linearizability doesn't constrain concurrent reads.",
+        "explanation": "Wrong. Linearizability constrains every operation relative to real time; reads that follow a read seeing the new value must also see it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Draw it:\n\n```\nA: |------write x=1------|\nB:    |-r=1-|\nC:            |-r=?-|\n```\n\n1. Each operation takes effect at a single instant within its interval.\n2. B returned 1, so A's write took effect before B ended (.150).\n3. C started at .200 > .150, so the write is already in effect for C.\n4. C must return 1.\n\nIf C returned 0, the history would show the value going *backwards*, which no single copy could do.",
+    "link": {
+      "title": "Linearizability (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/linearizable"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user refreshes a comment thread and sees 12 comments, refreshes again and sees 9, then 12 again. Reads go round-robin to async replicas. What's the cheapest fix?",
+    "options": [
+      {
+        "text": "Make all replication synchronous.",
+        "explanation": "Wrong for 'cheapest'. It would fix it, but makes every write wait for every replica and fails writes when one replica is down."
+      },
+      {
+        "text": "Run Raft consensus for every read.",
+        "explanation": "Wrong. Consensus reads give linearizability, far stronger (and slower) than needed for this anomaly."
+      },
+      {
+        "text": "Pin each user's reads to the same replica (e.g. hash of user id).",
+        "explanation": "Correct while the chosen replica keeps an advancing history. To preserve the guarantee through failover, carry the last-seen replication position and require the replacement to catch up."
+      },
+      {
+        "text": "Add a cache in front of the replicas with a 1-hour TTL.",
+        "explanation": "Wrong. A cache hides changes for an hour and, if it misses, still reads from a random replica. It trades one anomaly for heavy staleness."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The anomaly is reads going **backwards in time**: a monotonic reads violation caused by hopping between replicas with different lag.\n\n- Replica R1 is at log position 1,000 (12 comments), R2 at 940 (9 comments).\n- Round-robin alternates R1, R2, R1.\n\nPinning the user to one replica means each read sees a position ≥ the last. If that replica fails, rehash to another, and carry the last-seen position so the new replica waits until it's caught up.",
+    "link": {
+      "title": "Monotonic reads (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/monotonic-reads"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these genuinely need **linearizability** (not just eventual or causal consistency)? Select all that apply.",
+    "options": [
+      {
+        "text": "Ensuring two people can't register the same username",
+        "explanation": "Correct. Both registration attempts must see one agreed state; with weaker models, two replicas could each accept 'alice'."
+      },
+      {
+        "text": "Choosing which node is the current leader",
+        "explanation": "Correct. All nodes must agree on a single leader; disagreement leads to split brain."
+      },
+      {
+        "text": "Counting likes on a post",
+        "explanation": "Wrong. Showing 1,203 instead of 1,205 briefly is harmless; a CRDT counter with eventual consistency is ideal."
+      },
+      {
+        "text": "Displaying replies after the posts they reply to",
+        "explanation": "Wrong. That needs causal consistency, which is weaker and remains available during partitions."
+      },
+      {
+        "text": "Preventing an account balance going below zero across concurrent withdrawals",
+        "explanation": "Correct. Each withdrawal must see the effect of all previous ones; otherwise two concurrent withdrawals can both pass the balance check."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Ask: \"does correctness need everyone to agree on the *latest* value right now?\"\n\n- Username uniqueness: yes, it's a compare-and-set on one value.\n- Leader: yes, it's a lock.\n- Balance check: yes, it's a constraint over the latest value.\n- Likes: no, approximate is fine.\n- Reply order: only causal order matters.\n\nKeeping the linearizable core small is how systems stay fast.",
+    "link": {
+      "title": "Consistency models (Jepsen)",
+      "url": "https://jepsen.io/consistency"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q5",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does **eventual consistency** guarantee?",
+    "options": [
+      {
+        "text": "Reads return the latest write within a bounded time, e.g. 1 second.",
+        "explanation": "Wrong. Eventual consistency gives no time bound at all; bounded staleness is a separate, stronger model."
+      },
+      {
+        "text": "Clients see their own writes immediately.",
+        "explanation": "Wrong. That's read-your-writes, an extra session guarantee that plain eventual consistency doesn't include."
+      },
+      {
+        "text": "All clients see writes in the same order.",
+        "explanation": "Wrong. Agreement on order is part of sequential consistency and stronger; eventual consistency allows replicas to apply writes in different orders as long as they converge."
+      },
+      {
+        "text": "If writes stop, all replicas will eventually converge to the same value.",
+        "explanation": "Correct. That's the whole promise: convergence in the absence of new writes. Interim reads can be stale or out of order."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Strip it to the definition: **liveness only**. Eventually, with no new updates, replicas agree.\n\nIt says nothing about:\n\n- how long (could be ms or hours),\n- what you read meanwhile,\n- the order writes appear in.\n\nAnd to converge, replicas need a deterministic conflict rule (LWW, CRDT merge). That's why people add session guarantees on top.",
+    "link": {
+      "title": "Eventual consistency (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Eventual_consistency"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A system offers **serializable** transactions but not linearizability. Alice commits a transaction setting her balance to £50 (from £100). One second later, in real time, she runs a read-only transaction and sees £100. Is that allowed?",
+    "options": [
+      {
+        "text": "No: serializability forbids reading stale data.",
+        "explanation": "Wrong. Serializability only requires equivalence to *some* serial order; ordering the read before the write is a valid serial order, even though it contradicts real time."
+      },
+      {
+        "text": "Yes: serializability doesn't require the serial order to respect real time.",
+        "explanation": "Correct. Placing the read-only transaction before the write gives a valid serial history. Forbidding this needs strict serializability (serializable + linearizable)."
+      },
+      {
+        "text": "Yes, but only if the two transactions touched different rows.",
+        "explanation": "Wrong. They touch the same row; the anomaly is allowed regardless, because serializability ignores real-time ordering."
+      },
+      {
+        "text": "No: any serializable database is automatically linearizable.",
+        "explanation": "Wrong. They're independent properties. Serializability is about multi-object transactions; linearizability is about real-time recency. A system can have one without the other."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Serial orders available: [T_write, T_read] or [T_read, T_write].\n2. [T_read, T_write] produces read = £100, write = £50. Valid serial execution.\n3. Serializability is satisfied.\n4. But T_read started after T_write committed, so linearizability (real time) is violated.\n\nThis happens in practice with snapshot reads on lagging replicas. Spanner's TrueTime commit-wait exists precisely to rule this out, giving **strict serializability**.",
+    "link": {
+      "title": "Linearizability versus serializability (Bailis)",
+      "url": "https://www.bailis.org/blog/linearizability-versus-serializability/"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your global social app must keep working in every region during a trans-Atlantic partition, and must never show a reply before the post it answers. Clients remain with their region during the partition and dependencies are tracked. Which listed model best fits?",
+    "options": [
+      {
+        "text": "Linearizability",
+        "explanation": "Wrong. Linearizability can't stay available on both sides of a partition (CAP); one side would have to reject requests."
+      },
+      {
+        "text": "Sequential consistency",
+        "explanation": "Wrong. Sequential consistency also needs a single global order agreed by all nodes, which a partitioned system can't maintain while both sides accept writes."
+      },
+      {
+        "text": "Causal consistency",
+        "explanation": "Correct under the stated sticky-client assumption. Causal dependencies keep replies behind their posts, while each region can continue local work. Moving a client to a replica missing its dependencies can require waiting."
+      },
+      {
+        "text": "Eventual consistency only",
+        "explanation": "Wrong. Eventual consistency stays available, but it doesn't guarantee reply-after-post ordering. You can do better."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Two requirements:\n\n1. **Available during partitions** rules out linearizable and sequential (both need global agreement on order).\n2. **Reply after post** is a causal dependency: the reply was written after reading the post.\n\nCausal consistency tracks dependencies (e.g. reply carries 'depends on post #123 @ version vector V'). A replica only exposes the reply once it has the post. Each side of the partition keeps working; histories merge after healing.\n\nThe availability claim assumes clients remain with a replica that has their causal history. Arbitrary migration during a partition is not covered.",
+    "link": {
+      "title": "Causal consistency (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/causal"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q8",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Client A writes x = 1 and gets an acknowledgement. A second later (in real time), client B, which has never communicated with A, reads x and gets **0**, the initial value. Which consistency models permit this history? Select all that apply.",
+    "options": [
+      {
+        "text": "Linearizability",
+        "explanation": "Not permitted. B's read started after A's write completed in real time, so it must return 1 or something newer."
+      },
+      {
+        "text": "Sequential consistency",
+        "explanation": "Permitted. The total order \"B reads 0, then A writes 1\" respects each client's own program order. Sequential consistency doesn't require the order to match real time across clients."
+      },
+      {
+        "text": "Causal consistency",
+        "explanation": "Permitted. A's write and B's read are not causally related (B never saw anything from A), so B may observe the older state."
+      },
+      {
+        "text": "Eventual consistency",
+        "explanation": "Permitted. Eventual consistency allows stale reads in the meantime; it only promises convergence once writes stop."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Check each model's rule against the history:\n\n```\nA: |--w x=1--|\nB:              |--r x--| -> 0\n```\n\n1. **Linearizable**: real-time order is binding. The write finished before the read began, so the read must see it. ✗\n2. **Sequential**: find *any* single order that respects each client's program order. [B: read 0, A: write 1] works. ✓\n3. **Causal**: only causally related operations must be ordered. There's no path from A's write to B's read. ✓\n4. **Eventual**: anything goes in the interim. ✓\n\nThe moment B learns about A's write through some other channel (A phones B), real time starts to matter, and only linearizability protects you.",
+    "link": {
+      "title": "Sequential consistency (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/sequential"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your app gives read-your-writes by having the client keep the log position (LSN) of its last write and sending it with each read. A user edits their profile on their **phone**, then opens the **laptop** app and sees the old profile. What is the best fix?",
+    "options": [
+      {
+        "text": "Make all replicas synchronous.",
+        "explanation": "Wrong. It would work, but it makes every write wait for every replica and fail when any replica is down. That's a heavy price for a per-user guarantee."
+      },
+      {
+        "text": "Clear the laptop's cache on start-up.",
+        "explanation": "Wrong. The stale data comes from a lagging replica, not the laptop's cache. A fresh read can still hit the same lagging replica."
+      },
+      {
+        "text": "Record the user's last-write LSN on the server side (per user), so any device's read is served only by a replica that has caught up to it.",
+        "explanation": "Correct. The token lived only on the phone. Storing it per user, where every device can use it, extends read-your-writes across devices without global coordination."
+      },
+      {
+        "text": "Switch to eventual consistency.",
+        "explanation": "Wrong. That is already the underlying behaviour; it's what causes the anomaly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Why it failed:\n\n1. Phone writes at LSN 5,000 and remembers 5,000 locally.\n2. Laptop has no token, so its read goes to any replica.\n3. A replica at LSN 4,950 answers with the old profile.\n\nFix: keep `last_write_lsn` per **user** (for example in the session store or a small table keyed by user id). Each read looks it up and goes to a replica at or past that LSN, or to the leader. A simpler, coarser alternative: route a user's reads to the leader for a minute after any write by that user.",
+    "link": {
+      "title": "Read your writes (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/read-your-writes"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A sharded database guarantees **serializable** transactions. T1 credits £100 to account X (shard 1) and commits. Afterwards, in real time, T2 credits £50 to account Y (shard 2). An auditor's read-only T3 sees Y's credit but **not** X's. Which guarantee would rule this out?",
+    "options": [
+      {
+        "text": "None is needed: serializability already forbids it.",
+        "explanation": "Wrong. The serial order T2, T3, T1 explains exactly what T3 saw, so the history is serializable. It just contradicts real time."
+      },
+      {
+        "text": "Strict serializability",
+        "explanation": "Correct. Strict serializability requires the serial order to respect real time. T1 committed before T2 started, so T1 must come first, and any transaction that sees T2 must also see T1."
+      },
+      {
+        "text": "Read-your-writes",
+        "explanation": "Wrong. That's a per-session guarantee about a client seeing its own writes. The auditor wrote nothing."
+      },
+      {
+        "text": "Snapshot isolation",
+        "explanation": "Wrong. Snapshot isolation is weaker than serializability and also doesn't require snapshots to respect real-time order across shards."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Look for a serial order that explains T3:\n\n1. T3 sees T2 but not T1.\n2. Order [T2, T3, T1] produces exactly that. So it's **serializable**.\n3. But in real time T1 finished before T2 began. A real-time-respecting order must have T1 before T2, and then T3 couldn't see T2 without T1.\n4. So it violates **strict serializability**.\n\nThis \"causal reverse\" anomaly is possible when shards assign commit timestamps from unsynchronised clocks. Spanner rules it out with TrueTime and commit wait.",
+    "link": {
+      "title": "Strict serializability (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/strict-serializable"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about consistency models are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Every linearizable history is also sequentially consistent.",
+        "explanation": "True. The linearization order is a single total order that respects real time, so it also respects each client's program order."
+      },
+      {
+        "text": "If every key is linearizable on its own, operations across all keys together are linearizable.",
+        "explanation": "True. Linearizability is local (composable), which is why you can shard keys across independent linearizable groups."
+      },
+      {
+        "text": "A serializable database is automatically linearizable.",
+        "explanation": "False. Serializability allows a serial order that contradicts real time, for example a read-only transaction ordered before a write that finished earlier."
+      },
+      {
+        "text": "Sequential consistency requires operations from different clients to appear in real-time order.",
+        "explanation": "False. It only requires one total order that respects each client's own program order. Respecting real time across clients is what linearizability adds."
+      },
+      {
+        "text": "Strict serializability means serializable plus real-time ordering of transactions.",
+        "explanation": "True. It's the transactional analogue of linearizability, sometimes called external consistency."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Sort the models by two features:\n\n| Model | Transactions? | Real time? |\n|---|---|---|\n| Linearizable | no | yes |\n| Sequential | no | no |\n| Serializable | yes | no |\n| Strict serializable | yes | yes |\n\n- Linearizable ⇒ sequential: yes, real time is stricter than per-client order.\n- Composability: a property of linearizability, not of sequential consistency.\n- Serializable ⇒ linearizable: no, the real-time column differs.",
+    "link": {
+      "title": "Linearizability versus serializability (Peter Bailis)",
+      "url": "https://www.bailis.org/blog/linearizability-versus-serializability/"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Bob posts \"A\" and Carol posts \"B\" at about the same time; neither has seen the other's post. Dave's first read of the feed shows only A. Erin's first read shows only B. What is the **strongest** model this history is consistent with?",
+    "options": [
+      {
+        "text": "Linearizability",
+        "explanation": "Wrong. One copy of the feed would contain A and B in a single order, so it couldn't show A without B to one reader and B without A to another."
+      },
+      {
+        "text": "Sequential consistency",
+        "explanation": "Wrong. Sequential consistency needs one total order of the two writes that every reader agrees on. If A comes first, nobody can see B without A, yet Erin did."
+      },
+      {
+        "text": "Causal consistency",
+        "explanation": "Correct. The two posts are concurrent (neither caused the other), and causal consistency lets different readers see concurrent writes in different orders."
+      },
+      {
+        "text": "Only eventual consistency",
+        "explanation": "Wrong. The history is causally consistent too, and causal is stronger than eventual."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Is there a causal link between the posts? Neither author saw the other's, so no: they are **concurrent**.\n2. Sequential: pick an order. [A, B] means Erin's read of \"B only\" is impossible; [B, A] means Dave's \"A only\" is impossible. ✗\n3. Causal: only causally related writes must be ordered. Concurrent ones may appear in any order to different readers. ✓\n\nIf Carol had replied to Bob's post, the reply would be causally after A, and causal consistency would forbid anyone seeing the reply without A.",
+    "link": {
+      "title": "Causal consistency (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/causal"
+    }
+  }
+]

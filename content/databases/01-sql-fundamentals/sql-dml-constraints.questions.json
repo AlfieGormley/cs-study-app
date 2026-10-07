@@ -1,0 +1,378 @@
+[
+  {
+    "id": "sql-dml-constraints-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The products table has 5 rows, two in the kitchen category. How many rows does this change?\n\n```sql\nUPDATE products\nSET category = 'sale';\n```",
+    "options": [
+      {
+        "text": "0, because there is no WHERE clause",
+        "explanation": "A missing WHERE doesn't mean \"no rows\"; it means no filter at all."
+      },
+      {
+        "text": "2, the kitchen products",
+        "explanation": "Nothing in the statement mentions kitchen. Without WHERE, every row matches."
+      },
+      {
+        "text": "It raises an error asking for a WHERE clause",
+        "explanation": "Standard SQL, SQLite and PostgreSQL run it happily. Only opt-in guards such as MySQL's `--safe-updates` refuse it."
+      },
+      {
+        "text": "5, every product",
+        "explanation": "Correct. With no WHERE, UPDATE applies to every row in the table. Every product is now in 'sale'."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. UPDATE changes every row that matches WHERE.\n2. No WHERE means every row matches: all 5 products.\n3. Afterwards `GROUP BY category` shows a single group: sale, 5.\n4. Habit: write and run the `SELECT ... WHERE ...` first, then reuse that WHERE inside a transaction.",
+    "link": {
+      "title": "Data manipulation — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/dml.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Customers has ids 1 to 5, and `id` is `INTEGER PRIMARY KEY`. In SQLite you run:\n\n```sql\nINSERT INTO customers (name, city)\nVALUES ('Femi', 'Leeds');\n```\n\nWhat are Femi's `id` and `referred_by`?",
+    "options": [
+      {
+        "text": "id 6, referred_by NULL",
+        "explanation": "Correct. SQLite gives an INTEGER PRIMARY KEY the next number when you omit it, and columns left out of the column list get their default, which is NULL here."
+      },
+      {
+        "text": "id NULL, referred_by NULL",
+        "explanation": "A primary key can't be NULL. SQLite generates a value for an omitted INTEGER PRIMARY KEY."
+      },
+      {
+        "text": "id 6, referred_by 0",
+        "explanation": "The default for an omitted column is NULL unless a `DEFAULT` says otherwise. Zero would be a made-up value."
+      },
+      {
+        "text": "The insert fails because not every column is given",
+        "explanation": "You only need to supply columns that are NOT NULL without a default. `referred_by` is nullable, and `id` is generated."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Columns supplied: name = 'Femi', city = 'Leeds'.\n2. `id`: omitted INTEGER PRIMARY KEY, so SQLite uses the largest existing id + 1 = 6.\n3. `referred_by`: omitted, no DEFAULT, nullable, so NULL.\n4. Add `RETURNING id` to get the new id without a second query.",
+    "link": {
+      "title": "The INSERT statement — SQLite documentation",
+      "url": "https://www.sqlite.org/lang_insert.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A reviews table already declares `stars INTEGER NOT NULL`. Which additional constraint rejects star ratings outside 1 to 5?",
+    "options": [
+      {
+        "text": "UNIQUE (stars)",
+        "explanation": "UNIQUE forbids two rows with the same rating. It doesn't restrict the range, and it would stop two people giving 5 stars."
+      },
+      {
+        "text": "CHECK (stars BETWEEN 1 AND 5)",
+        "explanation": "Correct. A CHECK constraint tests a condition on each row written. Inserting 6 fails with `CHECK constraint failed`."
+      },
+      {
+        "text": "FOREIGN KEY (stars) REFERENCES products(id)",
+        "explanation": "A foreign key says the value must exist in another table. It has nothing to do with a valid range."
+      },
+      {
+        "text": "DEFAULT 3",
+        "explanation": "A default only fills in a value when none is given. It doesn't reject 6."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask what kind of rule it is: a condition on one column of one row.\n2. That's what CHECK is for:\n\n```sql\nstars INTEGER NOT NULL\n  CHECK (stars BETWEEN 1 AND 5)\n```\n\n3. Add NOT NULL too, because a CHECK passes when the value is NULL.",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With foreign keys enforced, this fails with `FOREIGN KEY constraint failed`:\n\n```sql\nDELETE FROM orders\nWHERE status = 'cancelled';\n```\n\nOrder 105 is the only cancelled order. Why does it fail?",
+    "options": [
+      {
+        "text": "Order 105's customer, Dev, still exists",
+        "explanation": "The foreign key runs from orders to customers. Deleting an order never breaks that link. Deleting a *customer* would."
+      },
+      {
+        "text": "You can't delete rows using a WHERE on a non-key column",
+        "explanation": "DELETE accepts any WHERE condition."
+      },
+      {
+        "text": "`order_items` still has a row referencing order 105, and the default ON DELETE NO ACTION forbids orphaning it",
+        "explanation": "Correct. order_items.order_id references orders(id). Delete the items first, in the same transaction, or declare the FK with ON DELETE CASCADE."
+      },
+      {
+        "text": "Cancelled orders are protected by a CHECK constraint",
+        "explanation": "There is no such CHECK in the schema, and the error names a foreign key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Find who references orders: `order_items.order_id REFERENCES orders(id)`.\n2. Order 105 has one item (Toaster).\n3. No ON DELETE action is declared, so the default NO ACTION applies: the parent can't be deleted while children exist.\n4. Fix, in one transaction:\n\n```sql\nBEGIN;\nDELETE FROM order_items\nWHERE order_id IN (SELECT id\n  FROM orders\n  WHERE status = 'cancelled');\nDELETE FROM orders\nWHERE status = 'cancelled';\nCOMMIT;\n```\n\nOr, since order lines are meaningless without their order, declare that FK `ON DELETE CASCADE`.",
+    "link": {
+      "title": "SQLite foreign key support",
+      "url": "https://www.sqlite.org/foreignkeys.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The products table has 5 rows and `price` is NOT NULL. After running this, how many rows does it have?\n\n```sql\nINSERT INTO products (name, price)\nVALUES ('Jug', 12),\n       ('Tray', NULL);\n```",
+    "options": [
+      {
+        "text": "7",
+        "explanation": "Tray violates NOT NULL, so it can't be inserted. And the error affects the whole statement."
+      },
+      {
+        "text": "6, because Jug is inserted and Tray is rejected",
+        "explanation": "Statements are atomic. When one row fails, the entire statement's changes are undone, including Jug."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. The statement fails on Tray's NULL price, and a failed statement has no effect at all. Jug isn't inserted either."
+      },
+      {
+        "text": "6, because Tray gets a default price of 0",
+        "explanation": "There's no DEFAULT on price, and an explicit NULL is not \"omitted\": it is a NULL, which NOT NULL rejects."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The statement tries to insert two rows.\n2. Tray's price is NULL, so `NOT NULL constraint failed: products.price`.\n3. A statement is all-or-nothing, so Jug's insert is rolled back too.\n4. `SELECT COUNT(*) FROM products` still returns 5.\n5. Note that an explicit `NULL` doesn't trigger a column's DEFAULT; only leaving the column out (or writing `DEFAULT`) does.",
+    "link": {
+      "title": "Data manipulation — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/dml.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API endpoint runs `UPDATE products SET price = 0 WHERE id = 42;` and returns \"200 OK, price updated\". There is no product 42. What did the database do?",
+    "options": [
+      {
+        "text": "Raised a \"no rows found\" error, which the API ignored",
+        "explanation": "UPDATE doesn't raise an error when nothing matches. Matching zero rows is a normal outcome."
+      },
+      {
+        "text": "Succeeded and reported 0 rows affected; the API should check the row count and return 404",
+        "explanation": "Correct. The statement is valid and simply matched nothing. Drivers expose the count (Python's `cursor.rowcount`), and `RETURNING` makes it explicit."
+      },
+      {
+        "text": "Inserted a new product with id 42",
+        "explanation": "UPDATE never inserts. Inserting when missing is an upsert, `INSERT ... ON CONFLICT`."
+      },
+      {
+        "text": "Updated the product with the nearest id",
+        "explanation": "SQL matches the WHERE exactly; there's no \"nearest\" fallback."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `WHERE id = 42` matches no rows.\n2. UPDATE succeeds and changes 0 rows. That's not an error.\n3. The database reports the count: SQLite's Python driver gives `rowcount == 0`; psql prints `UPDATE 0`.\n4. Robust pattern:\n\n```sql\nUPDATE products SET price = 0\nWHERE id = 42\nRETURNING id;\n```\n\nNo row returned means \"not found\", so the API should return 404.",
+    "link": {
+      "title": "Data manipulation — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/dml.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which pairings of foreign key and `ON DELETE` action are sensible for the shop? Select all that apply.",
+    "options": [
+      {
+        "text": "`reviews.product_id` → products: `ON DELETE CASCADE`",
+        "explanation": "Correct. A review has no meaning without its product, so deleting the product should remove its reviews."
+      },
+      {
+        "text": "`orders.customer_id` → customers: `ON DELETE CASCADE`",
+        "explanation": "Dangerous. Deleting one customer would silently delete their entire order history, which finance and tax records usually need. Prefer RESTRICT or NO ACTION, plus a soft delete or anonymisation."
+      },
+      {
+        "text": "`customers.referred_by` → customers: `ON DELETE SET NULL`",
+        "explanation": "Correct. The referral link is optional. If the referrer is deleted, the customer should stay, just without a referrer."
+      },
+      {
+        "text": "`order_items.order_id` → orders: `ON DELETE SET NULL`",
+        "explanation": "An order line with no order is meaningless, and order_id is part of the item's primary key, so it can't be NULL anyway. CASCADE fits better."
+      },
+      {
+        "text": "`orders.customer_id` → customers: `ON DELETE RESTRICT`",
+        "explanation": "Correct. It stops a customer with orders from being deleted by accident, which protects history."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Ask two questions for each FK:\n\n1. Does the child make sense without the parent?\n2. Must the child be kept for records?\n\n| child | sensible action |\n|---|---|\n| review | CASCADE |\n| order line | CASCADE |\n| order | RESTRICT |\n| referral link | SET NULL |\n\nOrders must survive (records), so RESTRICT. Reviews and order lines are part of their parent, so CASCADE. A referral is an optional link, so SET NULL.",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A small app uses SQLite. Its schema declares `orders.customer_id REFERENCES customers(id)`, yet the database contains orders for customer ids that don't exist. What's the most likely cause?",
+    "options": [
+      {
+        "text": "SQLite doesn't support foreign keys",
+        "explanation": "It does, but enforcement is opt-in per connection."
+      },
+      {
+        "text": "The application never ran `PRAGMA foreign_keys = ON` on its connections, so SQLite ignored the constraint",
+        "explanation": "Correct. For backwards compatibility, SQLite parses REFERENCES but doesn't enforce it unless the pragma is on for that connection."
+      },
+      {
+        "text": "The customers were deleted with ON DELETE CASCADE",
+        "explanation": "CASCADE would have deleted the orders too, leaving no orphans."
+      },
+      {
+        "text": "The foreign key only checks inserts, not deletes",
+        "explanation": "When enforced, foreign keys are checked on deletes and updates of the parent as well."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With `foreign_keys = OFF` (SQLite's default), both of these succeed:\n\n```sql\nINSERT INTO orders (customer_id,\n  ordered_on, status)\nVALUES (99, '2026-04-01',\n  'pending');\nDELETE FROM customers\nWHERE id = 1;\n```\n\n2. Both leave orders pointing at customers that don't exist.\n3. With the pragma ON, both fail with `FOREIGN KEY constraint failed`.\n4. Fix: run `PRAGMA foreign_keys = ON;` every time a connection opens, then find existing orphans with `PRAGMA foreign_key_check;`. PostgreSQL always enforces foreign keys.",
+    "link": {
+      "title": "SQLite foreign key support",
+      "url": "https://www.sqlite.org/foreignkeys.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In PostgreSQL, a signup handler runs in one transaction:\n\n```\nBEGIN\nINSERT user (email = dup)  -> error\n  (caught: \"email taken\")\nINSERT audit_log (...)\nCOMMIT\n```\n\nThe audit insert fails with `current transaction is aborted`. The same code worked on SQLite. Why, and what's a fix?",
+    "options": [
+      {
+        "text": "The audit table has a foreign key to users",
+        "explanation": "The audit insert isn't rejected for its own content. Every statement fails in an aborted transaction."
+      },
+      {
+        "text": "PostgreSQL rolls back only the failed statement, just like SQLite",
+        "explanation": "That's SQLite's behaviour. PostgreSQL marks the whole transaction failed after any error."
+      },
+      {
+        "text": "PostgreSQL needs COMMIT before each INSERT",
+        "explanation": "You can run many inserts in one transaction. The error state is what blocks them."
+      },
+      {
+        "text": "After an error, PostgreSQL refuses all statements until ROLLBACK; wrap the risky insert in a SAVEPOINT and roll back to it on error",
+        "explanation": "Correct. `SAVEPOINT s; INSERT ...; ROLLBACK TO SAVEPOINT s;` undoes only the failed insert and leaves the transaction usable. `INSERT ... ON CONFLICT DO NOTHING` avoids the error altogether."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. SQLite: a failed statement is undone, but the transaction continues, so the audit insert and COMMIT work.\n2. PostgreSQL: any error puts the transaction into an aborted state. Every following statement fails until ROLLBACK, and COMMIT acts as ROLLBACK.\n3. Fix with a savepoint:\n\n```sql\nBEGIN;\nSAVEPOINT try_user;\nINSERT INTO users ...;\n-- on error:\nROLLBACK TO SAVEPOINT try_user;\nINSERT INTO audit_log ...;\nCOMMIT;\n```\n\n4. Or avoid the error: `INSERT ... ON CONFLICT (email) DO NOTHING RETURNING id` and check whether a row came back.",
+    "link": {
+      "title": "SAVEPOINT — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-savepoint.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Table `s` holds one row, a = 1, b = 2. What does it hold after this statement, in PostgreSQL or SQLite?\n\n```sql\nUPDATE s SET a = b, b = a;\n```",
+    "options": [
+      {
+        "text": "a = 2, b = 2",
+        "explanation": "That assumes the assignments run left to right, with `b = a` seeing the new a. In SQL every SET expression reads the row as it was before the update."
+      },
+      {
+        "text": "a = 1, b = 1",
+        "explanation": "This assumes `b = a` runs first. Order doesn't matter: both read the old values."
+      },
+      {
+        "text": "It fails because a column is both read and written",
+        "explanation": "Reading and writing the same column in one UPDATE is normal, as in `SET price = price + 5`."
+      },
+      {
+        "text": "a = 2, b = 1",
+        "explanation": "Correct. Both right-hand sides use the old row (a = 1, b = 2), so the values swap."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The old row is (a = 1, b = 2).\n2. Evaluate every SET expression against the old row:\n   - new a = old b = 2\n   - new b = old a = 1\n3. Write the new row: (a = 2, b = 1).\n\nMySQL is a notable exception: it applies single-table assignments left to right, so the same statement there gives (2, 2).",
+    "link": {
+      "title": "The UPDATE statement — SQLite documentation",
+      "url": "https://www.sqlite.org/lang_update.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Prices are Kettle 30, Toaster 25, Lamp 40, Rug 90, Mug 8 (average 38.6). Which products are changed by this statement?\n\n```sql\nUPDATE products\nSET price = price * 2\nWHERE price > (SELECT AVG(price)\n               FROM products);\n```",
+    "options": [
+      {
+        "text": "Lamp and Rug",
+        "explanation": "Correct. The subquery sees the table as it was when the statement started, so the threshold is 38.6 throughout. Only Lamp (40) and Rug (90) exceed it."
+      },
+      {
+        "text": "Rug only",
+        "explanation": "This assumes the average is recomputed after Lamp doubles. The statement sees a consistent snapshot, so the average doesn't move part-way through."
+      },
+      {
+        "text": "Every product, repeatedly, until the average stops changing",
+        "explanation": "An UPDATE visits each row at most once and doesn't loop."
+      },
+      {
+        "text": "It depends on the physical order rows are updated in",
+        "explanation": "SQL guarantees the subquery result doesn't depend on update order: it's evaluated against the pre-statement state."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The subquery `AVG(price)` = 193 / 5 = 38.6.\n2. Statements see the data as it was at their start, so 38.6 holds for the whole statement.\n3. Rows with price > 38.6: Lamp (40) and Rug (90).\n4. New prices: Lamp 80, Rug 180, confirmed by `RETURNING name, price`.\n5. If the average were recomputed after each row, the answer would depend on row order. SQL rules that out.",
+    "link": {
+      "title": "Data manipulation — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/dml.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Assume the relevant columns are also declared NOT NULL. Which additional rules can a `CHECK` constraint enforce without another constraint type? Select all that apply.",
+    "options": [
+      {
+        "text": "A product's price is greater than 0",
+        "explanation": "Correct. A condition on one column of the row being written: `CHECK (price > 0)`."
+      },
+      {
+        "text": "An order's status is one of shipped, pending or cancelled",
+        "explanation": "Correct. `CHECK (status IN ('shipped','pending','cancelled'))` tests the row's own value."
+      },
+      {
+        "text": "A promotion's `ends_on` is after its `starts_on`",
+        "explanation": "Correct. A CHECK can compare columns within the same row: `CHECK (ends_on > starts_on)`."
+      },
+      {
+        "text": "Each customer has at most one pending order",
+        "explanation": "That spans rows. PostgreSQL forbids subqueries in CHECK. Use a partial unique index, e.g. `UNIQUE (customer_id) WHERE status = 'pending'`."
+      },
+      {
+        "text": "An order's customer exists in customers",
+        "explanation": "That's a reference to another table, which is a foreign key's job."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "A CHECK sees only the row being inserted or updated.\n\n| rule | scope | tool |\n|---|---|---|\n| price > 0 | one row | CHECK |\n| status in list | one row | CHECK |\n| ends after starts | one row | CHECK |\n| one pending/customer | many rows | partial unique index |\n| customer exists | other table | FOREIGN KEY |\n\nThe partial index is `CREATE UNIQUE INDEX one_pending ON orders(customer_id) WHERE status = 'pending';`. PostgreSQL and SQLite both support it.",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  }
+]

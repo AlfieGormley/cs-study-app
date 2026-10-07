@@ -1,0 +1,167 @@
+[
+  {
+    "id": "emb-codecs-i2s-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the difference between a DAC and an audio codec?",
+    "options": [
+      { "text": "A codec compresses audio (like MP3); a DAC does not", "explanation": "That is the software sense of 'codec'. In hardware, an audio codec is a converter chip, not a compression format." },
+      { "text": "They are the same thing", "explanation": "A DAC is one function. A codec bundles several, including the reverse conversion." },
+      { "text": "A codec is a single chip with both ADC and DAC (plus filters and often volume or headphone stages); a DAC only converts digital to analogue", "explanation": "Correct. That is why a codec gives you audio input as well as output." },
+      { "text": "A DAC needs I2S; a codec does not", "explanation": "Both typically use I2S-style serial audio for their sample data." }
+    ],
+    "answer": 2,
+    "workedExample": "Break down the names:\n\n- DAC: digital → analogue only.\n- ADC: analogue → digital only.\n- Codec: coder + decoder = ADC + DAC in one package, with their filters and often control features.\n\nThe Daisy Seed's PCM3060 and the Teensy adaptor's SGTL5000 are codecs, so both boards have audio inputs.",
+    "link": { "title": "PCM3060 datasheet — Texas Instruments", "url": "https://www.ti.com/lit/ds/symlink/pcm3060.pdf" }
+  },
+  {
+    "id": "emb-codecs-i2s-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an I2S link running at a 48 kHz sample rate, what is the frequency of the LRCLK (word select) signal?",
+    "options": [
+      { "text": "96 kHz, because there are two channels", "explanation": "Two channels share one LRCLK period: left in one half, right in the other. The clock itself runs at the sample rate." },
+      { "text": "48 kHz", "explanation": "Correct. One LRCLK period is one frame containing one left and one right sample." },
+      { "text": "3.072 MHz", "explanation": "That is a typical BCLK for 48 kHz with 64 bits per frame (64 × 48,000), not LRCLK." },
+      { "text": "12.288 MHz", "explanation": "That is 256 × 48 kHz, a common MCLK frequency." }
+    ],
+    "answer": 1,
+    "workedExample": "Per sample period, I2S sends a left word while LRCLK is in one state and a right word in the other. So LRCLK completes one cycle per sample period: 48 kHz.\n\n```\nLRCLK = fs        = 48 kHz\nBCLK  = 64 * fs   = 3.072 MHz\nMCLK  = 256 * fs  = 12.288 MHz\n```",
+    "link": { "title": "I²S — Wikipedia", "url": "https://en.wikipedia.org/wiki/I%C2%B2S" }
+  },
+  {
+    "id": "emb-codecs-i2s-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your library hands the audio callback floating-point samples. What range should your output values stay within to avoid clipping?",
+    "options": [
+      { "text": "−1.0 to +1.0", "explanation": "Correct. The library maps ±1.0 to the codec's integer full scale; values beyond it clip." },
+      { "text": "0 to 65,535", "explanation": "That is an unsigned 16-bit range. Audio codecs use signed two's complement, and float buffers use ±1.0." },
+      { "text": "0.0 to 1.0", "explanation": "Audio is bipolar: it swings positive and negative around zero. 0–1 is the knob range from lesson 3." },
+      { "text": "Any value; the codec rescales automatically", "explanation": "Converters do not normalise your signal; out-of-range values are clipped, which distorts." }
+    ],
+    "answer": 0,
+    "workedExample": "Float ±1.0 corresponds to integer full scale, for example:\n\n```\n24-bit: x * 8388608\n16-bit: x * 32768\n```\n\nAnything above +1.0 would need a value larger than the largest code, so it is clamped. Mixing three full-scale oscillators needs scaling down by about 1/3.",
+    "link": { "title": "Coding schemes used with data converters — TI", "url": "https://www.ti.com/lit/an/sbaa042/sbaa042.pdf" }
+  },
+  {
+    "id": "emb-codecs-i2s-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "PJRC states the Teensy audio adaptor uses LRCLK = 44.1 kHz and BCLK = 2.82 MHz. How many bit clocks are there per LRCLK cycle, and what does that imply about the 16-bit samples?",
+    "options": [
+      { "text": "32 bit clocks: two 16-bit words exactly fill the frame", "explanation": "That gives 1.41 MHz, the alternative 32-bits-per-LRCLK mode PJRC mentions, not 2.82 MHz." },
+      { "text": "16 bit clocks: one sample per frame", "explanation": "16 × 44.1 kHz = 0.71 MHz and would not carry stereo." },
+      { "text": "128 bit clocks: four channels", "explanation": "128 × 44.1 kHz = 5.64 MHz, double the stated BCLK." },
+      { "text": "64 bit clocks: two 32-bit slots, with the 16-bit sample in the upper half of each and the lower 16 bits ignored", "explanation": "Correct. 2,822,400 / 44,100 = 64. PJRC says the upper 16 bits of each 32-bit word carry data." }
+    ],
+    "answer": 3,
+    "workedExample": "```\nBCLK / LRCLK\n= 2,822,400 / 44,100\n= 64 bits per frame\n= 2 slots x 32 bits\n```\n\nWith 16-bit samples, each 32-bit slot holds the sample MSB-first in its upper 16 bits; the rest is padding.",
+    "link": { "title": "Audio adaptor boards for Teensy — PJRC", "url": "https://www.pjrc.com/store/teensy3_audio.html" }
+  },
+  {
+    "id": "emb-codecs-i2s-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You connect a codec configured for standard I2S to an MCU peripheral configured for left-justified format, 24-bit. What will you most likely hear?",
+    "options": [
+      { "text": "Perfect audio; the formats are identical", "explanation": "They differ in where the MSB sits relative to the LRCLK edge, so the bit alignment is wrong." },
+      { "text": "Audio at half speed", "explanation": "The sample rate is set by LRCLK, which is unchanged. Format mismatch misaligns bits, not timing." },
+      { "text": "Badly distorted or wrong-level audio, because every word is misread shifted by one bit clock", "explanation": "Correct. Standard I2S delays the MSB by one BCLK after the LRCLK edge; left-justified does not. Each word is read off by one bit, which changes values and can flip signs." },
+      { "text": "Left and right swapped, but otherwise fine", "explanation": "A one-bit shift corrupts the sample values; it does more than swap channels." }
+    ],
+    "answer": 2,
+    "workedExample": "In two's complement the MSB is the sign bit.\n\n1. Left-justified sender: MSB on the LRCLK edge.\n2. I2S receiver: expects MSB one BCLK later, so it takes bit 2 as the sign bit.\n3. Every value is effectively doubled and wrapped, flipping signs: harsh distortion.\n\nThe Daisy Rev 7 datasheet specifies left-justified for its PCM3060, which is why you read the format rather than assume 'I2S'.",
+    "link": { "title": "PCM3060 datasheet — Texas Instruments", "url": "https://www.ti.com/lit/ds/symlink/pcm3060.pdf" }
+  },
+  {
+    "id": "emb-codecs-i2s-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A new codec board shows healthy BCLK and LRCLK on a scope, and DMA counters advance, but there is no sound at all. The codec has an I2C control port. What is the most likely cause?",
+    "options": [
+      { "text": "The codec has not been configured (powered up, routed and unmuted) because an I2C write failed or used the wrong address", "explanation": "Correct. Control-port codecs start largely powered down; without successful register writes the DAC output stays off or muted." },
+      { "text": "The sample rate is too high for human hearing", "explanation": "LRCLK at a normal audio sample rate means the sample rate is fine." },
+      { "text": "The DMA should be replaced with per-sample interrupts", "explanation": "DMA is the correct mechanism and is evidently running." },
+      { "text": "The audio callback is too fast", "explanation": "Finishing early is never the cause of silence." }
+    ],
+    "answer": 0,
+    "workedExample": "Divide the path: clocks OK, data moving OK, so the digital side is alive. Silence then points to the analogue side not being enabled. For an I2C-controlled codec:\n\n1. Check each write is acknowledged (ACK).\n2. Confirm the 7-bit address from the datasheet and board.\n3. Read back key registers (power, routing, mute).",
+    "link": { "title": "Audio adaptor boards for Teensy — PJRC", "url": "https://www.pjrc.com/store/teensy3_audio.html" }
+  },
+  {
+    "id": "emb-codecs-i2s-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the DMA double-buffer pattern used by audio libraries are correct? Select all that apply.",
+    "options": [
+      { "text": "The DMA reads one half of a circular buffer while the CPU fills the other", "explanation": "Correct. That separation lets the CPU work on a whole block while playback continues." },
+      { "text": "The half-complete and complete interrupts each signal that one half is free to refill", "explanation": "Correct. libDaisy dispatches the audio callback from both the half-complete and complete DMA callbacks." },
+      { "text": "The CPU must copy every sample to the I2S peripheral itself", "explanation": "That is exactly the work DMA removes from the CPU." },
+      { "text": "The callback must finish refilling its half before the DMA wraps back to it, one block period later", "explanation": "Correct. That is the hard deadline; miss it and the codec plays stale or partly written data." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Timeline for block size N at fs:\n\n```\nt=0      DMA plays A, CPU fills B\nt=N/fs   half-complete: DMA->B,\n         CPU fills A\nt=2N/fs  complete: DMA->A,\n         CPU fills B\n```\n\nEach fill must finish within N/fs. libDaisy's buffer is blocksize × 2 × 2 words: two halves, two channels.",
+    "link": { "title": "Direct memory access — Wikipedia", "url": "https://en.wikipedia.org/wiki/Direct_memory_access" }
+  },
+  {
+    "id": "emb-codecs-i2s-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want to record a Daisy Seed's audio output into your audio interface. Which input on the interface is the appropriate starting point?",
+    "options": [
+      { "text": "A microphone input with phantom power on", "explanation": "Mic inputs expect far smaller signals, and phantom power is meant for condenser mics; neither suits a line-level output." },
+      { "text": "A line-level input (or an instrument input set appropriately), with the input gain turned down first", "explanation": "Correct. The Seed's datasheet describes line-level outputs with 0 dBFS at 1 V RMS. Check the interface manual for its line input's maximum level." },
+      { "text": "Any input; levels do not matter for digital synths", "explanation": "The output is analogue once it leaves the codec. Levels and input types matter exactly as for any other line source." },
+      { "text": "The interface's speaker output", "explanation": "That is an output, not an input. Connecting two outputs together can damage equipment." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify the source: line-level, 1 V RMS at full scale, 100 Ω output impedance (Daisy Seed datasheet).\n2. Match the destination: a line input designed for roughly that range.\n3. Start safe: interface gain at minimum, synth output low, then bring levels up.\n4. Record the interface model and the manual page you checked.",
+    "link": { "title": "Daisy Seed datasheet v1.2.0 — Electro-Smith", "url": "https://daisy.nyc3.cdn.digitaloceanspaces.com/products/seed/Daisy_Seed_datasheet.pdf" }
+  },
+  {
+    "id": "emb-codecs-i2s-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A board's output reaches 0 dBFS at 1 V RMS. Your interface's line input is specified for professional +4 dBu nominal level (1.228 V RMS). Roughly how does the synth's full-scale level compare with that nominal level?",
+    "options": [
+      { "text": "About 12 dB louder", "explanation": "1 V is below 1.228 V, so the synth's full scale is *lower* than +4 dBu, not louder." },
+      { "text": "About 1.8 dB below +4 dBu", "explanation": "Correct. 20·log10(1/1.228) ≈ −1.8 dB. Full-scale peaks sit just under the interface's nominal level, so typical program material will run lower still." },
+      { "text": "Exactly equal", "explanation": "1 V and 1.228 V differ; the gap is small but not zero." },
+      { "text": "About 10 dB below", "explanation": "That is roughly the gap to consumer −10 dBV (0.316 V) in the other direction: 1 V is about 10 dB *above* −10 dBV." }
+    ],
+    "answer": 1,
+    "workedExample": "```\nratio = 1.0 / 1.228 = 0.814\ndB = 20*log10(0.814)\n   = -1.78 dB\n```\n\nAnd versus consumer line:\n\n```\n20*log10(1.0/0.316) = +10 dB\n```\n\nSo this output sits between the two standards; set interface gain by measurement rather than assumption.",
+    "link": { "title": "Line level — Wikipedia", "url": "https://en.wikipedia.org/wiki/Line_level" }
+  },
+  {
+    "id": "emb-codecs-i2s-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are wiring a codec breakout to an MCU on a breadboard with 20 cm jumper wires and get intermittent crackles. Which are plausible contributors? Select all that apply.",
+    "options": [
+      { "text": "Long wires on fast clock lines (MCLK at around 11–12 MHz, BCLK at around 3 MHz) causing ringing or false edges", "explanation": "Correct. PJRC warns that MCLK, BCLK, LRCLK and data wires must be short." },
+      { "text": "A data-format mismatch (I2S vs left-justified)", "explanation": "A format mismatch distorts constantly rather than crackling intermittently; still worth checking, but it does not fit 'intermittent'." },
+      { "text": "Missed audio deadlines because the callback sometimes overruns", "explanation": "Correct. Occasional overruns produce clicks. Measure CPU load (lesson 6) to rule this out." },
+      { "text": "Poor ground connection between the boards", "explanation": "Correct. Logic signals are measured relative to ground; a weak shared ground adds noise and can corrupt edges." }
+    ],
+    "answer": [0, 2, 3],
+    "workedExample": "Separate constant faults from intermittent ones:\n\n- Constant distortion: format or bit-depth mismatch.\n- Intermittent crackle: signal integrity (long wires, ground) or timing (overruns).\n\nTest: shorten the wires and add a solid ground, then measure the callback's maximum load.",
+    "link": { "title": "Audio adaptor boards for Teensy — PJRC", "url": "https://www.pjrc.com/store/teensy3_audio.html" }
+  },
+  {
+    "id": "emb-codecs-i2s-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You compare two Daisy Seeds: one Rev 5 (WM8731) and one Rev 7 (PCM3060). Firmware built with libDaisy works on both. According to the datasheet, how does the library cope with the different codecs?",
+    "options": [
+      { "text": "It does not; you must build separate firmware for each", "explanation": "The datasheet says the boards are pin compatible and libDaisy detects the hardware, so one build works." },
+      { "text": "Both codecs are configured identically over I2C", "explanation": "The datasheet says Rev 7 does not use the I2C pins: its PCM3060 is configured in hardware mode." },
+      { "text": "The codecs are the same chip with different labels", "explanation": "They are different parts from different manufacturers; the revisions changed because of discontinuations." },
+      { "text": "Each revision ties a 'version pin' to ground, and libDaisy reads it to choose the right codec setup (Rev 7 is treated like Rev 4)", "explanation": "Correct. The datasheet lists PD3 for Rev 5 and PD5 for Rev 7, and notes that software detects Rev 7 as Rev 4 for compatibility." }
+    ],
+    "answer": 3,
+    "workedExample": "From the Hardware Revisions page:\n\n1. Rev 5: WM8731, uses I2C, version pin PD3 grounded.\n2. Rev 7: PCM3060, hardware mode, version pin PD5 grounded.\n3. libDaisy checks which pin cannot be pulled up and configures accordingly.\n\nTakeaway: record the revision of the board you own.",
+    "link": { "title": "Daisy Seed datasheet v1.2.0 — Electro-Smith", "url": "https://daisy.nyc3.cdn.digitaloceanspaces.com/products/seed/Daisy_Seed_datasheet.pdf" }
+  }
+]

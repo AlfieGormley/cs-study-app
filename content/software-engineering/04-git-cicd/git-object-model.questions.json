@@ -1,0 +1,344 @@
+[
+  {
+    "id": "git-object-model-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is a Git branch, as stored on disk?",
+    "options": [
+      {
+        "text": "A ref naming one commit; its physical representation depends on the ref-storage backend",
+        "explanation": "A loose SHA-1 ref in the files backend holds 40 hex digits plus a newline. Packed refs, reftable and SHA-256 use other representations."
+      },
+      {
+        "text": "A list of the commit hashes that belong to the branch",
+        "explanation": "A branch does not enumerate its commits. Which commits are \"on\" it is worked out by following parent pointers from the single commit it names."
+      },
+      {
+        "text": "A copy of the project's files in a separate directory inside `.git`",
+        "explanation": "This is how some older systems (and copy-based branching in Subversion) feel, but Git never copies the tree to branch. Snapshots are shared objects in the store."
+      },
+      {
+        "text": "A special commit object with a `branch` header",
+        "explanation": "Commit objects have no branch field at all. The same commit can be on many branches, or none, without changing its hash."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Run `cat .git/refs/heads/main` in a SHA-1 repository with an existing loose main ref and the files backend: you get one hash such as `587031...`.\n2. `git branch feature` creates `.git/refs/heads/feature` with the same hash. No objects are written.\n3. `git commit` on `feature` writes new objects and then overwrites that file with the new commit's hash.\n4. `git log feature` walks parent pointers from that hash. That walk is what we informally call \"the branch\".\n\nCreating the ref does not copy the project or walk its entire history; exact storage and hook costs depend on configuration.",
+    "link": {
+      "title": "Git Internals: Git References — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-References"
+    }
+  },
+  {
+    "id": "git-object-model-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which object type stores a file's **name**?",
+    "options": [
+      {
+        "text": "The blob",
+        "explanation": "A blob holds only the file's bytes. That is precisely why two files with the same content but different names share one blob."
+      },
+      {
+        "text": "The index only; names are never stored in objects",
+        "explanation": "The index does hold paths for the next commit, but committed trees store names permanently. Otherwise checking out an old commit could not recreate the files."
+      },
+      {
+        "text": "The commit",
+        "explanation": "A commit points at one root tree plus parents and metadata. It knows nothing about individual filenames directly."
+      },
+      {
+        "text": "The tree that lists the directory containing the file",
+        "explanation": "Correct. Each tree entry pairs a mode and a name with the hash of a blob or subtree."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "`git cat-file -p 'HEAD^{tree}'` prints lines like:\n\n```\n100644 blob ce0136... hello.txt\n040000 tree 5f6ed9... src\n```\n\nThe name `hello.txt` lives in the tree. Look at the blob itself with `git cat-file -p ce0136` and you get only `hello`.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  },
+  {
+    "id": "git-object-model-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `git commit --amend -m \"Better message\"` on an attached branch, changing the message but no files. What happens to the original commit?",
+    "options": [
+      {
+        "text": "Its message field is edited in place, so the hash stays the same",
+        "explanation": "Objects are immutable. The message is part of the hashed content, so any edit would change the hash; Git never rewrites an object in place."
+      },
+      {
+        "text": "It is deleted immediately from `.git/objects`",
+        "explanation": "Git does not delete objects during normal commands. The old commit remains, reachable from the reflog, until garbage collection eventually prunes it."
+      },
+      {
+        "text": "A new commit with a new hash is created, the branch moves to it, and the old commit still exists in the store",
+        "explanation": "Correct. Amend builds a replacement commit and moves the branch. The old object remains and may also be retained by other refs or reflogs."
+      },
+      {
+        "text": "It becomes the parent of the amended commit",
+        "explanation": "Amend replaces rather than extends: the new commit takes the *old commit's* parents, so the original is not in its ancestry."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: `main -> 375494` (message \"copy\").\n2. Amend writes a new commit: same tree, same parent, message \"Better message\". Its hash, say `a08133`, differs because the message is hashed.\n3. Git updates `refs/heads/main` to `a08133`.\n4. `git cat-file -t 375494` still prints `commit`.\n5. `git reflog` shows `HEAD@{1}: commit: copy`, so you can get it back with `git branch old 375494`.\n\nThis is also why amending a commit you have already pushed forces everyone else to reconcile.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  },
+  {
+    "id": "git-object-model-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A repository has `README`, `src/app.py` and `src/lib/util.py`. You append a line to `src/lib/util.py` and commit. Assuming no other file has ever had the new content, how many **new** objects does Git write?",
+    "options": [
+      {
+        "text": "2: a blob and a commit",
+        "explanation": "This forgets that trees embed their children's hashes. A new blob hash changes `lib`'s tree, which changes `src`'s tree, which changes the root tree."
+      },
+      {
+        "text": "5: a blob, three trees (`lib`, `src`, root) and a commit",
+        "explanation": "Correct. The change ripples up every directory on the path to the root, then the commit points at the new root tree."
+      },
+      {
+        "text": "3: a blob, the root tree and a commit",
+        "explanation": "Close, but intermediate directories are trees too. `src` and `src/lib` each get a new tree because an entry inside them changed hash."
+      },
+      {
+        "text": "7: a new blob for each of the three files, three trees and a commit",
+        "explanation": "Unchanged files keep their existing blobs; only `util.py`'s content is new. Git snapshots by reference, not by copying."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Walk from the changed file up to the commit:\n\n```\nutil.py  new content  -> new blob\nsrc/lib  entry hash   -> new tree\nsrc      entry hash   -> new tree\nroot     entry hash   -> new tree\ncommit   new tree     -> new commit\n```\n\nThat is 5. `README` and `src/app.py` reuse their old blobs. You can confirm with `git count-objects -v` before and after: with automatic housekeeping disabled and ordinary loose-object storage, count rises by 5. Counting loose files during repacking is not a reliable total-object measurement.\n\nThis is the Merkle-tree property: one leaf change produces a new hash at every level above it, and nothing else.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  },
+  {
+    "id": "git-object-model-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this Python print?\n\n```python\nimport hashlib\ndef h(kind, body):\n    hd = f\"{kind} {len(body)}\\0\"\n    return hashlib.sha1(\n        hd.encode() + body).hexdigest()\n\na = h(\"blob\", b\"hello\\n\")\nb = h(\"blob\", b\"hello\\n\")\nc = h(\"blob\", b\"hello\")\nprint(a == b, a == c)\n```",
+    "options": [
+      {
+        "text": "`True True`",
+        "explanation": "The third body has no trailing newline: 5 bytes instead of 6. Both the header (`blob 5` vs `blob 6`) and the content differ, so the hash differs."
+      },
+      {
+        "text": "`False False`",
+        "explanation": "SHA-1 is deterministic. Identical input always produces an identical hash, which is the whole basis of content addressing."
+      },
+      {
+        "text": "`False True`",
+        "explanation": "This would require identical inputs to hash differently and different inputs to collide, the opposite of how a hash function behaves."
+      },
+      {
+        "text": "`True False`",
+        "explanation": "Correct. `a` and `b` hash identical bytes. `c` differs by one byte, so it gets a completely different hash."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `a` hashes `blob 6\\0hello\\n` -> `ce013625...` (the same as `git hash-object` on a file containing `hello` plus newline).\n2. `b` hashes exactly the same bytes, so `a == b` is `True`.\n3. `c` hashes `blob 5\\0hello`: different length in the header and different content, so `a == c` is `False`.\n\nDifferent stored bytes normally produce different blobs. Configured clean filters and line-ending normalization can map different working-tree bytes to the same stored content.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  },
+  {
+    "id": "git-object-model-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these create a **new object** in the object store? Select all that apply. Assume an existing commit, no staged changes except where explicitly stated, distinct new tag names, and no clean filter that maps the new file to existing stored content.",
+    "options": [
+      {
+        "text": "`git branch feature`",
+        "explanation": "A branch command creates a ref to an existing commit, not a new content object."
+      },
+      {
+        "text": "`git tag -a v1.0 -m \"Release\"`",
+        "explanation": "Correct. An annotated tag is a `tag` object with a tagger, date and message, and the ref `refs/tags/v1.0` points at that object."
+      },
+      {
+        "text": "`git tag v0.1`",
+        "explanation": "A lightweight tag is only a ref pointing straight at a commit. `git cat-file -t v0.1` prints `commit`, not `tag`."
+      },
+      {
+        "text": "`git add notes.txt` for a file with never-before-seen content",
+        "explanation": "Correct. `git add` hashes the file and writes the blob immediately; the index then records that blob's hash."
+      },
+      {
+        "text": "`git commit --allow-empty -m \"Trigger CI\"`",
+        "explanation": "Correct. Even with no file changes Git writes a new commit object. It reuses the existing root tree, so exactly one object is added."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "In separate controlled fixtures, with housekeeping disabled and the index otherwise unchanged, compare git count-objects -v before and after:\n\n| Command | New objects |\n|---|---|\n| `git branch feature` | 0 |\n| `git tag -a v1.0` | 1 (tag) |\n| `git tag v0.1` | 0 |\n| `git add` new file | 1 (blob) |\n| empty commit | 1 (commit) |\n\nRule of thumb: refs (branches, lightweight tags, HEAD) are names; objects are content.",
+    "link": {
+      "title": "Git Internals: Git References — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-References"
+    }
+  },
+  {
+    "id": "git-object-model-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague ran `git reset --hard HEAD~3` on their local feature branch an hour ago and now wants the three commits back. They never pushed them. What should they do?",
+    "options": [
+      {
+        "text": "Inspect git reflog and create git branch rescue <old-tip> while that commit is still available",
+        "explanation": "A rescue branch preserves the recovered commit without overwriting current working files. Reflogs and objects must still be retained."
+      },
+      {
+        "text": "Nothing can be done; `--hard` deletes the commits",
+        "explanation": "`reset` only moves the branch ref and rewrites the working tree. The commit objects are untouched and are still referenced by the reflog."
+      },
+      {
+        "text": "Run `git fetch` to download them again from the remote",
+        "explanation": "They were never pushed, so the remote has never seen them. Fetching cannot return objects that only existed locally."
+      },
+      {
+        "text": "Run `git gc` to rebuild the missing objects",
+        "explanation": "This is backwards. `gc` is what eventually *deletes* unreachable objects; it never recreates anything."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `git log -g --format='%h %gs'` (a compact reflog) shows something like:\n\n```\n1a2b3c4 reset: moving to HEAD~3\n9f8e7d6 commit: Add retries\n```\n\n2. `9f8e7d6` is the old tip. Restore it:\n\n```\ngit branch rescue 9f8e7d6\n# inspect before switching branches\n```\n\n3. Why it works: the objects were never deleted, and reflog entries keep them reachable. Unreachable reflog entries expire after 30 days by default, but configuration and explicit expiry can shorten retention; recover promptly.",
+    "link": {
+      "title": "git-gc documentation",
+      "url": "https://git-scm.com/docs/git-gc"
+    }
+  },
+  {
+    "id": "git-object-model-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer commits `.env` containing a live API key, then deletes it in the next commit and pushes both. Is the key safe now?",
+    "options": [
+      {
+        "text": "Yes; the file is gone from the current tree, so clones won't contain it",
+        "explanation": "A normal full clone includes the relevant reachable history. Shallow or filtered clones may omit objects, but deletion from the current tree does not revoke the exposed credential."
+      },
+      {
+        "text": "Yes, as long as `.env` is added to `.gitignore` afterwards",
+        "explanation": "`.gitignore` only stops untracked files being added in future. It has no effect on content already committed."
+      },
+      {
+        "text": "No; the blob is still reachable through the first commit. Rotate the key immediately, then rewrite history if needed",
+        "explanation": "Correct. Treat the secret as leaked the moment it is pushed. Rewriting history (for example with `git filter-repo`) helps hygiene, but forks and existing clones may already have it."
+      },
+      {
+        "text": "No, but running `git gc` on the server will remove it",
+        "explanation": "`gc` removes only *unreachable* objects. The blob is reachable from a commit on the branch, so `gc` keeps it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Commit A: tree contains `.env -> blob K` (the key).\n2. Commit B: tree has no `.env`, but B's parent is A.\n3. In a normal full clone, the reachable chain includes: B -> A -> A's tree -> blob K.\n4. `git show A:.env` prints the key for anyone with a clone.\n5. Correct response: revoke and rotate the key first (that actually closes the hole), then optionally rewrite history and force-push, knowing copies may already exist.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  },
+  {
+    "id": "git-object-model-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A teammate says: \"Git stores snapshots, so a repo with 1,000 commits of a 1 MB file must use about 1 GB.\" After `git gc`, it uses about 3 MB. What explains this?",
+    "options": [
+      {
+        "text": "Git actually stores diffs between commits, not snapshots",
+        "explanation": "The *model* is snapshots: each commit's tree points at a complete blob. Deltas are a storage optimisation inside packfiles, independent of the model."
+      },
+      {
+        "text": "Packfiles store many objects as deltas against similar objects, and everything is zlib-compressed",
+        "explanation": "Correct. Logically each version is a full blob, but in a pack Git stores most of them as small deltas against a similar base, then compresses."
+      },
+      {
+        "text": "`git gc` deletes old versions of files that are more than 90 days old",
+        "explanation": "`gc` never deletes reachable objects. Every version is still retrievable with `git show <commit>:file`."
+      },
+      {
+        "text": "Identical blobs are deduplicated, so 1,000 versions collapse into one",
+        "explanation": "Deduplication only applies to byte-identical content. If the file changed in each commit, those are 1,000 different blobs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Logically there are 1,000 distinct blobs of about 1 MB each.\n2. Loose, each is stored zlib-compressed on its own; that can still be hundreds of MB.\n3. `git gc` packs them. The pack heuristic groups similar objects (same path, similar size) and stores most as a delta: \"take base X, copy bytes 0-500k, insert these 200 bytes, copy the rest\".\n4. If each commit changes a few lines, each delta is tiny, so the pack is a few MB.\n5. Binary files that change wholesale (compressed images, zips) delta badly. That is when Git repos genuinely balloon, and when Git LFS earns its keep.",
+    "link": {
+      "title": "Git Internals: Packfiles — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Packfiles"
+    }
+  },
+  {
+    "id": "git-object-model-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Why does the hash of the commit at the tip of `main` bind to the contents of the whole history behind it? Assume collision resistance; this does not establish author identity or code safety. Select all that apply.",
+    "options": [
+      {
+        "text": "A commit's content includes its parents' hashes, so changing any ancestor changes every descendant's hash",
+        "explanation": "Correct. Parent hashes are part of the hashed bytes, so history forms a hash chain back to the root commit."
+      },
+      {
+        "text": "A commit's content includes its root tree hash, and trees include the hashes of every blob and subtree",
+        "explanation": "Correct. One changed byte in any file changes that blob's hash, then every tree above it, then the commit."
+      },
+      {
+        "text": "Git re-hashes the entire repository on every `git status`",
+        "explanation": "No. `git status` compares the working tree to the index using cached file metadata. Integrity comes from the structure, not from constant rescanning."
+      },
+      {
+        "text": "This guarantee is only as strong as the hash function's collision resistance, which is why Git uses hardened SHA-1 and is moving to SHA-256",
+        "explanation": "Correct. If an attacker could craft two objects with the same hash, they could swap one for the other. SHA-1DC detects known collision attacks, and SHA-256 removes the weakness."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Trace the chain for a tampered file three commits back:\n\n1. File bytes change -> blob hash changes.\n2. Its tree's entry changes -> tree hash changes, up to the root tree.\n3. That commit's `tree` line changes -> its hash changes.\n4. The next commit's `parent` line changes -> its hash changes, and so on to the tip.\n\nSo if you know the tip hash is `a08133...`, any tampering anywhere produces a different tip. Signed tags and signed commits build on this: signing one hash vouches for the entire history, *provided* the hash function resists collisions.",
+    "link": {
+      "title": "Hash function transition — Git docs",
+      "url": "https://git-scm.com/docs/hash-function-transition"
+    }
+  },
+  {
+    "id": "git-object-model-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You check out a commit by hash, make two commits, then run `git switch main`. Git warns that you are leaving 2 commits behind. A month later you remember them, but `git reflog` was cleared by an aggressive `git gc --prune=now` after `git reflog expire --expire=now --all`. What is the state of those commits?",
+    "options": [
+      {
+        "text": "They are almost certainly gone: no ref or reflog entry reached them, and the prune removed unreachable objects immediately",
+        "explanation": "Correct. Expiring reflogs removed the last thing keeping them reachable, and `--prune=now` skipped the usual two-week grace period."
+      },
+      {
+        "text": "They are safe; detached commits are automatically attached to `main`",
+        "explanation": "Git never moves a branch on your behalf when you leave detached HEAD. That is exactly why it prints the warning."
+      },
+      {
+        "text": "They are on the remote, because commits are pushed when you switch branches",
+        "explanation": "Switching branches is purely local. Nothing is pushed unless you run `git push`."
+      },
+      {
+        "text": "They are stored in `.git/ORIG_HEAD` permanently",
+        "explanation": "`ORIG_HEAD` is a single ref overwritten by operations like reset, merge and rebase; switching from detached HEAD does not set it, and it would not survive later operations anyway."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. While detached, HEAD held the raw hash of your new commits.\n2. `git switch main` pointed HEAD back at `main`. Now only the HEAD reflog mentioned them.\n3. `git reflog expire --expire=now --all` deleted those reflog entries.\n4. `git gc --prune=now` removed every unreachable object with no grace period.\n\nDefault reflog and object expiry thresholds are independent, not additive: after a reflog expires, the old objects can already be old enough to prune. No extra two-week recovery window is guaranteed. The lesson: before leaving detached HEAD with work you care about, run `git switch -c <name>`.",
+    "link": {
+      "title": "git-gc documentation",
+      "url": "https://git-scm.com/docs/git-gc"
+    }
+  }
+]

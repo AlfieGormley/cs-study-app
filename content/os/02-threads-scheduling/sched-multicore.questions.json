@@ -1,0 +1,348 @@
+[
+  {
+    "id": "sched-multicore-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does Linux give each CPU its own run queue instead of sharing one global queue?",
+    "options": [
+      {
+        "text": "A global queue can't support priorities",
+        "explanation": "A single queue can hold priorities perfectly well. The problems are contention and affinity, not expressiveness."
+      },
+      {
+        "text": "Per-CPU queues guarantee perfect load balance",
+        "explanation": "It's the opposite: per-CPU queues can become imbalanced, which is why Linux needs migration and load balancing."
+      },
+      {
+        "text": "Per-CPU queues avoid a single lock contended by every CPU, and keep threads on the CPU where their cache is warm",
+        "explanation": "Correct. Scalability and cache affinity are the two wins. The cost is imbalance, which the load balancer fixes."
+      },
+      {
+        "text": "Each CPU runs a different scheduling algorithm",
+        "explanation": "Every CPU runs the same scheduling classes. Only the queue of tasks differs."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the two designs:\n\n| | Global queue | Per-CPU queues |\n|---|---|---|\n| Locking | One lock for all CPUs | Mostly local |\n| Affinity | Threads hop CPUs | Threads stay put |\n| Balance | Automatic | Needs migration |\n\nOn a 64-core machine, every scheduling decision taking the same lock would be a severe bottleneck, and threads bouncing between CPUs would keep reloading their caches. So Linux uses per-CPU queues and pays for it with a load balancer.",
+    "link": {
+      "title": "Multiprocessor Scheduling (Advanced) — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-multi.pdf"
+    }
+  },
+  {
+    "id": "sched-multicore-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On an 8-CPU Linux machine with no restrictions, what does this print?\n\n```python\nimport os\nos.sched_setaffinity(0, {1, 5})\nos.sched_setaffinity(0, {5, 6})\nprint(sorted(os.sched_getaffinity(0)))\n```",
+    "options": [
+      {
+        "text": "[5]",
+        "explanation": "That would be the intersection of the two masks. Each call *replaces* the mask; it doesn't intersect with the previous one."
+      },
+      {
+        "text": "[1, 5, 6]",
+        "explanation": "That would be the union. sched_setaffinity sets a new mask rather than adding to the old one."
+      },
+      {
+        "text": "[0, 1, 2, 3, 4, 5, 6, 7]",
+        "explanation": "The calls do take effect (pid 0 means the calling thread), so the mask is no longer all CPUs."
+      },
+      {
+        "text": "[5, 6]",
+        "explanation": "Correct. The second call replaces the mask with {5, 6}."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `sched_setaffinity(0, mask)` sets the calling thread's allowed CPUs to exactly `mask`.\n2. First call: {1, 5}.\n3. Second call replaces it: {5, 6}.\n4. `sched_getaffinity(0)` returns {5, 6}; sorted → `[5, 6]`.\n\nThe kernel will now only run this thread on CPUs 5 and 6, and children created with `fork()` inherit that mask.",
+    "link": {
+      "title": "sched_setaffinity(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/sched_setaffinity.2.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A fair-class batch container has cpu.weight=10, no leaf or ancestor quota, access to all 16 physical cores, and enough runnable workers. With no competing work, how much CPU can it use?",
+    "options": [
+      {
+        "text": "All 16 cores",
+        "explanation": "Correct. Weight only matters under contention. With no competitors, the low-weight group gets everything: weights are work-conserving."
+      },
+      {
+        "text": "About 10% of one core",
+        "explanation": "That treats weight as a hard cap. Caps come from cpu.max; weight is a relative share."
+      },
+      {
+        "text": "About 1.6 cores (10% of 16)",
+        "explanation": "Again a cap interpretation. Weight 10 means 'a tenth as much as a weight-100 group when both want CPU', not 10% of the machine."
+      },
+      {
+        "text": "None until a weight-100 group gives up the CPU",
+        "explanation": "There are no other groups, and weights never stop a group from using idle CPUs."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `cpu.weight` is proportional sharing between groups that are **competing**.\n2. Here no other group wants CPU, so its share of the contended CPU is 10 / 10 = 100%.\n3. With 16 cores and enough threads, it can use all 16.\n\nIf a weight-100 group then became busy, the split would be 10 : 100, about 9% vs 91%. A hard ceiling would need `cpu.max`.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an idealized quota model, a container has cpu.max = 300000 100000. Ten threads run continuously on ten CPUs from each period boundary, without contention, overhead, burst credit or carried runtime. How long is the group throttled in each 100 ms period?",
+    "options": [
+      {
+        "text": "0 ms; 3 CPUs of quota is plenty on a 32-core host",
+        "explanation": "The quota is shared by all threads across all CPUs. Ten busy threads burn through it faster than three would."
+      },
+      {
+        "text": "70 ms",
+        "explanation": "Correct. 10 threads consume 10 CPU-ms per ms, so 300 ms of quota lasts 30 ms. The remaining 70 ms is throttled."
+      },
+      {
+        "text": "30 ms",
+        "explanation": "That's how long the container *runs* before the quota is exhausted, not how long it is throttled."
+      },
+      {
+        "text": "97 ms",
+        "explanation": "That assumes each thread is limited to 0.3 ms. The quota is a pooled budget, not a per-thread one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Quota: 300 ms of CPU per 100 ms period (3 CPUs' worth).\n2. Consumption: 10 threads × 1 CPU-ms per ms = 10 CPU-ms per ms.\n3. Quota lasts 300 / 10 = **30 ms**.\n4. Throttled for 100 − 30 = **70 ms** of the period.\n\nAverage use is 3 CPUs, exactly the limit, so a dashboard looks healthy. But any request arriving during those 70 ms waits until the period ends. That's the tail-latency trap.",
+    "link": {
+      "title": "CFS Bandwidth Control — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-bwc.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A main thread pinned to NUMA node 0 writes every page of a new private 100 GiB array, with enough local memory and no explicit policy or migration. Workers then run on both nodes and bandwidth falls below expectations. Which placement problem fits this setup?",
+    "options": [
+      {
+        "text": "The workers are being throttled by a cgroup quota",
+        "explanation": "Nothing in the scenario mentions a CPU limit. The clue is who touched the memory first."
+      },
+      {
+        "text": "The array is too large for the L3 cache",
+        "explanation": "True of any 100 GiB array, but it doesn't explain why this layout is slow compared with alternatives."
+      },
+      {
+        "text": "Linux allocates huge arrays across both nodes evenly by default",
+        "explanation": "The default is first touch, not interleaving. That's exactly why the layout is lopsided."
+      },
+      {
+        "text": "First-touch placed every page on the main thread's node, so the other socket's workers make every access remotely and one node's memory bandwidth is shared by all",
+        "explanation": "Correct. Initialise each slice from the thread that will use it, interleave with numactl, or let automatic NUMA balancing migrate pages over time."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Under the stated assumptions, first-write faults allocate the new pages on node 0. Workers on node 1 then need remote memory for cache misses to those pages, and requests concentrate on node 0. The exact cost is hardware-dependent; no measured multiplier is available here. Parallel initialization, deliberate interleaving or matching workers to memory can improve placement, subject to measurement.",
+    "link": {
+      "title": "numa(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/numa.7.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Linux Python 3.13+, with 64 visible logical CPUs, no CPU-count override or affinity restriction, a pod has a two-CPU quota. A default ProcessPoolExecutor is given enough CPU-bound jobs to fill it. What problem can occur?",
+    "options": [
+      {
+        "text": "It starts 2 workers, because Python reads the cgroup quota",
+        "explanation": "`os.cpu_count()` (and `process_cpu_count()`) don't read cpu.max. Python doesn't see the quota."
+      },
+      {
+        "text": "Up to 64 workers compete for two CPUs of aggregate quota, risking heavy throttling",
+        "explanation": "Correct. The default maximum uses process_cpu_count(), which considers affinity but not CPU bandwidth quota. Running many CPU-bound workers can exhaust each period budget early."
+      },
+      {
+        "text": "It starts 64 workers, and the limit stops being enforced because there are more processes than CPUs",
+        "explanation": "The quota applies to all processes in the cgroup, however many there are."
+      },
+      {
+        "text": "It fails to start because 64 exceeds the limit",
+        "explanation": "Nothing checks pool size against the quota. The workers start; they just can't all run."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With the specified environment, process_cpu_count() returns 64, so the default maximum is 64 workers. Their CPU time shares the two-CPU quota. Enough runnable workers may exhaust the budget early and then wait for replenishment. Benchmark a smaller pool; discover effective affinity and cgroup hierarchy limits rather than assuming the host count is usable bandwidth.",
+    "link": {
+      "title": "os — Python documentation",
+      "url": "https://docs.python.org/3/library/os.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A latency-sensitive service in a container shows p99 far above p50 and `nr_throttled` rising fast, while average CPU is below its limit. Which changes are likely to help? Select all that apply.",
+    "options": [
+      {
+        "text": "Shrink the worker pool to roughly the CPU quota",
+        "explanation": "Correct. Fewer threads consume the quota more smoothly, so it lasts the whole period instead of being exhausted early."
+      },
+      {
+        "text": "Remove the CPU limit and rely on the CPU request (weight) for fairness",
+        "explanation": "Correct, if no ancestor quota remains: removing the limiting bandwidth cap can remove this cause of throttling. Fairness then depends on competing weights and available CPUs."
+      },
+      {
+        "text": "Allow bursting with cpu.max.burst",
+        "explanation": "Correct. Banking unused quota lets short spikes run without being throttled, while still bounding average use."
+      },
+      {
+        "text": "Raise the pod's cpu.weight (CPU request) but keep the same limit",
+        "explanation": "Weight affects sharing under contention, not the hard per-period quota. Throttling continues unchanged."
+      },
+      {
+        "text": "Add more worker threads so requests don't queue",
+        "explanation": "More threads burn the quota faster and make throttling worse."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "A smaller CPU-bound pool can consume budget more smoothly; removing all relevant quota caps avoids quota throttling; accumulated burst credit can absorb short spikes. Raising weight does not raise the quota. More workers can exhaust it earlier. These are workload-dependent remedies: compare throughput and latency, and inspect ancestor limits.",
+    "link": {
+      "title": "CFS Bandwidth Control — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-bwc.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A container's `cpu.stat` over the last hour shows `nr_periods 36000` and `nr_throttled 14400`, with the default 100 ms period. What does this tell you?",
+    "options": [
+      {
+        "text": "The container was throttled for 14,400 seconds",
+        "explanation": "nr_throttled counts periods in which throttling happened, not seconds. The time is in throttled_usec."
+      },
+      {
+        "text": "Throttling was reported for 40% of the counted periods; request latency needs separate measurement",
+        "explanation": "Correct. 14400 / 36000 = 0.4. Two periods in five ended with the group out of quota."
+      },
+      {
+        "text": "It used 40% of its quota on average",
+        "explanation": "nr_throttled doesn't measure average usage. A group can be throttled often while averaging well under its quota."
+      },
+      {
+        "text": "Nothing; nr_throttled only counts throttling of real-time tasks",
+        "explanation": "These cpu.stat fields come from CFS bandwidth control, which applies to normal tasks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "14400 / 36000 = 40%. With continuously active 100 ms enforcement periods, 36000 periods correspond to one hour. These counters alone do not measure request latency or the fraction of wall time stalled. Compare interval deltas, throttled_usec, usage and latency measurements; throttled time can aggregate across per-CPU run queues.",
+    "link": {
+      "title": "CFS Bandwidth Control — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-bwc.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In an idealized quota model, cpu.max = 50000 100000. One request needs 80 ms CPU and starts at a period boundary. Assume no other work, contention, overhead, burst credit or carried runtime. Roughly when does it finish?",
+    "options": [
+      {
+        "text": "At 80 ms",
+        "explanation": "That ignores the quota. Only 50 ms of CPU is allowed per 100 ms period."
+      },
+      {
+        "text": "At 160 ms",
+        "explanation": "That spreads the work evenly at half speed. Bandwidth control doesn't slow a thread down; it lets it run at full speed, then stops it."
+      },
+      {
+        "text": "At about 130 ms",
+        "explanation": "Correct. It runs 0–50 ms, is throttled 50–100 ms, then runs its remaining 30 ms from 100 to 130 ms."
+      },
+      {
+        "text": "At 200 ms",
+        "explanation": "The second period doesn't need to be used in full; the request finishes 30 ms into it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk the periods:\n\n```\n0    50   100  130\n|run |thr |run|\n 50ms  -    30ms\n```\n\n1. Period 1 (0–100): runs 50 ms, quota gone at 50, throttled until 100.\n2. Period 2 (100–200): needs 30 more ms; runs 100–130 and finishes.\n\nSo 80 ms of CPU takes ~130 ms of wall time. A request arriving just after the quota ran out would fare worse: it would wait up to 50 ms before starting.",
+    "link": {
+      "title": "CFS Bandwidth Control — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-bwc.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A machine has 4 physical cores with 2 hyper-threads each (CPUs 0–7, where 0/1, 2/3, 4/5 and 6/7 are siblings). You pin two CPU-bound, cache-heavy threads with `taskset -c 0,1`. The rest of the machine is idle. Compared with letting the scheduler place them, what do you expect?",
+    "options": [
+      {
+        "text": "Same throughput, since each thread has its own logical CPU",
+        "explanation": "Logical CPUs 0 and 1 share one physical core's execution units and L1/L2, so each thread runs slower than on its own core."
+      },
+      {
+        "text": "Better throughput, because the threads share an L1 cache",
+        "explanation": "Sharing helps only if they share data. Two cache-heavy threads with separate data mostly evict each other."
+      },
+      {
+        "text": "The scheduler will move one thread to another core to fix the imbalance",
+        "explanation": "A hard affinity mask is never overridden by the load balancer. It can only choose within CPUs 0 and 1."
+      },
+      {
+        "text": "Lower throughput: both threads compete for one physical core, while unpinned the balancer would have spread them across cores",
+        "explanation": "Correct. Linux's balancer prefers spreading busy tasks across physical cores before doubling up on SMT siblings. The pin overrode that."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. CPUs 0 and 1 are **SMT siblings**: one core, shared execution units and L1/L2.\n2. Two CPU-bound threads there each get only part of that core.\n3. Unpinned, the balancer would see 3 idle physical cores and spread the threads onto separate cores.\n4. The affinity mask forbids that, so the kernel can't fix it.\n\nLesson: if you pin, pin to **different cores** (e.g. `taskset -c 0,2`), and know your topology (`lscpu -e`).",
+    "link": {
+      "title": "Scheduler Domains — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-domains.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about Linux's multicore load balancing are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A CPU that is about to go idle tries to pull work from a busier CPU first",
+        "explanation": "Correct. This is 'newidle' balancing, one of the three triggers alongside periodic and wake-up balancing."
+      },
+      {
+        "text": "Balancing across NUMA nodes is done as eagerly as between SMT siblings",
+        "explanation": "It's the reverse. Moving between siblings is cheap (shared caches), so it happens readily; crossing NUMA nodes loses cache and memory locality, so it's done reluctantly."
+      },
+      {
+        "text": "When a thread wakes, the kernel prefers its previous CPU or an idle CPU sharing the same last-level cache",
+        "explanation": "Correct. Wake-up placement balances keeping a warm cache against finding an idle CPU quickly."
+      },
+      {
+        "text": "A task that ran very recently may be treated as cache-hot and left where it is",
+        "explanation": "Correct. Below the migration-cost threshold (0.5 ms by default) the balancer prefers not to move it."
+      },
+      {
+        "text": "Load is measured purely as the number of runnable tasks on each CPU",
+        "explanation": "Linux considers runnable counts alongside PELT load, runnable and utilization averages, CPU capacity and other signals. It does not rely purely on task counts."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The correct statements are 1, 3 and 4. Newidle balancing may pull work; wake-up placement considers locality and idle CPUs; recently running tasks may be treated as cache-hot. Cross-node balancing has different costs. Linux uses multiple signals, including task counts and distinct PELT averages; no one metric describes every balancing decision.",
+    "link": {
+      "title": "Scheduler Domains — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-domains.html"
+    }
+  }
+]

@@ -1,0 +1,379 @@
+[
+  {
+    "id": "net-proxies-gateways-mesh-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement correctly distinguishes a forward proxy from a reverse proxy?",
+    "options": [
+      {
+        "text": "A forward proxy acts on behalf of clients (servers see the proxy); a reverse proxy acts on behalf of servers (clients see the proxy)",
+        "explanation": "Correct. A corporate web proxy hides users from websites; NGINX in front of your app hides backends from users."
+      },
+      {
+        "text": "A forward proxy only handles HTTP; a reverse proxy only handles TCP",
+        "explanation": "Both kinds can handle HTTP, and both can work at the TCP level. Protocol isn't what separates them; whose side they're on is."
+      },
+      {
+        "text": "A reverse proxy sends responses backwards to the server",
+        "explanation": "'Reverse' refers to the direction of representation (it stands in for servers), not to the direction data flows."
+      },
+      {
+        "text": "They're the same thing with different names",
+        "explanation": "They're deployed by different parties for different reasons: one by the client's network, one by the service operator."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask: **who deploys it, and who is hidden?**\n\n| | Deployed by | Hides |\n|---|---|---|\n| Forward | Client's org | Clients |\n| Reverse | Service owner | Servers |\n\nExamples: Squid at a company or school (forward); NGINX, HAProxy or a CDN in front of a website (reverse).",
+    "link": {
+      "title": "Reverse proxy (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Reverse_proxy"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A server has 8 synchronous workers. Assume an unbuffered slow response occupies a worker for 5 s, while enabled NGINX buffering with adequate capacity lets the worker finish generation and transfer in 50 ms. Why can buffering raise the worker-limited throughput?",
+    "options": [
+      {
+        "text": "NGINX makes the mobile network faster",
+        "explanation": "NGINX can't change the client's network speed. The slow download still takes 5 s; it just no longer ties up a Python worker."
+      },
+      {
+        "text": "NGINX caches every response so the app never runs",
+        "explanation": "NGINX can cache, but personalised responses usually aren't cached. The throughput gain here comes from buffering, which works for uncacheable responses too."
+      },
+      {
+        "text": "NGINX buffers the response, freeing the Python worker in milliseconds while NGINX's event loop handles the slow client",
+        "explanation": "Correct. NGINX handles thousands of slow connections cheaply in one event loop, so the 8 expensive workers spend their time generating responses rather than waiting on sockets."
+      },
+      {
+        "text": "NGINX converts the app to async Python",
+        "explanation": "A proxy can't change how the app is written. It isolates the app from slow clients instead."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Given 5 seconds of worker occupancy: 8 / 5 = 1.6 requests/s.\n2. Given 50 ms occupancy with adequate proxy buffering: 8 / 0.05 = 160 requests/s.\n3. This is a 100-fold increase in the ideal worker-limited ceiling, not a benchmark of overall throughput.\n4. Client bandwidth, proxy memory/disk buffers, CPU and connection limits can become bottlenecks; no universal 10,000-client capacity follows.",
+    "link": {
+      "title": "ngx_http_proxy_module: proxy buffering (NGINX docs)",
+      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your public API has free and paid tiers: 100 and 10,000 requests per minute per API key. Requests must be authenticated with OAuth tokens before reaching any of your 12 services. Where is the most natural place to enforce this?",
+    "options": [
+      {
+        "text": "In each of the 12 services' code",
+        "explanation": "That duplicates auth and quota logic 12 times, possibly in several languages, and makes per-key quotas across services hard to count consistently."
+      },
+      {
+        "text": "In the service mesh sidecars",
+        "explanation": "Meshes focus on service-to-service (east-west) traffic: mTLS identity between services. Customer API keys and commercial quotas belong at the external entry point."
+      },
+      {
+        "text": "In DNS",
+        "explanation": "DNS only maps names to addresses; it never sees tokens or individual requests, so it can't authenticate or count them."
+      },
+      {
+        "text": "In an API gateway at the edge of the system",
+        "explanation": "Correct. Authenticating tokens and enforcing per-key quotas are classic north-south, cross-cutting API concerns. The gateway does them once and forwards the verified identity downstream."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Who's the concern for? **External API consumers** → north-south → gateway.\n2. Is it cross-cutting? Yes: every endpoint needs auth and quotas.\n3. Gateway flow: validate OAuth token → look up the key's plan → check counter (e.g. in Redis) → forward with `X-User-Id` or a signed internal token.\n4. Services still enforce **authorisation** on their own resources (\"can this user see order 42?\") because that's business logic.",
+    "link": {
+      "title": "What is Amazon API Gateway?",
+      "url": "https://docs.aws.amazon.com/apigateway/latest/developerguide/welcome.html"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your rate limiter keys on the first IP in `X-Forwarded-For`. Attackers bypass it easily. Why?",
+    "options": [
+      {
+        "text": "`X-Forwarded-For` is encrypted, so the limiter reads garbage",
+        "explanation": "It's a plain HTTP header, readable by any hop that terminates TLS. The problem is trust, not encryption."
+      },
+      {
+        "text": "Clients can send their own `X-Forwarded-For`; proxies append to it, so the left-most value is attacker-controlled. Use the entry added by your own trusted proxy.",
+        "explanation": "Correct. An attacker sends `X-Forwarded-For: 1.2.3.4` with a random IP each time; your proxy appends the real IP at the end. Read from the right, skipping known proxies."
+      },
+      {
+        "text": "IP addresses can't be used for rate limiting",
+        "explanation": "IP-based limits are common and useful (with caveats about NAT). They only fail here because the IP is being read from a spoofable position."
+      },
+      {
+        "text": "The load balancer strips the header",
+        "explanation": "If it were stripped, the limiter would see nothing at all, not attacker-chosen values. The symptom points to trusting client-supplied data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Attacker sends: `X-Forwarded-For: 9.9.9.9` (random each request).\n2. Your CDN appends the real client IP: `9.9.9.9, 203.0.113.5`.\n3. Your LB appends the CDN's IP: `9.9.9.9, 203.0.113.5, 198.51.100.7`.\n4. Taking the **first** entry gives `9.9.9.9`: attacker-chosen.\n5. Correct: walk from the **right**, discard addresses of hops you trust (LB, CDN ranges); the first untrusted one, `203.0.113.5`, is the real client.",
+    "link": {
+      "title": "Reverse proxy (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Reverse_proxy"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For traffic enrolled in a configured L7-capable mesh with supported HTTP protocols and no app-level TLS hiding requests from it, which features can the mesh provide without changing application code? Select all that apply.",
+    "options": [
+      {
+        "text": "Mutual TLS between services, with automatic certificate rotation",
+        "explanation": "Correct. Sidecars handle the TLS handshakes using certificates issued and rotated by the control plane."
+      },
+      {
+        "text": "Per-request load balancing and retries with timeouts",
+        "explanation": "Correct. The client-side sidecar balances each request across endpoints and applies retry and timeout policies from config."
+      },
+      {
+        "text": "Sending 5% of traffic to a new version",
+        "explanation": "Correct. Weighted routing rules in the proxies split traffic between versions for canaries."
+      },
+      {
+        "text": "Fixing N+1 query problems in the database layer",
+        "explanation": "A mesh sees network calls between services, not how an app queries its database. Query patterns are application logic."
+      },
+      {
+        "text": "Request-level metrics (rate, errors, latency) for each service pair",
+        "explanation": "Correct. Since every call goes through proxies, they emit uniform golden-signal metrics. (Full distributed traces still need apps to propagate trace headers.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Ask, for each feature: **can a proxy beside the app do it just by seeing network traffic?**\n\n- mTLS → yes, the proxy owns the connection.\n- LB, retries, timeouts → yes, per request.\n- Traffic splitting → yes, routing rules.\n- Metrics → yes, it sees every request and response.\n- Database query design → no, that's inside the app.\n\nNote the trace caveat: the proxy can create spans, but the app must forward headers like `traceparent` to link them.",
+    "link": {
+      "title": "What is Istio?",
+      "url": "https://istio.io/latest/docs/concepts/what-is-istio/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A request path is: API gateway → service A → service B. The gateway retries up to 3 attempts, A's mesh sidecar retries up to 3 attempts, and A's HTTP client retries up to 3 attempts. B starts timing out under load. In the worst case, how many requests can one user call generate against B, and what's the fix?",
+    "options": [
+      {
+        "text": "3, because retries don't multiply",
+        "explanation": "Retries at each layer are independent: every attempt from an outer layer triggers a full set of attempts at the inner layers, so they multiply."
+      },
+      {
+        "text": "9",
+        "explanation": "That counts only two layers (3 × 3). There are three retrying layers in this path."
+      },
+      {
+        "text": "27; retry at one layer only, with a retry budget and backoff with jitter",
+        "explanation": "Correct. 3 × 3 × 3 = 27 attempts against an already overloaded B: a retry storm. Retrying at one layer with a budget (e.g. ≤ 10% extra load) keeps amplification bounded."
+      },
+      {
+        "text": "Infinite, because retries loop",
+        "explanation": "Each layer is capped at 3 attempts, so the total is finite. It's just much larger than intended."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Gateway makes up to **3** attempts to A.\n2. For each of those, A's HTTP client makes up to **3** attempts to B.\n3. Each of those passes through A's outbound sidecar, which makes up to **3** attempts.\n4. Total against B = 3 × 3 × 3 = **27**.\n5. If B is failing because it's overloaded, up to 27× the attempts can prolong the overload.\n6. Fix: retry only at the innermost caller (or one chosen layer); use budgets, exponential backoff with jitter, and deadlines that propagate so outer layers don't retry work that's already doomed.",
+    "link": {
+      "title": "What is a service mesh? (Linkerd)",
+      "url": "https://linkerd.io/what-is-a-service-mesh/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A startup has 6 services, all in Go, on one Kubernetes cluster. The CTO wants Istio 'for observability'. What's the most balanced recommendation?",
+    "options": [
+      {
+        "text": "Start with a shared Go client/server library or OpenTelemetry instrumentation for metrics and tracing; revisit a mesh when service count, language mix or mTLS and traffic-policy needs grow",
+        "explanation": "Correct. One language means a library gives the same observability at lower operational cost. A mesh becomes worthwhile as heterogeneity and policy requirements increase."
+      },
+      {
+        "text": "Adopt Istio immediately; every Kubernetes cluster needs a mesh",
+        "explanation": "Many clusters run fine without a mesh. With 6 services in one language, the mesh's control plane, sidecar resources and debugging complexity may outweigh its benefits."
+      },
+      {
+        "text": "Never use a mesh; they only add latency",
+        "explanation": "Meshes add some latency and cost, but at scale (many services, many languages, strict mTLS needs) they're often the most practical option. A blanket 'never' ignores that."
+      },
+      {
+        "text": "Replace Kubernetes with an API gateway",
+        "explanation": "A gateway handles external traffic into the system; it doesn't replace container orchestration or give visibility into service-to-service calls."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Weigh benefits against costs for **this** team:\n\n1. Need: observability → OpenTelemetry in a shared Go library covers metrics and tracing.\n2. Languages: one → a library is maintained once, no polyglot problem.\n3. mTLS mandate? Not stated.\n4. Mesh cost: control plane to run and upgrade, a sidecar per pod (CPU and memory), deployment-dependent proxy latency, new failure modes.\n5. Conclusion: library now; reassess as measured needs, language mix or identity/policy requirements change. Ambient-mode meshes lower the cost if they adopt later.",
+    "link": {
+      "title": "Service mesh (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Service_mesh"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your mobile app's home screen calls 6 back-end services one after another, because each call needs data from the previous one. Users are about 150 ms RTT from your region, and services are about 1 ms from each other inside it. Roughly how much time does a backend-for-frontend (BFF) that makes those 6 calls server-side save per screen load, ignoring server processing time?",
+    "options": [
+      {
+        "text": "About 750 ms",
+        "explanation": "Correct. Direct: 6 × 150 = 900 ms. Via a BFF: one 150 ms round trip from the phone, plus 6 × 1 ms inside the region ≈ 156 ms. Saving ≈ 744 ms."
+      },
+      {
+        "text": "About 6 ms",
+        "explanation": "That's only the internal hop cost. The saving comes from replacing five 150 ms phone round trips with 1 ms internal calls."
+      },
+      {
+        "text": "Nothing, because the same 6 calls are still made",
+        "explanation": "The calls still happen, but over a 1 ms network instead of a 150 ms one. Where a round trip happens matters as much as how many there are."
+      },
+      {
+        "text": "About 900 ms, because the BFF removes all network time",
+        "explanation": "The phone still needs one round trip to reach the BFF, so about 150 ms remains."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "| Design | Network time |\n|---|---|\n| App calls 6 services | 6 × 150 = 900 ms |\n| App → BFF → 6 services | 150 + 6 × 1 = 156 ms |\n\nSaving ≈ 900 − 156 ≈ **744 ms**.\n\nSequential calls over a slow link are the worst case. A BFF (or an aggregating gateway, or GraphQL) moves the chatty part onto the fast internal network and shapes one response for the client.",
+    "link": {
+      "title": "Pattern: API gateway / backends for frontends (microservices.io)",
+      "url": "https://microservices.io/patterns/apigateway.html"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about Istio's ambient mode compared with classic sidecar mode are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A per-node proxy (ztunnel) provides L4 features such as mTLS without a sidecar in each pod",
+        "explanation": "Correct. ztunnel runs once per node and handles secure L4 transport for all the pods on it."
+      },
+      {
+        "text": "L7 features like HTTP retries or header-based routing need an optional waypoint proxy",
+        "explanation": "Correct. ambient splits L4 (ztunnel) from L7 (waypoint proxies, deployed only where needed)."
+      },
+      {
+        "text": "Ambient mode removes the need for a control plane",
+        "explanation": "Ambient still needs `istiod` to issue certificates and distribute configuration. What it removes is the per-pod sidecar."
+      },
+      {
+        "text": "Classic sidecar mode adds two proxy hops per service-to-service call",
+        "explanation": "Correct. The caller's outbound sidecar and the callee's inbound sidecar each process the request."
+      },
+      {
+        "text": "Ambient mode requires changing application code to call the mesh",
+        "explanation": "Like sidecars, ambient intercepts traffic transparently; apps don't change."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Separate the two planes:\n\n- **Control plane** (istiod): config and certificates → needed in both modes.\n- **Data plane:**\n  - Sidecar mode: a proxy in every pod → 2 hops per call, CPU and memory per pod.\n  - Ambient mode: ztunnel per node for L4 (mTLS, identity), plus waypoints for L7 only where you need it.\n\nThe saving is resources and operational friction (no sidecar injection or restarts for upgrades), not the control plane.",
+    "link": {
+      "title": "What is Istio?",
+      "url": "https://istio.io/latest/docs/concepts/what-is-istio/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The gateway permits two attempts, each with a 2 s timeout, within a 4 s overall budget. A calls B with a 5 s timeout, B runs a 4 s database query, and cancellation is not propagated. What failure amplification can occur?",
+    "options": [
+      {
+        "text": "Nothing; B eventually answers, so the user gets a response",
+        "explanation": "The gateway has already given up at 2 s. B's answer arrives after nobody is waiting for it."
+      },
+      {
+        "text": "The gateway gives up at 2 s and retries, but A and B keep working on the abandoned request, so each user request creates duplicate work on an already slow database",
+        "explanation": "Correct. Inner timeouts longer than outer ones waste capacity on requests nobody is waiting for, and the retry doubles the load at the worst moment. Inner timeouts should be shorter, or a deadline should propagate."
+      },
+      {
+        "text": "B's 5 s timeout causes the gateway to wait 5 s",
+        "explanation": "The gateway enforces its own 2 s timeout regardless of what downstream services are configured with."
+      },
+      {
+        "text": "A will retry B forever",
+        "explanation": "A's 5 s timeout bounds the call. The problem is wasted and duplicated work, not an infinite loop."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. At t=0 the gateway starts attempt 1: A → B → database.\n2. At t=2 the first attempt times out; the gateway starts attempt 2 while the abandoned database query continues. It has not yet returned a final response to the user.\n3. Around t=4 the first query finishes too late for its attempt; the overall gateway budget expires while the second query is still running.\n4. Two database queries were started for one user call.\n5. Propagate deadlines and implement cancellation in application/database work, or use shorter inner budgets. A deadline alone does not automatically interrupt every computation or database query.",
+    "link": {
+      "title": "What is a service mesh? (Linkerd)",
+      "url": "https://linkerd.io/what-is-a-service-mesh/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service receives 1,000 requests per second, and a downstream dependency starts failing 50% of calls. Compare retrying every failure once with a retry budget capping retries at 20% of normal traffic. How many retry requests per second reach the dependency in each case?",
+    "options": [
+      {
+        "text": "500 per second with blind retries, 200 per second with the budget",
+        "explanation": "Correct. 50% of 1,000 = 500 failures, each retried once. The budget caps retries at 20% of 1,000 = 200 per second, so the struggling dependency sees 1,200 rps instead of 1,500."
+      },
+      {
+        "text": "500 per second in both cases",
+        "explanation": "The budget's whole purpose is to cap retries below what blind retrying would send."
+      },
+      {
+        "text": "200 per second with blind retries, 500 per second with the budget",
+        "explanation": "This reverses the two: blind retries follow the failure rate, while the budget is a fixed fraction of normal traffic."
+      },
+      {
+        "text": "0 per second with the budget, because budgets disable retries during failures",
+        "explanation": "A budget still allows retries up to its limit; it just stops them growing with the failure rate."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Normal load: 1,000 rps. Failures: 50% → 500 rps.\n2. Blind retry-once: +500 rps → dependency sees **1,500 rps** (+50%) just as it's struggling.\n3. With a 20% budget: retries ≤ 0.2 × 1,000 = **200 rps** → dependency sees 1,200 rps.\n4. If failures rise to 100%, blind retries double the load (2,000 rps), while the budget still caps it at 1,200.\n\nBudgets keep retries useful for occasional blips but stop them amplifying a real overload.",
+    "link": {
+      "title": "Handling overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add a Server-Sent Events endpoint that streams small price updates every second. Behind NGINX, clients receive nothing for a while and then a burst of many updates at once. What's the likely cause and fix?",
+    "options": [
+      {
+        "text": "SSE doesn't work over HTTPS",
+        "explanation": "SSE works fine over HTTPS; the symptom is about batching, not failure."
+      },
+      {
+        "text": "The browser is caching the stream",
+        "explanation": "Browsers don't cache an open event stream; they process events as they arrive."
+      },
+      {
+        "text": "NGINX's response buffering collects the stream's output until a buffer fills or the response ends; disable buffering for that route (for example `proxy_buffering off`, or the app sending `X-Accel-Buffering: no`)",
+        "explanation": "Correct. Buffering protects workers from slow clients for normal responses, but for streaming it holds back each small event. Turning it off for the streaming route sends each event as it's written."
+      },
+      {
+        "text": "The app server needs more worker processes",
+        "explanation": "More workers wouldn't change how NGINX batches the stream's bytes before sending them on."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Normal case: NGINX reads the app's response into buffers so a slow client can't hold up a worker. Great for ordinary pages.\n2. Streaming case: each event is a few hundred bytes; the buffer only flushes when full → events arrive in bursts.\n3. Fix per route: `proxy_buffering off;` in that `location`, or have the app send `X-Accel-Buffering: no`.\n4. Also check proxy read timeouts, which can cut long-lived streams, and send periodic keep-alive comments.\n\nBuffering is a trade-off: right for request/response, wrong for streams.",
+    "link": {
+      "title": "ngx_http_proxy_module (NGINX docs)",
+      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html"
+    }
+  }
+]

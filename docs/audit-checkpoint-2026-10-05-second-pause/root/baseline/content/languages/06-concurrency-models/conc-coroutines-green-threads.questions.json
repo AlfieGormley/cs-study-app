@@ -1,0 +1,340 @@
+[
+  {
+    "id": "conc-coroutines-green-threads-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef gen():\n    print(\"a\")\n    yield 1\n    print(\"b\")\n    yield 2\n\ng = gen()\nprint(\"x\")\nprint(next(g))\n```",
+    "options": [
+      {
+        "text": "a, x, 1",
+        "explanation": "This assumes calling `gen()` runs the body up to the first `yield`. It runs nothing until the first `next`."
+      },
+      {
+        "text": "x, a, 1",
+        "explanation": "Correct. `gen()` only creates the generator. `next(g)` runs the body to the first `yield`, printing `a`, and returns 1."
+      },
+      {
+        "text": "x, a, 1, b, 2",
+        "explanation": "A generator stops at each `yield`. Only one `next` call is made, so execution pauses after yielding 1."
+      },
+      {
+        "text": "x, 1",
+        "explanation": "The `print(\"a\")` before the first `yield` does run during the first `next`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `g = gen()` builds a suspended generator. No output.\n2. `print(\"x\")` prints `x`.\n3. `next(g)` resumes the frame from the top: prints `a`, reaches `yield 1`, suspends and returns 1.\n4. `print` shows `1`.\n\nThe frame now sits paused just after `yield 1`, with `b` still unprinted.",
+    "link": {
+      "title": "PEP 342: Coroutines via Enhanced Generators",
+      "url": "https://peps.python.org/pep-0342/"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the defining difference between a **coroutine** and an ordinary subroutine?",
+    "options": [
+      {
+        "text": "A coroutine always runs on a separate OS thread",
+        "explanation": "Coroutines are usually run on one thread by a scheduler. Running on a separate thread is what threads do."
+      },
+      {
+        "text": "A coroutine must be declared with `async`",
+        "explanation": "`async` is one syntax for coroutines. Generators, Lua coroutines and Ruby Fibers are coroutines with no `async` keyword."
+      },
+      {
+        "text": "A coroutine can suspend part way through and later resume where it left off, keeping its local state",
+        "explanation": "Correct. A subroutine runs from entry to exit and discards its frame; a coroutine's frame survives a suspension."
+      },
+      {
+        "text": "A coroutine cannot return a value",
+        "explanation": "Coroutines can return values (a generator's return value travels in `StopIteration`; an async function returns normally)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare their lifecycles:\n\n| | Subroutine | Coroutine |\n|---|---|---|\n| Entries | One | Start + each resume |\n| Frame | Freed on return | Kept while suspended |\n\nEverything else (threads, `async`, return values) is a property of a particular implementation, not of the concept.",
+    "link": {
+      "title": "Coroutine — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Coroutine"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Go program starts 100,000 goroutines that each sleep for a second. Roughly how much memory do their initial stacks take, given Go's starting stack size?",
+    "options": [
+      {
+        "text": "About 200 MB",
+        "explanation": "Correct. 100,000 × 2 KB = 200,000 KB, roughly 200 MB."
+      },
+      {
+        "text": "About 800 GB",
+        "explanation": "That is 100,000 × 8 MB, the default stack reservation of a typical Linux OS thread. Goroutines start far smaller."
+      },
+      {
+        "text": "About 2 MB",
+        "explanation": "This is 100,000 × 20 bytes. A goroutine needs a real stack, starting at 2 KB, not a few bytes."
+      },
+      {
+        "text": "Go cannot run that many goroutines; it will crash",
+        "explanation": "Hundreds of thousands, even millions, of goroutines is normal. That is the point of small growable stacks."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Starting goroutine stack: 2 KB (since Go 1.4).\n2. 100,000 × 2 KB = 200,000 KB ≈ 195 MiB, call it 200 MB.\n3. Compare OS threads at an 8 MB reservation each: 100,000 × 8 MB = 800,000 MB ≈ 800 GB of virtual address space.\n4. Stacks that never grow stay at 2 KB, so sleeping goroutines stay cheap.",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's round-robin scheduler (pop a task, call `next`, drop it on `StopIteration`, otherwise append it), what is printed by:\n\n```python\nrun([task(\"A\", 3),\n     task(\"B\", 1)])\n```\n\nwhere `task(name, n)` prints `name i` then yields, for `i` in `range(n)`?",
+    "options": [
+      {
+        "text": "A 0, A 1, A 2, B 0",
+        "explanation": "This ignores the yields: each task runs only one step before going to the back of the queue."
+      },
+      {
+        "text": "A 0, B 0, A 1, B 1, A 2",
+        "explanation": "B was created with `n = 1`, so it only prints `B 0`. Its second resume raises `StopIteration`."
+      },
+      {
+        "text": "A 0, B 0, A 1, A 2",
+        "explanation": "Correct. After B's single step it is resumed once more, finishes and is dropped; A then runs alone."
+      },
+      {
+        "text": "B 0, A 0, A 1, A 2",
+        "explanation": "The deque is processed from the left, so A, listed first, runs first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace the queue:\n\n```\nq=[A,B] run A -> \"A 0\"  q=[B,A]\nq=[B,A] run B -> \"B 0\"  q=[A,B]\nq=[A,B] run A -> \"A 1\"  q=[B,A]\nq=[B,A] run B -> Stop   q=[A]\nq=[A]   run A -> \"A 2\"  q=[A]\nq=[A]   run A -> Stop   q=[]\n```\n\nOutput: `A 0, B 0, A 1, A 2`.",
+    "link": {
+      "title": "PEP 342: Coroutines via Enhanced Generators",
+      "url": "https://peps.python.org/pep-0342/"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef helper():\n    yield \"deep\"\n\ndef task():\n    helper()\n    yield \"top\"\n\nprint(list(task()))\n```",
+    "options": [
+      {
+        "text": "`['deep', 'top']`",
+        "explanation": "This is what `yield from helper()` would give. A bare `helper()` call only creates a generator object and discards it."
+      },
+      {
+        "text": "`['top', 'deep']`",
+        "explanation": "There is no mechanism that would run `helper` after `task`'s yield; `helper`'s body never runs at all."
+      },
+      {
+        "text": "It raises `TypeError` because `helper()` is a generator",
+        "explanation": "Creating and discarding a generator is legal. It is just useless here."
+      },
+      {
+        "text": "`['top']`",
+        "explanation": "Correct. Generators are stackless: `helper()` cannot suspend `task`. You need `yield from` to delegate."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `list(task())` drives `task` to completion.\n2. Line `helper()` creates a generator object. Nothing iterates it, so `\"deep\"` is never produced.\n3. `yield \"top\"` produces one item.\n4. Result: `['top']`.\n\nThis is the stackless limitation in action: only `task`'s own frame can suspend. Every level has to opt in with `yield from` (or `await`), which is the root of function colouring. In a stackful system like Lua, a plain call to `helper` could yield on behalf of the whole coroutine.",
+    "link": {
+      "title": "Coroutine — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Coroutine"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are **stackless** coroutines (only the coroutine's own frame can suspend)? Select all that apply.",
+    "options": [
+      {
+        "text": "Python `async def` functions",
+        "explanation": "Correct. Each async function is compiled separately into a resumable frame, and you must `await` at every level."
+      },
+      {
+        "text": "Lua coroutines",
+        "explanation": "Lua coroutines are stackful: `coroutine.yield` can be called from a function nested many calls deep."
+      },
+      {
+        "text": "Rust `async fn`",
+        "explanation": "Correct. The compiler turns each async function into a state-machine type implementing `Future`."
+      },
+      {
+        "text": "Go goroutines",
+        "explanation": "Each goroutine has its own growable stack, and any function it calls can block and be parked. That is stackful."
+      },
+      {
+        "text": "C++20 coroutines",
+        "explanation": "Correct. C++20 coroutines are stackless: `co_await` can only appear in the coroutine body itself."
+      }
+    ],
+    "answer": [0, 2, 4],
+    "workedExample": "The test: *can a plain function called from the coroutine suspend it?*\n\n1. Python async: no, the callee must be `async` and awaited. Stackless.\n2. Lua: yes, `coroutine.yield` works at any depth. Stackful.\n3. Rust async: no, `.await` only in `async` bodies. Stackless.\n4. Go: yes, any call can block and the runtime parks the whole goroutine stack. Stackful.\n5. C++20: no, `co_await` only in the coroutine body. Stackless.",
+    "link": {
+      "title": "Coroutine — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Coroutine"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Go program has `GOMAXPROCS=4`. One goroutine makes a blocking system call (say, a read on a file that the netpoller cannot handle) that takes 2 seconds. What happens to the other goroutines?",
+    "options": [
+      {
+        "text": "They keep running: the runtime detaches the P from the blocked M and gives it to another OS thread",
+        "explanation": "Correct. The OS thread is stuck in the kernel with the goroutine, but `sysmon` hands its P (and run queue) to another M, starting a new thread if needed."
+      },
+      {
+        "text": "All goroutines freeze for 2 seconds, because Go is M:1",
+        "explanation": "Go is M:N, not M:1. A blocked M does not stop the others."
+      },
+      {
+        "text": "Only a quarter of the goroutines freeze, because one of four Ps is lost",
+        "explanation": "The P is not lost; it is handed to another M. Goroutines queued on it keep running."
+      },
+      {
+        "text": "The runtime pre-empts the system call after 10 ms and retries it later",
+        "explanation": "The runtime cannot interrupt a thread inside the kernel. It works around the blocked thread instead."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. G runs on M1, which holds P1.\n2. G enters a blocking syscall. M1 is now stuck in the kernel.\n3. The `sysmon` thread notices P1 has been in a syscall too long and hands P1 to another M (M5, created if necessary).\n4. M5 runs the goroutines on P1's queue. The other Ps are unaffected throughout.\n5. When the syscall returns, M1 tries to get a P back; if none is free, G goes onto a run queue and M1 parks.\n\nSocket I/O is cheaper still: it goes through the netpoller, so no thread blocks at all.",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team moves a Java 21 service to virtual threads. Throughput improves at first, but under load the service stalls. Thread dumps show virtual threads blocked on JDBC calls made inside `synchronized` methods. What is going on?",
+    "options": [
+      {
+        "text": "Virtual threads cannot do blocking I/O; JDBC must be rewritten to be async",
+        "explanation": "The whole point of virtual threads is that blocking I/O unmounts them. JDBC works fine outside the pinning case."
+      },
+      {
+        "text": "Blocking inside `synchronized` pins the virtual thread to its carrier in JDK 21, so the few carrier threads are all stuck and no other virtual threads can run",
+        "explanation": "Correct. In JDK 21 to 23 a virtual thread could not unmount while holding a monitor. Switch to `ReentrantLock` there, or upgrade to JDK 24+ (JEP 491)."
+      },
+      {
+        "text": "The JVM limits each process to 256 virtual threads",
+        "explanation": "There is no such limit; millions of virtual threads are supported."
+      },
+      {
+        "text": "Virtual threads run on one carrier thread only, so they never use more than one core",
+        "explanation": "The default scheduler is a ForkJoinPool with roughly one carrier per core. Virtual threads are M:N, not M:1."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Carriers: by default about one per CPU core, say 8.\n2. A virtual thread blocked inside `synchronized` cannot unmount in JDK 21, so it holds its carrier for the whole JDBC wait.\n3. Eight such requests at once occupy all 8 carriers.\n4. Thousands of runnable virtual threads now have nowhere to run: the service stalls.\n5. Fixes: replace `synchronized` with `java.util.concurrent.locks.ReentrantLock` around blocking calls, or upgrade to JDK 24, where JEP 491 lets virtual threads unmount while holding a monitor. `-Djdk.tracePinnedThreads` helped diagnose this on JDK 21.",
+    "link": {
+      "title": "JEP 491: Synchronize Virtual Threads without Pinning — OpenJDK",
+      "url": "https://openjdk.org/jeps/491"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On Go 1.13, this program sometimes hangs forever on a multicore machine, while on Go 1.14+ it finishes:\n\n```go\ngo func() {\n  for { } // spin, no calls\n}()\ntime.Sleep(time.Millisecond)\nruntime.GC()\nfmt.Println(\"done\")\n```\n\nWhy?",
+    "options": [
+      {
+        "text": "Go 1.13 used M:1 scheduling, so the spinning goroutine took the only thread",
+        "explanation": "Go has been M:N for a long time. Other Ps were available; the problem was that the spinning goroutine itself could not be stopped."
+      },
+      {
+        "text": "The empty loop is a data race, which Go 1.14 started rejecting",
+        "explanation": "An empty loop touches no shared memory. Nothing races here."
+      },
+      {
+        "text": "Garbage collection needs every goroutine to reach a safe point; before 1.14 goroutines were only pre-empted at function calls, so a call-free loop never stopped",
+        "explanation": "Correct. Go 1.14 added asynchronous pre-emption: the runtime sends a signal to the thread and stops the goroutine wherever it is."
+      },
+      {
+        "text": "`time.Sleep` blocks the OS thread, and Go 1.13 could not create another one",
+        "explanation": "Sleep parks the goroutine, not the thread. Go has always been able to start more threads."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `runtime.GC()` needs a *stop-the-world* phase: every running goroutine must pause at a safe point.\n2. In Go 1.13 the safe points were cooperative: checks inserted at function prologues.\n3. `for { }` makes no calls, so it never reaches a check. The GC waits forever, and with it `main`.\n4. Go 1.14 added asynchronous pre-emption: `sysmon` sends `SIGURG` to the thread, the handler stops the goroutine mid-loop.\n\nLesson: \"pre-emptive\" green threads are only as pre-emptive as the runtime's mechanism. Erlang avoids this by counting reductions, because every Erlang loop is a function call.",
+    "link": {
+      "title": "Go 1.14 Release Notes (asynchronous pre-emption)",
+      "url": "https://go.dev/doc/go1.14"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Python team adopts gevent with `monkey.patch_all()` to make a `requests`-based crawler concurrent. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Ordinary blocking `requests.get` calls now switch to other greenlets while waiting, without rewriting code as `async`",
+        "explanation": "Correct. The patched `socket` module yields to the gevent hub instead of blocking the thread."
+      },
+      {
+        "text": "CPU-bound parsing in different greenlets now runs in parallel on several cores",
+        "explanation": "gevent is M:1: all greenlets share one OS thread. CPU work is still serial."
+      },
+      {
+        "text": "A C extension doing its own blocking network I/O can freeze every greenlet in the process",
+        "explanation": "Correct. Monkey-patching only replaces Python-level modules; C code calling the OS directly bypasses it and blocks the one thread."
+      },
+      {
+        "text": "Greenlets can switch only at points where the code explicitly writes `await`",
+        "explanation": "greenlet is stackful and switching is hidden inside patched calls. That is why no `await` is needed, and also why switch points are invisible."
+      },
+      {
+        "text": "Shared mutable state can still be corrupted if a check and an update are separated by a patched I/O call",
+        "explanation": "Correct. Any patched call is a potential switch point, the same check-then-act hazard as across an `await`."
+      }
+    ],
+    "answer": [0, 2, 4],
+    "workedExample": "Classify gevent:\n\n1. **Stackful** coroutines (greenlet), so blocking-looking code can suspend from any depth: statement A true, D false.\n2. **M:1**: one OS thread, so no CPU parallelism: B false.\n3. **Cooperative via patching**: only calls through patched modules switch. Unpatched C code blocks everything: C true.\n4. Switches can happen at every patched call, so `if x: (I/O); x -= 1` can interleave with another greenlet: E true.",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You are designing a systems language that must call C libraries freely, run on embedded targets with no runtime, and let futures be stored inline in structs with no heap allocation. Which concurrency primitive fits best, and what do you give up?",
+    "options": [
+      {
+        "text": "M:N green threads with growable stacks; you give up nothing important",
+        "explanation": "Green threads need a runtime scheduler and growable stacks, and C code called from them cannot be moved or grown safely. These clash directly with the requirements."
+      },
+      {
+        "text": "Stackful coroutines with a fixed 8 MB stack each; you give up C interop",
+        "explanation": "Fixed large stacks defeat the point of lightweight tasks and still need a separate allocation each, so inline storage is impossible."
+      },
+      {
+        "text": "Stackless coroutines (async/await compiled to state machines); you accept function colouring",
+        "explanation": "Correct. Each future is a fixed-size value known at compile time, needs no runtime to exist, and C calls are ordinary calls. This is the trade Rust made."
+      },
+      {
+        "text": "One OS thread per task; you give up the ability to run more than one task",
+        "explanation": "OS threads need an OS, cost far more per task than a future, and cannot be stored inline. They do not meet the embedded or no-allocation requirement."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Check each requirement:\n\n| Need | Stackless | Green threads |\n|---|---|---|\n| No runtime | Yes | No |\n| Inline, no heap | Yes | No (stack) |\n| Free C calls | Yes | Awkward |\n\nStackless coroutines meet all three. The cost is that suspension must be explicit at every level (`async`/`.await`), so functions are coloured, and an executor must be chosen (Tokio, Embassy, ...). Rust removed its pre-1.0 green threads for exactly these reasons.",
+    "link": {
+      "title": "Coroutine — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Coroutine"
+    }
+  }
+]

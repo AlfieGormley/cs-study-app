@@ -1,0 +1,386 @@
+[
+  {
+    "id": "arch-scaling-reads-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user updates their display name, the page reloads, and the old name appears for a few seconds. Reads go to asynchronous read replicas. What's going on? The primary confirms the committed update immediately; an uncached read from the replica still shows the older value.",
+    "options": [
+      {
+        "text": "The write failed and was silently retried.",
+        "explanation": "Wrong. The new name appears a few seconds later, so the write succeeded. The read simply happened before the replica caught up."
+      },
+      {
+        "text": "Replication lag: the read hit a replica that hadn't yet applied the write, violating read-your-writes consistency.",
+        "explanation": "Correct. Asynchronous replicas trail the primary. Reading from one straight after writing to the primary can return stale data."
+      },
+      {
+        "text": "The browser cached the old page, which replicas can't cause.",
+        "explanation": "Wrong. Browser caching is possible in principle, but the setup described (async replicas serving reads) is the textbook cause of exactly this symptom."
+      },
+      {
+        "text": "The primary and replica have permanently diverged.",
+        "explanation": "Wrong. The data converges after a few seconds, which is eventual consistency, not permanent divergence."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Write path: UPDATE goes to the primary at t = 0.\n2. Replication: the change reaches the replica at t ≈ 2 s under load.\n3. Read path: the reload at t = 0.3 s goes to the replica, which still shows the old name.\n4. Fix: route the required fresh read to the primary, or wait until the replica has replayed at least the write's commit position. A fixed 10-second primary window is a heuristic, not a bound on lag.",
+    "link": {
+      "title": "AWS: Working with read replicas",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which change primarily offloads reads while retaining the same single-writer primary and a complete write stream on each full replica?",
+    "options": [
+      {
+        "text": "Adding read replicas.",
+        "explanation": "Correct among these options. Replicas can indirectly free primary resources by offloading reads, but full replicas still replay the complete write stream rather than partition it."
+      },
+      {
+        "text": "Sharding the data across several primaries.",
+        "explanation": "Wrong choice. Sharding does scale writes, because each primary handles only its share of keys."
+      },
+      {
+        "text": "Batching many small writes into fewer larger ones.",
+        "explanation": "Wrong choice. Batching reduces per-write overhead (round trips, fsyncs), so it increases effective write throughput."
+      },
+      {
+        "text": "Moving to a larger primary instance.",
+        "explanation": "Wrong choice. Vertical scaling does raise write capacity, at least until you reach the largest instance size available."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Read replicas copy *all* data and apply *all* writes.\n2. So with 1 primary + 5 replicas, every full replica replays the write stream, though execution/replay costs differ.\n3. They're excellent for the 95% read share: reads spread across 6 nodes.\n4. But as writes grow, the primary (and each replica) hits a write ceiling.\n5. Offloading reads can free primary headroom. Sharding, batching and larger hardware can address other write bottlenecks, but none guarantees a fixed scaling factor.",
+    "link": {
+      "title": "AWS: Working with read replicas",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Product reads take 20 ms from the database and 0.5 ms from Redis. The cache hit rate is 90%, and the database is near capacity at 10,000 reads/s reaching it. If you raise the hit rate to 99% with the same traffic, how many reads/s reach the database?",
+    "options": [
+      {
+        "text": "1,000 reads/s",
+        "explanation": "Correct. At 90% hit rate, misses are 10% of total traffic, so total traffic is 100,000 reads/s. At 99%, misses are 1% of 100,000 = 1,000 reads/s."
+      },
+      {
+        "text": "9,000 reads/s",
+        "explanation": "Wrong. That treats the gain as 10% of current DB load. Misses fall from 10% to 1% of traffic, a tenfold reduction, not a 10% one."
+      },
+      {
+        "text": "100 reads/s",
+        "explanation": "Wrong. That would require a 99.9% hit rate (0.1% of 100,000)."
+      },
+      {
+        "text": "5,000 reads/s",
+        "explanation": "Wrong. Hit rate improvements don't halve misses here. The miss rate goes from 10% to 1%."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. DB receives the misses: 10,000 reads/s = 10% of total.\n2. Total traffic = 10,000 / 0.10 = 100,000 reads/s.\n3. New miss rate = 1%, so DB load = 0.01 × 100,000 = 1,000 reads/s.\n4. Average latency also improves:\n   - Before: 0.9 × 0.5 + 0.1 × 20.5 ≈ 2.5 ms\n   - After: 0.99 × 0.5 + 0.01 × 20.5 ≈ 0.7 ms\n5. Lesson: think in *miss rate*. Going from 90% to 99% hits is a 10× cut in DB load.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A social app's post page shows each post's like count. It currently runs `SELECT COUNT(*) FROM likes WHERE post_id = ?`, which takes 800 ms on viral posts with millions of likes. What's the most appropriate fix? The product accepts briefly delayed counts but not day-old counts.",
+    "options": [
+      {
+        "text": "Add another read replica so the count runs on a less busy machine.",
+        "explanation": "Wrong. The query is inherently expensive (counting millions of rows). A less busy replica still has to count them, so it's still slow."
+      },
+      {
+        "text": "Denormalise: keep a `like_count` column (or a Redis counter) updated when likes are added or removed, and read that.",
+        "explanation": "Correct. Maintaining the aggregate avoids an O(number of likes) recount. The point-lookup cost depends on the store/index; update atomically with like changes or reconcile an idempotent projection."
+      },
+      {
+        "text": "Normalise the schema further, splitting likes into more tables.",
+        "explanation": "Wrong. More normalisation means more work at read time, the opposite of what you need."
+      },
+      {
+        "text": "Cache each count for 24 hours.",
+        "explanation": "Wrong. It helps load, but the first read after expiry still costs 800 ms, and counts that are a day out of date on viral posts are visibly wrong."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Cost of the read: scanning millions of index entries per view.\n2. Read:write ratio is high (many views per like), so moving the work to write time pays off.\n3. On each like: `UPDATE posts SET like_count = like_count + 1 WHERE id = ?` (or Redis `INCR`).\n4. Read: one indexed row/key lookup; measure latency. Couple the count update atomically to the like record, or use reliable deduplicated projection and reconciliation.\n5. Watch out: a viral post's counter row becomes a hot key for writes. Shard the counter (N sub-counters summed on read) or batch increments.",
+    "link": {
+      "title": "Wikipedia: Denormalization",
+      "url": "https://en.wikipedia.org/wiki/Denormalization"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You have an analytics dashboard that aggregates 2 billion order rows by region and day. Users accept data up to 1 hour old. Which approaches can reduce repeated aggregation if their refresh duration, source lag and cache age are budgeted to stay within that hour? Select all that apply.",
+    "options": [
+      {
+        "text": "A precomputed view or rollup refreshed often enough that source age plus refresh interval/duration stays below one hour",
+        "explanation": "Correct. Refreshing every hour alone can exceed a one-hour data-age budget because refresh work and source lag add time."
+      },
+      {
+        "text": "Run the full aggregation on the primary database for every dashboard load.",
+        "explanation": "Wrong. Scanning 2 billion rows per view is slow and steals capacity from transactional writes."
+      },
+      {
+        "text": "Stream order events into a projector that incrementally updates per-region daily counters.",
+        "explanation": "Correct. Incremental maintenance keeps the read model fresh with small per-event updates, which is CQRS-style precomputation."
+      },
+      {
+        "text": "Cache the shared result with a freshness policy that accounts for its source snapshot age and refresh duration, not just time since insertion",
+        "explanation": "Correct. A one-hour TTL by itself does not prove one-hour source freshness; misses still pay the aggregation cost and need controlled refresh."
+      },
+      {
+        "text": "Denormalise the region name into every order row and keep running the full aggregation per request.",
+        "explanation": "Wrong. Removing a join barely helps when the real cost is scanning and aggregating 2 billion rows on every request."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Identify the cost: aggregating 2 billion rows, not joins.\n2. Staleness budget: 1 hour, so precomputing is allowed.\n3. Options that avoid repeating the aggregate per request: rollup/materialised view (0), incremental projector (2), and cache (3, though it still pays the full cost on each miss).\n4. Options that still aggregate everything per request: 1 and 4.\n5. A good design: a rollup maintained incrementally or refreshed within a measured age budget, plus a cache that preserves that budget.",
+    "link": {
+      "title": "Azure Architecture Center: Materialized View pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/materialized-view"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're designing a home timeline for 200M users. Most follow about 200 accounts, but 0.01% of accounts have over 10M followers. Users load the timeline far more often than they post. Which design fits best?",
+    "options": [
+      {
+        "text": "Pure fan-out on read: at load time, query the latest posts of every followed account and merge.",
+        "explanation": "Wrong. With about 200 followees and very frequent timeline loads, doing a 200-way merge per load is expensive at this read volume."
+      },
+      {
+        "text": "Pure fan-out on write: on each post, push the post ID into every follower's precomputed timeline.",
+        "explanation": "Wrong. This is great for normal users, but a single celebrity post would trigger more than 10M timeline writes, causing huge write spikes and delays."
+      },
+      {
+        "text": "Hybrid: fan out on write for normal accounts into cached per-user timelines, and merge posts from the few celebrity accounts in at read time.",
+        "explanation": "Correct. Most of the timeline is precomputed and cheap to read, while the few high-follower accounts avoid write amplification by being fetched on read. This is the approach Twitter described."
+      },
+      {
+        "text": "Store all posts in one table and add read replicas until the queries are fast enough.",
+        "explanation": "Wrong. Replicas add throughput, but each timeline query is still an expensive multi-account merge. It doesn't fix the cost per query."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Read:write ratio is high, which favours precomputing timelines (fan-out on write).\n2. Write cost for a normal user: if a particular normal account has 200 followers, it requires about 200 list inserts. The stated 200 followees per user does not establish that every normal account has 200 followers. Fine.\n3. Write cost for a celebrity: 10M+ followers means 10M+ inserts per post. Too much.\n4. Hybrid:\n   - Normal posts are pushed into each follower's Redis timeline list (capped at, say, 800 entries).\n   - At read time, fetch the precomputed list plus recent posts from the handful of celebrities you follow, then merge.\n5. Read cost: 1 list fetch + a few celebrity lookups. Use an explicit fan-out threshold and queue admission budget to bound per-post work; total work still depends on posting rates and recipients.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An Order History service builds a read model from `OrderPlaced`, `OrderShipped` and `UserRenamed` events published by three services. Users sometimes see an order as 'placed' even though the shipping email arrived an hour ago. Logs confirm that OrderShipped was applied before an older OrderPlaced event overwrote its status. Which diagnosis and repair best address this?",
+    "options": [
+      {
+        "text": "The projector consumes events out of order or dropped an event; process events per order in order, make the projector idempotent with versions, and rebuild the view by replaying events when a bug is fixed.",
+        "explanation": "Correct. Read models are only as good as their event handling. Per-key ordering, idempotent upserts with version checks, and the ability to replay are what make CQRS views trustworthy."
+      },
+      {
+        "text": "The read model is denormalised; normalise it so it joins the source services' databases.",
+        "explanation": "Wrong. Joining across services' databases recreates the shared-database coupling that CQRS read models exist to avoid."
+      },
+      {
+        "text": "Materialised views are always out of date; there's nothing to fix.",
+        "explanation": "Some lag is expected, but acceptable age is a product requirement. An hour can arise from backlog, unavailable dependencies or event-handling errors; investigate rather than infer a unique cause."
+      },
+      {
+        "text": "Add a cache in front of the read model.",
+        "explanation": "Wrong. A cache adds another layer of staleness and does nothing about a projector that missed or misapplied an event."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Symptom: the view never caught up to `Shipped` for some orders.\n2. Likely causes:\n   - `OrderShipped` processed before `OrderPlaced`, then overwritten by it.\n   - Event dropped by a consumer that acknowledged before processing.\n3. Fixes:\n   - Partition related events consistently and define causal/version rules. Matching keys in separate topics or from independent producers do not create a cross-service total order.\n   - Use ordered per-entity versions for complete snapshots. Partial events/deltas need gap handling or separate source versions; dropping every older delta can lose required updates.\n   - Acknowledge only after the view is written (at-least-once), and make updates idempotent.\n   - Keep the event log so the view can be rebuilt from scratch.\n4. Monitor projector lag to catch problems early.",
+    "link": {
+      "title": "Azure Architecture Center: CQRS pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A page lists 50 posts with their authors. The ORM runs one query for the posts and then one query per post for its author. Each query is a ~1 ms round trip. What's the cost, and the fix?",
+    "options": [
+      {
+        "text": "About 2 ms; ORMs batch these automatically.",
+        "explanation": "Wrong. Many ORMs load related rows lazily, one query each, unless you ask for eager loading."
+      },
+      {
+        "text": "About 51 ms of serial network round trips; batching authors takes two queries (~2ms network), while an appropriate join can use one",
+        "explanation": "Correct. This is the N+1 query problem: 1 query for the list plus N for related rows."
+      },
+      {
+        "text": "About 51 ms, and the only fix is a read replica.",
+        "explanation": "Wrong. A replica spreads load but each read still takes 51 round trips."
+      },
+      {
+        "text": "About 1 ms, because the database caches repeated queries.",
+        "explanation": "Wrong. Each query is a separate network round trip, whether or not the data is in memory."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Queries: 1 (posts) + 50 (authors) = 51.\n2. 51 × 1 ms ≈ 51 ms of pure round-trip time.\n3. Fix: collect the author IDs, run `SELECT ... WHERE id IN (...)`: 2 queries ≈ 2 ms.\n4. ORM terms: eager loading, `select_related` / `prefetch_related` in Django, `includes` in Rails.\n5. Do this before adding any infrastructure.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Reads are spread randomly across 3 async replicas. A user refreshes a comment thread twice in a row: the first refresh shows a new reply, the second doesn't. What's this anomaly, and the simplest fix?",
+    "options": [
+      {
+        "text": "A read-your-writes violation; route the user to the primary after they write.",
+        "explanation": "Wrong. The user didn't write anything. They saw someone else's data appear and then vanish."
+      },
+      {
+        "text": "Lost update; use transactions.",
+        "explanation": "Wrong. No write was lost; the reply exists on the primary and will reach every replica."
+      },
+      {
+        "text": "Split brain between replicas; fail over the primary.",
+        "explanation": "Wrong. Replicas being at slightly different positions is normal async replication, not split brain."
+      },
+      {
+        "text": "A monotonic reads violation (time appeared to go backwards); pin each user's reads to one replica, for example by hashing the user ID.",
+        "explanation": "Correct as a simple mitigation while the chosen replica only advances. Failover/reassignment can regress; carry a minimum observed version and wait or route to an eligible replica for a guarantee."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Refresh 1 → replica A (lag 0.2 s): reply visible.\n2. Refresh 2 → replica B (lag 3 s): reply not there yet.\n3. Monotonic reads: once you've seen a value, you never see an older one.\n4. Fix: `replica = replicas[hash(user_id) % 3]`.\n5. If that replica fails, the user moves to another and may see one backwards step; that is a policy choice, not a monotonic-read guarantee. Preserve an observed-version token across reassignment if the product requires monotonic reads.",
+    "link": {
+      "title": "AWS: Working with read replicas",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You maintain a Postgres materialised view `daily_sales` that takes 4 minutes to refresh, and dashboards query it constantly. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A plain `REFRESH MATERIALIZED VIEW` blocks dashboard reads of the view until it completes.",
+        "explanation": "Correct. It takes an exclusive lock, so dashboards stall for the 4 minutes."
+      },
+      {
+        "text": "CONCURRENTLY allows SELECTs during refresh, requiring a populated view and a unique plain-column index covering all rows",
+        "explanation": "Correct. It builds the new result and applies the differences, so readers keep seeing the old data meanwhile."
+      },
+      {
+        "text": "Postgres updates the view automatically as orders are inserted.",
+        "explanation": "Wrong. Postgres materialised views only change when you refresh them. Incremental maintenance needs other tools or your own triggers or rollups."
+      },
+      {
+        "text": "Visible source data can be older than one refresh interval because refresh duration, upstream lag and failures also contribute",
+        "explanation": "Correct. An hourly start schedule plus a 4-minute successful refresh can expose a prior snapshot for about 64 minutes; missed refreshes can be older still."
+      },
+      {
+        "text": "A materialised view is just a saved query that runs on every SELECT.",
+        "explanation": "Wrong. That's a regular view. A materialised view stores the result."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Regular view: query text, rerun every time.\n2. Materialised view: stored result, refreshed on demand.\n3. Plain refresh: exclusive lock, readers wait.\n4. CONCURRENTLY: needs a qualifying unique index and a populated view; permits concurrent SELECTs and is not universally slower.\n5. Hourly refresh → data up to about 1 h old (plus the 4 min refresh time).",
+    "link": {
+      "title": "PostgreSQL REFRESH MATERIALIZED VIEW",
+      "url": "https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Each of 40 app servers keeps an in-process cache of product prices with a 10-minute TTL, in front of Redis and the database. After a price change, customers see different prices on successive page loads for up to 10 minutes. What's the best explanation and fix?",
+    "options": [
+      {
+        "text": "Redis is inconsistent; replace it with Memcached.",
+        "explanation": "Wrong. Redis isn't the issue. Each server's local copy expires at a different time, so servers disagree."
+      },
+      {
+        "text": "The 40 local caches each hold their own copy with independent expiry; shorten the local TTL (say 10–30 s) or publish an invalidation message on price changes that every server subscribes to.",
+        "explanation": "These reduce local residency or trigger eviction, but neither alone guarantees source freshness: Redis may refill stale data, invalidation can be lost, and a concurrent load can repopulate an old value."
+      },
+      {
+        "text": "The load balancer should use sticky sessions so each user always sees the same server's prices.",
+        "explanation": "Wrong. Each user then sees a consistent price, but it may still be the stale one, and you lose the benefits of stateless routing."
+      },
+      {
+        "text": "Remove Redis and query the database directly.",
+        "explanation": "Wrong. That raises database load and doesn't touch the local caches that cause the disagreement."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 40 servers = 40 independent copies, each loaded at a different moment.\n2. After the change, server 7 may refresh in 1 minute, server 23 in 9.\n3. A user bouncing between servers sees prices flip.\n4. Options:\n   - Local TTL 10–30s bounds local entry age, not database-data age if upstream Redis is stale.\n   - Pub/sub (Redis channel `price-changed`): each connected server evicts on receipt; add recovery for missed messages and guard concurrent stale repopulation.\n   - For checkout, authorize and persist the charge using an authoritative price/version under the intended transaction; an earlier read can race a price change.\n5. Rule: the closer the cache, the harder it is to invalidate.",
+    "link": {
+      "title": "Redis: Client-side caching",
+      "url": "https://redis.io/docs/latest/develop/reference/client-side-caching/"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A leaderboard for a game with 20 million players shows the top 100 and \"your rank\". It currently runs `ORDER BY score DESC` on every request. Which improvements are sound? Select all that apply. The product needs live ranking, with deterministic tie-breaking and no personalized filtering.",
+    "options": [
+      {
+        "text": "Keep scores in a Redis sorted set (`ZADD` on each score change) and read the top 100 with `ZREVRANGE` and a player's rank with `ZREVRANK`.",
+        "explanation": "Correct. Sorted sets keep members ordered, so rank and range queries are O(log N) plus the result size, not a sort of 20 million rows."
+      },
+      {
+        "text": "Cache the top-100 list for a few seconds, since every player sees the same one.",
+        "explanation": "Correct. It's identical for everyone, so even a short TTL removes almost all repeated work."
+      },
+      {
+        "text": "Add read replicas and keep sorting 20 million rows per request.",
+        "explanation": "Wrong. Replicas spread the load, but each request still does a huge sort. The problem is the work per read, not the number of machines."
+      },
+      {
+        "text": "Recompute every player's rank in a nightly batch and show only that.",
+        "explanation": "Wrong for this product. 'Your rank' would be up to a day old, which is poor for a live game, while sorted sets give it live at low cost."
+      },
+      {
+        "text": "Add an index on `score` so the top 100 can be read without a full sort.",
+        "explanation": "Correct as a step. An index makes the top-N read cheap, but computing an arbitrary player's rank still needs a count of everyone above them, which is why the sorted set is better."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Top 100: same for everyone → cache it, or read it from an ordered structure.\n2. Redis ZREVRANK returns a zero-based position including a member-order tie-break; add 1 for ordinal display. Equal-score competition/dense ranks require a different policy.\n   - SQL with an index: still O(rank) to count.\n   - Redis sorted set: `ZREVRANK` is O(log N).\n3. Memory and node fit are not established here. Measure representative member lengths, encodings, allocator overhead, persistence/fork headroom and replica requirements; no universal bytes-per-member estimate is included.\n4. Write path: one `ZADD` per score change. That's precomputation: do the work on write.",
+    "link": {
+      "title": "Redis ZREVRANK",
+      "url": "https://redis.io/docs/latest/commands/zrevrank/"
+    }
+  }
+]

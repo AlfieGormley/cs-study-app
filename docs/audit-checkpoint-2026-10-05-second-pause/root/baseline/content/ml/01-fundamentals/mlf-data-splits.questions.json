@@ -1,0 +1,168 @@
+[
+  {
+    "id": "mlf-data-splits-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You are choosing k for a k-nearest-neighbour classifier, trying k = 1, 3, 5, 7 and 9. Which data should you use to pick the best k?",
+    "options": [
+      { "text": "The training set", "explanation": "On training data k = 1 always looks best, because every point is its own nearest neighbour. Training scores reward memorisation." },
+      { "text": "The validation set", "explanation": "Correct. k is a hyperparameter: train each candidate on the training set, compare them on validation, and keep the best." },
+      { "text": "The test set", "explanation": "Choosing k with the test set makes it part of model selection, so the final test score is no longer an unbiased estimate." },
+      { "text": "All the data combined, for the most reliable estimate", "explanation": "Scoring on data the model trained on has the same problem as using the training set: it measures fit, not generalisation." }
+    ],
+    "answer": 1,
+    "workedExample": "1. k is not learned by fitting; it is a choice you make, so it is a **hyperparameter**.\n2. Train five models (k = 1, 3, 5, 7, 9) on the training set.\n3. Score each on the validation set and keep the best, say k = 5.\n4. Only then score the k = 5 model once on the test set and report that number.\n\nWhy not training data? With k = 1, each training point's nearest neighbour is itself, so training accuracy is 100% (apart from duplicates with conflicting labels). It would always win and tell you nothing.",
+    "link": { "title": "Training, validation, and test data sets — Wikipedia", "url": "https://en.wikipedia.org/wiki/Training,_validation,_and_test_data_sets" }
+  },
+  {
+    "id": "mlf-data-splits-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Four models give these RMSE scores (lower is better). Which one is clearly **overfitting**?\n\n| Model | Train | Validation |\n|---|---|---|\n| A | 4.1 | 4.3 |\n| B | 0.2 | 3.9 |\n| C | 2.0 | 2.2 |\n| D | 6.0 | 6.1 |",
+    "options": [
+      { "text": "A", "explanation": "Train and validation are close (4.1 vs 4.3), so A generalises about as well as it fits. It is just not very accurate." },
+      { "text": "D", "explanation": "D has the highest errors but almost no gap. That pattern is underfitting (high bias), not overfitting." },
+      { "text": "B", "explanation": "Correct. Near-zero training error with validation error nearly 20 times larger is the signature of a model that has fitted noise in the training set." },
+      { "text": "C", "explanation": "C has low error on both and a small gap. It is the best model of the four." }
+    ],
+    "answer": 2,
+    "workedExample": "Look at the **gap** between train and validation, not just the values.\n\n| Model | Gap | Diagnosis |\n|---|---|---|\n| A | 0.2 | OK, mediocre |\n| B | 3.7 | Overfit |\n| C | 0.2 | Good |\n| D | 0.1 | Underfit |\n\nB fits the training data almost perfectly but fails to carry that over, so it has memorised rather than learned. C is the one to choose.",
+    "link": { "title": "Overfitting — Google Machine Learning Crash Course", "url": "https://developers.google.com/machine-learning/crash-course/overfitting/overfitting" }
+  },
+  {
+    "id": "mlf-data-splits-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You tune hyperparameters on a validation set, picking the best of 50 configurations. Its validation accuracy is 91%. Why do you still need a separate test set?",
+    "options": [
+      { "text": "Because the validation set was used during training", "explanation": "The model's parameters were not fitted to the validation set. The issue is subtler: the validation set was used to choose among models." },
+      { "text": "Because selecting the best of 50 on the same data biases that 91% upwards; an untouched test set gives an unbiased estimate", "explanation": "Correct. Some of the winner's edge is luck on those particular validation examples. The test set was not used for any choice, so it doesn't share that bias." },
+      { "text": "Because test sets are always larger", "explanation": "Size is a separate matter. Test sets are often the same size as validation sets." },
+      { "text": "You don't: the validation score is already unbiased", "explanation": "Each single model's validation score is unbiased, but the maximum of 50 noisy scores is not. That is the winner's curse." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each configuration's validation score = true skill + noise from the particular validation sample.\n2. Taking the **maximum** of 50 such scores picks the one with the most favourable noise as well as real skill.\n3. So the winner's 91% is an optimistic estimate of its real accuracy, perhaps a point or two too high.\n4. The test set played no part in the choice, so its noise is not correlated with the selection. Score the winner once on test, say 89.5%, and report that.",
+    "link": { "title": "On over-fitting in model selection (Cawley and Talbot, JMLR 2010)", "url": "https://jmlr.org/papers/v11/cawley10a.html" }
+  },
+  {
+    "id": "mlf-data-splits-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is wrong with this code?\n\n```python\nscaler = StandardScaler()\nX_scaled = scaler.fit_transform(X)\nX_tr, X_te, y_tr, y_te = (\n    train_test_split(X_scaled, y))\nmodel.fit(X_tr, y_tr)\nprint(model.score(X_te, y_te))\n```",
+    "options": [
+      { "text": "Nothing; scaling doesn't use the labels, so there is no leak", "explanation": "Leakage isn't only about labels. The scaler's mean and standard deviation were computed from the test rows too, so test information has shaped the training features." },
+      { "text": "StandardScaler should come after the model", "explanation": "Scaling is preprocessing and must be applied before the model; the problem is which data it is fitted on." },
+      { "text": "The scaler is fitted on all rows, including the test set, so test statistics leak into training", "explanation": "Correct. Split first, fit the scaler on the training rows only, then transform both sets, or wrap both steps in a Pipeline." },
+      { "text": "train_test_split must be called with shuffle=False", "explanation": "Shuffling is the default and is fine for independent rows. Turning it off doesn't fix the scaler leak." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `fit_transform(X)` computes the mean and standard deviation over **every** row, test rows included.\n2. The training features are then expressed in units partly defined by test data.\n3. For scaling the effect is often small, but the same mistake with feature selection, imputation or target encoding can inflate scores massively.\n4. Correct version:\n\n```python\nX_tr, X_te, y_tr, y_te = (\n    train_test_split(X, y))\npipe = make_pipeline(\n    StandardScaler(), model)\npipe.fit(X_tr, y_tr)\nprint(pipe.score(X_te, y_te))\n```",
+    "link": { "title": "Common pitfalls and recommended practices — scikit-learn", "url": "https://scikit-learn.org/stable/common_pitfalls.html" }
+  },
+  {
+    "id": "mlf-data-splits-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You are building a model to forecast daily electricity demand one week ahead, using three years of history. A colleague shuffles all days randomly into train and test and reports an excellent score. What is the main problem?",
+    "options": [
+      { "text": "Random shuffling lets the model train on days after the test days, so it effectively sees the future; use a time-based split", "explanation": "Correct. In production the model only ever has the past. Training on days around each test day (including later ones) makes the problem far easier than it really is." },
+      { "text": "The test set needs to be stratified by month", "explanation": "Stratifying still mixes past and future. It doesn't fix the core problem of future information in training." },
+      { "text": "Three years is too little data for any split to be valid", "explanation": "Three years of daily data is about 1,100 rows, which is plenty for a meaningful time-based evaluation." },
+      { "text": "The test set should be larger than the training set", "explanation": "The relative size isn't the problem; the ordering is." }
+    ],
+    "answer": 0,
+    "workedExample": "1. In production: train on everything up to today, predict next week.\n2. With a random split, a test day such as 14 March 2025 has neighbours on 13 and 15 March in training. Demand on adjacent days is highly correlated, so predicting the 14th is easy.\n3. The score measures interpolation, not forecasting.\n4. Fix: train on, say, the first 30 months, validate on the next 3 and test on the final 3. Better still, use several rolling windows (time-series cross-validation, covered later).",
+    "link": { "title": "Cross-validation: evaluating estimator performance — scikit-learn", "url": "https://scikit-learn.org/stable/modules/cross_validation.html" }
+  },
+  {
+    "id": "mlf-data-splits-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A dataset has 30,000 skin-lesion photos from 1,200 patients (about 25 photos each). You split the photos randomly 80/20. Test accuracy is 96%, but on photos from a new clinic it drops to 81%. What is the most likely flaw in the evaluation?",
+    "options": [
+      { "text": "The test set was too small", "explanation": "6,000 test photos is a large test set; the standard error on 96% is about 0.25 points. Size can't explain a 15-point drop." },
+      { "text": "The model is underfitting", "explanation": "An underfit model would score poorly on the internal test set too, not 96%." },
+      { "text": "Photos of the same patient appear in both train and test, so the model can recognise the patient rather than the lesion; split by patient", "explanation": "Correct. Related rows across the split inflate the score. A group split keeps each patient wholly in train or wholly in test." },
+      { "text": "The images should have been normalised", "explanation": "Normalisation affects training but doesn't explain why the internal test score is so much higher than performance on new patients." }
+    ],
+    "answer": 2,
+    "workedExample": "1. With random photo-level splitting, almost every test patient also has about 20 photos in training.\n2. Skin tone, the lesion's surroundings, camera and lighting identify the patient. The model can match a test photo to the same patient's training photos and copy the label.\n3. New patients don't get that shortcut, so accuracy falls.\n4. Fix: group-aware splitting (`GroupShuffleSplit` or `GroupKFold` in scikit-learn with `groups=patient_id`). The new-clinic drop may also include genuine distribution shift (different cameras), so evaluate on a held-out clinic as well.",
+    "link": { "title": "Cross-validation: evaluating estimator performance — scikit-learn", "url": "https://scikit-learn.org/stable/modules/cross_validation.html" }
+  },
+  {
+    "id": "mlf-data-splits-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a test set of 500 examples, model A scores 80% accuracy and model B scores 82%. Using the approximation SE ≈ √(p(1 − p)/n), roughly how wide is the 95% interval around A's score, and what can you conclude?",
+    "options": [
+      { "text": "About ±0.3 points, so B is clearly better", "explanation": "Far too narrow. √(0.16/500) ≈ 0.018, so one standard error alone is already about 1.8 points." },
+      { "text": "About ±3.5 points, so a 2-point difference is within the noise and B is not shown to be better", "explanation": "Correct. SE ≈ 1.8 points; ±1.96 SE ≈ ±3.5 points. A 2-point gap on 500 examples is not convincing by itself." },
+      { "text": "About ±10 points, so the test is useless", "explanation": "Too pessimistic. ±3.5 points is wide but still informative; it rules out A being, say, 70% or 90%." },
+      { "text": "Error bars don't apply because the test set is fixed", "explanation": "The test set is a sample of possible inputs. A different sample of 500 would give a different score, which is exactly what the standard error describes." }
+    ],
+    "answer": 1,
+    "workedExample": "1. p = 0.80, n = 500.\n2. p(1 − p) = 0.8 × 0.2 = 0.16.\n3. 0.16 / 500 = 0.00032; √0.00032 ≈ 0.0179, about 1.8 points.\n4. 95% interval ≈ ±1.96 × 1.8 ≈ ±3.5 points, so A is somewhere around 76.5% to 83.5%.\n5. B's 82% sits inside that range.\n\nA sharper comparison uses the *same* 500 examples for both models and looks at where they disagree (a paired test such as McNemar's), which can detect smaller real differences.",
+    "link": { "title": "Training, validation, and test data sets — Wikipedia", "url": "https://en.wikipedia.org/wiki/Training,_validation,_and_test_data_sets" }
+  },
+  {
+    "id": "mlf-data-splits-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are predicting, at the moment of discharge, whether a hospital patient will be readmitted within 30 days. Which candidate features are **target leakage**? Select all that apply.",
+    "options": [
+      { "text": "Patient's age", "explanation": "Known at discharge and legitimately predictive. Not a leak." },
+      { "text": "Whether the patient attended a follow-up appointment two weeks after discharge", "explanation": "Correct, this leaks. It happens after the prediction time, and a readmitted patient may miss it because they are back in hospital." },
+      { "text": "Number of days spent in the readmissions ward", "explanation": "Correct, this leaks. It is only non-zero if the patient was readmitted, so it essentially encodes the label." },
+      { "text": "Primary diagnosis recorded at discharge", "explanation": "Known when the prediction is made, so it is fair to use." }
+    ],
+    "answer": [1, 2],
+    "workedExample": "For each feature, ask: **would I know this value at the moment I make the prediction?**\n\n| Feature | Known at discharge? |\n|---|---|\n| Age | Yes |\n| Follow-up attended | No, 2 weeks later |\n| Readmission ward days | No, after outcome |\n| Discharge diagnosis | Yes |\n\nLeaked features often show up as suspiciously strong predictors. If one feature alone gives 99% accuracy on a hard problem, check its timestamp.",
+    "link": { "title": "Leakage (machine learning) — Wikipedia", "url": "https://en.wikipedia.org/wiki/Leakage_(machine_learning)" }
+  },
+  {
+    "id": "mlf-data-splits-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A learning curve shows that as training size grows from 1,000 to 20,000, training error rises from 1% to 4% and validation error falls from 22% to 12%, still dropping steeply at 20,000. What is the best next step?",
+    "options": [
+      { "text": "Use a more complex model, because the model is underfitting", "explanation": "Underfitting would show high training error with a small gap. Here training error is low and the gap (8 points) is large: the opposite." },
+      { "text": "Stop: the curves have converged", "explanation": "They haven't converged. An 8-point gap that is still closing means further gains are available." },
+      { "text": "Remove features until training error matches validation error", "explanation": "Forcing the curves together by crippling the model can raise validation error. The aim is low validation error, not equal errors." },
+      { "text": "Collect more labelled data and/or add regularisation, since this is high variance", "explanation": "Correct. A large, closing gap with validation still falling is the classic high-variance pattern; more data narrows the gap, as does regularisation." }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Training error low (4%)** → the model can represent the patterns; bias is not the main issue.\n2. **Gap large (12 − 4 = 8 points)** → the model fits quirks of its training sample: variance.\n3. **Validation still falling steeply** → each extra batch of data is still helping.\n4. Options, in order of cost: add regularisation or stronger augmentation; gather more data (the curve suggests it would pay off).\n\nIf instead both curves had flattened around 12% together, more data would be wasted money and a richer model or better features would be the move.",
+    "link": { "title": "Validation curves and learning curves — scikit-learn", "url": "https://scikit-learn.org/stable/modules/learning_curve.html" }
+  },
+  {
+    "id": "mlf-data-splits-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Fraud is 1% of transactions. Your stratified test set has 800 transactions. You report recall (the share of fraud cases caught). By how much does recall change if the model catches **one** more fraud case?",
+    "options": [
+      { "text": "0.125 percentage points", "explanation": "That divides by all 800 transactions. Recall's denominator is only the actual fraud cases." },
+      { "text": "1 percentage point", "explanation": "That would be true with 100 fraud cases. Here there are only 8." },
+      { "text": "12.5 percentage points", "explanation": "Correct. 1% of 800 is 8 fraud cases, so each one is 1/8 = 12.5% of recall. The test set is far too small to measure recall precisely." },
+      { "text": "It depends on the number of false positives", "explanation": "False positives affect precision, not recall. Recall = TP / (TP + FN) only involves the actual positives." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Positives in test = 1% × 800 = 8.\n2. Recall = TP / 8, so it can only take the values 0, 12.5%, 25%, ..., 100%.\n3. One extra catch moves recall by 12.5 points.\n4. To measure recall to within a few points you need hundreds of positives. Options: a much larger test set, oversampling positives into the *evaluation* set (and reweighting precision accordingly), or pooling scores over cross-validation folds.\n\nThe lesson: what matters is the number of examples in the class you care about, not the total test size.",
+    "link": { "title": "Classification: accuracy, recall, precision — Google ML Crash Course", "url": "https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall" }
+  },
+  {
+    "id": "mlf-data-splits-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which practices keep a test-set estimate honest? Select all that apply.",
+    "options": [
+      { "text": "Fitting imputation and scaling on the training set only, then applying them to test", "explanation": "Correct. Every fitted preprocessing step must learn only from training data, or test statistics leak in." },
+      { "text": "Removing near-duplicate rows that appear on both sides of the split", "explanation": "Correct. Duplicates across the split let the model score by recognition rather than generalisation." },
+      { "text": "Trying several feature sets and keeping the one with the best test score", "explanation": "This turns the test set into a validation set. The reported score is then optimistically biased by selection." },
+      { "text": "Holding out the most recent period when the model will run on future data", "explanation": "Correct. A time-ordered holdout mirrors deployment and exposes drift that a random split hides." },
+      { "text": "Re-running the split with different random seeds until test accuracy looks representative", "explanation": "Choosing a seed based on the test score is selection on the test set by another name." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Apply one test to each practice: **did any information from the test set influence a decision or a fitted value?**\n\n1. Fit preprocessing on train only: no test influence. Honest.\n2. Dedupe across the split: removes an unfair shortcut. Honest.\n3. Pick feature set by test score: a decision made on test. Biased.\n4. Most-recent holdout: mimics deployment. Honest.\n5. Re-roll seeds until happy: a decision made on test. Biased.\n\nThe safe workflow is: decide everything with train and validation (or cross-validation), then touch test once.",
+    "link": { "title": "Common pitfalls and recommended practices — scikit-learn", "url": "https://scikit-learn.org/stable/common_pitfalls.html" }
+  }
+]

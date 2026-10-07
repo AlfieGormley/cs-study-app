@@ -1,0 +1,356 @@
+[
+  {
+    "id": "fp-laziness-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a textbook call-by-need model with a shared thunk (ignoring compiler transformations), how many evaluations of expensive 42 are needed when the numeric result is demanded?\n\n```haskell\nlet y = expensive 42\nin y + y\n```",
+    "options": [
+      {
+        "text": "Zero, because `y` is lazy",
+        "explanation": "Laziness delays work until a value is needed. `y + y` needs `y`, so it must be computed at least once."
+      },
+      {
+        "text": "Once",
+        "explanation": "Correct. Haskell uses call-by-need: the thunk for `y` is evaluated the first time it is forced and then overwritten with its value, so the second use reuses the result."
+      },
+      {
+        "text": "Twice, once per use",
+        "explanation": "That is call-by-name, which re-evaluates the expression at every use. Haskell shares the result instead."
+      },
+      {
+        "text": "It depends on the optimisation level",
+        "explanation": "The question fixes a shared-thunk call-by-need model. Haskell's denotational semantics does not by itself promise exact allocation or evaluation counts for optimized code."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `let y = expensive 42` doesn't run anything; it allocates a thunk for `y`.\n2. `y + y` needs both operands, so the first `y` forces the thunk: `expensive 42` runs.\n3. The thunk is updated in place with the result.\n4. The second `y` reads the stored value.\n\n| Strategy | Runs of `expensive` |\n|---|---|\n| Call-by-value | 1 (before the body) |\n| Call-by-name | 2 |\n| Call-by-need | 1 (on first use) |\n\nIf the body were `if False then y else 0`, call-by-need would run it zero times, while call-by-value would still run it once.",
+    "link": {
+      "title": "Lazy evaluation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Lazy_evaluation"
+    }
+  },
+  {
+    "id": "fp-laziness-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these Python expressions produce a **lazy** object that computes its items only as they're requested? Select all that apply.",
+    "options": [
+      {
+        "text": "`range(10**9)`",
+        "explanation": "Correct. `range` stores only start, stop and step, and works out each number on demand. Its stored representation does not grow with the number of represented elements, apart from integer-bound sizes."
+      },
+      {
+        "text": "`[x * 2 for x in data]`",
+        "explanation": "Square brackets make a list comprehension, which runs the whole loop immediately and stores every result."
+      },
+      {
+        "text": "`map(str, data)`",
+        "explanation": "Correct. In Python 3, `map` returns an iterator that applies `str` one item at a time as you iterate."
+      },
+      {
+        "text": "`(x * 2 for x in data)`",
+        "explanation": "Correct. Round brackets make a generator expression: per-item multiplication is deferred; the leftmost iterable expression and iterator are evaluated when the generator expression is created."
+      },
+      {
+        "text": "`sorted(data)`",
+        "explanation": "`sorted` must see every element before it can return the first one, so it builds a full list eagerly."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask of each: does it return a list now, or an object that produces values on demand?\n\n- `range` - lazy sequence object.\n- `[...]` - list, fully built.\n- `map` - iterator (lazy since Python 3; in Python 2 it returned a list).\n- `(...)` - generator.\n- `sorted` - a new list. It can't be lazy in general, because the smallest item might be the last one in the input.\n\nsys.getsizeof reports only shallow object size. Iterators can retain large input objects or buffers, so it is not a total-memory test.",
+    "link": {
+      "title": "Generators — Python wiki",
+      "url": "https://wiki.python.org/moin/Generators"
+    }
+  },
+  {
+    "id": "fp-laziness-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is a **thunk**?",
+    "options": [
+      {
+        "text": "A value that has been computed and cached",
+        "explanation": "That's what a thunk *becomes* after it is forced under call-by-need. Before that, it holds the recipe, not the value."
+      },
+      {
+        "text": "A suspended computation that remembers how to produce a value but hasn't run yet",
+        "explanation": "Correct. A thunk packages up an expression and the variables it needs, so it can be evaluated later, or never."
+      },
+      {
+        "text": "A function that takes another function as an argument",
+        "explanation": "That's a higher-order function. A zero-argument closure is one way to represent a thunk; this is a different concept, not an opposite."
+      },
+      {
+        "text": "An error raised when an infinite list is printed",
+        "explanation": "Attempting to print all of a productive infinite list cannot finish; resource limits may interrupt it. A thunk is about delaying work."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Think of a thunk as an IOU for a value.\n\n```python\nt = lambda: slow_query()\n# no query has run\nv = t()   # now it runs\n```\n\nIn Python you make thunks by hand with zero-argument lambdas. A typical lazy Haskell implementation uses thunks for delayed expressions when they are needed in the runtime representation, and under call-by-need it replaces the thunk with its result the first time it is forced.",
+    "link": {
+      "title": "Lazy evaluation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Lazy_evaluation"
+    }
+  },
+  {
+    "id": "fp-laziness-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef gen():\n    print(\"start\")\n    yield 1\n    print(\"after 1\")\n    yield 2\n\ng = gen()\nprint(\"made\")\nprint(next(g))\n```",
+    "options": [
+      {
+        "text": "`start`, `made`, `1`",
+        "explanation": "Calling `gen()` does not run any of the body. It only creates the generator object, so `start` can't come first."
+      },
+      {
+        "text": "`made`, `start`, `1`",
+        "explanation": "Correct. The body starts on the first `next`, runs until the first `yield`, and pauses there."
+      },
+      {
+        "text": "`made`, `start`, `1`, `after 1`",
+        "explanation": "After yielding 1 the generator is paused. `after 1` would only print on a second `next(g)`."
+      },
+      {
+        "text": "`made`, `1`",
+        "explanation": "The body really does run when `next` is called, including the `print(\"start\")` before the `yield`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace step by step:\n\n1. `g = gen()` - creates a paused generator; the body hasn't started.\n2. `print(\"made\")` - prints `made`.\n3. `next(g)` - resumes the body from the top: prints `start`, then hits `yield 1` and pauses, handing 1 back.\n4. `print(...)` prints `1`.\n\nOutput:\n\n```\nmade\nstart\n1\n```\n\nThe generator body runs only in pieces, between `yield`s, as values are requested.",
+    "link": {
+      "title": "Generators — Python wiki",
+      "url": "https://wiki.python.org/moin/Generators"
+    }
+  },
+  {
+    "id": "fp-laziness-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nsq = (x * x for x in range(4))\nprint(sum(sq))\nprint(sum(sq))\n```",
+    "options": [
+      {
+        "text": "`14` then `14`",
+        "explanation": "That's what you'd get with a list. A generator can be consumed only once, so the second `sum` sees nothing."
+      },
+      {
+        "text": "`14` then `0`",
+        "explanation": "Correct. The first `sum` exhausts the generator. The second iterates an empty generator and returns the sum of nothing, 0."
+      },
+      {
+        "text": "`14` then an error",
+        "explanation": "Iterating an exhausted generator isn't an error; it simply yields no more items."
+      },
+      {
+        "text": "`30` then `0`",
+        "explanation": "0² + 1² + 2² + 3² = 0 + 1 + 4 + 9 = 14. `range(4)` stops before 4, so 16 isn't included."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `range(4)` gives 0, 1, 2, 3, so the squares are 0, 1, 4, 9.\n2. First `sum`: 0 + 1 + 4 + 9 = **14**. The generator is now exhausted.\n3. Second `sum`: the generator yields nothing, and `sum([])` is **0**.\n\nThis one-shot behaviour causes real bugs: a function that loops over its argument twice (say, once to validate and once to process) silently processes nothing if you pass it a generator. Use a list, or tee with care: tee buffers items when consumers diverge, potentially retaining the whole input.",
+    "link": {
+      "title": "Generators — Python wiki",
+      "url": "https://wiki.python.org/moin/Generators"
+    }
+  },
+  {
+    "id": "fp-laziness-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Using unbounded Integer enumerations, which expressions can be completely evaluated and printed as a finite result? Select all that apply.",
+    "options": [
+      {
+        "text": "`take 3 (filter even [1 ..])`",
+        "explanation": "Correct. `take` asks for only three elements, so the filter only needs to look at 1 to 6. The result is `[2,4,6]`."
+      },
+      {
+        "text": "`length [1 ..]`",
+        "explanation": "`length` has to reach the end of the list to count it, and an infinite list has no end. This runs forever."
+      },
+      {
+        "text": "`takeWhile (< 10) [1 ..]`",
+        "explanation": "Correct. `takeWhile` stops at the first element that fails the test (10), so it returns `[1..9]`."
+      },
+      {
+        "text": "`filter (< 10) [1 ..]`",
+        "explanation": "`filter` can't know there are no more small numbers later, so it keeps checking forever. Printed, it shows 1 to 9 and then hangs."
+      },
+      {
+        "text": "`head (filter (> 100) [1 ..])`",
+        "explanation": "Correct. `head` needs only the first match, so the filter stops after checking 1 to 101 and the result is 101."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "The question for each consumer is: does it need a finite prefix, or the whole list?\n\n| Expression | Needs | Result |\n|---|---|---|\n| `take 3 ...` | 3 items | `[2,4,6]` |\n| `length` | all | hangs |\n| `takeWhile` | up to first fail | `[1..9]` |\n| `filter (< 10)` | all | hangs after 9 |\n| `head ...` | 1 item | 101 |\n\nThe trap is `filter` versus `takeWhile`: you know the list is ascending, but `filter` doesn't, so it never stops looking.",
+    "link": {
+      "title": "Lazy evaluation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Lazy_evaluation"
+    }
+  },
+  {
+    "id": "fp-laziness-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague's PySpark script does `rdd = sc.textFile(path).map(parse).filter(is_valid)` and then exits. It finishes in under a second on a 2 TB dataset and the cluster shows no tasks. What's going on?",
+    "options": [
+      {
+        "text": "Spark cached the result from a previous run",
+        "explanation": "Nothing was computed, so nothing could have been cached. Caching also has to be requested explicitly with `cache()` or `persist()`."
+      },
+      {
+        "text": "`map` and `filter` are transformations, which only build a plan; record transformations do not execute until an action such as count() or saveAsTextFile(); setup may still inspect metadata",
+        "explanation": "Correct. Spark defers execution so it can see the whole pipeline before scheduling work. Without an action the plan is never executed."
+      },
+      {
+        "text": "`parse` failed silently on the first record, so Spark stopped",
+        "explanation": "Errors inside a lazy transformation would only surface when an action forces it; here nothing ran at all, so `parse` was never called."
+      },
+      {
+        "text": "Spark processes files lazily one line at a time, and 2 TB fits in a second on a big cluster",
+        "explanation": "No tasks were scheduled, so no record processing occurred. The question needs no universal claim about cluster throughput. The real cause is that no action was called."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. textFile constructs a source RDD; map and filter create derived RDDs describing transformations.\n2. Spark only builds a lineage graph: read file, then parse, then filter.\n3. An **action** (`count`, `collect`, `take`, `saveAsTextFile`) asks for a result and triggers the job.\n4. The script never called one, so no tasks ran.\n\nThis is the same deferred execution as Python generators or Django QuerySets, and the same pitfall: errors and costs show up where the result is demanded, not where the pipeline was written.",
+    "link": {
+      "title": "RDD Programming Guide — Apache Spark",
+      "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html"
+    }
+  },
+  {
+    "id": "fp-laziness-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This function raises `ValueError: I/O operation on closed file` when its result is iterated. Which rewrite fixes it **while keeping it lazy**?\n\n```python\ndef read_lines(path):\n    with open(path) as f:\n        return (l.strip() for l in f)\n```",
+    "options": [
+      {
+        "text": "Replace `return (...)` with `yield from (l.strip() for l in f)`",
+        "explanation": "Correct. The function becomes a generator itself, so the `with` block stays open until the caller has finished iterating (or the generator is closed)."
+      },
+      {
+        "text": "Replace `return (...)` with `return [l.strip() for l in f]`",
+        "explanation": "This does fix the error, but it reads the whole file into a list immediately, so it's no longer lazy."
+      },
+      {
+        "text": "Move `return` outside the `with` block",
+        "explanation": "The file is still closed when the `with` block ends, before the caller starts iterating, so the error remains."
+      },
+      {
+        "text": "Open the file with `open(path, \"r\", buffering=0)`",
+        "explanation": "Unbuffered text I/O also raises ValueError; changing buffering would not fix lifetime. The issue is lifetime: `with` closes it on `return`, before any line is read."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Why it fails:\n\n1. `return (...)` creates a generator but doesn't read any lines.\n2. Returning leaves the `with` block, which closes `f`.\n3. The caller iterates; the generator asks the closed file for a line, and Python raises `ValueError`.\n\nThe fix is to make `read_lines` itself a generator:\n\n```python\ndef read_lines(path):\n    with open(path) as f:\n        yield from (l.strip()\n                    for l in f)\n```\n\nNow the body (including the open `with`) is suspended between items and exits on exhaustion, explicit close, or an escaping exception. If a caller stops early while retaining the generator, it must close it to release the file promptly. The list version also works, but gives up streaming.",
+    "link": {
+      "title": "Generators — Python wiki",
+      "url": "https://wiki.python.org/moin/Generators"
+    }
+  },
+  {
+    "id": "fp-laziness-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In an execution where the compiler does not strictify the lazy fold, why can foldl (+) 0 [1..10^7] retain far more accumulator memory than foldl' (+) 0 [1..10^7]?",
+    "options": [
+      {
+        "text": "`foldl` copies the list before folding it",
+        "explanation": "Neither fold copies the list. The memory goes into the accumulator, not the input."
+      },
+      {
+        "text": "`foldl` builds a chain of about 10^7 unevaluated additions in the accumulator, which are only collapsed at the end; `foldl'` forces the accumulator at each step",
+        "explanation": "Correct. Laziness means `acc + x` is stored as a thunk each time, nesting deeper and deeper. `foldl'` uses `seq` to evaluate it to a number before moving on, so it avoids the linear thunk chain; storage for a growing arbitrary-precision number is separate."
+      },
+      {
+        "text": "`foldl'` runs in parallel and `foldl` doesn't",
+        "explanation": "The prime means *strict*, not parallel. Both are sequential left folds."
+      },
+      {
+        "text": "`foldl` is not tail recursive",
+        "explanation": "`foldl` is tail recursive. The problem isn't stack frames from the recursion itself but the huge thunk it builds up as the accumulator."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Expand a few steps of the lazy `foldl`:\n\n```\nfoldl (+) 0 [1,2,3,...]\n= foldl (+) (0+1) [2,3,...]\n= foldl (+) ((0+1)+2) [3,...]\n= ...\n```\n\nNothing forces `(0+1)+2`, so after n steps the accumulator is a thunk of n nested additions: O(n) memory, and evaluating it at the end can overflow the stack.\n\n`foldl'` does `acc' = acc + x` and then `seq acc' ...`, so the accumulator is always a plain number:\n\n```\n0 -> 1 -> 3 -> 6 -> ...\n```\n\nThat uses a bounded number of accumulator values, rather than n suspended additions; bit storage depends on the numeric type. This is the classic laziness **space leak**: the final value is small, but the thunks describing it are huge.",
+    "link": {
+      "title": "Foldr Foldl Foldl' — Haskell Wiki",
+      "url": "https://wiki.haskell.org/Foldr_Foldl_Foldl%27"
+    }
+  },
+  {
+    "id": "fp-laziness-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In Haskell, forcing undefined raises an exception (which can be caught in an appropriate IO context). Which of these evaluate **without** crashing? Select all that apply.",
+    "options": [
+      {
+        "text": "`seq (undefined, 1) \"ok\"`",
+        "explanation": "Correct. `seq` forces its first argument only to weak head normal form, i.e. the outermost constructor. The pair constructor is there, so its contents are never touched."
+      },
+      {
+        "text": "`seq undefined \"ok\"`",
+        "explanation": "To reach WHNF, `seq` must evaluate `undefined` itself, which crashes."
+      },
+      {
+        "text": "`length [undefined, undefined]`",
+        "explanation": "Correct. `length` walks the list's spine (the `:` cells) but never looks at the elements, so the result is 2."
+      },
+      {
+        "text": "`fst (1, undefined)`",
+        "explanation": "Correct. `fst` returns the first component and never inspects the second."
+      },
+      {
+        "text": "`sum [1, undefined]`",
+        "explanation": "`sum` needs the value of every element to add them, so it forces `undefined` and crashes."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "For each expression, ask what actually gets inspected.\n\n1. `seq (undefined, 1) ...` - WHNF of a pair is just `(_, _)`. Safe.\n2. `seq undefined ...` - WHNF of `undefined` means evaluating it. Crash.\n3. `length` - counts `:` cells only. Returns 2.\n4. `fst` - takes the left slot. Returns 1.\n5. `sum` - must add `1 + undefined`. Crash.\n\nThis is why `seq` alone doesn't fix every space leak: forcing a pair or a list only forces its outer shell. deepseq follows its NFData instance to force represented data more deeply; it does not evaluate arbitrary function bodies.",
+    "link": {
+      "title": "Weak head normal form — Haskell Wiki",
+      "url": "https://wiki.haskell.org/Weak_head_normal_form"
+    }
+  },
+  {
+    "id": "fp-laziness-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How many `gen` lines are printed before the `4`?\n\n```python\ndef nums():\n    for i in range(1, 100):\n        print(\"gen\", i)\n        yield i\n\nevens = (n for n in nums()\n         if n % 2 == 0)\nbig = (n * n for n in evens)\nprint(next(big))\n```",
+    "options": [
+      {
+        "text": "0, because generators print nothing until fully consumed",
+        "explanation": "Generators run their body piece by piece as items are pulled, so `nums` does print as it goes."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. `next(big)` pulls one item from `evens`, which pulls from `nums` until it finds an even number: 1 (rejected), then 2 (accepted). 2 * 2 = 4."
+      },
+      {
+        "text": "49, one per even number below 100",
+        "explanation": "Nothing runs ahead. The pipeline is pull-based: each stage asks the one before it for exactly what it needs."
+      },
+      {
+        "text": "99, because `evens` must filter all of `nums` first",
+        "explanation": "That's how a list comprehension would behave. With generator expressions, filtering happens one item at a time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow the demand backwards from `next(big)`:\n\n1. `big` needs one value from `evens`.\n2. `evens` asks `nums` for an item: prints `gen 1`, gets 1, odd, rejected.\n3. Asks again: prints `gen 2`, gets 2, even, accepted.\n4. `big` squares it: 4.\n\nOutput:\n\n```\ngen 1\ngen 2\n4\n```\n\nThe other 97 numbers are never generated. This is how the lesson's log pipeline stops reading a 50 GB file once it has 10 matches.",
+    "link": {
+      "title": "Generators — Python wiki",
+      "url": "https://wiki.python.org/moin/Generators"
+    }
+  }
+]

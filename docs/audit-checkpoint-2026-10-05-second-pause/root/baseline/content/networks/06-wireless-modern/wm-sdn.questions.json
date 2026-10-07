@@ -1,0 +1,374 @@
+[
+  {
+    "id": "wm-sdn-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is a **data-plane** task on a router, rather than a control-plane task?",
+    "options": [
+      {
+        "text": "Exchanging BGP updates with a neighbouring network",
+        "explanation": "BGP decides which routes to use: that is control plane, the part SDN moves into a controller."
+      },
+      {
+        "text": "Running Dijkstra's algorithm to compute OSPF shortest paths",
+        "explanation": "Computing routes is control plane; its output is the forwarding table the data plane uses."
+      },
+      {
+        "text": "Looking up each arriving packet's destination in the forwarding table and sending it out of the chosen port",
+        "explanation": "Correct. Per-packet forwarding at line rate is the data plane, done in hardware."
+      },
+      {
+        "text": "An operator changing the configuration through the command line",
+        "explanation": "Configuration is management, feeding the control plane. It does not forward packets."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Control plane:** decides *what* the forwarding tables should say. BGP, OSPF, spanning tree, an SDN controller.\n2. **Data plane:** applies those tables to every packet, billions of times a second, in ASICs.\n3. Only the per-packet lookup and forward is data plane.\n4. SDN keeps the data plane in the switch and moves the control plane out into software.",
+    "link": {
+      "title": "Software-defined networking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Software-defined_networking"
+    }
+  },
+  {
+    "id": "wm-sdn-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A switch has this OpenFlow table:\n\n```\nprio match               action\n50   ip dst=10.1.0.0/16  out:1\n40   tcp dp=80           out:4\n10   ip dst=10.1.2.3     out:2\n0    (anything)          drop\n```\n\nA TCP packet to 10.1.2.3 port 80 arrives. Where does it go?",
+    "options": [
+      {
+        "text": "Port 2, because 10.1.2.3 is the most specific match",
+        "explanation": "OpenFlow does not use longest-prefix match automatically: it uses **priority**. The /32 entry has priority 10, the lowest that matches apart from the catch-all."
+      },
+      {
+        "text": "Port 4, because it is HTTP traffic",
+        "explanation": "The port-80 entry matches, but at priority 40, which is below the /16 entry at 50."
+      },
+      {
+        "text": "Port 1",
+        "explanation": "Correct. Entries at 50, 40, 10 and 0 all match, and the highest priority (50) wins."
+      },
+      {
+        "text": "Dropped by the table-miss entry",
+        "explanation": "The table-miss entry only applies if nothing of higher priority matches."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check every entry against the packet (TCP, dst 10.1.2.3, port 80):\n   - 50: 10.1.2.3 is inside 10.1.0.0/16 → match\n   - 40: TCP port 80 → match\n   - 10: dst 10.1.2.3 → match\n   - 0: matches everything\n2. Pick the highest priority: 50.\n3. Action: output to port 1.\n\nA controller that wants longest-prefix behaviour must assign longer prefixes higher priorities itself. This table is probably a bug: the /32 entry can never take effect for IP traffic.",
+    "link": {
+      "title": "OpenFlow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/OpenFlow"
+    }
+  },
+  {
+    "id": "wm-sdn-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An EC2 instance's security group allows inbound TCP 443 from anywhere and has **no outbound rules at all**. A client opens an HTTPS connection. What happens?",
+    "options": [
+      {
+        "text": "The handshake fails because the instance's SYN-ACK is blocked by the missing outbound rule",
+        "explanation": "Security groups are stateful: return traffic for an allowed inbound connection is permitted automatically, whatever the outbound rules say."
+      },
+      {
+        "text": "The connection works; security groups track connections, so replies to allowed inbound traffic are permitted",
+        "explanation": "Correct. The missing outbound rules only stop the instance *initiating* new outbound connections."
+      },
+      {
+        "text": "The connection works only if the subnet's NACL allows it, because security groups only filter inbound",
+        "explanation": "Security groups filter both directions. The NACL may also need to allow the traffic, but that is a separate layer."
+      },
+      {
+        "text": "It is impossible: AWS requires at least one outbound rule",
+        "explanation": "You can remove all outbound rules; the default group simply comes with an allow-all outbound rule."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The client's SYN arrives on 443: allowed by the inbound rule, and the security group records the connection.\n2. The instance's SYN-ACK and all later replies belong to that tracked connection, so they are allowed out.\n3. Outbound rules matter only for connections the instance itself starts (e.g. `yum update`, calls to an API).\n4. Contrast with a NACL, which is stateless and would need an explicit outbound rule for the reply traffic.",
+    "link": {
+      "title": "Control traffic with security groups — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You create a `/26` subnet in an AWS VPC for a small fleet. How many IP addresses can you assign to instances and interfaces?",
+    "options": [
+      {
+        "text": "64",
+        "explanation": "A /26 has 64 addresses in total, but AWS reserves some in every subnet."
+      },
+      {
+        "text": "62",
+        "explanation": "62 is the classic answer that excludes only network and broadcast. AWS reserves three more."
+      },
+      {
+        "text": "59",
+        "explanation": "Correct. 2⁶ = 64, minus 5 reserved by AWS: network, .1 router, .2 DNS, .3 reserved, and the last address."
+      },
+      {
+        "text": "54",
+        "explanation": "Ten reserved addresses is too many; AWS reserves exactly five per subnet."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Host bits: 32 − 26 = 6, so 2⁶ = 64 addresses.\n2. AWS reserves 5. For `10.20.48.0/26`:\n\n```\n10.20.48.0   network\n10.20.48.1   VPC router\n10.20.48.2   DNS\n10.20.48.3   reserved\n10.20.48.63  last (broadcast)\n```\n\n3. Usable: 64 − 5 = **59**, from 10.20.48.4 to 10.20.48.62.\n4. Size subnets with headroom: load balancers, Lambda functions in a VPC and EKS pods can all consume subnet addresses.",
+    "link": {
+      "title": "Subnet CIDR blocks — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/subnet-sizing.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A subnet has a custom NACL: inbound rule 100 allows TCP 443 from 0.0.0.0/0, outbound rule 100 allows TCP 443 to 0.0.0.0/0, and everything else is denied. The web server's security group is correct. External HTTPS clients time out. Why?",
+    "options": [
+      {
+        "text": "NACLs need rule 100 to be rule 1",
+        "explanation": "Rule numbers only matter relative to each other; with one rule each way, numbering is not the problem."
+      },
+      {
+        "text": "The NACL is stateless, and the server's replies go to the client's ephemeral port (e.g. 51234), not 443, so the outbound rule does not match them",
+        "explanation": "Correct. Add an outbound allow for TCP 1024–65535 to the client range."
+      },
+      {
+        "text": "Security groups and NACLs cannot both be used on the same traffic",
+        "explanation": "They are designed to be layered: traffic must pass both."
+      },
+      {
+        "text": "TLS needs UDP 443 as well",
+        "explanation": "HTTPS over TCP needs only TCP. (HTTP/3 uses UDP 443, but clients fall back to TCP.)"
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Client → server: source `198.51.100.7:51234`, destination `server:443`. Inbound rule allows destination port 443. ✓\n2. Server → client: source `server:443`, destination `198.51.100.7:51234`.\n3. The outbound rule allows destination port **443**. The reply's destination port is **51234**. No match → denied by the final rule.\n4. A NACL has no connection tracking, so it cannot know this is a reply.\n5. Fix: outbound allow TCP 1024–65535 (the ephemeral range) to the clients. The security group, being stateful, never needed this.",
+    "link": {
+      "title": "Network ACLs — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "VMs talk across a VXLAN overlay on IPv4. The physical fabric's MTU is 1,500 bytes and cannot be changed. What is the largest IP packet a VM can send without fragmentation or drops?",
+    "options": [
+      {
+        "text": "1,500 bytes",
+        "explanation": "The outer headers must fit inside the physical 1,500 too. A 1,500-byte inner packet becomes 1,550 bytes on the wire."
+      },
+      {
+        "text": "1,450 bytes",
+        "explanation": "Correct. The physical MTU limits the outer IP packet, which contains outer IPv4 (20) + UDP (8) + VXLAN (8) + the inner Ethernet header (14) + the inner IP packet. 50 + X ≤ 1,500, so X ≤ 1,450."
+      },
+      {
+        "text": "1,472 bytes",
+        "explanation": "1,472 is the largest ICMP echo payload in a 1,500-byte packet (1,500 − 20 − 8). It is unrelated to VXLAN overhead."
+      },
+      {
+        "text": "1,492 bytes",
+        "explanation": "1,492 is the usual PPPoE MTU (8 bytes of PPPoE overhead), not VXLAN."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The physical MTU limits the **outer IP packet**:\n\n```\nouter IPv4 header      20\nouter UDP header        8\nVXLAN header            8\ninner Ethernet header  14\ninner IP packet         X\n----------------------------\ntotal = 50 + X <= 1500\nX <= 1450\n```\n\n(The 14-byte outer Ethernet header is not counted in the MTU, but the inner Ethernet header is, which is why the total overhead still comes to 50.)\n\nSet the VMs' MTU to 1,450, or raise the fabric to jumbo frames (e.g. 9,000) so tenants keep 1,500. AWS lets instances use a 9,001-byte MTU inside a VPC for this kind of reason.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  },
+  {
+    "id": "wm-sdn-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "VPC A (10.1.0.0/16) is peered with VPC B (10.2.0.0/16), and B is peered with VPC C (10.3.0.0/16). Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Instances in A cannot reach C through B, because VPC peering is not transitive",
+        "explanation": "Correct. Traffic over a peering must start or end in one of the two peered VPCs."
+      },
+      {
+        "text": "To connect A and C, add an A–C peering or attach all three to a Transit Gateway",
+        "explanation": "Correct. Either a direct peering or a hub with its own routing provides A ↔ C."
+      },
+      {
+        "text": "Creating a peering automatically adds the routes, so no route-table changes are needed",
+        "explanation": "You must add routes to each side's route tables pointing the peer's CIDR at the peering connection, and allow the traffic in security groups."
+      },
+      {
+        "text": "If C had used 10.1.0.0/16, an A–C peering would be impossible",
+        "explanation": "Correct. Peering requires non-overlapping CIDR blocks, because routes could not tell the two ranges apart."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Peering is a point-to-point relationship. B will not forward A's packets on to C.\n2. Options for A ↔ C: a third peering (fine for a few VPCs; the mesh grows as n(n − 1)/2), or a Transit Gateway hub (better for many).\n3. Peering needs explicit routes on both sides plus security-group rules.\n4. Overlapping CIDRs block peering entirely, which is why central IP allocation matters from day one.",
+    "link": {
+      "title": "VPC peering — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-peering.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A campus network uses a **reactive** OpenFlow controller: the first packet of each new flow goes to the controller, which installs an entry. During a flash sale, new connections per second jump 50-fold, and users see multi-second delays opening pages while existing downloads are fine. Why?",
+    "options": [
+      {
+        "text": "The switches' data planes are too slow for the extra traffic",
+        "explanation": "Existing flows are fine, so the forwarding hardware copes. The problem is specific to new flows."
+      },
+      {
+        "text": "Every new flow needs a round trip to the controller, which is now saturated, so first packets queue or are dropped and TCP retries the SYN",
+        "explanation": "Correct. Reactive setup puts the controller on the critical path of every new connection. Proactive rules or wildcard entries remove it."
+      },
+      {
+        "text": "OpenFlow does not support TCP",
+        "explanation": "OpenFlow matches TCP fields directly; ports and flags are standard match fields."
+      },
+      {
+        "text": "The flow entries' hard timeout expired for all users at once",
+        "explanation": "Expired entries would affect existing flows too, and these are fine."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Reactive model: table miss → packet-in to controller → controller computes → flow-mod installs entry → packet forwarded.\n2. Each step costs time, and the controller's capacity is finite.\n3. A 50× burst of new flows means 50× packet-ins; queues build and some are dropped.\n4. A dropped SYN waits for TCP's retransmission timer (about 1 s initially, then doubling), hence multi-second page loads.\n5. Existing flows already have entries and never touch the controller.\n6. Fix: proactively install coarse rules (by subnet or policy) and reserve per-flow control for exceptions.",
+    "link": {
+      "title": "OpenFlow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/OpenFlow"
+    }
+  },
+  {
+    "id": "wm-sdn-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A subnet NACL has these inbound rules:\n\n```\nrule  proto port src             action\n100   tcp   22   0.0.0.0/0       ALLOW\n110   tcp   22   203.0.113.0/24  DENY\n*     all   all  0.0.0.0/0       DENY\n```\n\nAn attacker at 203.0.113.9 connects to SSH. What happens, and why?",
+    "options": [
+      {
+        "text": "Denied, because rule 110 is more specific",
+        "explanation": "NACLs do not use specificity: they evaluate rules in ascending number order and stop at the first match."
+      },
+      {
+        "text": "Allowed, because rule 100 matches first and evaluation stops there",
+        "explanation": "Correct. To block that range, give the DENY a lower number than the ALLOW (e.g. 90)."
+      },
+      {
+        "text": "Denied, because DENY rules always override ALLOW rules",
+        "explanation": "That is how some firewalls behave, but not NACLs; order alone decides."
+      },
+      {
+        "text": "Allowed only if the security group also has a DENY rule",
+        "explanation": "Security groups have no DENY rules at all; they are allow-only."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. NACL evaluation: sort rules by number, test each, apply the **first** that matches, stop.\n2. Rule 100: TCP, port 22, source in 0.0.0.0/0 → matches 203.0.113.9 → **ALLOW**.\n3. Rule 110 is never reached.\n4. Fix:\n\n```\n90   tcp 22 203.0.113.0/24 DENY\n100  tcp 22 0.0.0.0/0      ALLOW\n```\n\n5. Better still, do not expose SSH to 0.0.0.0/0 at all: use a security group allowing only a bastion or use Session Manager.",
+    "link": {
+      "title": "Network ACLs — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "VXLAN encapsulates every tenant packet in an outer UDP header. RFC 7348 recommends setting the outer UDP **source port** from a hash of the inner packet's headers. Why?",
+    "options": [
+      {
+        "text": "To let the receiving host decrypt the inner packet",
+        "explanation": "VXLAN provides no encryption; the source port carries no key material."
+      },
+      {
+        "text": "So the physical fabric's ECMP, which hashes outer headers, spreads different tenant flows across different paths",
+        "explanation": "Correct. Between two hypervisors the outer IPs are constant; varying the source port per inner flow gives the fabric entropy, while keeping each inner flow on one path."
+      },
+      {
+        "text": "Because UDP requires a unique source port per packet",
+        "explanation": "UDP has no such requirement; a fixed source port would be legal, just bad for load balancing."
+      },
+      {
+        "text": "To carry the 24-bit VNI",
+        "explanation": "The VNI is carried in the 8-byte VXLAN header, not the UDP port."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. All traffic between hypervisor A and hypervisor B has the same outer source IP, destination IP, protocol (UDP) and destination port (4789).\n2. If the source port were fixed too, every tenant flow between those two hosts would hash to **one** ECMP path.\n3. Deriving the source port from the inner 5-tuple makes different inner flows look like different outer flows.\n4. The same inner flow always gets the same source port, so its packets stay in order on one path.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  },
+  {
+    "id": "wm-sdn-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An SDN fabric's controller cluster loses its connection to all switches for two minutes. The switches use proactively installed rules. Which are likely during the outage? Select all that apply.",
+    "options": [
+      {
+        "text": "Existing traffic keeps flowing on the installed entries",
+        "explanation": "Correct. Forwarding is in the switches' data planes; entries without timeouts stay in place."
+      },
+      {
+        "text": "Any flows that depend on reactive packet-in to the controller cannot be set up",
+        "explanation": "Correct. Without the controller, table misses have nowhere useful to go."
+      },
+      {
+        "text": "A link failure is not routed around unless backup paths were pre-installed (e.g. OpenFlow fast-failover groups)",
+        "explanation": "Correct. Recomputing paths is the controller's job; only pre-programmed local failover helps."
+      },
+      {
+        "text": "All traffic stops immediately because switches cannot forward without the controller",
+        "explanation": "That would make the controller a catastrophic single point of failure; data planes are designed to fail static."
+      },
+      {
+        "text": "The switches automatically fall back to running OSPF among themselves",
+        "explanation": "Pure OpenFlow switches have no distributed control plane to fall back to unless explicitly configured as hybrid."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. **Fail static:** with proactive rules, forwarding state is already in hardware, so steady-state traffic continues.\n2. **No new decisions:** anything needing the controller (new reactive flows, policy changes, topology recomputation) stalls.\n3. **Failures:** a link going down makes affected entries point at a dead port. Only pre-installed alternatives, such as fast-failover groups that pick the first live port, recover locally.\n4. This is why controllers are replicated and why production designs pre-compute backup paths.",
+    "link": {
+      "title": "Software-defined networking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Software-defined_networking"
+    }
+  },
+  {
+    "id": "wm-sdn-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Traffic from switch A to D currently goes A → B → D. The controller wants to move it to A → C → D. Switch C has no entry for this traffic yet. Updates reach switches one at a time. Which order avoids dropping packets?",
+    "options": [
+      {
+        "text": "Update A to forward to C, then install the entry on C",
+        "explanation": "Between the two updates, A sends packets to C, which has no entry and drops them (or sends them to the controller): a temporary black hole."
+      },
+      {
+        "text": "Install the entry on C first, wait for confirmation, then update A to forward to C, then remove the old entry from B",
+        "explanation": "Correct. Prepare the new path downstream first, flip the ingress last, clean up after. At every moment each packet follows a complete path."
+      },
+      {
+        "text": "Remove B's entry first so the old path is freed",
+        "explanation": "Packets still sent by A to B would hit the missing entry and be dropped."
+      },
+      {
+        "text": "Order does not matter because OpenFlow updates are atomic across switches",
+        "explanation": "OpenFlow makes changes within one switch (or one bundle on one switch) atomic, not across multiple switches."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Network-wide updates are not atomic: each switch changes at its own moment.\n2. Rule: **make the new path ready before anything uses it**, and **flip at the ingress last**.\n\n```\nstep 1: C gets \"to D\" entry  (unused)\nstep 2: barrier: C confirms\nstep 3: A switches next hop B -> C\nstep 4: remove old entry from B\n```\n\n3. In every intermediate state, a packet either takes the old complete path or the new complete path.\n4. Production systems generalise this with versioned rules: tag packets at ingress with a version so each packet is handled entirely by old rules or entirely by new ones (two-phase update).",
+    "link": {
+      "title": "B4: Experience with a Globally-Deployed Software Defined WAN — Google Research",
+      "url": "https://research.google/pubs/b4-experience-with-a-globally-deployed-software-defined-wan/"
+    }
+  }
+]

@@ -1,0 +1,344 @@
+[
+  {
+    "id": "proc-context-switching-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A process calls `getpid()`, which enters the kernel and returns straight away. Which kind of switch has happened?",
+    "options": [
+      {
+        "text": "A full process context switch",
+        "explanation": "A context switch means a *different* task runs next. Here the same task comes back, so nothing was swapped."
+      },
+      {
+        "text": "A mode switch only: user to kernel and back, same task",
+        "explanation": "Correct. The CPU changed privilege level, but the scheduler never chose another task, so no context switch took place."
+      },
+      {
+        "text": "A thread switch within the process",
+        "explanation": "No other thread was chosen to run. Entering the kernel doesn't by itself involve another thread."
+      },
+      {
+        "text": "No switch at all, because `getpid` runs in user space",
+        "explanation": "`getpid` is a real syscall on Linux (it isn't served by the vDSO), so the CPU does enter kernel mode."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask two questions:\n\n1. Did the CPU change privilege level? Yes: `syscall` moves it into kernel mode, and `sysret` moves it back.\n2. Did a *different* task run afterwards? No: the kernel returned to the caller.\n\nPrivilege change without a change of task is a **mode switch**. A context switch needs the scheduler to pick another task, which happens only if the task blocks or is preempted.",
+    "link": {
+      "title": "Context switch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Context_switch"
+    }
+  },
+  {
+    "id": "proc-context-switching-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A web server thread calls `read` on a socket that has no data yet, and the kernel runs another task. How does Linux classify this switch?",
+    "options": [
+      {
+        "text": "Involuntary, because the kernel made the decision",
+        "explanation": "The kernel always picks the next task, so that can't be the test. What matters is whether the task *could* have carried on."
+      },
+      {
+        "text": "Involuntary, because a timer interrupt fired",
+        "explanation": "No timer was involved. The thread stopped because it had nothing to do until data arrived."
+      },
+      {
+        "text": "Voluntary, because the thread blocked waiting for data",
+        "explanation": "Correct. The thread couldn't continue, so it gave up the CPU. It shows up in `voluntary_ctxt_switches`."
+      },
+      {
+        "text": "Not a context switch, because the thread is still in a syscall",
+        "explanation": "The thread is asleep inside the kernel and another task is now on the CPU. That is a context switch."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The test is: *could the task have kept running?*\n\n- It's waiting for socket data, so no. It **blocks**, which is a **voluntary** switch.\n- If it had been computing and its time slice ran out, the switch would be **involuntary** (preemption).\n\nOn Linux you can see the count in `/proc/<pid>/status` as `voluntary_ctxt_switches`.",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  },
+  {
+    "id": "proc-context-switching-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why is switching between two threads of the *same* process usually cheaper than switching between two processes?",
+    "options": [
+      {
+        "text": "Threads don't have their own registers, so there is nothing to save",
+        "explanation": "Each thread has its own registers, stack pointer and instruction pointer, and the kernel saves and restores them on every switch."
+      },
+      {
+        "text": "They share an address space, so the page tables stay loaded and the TLB stays warm",
+        "explanation": "Correct. Linux skips the `CR3` reload (`switch_mm`), so cached translations, and often cached data, are still useful."
+      },
+      {
+        "text": "Thread switches happen entirely in user space",
+        "explanation": "Linux pthreads are 1:1 kernel tasks, so the kernel does the switch. Only user-level (M:N) threads switch without the kernel."
+      },
+      {
+        "text": "The kernel never preempts threads of the same process",
+        "explanation": "Threads are scheduled independently and preempted like any other task."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "List what each switch has to do:\n\n| Step | Thread | Process |\n|---|---|---|\n| Save/load registers | yes | yes |\n| Swap kernel stacks | yes | yes |\n| Load new `CR3` | no | yes |\n| TLB still valid | yes | maybe not |\n\nThe only difference is the address space, and that is also what keeps the TLB and caches useful afterwards.",
+    "link": {
+      "title": "Context switch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Context_switch"
+    }
+  },
+  {
+    "id": "proc-context-switching-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service's `/proc/<pid>/status` shows:\n\n```\nvoluntary_ctxt_switches:     212\nnonvoluntary_ctxt_switches:  918344\n```\n\nWhat does this suggest?",
+    "options": [
+      {
+        "text": "It's I/O-bound and spends most of its time waiting",
+        "explanation": "An I/O-bound task blocks often, which gives a *high voluntary* count. Here the voluntary count is tiny."
+      },
+      {
+        "text": "It's CPU-bound and is repeatedly preempted because it wants more CPU than it gets",
+        "explanation": "Correct. It almost never blocks, but it keeps being taken off the CPU when its slice ends or something more urgent wakes."
+      },
+      {
+        "text": "It's stuck on a contended lock",
+        "explanation": "Blocking on a mutex is a voluntary switch, so lock contention would push the *voluntary* count up."
+      },
+      {
+        "text": "The counts are meaningless without knowing the CPU model",
+        "explanation": "The counts are per task and tell you directly why it left the CPU, whatever the hardware."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Voluntary = the task blocked (I/O, locks, sleep). 212 is next to nothing.\n2. Non-voluntary = the kernel took the CPU away while the task could still run. Nearly a million.\n3. So the task almost always wants to run and is competing for CPU.\n\nNext steps: check the load average against the core count, give it more CPU, or look at what else shares the cores (for example with `pidstat -w 1`).",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  },
+  {
+    "id": "proc-context-switching-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run the pipe ping-pong benchmark from the lesson pinned to one core. 100,000 round trips take 0.5 s. Roughly what does each context switch cost, as an upper bound?",
+    "options": [
+      {
+        "text": "5 µs",
+        "explanation": "That is the time per *round trip*. Each round trip contains two switches."
+      },
+      {
+        "text": "2.5 µs",
+        "explanation": "Correct. 0.5 s / 100,000 = 5 µs per round trip, and with 2 switches per round trip that's 2.5 µs each, including the syscall overhead."
+      },
+      {
+        "text": "1.25 µs",
+        "explanation": "This divides by four, treating the four syscalls as four switches. There are four syscalls but only two switches."
+      },
+      {
+        "text": "50 µs",
+        "explanation": "This is out by a factor of 10: 0.5 s / 100,000 is 5 µs, not 50 µs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\ntotal      = 0.5 s = 500,000,000 ns\nper trip   = 500,000,000 / 100,000\n           = 5,000 ns\nswitches   = 2 per trip\nper switch = 5,000 / 2 = 2,500 ns\n```\n\nIt's an *upper bound* because those 2.5 µs also cover the `read` and `write` syscalls. Pinning to one core (`taskset -c 0`) makes sure you measure switches, not cross-core wake-ups.",
+    "link": {
+      "title": "Mechanism: Limited Direct Execution — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
+    }
+  },
+  {
+    "id": "proc-context-switching-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A task's hot working set is 256 KiB. After a switch, another task has evicted all of it from L2. Each 64-byte line refills from L3 in about 20 ns. Roughly how long does the task spend re-warming?",
+    "options": [
+      {
+        "text": "About 5 µs",
+        "explanation": "This uses 256 lines. 256 KiB holds 256 × 1,024 / 64 = 4,096 lines, not 256."
+      },
+      {
+        "text": "About 20 µs",
+        "explanation": "That works for 1,000 lines. The working set is about four times that."
+      },
+      {
+        "text": "About 82 µs",
+        "explanation": "Correct. 4,096 lines × 20 ns ≈ 82 µs, far more than the microsecond or two of the switch itself."
+      },
+      {
+        "text": "About 5 ms",
+        "explanation": "That's 4,096 lines at more than 1 µs each. L3 hits are tens of nanoseconds, not microseconds."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nbytes = 256 × 1024 = 262,144\nlines = 262,144 / 64 = 4,096\ntime  = 4,096 × 20 ns\n      = 81,920 ns ≈ 82 µs\n```\n\nCompare that with a direct switch cost of roughly 1–3 µs. The indirect cost is about 30–80 times bigger here. Real numbers are lower because refills overlap and not every line is evicted, but this is why the working set matters more than the switch itself.",
+    "link": {
+      "title": "Context switch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Context_switch"
+    }
+  },
+  {
+    "id": "proc-context-switching-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A system shows hundreds of thousands of context switches per second per core and high system CPU time. Which changes are likely to **reduce** switching? Select all that apply.",
+    "options": [
+      {
+        "text": "Replace thread-per-connection with about one thread per core using `epoll`",
+        "explanation": "Correct. Fewer runnable threads means less juggling, and an event loop handles many connections without blocking."
+      },
+      {
+        "text": "Batch small messages between two chatty processes",
+        "explanation": "Correct. Each message cost two switches; sending 100 per batch cuts that roughly 100-fold."
+      },
+      {
+        "text": "Double the size of the thread pool",
+        "explanation": "More runnable threads per core means *more* preemption and colder caches, not fewer switches."
+      },
+      {
+        "text": "Shard a hot, contended mutex into several locks",
+        "explanation": "Correct. Threads blocking on a contended lock switch out and back in. Less contention means fewer blocking waits."
+      },
+      {
+        "text": "Split the service into more processes talking through pipes",
+        "explanation": "Every message across a pipe can wake the receiver, adding switches. This makes things worse."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Go through the causes from the lesson:\n\n1. **Too many runnable threads**: fixed by a small pool and non-blocking I/O (A). Making the pool bigger (C) goes the wrong way.\n2. **Chatty IPC**: fixed by batching (B). Adding more pipe hops (E) goes the wrong way.\n3. **Lock contention**: fixed by sharding or shortening critical sections (D).\n\nThen measure again with `vmstat 1` (the `cs` column) or `pidstat -w 1`.",
+    "link": {
+      "title": "Context switch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Context_switch"
+    }
+  },
+  {
+    "id": "proc-context-switching-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run the ping-pong benchmark without pinning, and the two processes land on different cores. What are you now mostly measuring?",
+    "options": [
+      {
+        "text": "The same context-switch cost, just less precisely",
+        "explanation": "On separate cores each process can sleep and wake on its own core, so the timing is dominated by something else."
+      },
+      {
+        "text": "Cross-core wake-up latency: signalling the other core and waking its sleeping task",
+        "explanation": "Correct. Each hop needs an inter-processor wake-up and possibly an idle core coming out of a low-power state."
+      },
+      {
+        "text": "Only the syscall cost, since no switches occur",
+        "explanation": "Switches still happen on each core (to and from idle), but the main cost is the cross-core signalling."
+      },
+      {
+        "text": "TLB shootdown cost",
+        "explanation": "TLB shootdowns happen when shared mappings change. A pipe write doesn't change any mappings."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow one hop with the processes on different cores:\n\n1. The parent writes on core 0. The child is asleep on core 1, and core 1 may be idle.\n2. The kernel marks the child runnable and sends an inter-processor interrupt to core 1.\n3. Core 1 wakes (perhaps from a deep C-state) and switches from idle to the child.\n\nThe interrupt and wake-up latency dominate. To measure the switch itself, put both on one core with `taskset -c 0`, so every hop is a direct switch from one task to the other.",
+    "link": {
+      "title": "Mechanism: Limited Direct Execution — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
+    }
+  },
+  {
+    "id": "proc-context-switching-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After Meltdown, Linux enabled KPTI. Why did PCID support on the CPU become important for performance?",
+    "options": [
+      {
+        "text": "PCID encrypts kernel memory, which KPTI requires",
+        "explanation": "PCID has nothing to do with encryption. It tags TLB entries with an address-space ID."
+      },
+      {
+        "text": "KPTI switches page tables on every kernel entry and exit; without PCID each switch would flush the TLB",
+        "explanation": "Correct. With PCID, user and kernel translations carry different tags and survive the `CR3` writes, so syscalls don't start with a cold TLB."
+      },
+      {
+        "text": "PCID lets the kernel skip saving registers on syscalls",
+        "explanation": "Registers are still saved on kernel entry. PCID only affects whether TLB entries survive a `CR3` load."
+      },
+      {
+        "text": "PCID stops the scheduler migrating tasks between cores",
+        "explanation": "Migration is a scheduler decision. PCID is about TLB tagging on a single core."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. KPTI keeps two page-table trees per process: a user one that maps almost no kernel memory, and a full one.\n2. Every syscall or interrupt switches `CR3` to the full tree and back again on return.\n3. Without tagging, each `CR3` write flushes non-global TLB entries, so even a cheap syscall would face hundreds of TLB misses afterwards.\n4. With PCID (used by Linux since 4.14), entries are tagged and both sets can stay in the TLB.\n\nSo PCID turns KPTI from a large slowdown on syscall-heavy loads into a much smaller one.",
+    "link": {
+      "title": "Page Table Isolation (PTI) — Linux kernel docs",
+      "url": "https://docs.kernel.org/arch/x86/pti.html"
+    }
+  },
+  {
+    "id": "proc-context-switching-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server runs 10,000 threads, all busy doing short CPU work between requests, on 16 cores. Throughput is poor, but per-request CPU time looks fine in a profiler. What is the most likely cause, and the fix?",
+    "options": [
+      {
+        "text": "Too few threads; raise the count to 20,000",
+        "explanation": "Each core already has about 625 runnable threads. Adding more increases preemption and cache thrashing."
+      },
+      {
+        "text": "About 625 runnable threads per core keep evicting each other's caches and TLB entries; use about one thread per core with non-blocking I/O",
+        "explanation": "Correct. The direct switch cost adds up, but the cold caches after every switch are the bigger loss. A small pool keeps working sets warm."
+      },
+      {
+        "text": "The kernel's run queue can't hold more than 1,024 threads",
+        "explanation": "Linux has no such limit; run queues hold many thousands of tasks. The problem is cost, not capacity."
+      },
+      {
+        "text": "Each thread's 8 MiB stack uses up physical RAM",
+        "explanation": "Stacks are reserved virtually and backed only by pages actually touched, so 10,000 threads don't use 80 GB of RAM."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Runnable threads per core: 10,000 / 16 = 625.\n2. Each one gets a slice, then is preempted. Between two turns of the same thread, hundreds of others have run on that core.\n3. By the time a thread runs again its L1, L2 and TLB contents are gone, so it starts cold every time.\n4. The profiler charges those misses as ordinary CPU time per request, which hides the cause.\n\nFix: about 16 threads with `epoll` or `io_uring` (the nginx model), so each core runs one thread with a warm cache.",
+    "link": {
+      "title": "Context switch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Context_switch"
+    }
+  },
+  {
+    "id": "proc-context-switching-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about user-level (M:N) threads, such as Go goroutines, are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Switching between two goroutines on the same OS thread doesn't need to enter the kernel",
+        "explanation": "Correct. The runtime saves a few registers and swaps stacks in user space, which takes tens to hundreds of nanoseconds."
+      },
+      {
+        "text": "A blocking syscall made by one user thread blocks the kernel thread underneath it",
+        "explanation": "Correct. The kernel only sees the kernel thread. This is why M:N runtimes use non-blocking I/O and hand work to other kernel threads around blocking calls."
+      },
+      {
+        "text": "The kernel scheduler sees and schedules each goroutine individually",
+        "explanation": "The kernel sees only the M kernel threads. Choosing which goroutine runs on them is the runtime's job."
+      },
+      {
+        "text": "M:N threads can run in parallel on several cores",
+        "explanation": "Correct. That's the difference from N:1: the N user threads are spread over M kernel threads, which can run on different cores."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Think about what the kernel can see:\n\n- **Kernel view**: M kernel threads. It schedules those, possibly in parallel on several cores, so D is true.\n- **Runtime view**: N goroutines multiplexed onto them. A switch between goroutines is a library call, so A is true, and the kernel never sees individual goroutines, so C is false.\n- **Blocking**: if a goroutine traps into a blocking syscall, its kernel thread sleeps, so B is true. Go copes by handing the other goroutines to another thread.",
+    "link": {
+      "title": "Thread (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Thread_(computing)"
+    }
+  }
+]

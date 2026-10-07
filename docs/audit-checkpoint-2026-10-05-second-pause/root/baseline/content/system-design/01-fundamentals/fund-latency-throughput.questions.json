@@ -1,0 +1,386 @@
+[
+  {
+    "id": "fund-latency-throughput-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You double the number of identical, stateless app servers behind a load balancer. The servers were lightly loaded before. What happens most likely?",
+    "options": [
+      {
+        "text": "Latency halves and throughput doubles",
+        "explanation": "Incorrect. Adding parallel capacity doesn't make an individual request faster when there was no queueing; each request still does the same work and network hops."
+      },
+      {
+        "text": "Nothing changes at all",
+        "explanation": "Incorrect. Capacity (maximum throughput) does increase, even if current traffic doesn't use it yet. You'd see the difference under a load spike."
+      },
+      {
+        "text": "Latency halves; throughput stays the same",
+        "explanation": "Incorrect. This confuses the two metrics. Parallelism increases throughput capacity; it doesn't speed up a lightly loaded request."
+      },
+      {
+        "text": "Maximum throughput roughly doubles; per-request latency stays about the same",
+        "explanation": "Correct. More servers means more requests can be processed concurrently (wider pipe), but a single request's path is unchanged, so its latency is roughly unchanged when the servers weren't saturated."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use the pipe analogy:\n\n- Latency = length of the pipe (the work and hops per request).\n- Throughput = width of the pipe (how many requests can be in flight).\n\nAdding servers adds pipes in parallel. Before: 4 servers × 500 req/s = 2,000 req/s capacity. After: 8 × 500 = 4,000 req/s. A single request still takes, say, 40 ms. Latency only drops if the servers were previously queueing (high utilisation), because the queue time shrinks.",
+    "link": {
+      "title": "Latency (engineering) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Over one minute, 1,000 requests are served: 980 take 20 ms and 20 take 3,000 ms. What are the **mean**, the **p50** and the **p99**?",
+    "options": [
+      {
+        "text": "Mean 20 ms, p50 20 ms, p99 20 ms",
+        "explanation": "Incorrect. This ignores the 20 slow requests. They make up 2% of traffic, which is enough to dominate both the mean and the p99."
+      },
+      {
+        "text": "Mean 1,510 ms, p50 20 ms, p99 3,000 ms",
+        "explanation": "Incorrect. 1,510 ms is the unweighted average of 20 and 3,000. A mean must be weighted by how many requests had each latency; only 2% were slow."
+      },
+      {
+        "text": "Mean 79.6 ms, p50 20 ms, p99 3,000 ms",
+        "explanation": "Correct. Mean = (980×20 + 20×3,000)/1,000 = 79.6 ms. The median request is a fast one (20 ms). The slowest 2% are 3,000 ms, so the 99th percentile falls among them. The mean describes no real request."
+      },
+      {
+        "text": "Mean 79.6 ms, p50 79.6 ms, p99 79.6 ms",
+        "explanation": "Incorrect. This assumes latency is the same for every request. Percentiles describe the distribution; the median and p99 here are very different from the mean."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "**Mean** (weighted by count):\n\n```\ntotal = 980 x 20 + 20 x 3000\n      = 19,600 + 60,000 = 79,600 ms\nmean  = 79,600 / 1,000 = 79.6 ms\n```\n\n**Percentiles.** Sort all 1,000 latencies. Positions 1–980 are 20 ms; positions 981–1,000 are 3,000 ms.\n\n- p50 = position 500 = **20 ms**\n- p99 = position 990 = **3,000 ms** (inside the slow block)\n\nThe mean (79.6 ms) is 4× the typical request and 38× better than the slow ones. That's why SLOs are written in percentiles.",
+    "link": {
+      "title": "Percentile (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Percentile"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A search service fans each query out to 50 index shards in parallel and waits for all of them. Each shard independently has a 1% chance of responding slowly (> 500 ms). Roughly what fraction of **user queries** are slow?",
+    "options": [
+      {
+        "text": "1%",
+        "explanation": "Incorrect. That's the per-shard rate. Because the query waits for all 50 shards, it's slow if *any* shard is slow, which is far more likely."
+      },
+      {
+        "text": "About 39%",
+        "explanation": "Correct. P(no shard slow) = 0.99^50 ≈ 0.605, so P(at least one slow) ≈ 1 − 0.605 = 39.5%. Fan-out turns a per-server tail into a common user experience."
+      },
+      {
+        "text": "50%",
+        "explanation": "Incorrect. This simply multiplies 50 × 1%, which overcounts cases where several shards are slow at once. The correct calculation uses the complement: 1 − 0.99^50."
+      },
+      {
+        "text": "0.01^50, effectively zero",
+        "explanation": "Incorrect. That's the probability that *all* 50 shards are slow simultaneously. The query only needs *one* slow shard to be slow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The query is slow if **at least one** shard is slow. Compute the complement:\n\n```\nP(shard fast)       = 0.99\nP(all 50 fast)      = 0.99^50\nln(0.99) ≈ -0.01005\n50 x -0.01005       = -0.5025\ne^-0.5025           ≈ 0.605\nP(at least one slow) = 1 - 0.605 = 0.395\n```\n\nSo ~39.5% of queries are slow. Mitigations: hedged requests to replica shards, returning partial results after a deadline, or reducing per-shard variance (GC tuning, isolating background work).",
+    "link": {
+      "title": "The Tail at Scale (Dean and Barroso, PDF)",
+      "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker has a service time of 10 ms per request. Using the M/M/1 approximation `W = S / (1 − ρ)`, what's the average time in the system at 90% utilisation, and what happens if load rises to 95%?",
+    "options": [
+      {
+        "text": "100 ms at 90%; 200 ms at 95%",
+        "explanation": "Correct. 10 / (1 − 0.9) = 100 ms; 10 / (1 − 0.95) = 200 ms. A 5-point rise in utilisation doubles latency, which is why running near capacity is dangerous."
+      },
+      {
+        "text": "11 ms at 90%; 10.5 ms at 95%",
+        "explanation": "Incorrect. This multiplies service time by (1 + ρ) or similar. The formula divides by (1 − ρ), which explodes as ρ approaches 1."
+      },
+      {
+        "text": "90 ms at 90%; 95 ms at 95%",
+        "explanation": "Incorrect. This treats latency as linear in utilisation. Queueing delay is non-linear: it grows like 1/(1 − ρ)."
+      },
+      {
+        "text": "10 ms in both cases, since service time is constant",
+        "explanation": "Incorrect. Service time is constant, but waiting time in the queue grows with utilisation. Time in the system = waiting + service."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Apply the formula:\n\n```\nρ = 0.90: W = 10 / (1 - 0.90)\n            = 10 / 0.10 = 100 ms\nρ = 0.95: W = 10 / (1 - 0.95)\n            = 10 / 0.05 = 200 ms\n```\n\nCompare with ρ = 0.5: W = 10 / 0.5 = 20 ms.\n\nGoing from 50% to 90% load increases latency 5×; from 90% to 95% doubles it again. Real systems aren't exactly M/M/1, but the shape (a hockey stick near 100%) is universal. That's why you plan peak utilisation around 50–70%.",
+    "link": {
+      "title": "Queueing theory (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Queueing_theory"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Using the classic latency numbers, which of these statements are **true**? Select all that apply.",
+    "options": [
+      {
+        "text": "A main-memory reference is roughly 100× slower than an L1 cache reference",
+        "explanation": "Correct. L1 is ~1 ns and main memory ~100 ns: two orders of magnitude, which is why cache-friendly data layouts matter."
+      },
+      {
+        "text": "A round trip within a datacentre (~0.5 ms) is faster than a random 4 KB read from an HDD (~10 ms seek)",
+        "explanation": "Correct. An HDD seek (~10 ms) is about 20× a same-datacentre round trip. That's why reading from a remote machine's RAM can beat reading from local spinning disk."
+      },
+      {
+        "text": "A cross-Atlantic round trip is about the same as a random SSD read",
+        "explanation": "Incorrect. London–New York is ~70 ms; a random SSD read is ~20–150 µs. The network round trip is several hundred to thousands of times slower."
+      },
+      {
+        "text": "Sequential reads from disk are much faster than random reads",
+        "explanation": "Correct. Random I/O on an HDD pays a ~10 ms seek per access; sequential reads stream at 100+ MB/s. Log-structured systems like Kafka exploit this."
+      },
+      {
+        "text": "Network bandwidth improvements have made cross-continent latency negligible",
+        "explanation": "Incorrect. Bandwidth (throughput) has grown enormously, but latency over distance is bounded by the speed of light in fibre (~200,000 km/s). London–New York can't go much below ~60 ms round trip."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Line the numbers up in the same unit (ns):\n\n| Operation | ns |\n|---|---|\n| L1 | 1 |\n| RAM | 100 |\n| SSD random 4 KB | ~100,000 |\n| DC round trip | 500,000 |\n| HDD seek | 10,000,000 |\n| London–NY RTT | 70,000,000 |\n\n- RAM / L1 = 100. True.\n- DC RTT (0.5 ms) < HDD seek (10 ms). True.\n- 70 ms vs 0.1 ms: ~700×, not the same. False.\n- Sequential beats random on disk. True.\n- Physics: 5,570 km × 2 / 200,000 km/s ≈ 56 ms minimum. False.",
+    "link": {
+      "title": "Latency numbers every programmer should know (gist)",
+      "url": "https://gist.github.com/jboner/2841832"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run 20 API servers. Each reports its own p99 latency every minute, and your dashboard shows the **average of the 20 p99 values** as \"fleet p99\". One server is badly degraded. What is wrong with this metric?",
+    "options": [
+      {
+        "text": "Nothing; averaging p99s gives the fleet p99 when servers get equal traffic",
+        "explanation": "Incorrect. Percentiles aren't linear, so they can't be averaged even with equal traffic. The true fleet p99 depends on the combined distribution of all requests."
+      },
+      {
+        "text": "It should use the median of the p99s instead of the mean",
+        "explanation": "Incorrect. The median of p99s would hide the degraded server even more effectively. Any statistic computed over per-server percentiles is still not the fleet percentile."
+      },
+      {
+        "text": "p99 is the wrong metric; use the mean, which can be averaged",
+        "explanation": "Incorrect. Means can be combined, but they hide tail latency, which is the thing you need to see here. The fix is correct aggregation, not a worse metric."
+      },
+      {
+        "text": "Percentiles can't be averaged; you must merge the underlying histograms and compute p99 from the combined distribution",
+        "explanation": "Correct. If one server's requests are all slow, they can make up the whole of the fleet's slowest 1%, so the true fleet p99 is that server's latency, while the average of p99s dilutes it with 19 healthy values. Merge histogram buckets (e.g. Prometheus `histogram_quantile` over summed buckets) instead."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Concrete case: 19 healthy servers each have p99 = 50 ms; 1 degraded server has *every* request at 2,000 ms. Equal traffic, 1,000 req/min each.\n\n**Averaged p99:**\n```\n(19 x 50 + 2000) / 20 = 147.5 ms\n```\n\n**True fleet p99:** 20,000 requests in total; the slowest 1% is 200 requests. The degraded server alone contributed 1,000 requests at 2,000 ms, so the slowest 200 are all 2,000 ms.\n\n```\nfleet p99 = 2,000 ms\n```\n\nThe dashboard says 147 ms; users are seeing 2 s. Store latency as histograms (fixed buckets), sum bucket counts across servers, then compute the percentile.",
+    "link": {
+      "title": "Implementing SLOs (Google SRE workbook)",
+      "url": "https://sre.google/workbook/implementing-slos/"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service's p95 latency is 40 ms and p99.9 is 900 ms, mostly due to occasional GC pauses on random replicas. You add **hedged requests**: if no response arrives within 40 ms, send a duplicate to another replica and take the first reply. What is the main effect and cost?",
+    "options": [
+      {
+        "text": "Tail latency gets worse because of the extra load",
+        "explanation": "Incorrect. With a ~5% load increase and independent slowness, hedging reduces the tail. It could backfire only if the system is near saturation or slowness is correlated across replicas."
+      },
+      {
+        "text": "Median latency halves, for 100% extra load",
+        "explanation": "Incorrect. Duplicating every request would double load; hedging only after the p95 time leaves the median unaffected because most requests finish before the hedge fires."
+      },
+      {
+        "text": "Tail latency drops sharply, for roughly 5% extra load",
+        "explanation": "Correct. Only requests slower than p95 (≈5%) trigger a hedge, so extra load is about 5%. Because slowness is caused by random, independent pauses, the duplicate usually lands on a healthy replica and returns quickly, cutting the tail dramatically. Google reported large p99.9 reductions with a few percent extra load."
+      },
+      {
+        "text": "No effect, because GC pauses affect all replicas simultaneously",
+        "explanation": "Incorrect. The scenario says pauses hit *random* replicas, i.e. they're independent. Hedging works precisely because a second replica is unlikely to be paused at the same moment."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Extra load:** a hedge fires only when the first attempt exceeds 40 ms (the p95), so ~5% of requests are duplicated: ~5% extra load.\n2. **Effect on the tail:** suppose a request hits a paused replica (the cause of the 900 ms tail). After 40 ms we send to another replica. If pauses are independent and affect, say, 1% of replicas at any instant, the hedge lands on a healthy replica about 99% of the time.\n3. **New tail:** a hedged request finishes in about 40 ms (the wait) plus one normal response time, so typically under ~100 ms instead of 900 ms. In *The Tail at Scale*, Google reports hedging cut a p99.9 from 1,800 ms to 74 ms for only 2% more requests.\n\nCaveats: requests must be idempotent (safe to send twice), and you should cancel the loser where possible (Google's 'tied requests').",
+    "link": {
+      "title": "The Tail at Scale (Dean and Barroso, PDF)",
+      "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Between London and Virginia (RTT 80 ms, 1 Gbps link) you run two jobs: (1) copy one 10 GB backup file; (2) send 1,000 tiny 1 KB requests **one after another**, each waiting for its reply. Both take about 80 seconds. What would speed each one up?",
+    "options": [
+      {
+        "text": "Upgrade both to a 10 Gbps link",
+        "explanation": "Incorrect. That helps the backup, which is bandwidth-bound, but the tiny requests spend almost all their time waiting on round trips, which bandwidth doesn't shorten."
+      },
+      {
+        "text": "Backup: more bandwidth or compression. Requests: batch them or send them in parallel",
+        "explanation": "Correct. The backup is bandwidth-bound (10 GB × 8 / 1 Gbps = 80 s). The requests are latency-bound (1,000 × 80 ms = 80 s; the bytes take only ~8 ms). Each needs the fix for its own bottleneck."
+      },
+      {
+        "text": "Move both to a lower-latency route",
+        "explanation": "Incorrect. Shaving RTT helps the requests, but the backup's 80 s is almost entirely data transfer time, which a shorter path barely changes."
+      },
+      {
+        "text": "Neither can be improved, because both are limited by the speed of light",
+        "explanation": "Incorrect. Only the round-trip part is bounded by physics. The backup is limited by bandwidth, and the requests can avoid paying the round trip 1,000 times."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Use `time ≈ round trips × RTT + bytes / bandwidth`.\n\n```\nbackup:\n  10 GB x 8 = 80 Gbit\n  80 Gbit / 1 Gbps = 80 s\n  RTT part: negligible\nrequests:\n  1,000 x 80 ms = 80 s\n  1 MB / 1 Gbps = ~8 ms\n```\n\nSame duration, opposite causes. Sending the 1,000 requests in one batch takes about one round trip (~80 ms plus ~8 ms of data). A 10 Gbps link would cut the backup to about 8 s.",
+    "link": {
+      "title": "Latency (engineering) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're asked to produce a trustworthy p99 latency figure for a service before launch. Which practices help? Select all that apply.",
+    "options": [
+      {
+        "text": "Use an open-loop load generator that sends at a fixed rate regardless of responses (e.g. `wrk2`)",
+        "explanation": "Correct. A fixed send schedule means a server stall delays many requests, and they are all measured. This avoids coordinated omission."
+      },
+      {
+        "text": "Use a closed-loop tester where each client waits for a response before sending the next request",
+        "explanation": "Incorrect. During a stall a closed-loop client stops sending, so the requests that *would* have suffered the stall are never measured. This is coordinated omission and it flatters the tail."
+      },
+      {
+        "text": "Record latencies into histograms on every host and merge the histograms before computing p99",
+        "explanation": "Correct. Percentiles must come from the combined distribution. Merged histograms give an accurate fleet-wide p99."
+      },
+      {
+        "text": "Report the average of each host's p99",
+        "explanation": "Incorrect. Percentiles can't be averaged; one degraded host can be hidden almost completely."
+      },
+      {
+        "text": "Also measure from the client side, not only inside the server's request handler",
+        "explanation": "Correct. Handler timing misses network time, TLS, load balancer hops and time spent queued before the handler starts, which is often where the tail lives."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Consider a 1-second server stall during a test at 1,000 req/s.\n\n```\nopen loop:  ~1,000 requests delayed,\n            all recorded (up to 1 s)\nclosed loop (10 clients):\n            ~10 requests delayed,\n            senders paused, rest unseen\n```\n\nThe closed-loop test records about 100x fewer slow requests, so its p99 looks far better than what real users, who don't politely wait, would see. Combine an open-loop generator, merged histograms and client-side timing.",
+    "link": {
+      "title": "wrk2: a constant-throughput load generator (GitHub)",
+      "url": "https://github.com/giltene/wrk2"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q10",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A mobile app in London builds its home screen by making **12 sequential** API calls to a server in a US region, with a round-trip time of about 70 ms. Server processing is negligible. Roughly how long does the screen take, and what's the best fix?",
+    "options": [
+      {
+        "text": "About 70 ms; it's already fine",
+        "explanation": "Incorrect. 70 ms is one round trip. Sequential calls pay the round trip once each."
+      },
+      {
+        "text": "About 840 ms; add one server-side endpoint that makes the 12 calls inside the datacentre and returns one response",
+        "explanation": "Correct. 12 × 70 ms = 840 ms. Moving the chatty calls server-side, where a round trip is ~0.5 ms, cuts it to about one 70 ms trip plus ~6 ms of internal calls."
+      },
+      {
+        "text": "About 840 ms; upgrade users to faster broadband",
+        "explanation": "Incorrect. More bandwidth doesn't shorten round trips, which are limited by distance and the speed of light in fibre."
+      },
+      {
+        "text": "About 12 ms; round trips overlap automatically",
+        "explanation": "Incorrect. Sequential calls wait for each response before sending the next, so nothing overlaps."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Sequential calls add up:\n\n```\nclient-side: 12 x 70 ms = 840 ms\n```\n\nAggregate on the server (a 'backend for frontend' endpoint):\n\n```\n1 x 70 ms (client to server)\n+ 12 x 0.5 ms (inside DC)\n= ~76 ms\n```\n\nThe lesson's rule: chatty protocols are deadly over distance. Fix them by batching, parallelising, or moving the chatter close to the data.",
+    "link": {
+      "title": "Latency (engineering) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Peak traffic is 45,000 req/s. Each server saturates at 1,000 req/s. Servers are spread evenly over **3 availability zones**. You want peak utilisation at or below **60%** normally, and at or below **90%** if a whole AZ is lost. What is the minimum server count?",
+    "options": [
+      {
+        "text": "45",
+        "explanation": "Incorrect. 45 servers would run at 100% utilisation at peak, deep in the queueing cliff, with nothing left for an AZ failure."
+      },
+      {
+        "text": "50",
+        "explanation": "Incorrect. 50 is how many must *survive* an AZ loss (at 90%). Since an AZ holds a third of the fleet, you need 50 in the other two AZs, i.e. 75 in total."
+      },
+      {
+        "text": "75",
+        "explanation": "Correct. Normal: 45,000 / 75 = 600 req/s per server = 60%. After losing one AZ: 50 servers left, 45,000 / 50 = 900 req/s = 90%. Both targets are met exactly."
+      },
+      {
+        "text": "113",
+        "explanation": "Incorrect. This keeps utilisation at 60% even after an AZ loss (75 survivors). That's safe but over-provisioned against the stated 90% failure target."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Check each constraint separately and take the larger answer.\n\n```\nnormal, <= 60%:\n  45,000 / (1,000 x 0.6) = 75\nAZ lost, <= 90%:\n  survivors = 45,000 / 900 = 50\n  total = 50 x 3/2 = 75\n```\n\nBoth give 75 (25 per AZ). Running at 90% after a failure is acceptable for a short incident, but latency will be visibly higher, as the M/M/1 table predicts.",
+    "link": {
+      "title": "Handling Overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A search service fans out to 100 shards and its p99 is dominated by occasional slow shards. CPU utilisation is about 25%. Which changes are likely to **reduce p99**? Select all that apply.",
+    "options": [
+      {
+        "text": "Hedge requests to a replica shard after the p95 time has elapsed",
+        "explanation": "Correct. Independent slow shards are exactly the case hedging fixes, for a few percent extra load."
+      },
+      {
+        "text": "Return partial results after a deadline if a few shards haven't replied",
+        "explanation": "Correct. For search, a result missing 1 of 100 shards is usually acceptable, and the deadline caps the tail directly."
+      },
+      {
+        "text": "Run compaction and other background work on a schedule or on isolated cores",
+        "explanation": "Correct. Background work is a common source of variability. Reducing variance at the source is one of Dean and Barroso's main recommendations."
+      },
+      {
+        "text": "Double the number of servers per shard while keeping fan-out the same",
+        "explanation": "Incorrect. At 25% utilisation, queueing isn't the cause. More capacity won't stop individual servers having pauses, so the fan-out maths is unchanged."
+      },
+      {
+        "text": "Raise the client timeout from 1 s to 5 s",
+        "explanation": "Incorrect. A longer timeout lets slow requests take even longer, which makes the tail worse, not better."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "First diagnose: at 25% CPU, the M/M/1 factor is only 1 / (1 - 0.25) ≈ 1.33, so queueing isn't the problem. The tail comes from per-shard variability amplified by fan-out:\n\n```\nP(slow) = 1 - 0.99^100 ≈ 63%\n```\n\nSo fix variability (isolate background work) or stop waiting for the slowest shard (hedging, deadlines with partial results). Adding capacity treats a queueing problem you don't have.",
+    "link": {
+      "title": "The Tail at Scale (Dean and Barroso, PDF)",
+      "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
+    }
+  }
+]

@@ -1,0 +1,348 @@
+[
+  {
+    "id": "nsec-detection-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the key operational difference between an IDS fed from a SPAN port and an inline IPS?",
+    "options": [
+      {
+        "text": "An IDS can decrypt TLS and an IPS cannot",
+        "explanation": "Neither can decrypt TLS without keys or interception; this is unrelated to the deployment mode."
+      },
+      {
+        "text": "The IPS can drop malicious traffic but sits in the path, so its failures and false positives affect real traffic; the IDS only alerts and cannot break the network",
+        "explanation": "Correct. Inline placement gives the power to block and the risk of blocking, plus the fail-open versus fail-closed decision."
+      },
+      {
+        "text": "An IDS uses signatures and an IPS uses anomaly detection",
+        "explanation": "Both can use either technique; Suricata runs as either an IDS or an IPS."
+      },
+      {
+        "text": "An IPS needs no tuning because it blocks automatically",
+        "explanation": "An IPS needs *more* tuning, because each false positive blocks a legitimate user."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. IDS: gets a **copy** via SPAN/TAP. Worst case it misses packets or raises noise.\n2. IPS: traffic passes **through** it. It can drop an exploit mid-flight.\n3. Costs of inline:\n   - latency,\n   - single point of failure: fail-open (unprotected) or fail-closed (outage),\n   - false positives become outages for users.\n4. Common pattern: run new rules in alert-only mode first, then promote precise ones to blocking.",
+    "link": {
+      "title": "Intrusion detection system — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Intrusion_detection_system"
+    }
+  },
+  {
+    "id": "nsec-detection-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In tcpdump output, a client sends `Flags [S]` to a server's port 8080 and immediately receives `Flags [R.]`. What does that tell you?",
+    "options": [
+      {
+        "text": "The connection was established and then reset by the application",
+        "explanation": "A connection never got established: there was no SYN-ACK."
+      },
+      {
+        "text": "A firewall silently dropped the SYN",
+        "explanation": "A silent drop produces no reply at all; here something answered with a reset."
+      },
+      {
+        "text": "The server sent data and closed normally",
+        "explanation": "Normal close uses FIN (`[F.]`), and data would show `[P.]`."
+      },
+      {
+        "text": "The host is reachable but nothing is listening on port 8080 (or a device rejected it with a RST)",
+        "explanation": "Correct. A RST in reply to a SYN means \"connection refused\"; a scanner reads this as a closed port."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Read the flags:\n\n| Sent | Reply | Meaning |\n|---|---|---|\n| `[S]` | `[S.]` | Port open |\n| `[S]` | `[R.]` | Port closed |\n| `[S]` | nothing | Filtered/dropped |\n\n1. The SYN reached a host.\n2. It answered RST (with ACK), refusing the connection.\n3. So the path works and the port is closed, or a firewall configured to `reject` (not `drop`) answered on the host's behalf.",
+    "link": {
+      "title": "tcpdump and libpcap",
+      "url": "https://www.tcpdump.org/"
+    }
+  },
+  {
+    "id": "nsec-detection-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why is it standard practice to run `tcpdump` with `-nn` on a busy server?",
+    "options": [
+      {
+        "text": "It disables reverse DNS and port-name lookups, which would otherwise slow the capture and generate extra DNS traffic",
+        "explanation": "Correct. Without it, tcpdump resolves each address, which is slow, can drop packets and pollutes the very traffic you are capturing."
+      },
+      {
+        "text": "It captures full-size packets instead of truncating them",
+        "explanation": "That is `-s 0` (the default snapshot length in modern tcpdump is already large)."
+      },
+      {
+        "text": "It enables promiscuous mode",
+        "explanation": "tcpdump enables promiscuous mode by default; `-p` disables it."
+      },
+      {
+        "text": "It writes packets to a file",
+        "explanation": "That is `-w file.pcap`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Default tcpdump prints hostnames and service names, e.g. `web01.https`.\n2. To do that it sends a reverse DNS query per new IP.\n3. On a busy link: thousands of lookups, delayed output, kernel drops, and your capture fills with tcpdump's own DNS traffic.\n4. `-n` stops host lookups; `-nn` also stops port-name lookups, so you see `10.0.0.5.443`.",
+    "link": {
+      "title": "tcpdump and libpcap",
+      "url": "https://www.tcpdump.org/"
+    }
+  },
+  {
+    "id": "nsec-detection-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A detector is 99% sensitive and has a 0.1% false-positive rate. It examines 10,000,000 connections a day, of which 100 are malicious. Approximately what fraction of its alerts are real attacks?",
+    "options": [
+      {
+        "text": "99%",
+        "explanation": "That is the detection rate (sensitivity): the share of attacks caught, not the share of alerts that are attacks."
+      },
+      {
+        "text": "About 1%",
+        "explanation": "Correct. 99 true alerts versus about 10,000 false ones gives precision 99 / 10,099 ≈ 1%."
+      },
+      {
+        "text": "99.9%",
+        "explanation": "That is the specificity (1 − 0.1%), which is about benign traffic, not alerts."
+      },
+      {
+        "text": "About 50%",
+        "explanation": "This would only hold if false alerts roughly equalled true ones; benign traffic vastly outnumbers attacks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\ntrue positives  = 100 x 0.99\n                = 99\nfalse positives = 9,999,900 x 0.001\n                ≈ 10,000\nprecision = 99 / (99 + 10,000)\n          ≈ 0.0098 ≈ 1%\n```\n\nThe detector looks excellent on paper but 99 in 100 alerts are noise. This is the **base-rate fallacy** (Axelsson, 1999). Improving precision (lower FPR, correlation with other signals) usually matters more than catching the last 1% of attacks.",
+    "link": {
+      "title": "Base rate fallacy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Base_rate_fallacy"
+    }
+  },
+  {
+    "id": "nsec-detection-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An engineer types `tcp.port == 443` into tcpdump's filter and gets a syntax error, then types `tcp port 443` into Wireshark's display-filter bar and gets an error there too. What is going on?",
+    "options": [
+      {
+        "text": "Both tools are broken and need reinstalling",
+        "explanation": "These are expected errors from using one tool's syntax in the other."
+      },
+      {
+        "text": "Port 443 cannot be filtered because it is encrypted",
+        "explanation": "Ports are in the clear TCP header; filtering on them always works."
+      },
+      {
+        "text": "tcpdump uses BPF capture-filter syntax (`tcp port 443`); Wireshark's display filters use field syntax (`tcp.port == 443`)",
+        "explanation": "Correct. Wireshark's *capture* filter box also uses BPF; its *display* filter bar uses its own language."
+      },
+      {
+        "text": "Wireshark only supports UDP display filters",
+        "explanation": "Wireshark display filters support TCP and hundreds of other protocols."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "| Where | Syntax | Example |\n|---|---|---|\n| tcpdump | BPF | `tcp port 443` |\n| Wireshark capture | BPF | `tcp port 443` |\n| Wireshark display | fields | `tcp.port == 443` |\n\n1. Capture filters run in the kernel before packets are saved: fast, limited.\n2. Display filters run over decoded packets: slower, can match any protocol field (`tls.handshake.type == 1`).\n3. Rule of thumb: dots and `==` mean Wireshark display filter.",
+    "link": {
+      "title": "Wireshark display filters — Wireshark wiki",
+      "url": "https://wiki.wireshark.org/DisplayFilters"
+    }
+  },
+  {
+    "id": "nsec-detection-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Most traffic on your network is now TLS 1.3. Which signals can a network sensor still use to detect malware without decrypting traffic? Select all that apply.",
+    "options": [
+      {
+        "text": "Regular beaconing intervals and sizes to the same destination",
+        "explanation": "Correct. Timing and volume are visible regardless of encryption."
+      },
+      {
+        "text": "The SNI hostname in the ClientHello, where ECH is not in use",
+        "explanation": "Correct. Without ECH, SNI is sent in clear."
+      },
+      {
+        "text": "JA3/JA4 fingerprints of the ClientHello",
+        "explanation": "Correct. The ClientHello's parameters are visible and identify client software."
+      },
+      {
+        "text": "The HTTP URL paths requested",
+        "explanation": "Incorrect. Paths are inside the encrypted HTTP request."
+      },
+      {
+        "text": "The server certificate's subject in TLS 1.3",
+        "explanation": "Incorrect. In TLS 1.3 the Certificate message is encrypted; only TLS 1.2 showed it in clear."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "What is still in clear with TLS 1.3 (no ECH):\n\n| Signal | Visible? |\n|---|---|\n| IPs, ports, timing, sizes | Yes |\n| ClientHello: SNI, ciphers, extensions | Yes |\n| Certificate | No |\n| HTTP method, path, headers | No |\n\nAdd DNS logs (often the best signal of all) and flow records. ECH will remove SNI for adopting sites, leaving timing, IPs, DNS and fingerprints.",
+    "link": {
+      "title": "Intrusion detection system — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Intrusion_detection_system"
+    }
+  },
+  {
+    "id": "nsec-detection-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Suricata rule includes `flow:established,to_server;`. What does this option achieve?",
+    "options": [
+      {
+        "text": "It makes the rule match only on traffic from the server to the client",
+        "explanation": "`to_server` means client-to-server direction."
+      },
+      {
+        "text": "It blocks the connection when the rule matches",
+        "explanation": "Blocking comes from the action (`drop` in IPS mode), not from `flow`."
+      },
+      {
+        "text": "It establishes a TCP connection to the server to test it",
+        "explanation": "Suricata is passive here; it does not create connections."
+      },
+      {
+        "text": "It restricts matching to client-to-server data on a completed TCP connection, so spoofed or stray packets do not trigger the rule",
+        "explanation": "Correct. An attacker cannot easily trigger alerts with spoofed packets, and the engine skips traffic that cannot be an attack on the server."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `established`: only after the three-way handshake has completed.\n2. `to_server`: only packets from client to server.\n3. Why it matters:\n   - spoofed one-off packets containing `union select` (e.g. to flood analysts with alerts) don't match,\n   - server responses that happen to contain the string are ignored,\n   - fewer packets to inspect means better performance.",
+    "link": {
+      "title": "Suricata rules format — Suricata docs",
+      "url": "https://docs.suricata.io/en/latest/rules/intro.html"
+    }
+  },
+  {
+    "id": "nsec-detection-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team wants to keep full packet captures of an internet link averaging 2 Gbps for 30 days. Roughly how much storage is that?",
+    "options": [
+      {
+        "text": "About 650 TB",
+        "explanation": "Correct. 2 Gbps = 250 MB/s; × 86,400 s ≈ 21.6 TB a day; × 30 ≈ 648 TB."
+      },
+      {
+        "text": "About 21.6 TB",
+        "explanation": "That is one day, not thirty."
+      },
+      {
+        "text": "About 5.2 PB",
+        "explanation": "This forgets to divide bits by 8 when converting Gbps to bytes."
+      },
+      {
+        "text": "About 65 TB",
+        "explanation": "This is out by a factor of 10; check the per-second figure: 250 MB, not 25 MB."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\n2 Gbps / 8 = 250 MB/s\n250 MB/s x 86,400 s\n  = 21,600,000 MB/day\n  ≈ 21.6 TB/day\n21.6 x 30 ≈ 648 TB\n```\n\nThat is why full capture is usually kept for hours or a few days, or triggered on alerts, while flow records (bytes per *connection*, not per packet) are kept for months.",
+    "link": {
+      "title": "tcpdump and libpcap",
+      "url": "https://www.tcpdump.org/"
+    }
+  },
+  {
+    "id": "nsec-detection-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You capture on a Linux web server and Wireshark shows outbound TCP \"packets\" of 28,960 bytes on a 1,500-byte MTU link, all with bad TCP checksums. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "The server is sending jumbo frames that the network will drop",
+        "explanation": "The wire still carries ≤1,500-byte frames; the capture point sees data before segmentation."
+      },
+      {
+        "text": "Segmentation and checksum offload: the kernel hands large segments to the NIC, which splits them and fills in checksums after the capture point",
+        "explanation": "Correct. These are artefacts of TSO and checksum offload, not real wire packets. Capture from a TAP or disable offloads (`ethtool -K`) if you need wire truth."
+      },
+      {
+        "text": "An attacker is corrupting packets",
+        "explanation": "Consistent bad checksums on every outbound packet is the classic offload signature, not tampering."
+      },
+      {
+        "text": "The capture file is corrupt",
+        "explanation": "A corrupt file would not show neatly decoded, consistently sized segments."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With **TSO**, the kernel builds one large TCP segment (here 20 × 1,448 = 28,960 bytes) and the NIC slices it into MTU-sized frames.\n2. With **checksum offload**, the NIC computes TCP checksums.\n3. tcpdump on the host captures *before* the NIC does either, so it sees one giant segment with a placeholder checksum.\n4. Inbound, **GRO** merges received packets before the capture point, causing the same effect.\n5. On the wire everything is normal. Wireshark can be told not to validate checksums.",
+    "link": {
+      "title": "Wireshark display filters — Wireshark wiki",
+      "url": "https://wiki.wireshark.org/DisplayFilters"
+    }
+  },
+  {
+    "id": "nsec-detection-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An incident responder is using AWS VPC Flow Logs to investigate a compromised instance. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Flow logs show whether security groups and NACLs accepted or rejected each flow",
+        "explanation": "Correct. The `action` field is ACCEPT or REJECT."
+      },
+      {
+        "text": "Flow logs record the DNS queries the instance made to the Amazon-provided resolver",
+        "explanation": "Incorrect. Traffic to the Amazon DNS resolver is not logged; use Route 53 Resolver query logs for that."
+      },
+      {
+        "text": "Records are aggregated over a capture window, so they are not real-time",
+        "explanation": "Correct. The aggregation interval is up to 10 minutes by default (1 minute is configurable)."
+      },
+      {
+        "text": "Flow logs contain the payload of each connection",
+        "explanation": "Incorrect. They are metadata only: addresses, ports, protocol, counts, times, action."
+      },
+      {
+        "text": "Flow logs can show which external addresses the instance sent large byte counts to",
+        "explanation": "Correct. Summing bytes by destination is a standard way to look for exfiltration."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "| Claim | Verdict |\n|---|---|\n| Accept/reject visible | Yes, `action` |\n| DNS to Amazon resolver | Not logged |\n| Real-time | No, aggregated |\n| Payload | No |\n| Volume by destination | Yes, `bytes` |\n\nTypical exfiltration query: group by `dstaddr`, sum `bytes`, filter for non-corporate destinations, sort descending, and compare with the instance's normal baseline.",
+    "link": {
+      "title": "Logging IP traffic using VPC Flow Logs — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html"
+    }
+  },
+  {
+    "id": "nsec-detection-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "This scan detector counts distinct `(destination, port)` pairs per source and flags sources with 4 or more:\n\n```\nsrc         dst      port action\n203.0.113.9 10.0.1.5 22   REJECT\n203.0.113.9 10.0.1.5 23   REJECT\n203.0.113.9 10.0.1.5 80   ACCEPT\n203.0.113.9 10.0.1.5 3389 REJECT\n203.0.113.9 10.0.1.6 22   REJECT\n10.0.2.7    10.0.1.5 5432 ACCEPT\n10.0.2.7    10.0.1.5 5432 ACCEPT\n```\n\nWhat does it output for each source?",
+    "options": [
+      {
+        "text": "203.0.113.9: 4 pairs, flagged; 10.0.2.7: 2 pairs",
+        "explanation": "203.0.113.9 hits 5 pairs (port 22 on two different hosts counts twice), and 10.0.2.7's two flows are the same pair."
+      },
+      {
+        "text": "203.0.113.9: 5 pairs, 4 rejects, flagged; 10.0.2.7: 1 pair, 0 rejects",
+        "explanation": "Correct. Distinct pairs: (.5,22), (.5,23), (.5,80), (.5,3389), (.6,22) = 5. The app server repeats one pair."
+      },
+      {
+        "text": "203.0.113.9: 3 pairs; neither is flagged",
+        "explanation": "Counting distinct ports only gives 4 (22, 23, 80, 3389), and the detector counts host-port pairs anyway, giving 5."
+      },
+      {
+        "text": "Both flagged, because both made multiple connections",
+        "explanation": "The threshold is on distinct targets, not number of connections; 10.0.2.7 has one target."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Build the sets:\n\n```\n203.0.113.9:\n  (10.0.1.5, 22)\n  (10.0.1.5, 23)\n  (10.0.1.5, 80)\n  (10.0.1.5, 3389)\n  (10.0.1.6, 22)\n  -> 5 pairs, 4 REJECTs\n10.0.2.7:\n  (10.0.1.5, 5432)  x2\n  -> 1 pair, 0 REJECTs\n```\n\n5 ≥ 4, so 203.0.113.9 is flagged. Distinct targets per source catch both vertical scans (many ports, one host) and horizontal scans (one port, many hosts).",
+    "link": {
+      "title": "Logging IP traffic using VPC Flow Logs — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html"
+    }
+  }
+]

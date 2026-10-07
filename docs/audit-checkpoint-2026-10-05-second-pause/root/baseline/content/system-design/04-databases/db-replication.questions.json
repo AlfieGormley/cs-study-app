@@ -1,0 +1,378 @@
+[
+  {
+    "id": "db-replication-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user changes their display name, then immediately reloads their profile page and sees the old name. The app writes to a Postgres primary and reads from async read replicas. What's happening?",
+    "options": [
+      {
+        "text": "The write was lost because async replication doesn't guarantee durability",
+        "explanation": "Wrong. The primary committed the write durably; it just hasn't reached the replica yet. It will appear once the replica catches up."
+      },
+      {
+        "text": "Replication lag: the reload was served by a replica that hasn't yet applied the update, violating read-your-writes",
+        "explanation": "Correct. With async replication, replicas trail the primary. A read right after a write can hit a replica that hasn't caught up."
+      },
+      {
+        "text": "The browser cached the page",
+        "explanation": "Possible in general, but it doesn't explain the architecture-level cause here. The described setup (writes to primary, reads from async replicas) produces exactly this symptom."
+      },
+      {
+        "text": "A write conflict between replicas",
+        "explanation": "Wrong. Single-leader replication has only one writer, so replicas can't produce conflicting writes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The write goes to the primary and commits.\n2. The primary streams the WAL to replicas asynchronously; a replica might be 50 ms to several seconds behind.\n3. The reload is load-balanced to a replica that hasn't applied it yet: old name.\n4. Fixes for read-your-writes:\n   - Read the user's own profile from the primary.\n   - After a write, route that user's reads to the primary for ~10 s (store the timestamp in their session).\n   - Store the primary's LSN after the write (`pg_current_wal_lsn()`), and only read from a replica whose `pg_last_wal_replay_lsn()` is at least that.",
+    "link": {
+      "title": "PostgreSQL: High availability, load balancing and replication",
+      "url": "https://www.postgresql.org/docs/current/high-availability.html"
+    }
+  },
+  {
+    "id": "db-replication-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement best describes the trade-off between synchronous and asynchronous replication?",
+    "options": [
+      {
+        "text": "Synchronous replication is faster because writes go to two places in parallel",
+        "explanation": "Wrong. Sync adds at least one network round trip to every commit, since the leader must wait for the follower's acknowledgement."
+      },
+      {
+        "text": "Asynchronous replication never loses data, because the WAL is kept on the leader",
+        "explanation": "Wrong. If the leader's disk is lost or a follower is promoted, writes that never shipped are gone, even though clients were told they committed."
+      },
+      {
+        "text": "Synchronous replication guarantees a confirmed write exists on at least two nodes, at the cost of higher latency and stalls if the sync follower is slow or down",
+        "explanation": "Correct. That's precisely the trade: durability across nodes for latency and availability. Semi-sync (wait for any one of several) softens the availability cost."
+      },
+      {
+        "text": "They're equivalent except for configuration",
+        "explanation": "Wrong. They give fundamentally different guarantees about data loss on failover."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Sync commit path: write WAL locally → send to follower → follower writes and acks → leader confirms to client. Latency = local fsync + one round trip (e.g. ~1 ms in one AZ, ~70 ms London to Virginia).\n2. Async commit path: write WAL locally → confirm. Ship afterwards.\n3. Failure scenario: leader's machine dies.\n   - Sync: the follower has every confirmed write; zero loss.\n   - Async: whatever hadn't shipped is lost if you promote the follower.\n4. Availability: if the sync follower dies, a strictly sync leader can't commit at all. Using `ANY 1 (s1, s2)` means one healthy follower is enough.",
+    "link": {
+      "title": "PostgreSQL: High availability, load balancing and replication",
+      "url": "https://www.postgresql.org/docs/current/high-availability.html"
+    }
+  },
+  {
+    "id": "db-replication-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user refreshes a comments page three times. They see a new comment, then it disappears, then it reappears. Reads are spread round-robin across three async replicas. Which guarantee is being violated, and what's a simple fix?",
+    "options": [
+      {
+        "text": "Monotonic reads; route each user consistently to the same replica, e.g. by hashing the user id",
+        "explanation": "Correct. Different replicas have different lag, so successive reads go backwards in time. Sticking a user to one replica means their view only moves forward."
+      },
+      {
+        "text": "Read-your-writes; read everything from the leader",
+        "explanation": "Wrong diagnosis. The user didn't write the comment, so this isn't about seeing their own writes. Reading everything from the leader would work but throws away read scaling."
+      },
+      {
+        "text": "Atomicity; wrap the reads in a transaction",
+        "explanation": "Wrong. Each read is on a different replica; a transaction on one node can't make separate replicas agree."
+      },
+      {
+        "text": "Durability; switch to synchronous replication to all replicas",
+        "explanation": "Wrong. It would technically remove most lag, but at a huge cost to write latency and availability. The violated property is monotonic reads, which routing fixes cheaply."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Replica lags: R1 = 0.5 s, R2 = 8 s, R3 = 1 s. The comment was written 3 s ago.\n2. Refresh 1 → R1 (has it). Refresh 2 → R2 (8 s behind, doesn't). Refresh 3 → R3 (has it).\n3. The user's view moved backwards in time: a monotonic reads violation.\n4. Fix: `replica = replicas[hash(user_id) % 3]`. The user always reads from one replica, whose state only advances.\n5. If that replica fails, reassign, accepting a possible one-off jump backwards.",
+    "link": {
+      "title": "Wikipedia: Eventual consistency",
+      "url": "https://en.wikipedia.org/wiki/Eventual_consistency"
+    }
+  },
+  {
+    "id": "db-replication-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A MySQL primary with async replication crashes. The most up-to-date replica is 2 seconds behind and gets promoted. The application also caches rows in Redis by primary key. Shortly after, some users see other users' data. What's the most likely mechanism?",
+    "options": [
+      {
+        "text": "Redis replicated the wrong keys during failover",
+        "explanation": "Wrong. Redis wasn't involved in the failover. The cache contents were correct for the ids at the time they were written."
+      },
+      {
+        "text": "The new primary reused auto-increment ids from the lost 2 seconds of writes, so new rows got ids that Redis still associated with the old, lost rows",
+        "explanation": "Correct. The lost writes had consumed ids N+1…N+k. The new primary didn't know, so it handed out those ids again. Anything outside the database (caches, other systems) that referenced the old ids now points at different data. This happened to GitHub in 2012."
+      },
+      {
+        "text": "Split brain: both primaries accepted writes",
+        "explanation": "Wrong for this scenario. The old primary crashed and didn't keep serving, so there weren't two writers."
+      },
+      {
+        "text": "The replica applied transactions out of order",
+        "explanation": "Wrong. Replicas apply the leader's log in order; the problem is that the tail of the log never arrived."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before the crash the primary inserted users 1001–1010 and Redis cached `user:1001…1010`.\n2. Those inserts hadn't replicated. The promoted replica's last id is 1000.\n3. New sign-ups on the new primary get ids 1001, 1002, ...: different people.\n4. Redis still holds the *old* `user:1001` entry (or other systems hold references to it), so lookups join one person's cached data to another person's account.\n5. Lessons:\n   - Async failover discards writes; anything outside the database that saw them is now inconsistent.\n   - Use non-reusable ids (UUIDs, or sequences bumped well past the last known value on promotion).\n   - Flush or version caches on failover.",
+    "link": {
+      "title": "MySQL: Replication",
+      "url": "https://dev.mysql.com/doc/refman/8.4/en/replication.html"
+    }
+  },
+  {
+    "id": "db-replication-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A network partition isolates the Postgres primary from the failover manager, which promotes a replica. The old primary is still running and some app servers can still reach it. Which measures prevent split brain from corrupting data? Select all that apply.",
+    "options": [
+      {
+        "text": "Fence the old primary: cut its power or network (STONITH) or revoke its storage access before promoting",
+        "explanation": "Correct. Fencing guarantees the old leader physically can't accept writes, so only one writer exists."
+      },
+      {
+        "text": "Have the primary hold a lease from a consensus store (e.g. Patroni with etcd) and demote itself when it can't renew it",
+        "explanation": "Correct. If the old primary can't reach etcd, its leader key expires and it stops accepting writes before the new primary is promoted (provided the lease TTL is shorter than the promotion delay)."
+      },
+      {
+        "text": "Lower the heartbeat timeout to 1 second so failover happens faster",
+        "explanation": "Wrong. Faster failover doesn't stop the old leader from writing; it actually raises the chance of spurious failovers during brief network blips or GC pauses."
+      },
+      {
+        "text": "Attach an increasing epoch (term) number to the leadership, and have storage or clients reject writes from a lower epoch",
+        "explanation": "Correct. Fencing tokens mean that even if the old leader tries to write, its stale epoch is rejected."
+      },
+      {
+        "text": "Use last-write-wins to merge the two primaries' data afterwards",
+        "explanation": "Wrong. LWW silently discards one side's writes, possibly including payments or orders. It's damage limitation, not prevention."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Split brain = two nodes both believe they're leader and accept writes, so data diverges.\n2. Prevention must guarantee the old leader *stops* before (or as) the new one starts:\n   - **Fencing**: physically stop it (power off, block its network, revoke disk access).\n   - **Leases**: leadership is valid only while renewed in a consensus store. If the primary can't reach etcd for the TTL (say 30 s), it demotes itself; the new leader is elected only after the lease expires.\n   - **Epochs / fencing tokens**: every write carries the leader's term; anything from an old term is rejected.\n3. Shorter timeouts and LWW don't prevent two writers.",
+    "link": {
+      "title": "PostgreSQL: High availability, load balancing and replication",
+      "url": "https://www.postgresql.org/docs/current/high-availability.html"
+    }
+  },
+  {
+    "id": "db-replication-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A collaborative notes app uses multi-leader replication across EU and US datacentres with last-write-wins. A user in the EU and one in the US edit the same note's title within the same second. What happens?",
+    "options": [
+      {
+        "text": "Both edits are kept as separate versions automatically",
+        "explanation": "Wrong. LWW keeps exactly one value per key; that's its whole point. Keeping both would require version vectors and sibling values (as in Riak) or a CRDT."
+      },
+      {
+        "text": "The write that reached its local leader first wins everywhere",
+        "explanation": "Wrong. LWW compares the attached timestamps, not arrival order, and since datacentre clocks differ, 'first' is not even well defined."
+      },
+      {
+        "text": "Both writes are rejected as a conflict",
+        "explanation": "Wrong. Multi-leader systems accept both writes locally (that's what gives them low latency and partition tolerance); conflicts are only discovered later, during replication."
+      },
+      {
+        "text": "Each datacentre accepts its write; when they replicate, the one with the larger timestamp silently overwrites the other everywhere, and the other edit is lost",
+        "explanation": "Correct. LWW converges, but it drops data. With clock skew, the 'later' edit by wall clock might even be the one discarded."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. EU leader accepts title = 'Plan A' at its local time 12:00:00.400.\n2. US leader accepts title = 'Plan B' at its local time 12:00:00.300, but its clock is 200 ms slow, so it was really later.\n3. Async replication exchanges both writes.\n4. LWW compares timestamps: 0.400 > 0.300, so 'Plan A' wins in both datacentres.\n5. 'Plan B', actually the later edit, is gone with no error.\n6. Better options for collaborative text: CRDTs or operational transforms, which merge concurrent edits instead of picking one.",
+    "link": {
+      "title": "Wikipedia: Eventual consistency",
+      "url": "https://en.wikipedia.org/wiki/Eventual_consistency"
+    }
+  },
+  {
+    "id": "db-replication-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a leaderless Cassandra-style cluster with n = 3, a client writes with w = 2. One replica, C, was down and missed the write. It comes back. Which mechanisms bring C up to date? ",
+    "options": [
+      {
+        "text": "C replays the leader's write-ahead log",
+        "explanation": "Wrong. Leaderless systems have no leader and no single log to replay."
+      },
+      {
+        "text": "Only a full manual rebuild of C from a backup",
+        "explanation": "Wrong. That's a last resort for a lost disk; ordinary short outages are repaired online."
+      },
+      {
+        "text": "Hinted handoff from a node that stored C's writes while it was down, read repair when a read notices C's stale value, and periodic anti-entropy repair using Merkle trees",
+        "explanation": "Correct. These three mechanisms together make leaderless replicas converge: hints for short outages, read repair for hot data, anti-entropy (`nodetool repair`) for everything else."
+      },
+      {
+        "text": "Nothing; C stays stale permanently, but quorum reads hide it",
+        "explanation": "Wrong. Without repair, a later failure of the up-to-date replicas could make stale data the majority. That's why Cassandra requires regular repair, at least within `gc_grace_seconds` (10 days by default), or deleted data can reappear."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Write goes to A, B and C. A and B ack, satisfying w = 2. C is down.\n2. **Hinted handoff**: the coordinator stores a hint for C and replays it when C returns (Cassandra keeps hints for 3 hours by default).\n3. **Read repair**: a later read at r = 2 that contacts C sees an older timestamp than A's, returns A's value and writes it back to C.\n4. **Anti-entropy**: `nodetool repair` compares Merkle trees of token ranges between replicas and streams only the differing ranges.\n5. Why repair matters: tombstones (deletion markers) are purged after `gc_grace_seconds`. If C missed a delete and isn't repaired before then, the old value can come back to life.",
+    "link": {
+      "title": "DeCandia et al.: Dynamo, Amazon's highly available key-value store",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "db-replication-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Postgres primary has one synchronous standby, `synchronous_commit = on`. To get read-your-writes, the app sends each user's reads to that sync standby after they write. Occasionally a user still doesn't see a change they just made. Why?",
+    "options": [
+      {
+        "text": "With `on`, the primary waits until the standby has *flushed* the WAL to disk, not until it has *applied* it, so a read can arrive before replay; use `remote_apply` for this read path",
+        "explanation": "Correct. `on` guarantees durability on the standby, not visibility. `remote_apply` makes the primary wait until the change is replayed and visible to queries there."
+      },
+      {
+        "text": "Synchronous replication is broken; the standby must have been running asynchronously",
+        "explanation": "Not necessarily. Everything can be working as configured. The issue is what `on` waits for."
+      },
+      {
+        "text": "The standby takes a snapshot only once a minute",
+        "explanation": "Wrong. Queries on a hot standby see whatever WAL has been replayed so far; there's no once-a-minute snapshot."
+      },
+      {
+        "text": "The client's connection pool cached the old result",
+        "explanation": "Unlikely. Connection pools don't cache query results. The gap between flush and replay explains the symptom exactly."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Commit path with `synchronous_commit = on`:\n   - Primary flushes WAL locally.\n   - Standby receives it and flushes it to disk.\n   - Standby acks; client sees \"committed\".\n2. Replay on the standby happens *after* the flush, in a separate process. Usually a few ms behind, sometimes more (heavy load, a replay conflict with a long query).\n3. A read arriving in that window sees the old row.\n4. Options:\n\n| Setting | Waits for |\n|---|---|\n| `remote_write` | Standby OS received |\n| `on` | Standby disk flush |\n| `remote_apply` | Standby replayed |\n\n5. Set it per transaction for just the writes that need it: `SET LOCAL synchronous_commit = remote_apply;`.",
+    "link": {
+      "title": "PostgreSQL: Replication settings",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-replication.html"
+    }
+  },
+  {
+    "id": "db-replication-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A leaderless store has n = 5 replicas per key. You want every read to overlap the latest successful write, **and** you want both reads and writes to keep succeeding with any two replicas down. Which (w, r) should you choose?",
+    "options": [
+      {
+        "text": "w = 5, r = 1",
+        "explanation": "Overlaps (5 + 1 > 5) and gives very fast reads, but a single replica down makes every write fail, since all 5 must ack."
+      },
+      {
+        "text": "w = 3, r = 3",
+        "explanation": "Correct. 3 + 3 = 6 > 5, so read and write sets always share a replica. With two down, three remain: enough for both a write quorum and a read quorum."
+      },
+      {
+        "text": "w = 2, r = 3",
+        "explanation": "Wrong. 2 + 3 = 5 is not greater than 5, so a read can miss both replicas that took the write."
+      },
+      {
+        "text": "w = 4, r = 2",
+        "explanation": "Overlaps (6 > 5), but with two replicas down only three remain, fewer than the 4 a write needs. Writes tolerate just one failure."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Overlap condition: w + r > n, i.e. w + r ≥ 6.\n2. Availability with f failures: need w ≤ n − f and r ≤ n − f. With f = 2: w ≤ 3 and r ≤ 3.\n3. Combine: w + r ≥ 6 with both ≤ 3 forces w = 3, r = 3.\n\n| w, r | Overlap? | Survives 2 down? |\n|---|---|---|\n| 5, 1 | Yes | Writes no |\n| 3, 3 | Yes | Yes |\n| 2, 3 | No | Yes |\n| 4, 2 | Yes | Writes no |\n\n4. General rule: a majority for both (w = r = ⌊n/2⌋ + 1) tolerates ⌊(n−1)/2⌋ failures.\n5. Caveat from the consensus module: even with overlap, sloppy quorums and concurrent writes mean quorums aren't linearizable by themselves.",
+    "link": {
+      "title": "Wikipedia: Quorum (distributed computing)",
+      "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"
+    }
+  },
+  {
+    "id": "db-replication-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Aurora stores 6 copies of each piece of data, 2 in each of 3 availability zones, with a write quorum of 4 and a read quorum of 3. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Losing a whole availability zone (2 copies) still leaves enough copies to keep writing",
+        "explanation": "Correct. 6 − 2 = 4 copies remain, exactly the write quorum."
+      },
+      {
+        "text": "Losing an availability zone plus one more copy elsewhere still leaves enough copies to read (and so to repair)",
+        "explanation": "Correct. 6 − 3 = 3 copies remain, which meets the read quorum of 3. Writes would stall until copies are rebuilt, but no committed data is lost."
+      },
+      {
+        "text": "Every read quorum overlaps every write quorum",
+        "explanation": "Correct. 4 + 3 = 7 > 6, so any 3 copies include at least one of any 4 that took a write."
+      },
+      {
+        "text": "Each commit waits for all 6 copies to acknowledge",
+        "explanation": "Wrong. It waits for 4. Waiting for all 6 would let one slow or failed storage node stall every write."
+      },
+      {
+        "text": "Losing two whole availability zones still allows writes",
+        "explanation": "Wrong. Only 2 copies would remain, below both the write quorum (4) and the read quorum (3)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Quorum arithmetic, n = 6, w = 4, r = 3:\n\n| Failure | Copies left | Write? | Read? |\n|---|---|---|---|\n| None | 6 | Yes | Yes |\n| 1 AZ | 4 | Yes | Yes |\n| 1 AZ + 1 | 3 | No | Yes |\n| 2 AZs | 2 | No | No |\n\n1. Overlap: w + r = 7 > 6. True.\n2. Waiting for 4 of 6 hides one slow node per write, a big tail-latency win.\n3. The design goal: survive \"AZ + 1\" without losing data, because failures in different AZs can overlap during a repair.",
+    "link": {
+      "title": "Amazon Aurora: Storage and reliability",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.StorageReliability.html"
+    }
+  },
+  {
+    "id": "db-replication-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Analysts run 10-minute reports on a Postgres streaming replica. Some fail with *canceling statement due to conflict with recovery*. Someone suggests turning on `hot_standby_feedback`. What's the trade-off?",
+    "options": [
+      {
+        "text": "No trade-off; it simply makes the replica more reliable",
+        "explanation": "Wrong. It fixes the cancellations by changing the primary's behaviour, which has a cost there."
+      },
+      {
+        "text": "It stops cancellations by making the replica apply WAL synchronously",
+        "explanation": "Wrong. It doesn't change sync or async replication at all. It tells the primary which old row versions the replica's queries still need."
+      },
+      {
+        "text": "The replica will start rejecting writes",
+        "explanation": "Wrong. A hot standby is read-only regardless of this setting."
+      },
+      {
+        "text": "The primary keeps old row versions the replica's queries still need, so the cancellations stop, but the primary's tables can bloat while those long queries run",
+        "explanation": "Correct. Feedback holds back vacuum on the primary. The alternative is raising `max_standby_streaming_delay`, which delays replay, so the replica falls behind instead."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Primary: vacuum removes dead row versions no primary transaction needs.\n2. That removal is replayed on the replica. If a replica query still needs those versions, there's a conflict.\n3. The replica can:\n   - Delay replay, up to `max_standby_streaming_delay` (30 s default), then cancel the query.\n4. Options for 10-minute reports:\n\n| Option | Cost |\n|---|---|\n| Feedback on | Bloat on primary |\n| Delay 15 min | Replica lags |\n| Separate replica | One more server |\n\n5. A common pattern: a dedicated reporting replica with a long delay, so the replicas serving users stay fresh.",
+    "link": {
+      "title": "PostgreSQL: Hot standby",
+      "url": "https://www.postgresql.org/docs/current/hot-standby.html"
+    }
+  },
+  {
+    "id": "db-replication-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to upgrade a 2 TB Postgres database from version 15 to 17 with only a few seconds of write downtime. Which replication approach makes this possible?",
+    "options": [
+      {
+        "text": "Physical streaming replication to a version 17 standby, then promote it",
+        "explanation": "Wrong. Physical replication ships raw WAL bytes, which require the same major version on both sides."
+      },
+      {
+        "text": "Statement-based replication",
+        "explanation": "Wrong. Postgres doesn't offer it, and it's fragile anyway: non-deterministic functions such as `now()` and `random()` give different results on each side."
+      },
+      {
+        "text": "Logical replication from the version 15 primary to a new version 17 server, then switch writes over once it has caught up",
+        "explanation": "Correct. Logical replication sends row changes, independent of the on-disk format, so it works across major versions. Copy the data, let it catch up, pause writes briefly, check the lag is zero, then repoint the application."
+      },
+      {
+        "text": "Take a nightly `pg_dump` and restore it on version 17",
+        "explanation": "Works, but not with seconds of downtime. Dumping and restoring 2 TB takes hours, and every write since the dump would be lost unless you stop writes for that whole time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Constraint: different major versions, near-zero downtime.\n2. Physical replication: same major version only. Out.\n3. Logical replication:\n   - Create a publication on v15, a subscription on v17.\n   - Initial table copy, then streaming of row changes.\n4. Cut-over:\n   - Stop writes (seconds).\n   - Wait for the subscriber to catch up.\n   - Bump sequences on v17 (logical replication doesn't copy sequence values).\n   - Repoint the application.\n5. Caveats: schema changes (DDL) aren't replicated, and tables need a primary key or replica identity for updates and deletes.",
+    "link": {
+      "title": "PostgreSQL: Logical replication",
+      "url": "https://www.postgresql.org/docs/current/logical-replication.html"
+    }
+  }
+]

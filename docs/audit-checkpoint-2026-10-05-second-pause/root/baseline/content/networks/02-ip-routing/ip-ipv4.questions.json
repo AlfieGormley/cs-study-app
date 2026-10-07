@@ -1,0 +1,378 @@
+[
+  {
+    "id": "ip-ipv4-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The first byte of an IPv4 packet is `0x46`. How long is its header?",
+    "options": [
+      {
+        "text": "70 bytes",
+        "explanation": "0x46 is 70 in decimal, but the byte isn't a length: it is two 4-bit fields, and the IHL unit is 4-byte words."
+      },
+      {
+        "text": "6 bytes",
+        "explanation": "This reads the IHL nibble as a byte count. IHL counts 32-bit (4-byte) words, and 6 bytes is smaller than the 20-byte minimum header anyway."
+      },
+      {
+        "text": "24 bytes",
+        "explanation": "Correct. The high nibble 4 is the version; the low nibble 6 is the IHL, meaning 6 × 4 = 24 bytes: the 20 fixed bytes plus 4 bytes of options."
+      },
+      {
+        "text": "46 bytes",
+        "explanation": "This treats the whole byte as a decimal length. The byte packs two fields, version and IHL, into one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Split the byte into nibbles: `0x46` → `4` and `6`.\n2. High nibble = Version = 4 (IPv4).\n3. Low nibble = IHL = 6, measured in 32-bit words.\n4. 6 × 4 = **24 bytes**.\n5. The fixed header is 20 bytes (IHL 5), so this packet carries 4 bytes of options. The maximum is IHL 15 = 60 bytes.",
+    "link": {
+      "title": "RFC 791: Internet Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc791"
+    }
+  },
+  {
+    "id": "ip-ipv4-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Linux host (initial TTL 64) sends a packet to a server. The path crosses 5 routers. What TTL does the server see in the packet it receives?",
+    "options": [
+      {
+        "text": "59",
+        "explanation": "Correct. Each of the 5 routers subtracts 1: 64 − 5 = 59. The sending and receiving hosts don't decrement it."
+      },
+      {
+        "text": "58",
+        "explanation": "This counts the destination host as a hop. Only forwarding routers decrement TTL."
+      },
+      {
+        "text": "64",
+        "explanation": "Routers must decrement TTL; it isn't only examined at the destination."
+      },
+      {
+        "text": "63",
+        "explanation": "That would be one router. Every router on the path decrements TTL, not just the first."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The sender sets TTL = 64.\n2. Router 1 forwards with 63, router 2 with 62, ... router 5 with 59.\n3. The server receives TTL **59**.\n4. This is how you can guess a sender's distance: TTL 59 on arrival suggests a Linux/macOS sender (64) about 5 hops away.",
+    "link": {
+      "title": "RFC 791: Internet Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc791"
+    }
+  },
+  {
+    "id": "ip-ipv4-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why must every IPv4 router recompute the header checksum before forwarding a packet?",
+    "options": [
+      {
+        "text": "Because each link uses a different checksum algorithm",
+        "explanation": "IPv4 uses one algorithm (the 16-bit ones' complement sum) everywhere. Link-layer checks like Ethernet's CRC are separate."
+      },
+      {
+        "text": "It doesn't; only the destination checks it",
+        "explanation": "Every router verifies and regenerates the header checksum in IPv4."
+      },
+      {
+        "text": "Because the checksum covers the payload, which routers re-encrypt",
+        "explanation": "Routers don't modify or encrypt the payload, and the IPv4 checksum covers only the header."
+      },
+      {
+        "text": "Because the router decrements TTL, which changes the header",
+        "explanation": "Correct. The checksum covers the header, and TTL is in the header, so each decrement invalidates the old checksum. This per-hop cost is one reason IPv6 dropped the header checksum."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The IPv4 checksum is computed over the **header only**.\n2. TTL lives in the header and every router decrements it.\n3. A changed header needs a new checksum, so every hop recomputes it (routers often use an incremental update rather than a full recompute).\n4. IPv6 removed the header checksum because link layers (Ethernet CRC) and transports (TCP/UDP checksums) already catch corruption.",
+    "link": {
+      "title": "RFC 791: Internet Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc791"
+    }
+  },
+  {
+    "id": "ip-ipv4-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A datagram with a 20-byte header and 1,980 bytes of data must cross a link with an MTU of 1,000 bytes. DF is clear. What are the **data size** and **offset field** of the *last* fragment?",
+    "options": [
+      {
+        "text": "20 bytes of data, offset 245",
+        "explanation": "This uses 980 bytes per fragment, but 980 isn't a multiple of 8. Fragment data (except the last) must be 8-byte aligned, so each carries 976."
+      },
+      {
+        "text": "28 bytes of data, offset 244",
+        "explanation": "Correct. Each non-final fragment carries 976 bytes (the largest multiple of 8 ≤ 980). Two of them carry 1,952 bytes, leaving 28 at byte 1,952, which is offset 1,952 ÷ 8 = 244."
+      },
+      {
+        "text": "28 bytes of data, offset 1,952",
+        "explanation": "The size is right, but the offset field is in 8-byte units, not bytes: 1,952 ÷ 8 = 244."
+      },
+      {
+        "text": "980 bytes of data, offset 0",
+        "explanation": "That describes a (wrongly sized) first fragment, not the last."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Space for data per fragment: 1,000 − 20 = 980 bytes.\n2. Non-final fragments must carry a multiple of 8: ⌊980 ÷ 8⌋ × 8 = **976**.\n3. Split 1,980:\n\n```\nfrag  data  byte off  field  MF\n1     976   0         0      1\n2     976   976       122    1\n3     28    1952      244    0\n```\n\n4. Check: 976 + 976 + 28 = 1,980.\n5. The last fragment is 48 bytes on the wire (20 + 28), with offset 244 and MF = 0.",
+    "link": {
+      "title": "IP fragmentation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/IP_fragmentation"
+    }
+  },
+  {
+    "id": "ip-ipv4-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Classic Unix `traceroute` sends UDP probes to high, unused ports. How does it know a probe has reached the destination itself rather than an intermediate router?",
+    "options": [
+      {
+        "text": "traceroute compares the reply's source address with a DNS lookup of the target",
+        "explanation": "traceroute does compare addresses, but the stopping signal is the change of ICMP message type. A multi-homed host may even reply from a different address."
+      },
+      {
+        "text": "The destination replies with ICMP Time Exceeded with a special code",
+        "explanation": "Time Exceeded comes from routers whose TTL decrement hit 0. The destination doesn't decrement and reports something else."
+      },
+      {
+        "text": "The destination replies with ICMP Port Unreachable, because nothing listens on that port",
+        "explanation": "Correct. A router reports Time Exceeded (type 11); the destination host, finding no process on the UDP port, returns Destination Unreachable, code 3 (port unreachable). That different message ends the trace."
+      },
+      {
+        "text": "The destination replies with a UDP packet echoing the probe",
+        "explanation": "Nothing listens on the port, so there is no application to send UDP back. The reply is ICMP from the kernel."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Probe with TTL = n reaches router n with TTL 1; router decrements to 0, drops it, sends **ICMP type 11** (Time Exceeded).\n2. When TTL is large enough, the probe reaches the destination intact.\n3. The destination's kernel finds no socket on port 33434+n and returns **ICMP type 3, code 3** (Port Unreachable).\n4. traceroute sees the different type and stops.\n5. Windows `tracert` uses ICMP Echo probes instead and stops on an Echo Reply (type 0).",
+    "link": {
+      "title": "Traceroute — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Traceroute"
+    }
+  },
+  {
+    "id": "ip-ipv4-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Remote staff on a new VPN can SSH into servers and load small web pages, but large downloads and some HTTPS sites hang right after connecting. The corporate firewall blocks all inbound ICMP. What is the most likely cause?",
+    "options": [
+      {
+        "text": "TCP's congestion window is too small",
+        "explanation": "A small window limits throughput but wouldn't stop data flowing completely, and it wouldn't depend on packet size."
+      },
+      {
+        "text": "DNS is failing for large sites",
+        "explanation": "DNS failure stops the connection before it starts; here the connection is made and then stalls."
+      },
+      {
+        "text": "The VPN encrypts traffic, which is too slow for large transfers",
+        "explanation": "Slow encryption would make transfers slow, not make them hang immediately while small exchanges work fine."
+      },
+      {
+        "text": "A PMTUD black hole: full-size packets with DF set are dropped at the tunnel, and the ICMP 'Fragmentation Needed' replies never arrive",
+        "explanation": "Correct. The tunnel's overhead lowers the path MTU. Small packets (handshakes, SSH keystrokes) fit; full 1,500-byte segments don't. The router reports this with ICMP type 3 code 4, but the firewall blocks it, so the sender keeps retransmitting packets that are too big."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Symptom pattern: **small packets work, large ones vanish**. That points at MTU.\n2. The VPN adds headers, so the tunnel MTU is below 1,500.\n3. Senders set DF (PMTUD), so routers drop oversized packets and send ICMP type 3/code 4.\n4. The firewall drops that ICMP → sender never learns → endless retransmits → hang.\n5. Fixes: allow ICMP type 3 (and ICMPv6 type 2) through; clamp TCP MSS on the VPN gateway; or lower the tunnel interface MTU.",
+    "link": {
+      "title": "Path MTU Discovery — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Path_MTU_Discovery"
+    }
+  },
+  {
+    "id": "ip-ipv4-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about IPv4 fragmentation are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Fragments are reassembled only by the destination host",
+        "explanation": "Correct. Routers forward fragments independently and may send them by different paths, so only the destination can reassemble them."
+      },
+      {
+        "text": "If one fragment is lost, only that fragment is retransmitted",
+        "explanation": "Incorrect. IP has no retransmission. The destination discards the incomplete datagram after a timeout, and the whole thing must be resent by a higher layer (e.g. TCP)."
+      },
+      {
+        "text": "Only the first fragment carries the TCP or UDP header",
+        "explanation": "Correct. The transport header is part of the data, which sits at offset 0. This is why port-based firewalls and load balancers struggle with later fragments."
+      },
+      {
+        "text": "All fragments of one datagram share the same Identification value",
+        "explanation": "Correct. The destination groups fragments by (source, destination, protocol, Identification)."
+      },
+      {
+        "text": "IPv6 routers fragment packets in the same way when needed",
+        "explanation": "Incorrect. IPv6 routers never fragment; they drop the packet and send ICMPv6 Packet Too Big. Only the source host may fragment."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Go through each statement:\n\n1. **Reassembly at destination only**: true. Fragments can take different routes, so no router is guaranteed to see them all.\n2. **Single-fragment retransmission**: false. Loss of any fragment loses the whole datagram; this loss amplification is a main reason to avoid fragmentation.\n3. **Transport header only in the first fragment**: true. Fragments 2+ start mid-payload.\n4. **Shared Identification**: true; with offset and MF it lets the receiver rebuild the datagram.\n5. **IPv6 routers fragment**: false; IPv6 moved fragmentation to the source only.",
+    "link": {
+      "title": "IP fragmentation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/IP_fragmentation"
+    }
+  },
+  {
+    "id": "ip-ipv4-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your traceroute shows `* * *` at hop 4, but hops 5 to 9 reply normally and the destination is reached with low latency. What is the best interpretation?",
+    "options": [
+      {
+        "text": "Hop 4 is dropping all traffic, so the path is broken",
+        "explanation": "If hop 4 dropped all traffic, probes with higher TTLs couldn't reach hops 5 to 9. They did, so traffic passes through hop 4."
+      },
+      {
+        "text": "Hop 4 doesn't send (or rate-limits) ICMP Time Exceeded; forwarding is fine",
+        "explanation": "Correct. Many routers deprioritise, rate-limit or filter ICMP generation. Packets transiting the router are forwarded in hardware; only the replies addressed to you are missing."
+      },
+      {
+        "text": "The destination is blocking traceroute",
+        "explanation": "The destination was reached, and a blocking destination would show stars at the end, not in the middle."
+      },
+      {
+        "text": "There is a routing loop at hop 4",
+        "explanation": "A loop would show the same addresses repeating and the destination would never be reached."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A probe with TTL 5 had to pass through hop 4 to reach hop 5, and it did.\n2. So hop 4 forwards traffic. It just doesn't answer probes that expire at it.\n3. Routers forward packets in fast hardware but generate ICMP in a slower control-plane CPU, which is rate-limited or disabled by policy.\n4. Rule of thumb: only worry about loss or latency that **persists to the end** of the trace.",
+    "link": {
+      "title": "Traceroute — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Traceroute"
+    }
+  },
+  {
+    "id": "ip-ipv4-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your router runs a GRE tunnel over IPv4 across an Ethernet path (MTU 1,500). GRE adds a 20-byte outer IPv4 header and a 4-byte GRE header. To avoid fragmentation of TCP traffic inside the tunnel, what MSS should the router clamp SYNs to (assume no IP or TCP options)?",
+    "options": [
+      {
+        "text": "1,456",
+        "explanation": "This subtracts the tunnel overhead but only one 20-byte header for the inner packet. Both the inner IP and TCP headers count."
+      },
+      {
+        "text": "1,460",
+        "explanation": "That's the normal MSS for a 1,500-byte link. It ignores the 24 bytes the tunnel adds."
+      },
+      {
+        "text": "1,476",
+        "explanation": "That's the tunnel's MTU (1,500 − 24). The MSS counts only TCP payload, so you must also subtract the inner IP and TCP headers."
+      },
+      {
+        "text": "1,436",
+        "explanation": "Correct. Tunnel MTU = 1,500 − 20 − 4 = 1,476. Inner packet = 20 (IP) + 20 (TCP) + payload, so MSS = 1,476 − 40 = 1,436."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Outer path MTU: 1,500.\n2. GRE overhead: 20 (outer IP) + 4 (GRE) = 24 → tunnel MTU **1,476**.\n3. Each inner packet: inner IP 20 + TCP 20 + payload.\n4. MSS = 1,476 − 20 − 20 = **1,436**.\n\n```\n|outer IP 20|GRE 4|IP 20|TCP 20|data|\n <---------------- 1500 ----------->\n```\n\n5. Clamping MSS in the SYN makes both endpoints send segments that fit, even if ICMP is blocked.",
+    "link": {
+      "title": "Path MTU Discovery — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Path_MTU_Discovery"
+    }
+  },
+  {
+    "id": "ip-ipv4-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You capture a packet whose TTL is 116 on arrival. What is the most reasonable inference?",
+    "options": [
+      {
+        "text": "The TTL tells you nothing about the sender",
+        "explanation": "It's a heuristic, not proof, but it's widely used (passive OS fingerprinting) and gives a strong hint."
+      },
+      {
+        "text": "It was sent by a Linux host 52 hops away",
+        "explanation": "Linux starts at 64, so 116 would be impossible: TTL only ever decreases."
+      },
+      {
+        "text": "It was probably sent by a Windows host (initial TTL 128) about 12 hops away",
+        "explanation": "Correct. TTL only goes down, so the initial value must be at least 116. The common defaults are 64, 128 and 255; 128 (Windows) is the nearest, giving 128 − 116 = 12 hops."
+      },
+      {
+        "text": "It was sent by a router (initial TTL 255) 139 hops away",
+        "explanation": "No Internet path is anywhere near 139 hops; typical paths are 10 to 30. 128 is a far likelier start."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. TTL never increases, so start ≥ 116.\n2. Common OS defaults: 64 (Linux, macOS), 128 (Windows), 255 (many network devices).\n3. Candidates: 128 → 12 hops; 255 → 139 hops.\n4. Internet paths are rarely more than about 30 hops, so 128 is the sensible answer.\n5. Caveat: the default can be changed, and NAT devices or tunnels may rewrite it. Treat this as a hint.",
+    "link": {
+      "title": "RFC 791: Internet Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc791"
+    }
+  },
+  {
+    "id": "ip-ipv4-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An NFS server sends 8 KB UDP datagrams at a steady 1 Gbit/s over Ethernet, so every datagram is fragmented. The receiver keeps incomplete fragments for 30 seconds. Roughly how long until the 16-bit Identification field wraps, and why does it matter?",
+    "options": [
+      {
+        "text": "About 4 seconds; IDs repeat well within the 30 s reassembly window, so fragments of different datagrams can be mis-assembled",
+        "explanation": "Correct. 125 MB/s ÷ 8,192 B ≈ 15,260 datagrams/s; 65,536 ÷ 15,260 ≈ 4.3 s. If a fragment is lost, a later datagram with the same ID may 'complete' it, corrupting data that the weak UDP checksum might not catch."
+      },
+      {
+        "text": "About 65 seconds; it never overlaps the reassembly window",
+        "explanation": "This assumes about 1,000 datagrams per second. At 1 Gbit/s with 8 KB datagrams it's around 15,000 per second."
+      },
+      {
+        "text": "About 0.5 seconds; but it doesn't matter because TTL prevents mixing",
+        "explanation": "The arithmetic is off by roughly 8×, and TTL limits hops, not fragment identity."
+      },
+      {
+        "text": "It never wraps, because each destination gets its own counter",
+        "explanation": "Some stacks keep per-destination counters, but each counter is still 16 bits and still wraps at this rate."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Bytes per second: 1 Gbit/s ÷ 8 = 125,000,000 B/s.\n2. Datagrams per second: 125,000,000 ÷ 8,192 ≈ **15,259**.\n3. IDs available: 2¹⁶ = 65,536.\n4. Wrap time: 65,536 ÷ 15,259 ≈ **4.3 s**.\n5. Reassembly timeout (30 s) > wrap time, so a stale fragment can be combined with a new datagram that reuses its ID.\n6. RFC 4963 documents this; it's one more reason to avoid fragmentation and use PMTUD.",
+    "link": {
+      "title": "IP fragmentation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/IP_fragmentation"
+    }
+  },
+  {
+    "id": "ip-ipv4-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about ICMP behaviour are true? Select all that apply.",
+    "options": [
+      {
+        "text": "ICMP error messages quote the original IP header plus at least 8 bytes of its payload",
+        "explanation": "Correct. Those 8 bytes contain the TCP/UDP source and destination ports, letting the sender's stack match the error to a socket."
+      },
+      {
+        "text": "A host never generates an ICMP error in response to an ICMP error message",
+        "explanation": "Correct. Otherwise two hosts could bounce errors back and forth indefinitely."
+      },
+      {
+        "text": "Routers commonly rate-limit the ICMP messages they generate",
+        "explanation": "Correct. Generating ICMP uses the router's control-plane CPU, so it is throttled. This is why traceroute shows `*` at some hops."
+      },
+      {
+        "text": "ICMP runs over UDP port 7",
+        "explanation": "Incorrect. ICMP is carried directly in IP with protocol number 1. Port 7 is the old UDP/TCP echo service, unrelated to ping."
+      },
+      {
+        "text": "Blocking all ICMP improves security with no side effects",
+        "explanation": "Incorrect. It breaks Path MTU Discovery (creating black holes) and makes diagnosis harder."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. **Quoted header + 8 bytes**: true (RFC 792; RFC 1812 lets routers quote more).\n2. **No errors about errors**: true, a rule to prevent storms. Also no errors about broadcasts or non-initial fragments.\n3. **Rate limiting**: true.\n4. **UDP port 7**: false. ICMP is IP protocol 1 and has no ports; ping uses ICMP type 8/0.\n5. **Block all ICMP safely**: false. Type 3 code 4 (and ICMPv6 Packet Too Big) is needed for PMTUD.",
+    "link": {
+      "title": "RFC 792: Internet Control Message Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc792"
+    }
+  }
+]

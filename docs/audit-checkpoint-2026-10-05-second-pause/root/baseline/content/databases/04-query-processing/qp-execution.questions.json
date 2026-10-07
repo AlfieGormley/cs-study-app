@@ -1,0 +1,340 @@
+[
+  {
+    "id": "qp-execution-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `SELECT stauts FROM orders;` (note the typo) and PostgreSQL replies `ERROR: column \"stauts\" does not exist`. Which stage of query processing raised the error?",
+    "options": [
+      {
+        "text": "The parser",
+        "explanation": "The parser only checks grammar. `SELECT stauts FROM orders` is grammatically valid SQL; the parser has no idea which columns exist."
+      },
+      {
+        "text": "The analyser (binder), when resolving names against the catalog",
+        "explanation": "Correct. The analyser looks every table and column name up in the system catalog and assigns types. An unknown name fails here, before any planning or execution."
+      },
+      {
+        "text": "The planner, when estimating the cost of reading the column",
+        "explanation": "The planner only ever sees a query tree whose names have already been resolved. It never meets an unknown column."
+      },
+      {
+        "text": "The executor, when it reads the first row and can't find the column",
+        "explanation": "Execution never starts. Rows are not read to discover the schema; the schema is checked from the catalog first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Walk the pipeline:\n\n1. **Parser**: is this valid SQL grammar? `SELECT <identifier> FROM <identifier>` is fine, so it passes.\n2. **Analyser**: look up `orders` in the catalog (found), then look up a column called `stauts` in it (not found). Error.\n3. Rewriter, planner and executor never run.\n\nA rule of thumb: syntax errors come from the parser (`syntax error at or near ...`); \"does not exist\" and type errors come from the analyser.",
+    "link": {
+      "title": "The path of a query — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/query-path.html"
+    }
+  },
+  {
+    "id": "qp-execution-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Here is a simplified plan:\n\n```\nAggregate\n-> Hash Join\n   -> Seq Scan on orders\n   -> Hash\n      -> Seq Scan on customers\n```\n\nWhich way do rows flow through this tree?",
+    "options": [
+      {
+        "text": "Top-down: the Aggregate produces rows and hands them to the scans",
+        "explanation": "Control (the `next()` calls) starts at the top, but data moves the other way. The Aggregate can't produce anything until rows reach it."
+      },
+      {
+        "text": "In the order the lines are printed: Aggregate first, then Hash Join, and so on",
+        "explanation": "Plans are printed root first, but that's display order, not execution order. Reading a plan top to bottom like a script is a common beginner mistake."
+      },
+      {
+        "text": "Bottom-up: the scans read rows from tables and each parent consumes its children's output",
+        "explanation": "Correct. The leaves are scans; their rows flow up into the Hash and Hash Join, and the join's output flows into the Aggregate at the root."
+      },
+      {
+        "text": "All nodes run independently and the results are merged at the end",
+        "explanation": "The operators are chained: each one consumes another's output. They are not independent jobs whose results get combined."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The root (`Aggregate`) asks its child for a row.\n2. The `Hash Join` must first build its hash table, so it pulls *every* row from `Hash`, which pulls from `Seq Scan on customers`.\n3. Then it pulls `orders` rows one at a time, probes the hash table and passes matches up.\n4. The `Aggregate` counts them and emits one row at the end.\n\nSo control starts at the top, but rows travel from the leaves up. Read plans from the most indented lines outwards.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-execution-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You write `... FROM orders o JOIN customers c ON ... WHERE o.status = 'pending'`. The plan shows `Filter: (status = 'pending')` inside the `Seq Scan on orders` node, *below* the join. Why?",
+    "options": [
+      {
+        "text": "Postgres ignores the order of clauses and always filters last",
+        "explanation": "The filter has clearly been applied first here, not last. Clause order doesn't fix execution order, but \"always last\" would be the worst choice."
+      },
+      {
+        "text": "It's a display quirk; the filter really runs after the join",
+        "explanation": "It's not a quirk. The scan node reported 969,934 rows removed by the filter, so the join only ever saw the 30,066 matching rows."
+      },
+      {
+        "text": "The WHERE clause is always evaluated before FROM in SQL",
+        "explanation": "In SQL's logical order FROM (including joins) comes before WHERE. The plan is allowed to differ from that logical order, but the logical order isn't WHERE first."
+      },
+      {
+        "text": "Predicate pushdown: the planner moves the filter as early as possible so the join processes fewer rows",
+        "explanation": "Correct. Filtering on a column of `orders` gives the same answer before or after the join, so the planner does it during the scan and the join handles 30,066 rows instead of 1,000,000."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "SQL's logical order (FROM, then WHERE, then GROUP BY...) defines what the result *means*. The planner may compute it any way that produces the same result.\n\nFor an inner join, `filter(join(A, B))` equals `join(filter(A), B)` when the filter only mentions columns of A. Doing it first:\n\n```\nwithout pushdown: join 1,000,000 rows\nwith pushdown:    join    30,066 rows\n```\n\nThat's about 33 times less work for the join.",
+    "link": {
+      "title": "Planner/optimiser — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/planner-optimizer.html"
+    }
+  },
+  {
+    "id": "qp-execution-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's generator operators, what does this print?\n\n```python\norders = [\n  {\"id\": 1, \"status\": \"shipped\"},\n  {\"id\": 2, \"status\": \"shipped\"},\n  {\"id\": 3, \"status\": \"pending\"},\n  {\"id\": 4, \"status\": \"shipped\"},\n  {\"id\": 5, \"status\": \"pending\"},\n]\nplan = limit(filter_rows(\n    seq_scan(orders),\n    lambda r: r[\"status\"] == \"pending\"),\n  1)\nprint([r[\"id\"] for r in plan])\nprint(reads)\n```",
+    "options": [
+      {
+        "text": "`[3]` then `5`",
+        "explanation": "That would mean the scan ran to the end. The limit returns as soon as it has one row, so the scan never gets asked for rows 4 and 5."
+      },
+      {
+        "text": "`[3]` then `3`",
+        "explanation": "Correct. Rows 1 and 2 are read and rejected, row 3 passes and reaches `limit`, which has its one row and returns. Nothing pulls row 4."
+      },
+      {
+        "text": "`[3, 5]` then `5`",
+        "explanation": "The limit is 1, so only one row can be returned. This answer ignores the `limit` operator."
+      },
+      {
+        "text": "`[3]` then `1`",
+        "explanation": "`reads` counts every row the scan produced, including the two the filter threw away, not just rows that reached the top."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the pulls:\n\n```\nlimit asks filter for a row\n filter asks scan  -> id 1 (reads=1)\n   shipped, rejected\n filter asks scan  -> id 2 (reads=2)\n   shipped, rejected\n filter asks scan  -> id 3 (reads=3)\n   pending, passed up\nlimit yields id 3; i == 1, return\n```\n\nThe list is `[3]` and `reads` is 3. This is the iterator model's big advantage: a LIMIT stops all the work beneath it.",
+    "link": {
+      "title": "The PostgreSQL executor",
+      "url": "https://www.postgresql.org/docs/current/executor.html"
+    }
+  },
+  {
+    "id": "qp-execution-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these operators are **blocking**, meaning they must consume all of their input before they can return their first row? Select all that apply.",
+    "options": [
+      {
+        "text": "Sort",
+        "explanation": "Correct. The row that sorts first could be the last one read, so a full sort can't emit anything until it has seen every input row."
+      },
+      {
+        "text": "Seq Scan with a Filter",
+        "explanation": "Not blocking. Each row is checked and passed up immediately; that's why a LIMIT over a filtered scan finishes early."
+      },
+      {
+        "text": "The Hash node (build side of a hash join)",
+        "explanation": "Correct. The hash table must hold every build row before probing starts, otherwise a probe that misses might be wrong."
+      },
+      {
+        "text": "HashAggregate",
+        "explanation": "Correct. A group's `count(*)` or `sum` isn't final until every input row has been seen, so no group can be emitted early."
+      },
+      {
+        "text": "Limit",
+        "explanation": "Not blocking. Limit passes rows straight through and simply stops after N."
+      }
+    ],
+    "answer": [0, 2, 3],
+    "workedExample": "Ask of each operator: could it ever be correct to emit a row before reading the last input row?\n\n| Operator | Emit early? |\n|---|---|\n| Sort | No: last row may sort first |\n| Filter | Yes: decide row by row |\n| Hash build | No: table must be complete |\n| HashAggregate | No: totals not final |\n| Limit | Yes: pass-through |\n\nBlocking operators show a high **startup cost** in EXPLAIN (the first number in `cost=a..b`). The probe side of a hash join does stream, but only after the build has finished.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-execution-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A plan line reads:\n\n```\nSort\n  (cost=140936.84..143436.84\n   rows=1000000 width=26)\n-> Seq Scan on orders\n  (cost=0.00..17353.00 ...)\n```\n\nWhat does the Sort's `140936.84` represent?",
+    "options": [
+      {
+        "text": "The estimated cost before the Sort can return its first row (startup cost)",
+        "explanation": "Correct. A sort must read all its input and sort it before returning anything, so most of its total cost is startup cost."
+      },
+      {
+        "text": "The estimated time in milliseconds",
+        "explanation": "Costs are in arbitrary planner units (one sequential page read = 1.0 by default), not milliseconds."
+      },
+      {
+        "text": "The cost of the Sort node alone, excluding the scan below it",
+        "explanation": "Costs are cumulative: a node's cost includes all its children. The scan's 17,353 is included in the sort's figure."
+      },
+      {
+        "text": "The cost of returning half the rows",
+        "explanation": "There's no such figure. The two numbers are startup cost and total cost."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "`cost=a..b` means:\n\n- `a` = startup cost: work done before the first row comes out.\n- `b` = total cost: work to return every row.\n\nFor the Seq Scan, `a = 0`: it can return a row immediately. For the Sort, `a = 140,936.84`, which already includes the scan's full 17,353 plus the comparison work. Returning the sorted rows adds the last 2,500 (`b - a = 143436.84 - 140936.84`).\n\nUnder a `LIMIT`, the planner weighs startup cost heavily, which is why it often prefers an index that is already in order.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-execution-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You define `CREATE VIEW pending_orders AS SELECT * FROM orders WHERE status = 'pending';` and then run `SELECT * FROM pending_orders WHERE customer_id = 42;`. There is an index on `orders(customer_id)`. What does the planner see?",
+    "options": [
+      {
+        "text": "It must materialise the whole view (30,000 rows) first, then filter for customer 42",
+        "explanation": "Simple views aren't materialised. That only happens for materialised views (which are real tables) or some constructs that block inlining."
+      },
+      {
+        "text": "A single query on `orders` with both conditions, so it can use the `customer_id` index",
+        "explanation": "Correct. The rewriter replaces the view with its definition, giving `WHERE status = 'pending' AND customer_id = 42` against `orders`, and the planner optimises it as one query."
+      },
+      {
+        "text": "It can't use any index because views have no indexes",
+        "explanation": "The view itself has no indexes, but after rewriting the query runs against the base table, whose indexes are all available."
+      },
+      {
+        "text": "It plans the view once when it is created and reuses that plan",
+        "explanation": "Views store a query definition, not a plan. Each query using the view is planned afresh."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The **rewriter** sees `pending_orders` and substitutes its definition.\n2. The query becomes, in effect:\n\n```sql\nSELECT * FROM orders\nWHERE status = 'pending'\n  AND customer_id = 42;\n```\n\n3. The **planner** sees both predicates on `orders` and can use the `customer_id` index (about 11 matching rows), then check `status` on each.\n\nThis is why views cost nothing at run time in Postgres: they disappear before planning.",
+    "link": {
+      "title": "The path of a query — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/query-path.html"
+    }
+  },
+  {
+    "id": "qp-execution-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table occupies 10 GiB on disk in 8 KiB pages. Ignoring CPU costs, what does a full sequential scan cost in Postgres planner units with the default `seq_page_cost = 1`?",
+    "options": [
+      {
+        "text": "About 10,240",
+        "explanation": "That's the size in MiB (10 x 1,024). Pages are 8 KiB, so there are eight times fewer pages than KiB, not a thousand times fewer."
+      },
+      {
+        "text": "About 1,310,720",
+        "explanation": "Correct. 10 GiB = 10,485,760 KiB; divide by 8 KiB per page gives 1,310,720 pages, each costing 1.0 to read sequentially."
+      },
+      {
+        "text": "About 5,242,880",
+        "explanation": "That uses `random_page_cost = 4` per page. A sequential scan is charged `seq_page_cost`, which is 1."
+      },
+      {
+        "text": "About 10,000,000,000",
+        "explanation": "That counts bytes. The planner charges per page, because pages are the unit of I/O."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\n10 GiB = 10 x 1,048,576 KiB\n       = 10,485,760 KiB\npages  = 10,485,760 / 8\n       = 1,310,720\ncost   = 1,310,720 x 1.0\n```\n\nThe real Seq Scan cost would also add `cpu_tuple_cost` (0.01) per row, plus `cpu_operator_cost` (0.0025) per row per filter condition. For our `orders` table: `7353 + 1,000,000 x 0.01 = 17,353`, exactly what EXPLAIN shows.",
+    "link": {
+      "title": "Query planning configuration — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"
+    }
+  },
+  {
+    "id": "qp-execution-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With no index on `total`, you run `SELECT * FROM orders ORDER BY total DESC LIMIT 10;` on the 1,000,000-row table. The plan is `Limit -> Sort (top-N heapsort, Memory: 26kB) -> Seq Scan`. How many rows does the Seq Scan return?",
+    "options": [
+      {
+        "text": "10, because the Limit stops the scan early",
+        "explanation": "The Limit can only stop its child early if that child streams. Sort is blocking: the 10 largest totals could be anywhere, so every row must be seen."
+      },
+      {
+        "text": "About 10% of the table, from sampling",
+        "explanation": "Postgres doesn't sample to answer queries. ORDER BY ... LIMIT must be exact."
+      },
+      {
+        "text": "All 1,000,000, but the sort keeps only the best 10 in a small heap",
+        "explanation": "Correct. A top-N heapsort reads every row but holds only a 10-element heap, which is why memory is 26 kB rather than tens of megabytes. It took about 70 ms."
+      },
+      {
+        "text": "All 1,000,000, and they are all fully sorted before the top 10 are returned",
+        "explanation": "All rows are read, but a full sort isn't needed. The planner knows about the LIMIT and uses a bounded heap: O(n log 10) instead of O(n log n)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Is any operator under the Limit blocking? Yes, the Sort.\n2. So the Limit can't save the scan: the Seq Scan returns all 1,000,000 rows (`actual rows=1000000.00`).\n3. But the Sort is *bounded*. It keeps a heap of the 10 best rows and discards anything smaller, so it needs about 26 kB.\n4. Cost: O(n log k) with k = 10.\n\nTo make the LIMIT truly early-exit, give it an index on `total`: an Index Scan Backward returns rows already in order, so it can stop after 10.",
+    "link": {
+      "title": "LIMIT and OFFSET — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-limit.html"
+    }
+  },
+  {
+    "id": "qp-execution-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why do analytical engines like DuckDB and ClickHouse use **vectorised** execution instead of the classic one-row-at-a-time iterator model?",
+    "options": [
+      {
+        "text": "The iterator model can't express joins or aggregates",
+        "explanation": "It can express everything; Postgres runs every SQL query with it. The problem is per-row overhead, not expressiveness."
+      },
+      {
+        "text": "Vectorised engines read fewer pages from disk for the same query",
+        "explanation": "Batching changes CPU work, not which pages are read. (Columnar storage does reduce I/O, but that is a separate design choice.)"
+      },
+      {
+        "text": "Vectorised execution lets the planner skip cost estimation",
+        "explanation": "Vectorised engines still have optimisers that estimate costs. Execution model and planning are separate concerns."
+      },
+      {
+        "text": "Processing a batch of values per `next()` call spreads the function-call overhead and gives tight, cache-friendly loops",
+        "explanation": "Correct. One call per row per operator is a big fraction of CPU time when scanning billions of rows. Batches of around a thousand values amortise that and let the CPU use SIMD and its caches well."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Count the calls for a scan, filter and sum over 1 billion rows:\n\n```\niterator:   ~3 calls x 1e9 rows\n          = ~3e9 next() calls\nbatch 1024: ~3 x 1e9/1024\n          = ~2.9e6 calls\n```\n\nEach call also has branches and pointer chasing. With batches, the inner loop is something like `for i in range(1024): out[i] = a[i] > 5`, which compilers and CPUs execute very fast. For OLTP queries touching a few rows, this overhead doesn't matter, which is why Postgres still uses the iterator model.",
+    "link": {
+      "title": "Query plan — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Query_plan"
+    }
+  },
+  {
+    "id": "qp-execution-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For the lesson's \"top three cities by pending orders\" query, the plan was:\n\n```\nLimit\n-> Sort [count DESC, top-N]\n   -> HashAggregate [by city]\n      -> Hash Join\n         -> Seq Scan orders\n              Filter: pending\n         -> Hash\n            -> Seq Scan customers\n```\n\nWhich statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The hash table is built from `customers`, and `orders` rows probe it",
+        "explanation": "Correct. The child under the `Hash` node is the build side; the other child of the Hash Join streams through and probes."
+      },
+      {
+        "text": "The Sort node sorts about 30,000 rows",
+        "explanation": "No. The Sort sits above the HashAggregate, which outputs one row per city: 8 rows. Grouping before sorting is what makes this cheap."
+      },
+      {
+        "text": "The `Limit` lets the Seq Scan on `orders` stop after a few rows",
+        "explanation": "No. Blocking operators (Sort, HashAggregate) sit between Limit and the scan, so every pending order must be counted first."
+      },
+      {
+        "text": "The filter on `status` is applied before any join work is done",
+        "explanation": "Correct. The filter is inside the scan node (predicate pushdown), so only the 30,066 pending orders reach the join."
+      },
+      {
+        "text": "The whole `customers` table is read even though only 8 cities appear in the output",
+        "explanation": "Correct. The build side scans all 100,000 customers to build the hash table, because any of them might match a pending order."
+      }
+    ],
+    "answer": [0, 3, 4],
+    "workedExample": "Work up from the leaves:\n\n1. `Seq Scan customers` returns 100,000 rows into `Hash` (build side).\n2. `Seq Scan orders` filters in place: 30,066 pass, 969,934 removed.\n3. `Hash Join` probes with each pending order: 30,066 joined rows.\n4. `HashAggregate` groups by city: 8 rows.\n5. `Sort` (top-N) sorts those 8 and `Limit` takes 3.\n\nThe Limit is above two blocking operators, so it saves nothing below them. The real run read 8,382 pages and took about 47 ms.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  }
+]

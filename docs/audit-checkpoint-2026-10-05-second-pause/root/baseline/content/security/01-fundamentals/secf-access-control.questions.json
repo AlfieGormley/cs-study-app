@@ -1,0 +1,169 @@
+[
+  {
+    "id": "secf-access-control-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A file has permissions `-rw-r-----`, owner `alice`, group `finance`. User `dave` is not in `finance`. What can Dave do with it?",
+    "options": [
+      { "text": "Read it", "explanation": "Read is granted to the group (`r--`), and Dave isn't in the group. The last three characters (`---`) apply to him." },
+      { "text": "Nothing", "explanation": "Correct. Dave is neither the owner nor in `finance`, so the 'other' bits apply, and they are `---`." },
+      { "text": "Read and write it", "explanation": "Read and write belong to the owner, Alice. Dave isn't the owner." },
+      { "text": "Execute it", "explanation": "No class has `x` set." }
+    ],
+    "answer": 1,
+    "workedExample": "Split the string after the type character:\n\n```\n-  rw-   r--    ---\n   owner group  other\n```\n\n1. Is Dave the owner? No.\n2. Is Dave in `finance`? No.\n3. So 'other' applies: `---`, no access.\n4. In octal this is `640`.",
+    "link": { "title": "File-system permissions — Wikipedia", "url": "https://en.wikipedia.org/wiki/File-system_permissions" }
+  },
+  {
+    "id": "secf-access-control-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement best describes the difference between **DAC** and **MAC**?",
+    "options": [
+      { "text": "DAC uses passwords; MAC uses hardware tokens", "explanation": "Both are authorisation models, not authentication methods. How you log in is a separate question." },
+      { "text": "DAC is for files; MAC is for networks", "explanation": "Both apply to any kind of object. The difference is who sets the policy." },
+      { "text": "In DAC the object's owner decides who has access; in MAC a central policy decides, and owners can't override it", "explanation": "Correct. Unix permissions are DAC; SELinux and military classification systems are MAC." },
+      { "text": "MAC stands for Media Access Control", "explanation": "That is the networking MAC (addresses). In access control, MAC means Mandatory Access Control." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: who can change the rule for this object?\n2. DAC: the owner (`chmod`, sharing a Google Doc).\n3. MAC: only the central policy; even root or the owner can't relabel a Secret file as Unclassified.\n4. Consequence: under DAC, malware running as you can share your files; under MAC it can't.",
+    "link": { "title": "Mandatory access control — Wikipedia", "url": "https://en.wikipedia.org/wiki/Mandatory_access_control" }
+  },
+  {
+    "id": "secf-access-control-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Under **Bell–LaPadula**, a subject cleared to *Secret* wants to (1) read a *Top Secret* report and (2) write a summary into an *Unclassified* file. What is allowed?",
+    "options": [
+      { "text": "Both are denied", "explanation": "Correct. Reading Top Secret violates 'no read up'; writing Unclassified violates the star property, 'no write down'." },
+      { "text": "Both are allowed", "explanation": "That ignores both rules. Bell–LaPadula exists to stop exactly these flows." },
+      { "text": "Reading is allowed; writing is denied", "explanation": "Reading a higher level is 'read up', which is forbidden." },
+      { "text": "Reading is denied; writing is allowed", "explanation": "Writing to a lower level is 'write down', which could leak Secret data into Unclassified. It's forbidden too." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Levels: Unclassified < Confidential < Secret < Top Secret.\n2. Read Top Secret from Secret: up -> **no read up** -> deny.\n3. Write Unclassified from Secret: down -> **no write down** -> deny.\n4. The star property stops a compromised Secret process copying secrets downwards.",
+    "link": { "title": "Bell–LaPadula model — Wikipedia", "url": "https://en.wikipedia.org/wiki/Bell%E2%80%93LaPadula_model" }
+  },
+  {
+    "id": "secf-access-control-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A file is `chmod 604`, owner `alice`, group `team`. Bob is in `team`; Eve is in neither. Who can read it?",
+    "options": [
+      { "text": "Alice, Bob and Eve", "explanation": "That assumes permissions accumulate, so Bob gets 'other' rights too. Unix stops at the first matching class." },
+      { "text": "Only Alice", "explanation": "Eve matches 'other', which has read (`4`)." },
+      { "text": "Alice and Bob", "explanation": "Bob's group class has `0`, so he can't read. And Eve can, via 'other'." },
+      { "text": "Alice and Eve, but not Bob", "explanation": "Correct. 6 = rw for owner, 0 for group, 4 = r for other. Bob matches the group class first and gets nothing; Eve falls through to other." }
+    ],
+    "answer": 3,
+    "workedExample": "```\n604 -> owner 6 = rw-\n       group 0 = ---\n       other 4 = r--\n```\n\n1. Alice: owner -> `rw-` -> can read.\n2. Bob: not owner, in group -> `---` -> stop, no read.\n3. Eve: not owner, not in group -> other -> `r--` -> can read.\n\nThe counter-intuitive result shows the check is first-match, not 'most permissive'.",
+    "link": { "title": "File-system permissions — Wikipedia", "url": "https://en.wikipedia.org/wiki/File-system_permissions" }
+  },
+  {
+    "id": "secf-access-control-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A customer portal uses RBAC with a `customer` role that has `invoice:read`. Customer 17 changes the URL from `/invoices/1001` to `/invoices/1002` and sees another customer's invoice. Why didn't RBAC prevent this?",
+    "options": [
+      { "text": "The role should have been called `viewer`", "explanation": "Names don't matter. The issue is what the check considers." },
+      { "text": "RBAC checks the role's permission on the type of object, not the relationship between this user and this specific object", "explanation": "Correct. 'Customers may read invoices' is true; 'customer 17 may read invoice 1002' needs an ownership attribute. That object-level check is missing: an IDOR." },
+      { "text": "The invoice IDs should be UUIDs", "explanation": "Unguessable IDs make the bug harder to find but don't fix it; anyone who learns an ID can still read it." },
+      { "text": "The user should have been logged out", "explanation": "The user is legitimately authenticated. The failure is authorisation, not authentication." }
+    ],
+    "answer": 1,
+    "workedExample": "1. RBAC asks: does `customer` have `invoice:read`? Yes.\n2. It doesn't ask: does invoice 1002 belong to customer 17?\n3. That needs an attribute of the object (`customer_id`), which is ABAC or ReBAC territory.\n4. Fix: `if inv.customer_id != current_user.id: abort(404)`, ideally enforced centrally or with database row-level security.",
+    "link": { "title": "Insecure Direct Object Reference Prevention — OWASP", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html" }
+  },
+  {
+    "id": "secf-access-control-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are **capability-like** rather than ACL-like? Select all that apply.",
+    "options": [
+      { "text": "An S3 pre-signed URL that grants GET on one object for 15 minutes", "explanation": "Correct. Whoever holds the URL can use it; the right travels with the token, not with an identity on a list." },
+      { "text": "A Unix file descriptor passed to a child process", "explanation": "Correct. The descriptor itself is the authority to read or write that open file, and can be handed over." },
+      { "text": "A bucket policy listing which IAM principals may read", "explanation": "That's an ACL: the list is attached to the object and names subjects." },
+      { "text": "An OAuth bearer access token scoped to `calendar.read`", "explanation": "Correct. A bearer token is presented to prove the right; anyone holding it can use it within its scope and lifetime." },
+      { "text": "The `rw-r-----` bits on a file", "explanation": "Permission bits are stored with the file and checked against the requester's identity: ACL-style." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Ask where the right is stored.\n\n1. With the **object**, naming subjects -> ACL (bucket policy, Unix bits).\n2. With the **subject**, as a token that is itself the authority -> capability (pre-signed URL, fd, bearer token).\n3. Capabilities are easy to delegate and scope narrowly, but leaking one leaks the right; that's why they are short-lived.",
+    "link": { "title": "Capability-based security — Wikipedia", "url": "https://en.wikipedia.org/wiki/Capability-based_security" }
+  },
+  {
+    "id": "secf-access-control-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A profile-update endpoint does this:\n\n```python\n@app.put(\"/me\")\ndef update_me():\n    for k, v in request.json.items():\n        setattr(current_user, k, v)\n    db.save(current_user)\n```\n\nA user sends `{\"name\": \"Eve\", \"role\": \"admin\"}`. What happens?",
+    "options": [
+      { "text": "Only the name changes, because `role` isn't a form field", "explanation": "The code doesn't look at the form; it copies every key in the JSON body onto the user object." },
+      { "text": "The request fails because users can't edit their own record", "explanation": "There is no such check in the code; it updates `current_user` directly." },
+      { "text": "Both fields are saved and Eve becomes an admin: mass assignment, a vertical privilege escalation", "explanation": "Correct. Fix with an explicit allowlist of editable fields (`name`, `email`), never binding raw input to the model." },
+      { "text": "Nothing changes, because `setattr` doesn't persist", "explanation": "`db.save(current_user)` persists the modified object, including the new role." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Loop: `setattr(user, \"name\", \"Eve\")`, then `setattr(user, \"role\", \"admin\")`.\n2. `db.save` writes both.\n3. Eve's next request is authorised as admin.\n4. Fix (fail-safe defaults again):\n\n```python\nEDITABLE = {\"name\", \"email\"}\nfor k, v in body.items():\n    if k in EDITABLE:\n        setattr(user, k, v)\n```",
+    "link": { "title": "A01:2021 Broken Access Control — OWASP Top 10", "url": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/" }
+  },
+  {
+    "id": "secf-access-control-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A browser's rendering process runs at *low* integrity under a Biba-style policy. Which operation does the policy block?",
+    "options": [
+      { "text": "Writing to the user's Documents folder, which is at medium integrity", "explanation": "Correct. Biba's 'no write up' stops a low-integrity subject modifying higher-integrity objects, so a compromised renderer can't plant files there. Windows' Mandatory Integrity Control works this way." },
+      { "text": "Writing to its own low-integrity temporary folder", "explanation": "Same level writes are allowed; the sandbox needs somewhere to work." },
+      { "text": "Reading pages from its own low-integrity cache", "explanation": "Reading at the same level is allowed. Biba only restricts reading *down* and writing *up*." },
+      { "text": "Reading a medium-integrity system library", "explanation": "Reading up is permitted in Biba (no read *down* is the rule). Reading trusted code doesn't corrupt the reader." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Biba: no read down, no write up.\n2. Renderer = low. Documents = medium.\n3. Renderer writing Documents = write up -> blocked.\n4. Renderer reading system libraries = read up -> allowed.\n5. Effect: a renderer exploit can't overwrite user files or persist in their profile; it must also escape the sandbox, a second barrier (defence in depth).",
+    "link": { "title": "Biba Model — Wikipedia", "url": "https://en.wikipedia.org/wiki/Biba_Model" }
+  },
+  {
+    "id": "secf-access-control-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a Zanzibar-style ReBAC system you store:\n\n```\nfolder:F#editor@user:alice\ndoc:D#parent@folder:F\ndoc:E#viewer@user:alice\n```\n\nThe rules are: editors of a doc's parent are editors of the doc; editors are also viewers. What can Alice do?",
+    "options": [
+      { "text": "Edit D only", "explanation": "Alice can also view E: she is a direct viewer of it." },
+      { "text": "View D and E, edit nothing", "explanation": "That misses the inherited editor relation from folder F to doc D." },
+      { "text": "Edit and view D, edit and view E", "explanation": "Alice is only a viewer of E. Being an editor elsewhere doesn't grant edit on E." },
+      { "text": "Edit and view D; view E", "explanation": "Correct. D: parent F has Alice as editor -> Alice edits D -> editors are viewers -> she views D. E: direct viewer only." }
+    ],
+    "answer": 3,
+    "workedExample": "Resolve each check as a graph walk.\n\n```\nedit D?  D.parent = F\n         F.editor has alice -> yes\nview D?  edit D -> yes\nedit E?  E has no parent;\n         no direct editor -> no\nview E?  direct viewer -> yes\n```\n\nThis is why ReBAC suits sharing models like Google Drive: one folder share grants rights over everything inside it.",
+    "link": { "title": "Zanzibar: Google's Consistent, Global Authorization System", "url": "https://research.google/pubs/zanzibar-googles-consistent-global-authorization-system/" }
+  },
+  {
+    "id": "secf-access-control-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A multi-tenant SaaS keeps forgetting `WHERE tenant_id = ?` in new queries, leaking data across tenants. Which approaches enforce tenancy so that a forgotten clause fails safe? Select all that apply.",
+    "options": [
+      { "text": "Postgres row-level security policies keyed on a per-session tenant setting", "explanation": "Correct. The database applies the filter to every query, so a missing WHERE clause returns only that tenant's rows (or nothing)." },
+      { "text": "A data-access layer that requires a tenant context to construct any query, with direct DB access blocked in code review and lint", "explanation": "Correct. Centralising the check in one mandatory layer is complete mediation; developers can't easily bypass it." },
+      { "text": "A wiki page reminding developers to add the clause", "explanation": "Documentation doesn't enforce anything; the failure mode (forgetting) is unchanged." },
+      { "text": "Integration tests that run every endpoint as tenant A against tenant B's data", "explanation": "Correct. Not prevention by itself, but it catches regressions before release and pairs with the structural controls." },
+      { "text": "Using UUIDs for tenant IDs", "explanation": "Unguessable IDs don't stop a query that omits the filter entirely; it returns everyone's rows regardless." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "1. The bug class is 'a check that must be repeated everywhere gets forgotten somewhere'.\n2. Structural fixes move the check to one place that every access passes through:\n   - row-level security (database enforces);\n   - a mandatory data-access layer (application enforces).\n3. Tests verify it continuously.\n4. Reminders and obscure IDs leave the failure mode intact.",
+    "link": { "title": "Authorization Cheat Sheet — OWASP", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html" }
+  },
+  {
+    "id": "secf-access-control-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does the fixed invoice handler in the lesson return **404** rather than **403** when a user requests someone else's invoice?",
+    "options": [
+      { "text": "404 is faster to compute", "explanation": "Both are equally cheap. The reason is what the response reveals." },
+      { "text": "403 is only for unauthenticated users", "explanation": "That's 401. 403 means authenticated but not authorised, which would be technically accurate here." },
+      { "text": "Browsers cache 404s so the attack can't be repeated", "explanation": "Caching isn't the point, and an attacker can repeat requests regardless." },
+      { "text": "A 404 doesn't confirm the invoice exists, so attackers can't enumerate valid IDs", "explanation": "Correct. Returning 403 for real IDs and 404 for missing ones would let an attacker map which invoice numbers exist. Treating 'not yours' like 'doesn't exist' hides that." }
+    ],
+    "answer": 3,
+    "workedExample": "1. With 403 vs 404: request IDs 1..10000; 403 = exists, 404 = doesn't. That leaks business volume and valid targets.\n2. With 404 for both, the attacker learns nothing.\n3. Both are valid HTTP choices; this one minimises information disclosure (the I in STRIDE).",
+    "link": { "title": "Insecure Direct Object Reference Prevention — OWASP", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html" }
+  }
+]

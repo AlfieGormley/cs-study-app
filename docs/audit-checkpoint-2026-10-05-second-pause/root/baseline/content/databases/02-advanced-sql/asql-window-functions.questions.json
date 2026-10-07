@@ -1,0 +1,376 @@
+[
+  {
+    "id": "asql-window-functions-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Order totals are 200, 120, 90, 60, 60, 45, 45, 30. With `OVER (ORDER BY total DESC)`, what do `RANK()` and `DENSE_RANK()` give the 30 order?",
+    "options": [
+      {
+        "text": "RANK 6, DENSE_RANK 6",
+        "explanation": "DENSE_RANK is 6, but RANK leaves gaps after ties. With two pairs of ties before it, RANK counts the rows ahead of it: 7 rows, so rank 8."
+      },
+      {
+        "text": "RANK 8, DENSE_RANK 8",
+        "explanation": "DENSE_RANK doesn't skip numbers after ties; that's what distinguishes it from RANK."
+      },
+      {
+        "text": "RANK 6, DENSE_RANK 8",
+        "explanation": "This has the two functions swapped. DENSE_RANK can never exceed RANK."
+      },
+      {
+        "text": "RANK 8, DENSE_RANK 6",
+        "explanation": "Correct. RANK = 1 + number of rows strictly ahead (7), so 8. DENSE_RANK counts distinct values ahead (200, 120, 90, 60, 45) plus 1, so 6."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. RANK = 1 + (rows with a strictly higher total). Seven rows beat 30, so RANK = **8**.\n2. DENSE_RANK = 1 + (distinct higher values). Those are 200, 120, 90, 60, 45: five, so DENSE_RANK = **6**.\n\n| total | rank | dense |\n|---|---|---|\n| 200 | 1 | 1 |\n| 120 | 2 | 2 |\n| 90 | 3 | 3 |\n| 60 | 4 | 4 |\n| 60 | 4 | 4 |\n| 45 | 6 | 5 |\n| 45 | 6 | 5 |\n| 30 | 8 | 6 |",
+    "link": {
+      "title": "Window functions reference — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`orders` has 8 rows across 4 customers. How many rows does this return?\n\n```sql\nSELECT id,\n  SUM(total) OVER (\n    PARTITION BY customer_id) AS s\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "8, one per order, each showing its customer's total",
+        "explanation": "Correct. Every order stays, and `s` is the sum over that order's partition: 240 on all three of Ana's orders, for example."
+      },
+      {
+        "text": "4, one per customer",
+        "explanation": "That's what `GROUP BY customer_id` would return. A window function never collapses rows; PARTITION BY only decides which rows each calculation sees."
+      },
+      {
+        "text": "1, the grand total",
+        "explanation": "That would be a plain `SUM(total)` with no GROUP BY or OVER."
+      },
+      {
+        "text": "An error: `id` must appear in GROUP BY",
+        "explanation": "That rule applies to GROUP BY queries. There is no GROUP BY here, and window functions don't impose it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With no `WHERE`, 8 rows go into the window stage.\n2. `PARTITION BY customer_id` splits them into 4 groups but keeps all 8 rows.\n3. Each row gets the sum of its own group:\n\n| id | s |\n|---|---|\n| 101 | 240 |\n| 103 | 240 |\n| 107 | 240 |\n| 102 | 135 |\n| ... | ... |\n\nRows out = rows in = 8.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/tutorial-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Monthly revenue is January 165, February 305 and March 180. What is `prev` for January?\n\n```sql\nSELECT month, rev,\n  LAG(rev) OVER (ORDER BY month)\n    AS prev\nFROM m;\n```",
+    "options": [
+      {
+        "text": "0",
+        "explanation": "LAG doesn't default to 0. You'd get 0 only with an explicit default: `LAG(rev, 1, 0)`."
+      },
+      {
+        "text": "180, wrapping round from the last row",
+        "explanation": "Windows don't wrap. The first row in order simply has no previous row."
+      },
+      {
+        "text": "NULL",
+        "explanation": "Correct. January is first in month order, so there is no previous row and LAG returns its default, which is NULL unless you give a third argument."
+      },
+      {
+        "text": "165, its own value",
+        "explanation": "LAG reads from the row *before* the current one, never the current row."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Order the rows by month: Jan, Feb, Mar.\n2. `LAG(rev)` = `rev` from one row earlier.\n3. Jan: no earlier row, so NULL. Feb: 165. Mar: 305.\n4. Any arithmetic on it, such as `rev - LAG(rev)`, is also NULL for January. Use `LAG(rev, 1, 0)` or `COALESCE` if a zero makes sense, which for growth percentages it usually doesn't.",
+    "link": {
+      "title": "Window functions reference — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Totals sorted ascending are 30, 45, 45, 60, 60, 90, 120, 200. What does order 103 (one of the 60s) show for `s`?\n\n```sql\nSELECT id, total,\n  SUM(total) OVER (\n    ORDER BY total) AS s\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "180",
+        "explanation": "That's the ROWS-mode answer for whichever 60 comes first. Without an explicit frame, the default is RANGE, which includes all peers with the same value."
+      },
+      {
+        "text": "240",
+        "explanation": "Correct. The default frame is `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`, which includes every row tied with the current one: 30 + 45 + 45 + 60 + 60 = 240."
+      },
+      {
+        "text": "60",
+        "explanation": "That would be `SUM(total) OVER (PARTITION BY total)` or a frame of just the current row. Adding ORDER BY makes the sum cumulative."
+      },
+      {
+        "text": "650",
+        "explanation": "650 is the total of every row, which you'd get from `OVER ()` with no ORDER BY."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. ORDER BY with no frame means `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.\n2. In RANGE mode, \"current row\" extends to all of its **peers** (rows with an equal sort value).\n3. For a 60, the frame is every row with total <= 60: 30, 45, 45, 60, 60.\n4. Sum: 240. Both 60s show 240.\n5. With `ROWS UNBOUNDED PRECEDING`, the first 60 would show 180 and the second 240.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want each customer's *cheapest* order. Ana has two orders of 60; everyone else has a unique minimum. How many rows does this return?\n\n```sql\nSELECT customer_id, id FROM (\n  SELECT customer_id, id,\n    RANK() OVER (\n      PARTITION BY customer_id\n      ORDER BY total) AS r\n  FROM orders\n) AS t\nWHERE r = 1;\n```",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "That's what ROW_NUMBER would give: exactly one row per customer. RANK gives tied rows the same rank."
+      },
+      {
+        "text": "8",
+        "explanation": "The `WHERE r = 1` keeps only each partition's lowest-ranked rows, not every order."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. Ana's two 60s both get rank 1, and Ben, Cat and Dev each contribute one row: 2 + 1 + 1 + 1 = 5."
+      },
+      {
+        "text": "3",
+        "explanation": "Every customer with orders has at least one rank-1 row. Ties add rows; they never remove a customer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Partition by customer, order by total ascending.\n2. Ana: 60, 60, 120 gives ranks 1, 1, 3. Two rows have r = 1.\n3. Ben: 45, 90 gives 1, 2. One row.\n4. Cat: 30, 200 gives 1, 2. One row.\n5. Dev: 45 gives 1. One row.\n6. Total **5**. Pick deliberately: `RANK` if ties should all appear, `ROW_NUMBER` with a tie-breaker (`ORDER BY total, id`) if you need exactly one.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/tutorial-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Orders by date have totals 120, 45, 60, 200, 45, 90, 60, 30. What is `avg3` for the sixth order (total 90)?\n\n```sql\nSELECT id, total,\n  AVG(total) OVER (\n    ORDER BY ordered_on\n    ROWS BETWEEN 2 PRECEDING\n         AND CURRENT ROW) AS avg3\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "111.67",
+        "explanation": "Correct. The frame is the 4th, 5th and 6th rows: (200 + 45 + 90) / 3 = 335 / 3 = 111.67."
+      },
+      {
+        "text": "90",
+        "explanation": "The frame includes the two preceding rows as well as the current one."
+      },
+      {
+        "text": "67.5",
+        "explanation": "That is (45 + 90) / 2, the current row and only one preceding row. `2 PRECEDING` includes two rows before the current one."
+      },
+      {
+        "text": "81.25",
+        "explanation": "81.25 is the average of all 8 orders. The frame is limited to three rows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Number the rows by date: 1:120, 2:45, 3:60, 4:200, 5:45, 6:90, 7:60, 8:30.\n2. For row 6, `2 PRECEDING AND CURRENT ROW` covers rows 4, 5, 6.\n3. Sum: 200 + 45 + 90 = 335.\n4. Average: 335 / 3 = **111.67**.\n\nRows 1 and 2 have fewer than three rows in their frames (they average 1 and 2 values), which is easy to forget when charting a moving average.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You computed `rn` with `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY ordered_on DESC)`. Which of these correctly keep only `rn = 1`, in PostgreSQL?",
+    "options": [
+      {
+        "text": "Compute `rn` in a subquery in FROM, then `WHERE rn = 1` in the outer query",
+        "explanation": "Correct. The outer WHERE runs after the inner query has computed rn."
+      },
+      {
+        "text": "Compute `rn` in a CTE, then `SELECT ... FROM cte WHERE rn = 1`",
+        "explanation": "Correct. Same idea as the subquery, just named."
+      },
+      {
+        "text": "Put `WHERE ROW_NUMBER() OVER (...) = 1` in the same query",
+        "explanation": "Window functions are evaluated after WHERE, so Postgres rejects this: `window functions are not allowed in WHERE`."
+      },
+      {
+        "text": "Use `HAVING rn = 1`",
+        "explanation": "HAVING filters groups after GROUP BY, which still runs before window functions, and it can't see a SELECT-list alias like `rn` anyway."
+      },
+      {
+        "text": "Use `QUALIFY rn = 1`",
+        "explanation": "QUALIFY exists in Snowflake, BigQuery and DuckDB, but not in PostgreSQL or SQLite."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "The logical order of a SELECT is roughly:\n\n```\nFROM / JOIN\nWHERE\nGROUP BY\nHAVING\nwindow functions\nSELECT list\nORDER BY / LIMIT\n```\n\nWindow values don't exist yet when WHERE and HAVING run. So you compute them in one query level and filter in the next, using a derived table or a CTE.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/tutorial-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Orders by date end with order 108, total 30. What does `lv` show on the *first* row (order 101, total 120)?\n\n```sql\nSELECT id, total,\n  LAST_VALUE(total) OVER (\n    ORDER BY ordered_on) AS lv\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "30, the last order's total",
+        "explanation": "That's the intended answer, but it needs a frame that reaches `UNBOUNDED FOLLOWING`. The default frame stops at the current row."
+      },
+      {
+        "text": "NULL",
+        "explanation": "The frame always contains at least the current row, so there's always a last value."
+      },
+      {
+        "text": "200, the largest total",
+        "explanation": "LAST_VALUE takes the last row in frame order, not the maximum value."
+      },
+      {
+        "text": "120, its own total",
+        "explanation": "Correct. The default frame is `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`, so the last row in the frame is the current row (dates are unique here)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. With ORDER BY and no frame, the frame runs from the start of the partition to the current row (and its peers).\n2. For the first row, the frame is just that row, so the last value is 120.\n3. In fact every row shows its own total, because dates are unique.\n4. Fix:\n\n```sql\nLAST_VALUE(total) OVER (\n  ORDER BY ordered_on\n  ROWS BETWEEN\n    UNBOUNDED PRECEDING\n    AND UNBOUNDED FOLLOWING)\n```\n\nNow every row shows 30.",
+    "link": {
+      "title": "Window functions reference — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Order 104 has total 200; all orders sum to 650. In both SQLite and Postgres, what is `pct` for order 104?\n\n```sql\nSELECT id,\n  100 * total\n    / SUM(total) OVER () AS pct\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "30.77",
+        "explanation": "That's the true percentage, but every operand is an integer, so the division is integer division and truncates."
+      },
+      {
+        "text": "31",
+        "explanation": "Integer division truncates towards zero; it doesn't round. 20000 / 650 = 30.77, truncated to 30."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. 100 * 200 = 20000, and 20000 / 650 in integer arithmetic is 30. Write `100.0 * total` to get 30.77."
+      },
+      {
+        "text": "0",
+        "explanation": "That happens if you divide first: `total / SUM(total)` = 200 / 650 = 0 in integers, then times 100 is 0. Here the multiplication comes first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Evaluate left to right: `100 * total` = 20000 (integer).\n2. `SUM(total)` over integers is an integer: 650 in SQLite, `bigint` 650 in Postgres.\n3. Integer / integer truncates: 20000 / 650 = 30.77..., giving **30**.\n4. All eight rows lose their fractions, so the percentages no longer add to 100 (here they sum to 95).\n5. Fix with a decimal literal (`100.0 * total`) or a cast, then round: in Postgres `ROUND(100.0 * total / SUM(total) OVER (), 1)` works because the expression is `numeric`.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Ranked by `total DESC, id`, the orders are 104, 101, 106, 103, 107, 102, 105, 108. Which bucket does `NTILE(3)` put order 103 in?",
+    "options": [
+      {
+        "text": "Bucket 2",
+        "explanation": "Correct. 8 rows into 3 buckets gives sizes 3, 3, 2 (the larger buckets come first). Rows 4 to 6 are bucket 2, and 103 is row 4."
+      },
+      {
+        "text": "Bucket 1",
+        "explanation": "Bucket 1 holds the first three rows: 104, 101 and 106. 103 is fourth."
+      },
+      {
+        "text": "Bucket 3",
+        "explanation": "Bucket 3 is the last two rows, 105 and 108."
+      },
+      {
+        "text": "It depends on the totals, since equal totals share a bucket",
+        "explanation": "NTILE works on row positions, not values. Tied rows can land in different buckets; here the two 60s (103 and 107) happen to share one."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. 8 rows / 3 buckets = 2 remainder 2.\n2. The remainder goes to the first buckets, so the sizes are 3, 3, 2.\n3. Bucket 1: rows 1-3 (104, 101, 106).\n4. Bucket 2: rows 4-6 (103, 107, 102).\n5. Bucket 3: rows 7-8 (105, 108).\n\nOrder 103 is row 4, so **bucket 2**. Because NTILE splits by position, two equal values can straddle a boundary, so it isn't a true percentile.",
+    "link": {
+      "title": "Window functions reference — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this return for order 101?\n\n```sql\nSELECT id,\n  SUM(total) OVER () AS s\nFROM orders\nWHERE customer_id = 1;\n```",
+    "options": [
+      {
+        "text": "650, the total of all orders",
+        "explanation": "WHERE runs before window functions, so the window only sees Ana's three orders."
+      },
+      {
+        "text": "120, its own total",
+        "explanation": "`OVER ()` with no ORDER BY covers the whole (filtered) result, not just the current row."
+      },
+      {
+        "text": "240, the sum of Ana's orders",
+        "explanation": "Correct. The filter leaves 101, 103, 107, and `OVER ()` sums those: 120 + 60 + 60 = 240."
+      },
+      {
+        "text": "An error: a window aggregate can't be mixed with WHERE",
+        "explanation": "WHERE and window functions combine freely; the window just runs on the filtered rows."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. FROM and WHERE produce Ana's rows: 101 (120), 103 (60), 107 (60).\n2. Window functions run on that result set.\n3. `SUM(total) OVER ()` = 240 on each row.\n\nSo if you want \"this order as a share of *all* revenue\" while showing only Ana, compute the window in an inner query first, then filter outside:\n\n```sql\nSELECT * FROM (\n  SELECT id, customer_id,\n    SUM(total) OVER () AS s\n  FROM orders) AS t\nWHERE customer_id = 1;\n```\n\nThat gives 650.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/tutorial-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which expressions give 650 (the grand total) on every one of the 8 rows?",
+    "options": [
+      {
+        "text": "`SUM(total) OVER ()`",
+        "explanation": "Correct. An empty window is the whole result set."
+      },
+      {
+        "text": "`SUM(total) OVER (ORDER BY ordered_on)`",
+        "explanation": "Adding ORDER BY makes it cumulative: 120 on the first row, reaching 650 only on the last."
+      },
+      {
+        "text": "`SUM(total) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)`",
+        "explanation": "Correct. The explicit frame covers the entire partition regardless of the ORDER BY."
+      },
+      {
+        "text": "`SUM(total) OVER (PARTITION BY customer_id)`",
+        "explanation": "This gives per-customer totals (240, 135, 230, 45), not the grand total."
+      },
+      {
+        "text": "`SUM(total) OVER (ORDER BY customer_id)`",
+        "explanation": "Cumulative by customer, with each customer's rows as peers: 240 for Ana's rows, 375 for Ben's, 605 for Cat's, 650 only for Dev's."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Ask two questions of each window: what is the partition, and what is the frame?\n\n| expression | partition | frame |\n|---|---|---|\n| `OVER ()` | all | all |\n| `ORDER BY date` | all | start..current |\n| explicit full frame | all | all |\n| `PARTITION BY cust` | customer | all of it |\n| `ORDER BY cust` | all | start..peers |\n\nOnly a whole-table partition with a whole-partition frame gives 650 everywhere. The last row is the RANGE peer rule again: all of Ana's orders show 240, Ben's 375, Cat's 605, Dev's 650.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  }
+]

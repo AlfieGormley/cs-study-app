@@ -1,0 +1,386 @@
+[
+  {
+    "id": "rel-security-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your database volumes are encrypted at rest with a cloud-managed key. An attacker exploits a SQL injection flaw in the web application and dumps the `customers` table. Does at-rest encryption protect the data?",
+    "options": [
+      {
+        "text": "Yes, because the data on disk is encrypted",
+        "explanation": "Disk encryption is transparent to the database: queries return decrypted rows. The attacker reads data through the application's legitimate database connection, so it arrives in plaintext."
+      },
+      {
+        "text": "No; at-rest encryption protects stolen disks and snapshots, not queries made through the application's own access",
+        "explanation": "Correct. The database decrypts for any authorised query. Defences here are parameterised queries (fixing the injection), least-privilege database users, and field-level encryption of sensitive columns with keys the database never holds."
+      },
+      {
+        "text": "Yes, as long as TLS is enabled between the app and the database",
+        "explanation": "TLS protects data on the wire between app and database. The injection runs *inside* that legitimate connection, so TLS just delivers the stolen rows securely."
+      },
+      {
+        "text": "No, because cloud-managed keys are never secure",
+        "explanation": "Managed key security depends on the provider and selected software or HSM protection level. The issue isn't key strength; it's that this threat bypasses the encryption layer entirely."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Map the threat to the layer each control protects:\n\n| Control | Protects against | Helps here? |\n|---|---|---|\n| Volume encryption | stolen disk/snapshot | ✗ |\n| TLS app↔DB | network sniffing | ✗ |\n| Parameterised queries | injection | ✓ (prevents) |\n| Least-priv DB user | broad dumps | ✓ (limits) |\n| Field-level encryption | DB-level reads | ✓ (ciphertext only) |\n\nAlways ask: *who* can decrypt, and does the attacker act as them? Here the attacker acts as the app, which the DB trusts.",
+    "link": {
+      "title": "OWASP Top 10:2025",
+      "url": "https://top10.owasp.org/2025/"
+    }
+  },
+  {
+    "id": "rel-security-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must encrypt 5 TB of objects using a key held in a symmetric AWS KMS encryption key. Why use **envelope encryption** rather than sending each object to KMS's Encrypt API?",
+    "options": [
+      {
+        "text": "KMS can only encrypt data up to 4 KB per call and is a remote API; envelope encryption encrypts bulk data locally with a data key and only sends small keys to KMS",
+        "explanation": "Correct. KMS's direct Encrypt API is limited to small payloads (4 KB), and sending terabytes through a network API would be slow and costly. A data key encrypts locally; KMS only wraps and unwraps that 32-byte key."
+      },
+      {
+        "text": "Envelope encryption is stronger because it applies two layers of AES to the data",
+        "explanation": "The data is encrypted once, with the data key. The second layer protects the *key*, not the data. Strength comes from AES-256 and the master key staying in the HSM."
+      },
+      {
+        "text": "KMS master keys can be exported, so envelope encryption hides them",
+        "explanation": "KMS master keys are designed never to leave the HSM in plaintext. Envelope encryption works *because* they stay inside, not to hide exported keys."
+      },
+      {
+        "text": "Envelope encryption avoids needing IAM permissions for KMS",
+        "explanation": "You still need IAM permission to call `GenerateDataKey` and `Decrypt`. That permission check and its audit log are key benefits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `GenerateDataKey` → KMS returns a plaintext 256-bit DEK and the same DEK encrypted under the KMS key.\n2. Encrypt each object locally with AES-256-GCM using the DEK with a unique nonce per encryption under that key, using a vetted SDK and respecting per-key/message limits. Hardware throughput figures are absent because no reproducible benchmark was available.\n3. Store ciphertext, nonce, authentication tag and encrypted DEK; wipe the plaintext DEK.\n4. To read: call KMS `Decrypt` on the encrypted DEK (IAM-checked, logged in CloudTrail), then decrypt locally.\n\nCompare: 5 TB through a 4 KB-limited remote API would be `5 × 10¹² / 4,096 ≈ 1.2 billion` calls. With envelope encryption key generation uses one KMS call per data key, with additional unwrap calls when decrypting; data-key caching changes this count.",
+    "link": {
+      "title": "AWS Encryption SDK concepts: envelope encryption",
+      "url": "https://docs.aws.amazon.com/encryption-sdk/latest/developer-guide/concepts.html"
+    }
+  },
+  {
+    "id": "rel-security-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A multi-tenant SaaS stores each tenant's documents encrypted with a per-tenant data key, wrapped by a per-tenant customer managed KMS key generated in AWS KMS. A tenant leaves and demands that all their data be destroyed, including copies in backups going back 90 days. What's the most practical approach? Assume there are no retained plaintext DEKs, alternate key wraps or recoverable key copies.",
+    "options": [
+      {
+        "text": "Restore every backup, delete the tenant's rows, and re-create the backups",
+        "explanation": "This is enormously expensive and risky, and immutable backups (which you should have) may forbid modification by design."
+      },
+      {
+        "text": "Wait 90 days for the backups to expire",
+        "explanation": "This may be acceptable under some policies, but it doesn't destroy the data promptly, and live replicas and logs still contain readable data in the meantime."
+      },
+      {
+        "text": "Re-encrypt the tenant's data under the platform's shared key",
+        "explanation": "This makes the data readable with the shared key: the opposite of destroying it."
+      },
+      {
+        "text": "Delete live data and schedule deletion of the tenant's KMS key (crypto-shredding), so every copy including backups becomes unreadable",
+        "explanation": "Correct. Once the per-tenant key is destroyed, every ciphertext encrypted under it, wherever it lives, can no longer be decrypted. This is a key design benefit of per-tenant envelope keys."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Every copy of the tenant's data (live DB, replicas, snapshots, backups) is ciphertext under DEKs that are wrapped by the tenant's KMS key.\n2. Without the KMS key, no DEK can be unwrapped; without a DEK, no ciphertext can be decrypted.\n3. Schedule key deletion (AWS KMS enforces a waiting period of 7–30 days to prevent accidents).\n4. After deletion, all copies are cryptographically shredded, without touching immutable backups.\n\nDesign implication: decide on per-tenant keys *up front*. Retrofitting may require re-encryption if tenants share DEKs. If existing DEKs are already tenant-isolated, re-wrapping them may suffice, but recoverable old wraps in backups must also be addressed.\n\nThe erasure conclusion depends on the stated key-copy assumptions. Cached/exported plaintext DEKs and any recoverable key versions must also be removed; this is a technical erasure mechanism, not a blanket conclusion about legal compliance.",
+    "link": {
+      "title": "AWS KMS concepts",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html"
+    }
+  },
+  {
+    "id": "rel-security-q4",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "A team stores a database password in `config/prod.env`, committed to the Git repository and baked into the Docker image. Which changes are good secrets-management practice? Select all that apply.",
+    "options": [
+      {
+        "text": "Move the secret to a secrets manager (Vault, AWS Secrets Manager) and fetch it at runtime using the workload's identity",
+        "explanation": "Correct. Access is then authenticated, authorised per secret and audited, and the secret no longer lives in code or images."
+      },
+      {
+        "text": "Rotate the password immediately, because it's already in Git history",
+        "explanation": "Correct. Deleting the file doesn't remove it from history, forks, clones or image layers. Assume it's compromised and rotate."
+      },
+      {
+        "text": "Base64-encode the password in the repo so it isn't readable",
+        "explanation": "Incorrect. Base64 is an encoding, not encryption; anyone can decode it instantly. It gives a false sense of security."
+      },
+      {
+        "text": "Add secret scanning to CI to block future commits containing credentials",
+        "explanation": "Correct as a detection layer. CI can block a merge for detected secrets, but the secret may already be committed or pushed. Add pre-commit or push protection where appropriate, and rotate any exposed credentials; scanners are not complete."
+      },
+      {
+        "text": "Log the password at start-up to make debugging connection problems easier",
+        "explanation": "Incorrect. Logs are widely accessible, retained long-term and shipped to third parties; secrets in logs are a common leak path."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Work through the secret's lifecycle:\n\n1. **Exposure already happened**: it's in Git history and image layers → rotate now.\n2. **Storage**: move to a secrets manager; the app authenticates with its IAM role / Kubernetes service account.\n3. **Rotation**: automate it; ideally use dynamic credentials (Vault database secrets engine issues a unique user per instance with a short lease).\n4. **Prevention**: CI secret scanning; redaction in logging.\n\nEven better: use IAM database authentication where available, removing the long-lived password entirely.",
+    "link": {
+      "title": "Secrets management cheat sheet (OWASP)",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "rel-security-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker phishes an employee's laptop and gains a foothold on the corporate network. In a traditional perimeter (castle-and-moat) design, internal services accept plain HTTP from any internal IP. What does a **zero trust** design change?",
+    "options": [
+      {
+        "text": "It adds a stronger firewall at the perimeter",
+        "explanation": "Strengthening the perimeter doesn't help once the attacker is already inside, which is exactly the scenario. Zero trust stops relying on the perimeter."
+      },
+      {
+        "text": "It moves all services to a separate VPN so only VPN users can reach them",
+        "explanation": "A VPN is just another perimeter. The phished laptop is likely on the VPN; network location still grants implicit trust."
+      },
+      {
+        "text": "Every request is authenticated and authorised on identity (user, device, service) and context, over encrypted channels, so network position grants nothing",
+        "explanation": "Correct as a design goal: enforce identity and authorization policy per resource/session, with continuous risk evaluation. Compromised credentials can still exercise their granted permissions; zero trust reduces rather than eliminates lateral-movement risk."
+      },
+      {
+        "text": "It requires all employees to work from the office",
+        "explanation": "Zero trust removes implicit trust based only on location; location may still inform risk policy; BeyondCorp was designed so employees could work from untrusted networks safely."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare what the attacker can do from the laptop:\n\n| Action | Perimeter | Zero trust |\n|---|---|---|\n| Reach internal HR API | ✓ (internal IP) | ✗ unless user authorised |\n| Call service-to-service APIs | ✓ | ✗ needs workload cert (mTLS) |\n| Sniff internal traffic | ✓ plain HTTP | ✗ encrypted |\n| Use stolen session elsewhere | n/a | limited by device posture checks |\n\nNIST SP 800-207 summarises it: no implicit trust based on network location; access decisions are per-session and per-resource.",
+    "link": {
+      "title": "NIST SP 800-207: Zero Trust Architecture",
+      "url": "https://csrc.nist.gov/pubs/sp/800/207/final"
+    }
+  },
+  {
+    "id": "rel-security-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An image-processing service runs with an IAM role granting `s3:*` on `*`. An SSRF bug lets an attacker make the service fetch the cloud metadata endpoint and steal its temporary credentials. Which combination of controls most reduces the impact?",
+    "options": [
+      {
+        "text": "Enable S3 encryption at rest with SSE-S3",
+        "explanation": "With SSE-S3, S3 decrypts transparently for any principal with read permission. The stolen role has `s3:*`, so the attacker reads plaintext."
+      },
+      {
+        "text": "Rotate the role's credentials every 12 hours",
+        "explanation": "Instance role credentials are already temporary, and an attacker can steal fresh ones via the same SSRF. Rotation alone doesn't bound what the credentials can do."
+      },
+      {
+        "text": "Add a WAF in front of the service",
+        "explanation": "A WAF may block some SSRF payloads, which helps, but it doesn't address the core problem that the role can read every bucket in the account."
+      },
+      {
+        "text": "Scope the role to only the required buckets and actions, require IMDSv2 (session-token metadata), and validate or allow-list outbound URLs",
+        "explanation": "Correct. Scope permissions, require IMDSv2, and restrict outbound destinations. IMDSv2 blocks simple GET-only SSRF paths but is not a universal SSRF defense. Validate resolved IPs and redirects as well as the original URL, and enforce network egress policy."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Break the attack into steps and find a control for each:\n\n1. **SSRF** (attacker makes the server request arbitrary URLs) → validate and allow-list outbound destinations; block link-local `169.254.169.254`.\n2. **Credential theft from metadata** → IMDSv2 requires a PUT to get a session token with a hop limit, which simple SSRF GETs can't do.\n3. **Using the credentials** → least privilege: `s3:GetObject` on `uploads/*`, `s3:PutObject` on `thumbnails/*`. If no other policies grant access, stolen credentials are limited to those actions and resources; audit all effective permissions.\n4. **Detection** → alert on the role being used from unexpected IPs or calling unusual APIs.\n\nThis is close to what happened in the 2019 Capital One breach: SSRF plus an over-permissioned role.",
+    "link": {
+      "title": "AWS Well-Architected Security Pillar",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html"
+    }
+  },
+  {
+    "id": "rel-security-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your site comes under an application-layer (L7) DDoS: 200,000 req/s of valid-looking `GET /search?q=<random>` requests spread approximately evenly across ~50,000 residential IPs. Normal traffic is 5,000 req/s and each search costs ~50 ms of database CPU time. Which defence plan is strongest?",
+    "options": [
+      {
+        "text": "Rely on autoscaling the search tier to absorb the traffic",
+        "explanation": "Random queries defeat caching, so every request hits the database: 200,000 × 50 ms = 10,000 DB-seconds per second. Autoscaling app servers doesn't scale the database that fast, and you pay for the attack."
+      },
+      {
+        "text": "Block the top 100 source IPs",
+        "explanation": "With 50,000 IPs each sending about 4 req/s, the top 100 contribute well under 1% of the attack. Per-IP blocking alone barely dents a widely distributed botnet."
+      },
+      {
+        "text": "Edge protection (CDN/WAF) with bot detection and challenges, rate limits per IP and per session, origin locked to the edge, and load shedding plus a cheaper degraded search",
+        "explanation": "Correct. Layered defences: the edge filters and challenges bots before they reach you; rate limits cap each client; the origin can't be bypassed; and shedding protects the database while serving users a degraded but working search."
+      },
+      {
+        "text": "Switch search from GET to POST",
+        "explanation": "Attackers can send POSTs just as easily. It changes nothing about request volume or cost, and makes legitimate caching harder."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Load: `200,000 × 50 ms = 10,000` DB-seconds per second, i.e. you'd need ~10,000 DB cores busy. Normal is `5,000 × 50 ms = 250`.\n2. Per-IP rate: `200,000 / 50,000 = 4 req/s`, too low for a crude per-IP limit to catch without hurting real users behind NAT.\n3. Layered plan:\n   - **Edge**: WAF and bot management score clients; challenge low-scoring ones (JS/proof-of-work). Challenges add friction but sophisticated bots can pass; measure false positives and attack adaptation.\n   - **Rate limit** per session/token as well as per IP, e.g. 1 search/s for unauthenticated users.\n   - **Origin lock**: restrict ingress and authenticate the intended edge; shared CDN IP ranges alone do not identify your own distribution.\n   - **Protect the DB**: concurrency limit on search, shed beyond it; serve a cached \"popular results\" fallback.\n4. Goal: keep origin load near the 250 DB-s/s it was built for.",
+    "link": {
+      "title": "AWS best practices for DDoS resiliency",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/aws-best-practices-ddos-resiliency/welcome.html"
+    }
+  },
+  {
+    "id": "rel-security-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A penetration test finds that `GET /invoices/1234` returns any customer's invoice to any logged-in user, and that an image-preview feature will fetch internal URLs like `http://169.254.169.254/`. Under the **OWASP Top 10:2025**, which category covers both findings?",
+    "options": [
+      {
+        "text": "A05 Injection",
+        "explanation": "Neither finding injects code or queries into an interpreter. One is a missing ownership check; the other is the server fetching attacker-chosen URLs."
+      },
+      {
+        "text": "A07 Authentication Failures",
+        "explanation": "The users are correctly authenticated. The flaw is what they're *allowed* to reach once logged in, which is authorisation."
+      },
+      {
+        "text": "A10 Server-Side Request Forgery",
+        "explanation": "SSRF was A10 in 2021. In 2025 it's part of A01, and A10 is the new Mishandling of Exceptional Conditions."
+      },
+      {
+        "text": "A01 Broken Access Control",
+        "explanation": "Correct. The invoice bug is an insecure direct object reference, and in the 2025 list server-side request forgery (SSRF) is folded into A01 too, rather than being its own category as in 2021."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Invoice bug: the user is authenticated, but the server never checks `invoice.owner == caller`. That's authorisation → A01.\n2. URL fetch: the server makes requests on the attacker's behalf to places the attacker can't reach directly. That's SSRF, which the 2025 list maps under A01.\n3. Fixes:\n   - one consistent authorisation layer checking ownership on every object;\n   - allow-list outbound destinations, block link-local and internal ranges, and require IMDSv2.\n\nRemember 2025's changes: SSRF merged into A01, supply chain broadened (A03), and A10 is new.",
+    "link": {
+      "title": "A01:2025 Broken Access Control (OWASP)",
+      "url": "https://top10.owasp.org/2025/A01_2025-Broken_Access_Control/"
+    }
+  },
+  {
+    "id": "rel-security-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "OWASP's new **A10:2025 Mishandling of Exceptional Conditions** covers failing open and poor error handling. Which of these are correct designs? Select all that apply.",
+    "options": [
+      {
+        "text": "Swallow exceptions in the rate limiter so a limiter bug never blocks traffic",
+        "explanation": "Incorrect. Silently disabling a protective control under error is failing open, and it will happen during exactly the overload it was meant to handle."
+      },
+      {
+        "text": "If the authorisation service times out, deny the request",
+        "explanation": "Correct. Failing closed means an outage of the policy service can't become an outage of your access control."
+      },
+      {
+        "text": "If JWT signature verification throws an unexpected exception, log it and continue processing the request",
+        "explanation": "Incorrect. That's failing open: any malformed or forged token that triggers the exception skips verification."
+      },
+      {
+        "text": "Return a generic error to clients and log the stack trace server-side",
+        "explanation": "Correct. Stack traces, SQL errors and internal hostnames in responses help attackers map your system."
+      },
+      {
+        "text": "On partial failure, preserve invariants with transactional rollback where available, or explicit compensation/reconciliation for external effects",
+        "explanation": "Correct. A local transaction can roll back its effects; multi-system operations may have irreversible steps and require a saga, compensation or reconciliation."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "For each case, ask: *when this check fails, does the system become more or less permissive?*\n\n| Case | On failure | Verdict |\n|---|---|---|\n| AuthZ timeout → deny | less | ✓ |\n| JWT exception → continue | more | ✗ |\n| Generic client error | less info | ✓ |\n| Rollback / reconciliation | preserve invariants | ✓ |\n| Limiter swallows errors | more | ✗ |\n\nSometimes failing open is a deliberate business choice (e.g. a non-critical recommendation filter), but it must be explicit, documented and monitored, never an accident of exception handling.",
+    "link": {
+      "title": "A10:2025 Mishandling of Exceptional Conditions (OWASP)",
+      "url": "https://top10.owasp.org/2025/A10_2025-Mishandling_of_Exceptional_Conditions/"
+    }
+  },
+  {
+    "id": "rel-security-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You store 10 TB of objects, each encrypted with its own data key (DEK) that is wrapped by an eligible AWS KMS symmetric customer managed key with AWS-generated material and automatic rotation enabled. Policy requires the KMS key to be rotated every year. What does rotation involve?",
+    "options": [
+      {
+        "text": "Rotating the KMS key's material; KMS keeps the old material to unwrap existing DEKs, new DEKs are wrapped with the new material, and the 10 TB is untouched",
+        "explanation": "Correct. With AWS KMS automatic rotation, the key ID stays the same and previous key material is retained for decryption. Optionally you can re-wrap old DEKs, which means only re-encrypting tiny keys."
+      },
+      {
+        "text": "Decrypting and re-encrypting all 10 TB under new data keys",
+        "explanation": "That's what envelope encryption avoids. The bulk data is encrypted under DEKs, which don't need to change when the wrapping key rotates."
+      },
+      {
+        "text": "Deleting the old KMS key so the old material can't be used",
+        "explanation": "Deleting the key would make every existing DEK, and so all 10 TB, permanently unreadable. That's crypto-shredding, not rotation."
+      },
+      {
+        "text": "Nothing; KMS keys never need rotating because they never leave the HSM",
+        "explanation": "Keeping keys in HSMs reduces exposure, but rotation still limits how much data any single key version protects and is often a compliance requirement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Layers: data → encrypted by DEK; DEK → wrapped by KMS key (KEK).\n2. Rotating the KEK changes what wraps *new* DEKs.\n3. Existing wrapped DEKs still decrypt, because KMS retains the old key material under the same key ID.\n4. Cost of rotation:\n\n```\nre-encrypt data:  10 TB      ✗\nre-wrap DEKs:  ~32 B each    (optional)\nKMS rotation:  one setting   ✓\n```\n\n5. If you must re-wrap (e.g. moving to a different key), `ReEncrypt` the encrypted DEKs: calls proportional to the number of DEKs; 10 TB alone does not determine that count.",
+    "link": {
+      "title": "AWS KMS concepts",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html"
+    }
+  },
+  {
+    "id": "rel-security-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker controls machines with a combined **1 Gbps** of upstream bandwidth and finds thousands of internet-exposed memcached servers answering on UDP. With spoofed source addresses and an amplification factor of about **10,000×**, what traffic could arrive at the victim, and what's the root fix?",
+    "options": [
+      {
+        "text": "About 1 Gbps; amplification only changes packet sizes, not volume",
+        "explanation": "Amplification is exactly a volume multiplier: each small request triggers a much larger response sent to the spoofed victim."
+      },
+      {
+        "text": "About 10 Gbps, because only 1% of the reflectors respond",
+        "explanation": "No 1% response fraction is given. If only 1% of the request traffic elicited amplified responses, the ideal result would be 100 Gbps, not 10 Gbps."
+      },
+      {
+        "text": "Up to about 10 Tbps in theory (limited in practice by the reflectors' bandwidth); the root fix is not exposing UDP services like memcached to the internet",
+        "explanation": "Correct. 1 Gbps × 10,000 = 10 Tbps of potential reflected traffic. Real attacks are capped by how much the reflectors can send, which is still enough for record-breaking floods. Closing UDP 11211 to the internet removes the reflectors."
+      },
+      {
+        "text": "Nothing, because the victim's firewall drops unsolicited UDP",
+        "explanation": "A firewall at the victim drops the packets only after they've filled the victim's links. Volumetric floods have to be absorbed upstream, at the edge."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Attacker sends spoofed requests: 1 Gbps of tiny UDP packets whose source address is the victim's.\n2. Each reflector replies to the victim with a response ~10,000× larger.\n3. Theoretical volume: `1 Gbps × 10,000 = 10 Tbps`.\n4. In practice the reflectors' own uplinks cap it, but in 2018 this technique produced attacks above 1 Tbps.\n5. Defences:\n   - **Root fix**: memcached shouldn't listen on public UDP (newer versions disable UDP by default).\n   - **Network**: providers filter spoofed source addresses (BCP 38).\n   - **Victim**: anycast DDoS protection absorbs the flood far from the origin.",
+    "link": {
+      "title": "February 28th DDoS incident report (GitHub)",
+      "url": "https://github.blog/news-insights/company-news/ddos-incident-report/"
+    }
+  },
+  {
+    "id": "rel-security-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A company adopts a service mesh that gives every workload a short-lived certificate and enforces mTLS between all services. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Being on the internal network no longer grants access to services",
+        "explanation": "Correct in the limited sense that network position alone is insufficient: a valid client credential is required. Additional authorization policy determines which authenticated workloads may call which services."
+      },
+      {
+        "text": "End-user authentication can be removed, since every hop is mutually authenticated",
+        "explanation": "Incorrect. mTLS identifies services, not the human on whose behalf they act. User identity and per-user authorisation are still needed."
+      },
+      {
+        "text": "Each service can now cryptographically verify which workload is calling it",
+        "explanation": "Correct. mTLS authenticates both ends; the client's certificate (e.g. a SPIFFE ID) identifies the calling service."
+      },
+      {
+        "text": "mTLS alone now ensures each caller can do only what it should",
+        "explanation": "Incorrect. mTLS answers *who* is calling. You still need authorisation policy, such as \"only orders may call payments `POST /charge`\"."
+      },
+      {
+        "text": "Short-lived certificates shrink the reuse window for a stolen certificate and private key",
+        "explanation": "Correct if the attacker cannot keep renewing credentials. A certificate is public; impersonation also requires its private key or equivalent signing access."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Separate the questions zero trust asks on every call:\n\n| Question | Answered by |\n|---|---|\n| Which service is calling? | mTLS cert |\n| May it do this? | authZ policy |\n| Which user is it for? | user token |\n| Is traffic private? | TLS |\n\nmTLS gives you the first and last rows. Combine it with policy (e.g. Open Policy Agent or the mesh's authorisation rules) and propagated user identity to get the full model NIST SP 800-207 describes.",
+    "link": {
+      "title": "NIST SP 800-207: Zero Trust Architecture",
+      "url": "https://csrc.nist.gov/pubs/sp/800/207/final"
+    }
+  }
+]

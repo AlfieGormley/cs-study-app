@@ -1,0 +1,168 @@
+[
+  {
+    "id": "sync-memory-ordering-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Eight threads each increment a shared request counter 100,000 times. Which declaration and update guarantees the final value is 800,000, with no lock?",
+    "options": [
+      { "text": "`int hits;` with `hits++`", "explanation": "A plain read-modify-write loses updates and is a data race (undefined behaviour in C)." },
+      { "text": "`volatile int hits;` with `hits++`", "explanation": "`volatile` forces real loads and stores but does not make the increment atomic. Updates are still lost." },
+      { "text": "`atomic_int hits;` with `atomic_fetch_add(&hits, 1)`", "explanation": "Correct. The read-modify-write is a single indivisible operation (`lock xadd` on x86), so no increment can be lost." },
+      { "text": "`int hits;` with `hits = hits + 1` written on one line", "explanation": "This is identical to `hits++`: a separate load, add and store. Writing it on one line changes nothing." }
+    ],
+    "answer": 2,
+    "workedExample": "1. The problem is the gap between load and store in a non-atomic increment.\n2. `volatile` does not close the gap; it only stops the compiler caching the value.\n3. `atomic_fetch_add` asks the hardware for an atomic read-modify-write: the core holds the cache line exclusively for the whole operation.\n4. 8 × 100,000 = 800,000 increments, none lost.\n\nIt is also not a data race, because both accesses are atomic.",
+    "link": { "title": "Atomic operations library — cppreference (C)", "url": "https://en.cppreference.com/w/c/atomic" }
+  },
+  {
+    "id": "sync-memory-ordering-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A C programmer marks a flag shared between threads as `volatile bool done;` and believes that makes it thread-safe. What does `volatile` actually guarantee in C?",
+    "options": [
+      { "text": "Accesses are atomic and ordered with respect to other variables", "explanation": "That is what C11 atomics provide. `volatile` provides neither atomicity nor inter-thread ordering." },
+      { "text": "Each access in the source becomes a real memory access, but there is no atomicity and no ordering with other memory operations", "explanation": "Correct. `volatile` is for memory-mapped I/O and signal handlers. For threads, use `atomic_bool`. (Java's `volatile` is a different keyword with acquire/release semantics.)" },
+      { "text": "The variable is stored in a CPU register for speed", "explanation": "The opposite: `volatile` prevents the compiler keeping the value in a register across accesses." },
+      { "text": "The CPU will not reorder accesses to it", "explanation": "`volatile` only constrains the compiler, and only relative to other volatile accesses. It emits no fences, so the CPU can still reorder." }
+    ],
+    "answer": 1,
+    "workedExample": "1. `volatile` tells the compiler the value may change outside its view, so it must load and store it every time the source says to.\n2. It emits no `lock` prefix (no atomic read-modify-write) and no fence (no CPU ordering).\n3. Non-volatile data written before setting the flag can still be reordered after it.\n4. Concurrent non-atomic access is still a data race.\n\nUse `atomic_bool` with `atomic_store`/`atomic_load` (seq_cst by default, or release/acquire).",
+    "link": { "title": "Memory barrier — Wikipedia", "url": "https://en.wikipedia.org/wiki/Memory_barrier" }
+  },
+  {
+    "id": "sync-memory-ordering-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Compiled with `-O2`, this worker sometimes never stops even after the main thread sets `stop = 1`:\n\n```c\nint stop = 0;  // plain int\n\nvoid *worker(void *a) {\n    while (!stop)\n        do_work();\n    return NULL;\n}\n```\n\n`do_work` is an inline function that never touches `stop`. Why?",
+    "options": [
+      { "text": "The CPU cache never receives the main thread's write", "explanation": "Cache coherence propagates the write to other cores, typically within nanoseconds. The issue is that the worker never re-reads memory." },
+      { "text": "`stop` is reset to 0 by the operating system", "explanation": "The OS does not modify program variables." },
+      { "text": "The loop runs too fast to notice", "explanation": "Speed is not the problem; even a fast loop would see the change if it actually re-read `stop`." },
+      { "text": "Since nothing in the loop writes `stop` and data races are UB, the compiler may load it once and loop on a register copy forever", "explanation": "Correct. In race-free single-threaded logic, `stop` cannot change inside the loop, so hoisting the load is legal. Making it `atomic_int` forces a real load every iteration and gives it defined behaviour." }
+    ],
+    "answer": 3,
+    "workedExample": "1. The compiler sees `while (!stop) do_work();` and that `do_work` never writes `stop`.\n2. It may legally rewrite the loop as:\n\n```c\nif (!stop)\n    for (;;) do_work();\n```\n\n3. The main thread's write is irrelevant; the worker never loads `stop` again.\n4. Fix: `atomic_int stop;` and `while (!atomic_load(&stop))`. Atomic loads cannot be merged away like this, and the race becomes well-defined.",
+    "link": { "title": "Memory ordering at compile time — Jeff Preshing", "url": "https://preshing.com/20120625/memory-ordering-at-compile-time/" }
+  },
+  {
+    "id": "sync-memory-ordering-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Store-buffering test, written in x86 assembly (so the compiler cannot interfere). Initially `x = y = 0`.\n\n```\nT1: mov [x], 1    T2: mov [y], 1\n    mov r1, [y]       mov r2, [x]\n```\n\nWhich final results can actually be observed on an x86 multicore machine? Select all that apply.",
+    "options": [
+      { "text": "r1 = 0, r2 = 1", "explanation": "Correct. T1 runs completely before T2: T1 reads y before it is set; T2 then sees x = 1." },
+      { "text": "r1 = 1, r2 = 0", "explanation": "Correct. The mirror image: T2 runs completely first." },
+      { "text": "r1 = 1, r2 = 1", "explanation": "Correct. Both stores complete before either load, for example with the instructions interleaved." },
+      { "text": "r1 = 0, r2 = 0", "explanation": "Correct, and the surprising one. Each store sits in its core's store buffer while the following load reads the old value from cache. x86 permits store→load reordering. An `mfence` between the store and load (or seq_cst atomics) forbids it." }
+    ],
+    "answer": [0, 1, 2, 3],
+    "workedExample": "1. The first three outcomes are all possible under sequential consistency, just from different interleavings.\n2. (0, 0) needs each load to run before the *other* thread's store is visible. Under SC that is impossible: one of the stores has to come first in the global order.\n3. On x86: T1's store to x goes into its store buffer; T1's load of y reads 0 from cache. Same on T2. Then both buffers drain. Result (0, 0).\n4. This is the one reordering TSO allows, and it is exactly what breaks Peterson's algorithm.\n\nSo all four are observable.",
+    "link": { "title": "Memory barrier — Wikipedia", "url": "https://en.wikipedia.org/wiki/Memory_barrier" }
+  },
+  {
+    "id": "sync-memory-ordering-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does the consumer print, on any architecture?\n\n```c\nint data = 0;\natomic_int ready = 0;\n\n// producer thread\ndata = 42;\natomic_store_explicit(&ready, 1,\n    memory_order_release);\n\n// consumer thread\nwhile (!atomic_load_explicit(&ready,\n        memory_order_acquire))\n    ;\nprintf(\"%d\", data);\n```",
+    "options": [
+      { "text": "Always 42", "explanation": "Correct. The acquire load reads the value written by the release store, so they synchronise: the write `data = 42` happens-before the read of `data`." },
+      { "text": "0 or 42, depending on timing", "explanation": "That would be true with relaxed ordering. Release/acquire is precisely what rules out seeing 0 once `ready == 1` is observed." },
+      { "text": "Always 0, because `data` is not atomic", "explanation": "A plain variable is fine when its accesses are ordered by happens-before. The release/acquire pair provides that ordering." },
+      { "text": "42 on x86, but possibly 0 on ARM", "explanation": "That describes the relaxed version. Release/acquire compiles to `stlr`/`ldar` on ARM, which enforce the ordering there too." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Producer: `data = 42` is sequenced-before the release store.\n2. Release: no earlier access may be moved after it.\n3. Consumer: the acquire load eventually reads 1, the value written by the release. Release + acquire-that-reads-it = synchronises-with.\n4. Acquire: no later access may be moved before it, so the read of `data` stays after.\n5. By transitivity, `data = 42` happens-before `printf` reads `data`. It prints 42, and there is no data race.",
+    "link": { "title": "Acquire and release semantics — Jeff Preshing", "url": "https://preshing.com/20120913/acquire-and-release-semantics/" }
+  },
+  {
+    "id": "sync-memory-ordering-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Worker threads increment `atomic_long bytes_sent` after every write. The main thread reads it only after joining all workers, to print a total. Which memory order is sufficient for the increments?",
+    "options": [
+      { "text": "`memory_order_seq_cst`, because anything weaker can lose increments", "explanation": "All memory orders, including relaxed, keep the read-modify-write atomic. Ordering is about *other* memory operations, not about losing updates." },
+      { "text": "`memory_order_acquire`, so the main thread sees the latest value", "explanation": "Acquire is meaningless on its own for a pure increment. Visibility to the main thread comes from `pthread_join`." },
+      { "text": "`memory_order_relaxed`", "explanation": "Correct. Each increment must be atomic, but nothing else is published with it. `pthread_join` already makes every worker's operations happen-before the main thread's read." },
+      { "text": "None; a plain `long` is fine because the main thread reads after join", "explanation": "The workers race with *each other* during the run, so a plain `long` loses updates and is undefined behaviour." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Requirement 1: no lost increments. Any atomic RMW gives that, even relaxed.\n2. Requirement 2: does any other data depend on seeing this counter? No; it is a statistic.\n3. Requirement 3: does the main thread see the final value? Thread termination synchronises-with `pthread_join` returning, so yes.\n4. So `atomic_fetch_add_explicit(&bytes_sent, n, memory_order_relaxed)` is enough.\n\nOn x86 it makes no difference (both use `lock xadd`); on ARM relaxed can avoid barriers.",
+    "link": { "title": "memory_order — cppreference (C)", "url": "https://en.cppreference.com/w/c/atomic/memory_order" }
+  },
+  {
+    "id": "sync-memory-ordering-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Code that hand-rolls synchronisation with plain loads and stores passes every test on x86 laptops but fails occasionally on ARM-based cloud servers. Which explanation is most likely?",
+    "options": [
+      { "text": "ARM caches are not coherent, so writes are never seen by other cores", "explanation": "ARM multiprocessors are cache-coherent. Writes become visible; the question is in what order." },
+      { "text": "ARM permits more reorderings (load-load, load-store, store-store) than x86, which only allows a later load to pass an earlier store", "explanation": "Correct. x86's TSO hides many missing barriers. On a weakly ordered CPU, the same code can see writes in a different order from how they were made." },
+      { "text": "ARM does not support atomic instructions", "explanation": "ARMv8 has LL/SC (`ldxr`/`stxr`) and, since v8.1, single-instruction atomics like `cas` and `ldadd`." },
+      { "text": "The ARM compiler ignores locks", "explanation": "Compilers honour mutex calls on every architecture. Locked code ports fine; it is hand-rolled lock-free code that breaks." }
+    ],
+    "answer": 1,
+    "workedExample": "| Reordering | x86 | ARM |\n|---|---|---|\n| store→load | yes | yes |\n| store→store | no | yes |\n| load→load | no | yes |\n| load→store | no | yes |\n\nA message-passing pattern (`data = 42; flag = 1;` / `if (flag) use(data)`) relies on store→store and load→load order. x86 provides both in hardware, so the bug is masked (though the compiler could still break it). ARM does not, so the bug surfaces. Fix: release/acquire atomics, which work everywhere.",
+    "link": { "title": "Linux kernel memory barriers", "url": "https://www.kernel.org/doc/Documentation/memory-barriers.txt" }
+  },
+  {
+    "id": "sync-memory-ordering-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With classic double-checked locking on a plain pointer, thread A is inside the lock running `instance = make();`. Thread B calls `get()`. What is the dangerous outcome?",
+    "options": [
+      { "text": "B creates a second instance", "explanation": "B either sees NULL and blocks on the lock (then sees A's pointer on its second check), or sees non-NULL. It does not get past the inner check with NULL while A holds the lock." },
+      { "text": "B deadlocks on the lock", "explanation": "A releases the lock after initialising, so B would just wait briefly. Deadlock is not the issue." },
+      { "text": "B always waits for the lock, making the fast path useless", "explanation": "Once `instance` is set, B skips the lock. The problem is that it can skip it too early." },
+      { "text": "B sees a non-NULL `instance` before the object's fields are visible, skips the lock, and uses a partly initialised object", "explanation": "Correct. The store of the pointer can be reordered (by compiler or CPU) before the stores inside `make()`. Nothing pairs B's unlocked read with A's write." }
+    ],
+    "answer": 3,
+    "workedExample": "`instance = make()` is really:\n\n```\np = malloc(...)\np->a = 1; p->b = 2   (init)\ninstance = p         (publish)\n```\n\n1. Without a release, the publish may become visible first.\n2. B's outer check reads `instance` without the lock and without acquire. It sees non-NULL.\n3. B returns `p` and reads `p->a`: may be 0 or garbage.\n\nFix: release store when publishing, acquire load in the outer check (or `pthread_once`, a C++ magic static, a Java `volatile`).",
+    "link": { "title": "The \"Double-Checked Locking is Broken\" declaration", "url": "https://www.cs.umd.edu/~pugh/java/memoryModel/DoubleCheckedLocking.html" }
+  },
+  {
+    "id": "sync-memory-ordering-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer publishes data with a **release** store but has the consumer spin with a **relaxed** load:\n\n```c\n// producer\ndata = 42;\natomic_store_explicit(&ready, 1,\n    memory_order_release);\n// consumer\nwhile (!atomic_load_explicit(&ready,\n        memory_order_relaxed)) ;\nuse(data);\n```\n\nIs `use(data)` guaranteed to see 42?",
+    "options": [
+      { "text": "Yes; the release on the producer side is sufficient", "explanation": "Release only constrains the producer. Synchronises-with needs an acquire on the reading side; without it, the consumer's read of `data` may be ordered before its read of `ready`." },
+      { "text": "Yes, but only on ARM", "explanation": "If anything, ARM is where it is most likely to fail, since it reorders loads freely." },
+      { "text": "No: without an acquire, the consumer's load of `data` can be performed before its load of `ready`, and in C it is also a data race", "explanation": "Correct. Both halves are needed. Add `memory_order_acquire` to the load, or put `atomic_thread_fence(memory_order_acquire)` after the loop." },
+      { "text": "No, because release stores are not visible to relaxed loads", "explanation": "The relaxed load will see the 1 eventually; visibility of `ready` itself is fine. What is missing is ordering of `data` relative to it." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Happens-before from producer to consumer requires synchronises-with.\n2. Synchronises-with requires a release store **and** an acquire operation that reads it.\n3. Here the read is relaxed: no edge, so `data = 42` does not happen-before `use(data)`.\n4. The read of `data` is then an unordered conflicting access to a non-atomic: data race, UB.\n5. In practice, on a weakly ordered CPU, the load of `data` can be satisfied early (even speculatively) and return 0.\n\nA fence-based fix:\n\n```c\nwhile (!atomic_load_explicit(\n    &ready, memory_order_relaxed)) ;\natomic_thread_fence(\n    memory_order_acquire);\nuse(data);\n```",
+    "link": { "title": "memory_order — cppreference (C)", "url": "https://en.cppreference.com/w/c/atomic/memory_order" }
+  },
+  {
+    "id": "sync-memory-ordering-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these create a **happens-before** edge from an operation in thread A to an operation in thread B? Select all that apply.",
+    "options": [
+      { "text": "A unlocks mutex `m`; later B locks `m`", "explanation": "Correct. An unlock synchronises-with the next lock of the same mutex, so everything A did before unlocking is visible to B after locking." },
+      { "text": "A does a release store to `flag`; B does an acquire load of `flag` that reads A's value", "explanation": "Correct. This is the defining synchronises-with pair." },
+      { "text": "A does a relaxed store to `flag`; B does a relaxed load that reads it", "explanation": "Relaxed operations are atomic but create no ordering. B sees `flag` but has no guarantee about A's other writes." },
+      { "text": "A calls `pthread_create` to start thread B", "explanation": "Correct. Everything A did before `pthread_create` happens-before the start of B." },
+      { "text": "A writes `x` and B reads `x` a second later in wall-clock time", "explanation": "Wall-clock time is not a happens-before relation. Without synchronisation, this is a data race regardless of how much time passes." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Happens-before = sequenced-before within a thread, plus synchronises-with between threads, closed under transitivity.\n\nSynchronises-with sources:\n\n1. Mutex unlock → subsequent lock of the same mutex (A).\n2. Release store → acquire load that reads it (B).\n3. Thread creation → thread start (D); thread end → join return.\n\nRelaxed atomics (C) give atomicity only. Time (E) gives nothing: the formal model has no clock, which is why \"it ran much later, so it must see the write\" is not a valid argument.",
+    "link": { "title": "The happens-before relation — Jeff Preshing", "url": "https://preshing.com/20130702/the-happens-before-relation/" }
+  },
+  {
+    "id": "sync-memory-ordering-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To fix the store-buffering test, a developer makes `x` and `y` atomic and uses **release** stores and **acquire** loads:\n\n```\nT1: store(x, 1, release)\n    r1 = load(y, acquire)\nT2: store(y, 1, release)\n    r2 = load(x, acquire)\n```\n\nIs `r1 == 0 && r2 == 0` now impossible?",
+    "options": [
+      { "text": "Yes: acquire and release forbid all reordering", "explanation": "A release stops *earlier* operations moving after the store; an acquire stops *later* operations moving before the load. Neither stops a later acquire load moving ahead of an earlier release store." },
+      { "text": "Yes, but only on x86", "explanation": "On x86 these compile to plain `mov`s, and plain `mov`s are exactly what produced (0, 0) in the first place." },
+      { "text": "No, and it can never be prevented on x86", "explanation": "It can: seq_cst stores compile to `xchg` (or `mov` + `mfence`), which drains the store buffer first." },
+      { "text": "No: release/acquire does not forbid store→load reordering; making the operations `seq_cst` (or adding a seq_cst fence) does", "explanation": "Correct. Only sequential consistency imposes a single total order on all four operations, which forbids both loads reading 0." }
+    ],
+    "answer": 3,
+    "workedExample": "1. In T1, the pair is (release store to x) then (acquire load of y).\n2. Release: earlier ops stay before the store. Nothing earlier here.\n3. Acquire: later ops stay after the load. Nothing later here.\n4. So nothing constrains the load from overtaking the store: still store→load reorderable, still (0, 0).\n5. Also, no synchronises-with: each acquire load reads 0, the initial value, not the other thread's release.\n6. `memory_order_seq_cst` on all four operations puts them in one total order; whichever store is first in that order must be seen by the other thread's load.\n\nOn x86, the seq_cst store becomes `xchg`, which acts as a full barrier.",
+    "link": { "title": "memory_order — cppreference (C)", "url": "https://en.cppreference.com/w/c/atomic/memory_order" }
+  }
+]

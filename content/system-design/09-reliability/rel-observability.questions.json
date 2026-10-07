@@ -1,0 +1,386 @@
+[
+  {
+    "id": "rel-observability-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Checkout latency has doubled. Checkout calls cart, inventory, pricing and payment, each of which calls further services. Which signal most directly shows *which* downstream call is responsible?",
+    "options": [
+      {
+        "text": "A metric showing checkout's average latency",
+        "explanation": "This confirms the symptom but aggregates across all calls, so it can't tell you which dependency added the time."
+      },
+      {
+        "text": "A distributed trace of a slow checkout request",
+        "explanation": "Correct. A trace is a tree of spans with timings for each downstream call, so the waterfall shows exactly which span (e.g. inventory at 610 ms) accounts for the extra latency."
+      },
+      {
+        "text": "CPU utilisation of the checkout hosts",
+        "explanation": "CPU is a resource metric (USE). If checkout is waiting on a slow dependency, its CPU may actually be *low*; it won't point to the culprit."
+      },
+      {
+        "text": "The checkout service's error logs",
+        "explanation": "Slow requests often succeed, producing no errors. Logs also lack the cross-service causal structure a trace provides."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Symptom: checkout p99 went from 400 ms to 800 ms (from metrics).\n2. Pull an exemplar trace from the slow bucket.\n3. Read the waterfall: gateway 840, checkout 790, of which inventory is 610 ms, while cart (60) and payment (90) look normal.\n4. Drill into inventory's spans, then its logs (joined by `trace_id`) and its USE metrics.\n\nMetrics → traces → logs is the usual investigation flow.",
+    "link": {
+      "title": "Traces (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/"
+    }
+  },
+  {
+    "id": "rel-observability-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team adds a `user_id` label to `http_request_duration_seconds` (a classic Prometheus histogram with 12 buckets including +Inf, plus sum and count) so they can debug per-user latency. They have 20 routes, 5 status codes, 50 pods and 2 million active users. What's the problem?",
+    "options": [
+      {
+        "text": "Histograms don't support labels",
+        "explanation": "Histograms support labels like any other metric; that's how you break latency down by route or status. The problem is which label."
+      },
+      {
+        "text": "It will produce too few series for statistical significance",
+        "explanation": "The opposite: it produces an enormous number of series, most with a handful of samples each."
+      },
+      {
+        "text": "Worst-case cardinality exceeds a hundred billion time series; per-user detail should use an appropriately designed log or trace store",
+        "explanation": "Correct. Each unique label combination is a separate series, and each histogram bucket is a series too. Unbounded labels like user ID make cost scale with users instead of with system shape."
+      },
+      {
+        "text": "Nothing, as long as the scrape interval is increased",
+        "explanation": "Scrape interval affects how often samples are taken, not how many distinct series exist. Memory and index size are driven by series count."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Without `user_id`: `20 routes × 5 status × 50 pods = 5,000` label combinations.\n2. A histogram with 12 buckets emits ~14 series per combination (buckets + `_sum` + `_count`): `5,000 × 14 = 70,000` series; assess that against the backend budget.\n3. With `user_id` (worst case, every user seen on every pod/route): `70,000 × 2,000,000 = 1.4 × 10¹¹` series.\n4. Even if each user only hits a few combinations, it's still tens of millions of series.\n\nPut high-cardinality identifiers in **trace attributes** or **structured log fields**, with suitable retention, indexing and access controls; high-cardinality fields still have storage and query costs.",
+    "link": {
+      "title": "Metrics (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/metrics/"
+    }
+  },
+  {
+    "id": "rel-observability-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You have 3 hosts. Their p99 latencies are 100 ms, 100 ms and 1,000 ms. Host 3 serves only 1% of traffic. A dashboard shows the fleet p99 as the mean of the three: 400 ms. What's wrong?",
+    "options": [
+      {
+        "text": "Nothing; averaging host percentiles gives the fleet percentile",
+        "explanation": "Percentiles are not linear, so the mean of percentiles is not the percentile of the combined distribution. It ignores how much traffic each host serves."
+      },
+      {
+        "text": "It should use the maximum, 1,000 ms",
+        "explanation": "The maximum host p99 is not generally the fleet p99. A 1%-traffic host can still materially affect the fleet tail depending on all distributions."
+      },
+      {
+        "text": "Percentiles can't be averaged; merge the hosts' histograms and compute p99 from the combined distribution",
+        "explanation": "Correct. Aggregating raw bucket counts weights each host by its traffic. The fleet p99 can't be derived from the three p99 values at all; it depends on the shape of each host's distribution, with request counts providing the appropriate weighting."
+      },
+      {
+        "text": "It should use the median of the three, 100 ms, which is always correct",
+        "explanation": "The median of host p99 values is not generally correct; these three numbers cannot determine how close it is."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose 10,000 requests: hosts 1 and 2 serve 4,950 each, host 3 serves 100.\n2. Fleet p99 is the latency of the 9,900th fastest request, i.e. the boundary of the slowest 100.\n3. Hosts 1 and 2 each have 1% of requests above 100 ms: about 99 slow requests between them. Host 3 adds up to 100 more slow ones.\n4. If all 100 requests on host 3 exceed 100 ms, roughly 199 are slower than 100 ms, and the slowest 100 of them set the fleet p99. Its value depends on how slow those tails are, which only the full distributions (histograms) reveal. The mean of host p99s (400 ms) has no meaning here: it gives host 3, with 1% of traffic, a third of the weight.\n\nPrometheus does this correctly with `histogram_quantile(0.99, sum by (le) (rate(..._bucket[5m])))`: sum the bucket counts across hosts first, then compute the quantile.",
+    "link": {
+      "title": "Monitoring distributed systems (Google SRE book)",
+      "url": "https://sre.google/sre-book/monitoring-distributed-systems/"
+    }
+  },
+  {
+    "id": "rel-observability-q4",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these are part of Brendan Gregg's **USE** method? Select all that apply.",
+    "options": [
+      {
+        "text": "Utilisation",
+        "explanation": "Correct. Utilisation measures resource busyness: for example device busy time, memory capacity used, or occupied pool slots."
+      },
+      {
+        "text": "Saturation",
+        "explanation": "Correct. The amount of work queued that the resource can't service yet, such as run-queue length or pool wait queue."
+      },
+      {
+        "text": "Errors",
+        "explanation": "Correct. Error events on the resource, e.g. disk I/O errors or dropped packets."
+      },
+      {
+        "text": "Rate",
+        "explanation": "Incorrect. Rate (requests per second) belongs to the RED method, which is for services, not resources."
+      },
+      {
+        "text": "Duration",
+        "explanation": "Incorrect. Duration (latency distribution) is the D in RED. USE describes resource health, not request latency."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Separate the two methods by their target:\n\n| Method | Target | Letters |\n|---|---|---|\n| USE | resources | Utilisation, Saturation, Errors |\n| RED | services | Rate, Errors, Duration |\n\nBoth contain *Errors*, but at different levels: USE counts resource errors (disk, network), RED counts failed requests. In practice, RED tells you users are suffering; USE tells you which resource is the bottleneck.",
+    "link": {
+      "title": "The USE method (Brendan Gregg)",
+      "url": "https://www.brendangregg.com/usemethod.html"
+    }
+  },
+  {
+    "id": "rel-observability-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Traces for your order flow show the API span, then stop. The worker that consumes from a message queue produces its own separate traces with new trace IDs and no links to the producing traces. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The worker's sampling rate is too low",
+        "explanation": "A sampling rate changes retained data, not by itself the propagated trace ID. A new ID can also be intentional across an asynchronous boundary when a span link preserves causality."
+      },
+      {
+        "text": "The trace context (`traceparent`) isn't propagated through the message headers",
+        "explanation": "Correct. HTTP instrumentation usually propagates context automatically, but for queues the producer must inject the context into message headers and the consumer must extract it. Without that, the consumer starts a new root trace."
+      },
+      {
+        "text": "Clocks on the worker hosts are out of sync",
+        "explanation": "Clock skew distorts span timings on the waterfall but doesn't change trace IDs; spans would still join the same trace."
+      },
+      {
+        "text": "Traces can't cross asynchronous boundaries by design",
+        "explanation": "They can. OpenTelemetry supports propagating context through message headers, and can also use span links when a consumer batches many messages."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A trace stays connected only if each hop receives the parent's `trace-id` and `span-id`.\n2. HTTP/gRPC auto-instrumentation injects `traceparent` into request headers.\n3. For a queue: the producer must `inject(context, message.headers)`; the consumer must `extract(message.headers)` and start its span as a child (or link).\n4. If either side skips this, the consumer sees no parent and starts a fresh root span, hence a new trace ID.\n\nCheck: inspect a message's headers. If the configured W3C carrier lacks traceparent, inspect producer instrumentation and any intermediate transport rewriting; also check for deliberately linked separate traces.",
+    "link": {
+      "title": "Context propagation (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/context-propagation/"
+    }
+  },
+  {
+    "id": "rel-observability-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service handles 20,000 req/s. 0.05% of requests fail and 0.5% are slow (>1 s), with no overlap between these groups. Assume all spans reach the tail sampler before its decision and no buffer overflow. You can afford to store about 300 traces/s. Compare 1% head-based sampling with tail-based sampling that keeps all errors and slow traces plus a random sample of the rest. Which is true?",
+    "options": [
+      {
+        "text": "Head-based keeps ~200 traces/s but only ~0.1 error traces/s; tail-based keeps all ~10 errors/s and ~100 slow/s within budget",
+        "explanation": "Correct. Head sampling picks 1% before outcomes are known, so it keeps 1% of errors too. Tail sampling sees the full trace first, so it can keep every interesting one and fill the rest of the budget with normal traffic."
+      },
+      {
+        "text": "Both keep the same number of error traces, because sampling is random",
+        "explanation": "That's only true if both sample uniformly. Tail-based sampling deliberately biases towards errors and slow traces, which is its whole point."
+      },
+      {
+        "text": "Tail-based sampling is cheaper to run because it stores fewer spans",
+        "explanation": "Tail sampling stores roughly the same amount in the backend but needs a collector tier that buffers *all* spans of in-flight traces in memory before deciding, which costs more to run."
+      },
+      {
+        "text": "Head-based sampling at 1% keeps all errors because errors are propagated to the root",
+        "explanation": "With head sampling the keep/drop decision is made at the root span, before the error happens. A dropped trace isn't recorded no matter how it ends."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Head-based at 1%:**\n\n```\nAll:    20,000 × 0.01         = 200/s\nErrors: 20,000 × 0.0005 × 0.01 = 0.1/s\nSlow:   20,000 × 0.005 × 0.01  = 1/s\n```\n\nYou'd see one error trace every 10 seconds.\n\n**Tail-based:**\n\n```\nErrors: 20,000 × 0.0005 = 10/s\nSlow:   20,000 × 0.005  = 100/s\nNormal: 300 − 110       = 190/s\n```\n\nYou get 100× more error traces within the stated 300 traces/s budget (versus 200 traces/s for 1% head sampling). The cost is the collector: it must hold every span for, say, 30 s until the trace completes. At ~10 spans × 2 KB per trace:\n\n```\n20,000 × 30 s × 20 KB ≈ 12 GB\n```\n\nof raw span payload, before object/indexing overhead, spread across collectors that each receive whole traces.",
+    "link": {
+      "title": "Traces (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/"
+    }
+  },
+  {
+    "id": "rel-observability-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your on-call team gets paged ~30 times a week by alerts like \"CPU > 85%\", \"GC pause > 200 ms\" and \"disk > 80%\". Most need no action, and two real customer-facing outages last month weren't paged at all. What change best follows Google SRE guidance?",
+    "options": [
+      {
+        "text": "Lower the thresholds so problems are caught earlier",
+        "explanation": "Lower thresholds on cause-based metrics produce even more noisy pages, deepening alert fatigue without catching outages that show no CPU or disk signal."
+      },
+      {
+        "text": "Add more cause-based alerts for every component",
+        "explanation": "More cause alerts increases noise. Outages have countless possible causes; you can't enumerate them all, so define telemetry that covers the user journeys and failures you need to detect."
+      },
+      {
+        "text": "Page on user-facing symptoms (error rate, latency, SLO burn); move resource metrics to dashboards and tickets",
+        "explanation": "Correct as the main change. Page on actionable user-impact signals with adequate coverage; keep resource diagnostics and advance warnings. Some urgent causes, such as imminent unrecoverable capacity loss, can also justify paging."
+      },
+      {
+        "text": "Route all alerts to email instead of paging",
+        "explanation": "That stops the noise but also stops real outages from waking anyone. The fix is choosing *what* pages, not abandoning paging."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Two kinds of alert:\n   - **Symptom**: \"5% of checkouts failing\". Always matters to users.\n   - **Cause**: \"CPU at 85%\". May or may not matter.\n2. The missed outages likely had causes nobody had an alert for (a bad config, a dependency) but would have shown as errors or latency.\n3. Google's guidance: pages should be urgent, actionable and user-visible. Every page should require intelligent human action.\n4. New setup: page on SLO burn rate for availability and latency (next lesson); show USE metrics on dashboards; ticket on slow-burning resource trends like disk filling within 7 days.",
+    "link": {
+      "title": "Monitoring distributed systems (Google SRE book)",
+      "url": "https://sre.google/sre-book/monitoring-distributed-systems/"
+    }
+  },
+  {
+    "id": "rel-observability-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want to graph (a) how many requests per second a service handles and (b) how many jobs are waiting in its queue right now. Which metric types fit?",
+    "options": [
+      {
+        "text": "(a) gauge, (b) counter",
+        "explanation": "Swapped. A request total only ever increases (a counter), while queue depth rises and falls (a gauge)."
+      },
+      {
+        "text": "Both gauges, set by each request",
+        "explanation": "A gauge holding only the latest per-request update loses intervening events. A precomputed rate gauge is possible, but a cumulative request counter plus reset-aware rate calculation is the conventional choice."
+      },
+      {
+        "text": "Both histograms",
+        "explanation": "Histograms are for distributions of observations, such as latency. Neither a request rate nor a current depth needs buckets."
+      },
+      {
+        "text": "(a) counter, graphed as a rate; (b) gauge",
+        "explanation": "Correct. Count requests with a monotonically increasing counter and graph `rate()` to get requests per second. Queue depth is a current value that goes up and down: a gauge."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Counter**: a running total that only goes up (it resets to 0 on restart, which `rate()` handles). Graph it as `rate(http_requests_total[5m])`, giving req/s.\n2. **Gauge**: a snapshot of a current value. Queue depth, memory in use and temperature are gauges.\n3. **Histogram**: a distribution, such as request duration, so you can compute percentiles.\n\nRule of thumb: if you'd ask \"how many per second?\", use a counter; if you'd ask \"how many right now?\", a gauge; if you'd ask \"how slow is the p99?\", a histogram.",
+    "link": {
+      "title": "Metrics (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/metrics/"
+    }
+  },
+  {
+    "id": "rel-observability-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your latency SLI is \"proportion of requests served in at most **300 ms**\". The service's classic Prometheus latency histogram has bucket boundaries at 100, 250, 500 and 1,000 ms. What's the problem, and the fix?",
+    "options": [
+      {
+        "text": "No problem; histograms record every value exactly",
+        "explanation": "Histograms record only counts per bucket. Requests between 250 and 500 ms are lumped together, so you can't tell which side of 300 ms they fell."
+      },
+      {
+        "text": "Use the average latency instead, which is exact",
+        "explanation": "An average is exact but answers a different question and hides the tail. The SLI is a ratio against a threshold."
+      },
+      {
+        "text": "The count of requests at most 300 ms has to be interpolated inside the 250–500 ms bucket; add a bucket boundary at exactly 300 ms",
+        "explanation": "Correct. With an edge at 300 ms, the good-event count is exact. Percentile and threshold estimates are only as precise as the bucket edges near them."
+      },
+      {
+        "text": "Switch to a gauge holding the latest request's latency",
+        "explanation": "A gauge would show one sample per scrape and lose almost every request. It can't produce a ratio over all requests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose the buckets show 9,000 requests ≤ 250 ms and 9,800 ≤ 500 ms.\n2. Somewhere between 9,000 and 9,800 were at most 300 ms. Linear interpolation guesses `9,000 + 800 × 50/250 = 9,160`, but the real figure could be anywhere in that range.\n3. As an SLI that's between 90% and 98% good: enough to show the 99% target was missed, but insufficient to measure the exact good-event ratio.\n4. Add a bucket at 300 ms: the ≤ 300 ms count is now exact.\n\nPrometheus's `histogram_quantile` interpolates within buckets the same way, so place bucket edges around the latencies your SLOs and alerts use.",
+    "link": {
+      "title": "Histograms and summaries (Prometheus)",
+      "url": "https://prometheus.io/docs/practices/histograms/"
+    }
+  },
+  {
+    "id": "rel-observability-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are good logging practices for a high-traffic payments service? Select all that apply.",
+    "options": [
+      {
+        "text": "Log at boundaries: request in, response out, each external call, and errors",
+        "explanation": "Correct. Boundary logs capture what you need to reconstruct a request without drowning in internal detail."
+      },
+      {
+        "text": "Emit structured JSON with fields such as `trace_id`, `user_id`, `provider` and `duration_ms`",
+        "explanation": "Correct. Structured fields can be filtered and grouped (`provider=stripe AND duration_ms>2000`), and the trace ID joins logs to traces."
+      },
+      {
+        "text": "Log the full card number on payment failures to help debug provider issues",
+        "explanation": "Incorrect. Logs are widely accessible and kept for a long time; full card numbers in logs are a serious compliance and security problem. Log a token or the last four digits."
+      },
+      {
+        "text": "Sample high-volume debug and info logs; prioritize errors with deduplication or rate limits during error storms",
+        "explanation": "Correct. Preserve error counts and representative diagnostic details while preventing a failure storm from exhausting logging capacity."
+      },
+      {
+        "text": "Log one line per item inside a loop that processes 10,000 items per request",
+        "explanation": "Incorrect. Tight-loop logging multiplies volume by the loop size. Log at boundaries, and summarise (\"processed 10,000 items, 3 failed\")."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Score each practice on value and cost:\n\n| Practice | Value | Cost/risk |\n|---|---|---|\n| Structured + trace_id | high | low |\n| Full card numbers | low | severe |\n| Sample info, preserve error evidence | high | low |\n| Per-item loop logs | low | huge volume |\n| Boundary logs | high | modest |\n\nVolume check for the loop: 1,000 req/s × 10,000 lines × 200 bytes = 2 GB/s, about 170 TB a day.",
+    "link": {
+      "title": "Observability primer (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/observability-primer/"
+    }
+  },
+  {
+    "id": "rel-observability-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service handles **20,000 req/s** and writes about **2 KB** of logs per request. Logs are retained for 30 days. You then sample info-level logs at 10%, keeping all errors (which are 2% of the volume). Roughly what are the daily volumes before and after?",
+    "options": [
+      {
+        "text": "About 3.5 TB/day before; about 0.4 TB/day after",
+        "explanation": "Correct. 20,000 × 2 KB × 86,400 s ≈ 3.46 TB/day. After sampling: 2% errors kept in full (~0.07 TB) plus 10% of the other 98% (~0.34 TB) ≈ 0.41 TB/day."
+      },
+      {
+        "text": "About 35 GB/day before; about 4 GB/day after",
+        "explanation": "This is off by a factor of 100. Check the units: 20,000 × 2 KB is 40 MB/s, and there are 86,400 seconds in a day."
+      },
+      {
+        "text": "About 3.5 TB/day before; about 0.35 TB/day after",
+        "explanation": "This samples everything at 10%, including errors. Keeping all errors adds back roughly 0.06 TB/day."
+      },
+      {
+        "text": "About 104 TB/day before",
+        "explanation": "104 TB is the 30-day retained total (3.46 × 30), not the daily volume."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Rate: `20,000 × 2 KB = 40 MB/s`.\n2. Per day: `40 MB/s × 86,400 s ≈ 3.46 TB`.\n3. Retained over 30 days: `≈ 104 TB`.\n4. After sampling:\n\n```\nerrors: 3.46 TB × 2%       ≈ 0.07\ninfo:   3.46 TB × 98% × 10% ≈ 0.34\ntotal                      ≈ 0.41 TB\n```\n\n5. Retained: `≈ 12 TB` instead of 104 TB, roughly an 88% saving.\n\nFor aggregate questions (\"how many payments failed by provider?\") use metrics, whose aggregate storage can remain stable with fixed labels, scrape frequency and retention; collection work still depends on traffic.",
+    "link": {
+      "title": "Observability primer (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/observability-primer/"
+    }
+  },
+  {
+    "id": "rel-observability-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're rolling out OpenTelemetry with a collector tier that does tail-based sampling across 6 collector instances. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Policies can keep every trace with an error or with latency above a threshold, plus a small random share of the rest",
+        "explanation": "Correct as a policy goal if the relevant spans arrive before the decision and capacity limits are not exceeded; tail sampling cannot recover spans dropped upstream."
+      },
+      {
+        "text": "Tail sampling makes context propagation unnecessary",
+        "explanation": "Incorrect. Without propagated context the spans never join into one trace, so there is nothing whole to sample."
+      },
+      {
+        "text": "All spans of a given trace must reach the same collector instance, e.g. via a load-balancing exporter keyed on trace ID",
+        "explanation": "Correct. A tail-sampling decision needs the whole trace. If spans are spread over 6 collectors, none of them sees the full picture."
+      },
+      {
+        "text": "Collectors must buffer spans for a decision window, so memory scales with traffic × window",
+        "explanation": "Correct. Each collector holds in-flight traces until it decides. Longer windows catch slower traces but need more memory."
+      },
+      {
+        "text": "Switching from Jaeger to another backend requires re-instrumenting every service",
+        "explanation": "Incorrect as a general requirement. Compatible OTel instrumentation often needs only exporter configuration changes; backend-specific features may need extra migration work."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Think about what a tail-sampling decision needs: **the complete trace**.\n\n1. Spans arrive from many services at different times. Route by trace ID so one collector gets them all.\n2. Wait a decision window (e.g. 30 s) for late spans; memory ≈ span rate × window × span size.\n3. Apply policies: errors → keep; latency > 1 s → keep; otherwise keep ~1%.\n4. Export the kept traces to a supported backend via the collector's exporters.\n\nPropagation (`traceparent`) is still what makes the spans one trace in the first place.",
+    "link": {
+      "title": "Traces (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/"
+    }
+  }
+]

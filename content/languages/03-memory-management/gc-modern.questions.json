@@ -1,0 +1,349 @@
+[
+  {
+    "id": "gc-modern-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the difference between a *parallel* and a *concurrent* garbage collector?",
+    "options": [
+      {
+        "text": "They mean the same thing",
+        "explanation": "They are distinct properties, and a collector can have either or both."
+      },
+      {
+        "text": "Parallel runs on several machines; concurrent runs on one",
+        "explanation": "Both terms are about threads within one process, not distribution."
+      },
+      {
+        "text": "Concurrent collectors never pause at all",
+        "explanation": "Even concurrent collectors have short stop-the-world phases, for example to start and finish marking."
+      },
+      {
+        "text": "Parallel means multiple GC threads work at once; concurrent means GC work overlaps application execution",
+        "explanation": "These are independent properties. A concurrent collector may also use parallel workers; the JVM collector named Parallel GC uses stop-the-world collection."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask two questions about a collector:\n\n1. Does GC work use multiple threads? If yes: **parallel**.\n2. Does the application run during GC work? If yes: **concurrent**.\n\n| Collector | Parallel | Concurrent |\n|---|---|---|\n| Serial | no | no |\n| Parallel | yes | no |\n| G1 | yes | marking |\n| ZGC | yes | almost all |\n\nConcurrency is what shrinks pauses; parallelism just shortens them by spreading the work.",
+    "link": {
+      "title": "HotSpot GC tuning guide: G1 — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-g1-garbage-collector1.html"
+    }
+  },
+  {
+    "id": "gc-modern-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In tri-colour marking, what does it mean for an object to be *grey*?",
+    "options": [
+      {
+        "text": "It has been reached, but its fields have not been scanned yet",
+        "explanation": "Correct. Grey objects form the collector's work list. Scanning one greys its white children and turns it black."
+      },
+      {
+        "text": "It has been found to be garbage",
+        "explanation": "At the end of marking, garbage is whatever is still *white*."
+      },
+      {
+        "text": "It and all its children have been fully scanned",
+        "explanation": "Black means the object’s own fields have been scanned; its children may still be grey and awaiting scanning."
+      },
+      {
+        "text": "It is in the old generation",
+        "explanation": "Colours are about marking progress, not generations."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The three colours:\n\n- white: not yet reached\n- grey: reached, fields pending\n- black: reached, fields done\n\nMarking loop:\n\n```\ngrey = roots\nwhile grey:\n    obj = grey.pop()\n    for c in children(obj):\n        if white(c): make_grey(c)\n    make_black(obj)\n```\n\nWhen the grey set is empty, white objects are unreachable.",
+    "link": {
+      "title": "Tri-color marking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection#Tri-color_marking"
+    }
+  },
+  {
+    "id": "gc-modern-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Go service has 300 MB of live heap and GOGC=100. Ignoring GC roots and a binding memory limit, what is its approximate heap-size goal (not the collection-start threshold)?",
+    "options": [
+      {
+        "text": "300 MB",
+        "explanation": "The goal includes an allocation allowance in addition to the measured live heap."
+      },
+      {
+        "text": "400 MB",
+        "explanation": "That would be GOGC=33, growth of a third."
+      },
+      {
+        "text": "600 MB",
+        "explanation": "Correct. target = live + live × 100/100 = 300 + 300 = 600 MB (ignoring the stacks and globals Go 1.18+ also counts)."
+      },
+      {
+        "text": "30 GB",
+        "explanation": "GOGC is a percentage, not a multiplier of 100."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Formula:\n\n```\ntarget = live + live x GOGC/100\n```\n\n2. Plug in:\n\n```\n300 + 300 x 100/100\n= 300 + 300\n= 600 MB\n```\n\n3. This gives a 300 MB allocation allowance in the simplified model. The pacer starts marking before the goal; the goal is not the trigger threshold.\n\nWith GOGC=50 the target would be 450 MB (more frequent GC, less memory); with GOGC=200 it would be 900 MB.",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-modern-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During concurrent marking, the program does the following. Which step, combined with the others, would cause a live object to be freed if there were **no** barrier?\n\n1. `A` (black) is already scanned.\n2. `A.f = C`, where `C` is white.\n3. `B.g = null`, where `B` (grey) held the only other pointer to `C`.",
+    "options": [
+      {
+        "text": "Step 2 alone is enough",
+        "explanation": "A black-to-white pointer is harmless if a grey object still leads to C, because C will be found through it."
+      },
+      {
+        "text": "Step 3 alone is enough",
+        "explanation": "Removing B's pointer alone would make C genuinely unreachable (if A hadn't been given it), so freeing it would be correct."
+      },
+      {
+        "text": "Steps 2 and 3 together: a black object points at C and no grey path to it remains",
+        "explanation": "Correct. Both conditions must hold. The collector won't rescan black A, and it can no longer reach C through B, so C stays white and is freed while A still uses it."
+      },
+      {
+        "text": "None: tracing collectors can't free live objects",
+        "explanation": "Without barriers, a concurrent tracing collector certainly can. That's why barriers are a correctness requirement."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. After step 2, C is pointed to by black A and grey B.\n2. After step 3, only A points to C.\n3. The collector:\n   - won't revisit A (black)\n   - reaches B, finds `g` is null\n   - never reaches C\n4. C stays white and is swept, while A.f still points at it.\n\nBarriers break one of the two conditions:\n- insertion (Dijkstra): at step 2, grey C\n- deletion / SATB (Yuasa): at step 3, grey C (the overwritten value)",
+    "link": {
+      "title": "Tri-color marking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection#Tri-color_marking"
+    }
+  },
+  {
+    "id": "gc-modern-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why is it called 'Garbage-First' (G1)?",
+    "options": [
+      {
+        "text": "It collects the youngest objects first because they are most likely to be garbage",
+        "explanation": "All generational collectors do that. G1's distinctive choice is about which *old* regions to collect."
+      },
+      {
+        "text": "After concurrent marking, mixed collections evacuate the old regions with the most garbage first, freeing the most space per unit of copying",
+        "explanation": "Correct. Concurrent marking estimates each region's live bytes. Regions that are mostly garbage are cheapest to evacuate and free the most, so they go first."
+      },
+      {
+        "text": "It frees garbage before marking live objects",
+        "explanation": "A tracing collector must mark before it knows what's garbage."
+      },
+      {
+        "text": "It was the first garbage collector in Java",
+        "explanation": "Java has had collectors since 1.0; G1 arrived in JDK 7 and became the default in JDK 9."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. G1 splits the heap into regions.\n2. Concurrent marking records how many live bytes each old region has.\n3. Evacuating a region costs ~ its live bytes; it frees the whole region.\n\n| Region | Live | Copy cost | Freed |\n|---|---|---|---|\n| R1 | 10% | low | 90% |\n| R2 | 80% | high | 20% |\n\n4. Pick R1 first. G1 adds regions to a mixed collection, cheapest first, until its pause-time budget is used.",
+    "link": {
+      "title": "HotSpot GC tuning guide: G1 — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-g1-garbage-collector1.html"
+    }
+  },
+  {
+    "id": "gc-modern-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team moves a JVM service with a 48 GB heap from G1 to ZGC. Which change in behaviour should they expect?",
+    "options": [
+      {
+        "text": "ZGC targets much shorter pauses through concurrent relocation, but CPU costs and required headroom must be measured",
+        "explanation": "This is a design trade-off, not a guarantee of sub-millisecond application latency or a fixed throughput penalty."
+      },
+      {
+        "text": "Throughput rises and pauses rise",
+        "explanation": "ZGC is designed for latency; it generally does not beat Parallel or G1 on raw throughput."
+      },
+      {
+        "text": "Memory use halves because ZGC compacts better",
+        "explanation": "Concurrent collectors typically need *more* headroom, because garbage accumulates while they work."
+      },
+      {
+        "text": "Nothing changes because both are stop-the-world collectors",
+        "explanation": "G1 does young and mixed evacuation in pauses; ZGC does nearly everything concurrently. That's a big difference."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. G1 evacuates young and mixed collection sets during pauses.\n2. ZGC relocates concurrently and targets very short pauses.\n3. Generational ZGC uses load and store barriers.\n4. Measure CPU cost, allocation stalls and tail latency on the actual workload; a collector choice does not guarantee an SLO.",
+    "link": {
+      "title": "HotSpot GC tuning guide: ZGC — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/z-garbage-collector.html"
+    }
+  },
+  {
+    "id": "gc-modern-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Go's garbage collector are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It is a concurrent tri-colour mark-sweep collector",
+        "explanation": "Correct. Marking and sweeping happen alongside goroutines, with two short stop-the-world phases."
+      },
+      {
+        "text": "It is generational, with a young generation like the JVM's",
+        "explanation": "Go's collector is not generational. Escape analysis keeps many short-lived values on goroutine stacks instead."
+      },
+      {
+        "text": "It does not move heap objects",
+        "explanation": "Correct. Go's GC is non-moving, which keeps interior pointers and C interop simple. (Goroutine *stacks* are moved when they grow, but that is separate from the heap collector.)"
+      },
+      {
+        "text": "A goroutine allocating heavily during marking may be made to help with marking",
+        "explanation": "Correct. These *mark assists* keep allocation from outrunning the collector."
+      },
+      {
+        "text": "Its main tuning knobs are GOGC and GOMEMLIMIT",
+        "explanation": "GOGC sets the heap growth goal; the pacer starts earlier. GOMEMLIMIT is a soft limit on memory managed by the Go runtime, not on all process memory."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3,
+      4
+    ],
+    "workedExample": "Check each against the design:\n\n1. Concurrent tri-colour mark-sweep: yes.\n2. Generational: no. Go relies on escape analysis and a fast allocator instead.\n3. Non-moving heap: yes.\n4. Mark assists: yes; the pacer charges allocating goroutines marking work.\n5. GOGC and GOMEMLIMIT: yes; the Go team deliberately exposes very few knobs.\n\nFour of five are true.",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-modern-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume requests otherwise take a fixed 4 ms, arrivals are uniform, a 200 ms pause starts every 8 seconds, and ignore in-flight requests and post-pause queueing. What fraction arrive during a pause and what happens to p99?",
+    "options": [
+      {
+        "text": "About 0.025%; the p99 is unaffected",
+        "explanation": "200 ms of every 8,000 ms is 2.5%, not 0.025%. Check the units."
+      },
+      {
+        "text": "About 25%; the median rises to 200 ms",
+        "explanation": "That would need 2 s of pause every 8 s."
+      },
+      {
+        "text": "None, because GC runs between requests",
+        "explanation": "A stop-the-world pause freezes every thread, including those mid-request."
+      },
+      {
+        "text": "About 2.5%; the p99 falls inside the delayed group, so it's tens to hundreds of milliseconds",
+        "explanation": "Correct in the stated model: 2.5% arrive during the pause; p99 is about 124 ms. A median alone would not determine that percentile."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "200/8000 = 2.5% of arrivals occur during pauses. Their added waits are uniformly spread over 0–200 ms. The upper 1% of all requests corresponds to waits above 120 ms, so this model gives p99 = 124 ms. The median remains 4 ms. In-flight work, other latency variation and queue draining change real results.",
+    "link": {
+      "title": "Getting to Go: Go's GC journey — go.dev",
+      "url": "https://go.dev/blog/ismmkeynote"
+    }
+  },
+  {
+    "id": "gc-modern-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Go service has a 2 GiB container limit, and live heap can grow from 600 MiB to 1.2 GiB. Measurements show little memory outside the Go runtime. Which is a reasonable configuration to test, rather than a guaranteed OOM fix?",
+    "options": [
+      {
+        "text": "GOGC=off, with no memory limit",
+        "explanation": "With no trigger at all, the heap grows until the container kills it, faster than before."
+      },
+      {
+        "text": "GOGC=400 so the GC runs less often",
+        "explanation": "Less frequent GC raises the peak heap (1.2 GiB live → about 6 GiB target), making OOM kills more likely."
+      },
+      {
+        "text": "Set GOMEMLIMIT to around 1.8 GiB and keep GOGC=100",
+        "explanation": "A soft runtime memory limit below the container limit can restrain growth, but headroom must cover memory the runtime does not track. It can still exceed its soft limit."
+      },
+      {
+        "text": "Call runtime.GC() in a loop every 10 ms",
+        "explanation": "Forcing constant full collections burns CPU and still doesn't bound the heap between calls."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ignoring roots, 600 MiB live gives a 1200 MiB heap goal at GOGC=100.\n2. A 1.2 GiB live heap gives a 2.4 GiB goal, beyond the container limit.\n3. For example, GOMEMLIMIT=1800MiB (about 1.76 GiB) lowers the runtime memory budget; measure the margin required by this process.\n4. The budget includes runtime-managed stacks and metadata, but excludes C allocations and other untracked memory.\n5. It is soft: under GC pressure the runtime can exceed it, so it does not guarantee avoidance of an OOM kill.",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-modern-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does ZGC use a *load* barrier rather than relying only on a *write* barrier as G1 does?",
+    "options": [
+      {
+        "text": "Loads are rarer than stores, so a load barrier is cheaper",
+        "explanation": "Load/store frequency is workload-dependent; the reason for this barrier is safe use of potentially relocated references."
+      },
+      {
+        "text": "Because objects can be relocated while threads run, every reference a thread reads must be checked and, if stale, fixed before use",
+        "explanation": "Correct. A write barrier sees only stores. Concurrent relocation means any loaded pointer might refer to an object's old location, so ZGC checks pointer colour bits on every load and heals stale ones in place."
+      },
+      {
+        "text": "Load barriers remove the need for marking",
+        "explanation": "ZGC still marks objects. Generational ZGC also uses store barriers; load barriers are not its only barrier mechanism."
+      },
+      {
+        "text": "Write barriers don't work on 64-bit machines",
+        "explanation": "G1, Go and others use write barriers on 64-bit hardware without trouble."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. G1 moves objects only inside stop-the-world pauses. After the pause, all references have been updated, so threads never see an old address. A write barrier (for SATB and remembered sets) is enough.\n2. ZGC moves objects **while threads run**. A thread could load a field still holding the old address.\n3. So every reference load checks the pointer's colour bits:\n   - good: use it (fast path, a few instructions)\n   - bad: slow path finds or completes the relocation, then writes the fixed pointer back\n4. Self-healing means each stale field is repaired once.\n\nThe trade: more barrier work on a frequent operation, in exchange for pauses that don't grow with heap size.\n\nThis explanation focuses on relocation. Modern generational ZGC also uses store barriers for marking and remembered-set work.\n\nA field can need healing again in a later GC phase/cycle. This describes the mechanism, not a promise that every machine-code load retains an independent barrier after optimization.",
+    "link": {
+      "title": "HotSpot GC tuning guide: ZGC — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/z-garbage-collector.html"
+    }
+  },
+  {
+    "id": "gc-modern-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are choosing a JVM collector. Which pairings of workload and collector are sensible? Select all that apply.",
+    "options": [
+      {
+        "text": "A nightly batch job that crunches data for an hour, where only total runtime matters: Parallel GC",
+        "explanation": "Correct. Parallel GC maximises throughput; long pauses don't matter if nobody is waiting on a response."
+      },
+      {
+        "text": "A typical web service with a 4 GB heap and a 200 ms latency budget: G1, the default",
+        "explanation": "G1 is a reasonable baseline to measure. Its 200 ms soft pause goal does not guarantee a 200 ms request latency budget."
+      },
+      {
+        "text": "A trading gateway with a 64 GB heap and a 2 ms p99.9 requirement: ZGC",
+        "explanation": "ZGC is a reasonable candidate because it targets low pause times with concurrent relocation. Benchmark it: the collector cannot guarantee a 2 ms p99.9 end-to-end latency."
+      },
+      {
+        "text": "A latency-critical service where the team wants zero GC overhead: Parallel GC, because it has no barriers",
+        "explanation": "Parallel GC still has barrier and collection work and uses stop-the-world pauses. It offers no zero-overhead or latency guarantee."
+      },
+      {
+        "text": "Any service: tune 30 flags from an old blog post rather than accepting defaults",
+        "explanation": "Modern collectors adapt automatically; stale flags often hurt. Measure with GC logs, then change one thing at a time."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Match the goal to the collector:\n\n| Goal | Collector |\n|---|---|\n| throughput | Parallel |\n| balanced | G1 |\n| low latency, big heap | ZGC / Shenandoah |\n\n1. Batch: throughput. Parallel. Sensible.\n2. Typical service: G1 default. Sensible.\n3. Strict latency, big heap: ZGC. Sensible.\n4. \"Zero overhead\": no collector has zero overhead, and Parallel GC has stop-the-world pauses whose lengths require measurement. Not sensible.\n5. Flag cargo-culting: not sensible.",
+    "link": {
+      "title": "HotSpot GC tuning guide: G1 — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-g1-garbage-collector1.html"
+    }
+  }
+]

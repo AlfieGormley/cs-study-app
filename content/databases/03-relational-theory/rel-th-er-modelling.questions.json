@@ -1,0 +1,368 @@
+[
+  {
+    "id": "rel-th-er-modelling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Each album belongs to exactly one artist, and an artist can have many albums. How do you map this relationship to tables?",
+    "options": [
+      {
+        "text": "Add `album_ids` (an array) to `artist`",
+        "explanation": "An array of references breaks 1NF and cannot carry foreign-key constraints, so dangling ids go unnoticed."
+      },
+      {
+        "text": "Add `artist_id NOT NULL REFERENCES artist` to `album`",
+        "explanation": "Correct. In a 1:N relationship the foreign key goes on the 'many' side. Total participation (every album has an artist) makes it `NOT NULL`."
+      },
+      {
+        "text": "Create a junction table `artist_album(artist_id, album_id)`",
+        "explanation": "A junction table is for M:N. With a composite key it would allow one album to have several artists, which this rule forbids."
+      },
+      {
+        "text": "Add `album_id` to `artist`",
+        "explanation": "One column on the 'one' side can hold only one album, but an artist can have many."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify the ends: Artist (one) ||----o< Album (many).\n2. Rule: put the foreign key on the **many** side, since each album references exactly one artist.\n3. Each album must have an artist (total participation), so `NOT NULL`.\n\n```sql\nartist_id INT NOT NULL\n  REFERENCES artist\n```",
+    "link": {
+      "title": "Cardinality (data modeling) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cardinality_(data_modeling)"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Students take many courses and each course has many students. Each enrolment has a grade. Where does `grade` go?",
+    "options": [
+      {
+        "text": "On `student`",
+        "explanation": "A student has many grades, one per course, so a single column on student cannot hold them."
+      },
+      {
+        "text": "On `course`",
+        "explanation": "A course has a grade per student, not one grade, so it does not belong here either."
+      },
+      {
+        "text": "In a separate `grade` table with its own id and no foreign keys",
+        "explanation": "Without the student and course keys the grade is not connected to anything."
+      },
+      {
+        "text": "On a junction table `enrolment(student_id, course_id, grade)`",
+        "explanation": "Correct. M:N relationships become a junction table, and attributes of the relationship itself (the grade for *this* student on *this* course) live on it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Student–Course is M:N, so map it to a junction (associative) table.\n2. Ask what `grade` depends on: `{student_id, course_id} → grade`. Neither entity alone determines it.\n3. So it is a relationship attribute and lives on the junction table:\n\n```sql\nCREATE TABLE enrolment (\n  student_id INT REFERENCES student,\n  course_id  INT REFERENCES course,\n  grade      TEXT,\n  PRIMARY KEY (student_id, course_id));\n```",
+    "link": {
+      "title": "Associative entity — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Associative_entity"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An artist can be tagged with several genres, and users filter artists by genre. How should the multivalued attribute `genres` be stored?",
+    "options": [
+      {
+        "text": "A table `artist_genre(artist_id, genre)` with primary key `(artist_id, genre)`",
+        "explanation": "Correct. A multivalued attribute becomes its own table keyed by owner plus value. It can be indexed by genre and constrained (for example with a foreign key to a `genre` table)."
+      },
+      {
+        "text": "Columns `genre1`, `genre2`, `genre3`",
+        "explanation": "This caps the number of genres, and every filter must check three columns. It is a repeating group spread across columns."
+      },
+      {
+        "text": "A text column `'rock,indie,folk'`",
+        "explanation": "Filtering would need string matching, and nothing enforces valid genre names. This is a repeating group, which breaks 1NF."
+      },
+      {
+        "text": "A new row in `artist` per genre",
+        "explanation": "That duplicates every other artist attribute once per genre, creating update anomalies."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Mapping rule: multivalued attribute → separate table (owner key, value).\n2. Key: `(artist_id, genre)`, so the same genre cannot be added twice.\n3. Query: `SELECT artist_id FROM artist_genre WHERE genre = 'folk'`, which an index on `(genre)` speeds up.\n4. Optional: `genre REFERENCES genre(name)` so only known genres are allowed.",
+    "link": {
+      "title": "Entity–relationship model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Every employee must belong to exactly one department, and a newly created department may have no employees yet. Which DDL captures **both** the cardinality and the participation?",
+    "options": [
+      {
+        "text": "`department.employee_id REFERENCES employee`",
+        "explanation": "The foreign key is on the wrong side: one column on department can name only one employee."
+      },
+      {
+        "text": "`employee.dept_id REFERENCES department` (nullable)",
+        "explanation": "Right side, but nullable lets an employee have no department, so total participation on the employee side is lost."
+      },
+      {
+        "text": "`employee.dept_id INT NOT NULL REFERENCES department`",
+        "explanation": "Correct. The foreign key on the many side gives 'each employee has at most one department'; `NOT NULL` makes it exactly one. Departments with no employees are allowed automatically."
+      },
+      {
+        "text": "A junction table `emp_dept(emp_id, dept_id)` with primary key `(emp_id, dept_id)`",
+        "explanation": "That allows an employee in several departments, and does not force every employee to have one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Read the constraints from each end:\n\n| End | Min | Max |\n|---|---|---|\n| employee → dept | 1 | 1 |\n| dept → employees | 0 | many |\n\n1. Max 1 department per employee: foreign key on employee.\n2. Min 1: `NOT NULL`.\n3. Min 0 employees per department: nothing to add; a department row with no referencing employees is fine.\n\nNote: enforcing \"a department must have at least one employee\" is much harder in SQL; it needs deferred constraints or triggers.",
+    "link": {
+      "title": "Cardinality (data modeling) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cardinality_(data_modeling)"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Playlists must allow the same track more than once, in a user-chosen order. Which primary key for `playlist_entry(playlist_id, track_id, position, added_at)` fits?",
+    "options": [
+      {
+        "text": "`(playlist_id, track_id)`",
+        "explanation": "This forbids adding the same track twice to one playlist, which the requirement allows."
+      },
+      {
+        "text": "`(playlist_id, position)`",
+        "explanation": "Correct. Each slot in a playlist holds one entry, and the same track can occupy several slots."
+      },
+      {
+        "text": "`(track_id)`",
+        "explanation": "That would let each track appear on only one playlist in the whole system."
+      },
+      {
+        "text": "`(playlist_id, track_id, added_at)`",
+        "explanation": "This allows duplicates, but it does not stop two entries claiming the same position, and timestamps are a fragile part of a key."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. What uniquely identifies an entry? \"The song in slot N of playlist P\".\n2. So `{playlist_id, position} → track_id, added_at`. That is the key.\n3. Check the requirement: two rows (P, 3, T9) and (P, 7, T9) are both allowed. Two rows for (P, 3) are not.\n4. Lesson: a junction table's key comes from the rule you want, not automatically from both foreign keys.",
+    "link": {
+      "title": "Associative entity — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Associative_entity"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Room numbers are unique only within a building (both Main and Annex have a room 101). Rooms cannot exist without their building. How should `room` be defined?",
+    "options": [
+      {
+        "text": "Primary key `(building_id, room_no)`, with `building_id REFERENCES building ON DELETE CASCADE`",
+        "explanation": "Correct. Room is a weak entity: its key is the owner's key plus the partial key `room_no`, and cascade reflects that it cannot exist without its building."
+      },
+      {
+        "text": "`room_no INT PRIMARY KEY`, `building_id INT`",
+        "explanation": "Room 101 exists in two buildings, so `room_no` alone cannot be a key."
+      },
+      {
+        "text": "Primary key `(building_id, room_no)` with no foreign key",
+        "explanation": "The key is right, but without the foreign key a room can reference a building that does not exist."
+      },
+      {
+        "text": "Store rooms as an array column on `building`",
+        "explanation": "Rooms have their own attributes and are referenced by bookings; an array cannot carry keys or foreign keys."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Room is identified only relative to its building: a **weak entity**.\n2. Partial key: `room_no`. Full key: owner key + partial key = `(building_id, room_no)`.\n3. Existence dependency: deleting a building deletes its rooms → `ON DELETE CASCADE`.\n\n```sql\nCREATE TABLE room (\n  building_id INT REFERENCES building\n    ON DELETE CASCADE,\n  room_no INT,\n  PRIMARY KEY (building_id, room_no));\n```",
+    "link": {
+      "title": "Weak entity — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Weak_entity"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, each user has at most one profile, and each profile belongs to exactly one user. Which designs enforce this? Select all that apply.",
+    "options": [
+      {
+        "text": "`profile.user_id INT NOT NULL UNIQUE REFERENCES users`",
+        "explanation": "Correct. The foreign key ties each profile to exactly one user, and `UNIQUE` stops a second profile for the same user."
+      },
+      {
+        "text": "`profile.user_id INT PRIMARY KEY REFERENCES users`",
+        "explanation": "Correct. Sharing the primary key makes it unique and not null, so this is the same 1:1 constraint in a compact form."
+      },
+      {
+        "text": "`profile.user_id INT NOT NULL REFERENCES users` with no unique constraint",
+        "explanation": "Without `UNIQUE`, one user could have many profiles; that is 1:N, not 1:1."
+      },
+      {
+        "text": "A junction table `user_profile(user_id, profile_id)` with primary key `(user_id, profile_id)`",
+        "explanation": "A composite key allows many profiles per user and many users per profile: that is M:N."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1:1 with total participation on the profile side:\n\n1. Put the foreign key on the side that must participate (profile), so it can be `NOT NULL`.\n2. Add uniqueness on the foreign key to cap it at one profile per user.\n3. Use NOT NULL together with UNIQUE, or a PostgreSQL PRIMARY KEY, which supplies both properties.\n4. If both sides were total and always created together, merging the tables would be simplest.",
+    "link": {
+      "title": "Cardinality (data modeling) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cardinality_(data_modeling)"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`Supplies(supplier, part, project)` holds (S1, P1, J2), (S1, P2, J1) and (S2, P1, J1). A designer replaces it with three binary tables SP, PJ and SJ (each the projection onto two attributes). How many rows does SP ⋈ PJ ⋈ SJ produce?",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That would mean the three binary tables capture the fact exactly. They do not: the join invents a row."
+      },
+      {
+        "text": "9",
+        "explanation": "That is |SP| × |PJ| with no join condition. The join requires matching parts and a matching (supplier, project) pair."
+      },
+      {
+        "text": "6",
+        "explanation": "Each binary table has only 3 rows, and the three-way join is filtered by all three pairs, so it does not grow to 6."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. The join returns the 3 real rows plus (S1, P1, J1): S1 supplies P1 (to J2), P1 goes to J1 (from S2), and S1 supplies J1 (with P2), but S1 never supplied P1 to J1."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Projections:\n\n```\nSP: S1P1  S1P2  S2P1\nPJ: P1J2  P2J1  P1J1\nSJ: S1J2  S1J1  S2J1\n```\n\n2. Join SP and PJ on part: S1P1J2, S1P1J1, S1P2J1, S2P1J2, S2P1J1.\n3. Keep rows whose (S, J) is in SJ: S2P1J2 fails (no S2J2). Left: S1P1J2, S1P1J1, S1P2J1, S2P1J1.\n4. **4 rows**, one spurious (S1, P1, J1). A real three-way fact needs a three-way table.",
+    "link": {
+      "title": "Entity–relationship model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You are modelling payments with three disjoint subtypes (card, bank transfer, wallet), each with around 10 subtype-specific columns that must be `NOT NULL` for that subtype. Finance often queries \"all payments over £1,000 this month\" across subtypes. Which mapping fits best?",
+    "options": [
+      {
+        "text": "Single-table inheritance",
+        "explanation": "One table makes cross-subtype queries trivial, but around 30 subtype columns would all be nullable, enforced only by large `CHECK` expressions. Workable, but the weakest fit for strong per-subtype `NOT NULL` rules."
+      },
+      {
+        "text": "Class-table inheritance: `payment(payment_id, amount, created_at, kind)` plus one table per subtype sharing `payment_id`",
+        "explanation": "Correct. Shared attributes (amount, date) live in one table, so the finance query needs no join, and each subtype table declares real `NOT NULL` columns. Loading a full payment costs one join."
+      },
+      {
+        "text": "Concrete-table inheritance",
+        "explanation": "The finance query would need a `UNION ALL` over three tables, and nothing guarantees ids are unique across them."
+      },
+      {
+        "text": "EAV: `payment_attr(payment_id, name, value)`",
+        "explanation": "EAV gives up types and `NOT NULL` constraints completely, the opposite of what is needed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Score the requirements against each mapping:\n\n| Need | Single | Class | Concrete |\n|---|---|---|---|\n| subtype NOT NULL | CHECKs | native | native |\n| query across all | easy | easy | UNION |\n| unique id overall | yes | yes | no |\n\nClass-table inheritance meets all three. Add `kind` with a `CHECK`, and optionally a composite foreign key `(payment_id, kind)` so a card row can only attach to a payment of kind 'card'.",
+    "link": {
+      "title": "Class Table Inheritance — Martin Fowler",
+      "url": "https://martinfowler.com/eaaCatalog/classTableInheritance.html"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`comment(id, body, commentable_type, commentable_id)` attaches comments to photos or videos. After a year, analysts find thousands of comments pointing at deleted photos. What is the root cause, and which change fixes it in the schema?",
+    "options": [
+      {
+        "text": "A missing index on `commentable_id`; add one",
+        "explanation": "An index speeds lookups but does not enforce anything; orphans would still be allowed."
+      },
+      {
+        "text": "Use `ON DELETE CASCADE` on `commentable_id`",
+        "explanation": "There is no foreign key to attach `ON DELETE` to; that is the whole problem."
+      },
+      {
+        "text": "`commentable_id` can refer to different tables, so no foreign key can be declared on it; replace it with `photo_id REFERENCES photo` and `video_id REFERENCES video` plus `CHECK (num_nonnulls(photo_id, video_id) = 1)`",
+        "explanation": "Correct. A polymorphic association defeats referential integrity. An exclusive arc gives each target a real foreign key, and the check ensures exactly one is set."
+      },
+      {
+        "text": "Store comments inside a `jsonb` column on each photo and video",
+        "explanation": "Embedding avoids a separate dangling reference, but querying and constraining comments across photos and videos becomes more complex. JSON remains queryable; each comment change updates its containing document and can contend on that row."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A foreign key must reference one specific table. `commentable_id` refers to `photo` or `video` depending on another column, so Postgres cannot check it.\n2. Deleting a photo therefore leaves its comments behind.\n3. Exclusive arc:\n\n```sql\nphoto_id INT REFERENCES photo\n  ON DELETE CASCADE,\nvideo_id INT REFERENCES video\n  ON DELETE CASCADE,\nCHECK (num_nonnulls(\n  photo_id, video_id) = 1)\n```\n\n4. Alternative: a `commentable` supertype table that photos and videos share a key with (class-table inheritance).",
+    "link": {
+      "title": "Entity–relationship model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After launch you learn that albums can have several artists (collaborations), each with a role such as 'primary' or 'featured'. The schema has `album.artist_id NOT NULL`. What is the correct new design?",
+    "options": [
+      {
+        "text": "Create `album_artist(album_id, artist_id, role)` with primary key `(album_id, artist_id)`, migrate existing rows into it, then drop `album.artist_id`",
+        "explanation": "Correct. The relationship is now M:N with an attribute (role), so it becomes a junction table holding the role."
+      },
+      {
+        "text": "Make `album.artist_id` an array of ids",
+        "explanation": "Arrays cannot carry foreign keys, and the role still has no home."
+      },
+      {
+        "text": "Add `artist2_id` and `artist3_id` columns to `album`",
+        "explanation": "A repeating group across columns: it caps the number of artists, makes every query check several columns, and has nowhere to put the role."
+      },
+      {
+        "text": "Keep `album.artist_id` for the primary artist and put featured artists in a text column",
+        "explanation": "Featured artists would have no foreign keys and could not be queried reliably, and there would be two different representations of the same relationship."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. New cardinality: Album >o----|< Artist (M:N), with a relationship attribute `role`.\n2. M:N with attributes → junction table:\n\n```sql\nCREATE TABLE album_artist (\n  album_id  INT REFERENCES album,\n  artist_id INT REFERENCES artist,\n  role      TEXT NOT NULL,\n  PRIMARY KEY (album_id, artist_id));\n```\n\n3. Migrate: `INSERT INTO album_artist SELECT album_id, artist_id, 'primary' FROM album;`\n4. For a live migration, deploy dual writes and wait until all writers use them, then backfill and verify existing rows. Switch reads to album_artist while retaining dual writes; only after all old readers and writers are retired should you drop album.artist_id. If every album must retain an artist, add an enforcement strategy for that minimum participation too.\n5. Lesson: ask for counterexamples before launch; a cardinality change is a data migration.",
+    "link": {
+      "title": "Associative entity — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Associative_entity"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A `customer` table could use `email` as its primary key, or a generated `customer_id`. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Emails change, and with `email` as primary key every referencing foreign key must change too",
+        "explanation": "Correct. Natural keys that change force cascading key updates across every referencing table."
+      },
+      {
+        "text": "Using a surrogate `customer_id` means you no longer need a constraint on `email`",
+        "explanation": "If emails must be unique for login, you still need `UNIQUE (email)`. A surrogate key adds identity; it does not replace the business rule."
+      },
+      {
+        "text": "A common design is a surrogate primary key plus `UNIQUE` on the natural key",
+        "explanation": "Correct. You get stable, compact references and still enforce the real-world uniqueness rule."
+      },
+      {
+        "text": "Natural keys are always wrong",
+        "explanation": "Stable natural keys such as ISO country codes or ISBNs make good keys, and they can save joins."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Weigh each key type:\n\n| | Natural (email) | Surrogate (id) |\n|---|---|---|\n| stable | no | yes |\n| meaningful | yes | no |\n| size | long text | 8 bytes |\n\n1. `email` changes, so it is a poor primary key: an update must cascade to every foreign key.\n2. A surrogate key avoids that, but the business rule \"one account per email\" still needs `UNIQUE (email)`.\n3. Stable, standard codes (country `GB`, currency `GBP`) are fine natural keys.",
+    "link": {
+      "title": "Surrogate key — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Surrogate_key"
+    }
+  }
+]

@@ -1,0 +1,378 @@
+[
+  {
+    "id": "comp-codegen-regalloc-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What stack bytecode does `compile_bc` produce for `(1 + 2) * 3` (before `RET`)?",
+    "options": [
+      {
+        "text": "`PUSH 1, PUSH 2, PUSH 3, ADD, MUL`",
+        "explanation": "This pushes all three numbers first, so `ADD` would add 2 and 3: it is the code for `1 * (2 + 3)`. Post-order emits each operator straight after its own operands."
+      },
+      {
+        "text": "`MUL, ADD, PUSH 1, PUSH 2, PUSH 3`",
+        "explanation": "That is pre-order (operator first). A stack machine needs its operands on the stack *before* the operator runs."
+      },
+      {
+        "text": "`PUSH 1, PUSH 2, ADD, PUSH 3, MUL`",
+        "explanation": "Correct. Post-order: generate the left child `1 + 2` fully (push, push, add), then the right child `3`, then `MUL`."
+      },
+      {
+        "text": "`PUSH 3, PUSH 1, PUSH 2, ADD, MUL`",
+        "explanation": "`gen` always visits the left operand first; the right operand `3` comes after the code for `1 + 2`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "`gen(BinOp('*', BinOp('+', 1, 2), 3))`:\n\n1. `gen(left)` = `gen(1 + 2)`: `PUSH 1`, `PUSH 2`, `ADD`. Stack: [3].\n2. `gen(right)`: `PUSH 3`. Stack: [3, 3].\n3. Emit `MUL`. Stack: [9].\n\nSo: `PUSH 1, PUSH 2, ADD, PUSH 3, MUL, RET`, and the maximum depth is 2.",
+    "link": {
+      "title": "A Map of the Territory — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-map-of-the-territory.html"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the maximum operand-stack depth of the bytecode for `1 + (2 + (3 + 4))`?",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "That is the depth for the left-leaning `((1 + 2) + 3) + 4`, where each sum is finished before the next number is pushed."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. The code is `PUSH 1, PUSH 2, PUSH 3, PUSH 4, ADD, ADD, ADD`. All four numbers are on the stack before the first `ADD`."
+      },
+      {
+        "text": "3",
+        "explanation": "The innermost `3 + 4` cannot start until 1, 2 and 3 are all pushed, and then 4 is pushed too: four values."
+      },
+      {
+        "text": "7",
+        "explanation": "Seven is the number of instructions, not the stack depth; `ADD` instructions reduce the depth."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Track the depth instruction by instruction:\n\n```\nPUSH 1   1\nPUSH 2   2\nPUSH 3   3\nPUSH 4   4   <- maximum\nADD      3\nADD      2\nADD      1\n```\n\nEach left operand waits on the stack while its right-hand side is computed. A right-leaning tree therefore needs depth proportional to its height; the JVM and CPython record this maximum (`max_stack`, `co_stacksize`) in the compiled code.",
+    "link": {
+      "title": "A Map of the Territory — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-map-of-the-territory.html"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For distinct values not proven equal, when can two compatible temporaries share an interchangeable register in the straight-line interval model?",
+    "options": [
+      {
+        "text": "When they have the same value",
+        "explanation": "Equal values could share, but that is CSE's job. Values that differ can still share a register if they are never needed at the same time."
+      },
+      {
+        "text": "When they are both constants",
+        "explanation": "Constants can often be encoded as immediates and need no register at all; constness is not the criterion for sharing."
+      },
+      {
+        "text": "Never: each temporary needs its own register",
+        "explanation": "That would need as many registers as temporaries. Reuse is the whole point of register allocation."
+      },
+      {
+        "text": "When their live ranges do not overlap",
+        "explanation": "Correct. If one value is dead (no later uses) before the other is defined, the register can be reused without losing anything."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A value is *live* from its definition until its last use.\n2. If value A's last use comes at or before value B's definition, A's register holds nothing useful any more when B is written.\n3. So A and B can use the same register.\n4. If their ranges overlap, writing B would destroy A while it is still needed.\n\nIn graph-colouring terms, overlapping values \"interfere\" and get an edge between them.",
+    "link": {
+      "title": "Register allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Register_allocation"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the idealized model of interchangeable registers, allowing a dying operand register to hold the result, with inputs a, b and c, how many registers does this code need to avoid any spills?\n\n```\nt1 = a + b\nt2 = a * c\nt3 = t1 - t2\nt4 = t3 + b\nret t4\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "Two registers are not enough even before the first instruction finishes: `a`, `b` and `c` all arrive live."
+      },
+      {
+        "text": "3",
+        "explanation": "Three holds the inputs, but instruction 0 defines `t1` while `a`, `b` and `c` are all still needed later."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Right after `t1 = a + b`, the live values are `a` (used at 1), `b` (used at 3), `c` (used at 1) and `t1`: four at once. That is MaxLive, and linear scan with k = 4 spills nothing."
+      },
+      {
+        "text": "7",
+        "explanation": "Seven is the number of distinct values. Many of them have non-overlapping lifetimes and can share."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compute live ranges (definition, last use):\n\n```\na  -1..1    b  -1..3    c  -1..1\nt1  0..2    t2  1..2\nt3  2..3    t4  3..ret\n```\n\nLive after each instruction:\n\n```\n0  a b c t1    (4)\n1  b t1 t2     (3)\n2  b t3        (2)\n3  t4          (1)\n```\n\nThe maximum is 4. Running `linear_scan` with k = 3 spills `b`; with k = 4 it spills nothing.",
+    "link": {
+      "title": "Linear Scan Register Allocation — Poletto and Sarkar",
+      "url": "https://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `sethi_ullman` (each leaf needs one register), how many registers does `(a + b) * (c + d) - (e + f) * (g + h)` need?",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "Each product `(a+b)*(c+d)` already needs 3. The two products are equal in need, so the subtraction needs one more."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Each sum needs 2; each product joins two subtrees needing 2, so it needs 3; the subtraction joins two subtrees needing 3, so it needs 4."
+      },
+      {
+        "text": "8",
+        "explanation": "Eight is the number of leaves. Sethi–Ullman evaluates subtrees so that finished results take only one register each."
+      },
+      {
+        "text": "5",
+        "explanation": "The rule adds one only when both children are equal: 3 and 3 give 4, not 5."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the rule bottom up: a leaf is 1; for a node with children needing l and r, the answer is max(l, r) if they differ, else l + 1.\n\n```\na + b          1, 1 -> 2\n(a+b)*(c+d)    2, 2 -> 3\n(e+f)*(g+h)    2, 2 -> 3\nP - Q          3, 3 -> 4\n```\n\nEvaluation: compute the left product with 3 registers, keep its result in one, then compute the right product with the remaining 3.",
+    "link": {
+      "title": "Sethi–Ullman algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sethi%E2%80%93Ullman_algorithm"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Run `linear_scan` with k = 3 on the code from the previous scenario (`t1 = a + b; t2 = a * c; t3 = t1 - t2; t4 = t3 + b`). Which value is spilled, and why?",
+    "options": [
+      {
+        "text": "`t1`, because it is the newest value",
+        "explanation": "Linear scan does not spill the newest value by default. It compares each interval's last-use position."
+      },
+      {
+        "text": "`a`, because it was allocated first",
+        "explanation": "Allocation order is not the criterion. `a` is needed again at instruction 1, sooner than `b`."
+      },
+      {
+        "text": "`c`, because it is used only once",
+        "explanation": "Use count is not the heuristic here. `c` is needed at instruction 1, almost immediately."
+      },
+      {
+        "text": "`b`, because among the live values its live range ends furthest away (at instruction 3)",
+        "explanation": "Correct. When `t1` needs a register, `a`, `b`, `c` occupy all three. Their ranges end at 1, 3 and 1, and `t1`'s ends at 2. `b` ends furthest, so it goes to memory and `t1` takes its register."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. a, b, c start at -1 and take r0, r1, r2.\n2. `t1` starts at 0. Nothing has ended (all ends are ≥ 1), so there is no free register.\n3. `far = max(active, key=end.get)`: ends are a → 1, b → 3, c → 1. `far` is `b`.\n4. `end[b] = 3 > end[t1] = 2`, so `b` is spilled and `t1` takes r1.\n5. The emitted code reads `b` from `[sp+0]` at instructions 0 and 3.\n\nThis heuristic uses the farthest interval end, not the farthest next use of Bélády's cache-replacement rule.",
+    "link": {
+      "title": "Linear Scan Register Allocation — Poletto and Sarkar",
+      "url": "https://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Clang `-O2` compiles `(x + y) * (x + y) - x * 8` for x86-64 to `lea eax, [rsi + rdi]` / `imul eax, eax` / `shl edi, 3` / `sub eax, edi` / `ret`. Which of these are visible in that output? Select all that apply.",
+    "options": [
+      {
+        "text": "Common subexpression elimination: `x + y` is computed once",
+        "explanation": "Correct. There is one `lea` and the `imul` squares its result."
+      },
+      {
+        "text": "Strength reduction: the multiply by 8 is a shift",
+        "explanation": "Correct. `shl edi, 3` multiplies `x` by 2³."
+      },
+      {
+        "text": "Spilling to the stack",
+        "explanation": "There are no spill loads or stores. LEA uses address-expression syntax but does not load from that address; optimized builds can still spill in other cases."
+      },
+      {
+        "text": "Use of the System V calling convention: arguments in `rdi`, `rsi`; result in `eax`",
+        "explanation": "Correct. `x` arrives in `edi`, `y` in `esi`, and the result is left in `eax`, the low half of `rax`."
+      },
+      {
+        "text": "Constant folding of the whole expression",
+        "explanation": "The result depends on the arguments, so nothing can be folded to a single constant."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Read the output line by line:\n\n```\nlea  eax, [rsi + rdi]   t = y + x\nimul eax, eax           t * t\nshl  edi, 3             x * 8\nsub  eax, edi           result\nret                     in eax\n```\n\n1. One addition feeds both factors → CSE.\n2. `shl` instead of `imul` → strength reduction.\n3. No `[rbp - ...]` operands → no spills.\n4. `rdi`, `rsi` in and `eax` out → System V ABI.\n5. Arithmetic remains → not folded.",
+    "link": {
+      "title": "Compiler Explorer",
+      "url": "https://godbolt.org/"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On x86-64 Linux, a C function `long f(long a, long b, long c)` is called. Where does it find `c`, and where must it put its result?",
+    "options": [
+      {
+        "text": "`c` in `rcx`; result in `rax`",
+        "explanation": "`rcx` is the *fourth* integer argument register in System V. (Microsoft's x64 convention uses `rcx` first.)"
+      },
+      {
+        "text": "`c` on the stack; result on the stack",
+        "explanation": "System V passes the first six integer arguments in registers, and returns integers in `rax`."
+      },
+      {
+        "text": "`c` in `rdx`; result in `rax`",
+        "explanation": "Correct. The System V order is `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`, so the third argument is in `rdx`. Integer results return in `rax`."
+      },
+      {
+        "text": "`c` in `r8`; result in `rdi`",
+        "explanation": "`r8` is the fifth argument, and results never return in `rdi`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. System V AMD64 integer argument registers, in order: `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`.\n2. `a` → `rdi`, `b` → `rsi`, `c` → `rdx`.\n3. A seventh argument would go on the stack.\n4. The integer return value goes in `rax`.\n\nThe register allocator must treat these as pre-coloured: values are forced into specific registers at calls and returns. Windows x64 uses a different order (`rcx`, `rdx`, `r8`, `r9`), which is why the ABI is part of the target, not the language.",
+    "link": {
+      "title": "x86 calling conventions — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_calling_conventions"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An interference graph is a 4-cycle: `a–b`, `b–c`, `c–d`, `d–a`. With k = 2 registers, what does Chaitin's original heuristic do, and what is the truth?",
+    "options": [
+      {
+        "text": "Chaitin finds a 2-colouring immediately",
+        "explanation": "Chaitin's simplify step needs a node with fewer than k = 2 neighbours. Every node here has exactly 2, so it cannot start."
+      },
+      {
+        "text": "Chaitin spills a node even though a 2-colouring exists (`a`, `c` in r0; `b`, `d` in r1); Briggs' optimistic colouring finds it",
+        "explanation": "Correct. Every node has degree 2 = k, so Chaitin must pick a spill. Briggs pushes the node anyway and only spills if no colour is free when popping, which here always succeeds because opposite corners share a colour."
+      },
+      {
+        "text": "No allocator can colour it with 2 registers, because there are 4 nodes",
+        "explanation": "The number of nodes does not matter, only which ones interfere. An even cycle is bipartite, so 2 colours suffice."
+      },
+      {
+        "text": "The graph needs 3 registers because it contains a triangle",
+        "explanation": "A 4-cycle has no triangle: `a` and `c` are not connected, nor are `b` and `d`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Chaitin: remove any node with degree < k. All degrees are 2 = k, so none qualifies. He must choose a node to spill.\n2. Briggs: push a node anyway, say `a`, and remove it. Now `b` and `d` have degree 1.\n3. Keep simplifying: push `b` (then `c` has degree 1), push `c`, push `d`. Stack, bottom to top: a, b, c, d.\n4. Select: pop `d` → r0. Pop `c`: neighbour `d` is r0 → r1. Pop `b`: neighbour `c` is r1 → r0. Pop `a`: neighbours `b` and `d` are both r0, so r1 is free.\n5. Colouring: {a, c} → r1, {b, d} → r0. No spill.\n\nThat is exactly Briggs' 1994 improvement: a node with k neighbours may still be colourable if neighbours share colours.",
+    "link": {
+      "title": "Register allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Register_allocation"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In `linear_scan`, someone changes the expiry test from `end[w] <= start[v]` to `end[w] < start[v]`. For `(x + y) * (x + y) - x * 8` (optimised), what happens with k = 2?",
+    "options": [
+      {
+        "text": "Nothing changes; it still uses two registers",
+        "explanation": "With the strict test, a value whose last use is at instruction i is not freed in time for the value defined at i."
+      },
+      {
+        "text": "It now spills, and needs 3 registers to avoid spilling",
+        "explanation": "Correct. A dying operand can no longer hand its register to the instruction's result, so `t1 = x + y` cannot reuse `y`'s register and this trace needs an extra register at its peak. The interval algorithm spills `x` and `t5`; k = 3 is spill-free."
+      },
+      {
+        "text": "It crashes because a register is freed twice",
+        "explanation": "Each value is removed from `active` exactly once; the change only delays freeing."
+      },
+      {
+        "text": "It produces incorrect code that overwrites a live value",
+        "explanation": "The strict test is *more* conservative, never less: it keeps registers busy longer, so it cannot overwrite a live value."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `t1 = x + y` at index 0. `y` ends at 0. With `<`, the test `0 < 0` fails, so `y` is still active.\n2. `x` and `y` occupy both registers; `t1` must spill something.\n3. The same happens at every instruction where an operand dies: the result cannot take its register.\n4. Tracing the shown algorithm: k = 2 spills `x` and `t5`; k = 3 spills nothing.\n\nFor the modeled instruction forms, source operands can share a dying register with the destination, so `add r1, r0, r1` is legal. The `<=` test exploits that, reducing the peak required by this example.",
+    "link": {
+      "title": "Linear Scan Register Allocation — Poletto and Sarkar",
+      "url": "https://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about register allocators in production systems are true? Select all that apply.",
+    "options": [
+      {
+        "text": "JIT compilers such as HotSpot's C1 and V8's TurboFan favour linear scan because allocation time counts as program run time",
+        "explanation": "Correct. Linear-scan variants aim for low allocation overhead, and a JIT compiles while the user waits."
+      },
+      {
+        "text": "Graph colouring always produces optimal allocations, since colouring is solved in polynomial time",
+        "explanation": "General graph k-colourability for k at least 3 is NP-complete. Allocators use heuristics such as Chaitin–Briggs, which are good but not optimal."
+      },
+      {
+        "text": "For interval ranges and freely interchangeable registers, start-order allocation is spill-free with k at least MaxLive",
+        "explanation": "Correct. Live ranges on straight-line code form an interval graph, for which greedy colouring in order of start points is optimal. This is a property of the idealized interval model, not a verified 10,000-program test result."
+      },
+      {
+        "text": "Coalescing assigns the same register to both sides of a copy, which is how most SSA phi copies disappear",
+        "explanation": "Correct. If `b = a` and the two do not interfere, giving them one register deletes the move."
+      },
+      {
+        "text": "Values that must survive a function call are best kept in caller-saved registers",
+        "explanation": "The callee may overwrite caller-saved registers, so such values would need saving around every call. Callee-saved registers may avoid repeated saves, but the best choice depends on save/restore costs and call frequency."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Evaluate each:\n\n1. **JITs and linear scan.** True: HotSpot C1 and V8 use linear-scan variants; C2 uses graph colouring.\n2. **Optimal colouring?** False: NP-complete; heuristics only.\n3. **Straight-line optimality.** True: interval graphs are perfectly coloured by greedy start-order allocation.\n4. **Coalescing.** True: it is how out-of-SSA copies are removed.\n5. **Calls.** False as a blanket rule: across calls, consider callee-saved registers (`rbx`, `r12`–`r15` on x86-64 System V).",
+    "link": {
+      "title": "Register allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Register_allocation"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For signed `int x`, Clang compiles C's `x / 2` on x86-64 to `mov eax, edi` / `shr eax, 31` / `add eax, edi` / `sar eax`. Why not just `sar` (arithmetic shift right), and would Calc need the extra instructions?",
+    "options": [
+      {
+        "text": "`sar` is slower than division",
+        "explanation": "Instruction costs depend on the processor and operands. The extra instructions exist for correctness, not speed."
+      },
+      {
+        "text": "`sar` rounds towards negative infinity, but C division truncates towards zero, so negative odd numbers need +1 first. Calc's `/` is floor division, which `sar` computes exactly, so a Calc value known to fit the machine word can use sar",
+        "explanation": "Correct. −7 >> 1 = −4 (floor), but C's −7 / 2 = −3. Adding the sign bit (1 for negatives) before shifting fixes it. Calc / and Python // give −7 divided by 2 as −4; Python / instead gives −3.5, matching `sar` directly."
+      },
+      {
+        "text": "The extra instructions handle division by zero",
+        "explanation": "Dividing by the constant 2 can never be division by zero; no check is needed."
+      },
+      {
+        "text": "`sar` only works on unsigned numbers",
+        "explanation": "`sar` is the *arithmetic* shift that preserves the sign bit, designed for signed numbers. `shr` is the logical (unsigned) one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `sar` by 1 computes floor(x / 2): −7 → −4.\n2. C99 requires `/` to truncate towards zero: −7 / 2 = −3.\n3. Fix: add 1 when `x` is negative. `shr eax, 31` extracts the sign bit (1 for negatives, 0 otherwise); `add` adds it; then `sar`. For −7: −7 + 1 = −6, −6 >> 1 = −3. ✓\n4. Calc uses floor division like Python: `-7 // 2 == -4 == -7 >> 1`.\n\nSo the source language's semantics decide what the back end must emit.",
+    "link": {
+      "title": "Compiler Explorer",
+      "url": "https://godbolt.org/"
+    }
+  }
+]

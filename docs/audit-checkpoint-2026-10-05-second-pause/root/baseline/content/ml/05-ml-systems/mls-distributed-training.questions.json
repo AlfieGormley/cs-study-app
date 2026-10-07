@@ -1,0 +1,340 @@
+[
+  {
+    "id": "mls-distributed-training-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In **data parallelism**, what does each GPU hold and what is exchanged after the backward pass?",
+    "options": [
+      {
+        "text": "Each GPU holds a different subset of layers and they exchange activations",
+        "explanation": "Incorrect. That describes pipeline parallelism, where layers are split across devices."
+      },
+      {
+        "text": "Each GPU holds one slice of every weight matrix and they exchange partial matrix products",
+        "explanation": "Incorrect. That is tensor parallelism (Megatron-style), which splits individual matrix multiplies."
+      },
+      {
+        "text": "Each GPU holds a full copy of the model, processes different examples, and the GPUs average their gradients with an all-reduce",
+        "explanation": "Correct. Replicas see different data, compute local gradients, then all-reduce so every replica applies the same averaged update and stays in sync."
+      },
+      {
+        "text": "Each GPU trains an independent model and the best one is kept at the end",
+        "explanation": "Incorrect. That is closer to a hyperparameter search; data-parallel replicas are synchronised every step."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Split the global batch: 256 examples over 4 GPUs gives 64 each.\n2. Each replica runs forward and backward on its 64, producing a full-size gradient.\n3. All-reduce averages the 4 gradients; each GPU now has the same average.\n4. Each applies the same optimiser step, so the 4 copies remain identical.\n\nOnly gradients cross the network, which is why it is the simplest scaling technique.",
+    "link": {
+      "title": "Distributed Data Parallel notes — PyTorch",
+      "url": "https://docs.pytorch.org/docs/stable/notes/ddp.html"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using the lesson's accounting for mixed-precision Adam (16 bytes per parameter), roughly how much memory does the **model state** of a 3-billion-parameter model need?",
+    "options": [
+      {
+        "text": "48 GB",
+        "explanation": "Correct. 3e9 × 16 bytes = 48e9 bytes ≈ 48 GB, before any activations."
+      },
+      {
+        "text": "6 GB",
+        "explanation": "Incorrect. 3e9 × 2 bytes = 6 GB is only the bf16 weights, the inference footprint. Training also stores gradients, fp32 master weights and two Adam moments."
+      },
+      {
+        "text": "12 GB",
+        "explanation": "Incorrect. 3e9 × 4 bytes is one fp32 copy; it omits the gradients, Adam states and bf16 weights."
+      },
+      {
+        "text": "96 GB",
+        "explanation": "Incorrect. That would be 32 bytes per parameter, double the lesson's accounting."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Add up bytes per parameter:\n\n```\nbf16 weights     2\nbf16 grads       2\nfp32 master      4\nAdam m (fp32)    4\nAdam v (fp32)    4\n               ----\n                16\n```\n\n3e9 × 16 = 4.8e10 bytes ≈ 48 GB. Activations come on top and depend on batch and sequence length.",
+    "link": {
+      "title": "ZeRO paper (Rajbhandari et al.)",
+      "url": "https://arxiv.org/abs/1910.02054"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does **activation checkpointing** trade?",
+    "options": [
+      {
+        "text": "Less disk space for checkpoints in exchange for longer restart times",
+        "explanation": "Incorrect. Despite the name, it is not about saving model checkpoints to disk."
+      },
+      {
+        "text": "Lower precision in exchange for faster matrix multiplies",
+        "explanation": "Incorrect. That describes mixed-precision training, a separate technique."
+      },
+      {
+        "text": "Fewer GPUs in exchange for more communication",
+        "explanation": "Incorrect. Checkpointing is local to each GPU and adds no communication."
+      },
+      {
+        "text": "Less memory for activations in exchange for extra compute to recompute them during the backward pass",
+        "explanation": "Correct. You keep only some activations and recompute the rest when the backward pass needs them; full recomputation costs roughly one extra forward pass."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The backward pass needs each layer's forward activations.\n2. Normally all are stored: memory grows with layers × batch × sequence × hidden.\n3. With checkpointing, store only some (e.g. each block's input) and recompute the inside during backward.\n4. Backward costs about 2× forward, so one extra forward adds about 1/3 more compute, for a big activation-memory saving.",
+    "link": {
+      "title": "The Ultra-Scale Playbook — Hugging Face",
+      "url": "https://huggingface.co/spaces/nanotron/ultrascale-playbook"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A model has 2B parameters with bf16 gradients (S = 4 GB). With ring all-reduce on **16** GPUs, how much data does **each** GPU send per step?",
+    "options": [
+      {
+        "text": "4 GB",
+        "explanation": "Incorrect. Each GPU sends more than its gradient once, because ring all-reduce has a reduce-scatter phase and an all-gather phase."
+      },
+      {
+        "text": "7.5 GB",
+        "explanation": "Correct. 2 × (16 − 1)/16 × 4 GB = 2 × 0.9375 × 4 = 7.5 GB."
+      },
+      {
+        "text": "64 GB",
+        "explanation": "Incorrect. That would be 16 × S, as if each GPU sent its full gradient to every other GPU. Ring all-reduce avoids that."
+      },
+      {
+        "text": "8 GB exactly, regardless of GPU count",
+        "explanation": "Incorrect. 2S is the limit as N grows large; for N = 16 it is slightly less, 2 × 15/16 × S."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ring all-reduce per-GPU send volume:\n\n```\n2 × (N - 1) / N × S\n= 2 × 15/16 × 4 GB\n= 2 × 0.9375 × 4\n= 7.5 GB\n```\n\nReduce-scatter: 15 steps of S/16 each. All-gather: another 15 steps of S/16. Total 30/16 × S. As N grows, this tends to 2S, which is why per-GPU traffic barely grows with more GPUs.",
+    "link": {
+      "title": "NCCL collective operations — NVIDIA",
+      "url": "https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/collectives.html"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 10B-parameter model is trained with ZeRO-**2** across 32 data-parallel GPUs. Using the lesson's formula `2Ψ + 14Ψ/N` (bytes), what is the model-state memory per GPU?",
+    "options": [
+      {
+        "text": "About 5 GB",
+        "explanation": "Incorrect. 160 GB / 32 = 5 GB is ZeRO-3, which also shards the weights."
+      },
+      {
+        "text": "About 43.75 GB",
+        "explanation": "Incorrect. That is ZeRO-1 (4Ψ + 12Ψ/N = 40 + 3.75), which does not shard gradients."
+      },
+      {
+        "text": "About 24.4 GB",
+        "explanation": "Correct. 2 × 10e9 = 20 GB of bf16 weights, plus 14 × 10e9 / 32 ≈ 4.4 GB of sharded gradients and optimiser state."
+      },
+      {
+        "text": "160 GB",
+        "explanation": "Incorrect. That is plain data parallelism, which replicates all 16 bytes per parameter on every GPU."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "With Ψ = 10e9:\n\n```\nZeRO-2 = 2Ψ + 14Ψ/N\n       = 20 GB + 140 GB/32\n       = 20 + 4.375\n       ≈ 24.4 GB\n```\n\nCompare all stages at N = 32:\n\n| Stage | GB/GPU |\n|---|---|\n| DP | 160 |\n| ZeRO-1 | 43.75 |\n| ZeRO-2 | 24.4 |\n| ZeRO-3 | 5 |\n\nThe unsharded 2Ψ (the bf16 weights) dominates ZeRO-2; removing it is what ZeRO-3 does.",
+    "link": {
+      "title": "ZeRO paper (Rajbhandari et al.)",
+      "url": "https://arxiv.org/abs/1910.02054"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A pipeline has **p = 8** stages. Using the GPipe bubble formula `(p − 1)/(m + p − 1)`, roughly what is the idle fraction with **m = 8** micro-batches, and with **m = 64**?",
+    "options": [
+      {
+        "text": "88% and 11%",
+        "explanation": "Incorrect. 7/8 and 7/64 come from (p − 1)/m, which measures bubble time relative to useful compute time, not the idle fraction of total time that this formula asks for."
+      },
+      {
+        "text": "12.5% and 1.6%",
+        "explanation": "Incorrect. That is 1/m, which ignores the number of stages entirely."
+      },
+      {
+        "text": "The same in both cases, since the bubble depends only on p",
+        "explanation": "Incorrect. The bubble depends on both: m appears in the denominator, so more micro-batches reduce it."
+      },
+      {
+        "text": "47% and 10%",
+        "explanation": "Correct. 7/15 ≈ 0.467 and 7/71 ≈ 0.099. More micro-batches fill the pipeline and shrink the bubble."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nm = 8:  (8-1)/(8+8-1)  = 7/15\n                       ≈ 0.467\nm = 64: (8-1)/(64+8-1) = 7/71\n                       ≈ 0.099\n```\n\nWhy: the first micro-batch takes p − 1 steps to reach the last stage, and the last one takes p − 1 steps to drain. Those 2(p − 1) half-empty phases are fixed; adding micro-batches adds useful work around them. Rule of thumb: keep m several times larger than p.",
+    "link": {
+      "title": "GPipe paper (Huang et al.)",
+      "url": "https://arxiv.org/abs/1811.06965"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A job uses tensor parallel 8, pipeline parallel 4 and data parallel 32. Each data-parallel replica processes 2 sequences per micro-batch and uses 16 micro-batches (accumulation) per step. How many GPUs, and what is the global batch in sequences?",
+    "options": [
+      {
+        "text": "1,024 GPUs; 1,024 sequences",
+        "explanation": "Correct. GPUs = 8 × 4 × 32 = 1,024. Only the data-parallel dimension multiplies the batch: 2 × 16 × 32 = 1,024 sequences."
+      },
+      {
+        "text": "1,024 GPUs; 32,768 sequences",
+        "explanation": "Incorrect. This multiplies the batch by all 1,024 GPUs. Tensor- and pipeline-parallel GPUs cooperate on the same sequences; they do not add batch."
+      },
+      {
+        "text": "44 GPUs; 1,024 sequences",
+        "explanation": "Incorrect. Parallelism degrees multiply, not add: 8 × 4 × 32, not 8 + 4 + 32."
+      },
+      {
+        "text": "256 GPUs; 128 sequences",
+        "explanation": "Incorrect. This drops a dimension in both counts."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. GPUs = TP × PP × DP = 8 × 4 × 32 = 1,024.\n2. A single model replica spans TP × PP = 32 GPUs. All 32 work on the same micro-batch.\n3. Batch per step = micro-batch × accumulation × DP\n   = 2 × 16 × 32 = 1,024 sequences.\n\nUseful sanity check: 16 micro-batches with 4 stages gives a bubble of 3/19 ≈ 16%.",
+    "link": {
+      "title": "Efficient Large-Scale LM Training (Narayanan et al.)",
+      "url": "https://arxiv.org/abs/2104.04473"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about PyTorch DDP are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It groups gradients into buckets and starts all-reducing a bucket while the backward pass is still computing other gradients",
+        "explanation": "Correct. Overlapping communication with computation is DDP's key optimisation; buckets are 25 MB by default."
+      },
+      {
+        "text": "Without `sampler.set_epoch(epoch)`, a `DistributedSampler` reuses the same shuffle order every epoch",
+        "explanation": "Correct. The epoch seeds the shuffle; forgetting it means identical ordering each epoch."
+      },
+      {
+        "text": "Each process holds a full copy of the model and optimiser state",
+        "explanation": "Correct. DDP replicates everything; it is plain data parallelism, which is why ZeRO/FSDP exist to remove the redundancy."
+      },
+      {
+        "text": "DDP shards the weights so models larger than one GPU's memory fit",
+        "explanation": "Incorrect. That is FSDP (ZeRO-3 style). DDP needs the full model to fit on each GPU."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each against how DDP works:\n\n1. Buckets plus overlap: yes, autograd hooks fire as gradients become ready and each full bucket launches an all-reduce.\n2. `set_epoch`: yes, the sampler's permutation is seeded by the epoch.\n3. Full replicas: yes, every rank holds model, gradients and optimiser state.\n4. Sharding: no, that is FSDP. If a model does not fit in one GPU, DDP alone cannot train it.",
+    "link": {
+      "title": "Distributed Data Parallel notes — PyTorch",
+      "url": "https://docs.pytorch.org/docs/stable/notes/ddp.html"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Estimate the training compute for a 13B-parameter model on 2 trillion tokens using `6ND`, and the GPU-hours at 400 TFLOP/s achieved per GPU.",
+    "options": [
+      {
+        "text": "5.2e22 FLOPs; about 36,000 GPU-hours",
+        "explanation": "Incorrect. This uses 2ND, which counts only the forward pass. Training also needs the backward pass, about twice the forward."
+      },
+      {
+        "text": "1.56e23 FLOPs; about 108,000 GPU-hours",
+        "explanation": "Correct. 6 × 13e9 × 2e12 = 1.56e23. Divided by 4e14 FLOP/s gives 3.9e8 GPU-seconds ≈ 108,000 GPU-hours."
+      },
+      {
+        "text": "1.56e23 FLOPs; about 6.5 million GPU-hours",
+        "explanation": "Incorrect. The FLOPs are right, but 3.9e8 seconds was divided by 60 (giving minutes) instead of 3600."
+      },
+      {
+        "text": "2.6e22 FLOPs; about 18,000 GPU-hours",
+        "explanation": "Incorrect. This is N × D (no factor of 6) or wrong exponents."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nFLOPs = 6 × 13e9 × 2e12\n      = 156e21 = 1.56e23\nsec   = 1.56e23 / 4e14\n      = 3.9e8 GPU-seconds\nhours = 3.9e8 / 3600\n      ≈ 108,000 GPU-hours\n```\n\nOn 1,024 GPUs that is about 106 hours (4.4 days) with perfect scaling. Real runs add time for failures, restarts and evaluation. 400 TFLOP/s per GPU is an assumed achieved rate, not a spec figure.",
+    "link": {
+      "title": "Training Compute-Optimal LLMs (Hoffmann et al.)",
+      "url": "https://arxiv.org/abs/2203.15556"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You have 4 nodes of 8 GPUs. Links between GPUs inside a node are many times faster than links between nodes. How should you place **tensor** and **pipeline** parallelism?",
+    "options": [
+      {
+        "text": "Tensor parallel across nodes, pipeline parallel within each node",
+        "explanation": "Incorrect. Tensor parallelism all-reduces activations several times per layer per micro-batch; doing that over the slow inter-node network would dominate step time."
+      },
+      {
+        "text": "It makes no difference; NCCL hides the topology",
+        "explanation": "Incorrect. NCCL picks good algorithms, but it cannot make slow links fast. Placement matters a great deal."
+      },
+      {
+        "text": "Tensor parallel within each node (TP = 8), pipeline parallel across nodes (PP = 4)",
+        "explanation": "Correct. TP is the most communication-hungry, so it goes on the fastest links. PP only passes activations at stage boundaries, so it tolerates slower inter-node links."
+      },
+      {
+        "text": "Use tensor parallel 32 across all GPUs and no pipeline",
+        "explanation": "Incorrect. TP across 32 GPUs would put most of its frequent all-reduces over slow links and shard matrices very thinly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Rank the techniques by communication frequency:\n\n| Technique | Sends | How often |\n|---|---|---|\n| Tensor | Activations | ~4×/layer/micro |\n| Pipeline | Activations | At stage edges |\n| Data | Gradients | Once per step |\n\nPut the chattiest on the fastest links: TP inside the node. Pipeline stages across nodes. That is the Megatron-LM recipe.",
+    "link": {
+      "title": "Megatron-LM paper",
+      "url": "https://arxiv.org/abs/1909.08053"
+    }
+  },
+  {
+    "id": "mls-distributed-training-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about **ZeRO stages** are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "ZeRO-1 and ZeRO-2 move about the same amount of data per step as ordinary data parallelism",
+        "explanation": "Correct. A reduce-scatter of gradients plus an all-gather of updated parameters has the same volume as one all-reduce."
+      },
+      {
+        "text": "ZeRO-3 moves roughly 1.5× the data of ordinary data parallelism because weights must be gathered for both forward and backward",
+        "explanation": "Correct. The ZeRO paper reports about 1.5× communication for stage 3."
+      },
+      {
+        "text": "ZeRO shards activations, so activation checkpointing becomes unnecessary",
+        "explanation": "Incorrect. ZeRO's stages shard optimiser state, gradients and weights. Activations still need checkpointing or other techniques."
+      },
+      {
+        "text": "PyTorch FSDP implements the same idea as ZeRO-3",
+        "explanation": "Correct. FSDP shards parameters, gradients and optimiser state across data-parallel ranks and gathers layers on demand."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Ordinary DP: one all-reduce of gradients ≈ 2S per GPU.\n2. ZeRO-1/2: reduce-scatter (S) so each rank gets its gradient shard, update its shard, all-gather parameters (S). Total ≈ 2S, the same.\n3. ZeRO-3: gather weights for forward (S), again for backward (S), reduce-scatter gradients (S). Total ≈ 3S = 1.5× of 2S.\n4. Activations are separate: ZeRO's memory model is about model state.",
+    "link": {
+      "title": "ZeRO paper (Rajbhandari et al.)",
+      "url": "https://arxiv.org/abs/1910.02054"
+    }
+  }
+]

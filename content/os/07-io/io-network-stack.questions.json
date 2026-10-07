@@ -1,0 +1,340 @@
+[
+  {
+    "id": "io-network-stack-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A 10 Gbit/s link is flooded with minimum-size Ethernet frames (84 bytes on the wire including preamble and gap). About how much time does the receiver have per packet to keep up?",
+    "options": [
+      {
+        "text": "About 67 ns",
+        "explanation": "Correct. 84 bytes × 8 = 672 bits; 10^10 / 672 ≈ 14.88 M packets/s, so 1 / 14.88 M ≈ 67 ns."
+      },
+      {
+        "text": "About 6.7 ns",
+        "explanation": "That's the budget at 100 Gbit/s, ten times faster."
+      },
+      {
+        "text": "About 672 ns",
+        "explanation": "That's the budget at 1 Gbit/s."
+      },
+      {
+        "text": "About 6.7 µs",
+        "explanation": "Far too generous: that's 100 times the real budget, roughly what a 100 Mbit/s link gives you."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Using the supplied occupancy model, 84 × 8 =672 bit-times. At10^10 bits/s, spacing is672/10^10 seconds =67.2 ns, corresponding to about14.88 million frames/s. This is aggregate arrival spacing; memory-level parallelism, batching, offloads and multiple cores determine processing capacity. No fixed DRAM/syscall latency is implied.",
+    "link": {
+      "title": "NAPI — Linux kernel documentation",
+      "url": "https://docs.kernel.org/networking/napi.html"
+    }
+  },
+  {
+    "id": "io-network-stack-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the Linux receive path, what is an `sk_buff` (skb)?",
+    "options": [
+      {
+        "text": "The NIC's ring of DMA descriptors",
+        "explanation": "The ring holds descriptors pointing at buffers; skbs are built by the driver from completed descriptors."
+      },
+      {
+        "text": "The user-space buffer passed to `recv()`",
+        "explanation": "That's your buffer; `recv()` copies data out of skbs into it."
+      },
+      {
+        "text": "The kernel's packet structure: metadata plus pointers to headers and data, passed between the network layers",
+        "explanation": "Correct for the conventional skb-based stack. Drivers may build, reuse or allocate these structures as appropriate, while native XDP drops can occur before that path."
+      },
+      {
+        "text": "A socket's send buffer limit",
+        "explanation": "That's `SO_SNDBUF`. The send buffer holds skbs, but an skb isn't a limit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Path of one packet:\n\n```\nRX ring buffer (DMA)\n  -> driver builds skb\n  -> GRO -> IP -> TCP\n  -> socket receive queue (skbs)\n  -> recv() copies to user\n```\n\nThe skb is the unit of work in the stack. XDP is fast partly because it runs *before* the skb is allocated.",
+    "link": {
+      "title": "NAPI — Linux kernel documentation",
+      "url": "https://docs.kernel.org/networking/napi.html"
+    }
+  },
+  {
+    "id": "io-network-stack-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the conventional interrupt-driven softirq NAPI path, what happens after a receive notification while the queue remains busy?",
+    "options": [
+      {
+        "text": "Raises one interrupt per packet, at higher priority",
+        "explanation": "Per-packet interrupts at millions of packets a second cause receive livelock; avoiding that is NAPI's purpose."
+      },
+      {
+        "text": "Drops packets until the load decreases",
+        "explanation": "NAPI schedules receive processing; packets can also be dropped for policy, malformed headers, allocation failures and other reasons, not only queue overflow."
+      },
+      {
+        "text": "Moves the driver into user space",
+        "explanation": "That's what DPDK does, not NAPI."
+      },
+      {
+        "text": "Masks the queue's interrupt and polls the RX ring in softirq context, re-enabling interrupts when the ring is empty",
+        "explanation": "Correct. Interrupts when idle for low latency, budgeted polling when busy for throughput."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Packet arrives, interrupt fires.\n2. Top half: schedule NAPI, mask this queue's IRQ.\n3. Softirq: poll up to the driver weight (often 64) packets.\n4. More packets? Keep polling within `netdev_budget`.\n5. Ring empty? Unmask the IRQ, go back to step 1.\n\nUnder load, one interrupt can cover thousands of packets.",
+    "link": {
+      "title": "NAPI — Linux kernel documentation",
+      "url": "https://docs.kernel.org/networking/napi.html"
+    }
+  },
+  {
+    "id": "io-network-stack-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a busy load balancer, column 3 of `/proc/net/softnet_stat` (time_squeeze) is climbing steadily on CPU 0 and close to zero on CPUs 1–15. What does this tell you?",
+    "options": [
+      {
+        "text": "CPU 0's NIC hardware is faulty",
+        "explanation": "Squeezes are a software budget signal, not a hardware fault."
+      },
+      {
+        "text": "CPU0 is repeatedly reaching the receive poll budget/time condition; investigate queue placement, processing cost and workload before tuning",
+        "explanation": "Correct. time_squeeze records the relevant budget/time test. It suggests receive-processing pressure but does not alone prove packets remain in a hardware ring or identify a misconfiguration."
+      },
+      {
+        "text": "Packets are being dropped by the firewall on CPU 0",
+        "explanation": "Firewall drops don't show as time squeezes; this counter is about NAPI budget exhaustion."
+      },
+      {
+        "text": "The application is reading too slowly from its socket",
+        "explanation": "A slow application can cause other queueing/drop symptoms and can coexist with processing pressure. This counter specifically records the receive-poll budget/time condition; it does not identify the application as the cause."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify CPU rows using the running kernel's softnet_stat format; row position is not always CPU ID when CPUs are offline.\n2. Correlate rising time_squeeze with actual budget values, CPU utilization, drop counters, IRQ affinity and queue configuration.\n3. More budget can lengthen uninterrupted processing and affect other work. More queues or RPS can add cross-core overhead.\n4. Choose changes from measured evidence rather than treating the counter as a complete diagnosis.",
+    "link": {
+      "title": "Documentation for /proc/sys/net — Linux kernel",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/net.html"
+    }
+  },
+  {
+    "id": "io-network-stack-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume stable conventional RSS across8 queues, balanced mapping for many independent flows, fixed IRQ affinity and no RPS/RFS. Why can one TCP backup flow still concentrate receive processing on one CPU?",
+    "options": [
+      {
+        "text": "RSS is disabled for TCP",
+        "explanation": "RSS hashes TCP flows by default; that's its main use."
+      },
+      {
+        "text": "The NIC's indirection table only has one entry",
+        "explanation": "Possible in a misconfiguration, but then *all* flows would hit one CPU. Here only the one big flow does."
+      },
+      {
+        "text": "RSS hashes per flow, so every packet of one connection maps to the same queue and CPU",
+        "explanation": "Correct. That keeps packets in order and caches warm, but a single elephant flow can't spread across queues. Use multiple parallel streams."
+      },
+      {
+        "text": "GRO forces all traffic onto CPU 0",
+        "explanation": "GRO merges segments; it doesn't choose CPUs."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A stable flow tuple hashes to one table bucket and RX queue.\n2. In the stated configuration, that queue is handled on one CPU.\n3. Additional independent streams can hash to other queues, but collisions are possible. Eight streams do not imply eight distinct queues.\n4. In an ideal independent uniform model, eight streams across eight queues occupy on average8 × (1 − (7/8)^8) ≈5.25 queues; real hashes/configuration can differ.",
+    "link": {
+      "title": "Scaling in the Linux Networking Stack — kernel documentation",
+      "url": "https://docs.kernel.org/networking/scaling.html"
+    }
+  },
+  {
+    "id": "io-network-stack-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about RPS, RFS and XPS are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "RPS spreads received packets across CPUs in software, useful when a NIC has too few queues",
+        "explanation": "Correct. The kernel hashes the flow in softirq and enqueues the packet on another CPU's backlog."
+      },
+      {
+        "text": "RFS steers a flow to the CPU where the application thread consuming it last ran",
+        "explanation": "Correct. That puts the socket data in the cache of the core that's about to read it."
+      },
+      {
+        "text": "XPS can select a transmit queue using CPU or receive-queue mappings",
+        "explanation": "Correct. Appropriate queue mappings can reduce contention and improve locality; no universal zero-contention guarantee follows."
+      },
+      {
+        "text": "RPS requires hardware support in the NIC",
+        "explanation": "That's RSS. RPS is purely software, which is the point."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "| Mechanism | Where | What |\n|---|---|---|\n| RSS | NIC | hash → RX queue |\n| RPS | kernel | hash → CPU backlog |\n| RFS | kernel | flow → consumer's CPU |\n| XPS | kernel | CPU → TX queue |\n\nOnly RSS (and accelerated RFS) need NIC support.",
+    "link": {
+      "title": "Scaling in the Linux Networking Stack — kernel documentation",
+      "url": "https://docs.kernel.org/networking/scaling.html"
+    }
+  },
+  {
+    "id": "io-network-stack-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does the XDP program check `(void *)(eth + 1) > end` before reading `eth->h_proto`?",
+    "options": [
+      {
+        "text": "To make the program faster by skipping short packets",
+        "explanation": "The check isn't an optimisation; the program wouldn't load without it."
+      },
+      {
+        "text": "Because Ethernet headers are variable length",
+        "explanation": "The Ethernet header is a fixed 14 bytes (without VLAN tags); the check is about the packet's length, not the header's."
+      },
+      {
+        "text": "To detect VLAN tags",
+        "explanation": "VLAN detection means inspecting `h_proto` for 0x8100, which is a different check."
+      },
+      {
+        "text": "Because the eBPF verifier rejects any packet access it can't prove is within `data`..`data_end`",
+        "explanation": "Correct. Without the bounds check, a short packet would make the program read past the buffer, an out-of-bounds kernel read, so the verifier refuses to load it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `ctx->data` and `ctx->data_end` delimit the packet.\n2. `eth + 1` points just past a 14-byte Ethernet header.\n3. If that's beyond `end`, the packet is shorter than a header.\n4. The verifier tracks pointer ranges; any read not proven inside the range fails verification at load time.\n\nThe same pattern repeats for the IP and UDP headers.",
+    "link": {
+      "title": "What is eBPF? — ebpf.io",
+      "url": "https://ebpf.io/what-is-ebpf/"
+    }
+  },
+  {
+    "id": "io-network-stack-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A native-mode XDP program returns XDP_PASS for a packet. What happens next in the normal receive path?",
+    "options": [
+      {
+        "text": "The packet is dropped",
+        "explanation": "That's `XDP_DROP`."
+      },
+      {
+        "text": "The packet proceeds toward the normal kernel networking stack, subject to subsequent processing and possible drops",
+        "explanation": "Correct. PASS permits stack processing; it does not guarantee socket delivery or undo modifications the XDP program made."
+      },
+      {
+        "text": "The packet is transmitted back out of the same NIC",
+        "explanation": "That's `XDP_TX`, used e.g. by load balancers."
+      },
+      {
+        "text": "The packet is delivered to an AF_XDP socket",
+        "explanation": "That requires `XDP_REDIRECT` to an XSK map."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Verdicts:\n\n- `DROP`: free the buffer.\n- `PASS`: build an skb, continue the normal path.\n- `TX`: send back out the same port.\n- `REDIRECT`: another NIC, CPU or AF_XDP socket.\n- `ABORTED`: drop and fire a trace event (program error).",
+    "link": {
+      "title": "The eXpress Data Path (XDP paper and data)",
+      "url": "https://github.com/tohojo/xdp-paper"
+    }
+  },
+  {
+    "id": "io-network-stack-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Profiling shows costly normal-stack processing of unwanted UDP traffic. Assume native XDP support and a correct classifier, while HTTPS must remain on the normal kernel stack. Which option directly removes early per-packet work for the unwanted traffic?",
+    "options": [
+      {
+        "text": "Move the server to DPDK",
+        "explanation": "An exclusive VFIO DPDK design would remove that data path from the normal stack; bifurcated/coexistence designs also exist, so DPDK does not universally take an entire NIC away."
+      },
+      {
+        "text": "Generic-mode XDP",
+        "explanation": "Generic XDP retains skb allocation costs. It can still help some workloads; its benefit is not universally negligible or limited to testing."
+      },
+      {
+        "text": "Native-mode XDP program that drops the attack traffic and returns `XDP_PASS` for everything else",
+        "explanation": "Correct under the assumptions. Native XDP can reject before normal skb/stack processing, retaining a PASS path for legitimate packets. Classification and processing still cost CPU."
+      },
+      {
+        "text": "Increase `net.core.netdev_budget`",
+        "explanation": "That lets NAPI process more packets per cycle; it doesn't make each packet cheaper, and the CPUs are already saturated."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Normal netfilter drops occur later than native XDP receive classification. Native XDP can discard matched unwanted packets before normal skb/stack work while returning PASS for legitimate traffic. Benchmark the actual classifier, driver, packet mix and mode; this is a path-cost argument, not proof of a particular packet rate or current vendor deployment.",
+    "link": {
+      "title": "How to drop 10 million packets per second — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/how-to-drop-10-million-packets/"
+    }
+  },
+  {
+    "id": "io-network-stack-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For a conventional exclusive VFIO DPDK application using dedicated always-busy poll loops and no kernel-stack integration, which tradeoffs apply? Select all that apply.",
+    "options": [
+      {
+        "text": "Polling cores run at 100% CPU even when there's no traffic",
+        "explanation": "Correct. Poll-mode drivers spin on the RX ring instead of sleeping on interrupts."
+      },
+      {
+        "text": "The NIC is unbound from the kernel, so `tcpdump`, `ss` and iptables no longer see its traffic",
+        "explanation": "Correct in the stated exclusive data-path model: ordinary kernel-stack packet tools do not see that bypassed traffic. The kernel still manages the VFIO device; DPDK-specific capture and other modes can differ."
+      },
+      {
+        "text": "You need your own TCP/IP stack if you want TCP on that NIC",
+        "explanation": "Correct. DPDK gives you raw packets; protocol processing is up to you or a user-space stack."
+      },
+      {
+        "text": "Every packet still needs a system call to reach user space",
+        "explanation": "DPDK's whole point is the opposite: the process reads the NIC's ring directly, with no syscalls."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The stated design avoids ordinary per-packet syscall/skb processing and dedicates CPU polling time. Its bypassed traffic is outside normal kernel-stack tooling, and TCP requires an appropriate stack/integration. DPDK does not universally require these choices: bifurcated drivers, alternative PMDs and power-management modes change the tradeoffs.",
+    "link": {
+      "title": "About DPDK — dpdk.org",
+      "url": "https://www.dpdk.org/about/"
+    }
+  },
+  {
+    "id": "io-network-stack-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux TCP sender uses ordinary copied send() with TSO enabled and supported. Which description best captures segmentation of the bytes accepted by send(), assuming a conventional qdisc path?",
+    "options": [
+      {
+        "text": "The kernel splits the data into 1,500-byte packets in `send()` and queues each to the NIC",
+        "explanation": "With TSO, segmentation is deferred. TCP passes large skbs down and the NIC cuts them."
+      },
+      {
+        "text": "The NIC DMAs the 1 MB straight from the application's buffer with no copy",
+        "explanation": "Plain `send()` copies into kernel memory. Zero-copy needs `MSG_ZEROCOPY` or `sendfile`."
+      },
+      {
+        "text": "The qdisc is bypassed whenever TSO is enabled",
+        "explanation": "TSO doesn't bypass queueing; packets still go through the qdisc (e.g. fq_codel or fq)."
+      },
+      {
+        "text": "Accepted bytes enter the socket send queue; larger skbs pass through queueing, and the NIC performs supported TCP segmentation",
+        "explanation": "Correct. TSO/GSO keep per-packet costs low by processing big chunks in the stack and segmenting as late as possible."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. send may accept fewer bytes than requested; the application handles the remainder.\n2. In the ordinary copied path, accepted bytes are queued in kernel memory.\n3. Supported TSO lets the stack submit larger aggregates; allowed size varies by kernel/device features.\n4. Queueing and driver submission lead to DMA, and the NIC segments according to TCP/MTU constraints.\n5. TX completion releases resources when safe; it is not proof that the remote application read the data.",
+    "link": {
+      "title": "Scaling in the Linux Networking Stack — kernel documentation",
+      "url": "https://docs.kernel.org/networking/scaling.html"
+    }
+  }
+]

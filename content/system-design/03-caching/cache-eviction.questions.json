@@ -1,0 +1,378 @@
+[
+  {
+    "id": "cache-eviction-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An LRU cache has capacity 3. Assume every miss loads and inserts its key. Starting empty, it receives: `get A, get B, get C, get A, get D`. Which key is evicted when D is inserted?",
+    "options": [
+      {
+        "text": "A",
+        "explanation": "A was accessed again just before D, making it the most recently used key, so it is the last LRU would evict."
+      },
+      {
+        "text": "C",
+        "explanation": "C was used after B, so it is more recent than B and survives."
+      },
+      {
+        "text": "D",
+        "explanation": "D is the item being inserted; LRU evicts an existing item to make room for it."
+      },
+      {
+        "text": "B",
+        "explanation": "Correct. After the accesses, recency order (most to least recent) is A, C, B. B was touched longest ago, so it is evicted."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Track the list from MRU (left) to LRU (right):\n\n```\nget A   [A]\nget B   [B, A]\nget C   [C, B, A]\nget A   [A, C, B]   A moves to front\nget D   full: evict B\n        [D, A, C]\n```\n\nB is at the LRU end when the cache is full, so B goes. Note that FIFO would have evicted A (inserted first), which is exactly the popular key you want to keep.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "cache-eviction-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Every night at 02:00 a reporting job reads 5 million product records once each through your LRU-based cache. Each morning the hit ratio starts low and takes an hour to recover. What is happening, and what is the best fix?",
+    "options": [
+      {
+        "text": "The TTL is too short; increase it to 24 hours",
+        "explanation": "TTL isn't the cause: the hot keys are being *evicted* for capacity, not expiring. A longer TTL would not stop the scan pushing them out."
+      },
+      {
+        "text": "The scan pollutes the LRU cache by making cold keys most-recent; switch to LFU (or bypass the cache for the batch job)",
+        "explanation": "Correct. LRU treats one access as proof of usefulness. LFU (or segmented LRU / W-TinyLFU) can protect frequently reused entries better, but sampling, decay and segment sizes mean scan resistance is not absolute. Simplest of all: have the batch job read the database directly."
+      },
+      {
+        "text": "The cache is too small; double its memory",
+        "explanation": "More memory might hold both sets, but 5 million one-off reads would still evict hot keys if the cache cannot hold them all. It treats the symptom expensively rather than the cause."
+      },
+      {
+        "text": "Switch to FIFO, which is immune to scans",
+        "explanation": "FIFO is just as vulnerable: the scan's keys are the newest inserts, so FIFO evicts the older hot keys first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before 02:00, the cache holds the hot set: say 200,000 popular products read all day.\n2. The job reads 5,000,000 distinct keys once each. Under LRU, each becomes the most recent entry, pushing older entries towards the tail.\n3. By 03:00 the cache holds the last N scanned keys, which nobody will read again.\n4. In the morning, real users miss on the popular products until they are re-read.\n5. Fix options:\n   - Route batch jobs straight to a read replica, not through the cache.\n   - Use `allkeys-lfu`: scanned keys have frequency ~1 and are evicted first.\n   - Use a scan-resistant library policy (W-TinyLFU, SLRU).",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You deploy a fresh Redis instance as a cache with default settings and `maxmemory 4gb`. Your app never sets TTLs. What happens when memory reaches 4 GB?",
+    "options": [
+      {
+        "text": "Writes start failing with an OOM error, while reads still work",
+        "explanation": "Correct. The default `noeviction` policy refuses commands that would add memory. For a cache, set `maxmemory-policy allkeys-lru` (or `allkeys-lfu`)."
+      },
+      {
+        "text": "Redis evicts the least recently used keys",
+        "explanation": "Only if `maxmemory-policy` is `allkeys-lru`. The default policy is `noeviction`."
+      },
+      {
+        "text": "Redis evicts keys with the shortest TTL",
+        "explanation": "That is `volatile-ttl`, which is not the default and would evict nothing here because no keys have a TTL."
+      },
+      {
+        "text": "Redis grows beyond 4 GB until the OS kills it",
+        "explanation": "Not the intended dataset-growth behavior: noeviction rejects memory-growing commands. However maxmemory is not a hard process-RSS limit; command overshoot, allocator fragmentation, buffers and copy-on-write still need headroom."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `maxmemory` sets the limit; `maxmemory-policy` decides what happens at the limit.\n2. Default policy: `noeviction`.\n3. At 4 GB, `SET` returns `OOM command not allowed when used memory > 'maxmemory'`. `GET` keeps working.\n4. Your cache-aside code fails to populate, so missed keys cannot be populated and keep reaching the DB; already cached keys can still hit.\n5. Even switching to `volatile-lru` wouldn't help, because no key has a TTL, so none are candidates.\n6. Correct config for a cache: `maxmemory-policy allkeys-lru`.",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q4",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What data structures give a classic LRU cache expected/amortized O(1) `get` and `put`?",
+    "options": [
+      {
+        "text": "A sorted array of keys by last-access time",
+        "explanation": "Wrong. In an array ordered by recency rather than by key, locating an arbitrary key may require O(n), and moving entries also costs O(n)."
+      },
+      {
+        "text": "A min-heap keyed by last-access time",
+        "explanation": "A heap finds the minimum in O(1) but updating a key's position on every access costs O(log n)."
+      },
+      {
+        "text": "A hash map from key to node, plus a doubly linked list ordered by recency",
+        "explanation": "Correct. The map finds the node in O(1); the doubly linked list lets you unlink it and move it to the head in O(1), and the tail is always the LRU victim."
+      },
+      {
+        "text": "A single hash map",
+        "explanation": "A hash map gives O(1) lookup but has no ordering, so finding the least recently used key would require scanning every entry."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `get(k)` must find k fast → hash map, O(1).\n2. It must then mark k most recent → unlink its node and insert at head. With `prev`/`next` pointers this is O(1).\n3. `put` on a full cache evicts the tail node, O(1), and deletes its key from the map, O(1).\n4. A singly linked list would fail step 2, because unlinking needs the previous node.\n5. Python's `OrderedDict` and Java's `LinkedHashMap(accessOrder=true)` are exactly this structure.\nHash-table operations are expected/amortized O(1), not an unconditional worst-case guarantee for all keys or hash functions.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "cache-eviction-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about **Redis's** eviction implementation are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It evicts by sampling a few random keys (default 5) and choosing the best candidate, rather than keeping a full LRU list",
+        "explanation": "Correct. `maxmemory-samples` controls the sample size, and an eviction pool keeps good candidates across rounds, approximating true LRU without per-key linked-list pointers."
+      },
+      {
+        "text": "Its LFU mode uses an 8-bit logarithmic counter that is incremented probabilistically",
+        "explanation": "Correct. The counter increments with decreasing probability as it grows (tuned by `lfu-log-factor`), letting 8 bits represent very large hit counts."
+      },
+      {
+        "text": "LFU counters never decrease, so a key popular last month remains protected",
+        "explanation": "Incorrect. Counters decay over time according to `lfu-decay-time` (default 1 minute per decrement), so old popularity fades."
+      },
+      {
+        "text": "Increasing `maxmemory-samples` to 10 brings eviction closer to true LRU at the cost of more CPU",
+        "explanation": "Correct. A bigger sample is more likely to contain the true oldest key, so accuracy improves, at the cost of more work per eviction."
+      },
+      {
+        "text": "Expired keys are only removed when a client reads them",
+        "explanation": "Incorrect. Redis also actively samples keys with TTLs about 10 times a second and deletes expired ones, so unread keys are reclaimed too."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Exact LRU costs two pointers per key plus list updates on every read. With 100 million keys that is ~1.6 GB of pointers alone.\n2. Redis instead stores a 24-bit clock or LFU counter in each object and **samples**: pick 5 random keys, put the oldest in a 16-entry pool, evict the pool's best.\n3. LFU: an 8-bit Morris-style counter. With `lfu-log-factor 10`, around a million hits saturate the counter at 255.\n4. Decay: elapsed decay periods are applied lazily when the key is accessed or considered; a background decrement of every idle key is not required, so formerly hot keys become evictable.\n5. Expiry is both lazy (on access) and active (periodic sampling).",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Memcached cluster shows heavy evictions and a falling hit ratio, yet `stats` reports gigabytes of free memory. Values recently shrank from ~1 KB JSON to ~100 B after a format change. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Memcached's global LRU is evicting large items first",
+        "explanation": "Memcached does not have one global LRU; it has a separate LRU per slab class, which is the point of the question."
+      },
+      {
+        "text": "The TTL on small values is shorter",
+        "explanation": "TTL causes expiry, which is reported separately from evictions; the format change did not alter TTLs."
+      },
+      {
+        "text": "Memcached compresses small values badly",
+        "explanation": "Memcached itself does not compress values (some clients do). Compression would not cause evictions alongside free memory."
+      },
+      {
+        "text": "Memory was assigned to the ~1 KB slab class; the small-item class has few pages and evicts within itself, while memory sits idle in the large class",
+        "explanation": "Correct. Each slab class evicts independently. Pages assigned to the old size class stay there until the slab rebalancer (`slab_reassign`/`slab_automove`) moves them, so one class can thrash while another is underused."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Memcached splits memory into 1 MB pages assigned to slab classes (for example 96 B, 120 B, ..., ~1 KB, ...).\n2. For months, values were ~1 KB, so almost all pages went to the ~1 KB class.\n3. After the change, new items (about 100 B of value plus a ~50 B header) land in a small class of around 150–200 B, which owns only a few pages.\n4. That class fills quickly and evicts its own LRU tail, even though the ~1 KB class has lots of free chunks.\n5. Fix: rely on automatic slab rebalancing (`slab_automove`, on by default in modern versions, but it moves pages gradually), or restart/warm the cluster after major size changes.",
+    "link": {
+      "title": "Memcached wiki",
+      "url": "https://github.com/memcached/memcached/wiki"
+    }
+  },
+  {
+    "id": "cache-eviction-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Caffeine's W-TinyLFU is described as an **admission** policy as well as an eviction policy. What does that mean in practice?",
+    "options": [
+      {
+        "text": "It refuses to cache any key that has not been read at least twice in the last minute",
+        "explanation": "There is no fixed threshold like this. Admission is relative: the candidate is compared with the eviction victim."
+      },
+      {
+        "text": "When the cache is full, a new item only displaces the victim if its estimated access frequency is higher than the victim's",
+        "explanation": "Correct. TinyLFU keeps approximate frequencies in a Count-Min Sketch. A newcomer from the LRU window competes with the main cache's victim; if the newcomer is less popular, it is dropped instead, which protects the cache from one-hit wonders."
+      },
+      {
+        "text": "It only admits keys that fit within a size limit",
+        "explanation": "Size limits exist in Caffeine (weighers), but that isn't what the admission policy refers to."
+      },
+      {
+        "text": "It caches items in the order they were admitted and evicts the oldest",
+        "explanation": "That describes FIFO, which ignores frequency entirely."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ordinary policies always admit the new item and only choose what to evict.\n2. W-TinyLFU: new items enter an LRU window whose size is implementation/configuration-dependent (modern Caffeine adapts it).\n3. When an item leaves the window, it is compared to the main segment's victim using sketch frequencies.\n4. Example: candidate X has estimated frequency 1 (seen once); victim Y has 7. X is discarded; Y stays.\n5. A scan's keys all have frequency ~1, so they are less likely to displace a well-established hot set; approximate counts and policy details do not guarantee immunity.\n6. The sketch is periodically halved so frequencies reflect recent behaviour.",
+    "link": {
+      "title": "TinyLFU: A Highly Efficient Cache Admission Policy (arXiv)",
+      "url": "https://arxiv.org/abs/1512.00727"
+    }
+  },
+  {
+    "id": "cache-eviction-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Redis runs with `allkeys-lfu` and the default `lfu-decay-time 1`. Key `promo:blackfriday` reached an LFU counter of 200 during a sale, then was not touched for 3 hours. A newer key `promo:xmas` has a counter of 30 and was read a minute ago. Under memory pressure, which is more likely to be evicted, and why?",
+    "options": [
+      {
+        "text": "`promo:xmas`, because 30 is far below 200 and LFU counters only ever grow",
+        "explanation": "Counters do not only grow. Idle keys are decremented by one per decay period, so the stored 200 is not what eviction compares against."
+      },
+      {
+        "text": "`promo:blackfriday`, because 180 idle minutes decay its counter to about 20, below `promo:xmas`'s 30",
+        "explanation": "Correct. One decrement per idle minute takes 200 down to roughly 20. Old popularity has faded, which is exactly what decay is for."
+      },
+      {
+        "text": "Neither: LFU never evicts a key whose counter has passed the initial value of 5",
+        "explanation": "There is no such protection. The initial value of 5 just gives new keys a chance to accumulate hits; any key can be evicted."
+      },
+      {
+        "text": "`promo:blackfriday`, but only because LFU falls back to LRU for idle keys",
+        "explanation": "LFU mode does not switch to LRU. The idle time matters only because it drives the counter's decay."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Decay rule: for every `lfu-decay-time` minutes (1 here) since the last decrement, subtract 1 from the counter.\n2. Idle time: 3 hours = 180 minutes.\n3. Effective counter:\n\n```\n200 - 180 = 20\n```\n\n4. Compare: `promo:blackfriday` ≈ 20 vs `promo:xmas` ≈ 29 after one minute of decay.\n5. Sampled eviction picks the lower counter, so Black Friday is more likely to be selected if both are considered; random sampling does not guarantee a particular victim.\n\nWithout decay, last month's hit would squat in the cache forever. Setting `lfu-decay-time 0` disables decay, which is rarely what a cache wants.",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Redis cache shows a 55% hit ratio, lower than you expected. `INFO stats` shows `evicted_keys` near zero but a very high `expired_keys`, and memory use is well below `maxmemory`. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The eviction policy is wrong; switch from `allkeys-lru` to `allkeys-lfu`",
+        "explanation": "With almost no evictions, the eviction policy is barely being exercised. Changing it won't change much."
+      },
+      {
+        "text": "The cache is too small for the working set",
+        "explanation": "A cache that is too small would be full and evicting heavily. Here memory is spare and evictions are near zero."
+      },
+      {
+        "text": "The TTLs are too short, so keys expire before they are read again",
+        "explanation": "Correct. Keys are leaving because of expiry, not capacity. Longer TTLs (where staleness allows) or explicit invalidation would keep useful keys longer."
+      },
+      {
+        "text": "Redis is failing to expire keys, so stale data is being served",
+        "explanation": "High `expired_keys` shows Redis *is* expiring keys. Redis never returns a key past its TTL."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Read the counters like a doctor reads symptoms:\n\n| Signal | Means |\n|---|---|\n| High `evicted_keys` | Cache too small or wrong policy |\n| High `expired_keys` | TTLs may be too short |\n| Memory < `maxmemory` | No capacity pressure |\n\n1. Memory is spare and evictions are ~0, so capacity is not the problem.\n2. Keys are disappearing through expiry.\n3. If a key's TTL is 30 s but it is typically re-read every 2 minutes, nearly every read misses.\n4. Fix: lengthen TTLs to cover the typical reuse interval, and rely on invalidation for freshness rather than very short TTLs.",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A nightly batch job reads millions of keys once each through your cache. Which of these designs are intended to help keep the daytime hot set largely intact? Select all that apply.",
+    "options": [
+      {
+        "text": "Plain LRU",
+        "explanation": "Incorrect. Each scanned key becomes the most recent entry, so the scan pushes the hot set out of the cache."
+      },
+      {
+        "text": "Redis `allkeys-lfu`",
+        "explanation": "Correct. Scanned keys are seen once, so their counters stay near the starting value and they are evicted before the frequently-used hot keys."
+      },
+      {
+        "text": "Memcached's segmented LRU (HOT/WARM/COLD)",
+        "explanation": "Correct as scan resistance, not immunity. Segment caps, asynchronous promotions and workload changes can still displace useful entries."
+      },
+      {
+        "text": "FIFO",
+        "explanation": "Incorrect. The scan's keys are the newest inserts, so FIFO evicts the older hot keys first, just as LRU does."
+      },
+      {
+        "text": "Caffeine's W-TinyLFU",
+        "explanation": "Correct. A one-hit candidate loses the frequency comparison against the main cache's victim, so scanned keys are dropped rather than admitted."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "LRU and FIFO are vulnerable to a stream of new one-off keys. LFU, segmented LRU and W-TinyLFU can protect repeatedly used entries, but sampling, frequency decay, segment sizes and concurrent traffic mean none guarantees the entire hot set survives. Bypassing the application cache for the batch job avoids this source of pollution directly.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "cache-eviction-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "One Redis instance holds both cache entries (always written with a TTL) and feature-flag keys that must never be evicted (no TTL). Which `maxmemory-policy` fits best, and what does the Redis documentation recommend instead?",
+    "options": [
+      {
+        "text": "`allkeys-lru`; there is no better option",
+        "explanation": "`allkeys-lru` treats every key as a candidate, so a rarely-read feature flag could be evicted."
+      },
+      {
+        "text": "`noeviction`, so nothing is ever lost",
+        "explanation": "This protects the flags, but cache writes start failing with OOM errors as soon as memory is full, which breaks the cache."
+      },
+      {
+        "text": "`volatile-ttl`, which evicts the keys without a TTL first",
+        "explanation": "It is the other way round: `volatile-*` policies only ever evict keys that *have* a TTL."
+      },
+      {
+        "text": "`volatile-lru` (or `volatile-lfu`), since only keys with a TTL are candidates; but ideally run two separate instances",
+        "explanation": "Correct. `volatile-*` restricts eviction to keys with an expiry, which protects the flags. The docs note that two instances, one for caching and one for persistent data, are cleaner."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. You need eviction to apply to cache entries **only**.\n2. `volatile-*` policies consider only keys with an expiry set, so the TTL acts as an \"evictable\" flag.\n3. `volatile-lru` evicts the least recently used of those.\n4. Caveat: if a cache write ever forgets its TTL, that key becomes unevictable. And if no key has a TTL, `volatile-*` behaves like `noeviction`.\n5. Hence the Redis docs' advice: separate instances, with `allkeys-lru` on the cache and `noeviction` on the store.",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A CLOCK cache holds four pages in a ring with these referenced bits: `A=1, B=1, C=0, D=1`. The hand points at A. A new page must be loaded. Which page is evicted, and what are A's and B's bits afterwards?",
+    "options": [
+      {
+        "text": "A is evicted, because the hand points at it",
+        "explanation": "CLOCK checks the referenced bit first. A's bit is 1, so it gets a second chance instead of being evicted."
+      },
+      {
+        "text": "D is evicted, because it was referenced most recently",
+        "explanation": "CLOCK does not know which reference was most recent. It only knows whether a page was referenced since the hand last passed."
+      },
+      {
+        "text": "C is evicted; A and B now have their bits cleared to 0",
+        "explanation": "Correct. The hand clears A (1→0), clears B (1→0), finds C with 0 and evicts it. A and B must be referenced again before the hand returns, or they will be next."
+      },
+      {
+        "text": "C is evicted; A and B keep their bits at 1",
+        "explanation": "Passing a page with bit 1 clears it. That clearing is what makes the second chance a *single* second chance."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Sweep the hand step by step:\n\n```\nhand A: bit 1 -> set 0, move on\nhand B: bit 1 -> set 0, move on\nhand C: bit 0 -> EVICT C\nnew page takes C's slot, bit 1\n```\n\nAfter the eviction: `A=0, B=0, new=1, D=1`, hand just past the new page.\n\nWhy this approximates LRU: a page survives only if it was used since the hand last passed it. No list is reordered on each access; the hardware or kernel just sets a bit.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  }
+]

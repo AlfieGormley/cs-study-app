@@ -1,0 +1,386 @@
+[
+  {
+    "id": "arch-batch-vs-stream-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which workload is the best fit for **stream** processing rather than batch?",
+    "options": [
+      {
+        "text": "Training a recommendation model on three years of purchase history once a week.",
+        "explanation": "Wrong. This is a bounded historical dataset with a weekly schedule, the classic batch workload."
+      },
+      {
+        "text": "Flagging a suspicious card transaction within a second of it happening.",
+        "explanation": "This requirement favors continuous low-latency processing. Fraud detection can also occur later; the one-second deadline is this product's constraint."
+      },
+      {
+        "text": "Producing the finance team's month-end revenue report.",
+        "explanation": "Wrong. Monthly reporting over a complete, bounded period suits batch; low latency adds nothing here."
+      },
+      {
+        "text": "Backfilling a new column for all 5 billion historical orders.",
+        "explanation": "Wrong. A one-off job over a large fixed dataset is batch. Streaming would add complexity with no latency benefit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask two questions: is the input bounded or unbounded, and how soon is the result useful?\n2. Model training, month-end reporting and backfills are bounded with hours-to-days deadlines, so batch.\n3. Fraud detection is unbounded and this product requires a result within a second, so stream.\n4. Rule: when latency of *insight* matters, stream it.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In MapReduce, what happens during the **shuffle** phase?",
+    "options": [
+      {
+        "text": "Map outputs are partitioned, sorted and sent across the network so that all values for a given key reach the same reducer.",
+        "explanation": "Correct. This grouping by key is what lets a reducer see every value for its keys. It's also usually the most expensive phase because of network and disk I/O."
+      },
+      {
+        "text": "Input files are randomly reordered to balance load.",
+        "explanation": "Wrong. Input order doesn't matter to map tasks. 'Shuffle' refers to redistributing map output, not randomising input."
+      },
+      {
+        "text": "Reducers send their results back to the mappers for verification.",
+        "explanation": "Wrong. Data flows one way, map → shuffle → reduce. There's no verification round-trip."
+      },
+      {
+        "text": "Failed tasks are reshuffled to new machines.",
+        "explanation": "Wrong. Re-running failed tasks is fault tolerance via re-execution, a separate mechanism from the shuffle."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Map on chunk 1 emits (a,1), (b,1), (a,1); map on chunk 2 emits (b,1), (c,1).\n2. Partition by hash(key) % R reducers: say a → R0, b → R1, c → R2.\n3. Each mapper sends its pairs to the right reducer, which sorts and groups: R0 gets a:[1,1], R1 gets b:[1,1], R2 gets c:[1].\n4. Reduce sums: (a,2), (b,2), (c,1).\n5. Network transfer of all map output is why combiners (pre-aggregating on the mapper) matter.",
+    "link": {
+      "title": "Wikipedia: MapReduce",
+      "url": "https://en.wikipedia.org/wiki/MapReduce"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A mobile game counts taps per minute with a stream processor. Phones on the Underground buffer events offline and send them minutes later. The team groups by the time each event *arrives* at the server. What goes wrong, and what's the fix?",
+    "options": [
+      {
+        "text": "Nothing; arrival time is always close enough to when the tap happened.",
+        "explanation": "Wrong. For offline phones the gap is minutes, so taps are counted in the wrong windows and peaks are smeared out."
+      },
+      {
+        "text": "Taps are attributed to the minute they arrived (processing time), not when they happened; window by event time with watermarks, and decide how to handle data that arrives after the watermark.",
+        "explanation": "Correct. Event-time windows place each tap in the minute it happened. Watermarks decide when a window is complete enough to emit, and an allowed-lateness policy handles stragglers."
+      },
+      {
+        "text": "The processor will crash because events are out of order.",
+        "explanation": "Wrong. Out-of-order events are normal and stream processors handle them. The problem is silent miscounting, not crashing."
+      },
+      {
+        "text": "Switch to batch processing once a day; streaming can't handle offline devices.",
+        "explanation": "Wrong. Event-time processing in streams is designed for exactly this. Batch would also add a day of latency."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A tap happens at 08:00:30 (event time) and arrives at 08:06:10 (processing time).\n2. Processing-time windows count it in 08:06; the 08:00 count is too low and the 08:06 count too high.\n3. Event-time windows use the timestamp in the event, so it goes in 08:00.\n4. When can the 08:00 window be emitted? When the configured event-time trigger fires for that window. A simplified watermark can lag observed event time; actual generators, input minima and idle-input handling matter.\n5. Events still later than that: either update the result (allowed lateness, emitting a correction) or route them to a side output.\n6. Trade-off: a longer watermark delay means more complete results but higher latency.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Spark shuffle aggregation groups 2 billion orders by customer_id. One hot key accounts for 25% of rows, and the physical plan shows those 500 million rows concentrated in one long-running task. Which diagnosis and mitigation fit?",
+    "options": [
+      {
+        "text": "The cluster needs more executors.",
+        "explanation": "More executors alone do not divide this one hot-key task; change the aggregation plan or distribution."
+      },
+      {
+        "text": "Data skew: for a mergeable aggregate such as SUM, partially aggregate by a salted key, then combine the partial sums by customer_id.",
+        "explanation": "This divides a hot key's initial work while preserving the aggregate. Verify semantics: not every aggregate can be combined by summing partial results."
+      },
+      {
+        "text": "Spark is reading from disk instead of memory; cache the DataFrame.",
+        "explanation": "Wrong. Caching speeds up re-use of a dataset. It doesn't redistribute a skewed partition."
+      },
+      {
+        "text": "Spark's lineage is recomputing the task repeatedly because of failures.",
+        "explanation": "Wrong. Nothing suggests failures. One task is slow because it has vastly more data than the others."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The plan confirms skew: 25% × 2 billion = 500 million hot-key rows.\n2. The other 1.5 billion rows would average about 7.5 million over 199 partitions if evenly distributed; actual hashing can add other rows to the hot partition.\n3. For SUM, assign salt buckets, compute partial sums by (customer_id, salt), then sum partials by customer_id.\n4. NULL keys are a legitimate group in aggregation; dropping them changes the result. For an ordinary inner equijoin, NULLs do not match and Spark may already filter them.\n5. AQE skew-join splitting is not a universal automatic fix for every hot-key aggregation.",
+    "link": {
+      "title": "Apache Spark: RDD programming guide",
+      "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the **Lambda** and **Kappa** architectures are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Lambda runs a batch layer and a speed layer in parallel and merges their results at query time.",
+        "explanation": "Correct. The batch layer gives accurate recomputed views; the speed layer covers recent data; the serving layer merges them."
+      },
+      {
+        "text": "Lambda's main drawback is maintaining the same business logic in two systems.",
+        "explanation": "Correct. Two codebases with different semantics drift apart, and discrepancies are painful to debug. This was Jay Kreps' central criticism."
+      },
+      {
+        "text": "Kappa recomputes results by replaying the retained event log through a new version of the stream job.",
+        "explanation": "Correct. Reprocessing means starting a new job from an early offset, building a new output, then switching readers over."
+      },
+      {
+        "text": "Kappa requires no long-term storage of events.",
+        "explanation": "Wrong. Kappa depends on keeping enough history in the log (or tiered storage) to replay. Without retention you can't recompute."
+      },
+      {
+        "text": "Lambda is only used for serverless AWS Lambda functions.",
+        "explanation": "Wrong. The name is unrelated to AWS Lambda. It refers to the shape of the two data paths."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Lambda = batch + speed + serving merge. Strength: accuracy from batch recomputation. Weakness: duplicated logic.\n2. Kappa = one streaming path; recompute by replay.\n   - Requires retention: e.g. Kafka with tiered storage holding 1 year of events.\n   - Needs a replay/state/output design meeting the application's correctness requirements; built-in exactly-once support alone does not cover arbitrary external systems.\n3. Check each option against these definitions: 0, 1 and 2 match; 3 contradicts Kappa's replay requirement; 4 is a naming confusion.",
+    "link": {
+      "title": "Jay Kreps: Questioning the Lambda Architecture",
+      "url": "https://www.oreilly.com/radar/questioning-the-lambda-architecture/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Flink job reads payments from Kafka, keeps a running total per merchant in state, and writes totals to a database. It checkpoints every 60 s. The job crashes 45 s after the last checkpoint and restarts. What must be true for the database totals to be exactly right afterwards?",
+    "options": [
+      {
+        "text": "Nothing; Flink guarantees exactly-once delivery to any external database automatically.",
+        "explanation": "Wrong. Flink's exactly-once guarantee covers its internal state. End-to-end exactly-once also needs a sink that is transactional (committing on checkpoint) or idempotent."
+      },
+      {
+        "text": "Restore state and source positions consistently; use a supported checkpoint-coordinated transactional sink, or a proven idempotent versioned output protocol that rejects stale attempts.",
+        "explanation": "A plain merchant-key upsert can expose rewound totals or let stale retries overwrite newer output. State recovery plus arbitrary upserts is not sufficient for exactly-once observable results."
+      },
+      {
+        "text": "Checkpoints must be taken every second so no events are ever replayed.",
+        "explanation": "Wrong. More frequent checkpoints shrink the replay window but don't eliminate it. Correctness comes from consistent restore plus sink semantics, not frequency."
+      },
+      {
+        "text": "The sink should increment the database total by each event's amount (`total = total + amount`).",
+        "explanation": "Wrong. Non-idempotent increments double-count replayed events whose effects reached the database before failure; the duplicated interval can be up to the 45 seconds since the checkpoint."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Restore merchant state and Kafka positions from the same completed checkpoint, then replay.\n2. Bare increments can double count output already written before failure.\n3. Bare SET total can temporarily regress and race stale retries. A versioned, fenced idempotent protocol must define and enforce output ordering.\n4. A compatible transactional sink coordinates commit/abort with checkpoints and recovery; validate its actual guarantees and timeouts.\n5. Internal state consistency and externally observable effects are separate guarantees.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company dumps raw JSON from 40 sources into S3. Analysts complain that queries are slow, nobody knows which files are current, concurrent jobs sometimes see incomplete multi-file table updates, and a schema change broke a dashboard. What's the most appropriate evolution?",
+    "options": [
+      {
+        "text": "Move everything into the production Postgres database so analysts can use SQL.",
+        "explanation": "Wrong. A row-oriented OLTP database isn't built for scanning terabytes, and analytical queries would compete with production traffic."
+      },
+      {
+        "text": "Adopt a lakehouse table format (e.g. Apache Iceberg or Delta Lake) over columnar Parquet files, with a catalogue, layered raw/cleaned/aggregated tables, and schema evolution rules.",
+        "explanation": "Columnar files can reduce scan work, and compatible table-format readers use atomic metadata commits for consistent snapshots. Catalog and schema governance remain necessary; this does not fix every slow query."
+      },
+      {
+        "text": "Add more JSON files with clearer names.",
+        "explanation": "Wrong. Naming doesn't provide atomic commits, columnar efficiency or schema management. It just makes the swamp slightly better labelled."
+      },
+      {
+        "text": "Replace S3 with a larger network file share.",
+        "explanation": "Wrong. The storage medium isn't the problem. The issues are format, transactions and metadata, which a file share doesn't solve either."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Map each complaint to a cause:\n   - Slow queries: row-based JSON, so every query parses whole files. Columnar Parquet reads only the needed columns, compressed.\n   - Which files are current: no table metadata. A table format tracks the exact file list per snapshot.\n   - Incomplete table updates: S3 objects are individually atomic, but an arbitrary set of files is not a table transaction. Iceberg/Delta commit a new snapshot atomically; compatible readers see one committed snapshot; bypassing the table metadata loses that guarantee.\n   - Schema breakage: no schema governance. Table formats support explicit, compatible schema evolution.\n2. Organise as bronze (raw) → silver (cleaned) → gold (aggregates), with SQL engines (Trino, Spark, Snowflake) on top.\n3. Result: warehouse-like reliability on cheap object storage.",
+    "link": {
+      "title": "Apache Iceberg documentation",
+      "url": "https://iceberg.apache.org/docs/latest/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A dashboard shows \"orders in the last 10 minutes\", updated every minute. Which window type fits?",
+    "options": [
+      {
+        "text": "A tumbling window of 10 minutes.",
+        "explanation": "A tumbling window partitions time into disjoint blocks, so it cannot represent the trailing ten minutes at every minute boundary. Early triggers may still emit partial results more often."
+      },
+      {
+        "text": "A session window with a 10-minute gap.",
+        "explanation": "Wrong. Session windows group bursts of activity per key separated by inactivity. They don't give a fixed 10-minute span."
+      },
+      {
+        "text": "A sliding (hopping) window of 10 minutes that advances every 1 minute.",
+        "explanation": "Correct. Each window covers 10 minutes and a new one starts every minute, so each event belongs to 10 overlapping windows."
+      },
+      {
+        "text": "No window: keep one running total since the job started.",
+        "explanation": "Wrong. A running total never forgets old orders, so it can't answer 'in the last 10 minutes'."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Requirement: span = 10 min, refresh = 1 min.\n2. Tumbling: non-overlapping fixed blocks; trigger frequency is separate. Doesn't fit.\n3. Sliding: span 10, slide 1. Windows [12:00, 12:10), [12:01, 12:11), ...\n4. Each event counts in 10 windows: more state and work than tumbling.\n5. Session: driven by gaps in a user's activity, e.g. a browsing session.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your stream job uses a watermark of \"max event time seen − 10 s\". About 3% of events arrive more than 10 s late and are dropped, so hourly totals don't match the nightly batch. Product wants both fast dashboards and exact totals. What's the best approach?",
+    "options": [
+      {
+        "text": "Set the watermark delay to 24 hours so nothing is ever late.",
+        "explanation": "A 24-hour delay still does not prove that nothing arrives later. It also delays watermark-driven final output and increases retained state."
+      },
+      {
+        "text": "Switch from event time to processing time so no event is ever late.",
+        "explanation": "Wrong. Nothing is late, but every delayed event is counted in the wrong window, so totals are still wrong, just differently."
+      },
+      {
+        "text": "Keep the short watermark for an early result, allow lateness (say 1 hour) with updated results emitted as late events arrive, and send anything later to a side output.",
+        "explanation": "Early and corrected results can meet freshness needs; retained side-output events must actually be reconciled to achieve eventual completeness. Use versioned window outputs or transactional updates."
+      },
+      {
+        "text": "Drop late events; 3% is within normal error.",
+        "explanation": "Wrong. The requirement is exact totals, and the error is systematic: it always undercounts the windows that mobile users fall into."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A watermark trades completeness for latency.\n2. Short watermark → fast, incomplete first answer.\n3. Allowed lateness → the window's state is kept for 1 h more; each late event re-emits a corrected total.\n4. Beyond that → side output, reconciled by a batch job.\n5. Publish corrections with defined semantics: for example versioned (window, key) replacements that reject stale retries. A changelog with retractions/deltas can also work; blindly summing appended replacement totals double-counts.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You run a Kappa-style pipeline: a Flink job reads `clicks` (Kafka, 90-day retention) and writes per-campaign aggregates to table `agg_v1`. You've found a bug in the attribution logic. Which steps are part of a correct fix? Select all that apply.",
+    "options": [
+      {
+        "text": "Deploy the fixed job as a second job with a new consumer group, starting from the earliest retained offset, writing to `agg_v2`.",
+        "explanation": "Correct. This is Kreps's reprocessing recipe: a parallel job replays history into a fresh output, while v1 keeps serving."
+      },
+      {
+        "text": "Stop v1 and restart it from offset 0 writing into `agg_v1`.",
+        "explanation": "Wrong. Readers would see a mix of old, wrong totals and partly recomputed ones while the replay runs, and v1's output stops updating."
+      },
+      {
+        "text": "After verified catch-up, switch readers through a supported atomic pointer change; retain and keep v1 current during any required rollback window before retiring it.",
+        "explanation": "Catch-up and a coordinated cutover avoid serving partial recomputation. Dropping the old output immediately would remove the proposed rollback path."
+      },
+      {
+        "text": "Accept that only the last 90 days can be recomputed unless older raw events are also kept, for example in tiered storage or a data lake.",
+        "explanation": "Correct. Replay can only go as far back as the log retains. Kappa's reprocessing promise depends on retention."
+      },
+      {
+        "text": "Run v2 with the same consumer group as v1 so they share the work.",
+        "explanation": "Use independent consumer identity and offset management. Kafka group-managed consumers would divide partitions, while modern Flink sources can assign partitions themselves; sharing group identity is not a safe way to run independent replay jobs."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Kappa: batch = replay of the log.\n2. v2: new group, `earliest`, new table.\n3. Catch-up: source-reading concurrency is limited by Kafka partitions, while downstream processing and sink capacity also matter. With a constant live arrival rate, 90 days of backlog processed at 5× that rate catches up in 90/(5−1) = 22.5 days, so size the replay cluster.\n4. Cut-over: repoint `agg` → `agg_v2`.\n5. Clean-up: retire v1 and its output only after the required rollback window and verification.\n6. Limit: data older than retention can't be replayed.",
+    "link": {
+      "title": "Jay Kreps: Questioning the Lambda Architecture",
+      "url": "https://www.oreilly.com/radar/questioning-the-lambda-architecture/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In a Spark job, which of these operations normally trigger a **shuffle** (a wide dependency)? Select all that apply. Assume the large inputs do not already have compatible partitioning and no broadcast or storage-partition join is selected.",
+    "options": [
+      {
+        "text": "`filter(col('country') == 'GB')`",
+        "explanation": "Wrong. Filter is narrow: each output partition depends on one input partition, so no data moves."
+      },
+      {
+        "text": "`groupBy('customer_id').sum('amount')`",
+        "explanation": "Correct. Partial sums may be computed before shuffling. Contributions for each customer must be combined, so the remaining keyed intermediate data is redistributed under the stated assumptions."
+      },
+      {
+        "text": "`withColumn('vat', col('amount') * 0.2)`",
+        "explanation": "Wrong. A per-row calculation is narrow and pipelined with neighbouring steps in the same stage."
+      },
+      {
+        "text": "Joining two large DataFrames on `order_id`",
+        "explanation": "Under these assumptions a sort-merge join redistributes inputs by key. Compatible pre-partitioning or a different supported join plan can avoid shuffling one or both sides."
+      },
+      {
+        "text": "`repartition(400)`",
+        "explanation": "Correct. Repartitioning redistributes rows across 400 new partitions, which is a full shuffle by definition."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "1. Narrow: output partition needs one input partition. Pipelined in one stage. (filter, map, withColumn)\n2. Wide: output partition needs data from many input partitions. Stage boundary + shuffle. (groupBy, join, distinct, repartition)\n3. Cost: shuffles write to local disk, cross the network and are where skew bites.\n4. Tricks: filter and project before the shuffle; broadcast small tables.",
+    "link": {
+      "title": "Apache Spark: RDD programming guide",
+      "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Analysts query a 2 TB table of events with 200 columns of roughly equal size. A typical query sums one column, filtered by date. Moving from row-oriented JSON to compressed columnar Parquet, partitioned by date, roughly how much data does a one-day query read? Assume 365 days of data and 5× compression. Assume equal per-day volume, decimal units, the date predicate is fully resolved by partition pruning, and ignore metadata/encoding overhead. Compare with an unpartitioned JSON scan.",
+    "options": [
+      {
+        "text": "About 2 TB, because every query must parse the whole table.",
+        "explanation": "Wrong. That's the JSON case. Columnar layout and partitioning both let the engine skip most of the data."
+      },
+      {
+        "text": "About 10 GB: one column out of 200 is 10 GB uncompressed for the whole year.",
+        "explanation": "Wrong. That ignores partition pruning by date and compression, both of which shrink it further."
+      },
+      {
+        "text": "About 5.5 GB: one day is 1/365 of the table.",
+        "explanation": "Wrong. That applies partition pruning but still reads all 200 columns of that day."
+      },
+      {
+        "text": "About 5–6 MB: one column, one day, compressed.",
+        "explanation": "Correct. 2 TB ÷ 200 columns = 10 GB per column; ÷ 365 days ≈ 27 MB; ÷ 5 compression ≈ 5.5 MB."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Row JSON: read everything ≈ 2 TB.\n2. Columnar: 1 of 200 columns → 2 TB / 200 = 10 GB.\n3. Partition pruning: 1 of 365 days → 10 GB / 365 ≈ 27 MB.\n4. Compression 5× → ≈ 5.5 MB.\n5. The ideal ratio is 200 × 365 × 5 = 365,000× fewer payload bytes under these assumptions; actual I/O includes metadata and layout effects. This is why warehouses and lakehouses store columnar data.\n\n```\n2e12 / 200 / 365 / 5\n  ≈ 5.5e6 bytes\n```",
+    "link": {
+      "title": "Wikipedia: Column-oriented DBMS",
+      "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"
+    }
+  }
+]

@@ -1,0 +1,379 @@
+[
+  {
+    "id": "git-merge-rebase-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You branch `feat` from `main`, make two commits on `feat`, and nobody touches `main`. You then run `git switch main && git merge feat`. What happens? Assume merge.ff=true and no branch-specific options or hooks changing this behavior.",
+    "options": [
+      {
+        "text": "Git fast-forwards: `main` now points at `feat`'s tip and no new commit is created",
+        "explanation": "Correct. Git prints `Fast-forward` and simply moves the `main` ref to the same commit as `feat`."
+      },
+      {
+        "text": "Git creates a merge commit with two parents",
+        "explanation": "A merge commit is only needed when both sides have moved. Here `main` is an ancestor of `feat`, so there is nothing to join (unless you pass `--no-ff`)."
+      },
+      {
+        "text": "Git replays the two commits onto `main` with new hashes",
+        "explanation": "That describes a rebase. A merge never rewrites existing commits."
+      },
+      {
+        "text": "Git refuses because the branches have not diverged",
+        "explanation": "Git happily merges; not having diverged is precisely the case where it can take the cheapest route."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `git merge-base main feat` returns `main`'s tip, B.\n2. If the merge base equals the current branch's tip, the current branch is an ancestor of the other.\n3. So Git just moves the pointer:\n\n```\nbefore: A--B (main)--C--D (feat)\nafter:  A--B--C--D (main, feat)\n```\n\n4. `git count-objects -v` is unchanged: no objects are written.\n5. To force a record of the merge, use `git merge --no-ff feat`.",
+    "link": {
+      "title": "Basic Branching and Merging — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After `git rebase main`, your commit \"Add parser\" has a new hash, even though its diff and message are unchanged. Why?",
+    "options": [
+      {
+        "text": "Rebase always edits the commit message slightly",
+        "explanation": "A plain rebase keeps the message exactly. The hash changes for a structural reason, not a cosmetic one."
+      },
+      {
+        "text": "Only the author timestamp is updated",
+        "explanation": "Rebase preserves the author date by default. It updates the committer date, but even with identical dates the new parent alone would change the hash."
+      },
+      {
+        "text": "Git randomises hashes on every write to prevent collisions",
+        "explanation": "Git hashes are deterministic. The same bytes always give the same hash; that is the basis of content addressing."
+      },
+      {
+        "text": "The new commit has a different parent (and usually a different tree), and both are part of the hashed content",
+        "explanation": "Correct. The replayed commit sits on top of `main`'s tip, so its `parent` line differs, and its tree includes `main`'s newer files."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "A commit's content looks like:\n\n```\ntree   <root tree hash>\nparent <parent hash>\nauthor ...\ncommitter ...\n\nAdd parser\n```\n\n1. Before: `parent` = B (old base).\n2. After rebasing onto E: `parent` = E.\n3. The tree now also contains E's changes, so `tree` differs too.\n4. Different bytes -> different SHA-1 -> new commit C'.\n\nThe original C still exists; it is just no longer on the branch.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Five developers commit to a shared `release-2.4` branch. One of them, wanting a tidier history, reorders and rewrites commits with git rebase -i over the last 20 commits of `release-2.4` and force-pushes. What is the most likely result?",
+    "options": [
+      {
+        "text": "Everyone else's next pull silently picks up the cleaner history",
+        "explanation": "Their local branches still contain the old commits. Git sees diverged histories, not an upgrade, so pulls produce conflicts or duplicate commits."
+      },
+      {
+        "text": "Nothing; force-push is rejected on any branch other than `main`",
+        "explanation": "Git itself does not protect any branch by name. Only server-side branch protection rules would stop it."
+      },
+      {
+        "text": "The other four now have commits that no longer exist upstream; their pulls diverge and changes may be duplicated or lost",
+        "explanation": "Correct. This breaks the golden rule of rebasing: never rewrite commits that others have based work on."
+      },
+      {
+        "text": "The rebased commits keep their original hashes, so nothing breaks",
+        "explanation": "Replaying onto changed parents or rewriting content changes hashes. A rebase that has nothing to change can instead be a no-op."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: everyone has `release-2.4` at commit Z, built from commits ... X, Y, Z.\n2. The rebase writes new commits X', Y', Z' and force-pushes. The remote now has Z'.\n3. A colleague with local work W on top of Z runs `git pull`. Git sees `origin/release-2.4` (Z') and local (W on Z) have diverged from far back.\n4. A merge pulls in both X..Z and X'..Z': the same changes twice under different hashes. A rebase may conflict repeatedly.\n5. If someone then force-pushes their version, other people's work can vanish.\n\nRewrite only branches that are yours alone.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "History looks like this:\n\n```\n          C---D   feat\n         /\n A---B---E        main\n```\n\nWhat does `git log --oneline feat..main` list?",
+    "options": [
+      {
+        "text": "C and D",
+        "explanation": "That is `main..feat`: commits on `feat` not on `main`. The order of the two names matters."
+      },
+      {
+        "text": "E only",
+        "explanation": "Correct. `X..Y` means reachable from Y but not from X. From `main` you reach E, B, A; from `feat` you reach D, C, B, A. Only E is left."
+      },
+      {
+        "text": "C, D and E",
+        "explanation": "That is the symmetric difference, `feat...main` with three dots."
+      },
+      {
+        "text": "A and B",
+        "explanation": "A and B are reachable from both branches, so any range between them excludes them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Treat ranges as set subtraction:\n\n```\nreach(main) = {E, B, A}\nreach(feat) = {D, C, B, A}\nfeat..main  = reach(main) - reach(feat)\n            = {E}\n```\n\nUseful idioms:\n- `git log origin/main..main`: what I have not pushed.\n- `git log main..origin/main`: what I have not pulled.\n- `git log main...feat`: what differs on either side.",
+    "link": {
+      "title": "gitrevisions: specifying ranges",
+      "url": "https://git-scm.com/docs/gitrevisions"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On `feat` you run `git rebase main`. It stops with a conflict in `cfg.py`, where `main` has `timeout = 45` and your `feat` commit has `timeout = 60`. You want to keep **your feat change**. Which command gives you that version of the file?",
+    "options": [
+      {
+        "text": "`git checkout --ours cfg.py`",
+        "explanation": "During a rebase, ours is the upstream plus already replayed commits; in this conflict it has 45."
+      },
+      {
+        "text": "`git merge --abort`",
+        "explanation": "You are in a rebase, not a merge. The equivalent escape hatch is `git rebase --abort`, and it abandons the whole rebase rather than choosing a side."
+      },
+      {
+        "text": "`git rebase --skip`",
+        "explanation": "Skip drops your commit entirely, so you would end up with `main`'s 45 and lose the rest of that commit's changes."
+      },
+      {
+        "text": "`git checkout --theirs cfg.py`",
+        "explanation": "Correct. In a rebase, \"theirs\" is the commit being replayed, which is your `feat` commit (60)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A rebase checks out `main`'s tip, then applies your commits onto it.\n2. So HEAD during the conflict is `main` plus any commits already replayed: that is \"ours\".\n3. The commit being applied (from `feat`) is \"theirs\".\n4. `git checkout --theirs cfg.py` gives `timeout = 60`.\n5. Then `git add cfg.py` and `git rebase --continue`.\n\nTip: rather than trust memory, look at the marker labels: in a rebase the bottom section is labelled with the commit being applied, e.g. `>>>>>>> 1fe6be0 (feat 60)`.",
+    "link": {
+      "title": "git-rebase documentation",
+      "url": "https://git-scm.com/docs/git-rebase"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your team uses GitHub's **Squash and merge** for every pull request. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Each pull request becomes exactly one commit on `main` with a single parent",
+        "explanation": "Correct. The combined diff of the branch is committed on top of `main`, so `main` stays linear."
+      },
+      {
+        "text": "The feature branch's original commits become ancestors of `main`",
+        "explanation": "The original branch commits are not made ancestors by a squash. Local branch deletion checks the configured upstream if present, otherwise HEAD; it does not always refuse."
+      },
+      {
+        "text": "Reverting an entire feature is a single `git revert <sha>`",
+        "explanation": "Correct. One commit per feature makes revert and cherry-pick simple, with no `-m` parent choice needed."
+      },
+      {
+        "text": "Continuing to commit on the same branch and opening a second PR can produce conflicts against your own earlier changes",
+        "explanation": "Correct. Git does not know the first squash commit contains your branch's commits, so the merge base is still the old fork point and the same changes are compared again."
+      },
+      {
+        "text": "Fine-grained commit messages from the branch are preserved as separate commits in `main`",
+        "explanation": "Incorrect. They are collapsed into one commit. GitHub can paste them into the squash commit's message body, but they are no longer separate commits."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Locally a squash merge is:\n\n```\ngit merge --squash feat\ngit commit -m \"Feature X (#123)\"\n```\n\n1. `git cat-file -p HEAD` shows one `parent` line.\n2. `git merge-base main feat` is still the original fork point, because nothing in `main` points at `feat`'s commits.\n3. Consequences: easy reverts and readable history, but delete the branch after merging and start the next piece of work from fresh `main`.",
+    "link": {
+      "title": "git-merge documentation",
+      "url": "https://git-scm.com/docs/git-merge"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You rebased your pushed branch `feat`. Meanwhile a colleague pushed a fix to `feat`. Your IDE runs `git fetch` in the background, then you run `git push --force-with-lease`. What happens? Assume force updates are permitted, the fetched tip has never been incorporated into this local branch, and nobody pushes again during the command.",
+    "options": [
+      {
+        "text": "The push succeeds and the colleague's commit is overwritten",
+        "explanation": "Correct. `--force-with-lease` compares the remote with your remote-tracking ref. After the fetch they match, even though you never looked at or incorporated the fix."
+      },
+      {
+        "text": "The push is rejected as stale, protecting the colleague's commit",
+        "explanation": "That is what happens *without* the background fetch. The fetch updated `origin/feat` to include their commit, so the lease check now passes."
+      },
+      {
+        "text": "Git merges the colleague's commit automatically before pushing",
+        "explanation": "`push` never merges. It either updates the remote ref or refuses."
+      },
+      {
+        "text": "The push fails because force-pushing is never allowed after a fetch",
+        "explanation": "Git has no such rule. A fetch merely updates your remote-tracking refs, which is what makes the lease pass."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. You fetched earlier: `origin/feat` = X.\n2. Colleague pushes Y on top of X. Remote `feat` = Y.\n3. Background fetch: `origin/feat` = Y.\n4. `--force-with-lease` asks the server \"is `feat` still Y?\" Yes, so it overwrites with your rebased tip. Y is no longer the remote branch tip; the object can still exist.\n5. Fix: `git push --force-with-lease --force-if-includes`. Git checks whether Y is reachable from an entry in the local branch's reflog used for the rewrite; it does not, so the push is rejected.\n\nIn a scratch repo you can reproduce this: plain `--force-with-lease` after the fetch succeeds with `(forced update)`; adding `--force-if-includes` makes it fail.",
+    "link": {
+      "title": "git-push documentation (force-with-lease)",
+      "url": "https://git-scm.com/docs/git-push"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`feat` has 3 commits and `main` has moved on by 2 commits since you branched. You run `git rebase main` on `feat`, then `git switch main && git merge feat`. No conflicts occur and no commit becomes empty. How many new commit objects were created in total? Assume a simple linear feature branch, no patch-equivalent commits already upstream, merge.ff=true, and no branch-specific merge options.",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "That would be a single merge commit (or a squash). Here the rebase replays each commit individually."
+      },
+      {
+        "text": "4",
+        "explanation": "This assumes the final merge creates a merge commit. After the rebase, `main` is an ancestor of `feat`, so the merge is a fast-forward."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. The rebase creates 3 new commits (C', D', E'), and the merge then fast-forwards `main` to them without creating anything."
+      },
+      {
+        "text": "5",
+        "explanation": "`main`'s 2 commits already exist and are reused as the new base. Rebasing never copies the upstream's commits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nbefore:      C--D--E      feat\n            /\n   A--M1--M2              main\n\nrebase:            C'-D'-E'  feat\n                  /\n   A--M1--M2              main\n```\n\n1. Rebase writes C', D', E': 3 commits.\n2. `main` (M2) is now an ancestor of `feat` (E'), so `git merge feat` fast-forwards.\n3. Total new commits: 3. With `--no-ff` it would be 4.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Feature branch `pay` was merged into `main` with a merge commit M. It broke production, so you ran `git revert -m 1 M`. The team fixes the bug with one new commit on `pay` and merges `pay` into `main` again. The new commit adds a separate file, so this merge is clean. What does main now contain?",
+    "options": [
+      {
+        "text": "All of `pay`'s original work plus the fix, as intended",
+        "explanation": "This is the common expectation, but the original `pay` commits are already ancestors of `main`. Git considers them merged, and the revert undoing them still stands."
+      },
+      {
+        "text": "Only the new fix commit's changes; the original feature stays reverted",
+        "explanation": "Correct. The second merge's base is the old `pay` tip, so only the new commit is merged. To restore the feature, revert the revert commit."
+      },
+      {
+        "text": "A conflict on every file the feature touched",
+        "explanation": "Conflicts depend on the edits; a fix modifying a file deleted by the revert may conflict. The question explicitly makes the new file independent."
+      },
+      {
+        "text": "The merge is refused because M was reverted",
+        "explanation": "Git does not track reverts specially. A revert is just an ordinary commit applying the inverse diff."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. After M, `pay`'s commits (P1, P2) are ancestors of `main`.\n2. `git revert -m 1 M` adds R, which undoes P1 and P2's changes relative to the first parent.\n3. Add fix F on `pay` and merge again. The merge base is P2 (already in `main`).\n4. Three-way merge: base P2, ours (`main` with R), theirs (F). Here F adds an independent file, so that addition merges cleanly; edits to reverted feature files could instead conflict.\n5. Result: feature still missing. Fix: `git revert R` (revert the revert), then merge.\n\nTry it in a scratch repo: after the re-merge only the fix's file appears; reverting the revert brings back the original feature.",
+    "link": {
+      "title": "git-revert documentation",
+      "url": "https://git-scm.com/docs/git-revert"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You branched `ui` off `api` (a colleague's branch) at commit X, the tip of `api`. You added 2 commits. Your colleague then amended X's contents into X' and force-pushed `api`. Which command moves **only your 2 commits** onto the new `api`?",
+    "options": [
+      {
+        "text": "`git rebase --onto api X`",
+        "explanation": "Correct. `--onto api` sets the new base; `X` (the old tip) is the upstream, so only commits after X (your two) are replayed."
+      },
+      {
+        "text": "`git merge api`",
+        "explanation": "A merge keeps old X in your history alongside X', so `ui` would carry both versions of the colleague's work."
+      },
+      {
+        "text": "`git rebase api`",
+        "explanation": "Commits on `ui` not on `api` include the old X as well as your two. Git would try to replay X on top of X', probably conflicting, since its content differs."
+      },
+      {
+        "text": "`git cherry-pick api`",
+        "explanation": "This would copy X' onto `ui`, adding the colleague's commit again rather than moving yours."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nbefore:  ...--X--U1--U2   ui\n          \\\n           X'             api\n```\n\n1. `git rebase --onto <newbase> <upstream>` replays `<upstream>..HEAD` onto `<newbase>`.\n2. `<upstream>` = old X, so `X..ui` = {U1, U2}.\n3. `<newbase>` = `api` (X').\n4. After:\n\n```\n ...--X'--U1'--U2'   ui\n```\n\nYou can find the old X with `git reflog` or git merge-base --fork-point api ui if the local api reflog retained X; for a fetched remote branch use the appropriate origin/api ref.",
+    "link": {
+      "title": "git-rebase documentation",
+      "url": "https://git-scm.com/docs/git-rebase"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Since you branched `feat`, someone added `billing.py` on `main`. You compare branches with `git diff main..feat` and it shows `billing.py` being **deleted**, which your branch never did. What is going on?",
+    "options": [
+      {
+        "text": "Your branch really deletes it; Git computes diffs from the commits' changes",
+        "explanation": "Git diffs snapshots, not changes. Your branch simply never had the file because it forked before `billing.py` existed."
+      },
+      {
+        "text": "You need `git diff feat..main` instead, which shows only your changes",
+        "explanation": "Swapping the order just inverts the diff: it would show `billing.py` as added and all your changes reversed."
+      },
+      {
+        "text": "Git has a bug with files added on another branch",
+        "explanation": "This is defined behaviour. The surprise comes from `diff` treating dots differently from `log`."
+      },
+      {
+        "text": "Two dots in `git diff` compares the two tips directly; use `git diff main...feat` to compare against the merge base",
+        "explanation": "Correct. `main..feat` in `diff` means `main` tip vs `feat` tip, so anything new on `main` looks like a deletion. Three dots diffs merge base vs `feat`, which is what PR views show."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `git diff A..B` is the same as `git diff A B`: snapshot A vs snapshot B.\n2. `main`'s snapshot has `billing.py`; `feat`'s does not, so the diff shows a deletion.\n3. `git diff A...B` means `git diff $(git merge-base A B) B`: what differs between a merge base and B; later integrations can move that base.\n4. Try it: add a file on `main` only, and the two-dot diff shows it deleted while the three-dot diff does not mention it.\n\nNote that this is the reverse of how dots feel in `git log`, where `A..B` is the everyday one.",
+    "link": {
+      "title": "gitrevisions: specifying ranges",
+      "url": "https://git-scm.com/docs/gitrevisions"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team debates \"merge commits\" versus \"rebase then fast-forward\" for integrating feature branches into `main`. Which claims are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "With merge commits, git log --first-parent main skips merged branch internals while retaining direct mainline commits",
+        "explanation": "Correct. The first parent of each merge is the previous `main` tip, so following only first parents skips the branch internals."
+      },
+      {
+        "text": "Rebasing means each conflict is resolved commit by commit, so a long branch can mean resolving similar conflicts repeatedly",
+        "explanation": "Correct. Each replayed commit can hit the conflict again; `rerere` can reduce the pain by reusing recorded resolutions."
+      },
+      {
+        "text": "Rebasing preserves the original commit hashes, which keeps CI results valid",
+        "explanation": "Incorrect. Rebasing creates new commits with new hashes, and the code each one contains differs (new base), so earlier CI results do not strictly apply."
+      },
+      {
+        "text": "Linear history makes `git bisect` easier because every step is a single-parent commit",
+        "explanation": "Correct. Bisect works with merges, but linear history (especially when every commit builds) gives fewer confusing steps."
+      },
+      {
+        "text": "A merge commit preserves the existing parent relationships; this records ancestry, not a trustworthy wall-clock chronology",
+        "explanation": "Correct. Commits carry editable author/committer timestamps, and independent branches have no intrinsic total time order. A merge preserves their existing ancestry."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Weigh each claim against the mechanics:\n\n1. First-parent: in `M = merge(main, feat)`, parent 1 is old `main`. So --first-parent shows merges and any direct mainline commits, omitting side-branch internals. True.\n2. Rebase replays N commits, each a separate three-way merge, so conflicts can recur. True.\n3. Replaying commits onto changed parents rewrites hashes; a no-op rebase need not. False.\n4. Bisect on a straight line halves a simple list. True.\n5. Merges preserve real ancestry. True.\n\nNeither option is \"right\"; many teams rebase private branches and integrate via merge or squash.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  }
+]

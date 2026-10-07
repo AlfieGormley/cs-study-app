@@ -1,0 +1,344 @@
+[
+  {
+    "id": "sep-clean-code-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the main readability problem in this snippet?\n\n```python\nif user.status == 3:\n    send_reminder(user)\n```",
+    "options": [
+      {
+        "text": "The comparison should use `is` instead of `==`",
+        "explanation": "`is` tests object identity, not equality. Comparing integers with `is` is a bug waiting to happen (it only works by accident for small cached ints), so this would make things worse."
+      },
+      {
+        "text": "`3` is a magic number: the reader can't tell what status it represents",
+        "explanation": "Correct. Nothing tells the reader that 3 means, say, 'trial expired'. A named constant or an enum (`Status.TRIAL_EXPIRED`) makes the intent explicit and gives one place to change it."
+      },
+      {
+        "text": "`send_reminder` should be renamed `reminder`",
+        "explanation": "Functions are actions, so a verb phrase like `send_reminder` is the right shape. A noun like `reminder` reads like a value."
+      },
+      {
+        "text": "The `if` statement should be replaced with a guard clause",
+        "explanation": "Guard clauses help when nesting gets deep. A single, flat `if` is already as simple as it gets; the problem is what the condition means, not its shape."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Read the condition aloud: \"if the user's status equals three\". That sentence carries no meaning.\n2. Ask what a maintainer must do to understand it: find where statuses are defined, or grep for other uses of `3`. That search is the cost of a magic number.\n3. Fix it with a name:\n\n```python\nclass Status(IntEnum):\n    ACTIVE = 1\n    PAUSED = 2\n    TRIAL_EXPIRED = 3\n\nif user.status == Status.TRIAL_EXPIRED:\n    send_reminder(user)\n```\n\n4. Now the line reads as a sentence, and changing the code for \"trial expired\" happens in one place.",
+    "link": {
+      "title": "PEP 8: Style Guide for Python Code",
+      "url": "https://peps.python.org/pep-0008/"
+    }
+  },
+  {
+    "id": "sep-clean-code-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need a boolean variable that records whether the current user may delete a document. Which name is clearest?",
+    "options": [
+      {
+        "text": "`delete`",
+        "explanation": "This reads like a command (a verb), so `if delete:` looks as if it performs a deletion. Booleans should read as yes/no questions."
+      },
+      {
+        "text": "`flag`",
+        "explanation": "A noise word. It says the value is a boolean but not what it means, so every reader has to trace where it was set."
+      },
+      {
+        "text": "`perm_del_chk`",
+        "explanation": "Abbreviations save a few keystrokes and cost every reader a decoding step. It is also unclear whether this holds a permission, the result of a check, or a function."
+      },
+      {
+        "text": "`can_delete_document`",
+        "explanation": "Correct. It reads as a predicate, so `if can_delete_document:` is a plain English sentence, and it names exactly what is being permitted."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A boolean answers a yes/no question, so its name should be that question: `is_`, `has_`, `can_`, `should_`.\n2. Test each candidate in an `if`:\n   - `if delete:` sounds like an action.\n   - `if flag:` says nothing.\n   - `if perm_del_chk:` needs decoding.\n   - `if can_delete_document:` reads as English.\n3. The last one wins because the reader understands the condition without looking anywhere else.",
+    "link": {
+      "title": "PEP 8: Style Guide for Python Code",
+      "url": "https://peps.python.org/pep-0008/"
+    }
+  },
+  {
+    "id": "sep-clean-code-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague writes `export(report, True, False)`. The function signature is:\n\n```python\ndef export(report, compress, email):\n```\n\nWhich smell does the call site show?",
+    "options": [
+      {
+        "text": "Flag arguments: booleans that switch the function's behaviour, unreadable at the call site",
+        "explanation": "Correct. `True, False` tells a reader nothing. Each flag also suggests the function does more than one thing. Prefer keyword-only arguments or separate functions."
+      },
+      {
+        "text": "Command-query separation is violated",
+        "explanation": "CQS is about a function both changing state and returning a value. Nothing here says `export` returns anything; the problem is the opaque booleans."
+      },
+      {
+        "text": "Magic numbers",
+        "explanation": "There are no numeric literals. The issue is related (opaque literals), but the specific smell is boolean flag arguments."
+      },
+      {
+        "text": "The function name is too short",
+        "explanation": "`export` is a reasonable verb. The call is unreadable because of its arguments, not its name."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Read the call without the signature: `export(report, True, False)`. What is true? What is false? You can't tell.\n2. Each boolean changes behaviour, so the function has at least four modes. That is a hint it is doing several jobs.\n3. Two fixes, in increasing strength:\n\n```python\n# Keyword-only: self-explaining call\ndef export(report, *, compress,\n           email):\n\nexport(report, compress=True,\n       email=False)\n```\n\n```python\n# Or split the behaviours\ndata = export(report)\nsend(compress(data))\n```\n\n4. The keyword-only version is the cheap win; splitting is better if the modes really are separate jobs.",
+    "link": {
+      "title": "Flag Argument — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/FlagArgument.html"
+    }
+  },
+  {
+    "id": "sep-clean-code-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What principle does this function violate?\n\n```python\ndef has_stock(item, qty):\n    item.reserved += qty\n    return item.on_hand >= qty\n```",
+    "options": [
+      {
+        "text": "Don't repeat yourself",
+        "explanation": "There is no duplicated knowledge here. DRY is about the same fact appearing in several places."
+      },
+      {
+        "text": "Single level of abstraction",
+        "explanation": "Both lines work at the same level (fields on `item`). Mixed levels would be, say, a business rule next to raw SQL."
+      },
+      {
+        "text": "Command-query separation: a query-sounding function has a hidden side effect",
+        "explanation": "Correct. `has_stock` reads like a question, but it also reserves stock. Calling it twice to 'check again' would reserve twice, and nothing at the call site warns you."
+      },
+      {
+        "text": "Keyword-only arguments",
+        "explanation": "That's a technique, not a principle being violated, and two parameters of different types are not confusing here."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The name `has_stock` promises a **query**: it should answer a question and change nothing.\n2. Line 1 is a **command**: it mutates `item.reserved`.\n3. Picture a caller:\n\n```python\nif has_stock(item, 2):\n    log(has_stock(item, 2))\n```\n\n   This reserves 4 units, not 2. A reader would never guess that from the call site.\n4. Fix by separating the two:\n\n```python\ndef has_stock(item, qty):\n    return item.on_hand >= qty\n\ndef reserve(item, qty):\n    item.reserved += qty\n```\n\n5. Note the original also checks stock *after* reserving, which is probably a logic bug. Side effects hidden in queries make bugs like this easy to miss.",
+    "link": {
+      "title": "Command Query Separation — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/CommandQuerySeparation.html"
+    }
+  },
+  {
+    "id": "sep-clean-code-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** the problems in this function.\n\n```python\ndef get(l, t):\n    r = []\n    for x in l:\n        if x[1] > t and x[2] == \"A\":\n            r.append(x)\n    print(len(r))\n    return r\n```",
+    "options": [
+      {
+        "text": "Names `get`, `l`, `t`, `r` and `x` reveal nothing about intent",
+        "explanation": "Correct. `get` what? Is `t` a threshold, a time, a type? Single letters are acceptable for tiny scopes, but here they carry the whole meaning of the function."
+      },
+      {
+        "text": "Positional indices `x[1]` and `x[2]` hide which fields are being compared",
+        "explanation": "Correct. The reader must know the tuple layout. A dataclass or named tuple (`x.amount`, `x.status`) makes the condition self-explaining."
+      },
+      {
+        "text": "`\"A\"` is an unexplained literal",
+        "explanation": "Correct. 'A' might mean active, approved or archived. A named constant or enum removes the guesswork."
+      },
+      {
+        "text": "The `print` is a hidden side effect in what looks like a query",
+        "explanation": "Correct. A caller expects `get` to return data. Printing to stdout surprises callers, pollutes output in tests and can't be turned off."
+      },
+      {
+        "text": "Using a `for` loop is wrong; it must be a list comprehension",
+        "explanation": "A comprehension might be tidier, but a plain loop is perfectly readable. Style preference is not a defect; the real problems are naming and hidden meaning."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Go through the function a line at a time and ask \"would a newcomer know what this means?\"\n\n1. `def get(l, t)`: no. Get what, from what, using what?\n2. `x[1] > t`: no. Which field is index 1?\n3. `x[2] == \"A\"`: no. What is A?\n4. `print(len(r))`: a side effect a caller won't expect.\n\nA cleaner version:\n\n```python\nAPPROVED = \"A\"\n\ndef approved_over(orders, min_amount):\n    return [\n        o for o in orders\n        if o.amount > min_amount\n        and o.status == APPROVED\n    ]\n```\n\nThe loop-versus-comprehension choice is the only \"problem\" that isn't one: both are clear once the names are fixed.",
+    "link": {
+      "title": "Code smells catalogue — Refactoring.Guru",
+      "url": "https://refactoring.guru/refactoring/smells"
+    }
+  },
+  {
+    "id": "sep-clean-code-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which of these identifiers most needs a longer, more descriptive name?",
+    "options": [
+      {
+        "text": "`i` in `for i in range(3): retry()`",
+        "explanation": "The scope is one line and `i` is the universal loop index. A longer name would add noise, not information."
+      },
+      {
+        "text": "`x` in `squares = [x * x for x in nums]`",
+        "explanation": "The comprehension is self-contained; the reader sees `x`'s whole life in one line."
+      },
+      {
+        "text": "A module-level `T = 30` used by several files",
+        "explanation": "Correct. It has the widest scope, its meaning (timeout? threshold? seconds or minutes?) is invisible at the point of use, and readers in other files have no nearby context."
+      },
+      {
+        "text": "`e` in `except ValueError as e: log(e)`",
+        "explanation": "`e` for a caught exception is idiomatic, and its scope is the few lines of the `except` block."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The rule of thumb: **name length should grow with scope**. The further a use is from the definition, the more the name itself must explain.\n2. Check each scope:\n   - `i`: one line.\n   - `x`: one expression.\n   - `e`: one small block.\n   - `T`: every file that imports it.\n3. Someone reading `if elapsed > config.T:` in another file has no clue whether `T` is in seconds, minutes or something else entirely.\n4. Rename to something like `REQUEST_TIMEOUT_SECONDS = 30`, or use a `timedelta`.",
+    "link": {
+      "title": "PEP 8: Style Guide for Python Code",
+      "url": "https://peps.python.org/pep-0008/"
+    }
+  },
+  {
+    "id": "sep-clean-code-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Given this definition, what happens when the second line runs?\n\n```python\ndef transfer(*, amount, src, dst): ...\n\ntransfer(100, src=1, dst=2)\n```",
+    "options": [
+      {
+        "text": "It works; `100` binds to `amount` because it is the first parameter",
+        "explanation": "The bare `*` means every parameter after it is keyword-only. There are no positional slots, so `100` cannot bind to `amount`."
+      },
+      {
+        "text": "It raises `TypeError` because `amount` must be passed by keyword",
+        "explanation": "Correct. Python rejects the positional argument (the message is along the lines of 'takes 0 positional arguments but 1 was given'). That is exactly the point: callers must write `amount=100`."
+      },
+      {
+        "text": "It raises `SyntaxError` at definition time",
+        "explanation": "`*` alone in a signature is valid syntax (PEP 3102), so the definition compiles fine."
+      },
+      {
+        "text": "`amount` silently becomes `None`",
+        "explanation": "Python never fills a missing required argument with `None`. Required keyword-only parameters without defaults must be supplied."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In a signature, a bare `*` ends the positional parameters. Everything after it is **keyword-only**.\n2. So `transfer` accepts zero positional arguments.\n3. The call passes one positional argument (`100`), so Python raises `TypeError` before the body runs.\n4. The correct call is `transfer(amount=100, src=1, dst=2)`.\n5. Why bother? Three integers in a row are easy to swap. Keyword-only parameters make the call site self-documenting and turn a silent mix-up into an immediate error.",
+    "link": {
+      "title": "PEP 3102: Keyword-Only Arguments",
+      "url": "https://peps.python.org/pep-3102/"
+    }
+  },
+  {
+    "id": "sep-clean-code-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which change best addresses the main problem with this function?\n\n```python\ndef place_order(cart, user):\n    total = sum(i.price * i.qty\n                for i in cart)\n    db = sqlite3.connect(\"shop.db\")\n    db.execute(\"INSERT INTO orders \"\n               \"VALUES (?, ?)\",\n               (user.id, total))\n    db.commit()\n    log.info(\"order placed\")\n```",
+    "options": [
+      {
+        "text": "Add a comment above each block explaining what it does",
+        "explanation": "Comments that label blocks are a hint that the blocks want to be functions. They'd also drift out of date as the code changes."
+      },
+      {
+        "text": "Rename it to `place_order_and_save_and_log`",
+        "explanation": "An honest name, but it advertises the problem rather than fixing it. A name with 'and' in it is a sign of a function doing several things."
+      },
+      {
+        "text": "Extract the low-level steps so the function reads at one level, for example `total = cart.total()` and `orders.save(user, total)`",
+        "explanation": "Correct. The function mixes business intent (place an order) with SQL and connection handling. Extracting gives each detail a home and leaves `place_order` as a readable summary."
+      },
+      {
+        "text": "Inline the `sum` into the SQL call to save a line",
+        "explanation": "Fewer lines isn't the goal. Inlining makes the low-level mixing worse and makes the total harder to test."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. List the levels present:\n   - business: \"place an order\"\n   - arithmetic: summing price × qty\n   - infrastructure: connection string, SQL, commit\n2. A reader who wants to know *what* happens must wade through *how* the database is used.\n3. Separate intention from implementation:\n\n```python\ndef place_order(cart, user):\n    total = cart.total()\n    order = orders.save(user, total)\n    log.info(\"order placed\")\n    return order\n```\n\n4. Bonus: `cart.total()` and `orders.save` can now be tested on their own, and the database can be swapped in tests.",
+    "link": {
+      "title": "Function Length — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/FunctionLength.html"
+    }
+  },
+  {
+    "id": "sep-clean-code-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague \"flattens\" this function with guard clauses. For which input do the two versions return different results?\n\n```python\n# Before\ndef fee(o):\n    if o.member:\n        if o.total > 100:\n            return 0\n        return 5\n    return 10\n\n# After\ndef fee(o):\n    if o.total > 100:\n        return 0\n    if o.member:\n        return 5\n    return 10\n```",
+    "options": [
+      {
+        "text": "A member with total 150",
+        "explanation": "Before: member and > 100, so 0. After: > 100, so 0. Same result."
+      },
+      {
+        "text": "A member with total 50",
+        "explanation": "Before: member, not > 100, so 5. After: not > 100, member, so 5. Same result."
+      },
+      {
+        "text": "A non-member with total 50",
+        "explanation": "Before: not a member, so 10. After: not > 100, not a member, so 10. Same result."
+      },
+      {
+        "text": "A non-member with total 150",
+        "explanation": "Correct. Before: not a member, so 10. After: the first guard sees 150 > 100 and returns 0. The refactor gave non-members free delivery."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Build a truth table over the two conditions:\n\n| member | >100 | Before | After |\n|---|---|---|---|\n| yes | yes | 0 | 0 |\n| yes | no | 5 | 5 |\n| no | yes | **10** | **0** |\n| no | no | 10 | 10 |\n\n1. In the original, the `> 100` check is *nested inside* the member check, so it only applies to members.\n2. The refactor hoisted it to the top, so it now applies to everyone.\n3. A faithful flattening keeps the conditions together:\n\n```python\ndef fee(o):\n    if not o.member:\n        return 10\n    if o.total > 100:\n        return 0\n    return 5\n```\n\nLesson: a refactor must not change behaviour. Write the truth table (or a test per row) before restructuring conditionals.",
+    "link": {
+      "title": "Refactoring catalogue — Martin Fowler",
+      "url": "https://refactoring.com/catalog/"
+    }
+  },
+  {
+    "id": "sep-clean-code-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about function size are sound? Select **all** that apply.",
+    "options": [
+      {
+        "text": "If you have to read a block to work out what it does, extracting it into a well-named function is usually worthwhile, even if it is only a line or two",
+        "explanation": "Correct. This is Fowler's 'intention versus implementation' rule. A one-line function such as `is_overdue(invoice)` can be worth having because the name says what the expression means."
+      },
+      {
+        "text": "A function longer than 10 lines is always a design error",
+        "explanation": "Line-count rules are crude. A 25-line function that does one thing at one level can be clearer than five tiny functions the reader must jump between."
+      },
+      {
+        "text": "Extracting many tiny functions that each just call the next can make code harder to follow",
+        "explanation": "Correct. Over-extraction forces the reader to hop through layers that add no information. Extract when the name tells the reader something the code doesn't."
+      },
+      {
+        "text": "Extracting a function is only worthwhile if the new function is reused elsewhere",
+        "explanation": "Reuse is a bonus, not the main reason. Extraction for naming, testability and a single level of abstraction pays off even with one caller."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "1. The goal is not small functions; it is functions whose **names tell the truth** about what they do.\n2. Fowler's test: if a reader needs to study a block to know *what* it does, give that block a name. Size doesn't matter; even a single expression can qualify.\n3. The counter-pressure: each extra function is a jump for the reader. If the new name just restates the code (`def add_one(x): return x + 1`), it adds a hop without adding meaning.\n4. Fixed line limits ignore both of these, and \"only extract for reuse\" ignores the main benefit, readability.",
+    "link": {
+      "title": "Function Length — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/FunctionLength.html"
+    }
+  },
+  {
+    "id": "sep-clean-code-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "While cleaning up names in a function you notice it uses `age > 18` to mean \"adult\", although the product spec says 18-year-olds are adults. What is the best course of action?",
+    "options": [
+      {
+        "text": "Silently change it to `>=` as part of the clean-up commit",
+        "explanation": "Mixing a behaviour change into a refactor hides it from reviewers, who will assume the commit is behaviour-neutral. If it breaks something, it is also hard to bisect."
+      },
+      {
+        "text": "Finish the behaviour-preserving refactor, then fix the boundary in a separate change with a test for age 18",
+        "explanation": "Correct. Refactoring and behaviour changes are different kinds of change. Keeping them apart makes each easy to review, and the test pins down the boundary so it can't regress."
+      },
+      {
+        "text": "Leave it alone, because a refactor must never be followed by a behaviour change",
+        "explanation": "The rule is that a refactor itself shouldn't change behaviour. Nothing stops you fixing a real bug afterwards; ignoring it would be negligent."
+      },
+      {
+        "text": "Add a comment saying the condition might be wrong",
+        "explanation": "A comment records doubt but fixes nothing, and future readers will wonder whether it was ever checked. Confirm with the spec and fix it properly."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Clean names often *expose* bugs: `if m.age > ADULT_AGE` makes a reader ask \"is 18 an adult?\" in a way `x[3] > 18` never did.\n2. A refactor is defined as a change that preserves behaviour. Reviewers rely on that when reading it.\n3. So do two changes:\n   - Commit 1: rename, extract, no behaviour change; tests still pass.\n   - Commit 2: add a test for age 18, watch it fail, change `>` to `>=`, watch it pass.\n4. Each commit has one purpose, is easy to review and can be reverted on its own.",
+    "link": {
+      "title": "Refactoring catalogue — Martin Fowler",
+      "url": "https://refactoring.com/catalog/"
+    }
+  }
+]

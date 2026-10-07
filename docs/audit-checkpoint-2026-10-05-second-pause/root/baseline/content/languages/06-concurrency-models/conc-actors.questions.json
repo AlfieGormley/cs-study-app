@@ -1,0 +1,340 @@
+[
+  {
+    "id": "conc-actors-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the actor model, how does one actor change another actor's state?",
+    "options": [
+      {
+        "text": "It takes the other actor's lock and writes the field directly",
+        "explanation": "Actors have no shared state and no locks. Direct writes are exactly what the model forbids."
+      },
+      {
+        "text": "It sends a message; the receiving actor decides how to update its own state when it processes that message",
+        "explanation": "Correct. State is private. Messages are the only interface, and each actor handles them one at a time."
+      },
+      {
+        "text": "It writes to a channel that both actors share",
+        "explanation": "Shared named channels are CSP. In the actor model you send to an actor's address (its mailbox), not to a channel."
+      },
+      {
+        "text": "It calls a method on the other actor, which runs on the caller's thread",
+        "explanation": "That is an ordinary object call. Running another actor's code on your thread would break its one-message-at-a-time guarantee."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The model allows an actor, on receiving a message, to do only three things:\n\n1. Send messages to actors it knows.\n2. Create new actors.\n3. Choose how to handle its next message.\n\nNone of these touches another actor's memory. So the only way to influence actor B is to send B a message and let B act on it.",
+    "link": {
+      "title": "Actor model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Actor_model"
+    }
+  },
+  {
+    "id": "conc-actors-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Erlang, what does `Pid ! {hello, self()}` do if the process `Pid` is busy handling another message?",
+    "options": [
+      {
+        "text": "It blocks until `Pid` is ready to receive",
+        "explanation": "That is an unbuffered Go channel's rendezvous. Erlang's send is asynchronous and never waits for the receiver."
+      },
+      {
+        "text": "It raises an error because `Pid` is busy",
+        "explanation": "Being busy is normal. Messages simply queue in the mailbox."
+      },
+      {
+        "text": "It interrupts `Pid` and runs the new message immediately",
+        "explanation": "An actor processes one message at a time. A new message never pre-empts the one in progress."
+      },
+      {
+        "text": "It places the message in `Pid`'s mailbox and returns immediately",
+        "explanation": "Correct. `!` is asynchronous. `Pid` will see the message when its code next runs a matching `receive`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `!` copies the term into the receiver's mailbox.\n2. The sender continues straight away; it does not know whether or when the message will be handled.\n3. The receiver finishes its current message, loops back to `receive`, and picks up the new one if a pattern matches.\n4. Sending to a pid that has already died also succeeds silently; the message is discarded. Use a monitor if you need to know.",
+    "link": {
+      "title": "Concurrent Programming — Erlang system documentation",
+      "url": "https://www.erlang.org/doc/system/conc_prog.html"
+    }
+  },
+  {
+    "id": "conc-actors-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A supervisor has three independent worker children. Worker 2 crashes. With the `one_for_one` strategy, what happens?",
+    "options": [
+      {
+        "text": "Only worker 2 is restarted",
+        "explanation": "Correct. `one_for_one` treats each child independently."
+      },
+      {
+        "text": "All three workers are restarted",
+        "explanation": "That is `one_for_all`, used when the children depend on each other."
+      },
+      {
+        "text": "Workers 2 and 3 are restarted",
+        "explanation": "That is `rest_for_one`: the crashed child and those started after it."
+      },
+      {
+        "text": "The supervisor crashes too, taking down all three",
+        "explanation": "A supervisor only gives up when restarts exceed its intensity limit. A single crash is handled by restarting."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "| Strategy | Restarted |\n|---|---|\n| `one_for_one` | 2 |\n| `one_for_all` | 1, 2, 3 |\n| `rest_for_one` | 2, 3 |\n\nIndependent workers suit `one_for_one`: there is no reason to disturb 1 and 3.",
+    "link": {
+      "title": "Supervisor Behaviour — Erlang system documentation",
+      "url": "https://www.erlang.org/doc/system/sup_princ.html"
+    }
+  },
+  {
+    "id": "conc-actors-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's counter actor (handles `{inc, By}` and `{get, From}`), what does the shell receive?\n\n```erlang\nC = counter:start(),\nC ! {inc, 4},\nC ! {get, self()},\nC ! {inc, 10},\nreceive {count, X} -> X end.\n```",
+    "options": [
+      {
+        "text": "14",
+        "explanation": "This assumes all `inc`s are applied before the `get`. Messages from one sender arrive in order, so the `get` is handled before the second `inc`."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Per sender-receiver ordering means the counter sees `inc 4`, then `get`, then `inc 10`."
+      },
+      {
+        "text": "0",
+        "explanation": "That would require `get` to overtake `inc 4`. Both come from the same shell process, so their order is preserved."
+      },
+      {
+        "text": "Either 4 or 14, depending on timing",
+        "explanation": "Timing would matter if the messages came from different senders. From one sender to one receiver, the order is guaranteed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. All three messages come from the shell and go to `C`.\n2. Erlang guarantees they arrive in send order: `{inc,4}`, `{get,Shell}`, `{inc,10}`.\n3. `C` handles `{inc,4}`: N = 4.\n4. Handles `{get,Shell}`: sends `{count, 4}` back.\n5. Handles `{inc,10}`: N = 14, but nobody asked.\n6. The shell receives `{count, 4}`, so `X = 4`.",
+    "link": {
+      "title": "Erlang FAQ: Academic and historical questions",
+      "url": "https://www.erlang.org/faq/academic.html"
+    }
+  },
+  {
+    "id": "conc-actors-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A process's mailbox is `[{log,a}, {tick}, {reply,7}, {reply,8}]` (oldest first). It runs:\n\n```erlang\nreceive\n  {reply, V} -> V\nend\n```\n\nWhat is returned, and what is left in the mailbox?",
+    "options": [
+      {
+        "text": "It blocks, because the oldest message `{log,a}` does not match",
+        "explanation": "Selective receive does not stop at the first non-matching message. It scans on through the mailbox."
+      },
+      {
+        "text": "8; mailbox `[{log,a}, {tick}, {reply,7}]`",
+        "explanation": "The scan goes oldest to newest and takes the first match, which is `{reply,7}`, not the newest."
+      },
+      {
+        "text": "7; mailbox `[{log,a}, {tick}, {reply,8}]`",
+        "explanation": "Correct. The first matching message is removed; unmatched ones stay in order."
+      },
+      {
+        "text": "7; mailbox `[{reply,8}]`, because skipped messages are discarded",
+        "explanation": "Unmatched messages are never discarded by `receive`. They stay for a later `receive` that does match them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Scan oldest to newest, trying the pattern `{reply, V}`:\n\n1. `{log,a}`: no match, skip.\n2. `{tick}`: no match, skip.\n3. `{reply,7}`: match. Remove it, bind `V = 7`.\n\nRemaining mailbox: `[{log,a}, {tick}, {reply,8}]`. Note the cost: two messages were inspected and kept. If thousands of unmatched messages accumulate, every such `receive` pays to scan them.",
+    "link": {
+      "title": "Processes — Erlang reference manual",
+      "url": "https://www.erlang.org/doc/system/ref_man_processes.html"
+    }
+  },
+  {
+    "id": "conc-actors-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these does Akka's default message delivery guarantee? Select all that apply.",
+    "options": [
+      {
+        "text": "Each message is delivered at most once",
+        "explanation": "Correct. Akka documents at-most-once delivery: no duplicates, but also no automatic redelivery."
+      },
+      {
+        "text": "Each message is delivered exactly once, even across a network partition",
+        "explanation": "Akka explicitly does not guarantee delivery. Exactly-once needs acknowledgements, retries and deduplication on top."
+      },
+      {
+        "text": "Messages from one sender to one receiver arrive in the order sent",
+        "explanation": "Correct. Akka guarantees ordering per sender-receiver pair."
+      },
+      {
+        "text": "Messages from all senders to one receiver are delivered in global send order",
+        "explanation": "There is no global ordering across senders. Two senders' messages can interleave in any order."
+      },
+      {
+        "text": "A sender blocks until the receiver has processed its message",
+        "explanation": "`tell` is fire-and-forget. Even `ask` does not block the sender's thread; it returns a `Future`."
+      }
+    ],
+    "answer": [0, 2],
+    "workedExample": "Akka's documentation lists exactly two general rules for `tell` (which also underlies `ask`):\n\n1. **At-most-once** delivery, i.e. no guaranteed delivery.\n2. **Ordering per sender-receiver pair**.\n\nEverything stronger (at-least-once with acknowledgements, exactly-once processing via deduplication) is built on top, e.g. with Akka Persistence.",
+    "link": {
+      "title": "Message Delivery Reliability — Akka documentation",
+      "url": "https://doc.akka.io/libraries/akka-core/current/general/message-delivery-reliability.html"
+    }
+  },
+  {
+    "id": "conc-actors-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A supervisor starts children in this order: `[Db, Cache, Api]`. `Cache` reads from `Db` and `Api` calls `Cache`; if `Db` restarts, the others hold stale connections. `Db` crashes. Which strategy restarts exactly the processes that need it?",
+    "options": [
+      {
+        "text": "`one_for_one`",
+        "explanation": "Only `Db` would restart, leaving `Cache` and `Api` holding stale connections to the old `Db`."
+      },
+      {
+        "text": "`one_for_all` is the only correct choice",
+        "explanation": "It works here, but for a crash of `Api` it would also restart `Db` and `Cache` needlessly. `rest_for_one` matches the dependency order exactly."
+      },
+      {
+        "text": "No strategy; the developer must restart the dependants by hand in a `try` block",
+        "explanation": "This is the defensive style \"let it crash\" avoids. Supervisors encode the dependency in the strategy."
+      },
+      {
+        "text": "`rest_for_one`",
+        "explanation": "Correct. Children started after the crashed one are restarted with it. `Db` crashing restarts all three; `Api` crashing restarts only `Api`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Dependencies follow start order: `Cache` needs `Db`, `Api` needs `Cache`.\n2. `rest_for_one` restarts the crashed child and every child started after it.\n\n| Crash | Restarted |\n|---|---|\n| `Db` | Db, Cache, Api |\n| `Cache` | Cache, Api |\n| `Api` | Api |\n\nThat is exactly the set with stale state each time.",
+    "link": {
+      "title": "Supervisor Behaviour — Erlang system documentation",
+      "url": "https://www.erlang.org/doc/system/sup_princ.html"
+    }
+  },
+  {
+    "id": "conc-actors-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An Erlang supervisor uses the default restart intensity (1 restart in 5 seconds). A child has a bug that crashes it within 100 ms of every start. What happens?",
+    "options": [
+      {
+        "text": "The supervisor restarts it forever, once every 100 ms",
+        "explanation": "The intensity limit exists to stop exactly this restart loop."
+      },
+      {
+        "text": "The second crash within 5 seconds exceeds the limit, so the supervisor terminates its children and exits, escalating to its own supervisor",
+        "explanation": "Correct. More than MaxR restarts within MaxT seconds makes the supervisor give up and pass the failure upward."
+      },
+      {
+        "text": "The supervisor waits 5 seconds between restarts",
+        "explanation": "Erlang supervisors restart immediately. The period defines a window for counting restarts, not a delay."
+      },
+      {
+        "text": "The child is restarted with its last state, so the bug is avoided",
+        "explanation": "A restart begins from the child's initial state. That is why restarting cures transient faults but not deterministic bugs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Crash 1 at t = 0.1 s: restarts in window = 1, allowed (1 ≤ MaxR = 1).\n2. Crash 2 at t ≈ 0.2 s: this would be the 2nd restart within 5 s, more than MaxR.\n3. The supervisor kills its remaining children and exits with reason `shutdown`.\n4. Its parent supervisor sees a child exit and applies *its* strategy and intensity.\n5. If the bug persists, the failure climbs the tree until the application stops: a loud, visible failure instead of a silent busy loop.",
+    "link": {
+      "title": "supervisor — Erlang stdlib documentation",
+      "url": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
+    }
+  },
+  {
+    "id": "conc-actors-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A logging actor receives events with `!` from 200 request handlers. Under a traffic spike it writes to disk more slowly than events arrive. Memory climbs until the node is killed. What is the root cause, and the most direct fix?",
+    "options": [
+      {
+        "text": "Erlang's per-process GC is too slow; tune the garbage collector",
+        "explanation": "GC is not the cause. The heap is growing because live messages are queueing, and no GC can free messages nobody has handled."
+      },
+      {
+        "text": "Message copying doubles memory; send references instead of terms",
+        "explanation": "Copying is a constant factor. The unbounded growth comes from the queue length, which keeps rising while arrival rate exceeds service rate."
+      },
+      {
+        "text": "Asynchronous sends never block, so the mailbox grows without bound; add backpressure, e.g. make handlers use a synchronous `call`, or batch, sample or shed events",
+        "explanation": "Correct. Actor mailboxes are unbounded. When producers outrun a consumer, something has to slow them down or drop work."
+      },
+      {
+        "text": "Message ordering forces the logger to process events one by one; disable ordering",
+        "explanation": "Ordering cannot be disabled, and is not the issue. Any single sequential consumer has a maximum rate; the problem is unlimited buffering in front of it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Say events arrive at 50,000/s and the logger handles 30,000/s.\n2. The mailbox grows by 20,000 messages per second, all live, all on the logger's heap.\n3. Nothing pushes back: `!` always succeeds immediately.\n4. Options:\n   - `gen_server:call` makes each handler wait for its event to be accepted, capping the rate.\n   - Batch writes so the logger's throughput rises.\n   - Drop or sample when the queue is long (Erlang's own `logger` has overload protection that does this).\n   - Shard across several loggers.",
+    "link": {
+      "title": "Concurrent Programming — Erlang system documentation",
+      "url": "https://www.erlang.org/doc/system/conc_prog.html"
+    }
+  },
+  {
+    "id": "conc-actors-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Actor A sends `m1` to C, then sends `m2` to B. On receiving `m2`, B sends `m3` to C. In Erlang, which orders can C observe?",
+    "options": [
+      {
+        "text": "Only `m1` then `m3`, because `m1` was sent first",
+        "explanation": "Ordering is only guaranteed per sender-receiver pair. `m1` (from A) and `m3` (from B) have different senders, so no order is promised."
+      },
+      {
+        "text": "Either `m1` then `m3`, or `m3` then `m1`",
+        "explanation": "Correct. There is a causal chain, but Erlang does not guarantee causal ordering across different senders."
+      },
+      {
+        "text": "Only `m3` then `m1`, because `m3` travels a shorter path",
+        "explanation": "Nothing forces this order either. It is possible, not certain."
+      },
+      {
+        "text": "C may receive `m3` twice",
+        "explanation": "Erlang does not duplicate messages. The question is only about order."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Guarantees in play: A to C is one pair; B to C is another.\n2. Causally, `m1` was sent before `m2`, which caused `m3`. Humans expect C to see `m1` first.\n3. But the only promise is per pair. If `m1` travels over a slow link (say, to another node) and B and C are local, `m3` can arrive first.\n4. So both orders are possible.\n\nDesign consequence: if C needs `m1` before `m3`, route both through one sender, or include sequence numbers and let C reorder.",
+    "link": {
+      "title": "Erlang FAQ: Academic and historical questions",
+      "url": "https://www.erlang.org/faq/academic.html"
+    }
+  },
+  {
+    "id": "conc-actors-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Two gen_servers, `Orders` and `Stock`, each handle some requests by doing `gen_server:call` to the other. Under load, both occasionally crash with `timeout` errors at the same moment. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "This is a deadlock: each is blocked inside a `call` waiting for the other, which cannot reply because it is also blocked",
+        "explanation": "Correct. Each gen_server handles one message at a time, so while it waits in `call` it cannot serve the other's request."
+      },
+      {
+        "text": "The actor model makes deadlock impossible, so the cause must be a network fault",
+        "explanation": "Actors remove data races, not deadlocks. Synchronous request/reply between actors can form a waiting cycle just like locks."
+      },
+      {
+        "text": "The default 5-second `call` timeout turns the deadlock into crashes, which supervisors then restart",
+        "explanation": "Correct. The timeout breaks the cycle by crashing the callers; supervision restores them, but the requests in flight are lost."
+      },
+      {
+        "text": "Making one direction a `cast` (or having one server reply via a later message) breaks the cycle",
+        "explanation": "Correct. If at least one side does not block waiting, the waiting cycle cannot close."
+      },
+      {
+        "text": "Increasing the timeout to `infinity` fixes the problem",
+        "explanation": "That turns a crash into a permanent hang. The cycle is still there; nothing would ever break it."
+      }
+    ],
+    "answer": [0, 2, 3],
+    "workedExample": "1. `Orders` handles request R1, which calls `Stock`. `Orders` is now blocked.\n2. Meanwhile `Stock` handles R2, which calls `Orders`. `Stock` is blocked.\n3. Each waits for a reply the other can only send after finishing its own call: a cycle.\n4. After 5 s both `call`s exit with `timeout`; both processes crash and are restarted.\n5. Fix by breaking the cycle: make one direction asynchronous, restructure so calls go one way only (a hierarchy), or move the shared logic into a third process.",
+    "link": {
+      "title": "Concurrent Programming — Erlang system documentation",
+      "url": "https://www.erlang.org/doc/system/conc_prog.html"
+    }
+  }
+]

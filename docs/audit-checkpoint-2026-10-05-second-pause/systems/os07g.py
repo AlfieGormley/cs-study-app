@@ -1,0 +1,7 @@
+from helper import *
+b=Path('content/os/07-io');s=['Editorial consistency']
+for name,a,c in [('io-models','if (fl == -1) { perror("F_GETFL"); exit(1); }','if (fl == -1) {\n    perror("F_GETFL"); exit(1);\n}'),('io-multiplexing','        handle_events(p[i].fd, p[i].revents);','        handle_events(p[i].fd,\n                      p[i].revents);'),('io-uring','int ret = io_uring_queue_init(256, &ring, 0);','int ret = io_uring_queue_init(\n    256, &ring, 0);')]:edit(b/(name+'.md'),a,c,'Wrap code to44-column project limit.',s)
+qe(b/'io-event-loops.questions.json','io-event-loops-q7','prompt','On one Redis instance with synchronous DEL behavior (lazyfree-lazy-user-del disabled), which choices explicitly request a whole-keyspace scan, freeing a large aggregate, or long script execution in one operation, rather than incremental scanning or a small lookup? Select all that apply.','Avoid implying SCAN COUNT strictly bounds work while preserving pedagogical answer.',['https://redis.io/docs/latest/commands/scan/'])
+edit(b/'io-event-loops.md','workers × worker_connections','Workers × worker_connections','Sentence capitalization.',s)
+edit(b/'io-event-loops.md','a timer delay is a minimum, not a guarantee.','timer thresholds do not guarantee exact wakeup time.','Align recap with clock-resolution qualification.',['https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick'])
+save([*b.glob('*.md'),*b.glob('*.questions.json')])

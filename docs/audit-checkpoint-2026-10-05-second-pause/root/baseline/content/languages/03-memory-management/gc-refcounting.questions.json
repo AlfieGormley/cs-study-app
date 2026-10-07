@@ -1,0 +1,348 @@
+[
+  {
+    "id": "gc-refcounting-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In CPython, what does this print?\n\n```python\nclass N:\n    def __del__(self):\n        print(\"freed\")\n\na = N()\nb = a\na = None\nprint(\"one\")\nb = None\nprint(\"two\")\n```",
+    "options": [
+      {
+        "text": "`freed`, `one`, `two`",
+        "explanation": "Setting `a = None` drops the count from 2 to 1, not to 0, because `b` still refers to the object. Nothing is freed yet."
+      },
+      {
+        "text": "`one`, `freed`, `two`",
+        "explanation": "Correct. The object is freed the instant its count hits zero, which is when `b = None` runs, just before `print(\"two\")`."
+      },
+      {
+        "text": "`one`, `two`, `freed`",
+        "explanation": "That would be the behaviour of a tracing GC that runs later, or at exit. CPython's reference counting frees immediately."
+      },
+      {
+        "text": "`one`, `two` and never `freed`",
+        "explanation": "There is no cycle here, so reference counting alone frees the object as soon as the last reference goes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Track the count:\n\n| Line | rc |\n|---|---|\n| `a = N()` | 1 |\n| `b = a` | 2 |\n| `a = None` | 1 |\n| `b = None` | 0, freed |\n\n1. `print(\"one\")` runs while rc is 1.\n2. `b = None` takes it to 0; `__del__` prints `freed` straight away.\n3. Then `print(\"two\")`.\n\nThis promptness is a defining property of reference counting.",
+    "link": {
+      "title": "Reference counting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Reference_counting"
+    }
+  },
+  {
+    "id": "gc-refcounting-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can't pure reference counting free two objects that refer only to each other?",
+    "options": [
+      {
+        "text": "Because their counts are both at least 1, held by each other, so neither ever reaches zero",
+        "explanation": "Correct. Each object's count includes the reference from the other. Without outside help, neither count can drop to zero."
+      },
+      {
+        "text": "Because reference counts can't go below 1",
+        "explanation": "Counts reach zero all the time; that is when objects are freed. The problem is specifically the references inside the cycle."
+      },
+      {
+        "text": "Because the objects are on the stack",
+        "explanation": "Reference-counted objects live on the heap. Placement is not the issue."
+      },
+      {
+        "text": "Because the counter overflows",
+        "explanation": "A two-object cycle has small counts. Overflow has nothing to do with it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `A.other = B` gives B rc ≥ 1; `B.other = A` gives A rc ≥ 1.\n2. Drop all outside references: each count falls by those, but the internal ones remain.\n\n```\n[A rc=1] --> [B rc=1]\n   ^------------'\n```\n\n3. Counting asks \"does anything point at me?\", not \"can the program reach me?\". For a cycle those questions have different answers.\n\nA tracing collector asks the second question, which is why it handles cycles naturally.",
+    "link": {
+      "title": "Reference counting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Reference_counting"
+    }
+  },
+  {
+    "id": "gc-refcounting-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A tree node holds a list of its children and a pointer to its parent. Which reference should be weak to avoid a reference cycle?",
+    "options": [
+      {
+        "text": "The parent's references to its children",
+        "explanation": "If the children list were weak, children would be freed as soon as you stopped holding them elsewhere: the tree would fall apart. Parents own their children."
+      },
+      {
+        "text": "Both",
+        "explanation": "If both were weak, nothing would keep the children alive once you let go of them."
+      },
+      {
+        "text": "Neither: reference counting handles trees fine",
+        "explanation": "A parent pointer plus a child list is a cycle (parent → child → parent), which pure counting leaks."
+      },
+      {
+        "text": "The child's pointer to its parent",
+        "explanation": "Correct. Owners hold strong references; back-pointers are weak. When the root is dropped, the strong chain down the tree frees everything."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Draw the references:\n\n```\nparent --strong--> child\nchild  --?------> parent\n```\n\n2. If both are strong, that is a cycle of length 2.\n3. Ownership flows downward, so make the upward pointer weak.\n4. Dropping the root: root rc → 0, freed; it decrements each child to 0; they free their children, and so on.\n\nPython `weakref.ref`, Swift `weak`, C++ `weak_ptr` and Rust `Weak` all express this.",
+    "link": {
+      "title": "Rc and reference cycles — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch15-06-reference-cycles.html"
+    }
+  },
+  {
+    "id": "gc-refcounting-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print in CPython, assuming no automatic collection happens in between?\n\n```python\nimport gc\nclass N:\n    def __del__(self):\n        print(\"freed\")\n\na, b = N(), N()\na.o, b.o = b, a\ndel a, b\nprint(\"X\")\ngc.collect()\nprint(\"Y\")\n```",
+    "options": [
+      {
+        "text": "`freed`, `freed`, `X`, `Y`",
+        "explanation": "`del` only removes the names. Each object still holds the other, so neither count reaches zero at that point."
+      },
+      {
+        "text": "`X`, `Y`, and the objects leak forever",
+        "explanation": "That would be true with reference counting alone, or with `gc.disable()`. CPython's cycle collector finds the pair when `gc.collect()` runs."
+      },
+      {
+        "text": "`X`, `freed`, `freed`, `Y`",
+        "explanation": "Correct. The cycle survives `del`, then `gc.collect()` finds the two objects referenced only by each other and frees them. Since Python 3.4, `__del__` methods in cycles are run normally."
+      },
+      {
+        "text": "`X`, `Y`, `freed`, `freed`",
+        "explanation": "`gc.collect()` is synchronous: it finishes freeing before returning, so the `freed` lines come before `Y`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. After `del a, b`: each object rc = 1 (held by the other). Nothing freed.\n2. `print(\"X\")`.\n3. `gc.collect()`:\n   - copy rc into scratch: A=1, B=1\n   - subtract internal refs: A=0, B=0\n   - nothing has an outside reference, so both are unreachable\n   - run finalisers (PEP 442), free them\n4. `print(\"Y\")`.\n\nBefore Python 3.4, objects with `__del__` in a cycle were left in `gc.garbage` instead.",
+    "link": {
+      "title": "Python gc module documentation",
+      "url": "https://docs.python.org/3/library/gc.html"
+    }
+  },
+  {
+    "id": "gc-refcounting-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine costs of reference counting compared with a tracing collector? Select all that apply.",
+    "options": [
+      {
+        "text": "A memory write on every reference copy, including reads such as passing an argument",
+        "explanation": "Correct. Even code that only reads an object updates its count when it takes a reference."
+      },
+      {
+        "text": "Atomic increments and decrements when objects are shared between threads",
+        "explanation": "Correct. Thread-safe counts (C++ `shared_ptr`, Rust `Arc`) need atomic read-modify-write instructions, which are much slower than plain ones."
+      },
+      {
+        "text": "It cannot free any object until the whole heap is scanned",
+        "explanation": "That describes a tracing collector's cycle. Reference counting frees each object as soon as its count hits zero."
+      },
+      {
+        "text": "Dropping the last reference to a huge structure frees all of it at once, causing a pause",
+        "explanation": "Correct. Freeing is recursive, so releasing a 10-million-node tree does 10 million frees right there."
+      },
+      {
+        "text": "It needs twice the heap, like a copying collector",
+        "explanation": "Reference counting adds a count per object, not a second semispace."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Go through each:\n\n1. Count updates: every `x = y`, every argument pass. Real cost.\n2. Atomics: needed for cross-thread sharing. Real cost; this is why Rust has a cheaper `Rc` for single-threaded use.\n3. Whole-heap scan: wrong; that's tracing.\n4. Cascading frees: real; the pause happens at the `del`.\n5. Double heap: wrong; that's semispace copying (lesson 4).\n\nReference counting's costs are spread through the program; tracing's are concentrated in collections.",
+    "link": {
+      "title": "Reference counting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Reference_counting"
+    }
+  },
+  {
+    "id": "gc-refcounting-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Swift view controller stores a closure in a property: `self.onTap = { self.count += 1 }`. The controller is dismissed but never deinitialised. Why, and what is the usual fix?",
+    "options": [
+      {
+        "text": "The controller holds the closure strongly and the closure captures `self` strongly: a cycle. Capture `[weak self]`.",
+        "explanation": "Correct. Swift's ARC has no cycle collector, so this cycle leaks. `{ [weak self] in self?.count += 1 }` breaks it."
+      },
+      {
+        "text": "ARC doesn't track closures, so they're never freed; mark the property `static`",
+        "explanation": "ARC does count closures; a closure that captures `self` holds a strong reference to it. `static` would make it worse by making it global."
+      },
+      {
+        "text": "ARC frees objects only when memory runs low; wait for a memory warning",
+        "explanation": "ARC frees deterministically when the count hits zero, not under memory pressure."
+      },
+      {
+        "text": "Closures are on the stack; move it to the heap with `Box`",
+        "explanation": "That is Rust vocabulary. Escaping closures in Swift are heap objects already; the issue is the strong capture."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `self.onTap` → closure: strong.\n2. Closure captures `self`: strong.\n\n```\nVC --strong--> closure\n ^---strong------'\n```\n\n3. When the navigation stack lets go of the VC, both counts are still 1. ARC has no tracing backup, so it leaks.\n4. Fix with a capture list:\n\n```swift\nself.onTap = { [weak self] in\n    self?.count += 1\n}\n```\n\nInside, `self` is optional and becomes `nil` once the VC is freed.",
+    "link": {
+      "title": "Automatic Reference Counting — Swift",
+      "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/automaticreferencecounting/"
+    }
+  },
+  {
+    "id": "gc-refcounting-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team runs a Python service with `gc.disable()` to remove collection pauses. What happens to memory?",
+    "options": [
+      {
+        "text": "Nothing is ever freed, so memory grows without bound",
+        "explanation": "`gc.disable()` only switches off the cycle collector. Reference counting still frees every acyclic object immediately."
+      },
+      {
+        "text": "Memory is freed at the same rate, because Python's GC is only for statistics",
+        "explanation": "The cycle collector does real freeing. Without it, cycles accumulate."
+      },
+      {
+        "text": "Acyclic garbage is still freed by reference counting, but every reference cycle created from now on leaks",
+        "explanation": "Correct. That is the trade they are making. It can work if the code avoids cycles (or calls `gc.collect()` at quiet moments), but cycles from exceptions, closures or parent pointers will build up."
+      },
+      {
+        "text": "CPython switches to tracing collection instead",
+        "explanation": "There is no fallback collector; disabling means cycles are simply never found."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. CPython has two mechanisms:\n   - reference counting: always on\n   - cycle collector (`gc`): can be disabled\n2. `gc.disable()` turns off only the second.\n3. So a list that goes out of scope is still freed at once.\n4. But anything in a cycle (a node with a parent pointer, an exception holding its own traceback) is never freed.\n\nInstagram famously ran with the collector disabled to reduce copy-on-write damage in forked workers; `gc.freeze()` (Python 3.7) was later added as a gentler option.",
+    "link": {
+      "title": "Python gc module documentation",
+      "url": "https://docs.python.org/3/library/gc.html"
+    }
+  },
+  {
+    "id": "gc-refcounting-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does Rust provide both `Rc<T>` and `Arc<T>`?",
+    "options": [
+      {
+        "text": "`Rc` is for the stack and `Arc` is for the heap",
+        "explanation": "Both allocate their value and counts on the heap. The difference is thread safety."
+      },
+      {
+        "text": "`Arc` can collect cycles and `Rc` cannot",
+        "explanation": "Neither collects cycles. Both need `Weak` to break them."
+      },
+      {
+        "text": "`Rc` counts references and `Arc` traces them",
+        "explanation": "Both are reference counted; the A stands for atomic."
+      },
+      {
+        "text": "`Rc` uses plain increments and is single-threaded only; `Arc` uses atomic counts so it can be shared between threads",
+        "explanation": "Correct. Non-atomic counts are cheaper, and the compiler stops you sending an `Rc` to another thread (it is not `Send`), so you only pay for atomics when you need them."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A reference count is a shared counter.\n2. If two threads increment it with a plain `count += 1` at the same time, one update can be lost, leading to a premature free.\n3. Atomic instructions prevent that but cost more.\n4. Rust lets you choose:\n\n| Type | Count | Threads |\n|---|---|---|\n| `Rc` | plain | one |\n| `Arc` | atomic | many |\n\n5. The type system enforces the choice at compile time, so using `Rc` across threads is an error, not a race.",
+    "link": {
+      "title": "Rc and reference cycles — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch15-06-reference-cycles.html"
+    }
+  },
+  {
+    "id": "gc-refcounting-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "CPython's cycle collector examines three container objects A, B and C, with reference counts A=2, B=2, C=1. The references among them are A→B, B→C and C→B. Which of them are garbage?",
+    "options": [
+      {
+        "text": "A, B and C",
+        "explanation": "A has no references from inside the group, so both of its references come from outside (say, a variable). A is alive, and so is everything it reaches."
+      },
+      {
+        "text": "B and C only",
+        "explanation": "B and C have no outside references of their own, but A is alive and A → B → C makes them reachable. Zero outside references is not the same as unreachable."
+      },
+      {
+        "text": "None of them",
+        "explanation": "Correct. After subtracting internal references, A still has 2, so it is referenced from outside and alive. Marking from A reaches B and then C, so all three survive."
+      },
+      {
+        "text": "Only C",
+        "explanation": "C is reachable through A → B → C, so it survives."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Run the algorithm:\n\n1. Copy the counts into scratch fields: A=2, B=2, C=1.\n2. Subtract one for every reference *inside* the group:\n\n```\nA->B : B 2 -> 1\nB->C : C 1 -> 0\nC->B : B 1 -> 0\n\nA = 2  (outside refs)\nB = 0\nC = 0\n```\n\n3. A is above zero, so something outside the group holds it: alive.\n4. Mark everything reachable from alive objects: A → B, B → C.\n5. Nothing is left unmarked, so there is no garbage.\n\nThe trap is step 3: a scratch count of zero only means \"no outside references\". Reachability from a live object decides.",
+    "link": {
+      "title": "Python gc module documentation",
+      "url": "https://docs.python.org/3/library/gc.html"
+    }
+  },
+  {
+    "id": "gc-refcounting-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server forks 32 worker processes from a parent that has loaded a large read-only Python dataset, hoping to share its memory via copy-on-write. Memory use climbs to nearly 32 copies. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Merely reading objects updates their reference counts (and GC bookkeeping in their headers), which writes to the shared pages and forces the OS to copy them",
+        "explanation": "Correct. In a reference-counted runtime, touching an object writes to it. Each worker's reads gradually dirty and duplicate the parent's pages. This is what Instagram hit, and why `gc.freeze()` exists."
+      },
+      {
+        "text": "`fork()` always copies all memory eagerly",
+        "explanation": "Modern `fork()` shares pages copy-on-write; nothing is copied until a page is written."
+      },
+      {
+        "text": "The dataset is on the stack, which is never shared",
+        "explanation": "Python objects live on the heap, and the stack is small anyway."
+      },
+      {
+        "text": "The workers leak memory through reference cycles",
+        "explanation": "Cycles would cause growth over time, but the symptom here is each worker converging on a full copy of the shared data, which points at copy-on-write being defeated."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Copy-on-write: after `fork()`, parent and child share physical pages until either writes to one.\n2. In CPython, `x = data[i]` increments the object's `ob_refcnt`. That is a write.\n3. Each worker reading the dataset therefore writes to every page it touches, and the kernel copies each one.\n4. The cycle collector's passes also write bookkeeping into object headers.\n\nMitigations: `gc.freeze()` before forking (moves objects to a permanent generation the collector ignores), and immortal objects (PEP 683) for some built-ins. Copy-on-write sharing in forked workers is one of the motivations PEP 683 gives for immortal objects.",
+    "link": {
+      "title": "PEP 683: Immortal objects",
+      "url": "https://peps.python.org/pep-0683/"
+    }
+  },
+  {
+    "id": "gc-refcounting-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are designing a reference-counted object model for a new language. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "You need either weak references, a cycle collector, or both, or cycles will leak",
+        "explanation": "Correct. Counting alone never frees a cycle; you must give programmers weak references, run a backup collector, or both (as CPython does)."
+      },
+      {
+        "text": "Making every count update atomic is necessary only if objects can be shared between threads",
+        "explanation": "Correct. Single-threaded programs (or values the type system confines to one thread, like Rust's `Rc`) can use cheaper plain increments."
+      },
+      {
+        "text": "Deferred reference counting, which skips updates for stack variables, can reduce overhead at the cost of slightly delayed freeing",
+        "explanation": "Correct. Stack references are the most frequent; deferring them and reconciling periodically removes much of the count traffic."
+      },
+      {
+        "text": "Reference counting guarantees no pauses, so it suits hard real-time systems unconditionally",
+        "explanation": "Cascading frees can cause pauses proportional to the size of the structure released. Real-time use needs care, such as deferred or incremental freeing."
+      },
+      {
+        "text": "With reference counting, destructor timing is unpredictable",
+        "explanation": "The opposite: destructors run exactly when the last reference goes, which is a key selling point."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Cycles: the fundamental gap; you need a fix. True.\n2. Atomics: only when crossing threads. True.\n3. Deferred RC: a classic optimisation from the research literature. True.\n4. No pauses: false; freeing a big structure recursively is a pause.\n5. Unpredictable destructors: false; that is a tracing-GC property.\n\nA real-world example of the full design: CPython (counting, weakrefs and a cycle collector). Swift picks counting plus weak/unowned and no collector.",
+    "link": {
+      "title": "Reference counting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Reference_counting"
+    }
+  }
+]

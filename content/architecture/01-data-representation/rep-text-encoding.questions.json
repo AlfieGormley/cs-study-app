@@ -1,0 +1,378 @@
+[
+  {
+    "id": "rep-text-encoding-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How many bytes does UTF-8 use to encode `é` (U+00E9)?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "Only U+0000 to U+007F (ASCII) fit in one byte. 0xE9 = 233 is above 127."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. U+0080 to U+07FF use two bytes: `110xxxxx 10xxxxxx`. é is `C3 A9`."
+      },
+      {
+        "text": "3",
+        "explanation": "Three-byte encodings cover scalar values U+0800–FFFF, excluding the surrogate range, such as € (U+20AC)."
+      },
+      {
+        "text": "4",
+        "explanation": "Four-byte UTF-8 encodes supplementary scalar values above U+FFFF, including many emoji (some emoji are in the BMP)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 0xE9 = 233, between 0x80 and 0x7FF → **2 bytes**.\n2. 11 payload bits: 0xE9 = `000 1110 1001` → split 5 | 6 = `00011 | 101001`.\n3. Fill `110xxxxx 10xxxxxx`: `11000011 10101001` = `C3 A9`.\n\nIn Latin-1, by contrast, é is the single byte `E9`. Confusing the two is one common cause of mojibake.",
+    "link": {
+      "title": "UTF-8 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this Python 3 code print?\n\n```python\ns = 'naïve'\nprint(len(s), len(s.encode('utf-8')))\n```",
+    "options": [
+      {
+        "text": "`5 5`",
+        "explanation": "This assumes every character is one byte in UTF-8. ï (U+00EF) is not ASCII, so it takes two bytes."
+      },
+      {
+        "text": "`6 6`",
+        "explanation": "`len` on a Python `str` counts code points. 'naïve' has 5 code points (when ï is precomposed, as typed here)."
+      },
+      {
+        "text": "`5 6`",
+        "explanation": "Correct. Five code points; in UTF-8, n, a, v, e take 1 byte each and ï takes 2, so 6 bytes."
+      },
+      {
+        "text": "`5 10`",
+        "explanation": "That is the size in UTF-16LE or UTF-16BE without a BOM (2 bytes per BMP scalar value). Python encode(\"utf-16\") also emits a BOM, making 12 bytes here. UTF-8 uses 1 byte for ASCII."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Python's `str` is a sequence of code points: n, a, ï, v, e → `len(s)` = **5**.\n2. `.encode('utf-8')` gives a `bytes` object:\n\n```\nn  a  ï     v  e\n6e 61 c3 af 76 65\n```\n\n3. `len()` of the bytes = **6**.\n\nDatabases and network protocols often limit **bytes**, so a 255-character limit in code points can still overflow a 255-byte column.",
+    "link": {
+      "title": "Unicode HOWTO — Python docs",
+      "url": "https://docs.python.org/3/howto/unicode.html"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You start reading a valid UTF-8 stream in the middle. Which of these bytes **cannot** be the first byte of a character?",
+    "options": [
+      {
+        "text": "`0x41`",
+        "explanation": "`0100 0001` starts with 0: a complete one-byte (ASCII) character, 'A'."
+      },
+      {
+        "text": "`0xC3`",
+        "explanation": "`1100 0011` starts with `110`: the lead byte of a two-byte sequence."
+      },
+      {
+        "text": "`0xE2`",
+        "explanation": "`1110 0010` starts with `1110`: the lead byte of a three-byte sequence."
+      },
+      {
+        "text": "`0x9F`",
+        "explanation": "Correct. `1001 1111` starts with `10`, which marks a continuation byte. Skip forward until a byte that does not start with `10`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Look at the top bits of each byte:\n\n| Byte | Bits | Role |\n|---|---|---|\n| 41 | 0100 0001 | ASCII |\n| C3 | 1100 0011 | 2-byte lead |\n| E2 | 1110 0010 | 3-byte lead |\n| 9F | 1001 1111 | continuation |\n\nAny byte from 0x80 to 0xBF is a continuation byte. This property, **self-synchronisation**, means a decoder that lands mid-character skips at most 3 bytes.",
+    "link": {
+      "title": "UTF-8 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Encode `ñ` (U+00F1) in UTF-8 by hand. Which bytes do you get?",
+    "options": [
+      {
+        "text": "`F1`",
+        "explanation": "`F1` is the Latin-1 encoding. In UTF-8 a single byte above 0x7F is never a complete character."
+      },
+      {
+        "text": "`C3 B1`",
+        "explanation": "Correct. 0xF1 → 11 bits `00011 110001` → `110 00011` (C3) and `10 110001` (B1)."
+      },
+      {
+        "text": "`C7 81`",
+        "explanation": "This splits the bits 4 | 4 like hex digits. UTF-8 splits the payload 5 | 6 for two-byte sequences."
+      },
+      {
+        "text": "`00 F1`",
+        "explanation": "That is UTF-16BE. UTF-8 never has a zero byte except for U+0000."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 0xF1 = 241, in U+0080–07FF → two bytes, 11 payload bits.\n2. 0xF1 as 11 bits: `000 1111 0001`.\n3. Split 5 | 6: `00011` | `110001`.\n4. Fill the template:\n\n```\n110 00011  -> 1100 0011 = C3\n10 110001  -> 1011 0001 = B1\n```\n\nResult: `C3 B1`. Check: `'ñ'.encode()` → `b'\\xc3\\xb1'`.",
+    "link": {
+      "title": "RFC 3629: UTF-8",
+      "url": "https://www.rfc-editor.org/rfc/rfc3629"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Decode the UTF-8 bytes `E4 BD A0`. Which code point do they represent?",
+    "options": [
+      {
+        "text": "U+E4BD",
+        "explanation": "UTF-8 bytes are not the code point written out. The marker bits (`1110`, `10`, `10`) must be stripped first."
+      },
+      {
+        "text": "U+4F60",
+        "explanation": "Correct. Payload bits `0100` + `111101` + `100000` = `0100 1111 0110 0000` = 0x4F60 (你)."
+      },
+      {
+        "text": "U+1F60",
+        "explanation": "This uses an incorrect leading payload nibble. E4 contributes 0100, giving U+4F60. Dropping that nibble entirely would instead give U+0F60, not U+1F60."
+      },
+      {
+        "text": "Invalid: three bytes cannot start with E4",
+        "explanation": "`E4` = `1110 0100` is a valid three-byte lead, and `BD`, `A0` are valid continuation bytes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nE4 = 1110 0100  -> payload 0100\nBD = 10 111101  -> payload 111101\nA0 = 10 100000  -> payload 100000\n```\n\nConcatenate: `0100 111101 100000` → regroup in fours: `0100 1111 0110 0000` = **0x4F60**.\n\nU+4F60 is 你 (\"you\" in Chinese). This BMP ideograph takes 3 bytes in UTF-8 and 2 in UTF-16. Supplementary CJK characters take 4 bytes in either encoding; repertoire counts are not the same as text-frequency statistics.",
+    "link": {
+      "title": "UTF-8 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is 👍 (U+1F44D) in UTF-16, as 16-bit code units?",
+    "options": [
+      {
+        "text": "`D83D DC4D`",
+        "explanation": "Correct. 0x1F44D − 0x10000 = 0xF44D; top 10 bits 0x03D → D83D, low 10 bits 0x04D → DC4D."
+      },
+      {
+        "text": "`F44D`",
+        "explanation": "This truncates to 16 bits. Code points above U+FFFF need a surrogate pair."
+      },
+      {
+        "text": "`0001 F44D`",
+        "explanation": "That is UTF-32 (one 32-bit unit). UTF-16 uses two 16-bit surrogates."
+      },
+      {
+        "text": "`DC4D D83D`",
+        "explanation": "The high surrogate (D800–DBFF) always comes first, then the low surrogate (DC00–DFFF)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Subtract 0x10000: 0x1F44D − 0x10000 = **0x0F44D** (20 bits).\n2. In binary: `0000 1111 01 | 00 0100 1101`.\n3. Top 10 bits = `0000111101` = 0x03D → 0xD800 + 0x03D = **D83D**.\n4. Low 10 bits = `0001001101` = 0x04D → 0xDC00 + 0x04D = **DC4D**.\n\nCheck: `'👍'.encode('utf-16-be').hex()` → `'d83ddc4d'`. Note the high surrogate is the same as for 😀 (D83D), since both lie in the same 1,024-code-point block.",
+    "link": {
+      "title": "UTF-16 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-16"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Customer names and reviews on your site show `donâ€™t` where users typed `don’t` (with a curly apostrophe, U+2019). What has happened?",
+    "options": [
+      {
+        "text": "The text was stored as UTF-16 and read as UTF-8",
+        "explanation": "Typical UTF-16 encodings of this ASCII-heavy text introduce NULs when misread as UTF-8; they do not explain the specific E2 80 99 → â€™ transformation."
+      },
+      {
+        "text": "The database cannot store characters above U+FFFF",
+        "explanation": "U+2019 is in the BMP, so even MySQL's 3-byte `utf8` can store it. That limitation affects supplementary characters, including some emoji; BMP emoji still fit."
+      },
+      {
+        "text": "The apostrophe's UTF-8 bytes were decoded as Windows-1252",
+        "explanation": "Correct. U+2019 is `E2 80 99` in UTF-8; in Windows-1252 those bytes are â, € and ™."
+      },
+      {
+        "text": "The browser's font has no curly apostrophe glyph",
+        "explanation": "A missing glyph shows as a box or a fallback glyph, not as three specific different characters."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. U+2019 needs 3 UTF-8 bytes: `E2 80 99`.\n2. Decoding those bytes one per character with Windows-1252:\n\n```\nE2 -> â\n80 -> €\n99 -> ™\n```\n\n3. Result: `â€™`.\n\nFind the boundary where the encoding was lost: a database connection without `charset=utf8mb4`, a CSV opened with the system default, or a missing `charset=utf-8` in the HTTP header. If this exact reversible mis-decoding is confirmed, s.encode('cp1252').decode('utf-8') can undo it. It is not a general repair: mixed encodings, replacement characters or lost bytes may make reversal impossible; preserve a copy first.",
+    "link": {
+      "title": "Mojibake — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Mojibake"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about UTF-8 are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Every valid ASCII file is also a valid UTF-8 file with the same meaning",
+        "explanation": "Correct. U+0000–007F encode as the identical single bytes."
+      },
+      {
+        "text": "In valid UTF-8, each byte can be classified as starting a scalar-value encoding or continuing one",
+        "explanation": "Correct. Continuation bytes always begin with `10`; lead bytes never do."
+      },
+      {
+        "text": "Every character takes exactly two bytes",
+        "explanation": "That is closer to UCS-2. UTF-8 is variable length: 1 to 4 bytes."
+      },
+      {
+        "text": "A byte order mark is required to tell little-endian from big-endian UTF-8",
+        "explanation": "UTF-8 is a byte sequence, so it has no byte order. A UTF-8 BOM (`EF BB BF`) exists but is optional and often discouraged."
+      },
+      {
+        "text": "The byte 0x00 appears only when encoding U+0000",
+        "explanation": "Correct. All bytes of multibyte sequences have the high bit set. A U+0000 inside text still terminates a C string, so arbitrary Unicode text needs explicit length handling."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Check each against the byte table:\n\n```\n0xxxxxxx               ASCII\n110xxxxx 10xxxxxx\n1110xxxx 10xxxxxx ...\n11110xxx 10xxxxxx ...\n```\n\n1. ASCII rows are unchanged: true.\n2. `10` prefix marks continuations: true.\n3. Lengths vary from 1 to 4: false.\n4. Bytes have no endianness: false.\n5. Every byte in a multi-byte sequence is ≥ 0x80: true.",
+    "link": {
+      "title": "UTF-8 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A chat app limits messages using JavaScript's `.length`. A user sends just 👍🏽 (thumbs up with a medium skin tone). What is `'👍🏽'.length`?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "That counts grapheme clusters, what the user sees. JavaScript's `length` counts UTF-16 code units."
+      },
+      {
+        "text": "2",
+        "explanation": "2 is the number of code points (U+1F44D and the modifier U+1F3FD). That is what Python's `len` would return."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Both code points are above U+FFFF, so each is a surrogate pair: 2 + 2 = 4 UTF-16 code units."
+      },
+      {
+        "text": "8",
+        "explanation": "8 is the UTF-8 byte count. JavaScript strings are UTF-16."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Break it down:\n\n```\n👍   U+1F44D  D83D DC4D\n🏽   U+1F3FD  D83C DFFD\n```\n\n| Measure | Count |\n|---|---|\n| graphemes | 1 |\n| code points | 2 |\n| UTF-16 units | **4** |\n| UTF-8 bytes | 8 |\n\nTruncating with `s.slice(0, 1)` would leave a lone high surrogate. Use `Intl.Segmenter` to count or cut by graphemes in JavaScript.",
+    "link": {
+      "title": "String: length — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A MySQL 8.4 table uses `CHARACTER SET utf8`. Inserting a review containing 😀 fails with `Incorrect string value: '\\xF0\\x9F\\x98\\x80'`. Text with é and € works. Why?",
+    "options": [
+      {
+        "text": "MySQL's `utf8` is an alias for `utf8mb3`, which allows at most 3 bytes per character, and 😀 needs 4",
+        "explanation": "Correct. é (2 bytes) and € (3 bytes) fit, but anything above U+FFFF needs 4 bytes. Convert the column to `utf8mb4`."
+      },
+      {
+        "text": "Emoji are not part of Unicode, so MySQL rejects them",
+        "explanation": "Emoji are ordinary Unicode code points; 😀 is U+1F600."
+      },
+      {
+        "text": "The client sent UTF-16, which MySQL cannot parse",
+        "explanation": "Those bytes are UTF-8 for 😀, not UTF-16. Connection configuration still needs checking alongside the column encoding."
+      },
+      {
+        "text": "The column is too short for a 4-character string",
+        "explanation": "😀 is one character. The limit is on bytes per character, not on the number of characters."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The bytes in the error, `F0 9F 98 80`, start with `11110`, so this is a 4-byte UTF-8 sequence for a code point above U+FFFF.\n2. MySQL's legacy `utf8` (now named `utf8mb3`) stores at most 3 bytes per character, covering only the BMP.\n3. é (`C3 A9`) and € (`E2 82 AC`) fit within 3 bytes, so they work.\n4. Example migration syntax for MySQL 8.x (the chosen collation also changes comparison semantics; review indexes and uniqueness before applying):\n\n```sql\nALTER TABLE reviews\n  CONVERT TO CHARACTER SET\n  utf8mb4\n  COLLATE utf8mb4_0900_ai_ci;\n```\n\nAlso set the connection charset to `utf8mb4`, or the driver may mangle the bytes before they arrive.",
+    "link": {
+      "title": "The utf8mb4 character set — MySQL docs",
+      "url": "https://dev.mysql.com/doc/refman/8.0/en/charset-unicode-utf8mb4.html"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Given `a = 'caf\\u00e9'` and `b = 'cafe\\u0301'` in Python 3, which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`a == b` is `False`",
+        "explanation": "Correct. They render identically, but `==` compares code points, and the sequences differ."
+      },
+      {
+        "text": "`len(a)` is 4 and `len(b)` is 5",
+        "explanation": "Correct. `b` uses `e` plus U+0301 COMBINING ACUTE ACCENT, two code points for one visible character."
+      },
+      {
+        "text": "`unicodedata.normalize('NFC', b) == a` is `True`",
+        "explanation": "Correct. NFC composes `e` + U+0301 into the precomposed U+00E9."
+      },
+      {
+        "text": "`a.encode('utf-8') == b.encode('utf-8')` is `True`",
+        "explanation": "Encoding preserves the code point difference: `a` ends `C3 A9`, `b` ends `65 CC 81`."
+      },
+      {
+        "text": "`a.upper() == b.upper()` is `True`",
+        "explanation": "These uppercase results still differ: precomposed É versus E plus U+0301. Case mapping is not normalisation; in general Unicode case mappings can be context-sensitive or expand one code point into several."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Write out the code points:\n\n```\na: c a f é          (é = U+00E9)\nb: c a f e  ́        (U+0301)\n```\n\n1. Different sequences → `a == b` is False.\n2. Lengths 4 and 5.\n3. NFC composes b into a → True.\n4. UTF-8: `63 61 66 c3 a9` vs `63 61 66 65 cc 81` → False.\n5. Case mapping does not normalise → False.\n\nIf canonical-equivalence matching is intended, normalise both strings consistently, often to NFC. Preserve original text or follow protocol-specific rules where exact bytes matter.",
+    "link": {
+      "title": "Unicode Normalization Forms (UAX #15)",
+      "url": "https://www.unicode.org/reports/tr15/"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A web server rejects any URL path containing `../`, *then* decodes it with an obsolete decoder that accepts overlong UTF-8 sequences. An attacker sends the bytes `2E 2E C0 AF`. What does that decoder turn `C0 AF` into, and why is this dangerous?",
+    "options": [
+      {
+        "text": "It produces / (U+002F), creating ../ and potentially bypassing the traversal filter",
+        "explanation": "Correct for the stipulated obsolete decoder. Whether access escapes the root also depends on subsequent path resolution and containment checks."
+      },
+      {
+        "text": "`¯` (U+00AF), which is harmless",
+        "explanation": "This reads the second byte as Latin-1. In UTF-8 the payload bits come from both bytes: `00000` + `101111`."
+      },
+      {
+        "text": "Nothing: `C0` is not a valid byte at all, so it is ignored",
+        "explanation": "A conforming UTF-8 decoder rejects the sequence or follows an error policy such as replacement; permissive decoding does not necessarily mean accepting overlongs as characters."
+      },
+      {
+        "text": "U+C0AF, a Hangul syllable",
+        "explanation": "UTF-8 bytes are not the code point. Stripping the marker bits leaves only 11 bits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `C0` = `110 00000` → 2-byte lead, payload `00000`.\n2. `AF` = `10 101111` → payload `101111`.\n3. Combined: `00000101111` = 0x2F = `/`.\n4. The shortest form of `/` is the single byte `2F`; using two bytes is an **overlong** encoding, forbidden by RFC 3629.\n5. The filter saw `2E 2E C0 AF`, no `../`, and passed it. After decoding it became `../`.\n\nThis is essentially the 2000 IIS \"Unicode\" directory traversal. Defence: strictly decode, apply protocol-specific canonicalisation, validate the resulting path, and enforce filesystem containment. Unicode NFC by itself does not prevent traversal.",
+    "link": {
+      "title": "UTF-8: overlong encodings — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  }
+]

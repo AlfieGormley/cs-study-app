@@ -1,0 +1,378 @@
+[
+  {
+    "id": "llm-training-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You prompt a freshly pre-trained **base** model with `What is the capital of France?` and it replies with three more quiz questions. Why?",
+    "options": [
+      {
+        "text": "The model has not learned that Paris is the capital",
+        "explanation": "It very likely has; the knowledge is in there. The problem is behaviour, not knowledge."
+      },
+      {
+        "text": "The tokeniser failed to encode the question mark",
+        "explanation": "Byte-level tokenisers encode every character; nothing was lost."
+      },
+      {
+        "text": "Base models are trained only to continue text, and a list of quiz questions is a plausible continuation; following instructions is taught later by supervised fine-tuning",
+        "explanation": "Correct. Pre-training teaches 'what comes next in documents like this', and quiz pages often list questions one after another."
+      },
+      {
+        "text": "Base models are deliberately sabotaged to stop misuse",
+        "explanation": "No sabotage is involved; base models are simply not trained on the question-answer format."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Pre-training objective: maximise the probability of the next token in web-like documents.\n2. In such documents, a line like `What is the capital of France?` is often followed by more questions.\n3. SFT on (prompt, answer) pairs in a chat template teaches the model that after a user turn comes an assistant answer.\n4. Preference tuning then shapes which answers it prefers.",
+    "link": {
+      "title": "Training language models to follow instructions with human feedback (InstructGPT)",
+      "url": "https://arxiv.org/abs/2203.02155"
+    }
+  },
+  {
+    "id": "llm-training-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A language model's average next-token loss on a validation set is 1.5 nats. What is its perplexity?",
+    "options": [
+      {
+        "text": "About 4.48",
+        "explanation": "Correct. e^1.5 ≈ 4.48: as uncertain, on average, as a uniform choice among about 4.5 tokens."
+      },
+      {
+        "text": "1.5",
+        "explanation": "That is the loss itself. Perplexity is the exponential of the loss."
+      },
+      {
+        "text": "About 0.22",
+        "explanation": "That is e^−1.5, the geometric-mean probability of the correct token, not the perplexity."
+      },
+      {
+        "text": "About 31.6",
+        "explanation": "That is 10^1.5. The loss is in nats (natural log), so use e, not 10."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Perplexity = exp(average cross-entropy).\n2. With natural-log loss: e^1.5 ≈ 4.4817.\n3. Interpretation: geometric-mean probability on the true token is e^−1.5 ≈ 0.223, and 1 / 0.223 ≈ 4.48.\n4. Reference point: uniform guessing over 50,257 tokens gives loss 10.82, perplexity 50,257.",
+    "link": {
+      "title": "Perplexity — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Perplexity"
+    }
+  },
+  {
+    "id": "llm-training-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "During supervised fine-tuning, labels for the prompt tokens are set to `-100` (ignored) and only response tokens contribute to the loss. Why?",
+    "options": [
+      {
+        "text": "To make training faster by skipping the forward pass on the prompt",
+        "explanation": "The prompt still goes through the forward pass; the model needs it as context. Only its contribution to the loss is removed."
+      },
+      {
+        "text": "Because prompt tokens are encrypted",
+        "explanation": "Nothing is encrypted; `-100` is PyTorch's default `ignore_index` for cross-entropy."
+      },
+      {
+        "text": "Because the tokeniser cannot handle prompt tokens",
+        "explanation": "The prompt is tokenised normally and fed in as input."
+      },
+      {
+        "text": "So the model learns to produce good responses rather than spending capacity learning to imitate user messages",
+        "explanation": "Correct. The goal is P(response | prompt). Predicting the user's text is not the behaviour you want to reinforce."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Inputs: prompt + response tokens, all visible to the model through attention.\n2. Labels: `-100` for the prompt, the true tokens for the response.\n3. Cross-entropy ignores `-100` positions.\n4. Gradients therefore only improve the probability of the response given the prompt.\n5. Some recipes do train on prompts too, but response-only loss is the common default.",
+    "link": {
+      "title": "Training language models to follow instructions with human feedback (InstructGPT)",
+      "url": "https://arxiv.org/abs/2203.02155"
+    }
+  },
+  {
+    "id": "llm-training-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You have a training budget of 1.2 × 10²² FLOPs and want to be Chinchilla compute-optimal (about 20 tokens per parameter, C ≈ 6ND). Roughly what model size and token count should you choose?",
+    "options": [
+      {
+        "text": "1B parameters on 2 trillion tokens",
+        "explanation": "6 × 10⁹ × 2 × 10¹² = 1.2 × 10²² fits the budget, but at 2,000 tokens per parameter it is far from the 20:1 ratio."
+      },
+      {
+        "text": "10B parameters on 200B tokens",
+        "explanation": "Correct. 6 × 10¹⁰ × 2 × 10¹¹ = 1.2 × 10²², and 200B / 10B = 20 tokens per parameter."
+      },
+      {
+        "text": "100B parameters on 20B tokens",
+        "explanation": "Fits the budget but is badly under-trained (0.2 tokens per parameter); this is the mistake Chinchilla identified in earlier giant models."
+      },
+      {
+        "text": "20B parameters on 20B tokens",
+        "explanation": "Only 2.4 × 10²¹ FLOPs and 1 token per parameter; uses a fifth of the budget and is under-trained."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Compute-optimal: D = 20N.\n2. C = 6 · N · D = 6 · N · 20N = 120N².\n3. N = √(C / 120) = √(1.2 × 10²² / 120) = √(10²⁰) = 10¹⁰ = 10B.\n4. D = 20 × 10¹⁰ = 2 × 10¹¹ = 200B tokens.\n5. Check: 6 × 10¹⁰ × 2 × 10¹¹ = 1.2 × 10²². ✓",
+    "link": {
+      "title": "Training Compute-Optimal Large Language Models (Chinchilla)",
+      "url": "https://arxiv.org/abs/2203.15556"
+    }
+  },
+  {
+    "id": "llm-training-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Approximately how much GPU memory do the weights, gradients and Adam optimiser state need for **full** fine-tuning of a 13-billion-parameter model in standard mixed precision (≈ 16 bytes per parameter), excluding activations?",
+    "options": [
+      {
+        "text": "26 GB",
+        "explanation": "That is just the 16-bit weights (2 bytes per parameter). Gradients and optimiser state are far bigger."
+      },
+      {
+        "text": "52 GB",
+        "explanation": "That is 4 bytes per parameter, e.g. FP32 weights only."
+      },
+      {
+        "text": "208 GB",
+        "explanation": "Correct. 13 × 10⁹ × 16 bytes = 208 GB, so this needs several GPUs or a technique like LoRA or ZeRO sharding."
+      },
+      {
+        "text": "1.6 TB",
+        "explanation": "That would be about 128 bytes per parameter; the standard breakdown is 16."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Per parameter:\n\n```\nfp16 weights        2 bytes\nfp16 gradients       2 bytes\nfp32 master weights  4 bytes\nAdam m (fp32)        4 bytes\nAdam v (fp32)        4 bytes\ntotal               16 bytes\n```\n\n13 × 10⁹ × 16 = 2.08 × 10¹¹ bytes = 208 GB. An 80 GB GPU cannot hold it, which is why LoRA (tiny trainable set) or sharding across GPUs is used.",
+    "link": {
+      "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+      "url": "https://arxiv.org/abs/2106.09685"
+    }
+  },
+  {
+    "id": "llm-training-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You apply LoRA with rank `r = 16` to the query and value projections (each 4,096 × 4,096) in all 32 layers of a model. How many trainable parameters is that?",
+    "options": [
+      {
+        "text": "4,194,304",
+        "explanation": "That is rank 8; with r = 16 each adapter is twice as big."
+      },
+      {
+        "text": "8,388,608",
+        "explanation": "Correct. Each adapter: 2 × 4,096 × 16 = 131,072; × 2 matrices × 32 layers = 8,388,608."
+      },
+      {
+        "text": "1,073,741,824",
+        "explanation": "That is the full size of 2 × 32 dense 4,096² matrices. LoRA only trains A and B."
+      },
+      {
+        "text": "262,144",
+        "explanation": "That is two adapters for one layer only. Multiply by 32 layers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. One adapter: A is 16 × 4,096 = 65,536, B is 4,096 × 16 = 65,536. Total 131,072.\n2. Two target matrices per layer (W_Q, W_V): 262,144.\n3. 32 layers: 262,144 × 32 = 8,388,608.\n4. Compare with the 32 × 2 × 16,777,216 = 1,073,741,824 weights they adapt: 0.78%.\n5. Optimiser state is now only needed for 8.4M parameters.",
+    "link": {
+      "title": "LoRA: Low-Rank Adaptation of Large Language Models",
+      "url": "https://arxiv.org/abs/2106.09685"
+    }
+  },
+  {
+    "id": "llm-training-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reward model gives the preferred response a score of 1.0 and the rejected one 1.0 as well. What is its Bradley–Terry loss on this pair, `−log σ(r_win − r_lose)`?",
+    "options": [
+      {
+        "text": "About 0.69 (ln 2)",
+        "explanation": "Correct. σ(0) = 0.5, and −ln 0.5 = ln 2 ≈ 0.693."
+      },
+      {
+        "text": "0",
+        "explanation": "The loss is 0 only in the limit where r_win − r_lose → +∞. Equal scores are a coin flip."
+      },
+      {
+        "text": "1.0",
+        "explanation": "That mixes up the score with the loss. The loss depends only on the difference, which is 0."
+      },
+      {
+        "text": "About 1.31",
+        "explanation": "That would be −ln σ(−1) ≈ 1.31, the loss when the rejected response is scored one point higher."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Difference: 1.0 − 1.0 = 0.\n2. σ(0) = 1 / (1 + e⁰) = 0.5: the model thinks each response is equally likely to be preferred.\n3. Loss: −ln 0.5 = 0.693.\n4. Gradient descent increases r_win and decreases r_lose until σ(difference) approaches 1.",
+    "link": {
+      "title": "Illustrating RLHF — Hugging Face blog",
+      "url": "https://huggingface.co/blog/rlhf"
+    }
+  },
+  {
+    "id": "llm-training-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PPO-based RLHF, the objective includes `− β · KL(π ‖ π_SFT)`. Which statements about this term are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It discourages the policy from drifting far from the SFT model",
+        "explanation": "Correct. The KL divergence grows as the policy's output distribution moves away from the reference."
+      },
+      {
+        "text": "It limits reward hacking, where the policy exploits flaws in the imperfect reward model",
+        "explanation": "Correct. Far from the SFT distribution the reward model is unreliable; the penalty keeps the policy where its scores mean something."
+      },
+      {
+        "text": "Setting β = 0 always gives the most helpful model, because reward is maximised",
+        "explanation": "Maximising a learned proxy without constraint typically produces degenerate outputs (verbosity, flattery, gibberish that scores well)."
+      },
+      {
+        "text": "It helps preserve the fluency and knowledge the SFT model already has",
+        "explanation": "Correct. Staying close to the reference limits collapse into narrow, repetitive styles."
+      },
+      {
+        "text": "It replaces the need for a reward model",
+        "explanation": "The KL term is added to the reward; PPO-based RLHF still needs the reward model's score. (DPO is the method that removes the explicit reward model.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. The reward model is trained on a finite set of comparisons, so it is only trustworthy near that data.\n2. The policy is optimised hard against it; unconstrained, it will find quirks (e.g. longer answers score higher).\n3. The KL penalty charges for moving away from π_SFT, so the optimum is a trade-off: more reward but not at any cost.\n4. β tunes the trade-off: too high and little changes; too low and reward hacking appears.",
+    "link": {
+      "title": "Training language models to follow instructions with human feedback (InstructGPT)",
+      "url": "https://arxiv.org/abs/2203.02155"
+    }
+  },
+  {
+    "id": "llm-training-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Llama 2 7B was trained on about 2 trillion tokens, roughly 300 tokens per parameter, far beyond Chinchilla's 20:1. Why might a lab deliberately do this?",
+    "options": [
+      {
+        "text": "Chinchilla's result was later shown to be wrong",
+        "explanation": "Chinchilla's finding is about minimising training compute for a given loss; it has not been overturned in that sense. Over-training optimises a different goal."
+      },
+      {
+        "text": "A smaller model trained longer reaches a given quality with fewer parameters, which makes every future inference cheaper, and serving cost usually dominates over the model's lifetime",
+        "explanation": "Correct. Compute-optimal minimises training FLOPs; inference-aware choices accept extra training cost for a cheaper, faster model to serve."
+      },
+      {
+        "text": "More tokens per parameter reduces training compute",
+        "explanation": "C ≈ 6ND: more tokens means more compute, not less."
+      },
+      {
+        "text": "Small models cannot be trained on fewer tokens",
+        "explanation": "They can; they would simply be weaker than they could be."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Chinchilla: for a fixed training budget, the lowest loss comes at about 20 tokens per parameter.\n2. Loss still improves beyond that, just less per FLOP.\n3. Inference costs ≈ 2N FLOPs per generated token, forever. A 7B model is about 10× cheaper to serve than a 70B one.\n4. If a model will serve billions of tokens, spending more training compute to make a smaller model good enough is a net win.\n5. 2 × 10¹² / 6.74 × 10⁹ ≈ 297 tokens per parameter.",
+    "link": {
+      "title": "Training Compute-Optimal Large Language Models (Chinchilla)",
+      "url": "https://arxiv.org/abs/2203.15556"
+    }
+  },
+  {
+    "id": "llm-training-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For one preference pair, the policy and reference log-probabilities are: preferred `log π(y_w) = −10.0`, `log π_ref(y_w) = −11.0`; rejected `log π(y_l) = −12.0`, `log π_ref(y_l) = −11.5`. With β = 0.1, what is the DPO loss `−log σ(z)`?",
+    "options": [
+      {
+        "text": "About 0.69",
+        "explanation": "That is ln 2, the loss when z = 0. Here the policy already favours y_w relative to the reference, so z > 0."
+      },
+      {
+        "text": "About 0.20",
+        "explanation": "That is −ln σ(1.5), forgetting to multiply by β = 0.1."
+      },
+      {
+        "text": "About 0.62",
+        "explanation": "Correct. z = 0.1 × [(−10 + 11) − (−12 + 11.5)] = 0.1 × 1.5 = 0.15, and −ln σ(0.15) ≈ 0.621."
+      },
+      {
+        "text": "About 0.77",
+        "explanation": "That is −ln σ(−0.15): the sign of the rejected term was flipped."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nchosen   = -10.0 - (-11.0) = +1.0\nrejected = -12.0 - (-11.5) = -0.5\nz = 0.1 * (1.0 - (-0.5)) = 0.15\nσ(0.15) = 1 / (1 + e^-0.15)\n        = 0.5374\nloss = -ln 0.5374 = 0.621\n```\n\nThe policy has raised y_w and lowered y_l relative to the reference, so the loss is below ln 2 ≈ 0.693. The gradient keeps pushing in the same direction.",
+    "link": {
+      "title": "Direct Preference Optimization (Rafailov et al.)",
+      "url": "https://arxiv.org/abs/2305.18290"
+    }
+  },
+  {
+    "id": "llm-training-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Compared with PPO-based RLHF, which statements about **DPO** are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "It does not train a separate reward model",
+        "explanation": "Correct. The reward is implicit in the log-probability ratio between the policy and the reference model."
+      },
+      {
+        "text": "It does not need to sample new responses from the policy during training",
+        "explanation": "Correct. Standard DPO trains on a fixed dataset of (prompt, chosen, rejected) triples."
+      },
+      {
+        "text": "It still keeps a frozen reference model whose log-probabilities appear in the loss",
+        "explanation": "Correct. The β-weighted log-ratios against π_ref play the role of the KL constraint."
+      },
+      {
+        "text": "It needs no preference data at all",
+        "explanation": "DPO is trained precisely on preference pairs; without them there is nothing to optimise."
+      },
+      {
+        "text": "It is guaranteed to produce a better model than PPO in every setting",
+        "explanation": "Empirical comparisons are mixed and depend on data and tuning; DPO's main advantages are simplicity and stability."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. PPO-RLHF keeps policy, reference, reward model and value model, and samples from the policy in the loop.\n2. DPO derives a closed-form link between the optimal KL-constrained policy and the reward, so it can optimise preferences directly.\n3. It needs the policy and a frozen reference only, and an offline preference dataset.\n4. It is simpler and cheaper, but not universally better.",
+    "link": {
+      "title": "Direct Preference Optimization (Rafailov et al.)",
+      "url": "https://arxiv.org/abs/2305.18290"
+    }
+  },
+  {
+    "id": "llm-training-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company fine-tunes a model with LoRA on 2,000 internal policy documents so it can answer staff questions. It now answers in the right tone but often states wrong policy details confidently. What is the best next step?",
+    "options": [
+      {
+        "text": "Raise the LoRA rank to 1,024 and train for many more epochs",
+        "explanation": "Heavy training on a small corpus encourages memorisation and forgetting, and still gives no reliable way to look up or cite the exact policy."
+      },
+      {
+        "text": "Switch from LoRA to RLHF so the model learns the facts from preferences",
+        "explanation": "Preference tuning shapes which answers are preferred; it is not an efficient way to inject specific facts."
+      },
+      {
+        "text": "Lower the temperature to 0 so it stops making mistakes",
+        "explanation": "Greedy decoding makes output deterministic, not correct; a wrong fact will just be stated consistently."
+      },
+      {
+        "text": "Use retrieval-augmented generation: fetch the relevant policy passages at query time and put them in the prompt, keeping the fine-tune for tone and format if it helps",
+        "explanation": "Correct. Fine-tuning mostly shapes behaviour; retrieval supplies exact, current, citable facts and is easy to update when policies change."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The symptom: style learned, facts unreliable. That is typical: a few epochs of SFT teach format far more easily than they implant detailed facts.\n2. Facts that change and must be exact belong in a retrieval index.\n3. RAG puts the relevant text in context, so the model can quote it and you can show sources.\n4. Updating a policy then means re-indexing a document, not re-training a model.",
+    "link": {
+      "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (Lewis et al.)",
+      "url": "https://arxiv.org/abs/2005.11401"
+    }
+  }
+]

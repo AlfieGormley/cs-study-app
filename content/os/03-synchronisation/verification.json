@@ -1,0 +1,1471 @@
+{
+  "module": "os-sync",
+  "author": {
+    "agent": "historical author unknown",
+    "date": "2026-10-05",
+    "note": "Audit bookkeeping date only."
+  },
+  "verifier": {
+    "agent": "audit_systems",
+    "date": "2026-10-05",
+    "independent": true,
+    "sources": [
+      "https://clang.llvm.org/docs/ThreadSanitizer.html",
+      "https://docs.kernel.org/RCU/whatisRCU.html",
+      "https://docs.kernel.org/locking/locktypes.html",
+      "https://docs.kernel.org/locking/seqlock.html",
+      "https://docs.python.org/3/howto/free-threading-python.html",
+      "https://docs.python.org/3/library/queue.html",
+      "https://docs.python.org/3/library/threading.html",
+      "https://gcc.gnu.org/onlinedocs/gcc/Volatiles.html",
+      "https://greenteapress.com/semaphores/LittleBookOfSemaphores.pdf",
+      "https://man7.org/linux/man-pages/man2/futex.2.html",
+      "https://man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html",
+      "https://man7.org/linux/man-pages/man3/pthread_cond_wait.3p.html",
+      "https://man7.org/linux/man-pages/man3/pthread_rwlockattr_setkind_np.3.html",
+      "https://man7.org/linux/man-pages/man3/sem_wait.3.html",
+      "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf",
+      "https://raw.githubusercontent.com/bminor/glibc/master/nptl/pthread_mutex_unlock.c",
+      "https://www.kernel.org/doc/Documentation/memory-barriers.txt",
+      "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf",
+      "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2530r3.pdf",
+      "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2545r4.pdf"
+    ]
+  },
+  "summary": {
+    "claimsChecked": 68,
+    "errorsCorrected": 118,
+    "hedgedOrRemoved": 31
+  },
+  "countingMethod": "claimsChecked counts question-answer propositions; correction records include repeated fields and qualifications, not distinct false facts.",
+  "reviewScope": "Six lessons, 68 questions, selected fetched primary sources, 29 runtime/model assertions.",
+  "corrections": [
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.md",
+      "original": "Compile it with `gcc -O0 -pthread` and run it a few times on a multicore machine. You will typically see different numbers below 2,000,000 on each run, such as 1,143,027 or 1,388,412. (With optimisation on, the compiler may transform the loop and hide or change the symptom, which is its own lesson: the code is broken either way.)",
+      "correction": "This deliberately broken C program has a data race and undefined behavior, so no output is guaranteed at any optimization level. A lost-update trace below illustrates a simplified machine model, not all behavior permitted for this C program.\n\n> [!note] Content gap\n> No reproducible record supports the original exact sample counts, so they are omitted. A run that prints 2,000,000 does not establish correctness.",
+      "reason": "Unrecorded empirical output removed and UB madeexplicit.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.md",
+      "original": "On the free-threaded build (3.13+, no GIL) or with a slightly different loop body, it loses updates readily.",
+      "correction": "Free-threaded builds and changes that introduce additional switching points can expose lost updates; neither failure nor a particular count is guaranteed.",
+      "reason": "Outcome conditionalnotuniversal.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.md",
+      "original": "It satisfies all three requirements, on paper. On a modern multicore CPU it is **broken as written**, because both the compiler and the processor may reorder the store to `flag[me]` with the later load of `flag[other]`.",
+      "correction": "Under sequentially consistent atomic reads/writes and suitable progress assumptions, the algorithm satisfies these requirements. The plain C version is **broken as written** because it has data races and undefined behavior; hardware store buffering is an additional way a literal load/store implementation can fail.",
+      "reason": "LanguageUBnotfixedbyfencealone.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.md",
+      "original": "Pure load/store algorithms like Peterson's fail on modern hardware without memory barriers.",
+      "correction": "Peterson's teaching algorithm needs a valid atomic memory model, such as sequentially consistent C atomics; fences alone do not legalize racing plain C accesses.",
+      "reason": "Keepkeytakeawayconsistent.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q1",
+      "field": "prompt",
+      "option": null,
+      "original": "`counter` starts at 10. Two threads each run `counter++` once, compiled to load / add / store. The scheduler produces this interleaving:\n\n```\nA: load  (rA = 10)\nA: add   (rA = 11)\nB: load  (rB = 10)\nA: store (counter = 11)\nB: add   (rB = 11)\nB: store\n```\n\nWhat is the final value of `counter`?",
+      "correction": "Use a sequentially consistent toy model with indivisible loads/stores and preserved per-thread order, not the semantics of data-racing C. `counter` starts at 10. Two threads each run `counter++` once, compiled to load / add / store. The scheduler produces this interleaving:\n\n```\nA: load  (rA = 10)\nA: add   (rA = 11)\nB: load  (rB = 10)\nA: store (counter = 11)\nB: add   (rB = 11)\nB: store\n```\n\nWhat is the final value of `counter`?",
+      "reason": "State explicitmodel fordeterminateanswer.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q7",
+      "field": "prompt",
+      "option": null,
+      "original": "`counter` starts at 0. Two threads each execute `counter++` exactly **once** (load, add, store) with no synchronisation. Which set lists every possible final value?",
+      "correction": "Use a sequentially consistent toy model with indivisible loads/stores and preserved per-thread order, not the semantics of data-racing C. `counter` starts at 0. Two threads each execute `counter++` exactly **once** (load, add, store) with no synchronisation. Which set lists every possible final value?",
+      "reason": "State explicitmodel fordeterminateanswer.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q8",
+      "field": "prompt",
+      "option": null,
+      "original": "`counter` starts at 0. Two threads each run `counter++` **3 times** in a loop, with each increment being a separate load, add and store, and no synchronisation. What is the **smallest** possible final value?",
+      "correction": "Use a sequentially consistent toy model with indivisible loads/stores and preserved per-thread order, not the semantics of data-racing C. `counter` starts at 0. Two threads each run `counter++` **3 times** in a loop, with each increment being a separate load, add and store, and no synchronisation. What is the **smallest** possible final value?",
+      "reason": "State explicitmodel fordeterminateanswer.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q1",
+      "field": "explanation",
+      "option": 3,
+      "original": "For this specific, given interleaving the outcome is fully determined. The non-determinism is in which interleaving the scheduler picks, not in what a given one produces.",
+      "correction": "The stipulated toy trace has a determined result. A plain C implementation with unsynchronized conflicting accesses instead has undefined behavior, so this trace is not a language-level output guarantee.",
+      "reason": "OriginaldismissedcorrectUBqualification.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q7",
+      "field": "explanation",
+      "option": 3,
+      "original": "Formally it is UB in C, but at the machine level (which is what the question models with load/add/store) only 1 or 2 can result.",
+      "correction": "The question explicitly stipulates a sequentially consistent trace model. Its outcomes are 1 or 2; a data-racing plain C program has no corresponding output guarantee.",
+      "reason": "Toymodelnotuniversalhardware.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q8",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. A pathological schedule can make each thread's final store depend on a value of 1, giving 2. See the trace.",
+      "correction": "Correct. The trace arranges for the final store overall to write 2. The two threads need not both finish by storing 2.",
+      "reason": "Originalsaideachthreadfinaldepends1contradictstraceA3.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q3",
+      "field": "prompt",
+      "option": null,
+      "original": "Two threads use **strict alternation** to guard a critical section:\n\n```c\n// thread i (0 or 1)\nwhile (turn != i) ;  // spin\n/* critical section */\nturn = 1 - i;\n```\n\nThread 0 leaves the critical section, sets `turn = 1`, and then spends an hour in its remainder section. Thread 1 enters, exits (setting `turn = 0`) and immediately wants to enter again. Which requirement is violated?",
+      "correction": "Treat the code as pseudocode with sequentially consistent atomic access to turn. Two threads use **strict alternation** to guard a critical section:\n\n```c\n// thread i (0 or 1)\nwhile (turn != i) ;  // spin\n/* critical section */\nturn = 1 - i;\n```\n\nThread 0 leaves the critical section, sets `turn = 1`, and then spends an hour in its remainder section. Thread 1 enters, exits (setting `turn = 0`) and immediately wants to enter again. Which requirement is violated?",
+      "reason": "PlainCspinotherwiseUB underminesanswer.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q4",
+      "field": "prompt",
+      "option": null,
+      "original": "A bank account class takes an internal lock in every method. Balance is 150. Two threads each run:\n\n```python\nif acct.balance() >= 100:\n    acct.withdraw(100)\n```\n\nWhat is the worst final balance, and what kind of bug is this?",
+      "correction": "Assume withdraw subtracts unconditionally and performs no balance validation. A bank account class takes an internal lock in every method. Balance is 150. Two threads each run:\n\n```python\nif acct.balance() >= 100:\n    acct.withdraw(100)\n```\n\nWhat is the worst final balance, and what kind of bug is this?",
+      "reason": "APIbehaviorotherwiseundefinedcouldrejectoverdraft.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q6",
+      "field": "explanation",
+      "option": 3,
+      "original": "Not a data race: both accesses are atomic, which the definition explicitly excludes. The result is always correct.",
+      "correction": "Both accesses are atomic, so this operation has no data race. Whether the overall application is correct still depends on its protocol and numeric requirements.",
+      "reason": "Atomicdoesnotprovewholeprogramcorrect.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q10",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Thread 0: `flag[0] = 1` goes into core 0's store buffer, not yet visible.\n2. Thread 1: `flag[1] = 1` goes into core 1's store buffer.\n3. Both write `turn`, then thread 0 loads `flag[1]` from memory: still 0. Thread 1 loads `flag[0]`: still 0.\n4. Each loop condition `flag[other] && ...` is false. Both enter.\n\nThis is the store-buffering reordering that even x86 allows. Lesson 5 covers fences and `memory_order_seq_cst`, which forbid it.",
+      "correction": "The plain C implementation already has undefined behavior. In a separate literal machine-code model, stores can remain buffered while each core reads the other flag as zero; both may then enter. Sequentially consistent C atomics provide a valid teaching implementation. A hardware fence by itself does not repair non-atomic C data races.",
+      "reason": "DistinguishhardwareillustrationfromvalidClanguage.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-race-conditions.questions.json",
+      "questionId": "sync-race-conditions-q11",
+      "field": "explanation",
+      "option": 3,
+      "original": "Correct. This is a genuine data race (one write, one read, no synchronisation), and TSan flags it even if the program seems to work.",
+      "correction": "This is a data race and may be reported when the conflicting path is executed and instrumented. A detector run does not guarantee every possible race is found.",
+      "reason": "Dynamicdetectornotguaranteedreport.",
+      "sources": [
+        "https://clang.llvm.org/docs/ThreadSanitizer.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "On a single-CPU machine, a thread only loses the CPU when an interrupt (such as the timer) fires. Disable interrupts in `lock()`, re-enable them in `unlock()`, and nobody can interleave.",
+      "correction": "On a single CPU, disabling maskable interrupts can protect a short kernel section against relevant interrupt handlers, provided it cannot block, yield or otherwise schedule and the kernel's preemption rules are respected. It does not exclude every context, such as non-maskable interrupts.",
+      "reason": "Blocking/cooperativescheduling/NMIs invalidateonlyinterruptclaim.",
+      "sources": [
+        "https://docs.kernel.org/locking/locktypes.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "Interrupts lost while disabled (for example from a disk) can be missed or delayed.",
+      "correction": "Interrupt handling is delayed. Many interrupt sources remain pending, but excessive latency or finite device buffering can still lose events or data.",
+      "reason": "Maskingdoesnotgenerallydropallinterrupts.",
+      "sources": [
+        "https://docs.kernel.org/locking/locktypes.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "Threads enter in strict FIFO order, so bounded waiting is guaranteed. Linux used ticket spinlocks from 2.6.25 and later moved to queued spinlocks, which are also fair but spin on a per-CPU variable instead of one shared one.",
+      "correction": "Tickets order admission by ticket allocation, assuming holders and waiters keep progressing and counter wraparound does not alias outstanding tickets. Linux queued spinlocks use queue-based waiting, but their implementation and fairness properties should not be equated with this simple ticket model.",
+      "reason": "Boundrequiresprogress/counterspace;queuedlocknotuniversallystrictFIFO.",
+      "sources": [
+        "https://docs.kernel.org/locking/locktypes.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "That is exactly the situation inside an OS kernel, where taking a spinlock also disables preemption on that CPU (and interrupts, with `spin_lock_irqsave`, if an interrupt handler shares the lock).",
+      "correction": "On non-PREEMPT_RT Linux, spinlock_t disables preemption while held; irqsave variants also mask local interrupts. Under PREEMPT_RT, spinlock_t instead has sleeping-lock semantics, while raw_spinlock_t remains a strict spinning lock.",
+      "reason": "CriticalPREEMPT_RTexception.",
+      "sources": [
+        "https://docs.kernel.org/locking/locktypes.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "But a system call costs far more than an atomic instruction (hundreds of nanoseconds or more versus a few nanoseconds), and most lock operations are uncontended.",
+      "correction": "Avoiding a kernel transition can reduce uncontended-path overhead; actual costs and contention rates are workload- and platform-dependent.",
+      "reason": "Unsupporteduniversalbenchmarkcosts.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man2/futex.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "(`futex_wait` and `futex_wake` stand for thin wrappers around the `futex` syscall.)",
+      "correction": "(`futex_wait` and `futex_wake` are illustrative wrappers. A real Linux implementation needs a correctly aligned 32-bit futex word compatible with its atomic representation, the appropriate private/shared operation and handling for interruptions, spurious wakes and errors.)",
+      "reason": "Atomicintsize/alignmentanderrorsnotportableLinuxcontract.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man2/futex.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "The kernel is involved only when threads actually collide. glibc's `pthread_mutex_t` is built this way, and so are most lock implementations on Linux.",
+      "correction": "This teaching algorithm illustrates the fast-path principle. Ordinary glibc mutexes also use user-space atomic state plus futex slow paths, but exact instructions and paths differ with mutex type, glibc version and optimizations.",
+      "reason": "Glibcactualunlockexchange notdecrement andspecialtypes.",
+      "sources": [
+        "https://raw.githubusercontent.com/bminor/glibc/master/nptl/pthread_mutex_unlock.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "A lock is correct the moment it exists. Whether it is *fast* depends on **contention**: how often threads want it at the same time.",
+      "correction": "A correctly implemented lock still needs a correct application protocol: all relevant accesses must participate, lifetimes must be valid and lock ordering must avoid deadlock. Performance then depends partly on contention.",
+      "reason": "Existenceoflockdoesnotproveprotocol.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "When a lock is uncontended, its cost is a few nanoseconds.",
+      "correction": "No reproducible uncontended-lock timing is supplied here.",
+      "reason": "Removeunsupportedbenchmark.",
+      "sources": [
+        "https://raw.githubusercontent.com/bminor/glibc/master/nptl/pthread_mutex_unlock.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "Per-thread counters summed at the end (sharding) beat any lock.",
+      "correction": "Per-thread counters combined at the end can reduce contention when delayed aggregation preserves the required semantics.",
+      "reason": "Performanceuniversalandsemanticsunsupported.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "Two unrelated variables on the same 64-byte cache line contend even under separate locks.",
+      "correction": "Independent writes sharing a cache line can cause coherence traffic even under separate locks. Cache-line size is architecture-dependent; 64 bytes is one common example.",
+      "reason": "Read-onlysharingnotcontention andlinesizevaries.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "## Key takeaways",
+      "correction": "> [!note] Content gap\n> No reproducible lock or syscall benchmark accompanies this lesson, so exact nanosecond costs and universal speed-up claims are omitted. The futex code is a teaching sketch, not a portable production mutex.\n\n## Key takeaways",
+      "reason": "Explicitunverifiedperformancegap.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man2/futex.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q3",
+      "field": "prompt",
+      "option": null,
+      "original": "A thread locks and then unlocks a glibc `pthread_mutex_t` that no other thread is using. How many system calls does that take?",
+      "correction": "An ordinary non-robust, non-PI glibc pthread mutex takes its uncontended user-space fast path for both lock and unlock. How many futex system calls are required?",
+      "reason": "Specifyordinarytypeandfastpathnotallpthreadtypes.",
+      "sources": [
+        "https://raw.githubusercontent.com/bminor/glibc/master/nptl/pthread_mutex_unlock.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q3",
+      "field": "text",
+      "option": 2,
+      "original": "Zero: both are single atomic instructions in user space",
+      "correction": "Zero: the uncontended fast path stays in user space",
+      "reason": "Exactsingleatomicinstructionnotuniversal.",
+      "sources": [
+        "https://raw.githubusercontent.com/bminor/glibc/master/nptl/pthread_mutex_unlock.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q3",
+      "field": "explanation",
+      "option": 2,
+      "original": "Correct. Lock is one CAS from 0 to 1; unlock is one atomic decrement that sees no waiters. The kernel is never entered.",
+      "correction": "Correct. No futex wait or wake is needed on this path. The exact atomic operations depend on implementation and optimization; this does not promise exactly one machine instruction per API call.",
+      "reason": "Glibcunlockusesexchange andsinglethreadoptimization.",
+      "sources": [
+        "https://raw.githubusercontent.com/bminor/glibc/master/nptl/pthread_mutex_unlock.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q3",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Lock fast path: `CAS(word, 0, 1)` succeeds. Done, in user space.\n2. Unlock: atomic decrement from 1 to 0. Old value 1 means \"no waiters\", so skip `FUTEX_WAKE`.\n3. Total: two atomic instructions, zero syscalls.\n4. Only if the CAS fails (lock held) does a thread set the word to 2 and call `FUTEX_WAIT`, and only an unlock that sees 2 calls `FUTEX_WAKE`.",
+      "correction": "For the stipulated ordinary uncontended fast path, user-space state is sufficient to acquire and release, so no futex syscall is needed. The lesson's decrement algorithm illustrates one design; glibc versions and mutex types can use different instructions and additional paths.",
+      "reason": "Removeincorrectglibcassembly equivalence.",
+      "sources": [
+        "https://raw.githubusercontent.com/bminor/glibc/master/nptl/pthread_mutex_unlock.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q4",
+      "field": "text",
+      "option": 1,
+      "original": "B's first CAS fails and sets `expected` to 1; the next CAS compares 1 == 1, succeeds, and B enters while A is still inside",
+      "correction": "After failure sets expected to 1, a later CAS can succeed writing 1 over 1 while A still holds the lock",
+      "reason": "WeakCAScanfailspuriously;Aschedcanreleasebefore next.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q4",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. After the first failure B is effectively asking \"if the lock is held, mark it held\", which always succeeds. Mutual exclusion is broken.",
+      "correction": "Correct as a possible failure: with expected changed to 1, a subsequent successful comparison can enter while the lock is still held. Weak CAS may also fail spuriously; the broken protocol no longer enforces exclusion.",
+      "reason": "Possibletracevsinevitable nextCAS.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q8",
+      "field": "explanation",
+      "option": 0,
+      "original": "Correct. The holder cannot be descheduled and will release in nanoseconds, so spinning is cheaper than a sleep/wake round trip.",
+      "correction": "Correct when the section is short and the holder can continue on another CPU. The cost trade-off needs measurement; no fixed nanosecond duration is implied.",
+      "reason": "Unsupportedduration.",
+      "sources": [
+        "https://docs.kernel.org/locking/locktypes.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q8",
+      "field": "text",
+      "option": 2,
+      "original": "An interrupt handler on a multicore machine that shares data with normal kernel code",
+      "correction": "A non-threaded hard interrupt handler sharing a short section with other kernel contexts, using the appropriate raw spinlock and interrupt masking",
+      "reason": "PREEMPTRTthreadedinterrupt/sleeping spinlockexception.",
+      "sources": [
+        "https://docs.kernel.org/locking/locktypes.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q11",
+      "field": "text",
+      "option": 2,
+      "original": "Move the session-store write to the database outside the critical section, holding the lock only for the in-memory update",
+      "correction": "Move a database write outside the critical section if versioning or another protocol preserves ordering and consistency",
+      "reason": "MovingIOcanbreakcorrectnesswithoutprotocol.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q11",
+      "field": "explanation",
+      "option": 2,
+      "original": "Correct. Doing I/O under a hot lock stretches the critical section from nanoseconds to milliseconds. Shorter hold times mean less waiting.",
+      "correction": "Correct under that condition: removing a slow operation can shorten lock hold time. Simply moving it without preserving state ordering may introduce stale or reordered writes.",
+      "reason": "Cannotrecommendunsafeunlockbeforepersistunqualified.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.questions.json",
+      "questionId": "sync-locks-q11",
+      "field": "workedExample",
+      "option": null,
+      "original": "Contention ≈ (how often threads want the lock) × (how long it is held).\n\n1. **Sharding** divides the arrival rate per lock by about the shard count.\n2. **Moving I/O out** cuts hold time, often by orders of magnitude.\n3. **Padding** reduces the cost of each acquire by removing cache-line ping-pong from unrelated writes.\n4. A re-entrant lock changes semantics, not contention.\n5. Holding the lock for the whole request raises hold time and turns the service into a single-threaded one.",
+      "correction": "Sharding can distribute contention if keys are sufficiently spread. Moving I/O out reduces hold time only when the application preserves its ordering and consistency requirements. Padding may reduce false sharing but must be measured. Re-entrancy does not itself improve inter-thread concurrency; widening the locked region can serialize more work.",
+      "reason": "Removeguaranteedshardfactorandperformance.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "(P and V come from Dutch words; the usual reading is *proberen*, \"to try\", and *verhogen*, \"to raise\".)",
+      "correction": "P and V are historical names for the wait and signal operations.",
+      "reason": "Specificetymologynotneedednotreliablysourcedhere.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/sem_wait.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "| 1 | binary semaphore (lock) |",
+      "correction": "| 1 | mutual exclusion, with balanced waits/posts |",
+      "reason": "Countingsemaphoreinitial1notautomaticallybinary.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/sem_wait.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "sem_t done;            // init 0",
+      "correction": "sem_t done;  // sem_init(&done, 0, 0)\n             // before creating the child",
+      "reason": "Globalzero storageisnotinitializedsemaphore.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/sem_wait.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "It works whichever thread runs first.",
+      "correction": "Assuming initialization and calls succeed, it works whichever thread runs first. POSIX sem_wait can fail with EINTR; real code must retry that case and handle other errors rather than enter a protected section without a permit. The snippets omit this error handling.",
+      "reason": "semwaitEINTR couldviolateprotocol.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/sem_wait.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "- `signal` wakes one waiter.",
+      "correction": "- POSIX `signal` unblocks at least one waiter, if any; callers must tolerate extra or spurious wakeups.",
+      "reason": "POSIXatleastone notexactone.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "Broadcast is always correct (thanks to the while loop)",
+      "correction": "With correctly protected predicates and a sound protocol, broadcast preserves the safety of the wait loop",
+      "reason": "Whilealonecannotfixbrokenprotocol.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "It is easier to reason about but harder to implement and slower, so almost every real system (POSIX, Java, Python, Go, Rust) uses Mesa semantics.",
+      "correction": "This gives a stronger handoff contract. POSIX, Java and Python instead require callers to tolerate delayed reacquisition and recheck their predicates; the performance trade-off depends on implementation.",
+      "reason": "Unsupporteduniversalspeedandadoptionclaim.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html",
+        "https://docs.python.org/3/library/threading.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.md",
+      "original": "Signalling while holding the mutex or just after releasing it are both legal. Signalling while holding it is the simpler habit and avoids subtle bugs; well-implemented libraries avoid the extra context switch it might seem to cause.",
+      "correction": "For POSIX condition variables, signalling with or without the mutex held is permitted, but predicate changes and object lifetime must remain correctly coordinated. Python notify/notify_all and Java notify/notifyAll require holding their associated lock or monitor; the POSIX rule must not be copied into those APIs.",
+      "reason": "Crosslanguagecrucialdifference.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html",
+        "https://docs.python.org/3/library/threading.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.questions.json",
+      "questionId": "sync-semaphores-condvars-q5",
+      "field": "text",
+      "option": 3,
+      "original": "The parent sleeps forever: the signal was sent when no one was waiting and condition variables do not remember signals",
+      "correction": "The parent can wait indefinitely because the earlier signal was not remembered",
+      "reason": "Spuriousreturnpossible.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_wait.3p.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.questions.json",
+      "questionId": "sync-semaphores-condvars-q5",
+      "field": "explanation",
+      "option": 3,
+      "original": "Correct. Without a state variable there is nothing for the parent to check, so it waits for a signal that already came and went (barring a lucky spurious wakeup).",
+      "correction": "Correct. No stored completion predicate prevents the wait. Without another notification or a spurious wakeup, it can remain blocked indefinitely.",
+      "reason": "Avoidunconditionalforever.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_wait.3p.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.questions.json",
+      "questionId": "sync-semaphores-condvars-q5",
+      "field": "explanation",
+      "option": 1,
+      "original": "`pthread_cond_signal` never blocks; with no waiters it is a no-op.",
+      "correction": "Signalling does not wait for a receiver to consume a signal. An empty condition variable is a valid case; this does not promise a universally wait-free implementation.",
+      "reason": "Neverblocks implementationabsoluteunjustified.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.questions.json",
+      "questionId": "sync-semaphores-condvars-q6",
+      "field": "prompt",
+      "option": null,
+      "original": "The parent checks the flag **without** holding the mutex:\n\n```c\n// parent\nwhile (done == 0) {\n  lock(&m);\n  pthread_cond_wait(&c, &m);\n  unlock(&m);\n}\n// child\nlock(&m); done = 1;\nsignal(&c); unlock(&m);\n```\n\nWhat bad interleaving can occur?",
+      "correction": "For this trace, assume done is an atomic flag so we can isolate the lost-wakeup protocol bug. The parent checks the flag **without** holding the mutex:\n\n```c\n// parent\nwhile (done == 0) {\n  lock(&m);\n  pthread_cond_wait(&c, &m);\n  unlock(&m);\n}\n// child\nlock(&m); done = 1;\nsignal(&c); unlock(&m);\n```\n\nWhat bad interleaving can occur?",
+      "reason": "PlainCdoneoutside mutexalsoUB.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_wait.3p.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.questions.json",
+      "questionId": "sync-semaphores-condvars-q10",
+      "field": "explanation",
+      "option": 0,
+      "original": "Like `wait()`, `wait_for` must be called with the condition's lock held; otherwise it raises `RuntimeError`.",
+      "correction": "It must be used with the condition lock held. If it needs to invoke wait() without the lock, RuntimeError results; an already-true predicate may return without reaching that check.",
+      "reason": "wait_foronlyraiseswhenwaitactuallycalled.",
+      "sources": [
+        "https://docs.python.org/3/library/threading.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-semaphores-condvars.questions.json",
+      "questionId": "sync-semaphores-condvars-q11",
+      "field": "workedExample",
+      "option": null,
+      "original": "Ask: **how many waiters could make progress, and can I target them?**\n\n1. Different conditions on one CV: you cannot target, so wake all and let the while loops sort it out.\n2. One shared Java condition: same problem, producers and consumers mixed.\n3. Shutdown: everyone must wake.\n4. One item, identical waiters: exactly one can proceed, so `signal`.\n\nBroadcast is never *incorrect* with while loops, only potentially wasteful. Signal is only correct when any single woken waiter is guaranteed to be one that can use the change.",
+      "correction": "Broadcast lets all waiters recheck after changes that may enable several or different predicates, or shutdown. A single-item change with interchangeable consumers generally needs only signal. These choices assume protected predicates, valid object lifetimes and a correct overall protocol; while loops do not make arbitrary misuse correct. POSIX signal may also unblock more than one waiter.",
+      "reason": "Broadcastnotunconditionallycorrectand signalnotexact1.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.md",
+      "original": "At every moment `empty + full` equals N, apart from the brief window inside a producer or consumer.",
+      "correction": "When no operation holds an outstanding permit, empty + full = N. During in-flight operations, reserved permits are not yet reflected in the opposite semaphore; that interval can be arbitrarily long if a thread is delayed. These C sketches assume successful initialization/calls; production code must handle EINTR and other semaphore errors.",
+      "reason": "Invariantnotcontinuousexceptbriefnotbounded.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.md",
+      "original": "add a semaphore that every thread, reader or writer, must pass through in arrival order.",
+      "correction": "add a turnstile with an explicit fair admission policy for readers and writers. Plain POSIX/Python semaphore APIs do not by themselves promise FIFO wake order.",
+      "reason": "Turnstilefairnessrequiresunderlyingfairness.",
+      "sources": [
+        "https://greenteapress.com/semaphores/LittleBookOfSemaphores.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.md",
+      "original": "it can be set to prefer writers with a non-portable attribute",
+      "correction": "its nonrecursive writer-preference mode requires promising that read locks will not be acquired recursively; the similarly named recursive writer-preference setting is ignored by glibc",
+      "reason": "ActualNPattributecriticalrestriction.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man3/pthread_rwlockattr_setkind_np.3.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.md",
+      "original": "barber_ready = Semaphore(0)",
+      "correction": "barber_ready = Semaphore(0)\ncustomer_seated = Semaphore(0)\nhaircut_done = Semaphore(0)\ncustomer_left = Semaphore(0)",
+      "reason": "Addhandshakes sobarber cannotcallmultipleclientsbeforefirstarrives.",
+      "sources": [
+        "https://greenteapress.com/semaphores/LittleBookOfSemaphores.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.md",
+      "original": "        barber_ready.release()  # call\n        cut_hair()",
+      "correction": "        barber_ready.release()  # call\n        customer_seated.acquire()\n        cut_hair()\n        haircut_done.release()\n        customer_left.acquire()",
+      "reason": "Rendezvousandcompletionrequiredforexclusivechair.",
+      "sources": [
+        "https://greenteapress.com/semaphores/LittleBookOfSemaphores.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.md",
+      "original": "    barber_ready.acquire()   # wait turn\n    get_haircut()",
+      "correction": "    barber_ready.acquire()   # wait turn\n    customer_seated.release()\n    haircut_done.acquire()   # wait finish\n    customer_left.release()",
+      "reason": "Customerdoesnotleavebeforehaircutdone.",
+      "sources": [
+        "https://greenteapress.com/semaphores/LittleBookOfSemaphores.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.md",
+      "original": "- `barber_ready` is the barber calling the next customer to the chair.",
+      "correction": "- `barber_ready` calls one customer. The seated, done and left handshakes coordinate chair arrival, haircut completion and departure before the next customer is called. These snippets assume no cancellation or failure during the handshake.",
+      "reason": "Explaincompleteprotocolandfailurelimits.",
+      "sources": [
+        "https://greenteapress.com/semaphores/LittleBookOfSemaphores.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q2",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Arrival rate 50,000/s, service rate 20,000/s.\n2. Net growth: 30,000 lines/s. After an hour: 108 million lines queued.\n3. At, say, 200 bytes per line, that is over 20 GB. The process is killed.\n4. With `Queue(maxsize=10_000)`, once 10,000 lines are waiting, the producer's `put` blocks. Throughput settles at 20,000/s and memory stays bounded.\n\nThe bound turns a memory problem into back-pressure, which is what the *bounded* in bounded buffer is for.",
+      "correction": "If these rates persist, the backlog grows by 30000 lines/s: 108 million lines in an hour. At an illustrative 200 bytes per line, payload alone is 21.6 GB before object/queue overhead. Memory pressure may cause allocation failures, termination or reduced throughput; a kill is not inevitable. A bounded queue applies back-pressure, with bounded queued item count rather than a universal byte limit.",
+      "reason": "MathcorrectbutOOMkillinevitablefalse anditemsizebound.",
+      "sources": [
+        "https://docs.python.org/3/library/queue.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q6",
+      "field": "text",
+      "option": 2,
+      "original": "Every philosopher now picks up their lower-numbered fork first, so a cycle of waits cannot form: whoever holds the highest-numbered fork can always get its other fork",
+      "correction": "All acquire lower-numbered forks before higher ones, so wait edges increase in fork number and cannot form a cycle",
+      "reason": "Highestforkholderalreadyhaslower, originalgetothermisleading.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q8",
+      "field": "prompt",
+      "option": null,
+      "original": "In the lesson's sleeping barber code with N = 3 waiting chairs, the barber is cutting a customer's hair and all three waiting chairs are empty. Five new customers arrive at once. How many leave without a haircut?",
+      "correction": "In the lesson's sleeping barber code with N = 3 waiting chairs, the barber is cutting a customer's hair and all three waiting chairs are empty. Five new customers arrive at once. How many leave without a haircut? Assume the barber does not finish the current haircut while the five arrivals check for seats.",
+      "reason": "Concurrentarrivalnotatomicagainstservicecompletion.",
+      "sources": [
+        "https://greenteapress.com/semaphores/LittleBookOfSemaphores.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q9",
+      "field": "text",
+      "option": 2,
+      "original": "Replace the lock with copy-on-write: readers grab a pointer to an immutable config; the writer builds a new copy and atomically swaps the pointer",
+      "correction": "Publish an immutable configuration by atomic pointer swap, with an explicit lifetime/reclamation protocol for readers",
+      "reason": "Pointer swapalonecanuseafterfree.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q9",
+      "field": "explanation",
+      "option": 2,
+      "original": "Correct. Readers never block the writer at all. This is the idea behind RCU, covered in lesson 6.",
+      "correction": "This can avoid waiting for readers before publishing a new version. The old object must remain alive while readers use it; reclamation or bounded-memory requirements can still require waiting.",
+      "reason": "RCUwriterdoesnotalwaysneverbock.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q9",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. With 5,000 reads/s each lasting 2 ms, on average about 10 reads are in progress (Little's law: 5,000 × 0.002). The count rarely hits 0.\n2. Readers-preference only lets a writer in at 0, so the writer waits for a lucky gap.\n3. Fixes either stop *new* readers once a writer waits (writer-preference, turnstile) or remove the need for readers to block writers at all (pointer swap of immutable data).\n4. More readers would raise the average from 10 to more, making gaps rarer.",
+      "correction": "At a sustained rate of 5000 reads/s and mean duration 0.002 s, Little's law gives mean concurrency 10. That mean alone does not determine how often the count reaches zero. A fair or writer-preference policy limits reader bypass; immutable publication can remove that acquisition bottleneck if old versions are reclaimed safely. Adding threads alone supplies no starvation fix.",
+      "reason": "Mean10doesnotprovegapdistributionnoradditionalthreadsraisefixedarrivals.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q10",
+      "field": "prompt",
+      "option": null,
+      "original": "In the readers-preference code, a developer \"optimises\" `read_unlock` by dropping the mutex:\n\n```c\nvoid read_unlock(void) {\n    if (--readers == 0)\n        sem_post(&rw);\n}\n```\n\nTwo readers R1 and R2 finish at the same moment with `readers == 2`. What can go wrong?",
+      "correction": "Treat the trace as an illustrative interleaving; a literal plain-C implementation has a data race and undefined behavior. In the readers-preference code, a developer \"optimises\" `read_unlock` by dropping the mutex:\n\n```c\nvoid read_unlock(void) {\n    if (--readers == 0)\n        sem_post(&rw);\n}\n```\n\nTwo readers R1 and R2 finish at the same moment with `readers == 2`. What can go wrong?",
+      "reason": "DistinguishtoytracefromlanguageUB.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q11",
+      "field": "prompt",
+      "option": null,
+      "original": "A bounded buffer with N = 10 has **two producers** and one consumer. The developer argues: \"`empty` already stops producers overfilling the buffer, so the `mutex` is unnecessary.\" With the buffer empty, both producers call `put` at once. What can go wrong without the mutex?",
+      "correction": "Treat the trace as an illustrative interleaving; a literal plain-C implementation has a data race and undefined behavior. A bounded buffer with N = 10 has **two producers** and one consumer. The developer argues: \"`empty` already stops producers overfilling the buffer, so the `mutex` is unnecessary.\" With the buffer empty, both producers call `put` at once. What can go wrong without the mutex?",
+      "reason": "DistinguishtoytracefromlanguageUB.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-classic-problems.questions.json",
+      "questionId": "sync-classic-problems-q11",
+      "field": "workedExample",
+      "option": null,
+      "original": "```\nP1: wait(empty) 10 -> 9\nP2: wait(empty)  9 -> 8\nP1: reads in = 0\nP2: reads in = 0\nP1: buf[0] = a; in = 1\nP2: buf[0] = b; in = 1\nP1: post(full); P2: post(full)\n```\n\n`full == 2` but only slot 0 has data (and `a` was overwritten). The consumer will read `buf[0]`, then `buf[1]`, which was never written. With one producer and one consumer the mutex can sometimes be dropped (they touch different indices), but with multiple producers or consumers it is essential.",
+      "correction": "An illustrative failure has both producers read in=0, both overwrite buf[0], both set in=1 and both post full. The count advertises two items but only one slot was filled. Plain C racing accesses are undefined behavior, not limited to this trace. This implementation needs serialized index/slot updates; other carefully designed multi-producer algorithms can use atomics instead of a mutex.",
+      "reason": "Mutexnotuniversallyessentialalternativelockfree.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "Real hardware and compilers do not provide it by default, because it would make them much slower.",
+      "correction": "Uncoordinated accesses do not generally provide that model; language rules and hardware ordering permit optimizations. The performance effect of stronger ordering depends on the target and workload.",
+      "reason": "Unsupporteduniversalperformancedifference.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "Atomicity solves \"half-done\" operations.",
+      "correction": "For some atomic types, an implementation may use internal locks; the atomic API does not universally promise lock-free machine instructions. Atomicity solves \"half-done\" operations.",
+      "reason": "C atomicsnotalllockfree.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "Different architectures allow different reorderings:",
+      "correction": "This simplified table concerns ordinary accesses to coherent normal cacheable memory, not every memory type, special instruction or dependency rule:",
+      "reason": "x86NT/WC/MMIOandARMdependencies exceptions.",
+      "sources": [
+        "https://www.kernel.org/doc/Documentation/memory-barriers.txt"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "The fix is a **full fence** between the store and the load (`mfence` on x86), which forces the store buffer to drain first.",
+      "correction": "In the machine-code model, a full fence between the store and load in each thread forbids that result (for example mfence on x86). In C, first use valid atomic accesses; a hardware fence does not legalize races on plain objects.",
+      "reason": "Needbothfencesandvalidlanguageatomics.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf",
+        "https://www.kernel.org/doc/Documentation/memory-barriers.txt"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "With relaxed ordering, the store to `data` may become visible after the store to `ready`, or the load of `data` may be satisfied before the load of `ready`. On ARM this can genuinely print 0. The compiler is also allowed to reorder the two stores on any architecture. (Strictly, reading `data` here is also a data race, because nothing orders it after the write.)",
+      "correction": "The plain data accesses lack a happens-before edge and therefore race: the C program has undefined behavior, not merely a choice between 0 and 42. Weakly ordered machine traces explain one possible stale-read symptom but do not bound C behavior.",
+      "reason": "UBprimarynotafterthoughtpossiblevalues.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "Every mutex implementation has exactly these semantics, which is why code that protects all shared data with locks never has to think about memory ordering.",
+      "correction": "Correct standard mutex use supplies the synchronization needed for protected accesses. Applications must still coordinate object lifetime, initialization and all access paths; having a lock somewhere is not enough.",
+      "reason": "Everymutexexactly/neverthinktoobroad.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "It is the only one of these that forbids the store-buffering outcome.",
+      "correction": "Using seq_cst for all four operations in this litmus test forbids both loads seeing zero. Other correctly constructed synchronization protocols or fence placements can also forbid it.",
+      "reason": "Seqcstnotonlypossibleprotocol.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "Locking every call is slow, so programmers wrote:",
+      "correction": "To avoid locking an already-initialized fast path, programmers wrote:",
+      "reason": "Unsupportedslowclaim.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "It is broken. Line 3",
+      "correction": "It is broken: the unlocked plain pointer read races with publication in C. One illustrative failure is incomplete publication. Line 3",
+      "reason": "ExplicitpointerUB.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "The free-threaded build keeps built-in types internally consistent, but compound operations still need locks. In both cases: **use `threading` primitives and `queue.Queue`, and you inherit their happens-before guarantees.**",
+      "correction": "Free-threaded CPython currently uses internal locking for many built-ins, but that is not a blanket language-level atomicity contract. In both cases use documented threading and queue protocols for shared invariants. Python does not specify the complete C11 memory model described above.",
+      "reason": "DontclaimformalPythonHB/C11equivalence.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.md",
+      "original": "and is the only ordering that rules out the store-buffering outcome",
+      "correction": "and rules out both-zero in this test when all four operations use it",
+      "reason": "Matchqualifiedlesson.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q1",
+      "field": "prompt",
+      "option": null,
+      "original": "Eight threads each increment a shared request counter 100,000 times. Which declaration and update guarantees the final value is 800,000, with no lock?",
+      "correction": "Assume int can represent 800000 and hits is initialized to zero before starting eight threads. Each increments it 100000 times and all are joined before reading the result. Which declaration/update gives 800000 without an application mutex?",
+      "reason": "Missinginitialization/resultobservation/rangeandnonlockfree caveat.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q2",
+      "field": "text",
+      "option": 1,
+      "original": "Each access in the source becomes a real memory access, but there is no atomicity and no ordering with other memory operations",
+      "correction": "Volatile accesses follow implementation-defined observable-access rules; volatile alone gives no inter-thread atomicity or synchronization",
+      "reason": "Standarddoesnotguaranteeeachsourceaccessexactphysicalmemory.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Volatiles.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q2",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. `volatile` is for memory-mapped I/O and signal handlers. For threads, use `atomic_bool`. (Java's `volatile` is a different keyword with acquire/release semantics.)",
+      "correction": "Correct. Volatile is useful for supported hardware/signal conventions, but is not a replacement for C atomic types or locks. The implementation defines what constitutes a volatile access.",
+      "reason": "Exactstandardqualification.",
+      "sources": [
+        "https://gcc.gnu.org/onlinedocs/gcc/Volatiles.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q3",
+      "field": "explanation",
+      "option": 0,
+      "original": "Cache coherence propagates the write to other cores, typically within nanoseconds. The issue is that the worker never re-reads memory.",
+      "correction": "Coherence alone cannot repair a compiler-hoisted load or a C data race. No fixed propagation time is guaranteed here.",
+      "reason": "Removeunsupportednanoseconds.",
+      "sources": [
+        "https://www.kernel.org/doc/Documentation/memory-barriers.txt"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q5",
+      "field": "prompt",
+      "option": null,
+      "original": "What does the consumer print, on any architecture?\n\n```c\nint data = 0;\natomic_int ready = 0;\n\n// producer thread\ndata = 42;\natomic_store_explicit(&ready, 1,\n    memory_order_release);\n\n// consumer thread\nwhile (!atomic_load_explicit(&ready,\n        memory_order_acquire))\n    ;\nprintf(\"%d\", data);\n```",
+      "correction": "Assume one producer, one consumer, initialized globals, no other accesses, and that the consumer reaches printf. What value does it print?\n\n```c\nint data = 0;\natomic_int ready = 0;\n\n// producer\ndata = 42;\natomic_store_explicit(&ready, 1,\n    memory_order_release);\n// consumer\nwhile (!atomic_load_explicit(&ready,\n        memory_order_acquire)) ;\nprintf(\"%d\", data);\n```",
+      "reason": "Visibilityresultnotprogressguarantee.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q5",
+      "field": "explanation",
+      "option": 1,
+      "original": "That would be true with relaxed ordering. Release/acquire is precisely what rules out seeing 0 once `ready == 1` is observed.",
+      "correction": "The release/acquire pair orders the plain data accesses. Replacing it with relaxed access would introduce a C data race, not a defined two-value outcome.",
+      "reason": "RelaxedplainprogramUB.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q5",
+      "field": "explanation",
+      "option": 3,
+      "original": "That describes the relaxed version. Release/acquire compiles to `stlr`/`ldar` on ARM, which enforce the ordering there too.",
+      "correction": "Correct C release/acquire synchronization provides the result on conforming targets. The relaxed plain-data version is undefined behavior on either architecture.",
+      "reason": "Removeincorrectrelaxedx8642guarantee.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q6",
+      "field": "explanation",
+      "option": 1,
+      "original": "Acquire is meaningless on its own for a pure increment. Visibility to the main thread comes from `pthread_join`.",
+      "correction": "Acquire is a valid RMW order, but it is stronger than necessary here. The joins supply the required final-observation ordering; no producer publication is needed from the increments.",
+      "reason": "AcquireRMWnotmeaninglessin general.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q11",
+      "field": "text",
+      "option": 3,
+      "original": "No: release/acquire does not forbid store→load reordering; making the operations `seq_cst` (or adding a seq_cst fence) does",
+      "correction": "No: both-zero remains allowed; use all seq_cst operations or a correctly placed seq_cst fence between store and load in each thread",
+      "reason": "Singularfencecouldmisleadone-sidedfix.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-memory-ordering.questions.json",
+      "questionId": "sync-memory-ordering-q11",
+      "field": "explanation",
+      "option": 3,
+      "original": "Correct. Only sequential consistency imposes a single total order on all four operations, which forbids both loads reading 0.",
+      "correction": "Correct. If both acquire loads read the initial zero, neither reads the other release, so no such synchronizes-with edge connects them. All-seq_cst operations forbid that cycle; properly placed fences can also do so.",
+      "reason": "LogicalHBreasonvsimplementationreordering.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "at every moment, *some* thread completes its operation in a bounded number of steps. An individual thread can starve, but the system as a whole never stalls.",
+      "correction": "continued execution guarantees system-wide operation progress under the algorithm's primitive and scheduling assumptions. An individual operation can starve; this is not a fixed wall-clock completion deadline.",
+      "reason": "Lockfreeprogressnotateverymomentfinitewalltime.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2530r3.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "alternatively a small counter is packed into the unused high bits of a 64-bit pointer, which works but wraps around after relatively few updates (65,536 with 16 bits).",
+      "correction": "packing a small counter into pointer bits is platform-specific and requires validating address representation and atomic support. A 16-bit tag wraps after 65536 updates; any finite tag needs an argument that wraparound cannot alias an outstanding observation.",
+      "reason": "PointerhighbitsnotuniversallyunusedandfiniteABAremains.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "C++26 standardises both hazard pointers and RCU, a sign of how fundamental the reclamation problem is.",
+      "correction": "WG21 proposals P2530 and P2545 specify hazard-pointer and RCU facilities for C++; check the chosen standard-library implementation before relying on availability.",
+      "reason": "Versionavailabilitynotprovenbypaperalone.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2530r3.pdf",
+        "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2545r4.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "If the read section is a few hundred nanoseconds, a read-write lock usually scales no better than a plain mutex, and costs more per operation.",
+      "correction": "For sufficiently short reads, this overhead can outweigh reader parallelism; there is no universal duration threshold.",
+      "reason": "Unsupportedperformancethreshold.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "Read-write locks pay off when read sections are **long** (microseconds or more, for example walking a large structure) and writes are rare.",
+      "correction": "Longer read sections and rare writes can make reader parallelism worthwhile, but the crossover must be measured on the actual implementation and hardware.",
+      "reason": "Universal microsecondthresholdunsupported.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "(Real implementations need careful memory barriers here, and the reader's data reads must be atomic to avoid a C data race; the Linux kernel's `seqlock_t` provides them.)",
+      "correction": "This is algorithm pseudocode. Portable C requires a race-free representation (for example atomic fields) plus a proven ordering protocol; retrying does not undo undefined behavior. Linux seqlock APIs follow the Linux kernel memory model and do not magically make arbitrary plain C fields portable atomic objects. Writers must also meet the API's serialization and non-preemption requirements.",
+      "reason": "CriticalkernelmemorymodelnotISOatomics.",
+      "sources": [
+        "https://docs.kernel.org/locking/seqlock.html",
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "A writer never modifies data that readers might be looking at. Instead it:",
+      "correction": "In this immutable-configuration example, a writer does not modify a published object. Instead it:",
+      "reason": "RCUcaninplaceupdateswithadditionalprotocol.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "        malloc(sizeof *new);\n    *new = *old;",
+      "correction": "        malloc(sizeof *new);\n    if (!new) return;  // report failure\n    *new = *old;",
+      "reason": "AvoidNULLdereference evenillustrative.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "`rcu_assign_pointer` is a release store",
+      "correction": "This is RCU-style pseudocode: a real kernel implementation uses kernel allocation and protected pointer-access APIs; a liburcu application needs its selected flavor's headers, registration and lifecycle rules. Assume cur initially refers to a valid object and writers hold the same mutex.\n\n`rcu_assign_pointer` is a release store",
+      "reason": "MixedmallockernelAPInotstandalonecode.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "The grace period only has to cover readers that started *before* the publish (R1, R2). R3 started after it and can only find the new version, so the writer does not wait for it.",
+      "correction": "synchronize_rcu waits for read-side sections that pre-exist its invocation, not necessarily every later reader. In the simplified diagram publication and the start of the grace-period wait are adjacent; R1/R2 may retain the old object. Actual grace-period completion need not coincide with the last illustrated unlock.",
+      "reason": "APIboundaryinvocationnotarbitrarypublish.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "Readers pay almost zero, and the cost moves entirely to writers, whose grace periods typically take milliseconds.",
+      "correction": "Costs and grace-period duration depend on RCU flavor, configuration and workload; no fixed timing is supplied here.",
+      "reason": "Unsupportedzero/entirecost/timing.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "Garbage-collected languages get the hard part, the grace period, for free. Readers take a reference to an immutable object; writers build a new one and swap a single reference; the old object is freed only when its last reader drops it.",
+      "correction": "Managed runtimes help keep referenced objects alive, but do not supply publication ordering or application immutability automatically. This example uses a brief shared lock to obtain or publish a snapshot, then allows use of that immutable snapshot outside the lock.",
+      "reason": "GCnotfreeRCU/properpublishingneeded.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "    return _config   # one atomic read",
+      "correction": "    with _write_lock:\n        return _config  # immutable snapshot",
+      "reason": "Portable explicitpublicationprotocol.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "    with _write_lock:      # writers only",
+      "correction": "    with _write_lock:      # publish lock",
+      "reason": "Readersnowparticipate.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "Readers take no lock. A reader that fetched the old dict keeps a consistent snapshot; reference counting frees it when they finish.",
+      "correction": "Readers briefly take the publication lock, then retain a reference to an unchanged dictionary. Reclamation timing is runtime-dependent. Callers must not mutate the returned dictionary or mutable objects reachable from it.",
+      "reason": "Nolockportableclaimremoved andshallowimmutability.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "would put readers back into a data race.",
+      "correction": "could violate the snapshot invariant; do not equate Python compound-operation races with the precise C data-race definition.",
+      "reason": "Languageleveldistinction.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "## Choosing a tool",
+      "correction": "> [!note] Content gap\n> No hardware-specific lock, cache-transfer or RCU timing benchmark is available. The stack deliberately omits safe reclamation, and the seqlock/RCU fragments are protocol illustrations, not complete production implementations.\n\n## Choosing a tool",
+      "reason": "Explicitmissingmeasurement/implementation.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q5",
+      "field": "prompt",
+      "option": null,
+      "original": "Which changes protect a C Treiber stack against the ABA problem in `pop`? Select all that apply.",
+      "correction": "Assume every node removed from a C Treiber stack is retired and never explicitly reinserted while stale readers can retain it. Which techniques can address address-reuse ABA when implemented correctly? Assume a version tag cannot wrap while an observation is outstanding.",
+      "reason": "Hazardsalonecannotpreventexplicitreinsertion;tagwrap.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2530r3.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q5",
+      "field": "text",
+      "option": 3,
+      "original": "Hazard pointers: publish `old` in a hazard slot before reading `old->next`, and never free or reuse a node that appears in any slot",
+      "correction": "Hazard pointers with publish-then-revalidate before dereference, and retirement that forbids reclamation/reuse while protected",
+      "reason": "Publishingwithoutrecheckuseafterfree.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/p2530r3.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q6",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Each read does two atomic read-modify-writes on the reader count: one in `rdlock`, one in `unlock`.\n2. An atomic RMW needs the cache line in exclusive state on that core. With 32 cores reading, the line keeps moving between them; each transfer can cost on the order of 100 ns.\n3. The useful work is only about 100 ns, so the lock overhead is comparable to or larger than the work, and it is serialised.\n4. Read-write locks help when read sections are long (microseconds or more). For very short, hot reads, use a scheme where readers write nothing shared: RCU, a seqlock, or per-core sharding.",
+      "correction": "A plausible bottleneck is atomic modification of shared rwlock metadata on reader entry/exit. That coherence traffic can dominate very short useful work. The hypothetical 100 ns lookup is not a measured cache-transfer latency, and write frequency alone does not prove writer hold times are harmless. Profile the implementation before choosing RCU, sharding or another protocol.",
+      "reason": "Remove invented100nscoherencetiming anduniversaldiagnosis.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q6",
+      "field": "explanation",
+      "option": 1,
+      "original": "Writes are 0.1% of operations, and glibc's default actually prefers readers. Writer pressure is not the bottleneck.",
+      "correction": "A low write count does not alone rule out long writer hold times. The question illustrates reader-metadata contention as a plausible cause; measurement must distinguish it from writer delays.",
+      "reason": "Countfractionnotduration.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q8",
+      "field": "explanation",
+      "option": 0,
+      "original": "Each single assignment is indeed atomic, but the *pair* is not. Atomic individual operations do not give readers a consistent snapshot of two fields.",
+      "correction": "Even if an individual operation has runtime-level protection, a pair of updates is not a portable atomic snapshot. The invariant requires immutable publication or synchronized reads of the entire pair.",
+      "reason": "GILsingleassignmentnotuniversalcallback guarantee.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q8",
+      "field": "explanation",
+      "option": 1,
+      "original": "Readers never touch the lock, so they cannot wait on it. The writer holds it only to exclude other writers.",
+      "correction": "get_config now takes a brief publication lock. That does not deadlock this protocol; the defect is that returned dictionaries may be mutated later while readers use them outside the lock.",
+      "reason": "Matchcorrectedlesson.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q9",
+      "field": "workedExample",
+      "option": null,
+      "original": "Classify each reader against the publish at t=3:\n\n| Reader | Started | Ended | Wait? |\n|---|---|---|---|\n| R1 | t=0 | t=2 | no, done |\n| R2 | t=1 | t=5 | yes |\n| R3 | t=4 | t=6 | no, new |\n\n1. Only readers that began **before** the publish could have loaded the old pointer.\n2. Of those, only ones **still running** at the publish matter: R2.\n3. So the grace period must last at least until t=5. (Real grace periods are often longer, since RCU detects quiescence coarsely, but they must cover R2.)",
+      "correction": "At the synchronize_rcu invocation (t=3), R1 has already exited and R2 is active. R2 must finish before the wait may complete. R3 starts afterward and is not necessarily included. Thus t=5 is a lower bound, not a promised return time; batching and scheduling can delay completion.",
+      "reason": "UseformalAPIboundary and noexacttiming.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q11",
+      "field": "explanation",
+      "option": 1,
+      "original": "At a billion updates per second a 64-bit counter takes centuries to wrap. That is not a realistic cause.",
+      "correction": "A 64-bit tag wraps after 2^64 updates: about 584.5 years at 10^9 updates/s. This illustrates a very long cycle, but finite tags are not a mathematical no-wrap guarantee. The immediate dereference-after-free bug needs no wraparound.",
+      "reason": "QualifyfiniteABAprotection.",
+      "sources": [
+        "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q12",
+      "field": "prompt",
+      "option": null,
+      "original": "A 32-bit embedded kernel keeps a 64-bit timestamp. Every core reads it millions of times per second; a timer interrupt updates it 1,000 times per second. 64-bit loads are not atomic on this CPU. Which synchronisation suits it best?",
+      "correction": "A hypothetical 32-bit kernel reads a split 64-bit timestamp frequently and updates it in a short timer-interrupt section. Assume a proven kernel memory-model implementation, serialized non-preempted writers and retry-safe reads. Which listed technique is a good fit without allocating a new object per update?",
+      "reason": "AvoidISOplainracingseqlockappearsvalid; hypotheticalloadnotbenchmark.",
+      "sources": [
+        "https://docs.kernel.org/locking/seqlock.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.questions.json",
+      "questionId": "sync-lock-free-q8",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Writer: `_config[\"host\"] = \"10.0.0.2\"`.\n2. A thread switch happens. A reader calls `get_config()` and gets the **same** dict object.\n3. It reads host = new, port = old, and connects to the wrong place.\n4. The writer then sets the new port, too late.\n\nThe original version never mutates a published object:\n\n```python\nnew = dict(_config)\nnew[\"host\"] = host\nnew[\"port\"] = port\n_config = new   # publish\n```\n\nA reader holds either the old dict or the new one, never a mixture. That is the RCU rule: copy, update the copy, then publish with one atomic reference swap.",
+      "correction": "A reader first gets a reference to the current dictionary and releases the brief publication lock. The writer then changes host in that same dictionary, the reader reads host and port before the second assignment, and the writer finally changes port. The reader can therefore combine versions. Instead, build a replacement dictionary under the publication lock and leave every previously returned dictionary unchanged. The same rule extends to nested mutable values.",
+      "reason": "Match corrected getter lock and demonstrate stillvalidmixedsnapshotrace.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-locks.md",
+      "original": "Ticket and queued locks add fairness; adaptive mutexes spin briefly before sleeping.",
+      "correction": "Ticket locks order admission subject to progress and wraparound assumptions; queued-lock fairness is implementation-specific. Adaptive mutexes may spin before sleeping.",
+      "reason": "Keep summary aligned with qualified fairness.",
+      "sources": [
+        "https://docs.kernel.org/locking/locktypes.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/03-synchronisation/sync-lock-free.md",
+      "original": "Read-write locks only help when read sections are long; short reads still contend on the reader count.",
+      "correction": "Read-write-lock benefits depend on workload; short reads may contend on shared reader metadata.",
+      "reason": "Remove only/long universal threshold.",
+      "sources": [
+        "https://docs.kernel.org/RCU/whatisRCU.html"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "lowConfidence": [
+    {
+      "lesson": "sync-race-conditions",
+      "claim": "Version-specific mechanisms and complete concurrent implementation correctness",
+      "confidence": "medium",
+      "reason": "Core checked against primary sources; fragments and runtime differences explicitly qualified, not a formal implementation proof."
+    },
+    {
+      "lesson": "sync-locks",
+      "claim": "Version-specific mechanisms and complete concurrent implementation correctness",
+      "confidence": "medium",
+      "reason": "Core checked against primary sources; fragments and runtime differences explicitly qualified, not a formal implementation proof."
+    },
+    {
+      "lesson": "sync-semaphores-condvars",
+      "claim": "Version-specific mechanisms and complete concurrent implementation correctness",
+      "confidence": "medium",
+      "reason": "Core checked against primary sources; fragments and runtime differences explicitly qualified, not a formal implementation proof."
+    },
+    {
+      "lesson": "sync-classic-problems",
+      "claim": "Version-specific mechanisms and complete concurrent implementation correctness",
+      "confidence": "medium",
+      "reason": "Core checked against primary sources; fragments and runtime differences explicitly qualified, not a formal implementation proof."
+    },
+    {
+      "lesson": "sync-memory-ordering",
+      "claim": "Version-specific mechanisms and complete concurrent implementation correctness",
+      "confidence": "medium",
+      "reason": "Core checked against primary sources; fragments and runtime differences explicitly qualified, not a formal implementation proof."
+    },
+    {
+      "lesson": "sync-lock-free",
+      "claim": "Version-specific mechanisms and complete concurrent implementation correctness",
+      "confidence": "medium",
+      "reason": "Core checked against primary sources; fragments and runtime differences explicitly qualified, not a formal implementation proof."
+    }
+  ],
+  "gaps": [
+    "Full semantic reading of all six lessons and all fields of 68 questions. Selected primary-source checks target language/locking contracts, races, progress and kernel-specific mechanisms; not every sentence is externally proven.",
+    "29 host/model assertions passed, including eight compiled C programs, atomic/lock counters, release/acquire publication, CV completion, exhaustive toy SC increment outcomes for N=1..4, SC store-buffering outcomes, Python semaphore/condition/snapshot contracts, barber progress and bounded subprocess deadlock observation.",
+    "No real weak-memory litmus stress test on x86 hardware, kernel seqlock/RCU execution, complete reclamation proof or C++26 library conformance test. C/RCU/futex fragments are explicitly illustrative where prerequisites or error handling are omitted.",
+    "Unsupported exact lock/syscall/cache-transfer/RCU timings and race-output measurements are omitted with visible content-gap notes. Local runs are not a universal performance guarantee or concurrency proof.",
+    "Whole-project links, shared diagram reconciliation and mobile rendering are integrated by parent."
+  ],
+  "lessons": {
+    "sync-race-conditions": {
+      "confidence": "medium",
+      "hash": "66d1ae766350a874"
+    },
+    "sync-locks": {
+      "confidence": "medium",
+      "hash": "a466e78ce903f0b8"
+    },
+    "sync-semaphores-condvars": {
+      "confidence": "medium",
+      "hash": "db20d21080c2d5be"
+    },
+    "sync-classic-problems": {
+      "confidence": "medium",
+      "hash": "1c99a84e841aec77"
+    },
+    "sync-memory-ordering": {
+      "confidence": "medium",
+      "hash": "fb67e9ae24238fc5"
+    },
+    "sync-lock-free": {
+      "confidence": "medium",
+      "hash": "4c65955e5b587bb5"
+    }
+  }
+}

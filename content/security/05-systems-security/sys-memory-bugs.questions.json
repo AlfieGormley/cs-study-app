@@ -1,0 +1,348 @@
+[
+  {
+    "id": "sys-memory-bugs-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How much destination space does this copy require, and by how many bytes does that exceed `buf`? Executing the overflowing call has undefined behaviour.\n\n```c\nchar buf[8];\nstrcpy(buf, \"ABCDEFGHIJ\");\n```",
+    "options": [
+      {
+        "text": "10 bytes required, exceeding capacity by 2",
+        "explanation": "This forgets the NUL terminator. `strcpy` copies the string's characters *and* the terminating `\\0`."
+      },
+      {
+        "text": "8 bytes required, fitting exactly",
+        "explanation": "The required destination capacity includes the entire source and its NUL. The API has no destination-capacity argument."
+      },
+      {
+        "text": "11 bytes required, exceeding capacity by 3",
+        "explanation": "Ten single-byte letters plus NUL require 11 bytes; capacity is 8. This does not guarantee any particular overwrite when the invalid call executes."
+      },
+      {
+        "text": "It fails to compile because the string is too long",
+        "explanation": "A diagnostic may be issued or treated as a build error. The C language does not require a compiler to reject this library-precondition violation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The required capacity is 10 + 1 = 11 bytes, exceeding 8 by 3. The call is invalid; it might corrupt neighbouring state, abort or behave otherwise. Use a bounded API with valid arguments and check truncation/errors.",
+    "link": {
+      "title": "Buffer overflow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Buffer_overflow"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which loop condition makes this copy safe?\n\n```c\nchar id[8];\nfor (int i = 0; ???; i++)\n    id[i] = src[i];\n```\n\n(Assume `src` holds at least 8 bytes.)",
+    "options": [
+      {
+        "text": "`i <= 8`",
+        "explanation": "Classic off-by-one: this runs for i = 0..8, nine iterations, and writes `id[8]`, which is one past the end."
+      },
+      {
+        "text": "`i < 8`",
+        "explanation": "Correct. Valid indices for an 8-element array are 0 to 7; `i < 8` stops after writing index 7."
+      },
+      {
+        "text": "`i <= sizeof id`",
+        "explanation": "`sizeof id` is 8, so this is the same off-by-one as `i <= 8`."
+      },
+      {
+        "text": "`i < 9`",
+        "explanation": "Equivalent to `i <= 8`: nine iterations, the last writing out of bounds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For an eight-byte raw copy with at least eight readable source bytes, `i < 8` visits indices 0 through 7. Conditions allowing index 8 overrun the destination. This raw copy does not guarantee a NUL terminator; a string needs room for one and an explicit termination policy.",
+    "link": {
+      "title": "Off-by-one error — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Off-by-one_error"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is a **temporal** memory-safety bug rather than a spatial one?",
+    "options": [
+      {
+        "text": "Writing `arr[10]` into a 10-element array",
+        "explanation": "That is spatial: the address is outside the object's bounds, even though the object is alive."
+      },
+      {
+        "text": "Heartbleed's over-long `memcpy` read",
+        "explanation": "Also spatial: an out-of-bounds read past the end of a live buffer."
+      },
+      {
+        "text": "Reading `s->name` after `free(s)`",
+        "explanation": "Correct. The address was once valid, but the object's lifetime has ended. That is a use-after-free, a temporal bug."
+      },
+      {
+        "text": "A `malloc` size that wrapped round to a small number",
+        "explanation": "Wrapping can produce an undersized request; later accesses beyond the actual allocation are spatial errors. The arithmetic alone is not a temporal error."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Spatial checks concern object boundaries; temporal checks concern lifetime. In the selected option the session has been freed, so accessing its former member is invalid even though that member belonged to the original layout. A wrapped allocation can lead to spatial errors when code later exceeds the actual allocation.",
+    "link": {
+      "title": "CWE-416: Use After Free — MITRE",
+      "url": "https://cwe.mitre.org/data/definitions/416.html"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```c\nchar d[8];\nint n = snprintf(d, sizeof d,\n    \"%s\", \"hello world\");\nprintf(\"%d [%s]\\n\", n, d);\n```",
+    "options": [
+      {
+        "text": "`11 [hello world]`",
+        "explanation": "`snprintf` never writes more than `sizeof d` bytes, so the full string cannot be stored in an 8-byte buffer."
+      },
+      {
+        "text": "`7 [hello w]`",
+        "explanation": "The contents are right but the return value is not the number of characters written; it is the length the full output *would* have had."
+      },
+      {
+        "text": "`11 [hello w]`",
+        "explanation": "Correct. It stores 7 characters plus a NUL in the 8 bytes, and returns 11, the untruncated length. `n >= sizeof d` tells you it truncated."
+      },
+      {
+        "text": "`-1 [hello w]`",
+        "explanation": "A negative return means an encoding error, not truncation. C99 `snprintf` returns the would-be length on truncation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The required formatted length is 11. Eight output bytes hold seven characters, `hello w`, followed by NUL. Therefore the result is `11 [hello w]`. Check errors before converting the return value to an unsigned type:\n\n```c\nif (n < 0 || (size_t)n >= sizeof d) {\n    /* Handle error or truncation. */\n}\n```",
+    "link": {
+      "title": "snprintf — cppreference",
+      "url": "https://en.cppreference.com/w/c/io/fprintf"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reviewer replaces `strcpy(dst, src)` with `strncpy(dst, src, sizeof dst)` where `dst` is `char dst[4]` and `src` is `\"abcdef\"`. What is the remaining problem?",
+    "options": [
+      {
+        "text": "None; `strncpy` is the safe version of `strcpy`",
+        "explanation": "This is the common misconception. `strncpy` bounds the write but does not guarantee a terminator."
+      },
+      {
+        "text": "`strncpy` still writes 7 bytes",
+        "explanation": "It writes at most `n` = 4 bytes, so there is no write overflow here."
+      },
+      {
+        "text": "`dst` has no NUL terminator, so unbounded string operations on it are invalid",
+        "explanation": "The four bytes are `abcd`, with no terminator. Passing that array to an unbounded string operation violates its input requirements and can over-read."
+      },
+      {
+        "text": "`strncpy` pads with spaces, corrupting the string",
+        "explanation": "It pads with NUL bytes, and only when the source is *shorter* than `n`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Four source bytes fill `dst` as `abcd`; no NUL fits. An unbounded string operation is invalid on this result. Use a bounded formatting/copy API with error and truncation checks, or explicitly terminate within the destination while treating lost data as truncation. `strlcpy` is an option only where provided.",
+    "link": {
+      "title": "strncpy — cppreference",
+      "url": "https://en.cppreference.com/w/c/string/byte/strncpy"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume `size_t` and `count` are 32-bit unsigned types, `count = 0x10000001`, and an item needs 16 bytes. What byte count is passed to `malloc`? Allocation success is not assumed.\n\n```c\nitem *a = malloc(count * 16);\n```",
+    "options": [
+      {
+        "text": "16 bytes requested",
+        "explanation": "The mathematical product is 0x100000010. Reduced modulo 2^32 it is 0x10, or 16; attempting all intended item writes would exceed a successful allocation."
+      },
+      {
+        "text": "About 4 GB",
+        "explanation": "The true product is about 4 GB, but it cannot be represented in a 32-bit `size_t`, so it wraps."
+      },
+      {
+        "text": "0 bytes, and malloc returns NULL",
+        "explanation": "The wrapped value is 0x10, not 0. Only the bits above bit 31 are lost."
+      },
+      {
+        "text": "The multiplication traps and the program aborts",
+        "explanation": "Unsigned arithmetic in C wraps silently modulo 2^32; there is no trap unless you add a check or a sanitizer."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "0x10000001 * 16 = 0x100000010; modulo 2^32 gives 16. Check `count > SIZE_MAX / sizeof(item)` before multiplication, apply an application limit, and handle allocation failure. On implementations such as glibc, `calloc(count, sizeof(item))` rejects multiplication overflow, but its return must still be checked.",
+    "link": {
+      "title": "Integer overflow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Integer_overflow"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For valid NUL-terminated `msg`, which changes fix the illustrated format-string flaw in `printf(msg);`, or reject it at build time with GCC/Clang? Select all that apply.",
+    "options": [
+      {
+        "text": "Change it to `printf(\"%s\", msg);`",
+        "explanation": "Correct. The format string is now a constant, and the user's text is only ever data printed by `%s`."
+      },
+      {
+        "text": "Use `fputs(msg, stdout);`",
+        "explanation": "Correct. `fputs` does not interpret format directives at all, so `%n` and `%x` are just characters."
+      },
+      {
+        "text": "Compile with `-Wformat -Wformat-security -Werror`",
+        "explanation": "Correct as prevention: the compiler flags non-literal format strings with no arguments and the build fails until it is fixed."
+      },
+      {
+        "text": "Strip newline characters from `msg`",
+        "explanation": "Newlines are harmless here. The dangerous characters are `%` directives, and filtering is a fragile substitute for the real fix."
+      },
+      {
+        "text": "Make `msg` a larger buffer",
+        "explanation": "Buffer size is irrelevant: the bug is that user data is interpreted as instructions to `printf`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Untrusted text controls the conversion directives. Missing or wrongly typed arguments cause undefined behaviour and can expose data or attempt writes; their locations depend on the calling convention. A fixed `%s` format or `fputs` treats the valid string as data. The listed warning/error flags reject this specific no-extra-arguments pattern, not every possible misuse.",
+    "link": {
+      "title": "Uncontrolled format string — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Uncontrolled_format_string"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A malformed Heartbleed request supplied fewer payload bytes than its length field claimed. Which behaviour made the vulnerable OpenSSL implementation an information-disclosure vulnerability?",
+    "options": [
+      {
+        "text": "Crashed immediately on the oversized length",
+        "explanation": "A crash was possible, but was not a reliable protection. The vulnerability could disclose process memory rather than rejecting every malformed request."
+      },
+      {
+        "text": "It could copy beyond the supplied payload into a response, disclosing up to about 64 KB",
+        "explanation": "Correct. `memcpy` used the attacker's length without checking it against the record's real size, so it over-read adjacent heap memory, which could hold keys and cookies."
+      },
+      {
+        "text": "Wrote 64 KB of attacker data over its heap",
+        "explanation": "Heartbleed was an out-of-bounds *read* (an information leak), not a write."
+      },
+      {
+        "text": "Rejected the message because TLS records are authenticated",
+        "explanation": "The heartbeat was processed inside the TLS layer; record authentication does not validate this inner length field."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The request contains a type, two-byte payload length, payload and at least 16 padding bytes. Vulnerable code trusted the claimed length in a copy. A robust parser first checks that the header is present, parses the length, and then checks payload plus minimum padding against the remaining record. The review does not assume every malformed maximum-length request yields an identical complete reply.",
+    "link": {
+      "title": "The Heartbleed Bug",
+      "url": "https://heartbleed.com/"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server frees a `session` object on logout but a cached pointer to it survives. Shortly after, a request allocates a buffer of the same size and fills it with request data. Why is the later `if (sess->is_admin)` check dangerous rather than merely buggy?",
+    "options": [
+      {
+        "text": "Because freed memory is zeroed, so `is_admin` reads as false and locks users out",
+        "explanation": "Freeing storage does not promise that a later invalid access reads zero. Denying legitimate access can itself be a security/availability problem."
+      },
+      {
+        "text": "The allocator may reuse that storage for request data, allowing a stale access to influence authorization",
+        "explanation": "If reuse occurs, the stale access can observe storage occupied by request-controlled bytes. The access is undefined behaviour, so this is a threat scenario rather than a promised C execution trace."
+      },
+      {
+        "text": "Because `free` returns the page to the OS, so access always segfaults",
+        "explanation": "The allocator may retain the mapping or release it; neither behaviour makes stale access valid or guarantees a segmentation fault."
+      },
+      {
+        "text": "Because the compiler removes the check after `free`",
+        "explanation": "The compiler has no obligation to preserve a meaningful check after undefined behaviour. Optimisation is another reason the result cannot be predicted; allocation reuse explains the illustrated security risk."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A possible sequence is allocate X, free X, reuse X for request bytes, then access X through a stale alias. Prevent it through ownership and lifetime discipline. Nulling one pointer does not invalidate all aliases. ASan can detect accesses while freed storage remains poisoned, but may miss accesses after that address has been reused for a live allocation.",
+    "link": {
+      "title": "CWE-416: Use After Free — MITRE",
+      "url": "https://cwe.mitre.org/data/definitions/416.html"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You maintain a C image decoder that parses untrusted files. Which practices give the best chance of finding memory-safety bugs **before** release? Select all that apply.",
+    "options": [
+      {
+        "text": "Coverage-guided fuzzing (libFuzzer or AFL++) of the decode function",
+        "explanation": "Coverage-guided fuzzing explores varied inputs and paths within the available budget; it has no universal minimum input count or productivity ranking."
+      },
+      {
+        "text": "Running the fuzzer and tests with AddressSanitizer enabled",
+        "explanation": "ASan detects many invalid accesses on executed instrumented paths. Instrumentation gaps, same-object overwrites and reused live storage can escape detection."
+      },
+      {
+        "text": "Testing only with a corpus of valid sample images",
+        "explanation": "Valid-image tests are useful, and valid inputs can reveal bugs too. Using only them leaves important malformed-input and error-handling paths untested."
+      },
+      {
+        "text": "Shipping with `-O3` so the code runs faster",
+        "explanation": "Higher optimisation is not a replacement for tests or detectors; it can change how undefined behaviour manifests."
+      },
+      {
+        "text": "Joining OSS-Fuzz or running fuzzing continuously in CI",
+        "explanation": "Continuous fuzzing can expose newly introduced failures within its input and instrumentation coverage. OSS-Fuzz has project eligibility requirements."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Combine valid regression cases, malformed-input fuzzing, sanitizer-enabled runs and continuous retesting. Results depend on exercised paths and detector coverage. Optimisation alone is not a bug-finding strategy, and a clean run does not prove safety.",
+    "link": {
+      "title": "OSS-Fuzz — Google",
+      "url": "https://google.github.io/oss-fuzz/"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A driver copies this raw struct across a trust boundary. Assume an ABI where `value` is at offset 8 and the struct occupies 16 bytes. What risk remains after assigning both fields?\n\n```c\nstruct info {\n    uint8_t  flag;\n    uint64_t value;\n};\nstruct info r;\nr.flag = 1;\nr.value = v;\ncopy_to_user(u, &r, sizeof r);\n```",
+    "options": [
+      {
+        "text": "None; both fields are initialised",
+        "explanation": "The members are assigned, but that does not establish safe portable contents for the padding bytes."
+      },
+      {
+        "text": "`sizeof r` is 9, so the copy is too short",
+        "explanation": "With 8-byte alignment for `uint64_t`, the struct is 16 bytes, not 9."
+      },
+      {
+        "text": "Seven padding bytes may contain unspecified data and disclose information",
+        "explanation": "Under the stated ABI offsets 1 through 7 are padding. Assigning members does not establish portable padding contents, so serializing the raw object can disclose unintended bytes."
+      },
+      {
+        "text": "`uint8_t` cannot be copied to user space",
+        "explanation": "Any bytes can be copied; the problem is which bytes are in the struct."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Given the stated layout, flag uses byte 0, padding occupies bytes 1–7, and value uses bytes 8–15. Do not transmit the padding. Encode the two named fields into an explicit wire format with defined endianness. `{0}` or an earlier `memset` is not a portable guarantee that padding stays zero after later member stores.",
+    "link": {
+      "title": "CWE-200: Exposure of Sensitive Information — MITRE",
+      "url": "https://cwe.mitre.org/data/definitions/200.html"
+    }
+  }
+]

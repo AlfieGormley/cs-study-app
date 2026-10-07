@@ -1,0 +1,378 @@
+[
+  {
+    "id": "msg-ordering-backpressure-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An SQS FIFO queue carries order events with `MessageGroupId = orderId`. There are 10,000 active orders and 50 consumers. How much parallelism can the consumers achieve?",
+    "options": [
+      {
+        "text": "Up to 50, because there are many more active groups than consumers",
+        "explanation": "Correct. SQS holds back further messages only for a group with a message in flight. With 10,000 groups, every one of the 50 consumers can always find a group to work on (subject to FIFO throughput limits)."
+      },
+      {
+        "text": "1, because FIFO queues process one message at a time",
+        "explanation": "Wrong. FIFO ordering applies within each message group, not across the whole queue. Different groups can be processed concurrently."
+      },
+      {
+        "text": "Up to 10,000, one per order",
+        "explanation": "Wrong. 10,000 groups could support 10,000 concurrent consumers, but you have only 50. Parallelism is the minimum of available consumers and active groups."
+      },
+      {
+        "text": "It depends on the number of partitions configured on the queue",
+        "explanation": "Wrong. SQS FIFO queues have no user-configured partitions like Kafka. Parallelism is driven by message groups."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FIFO rule: within a group, one message in flight at a time, in order.\n2. Across groups: independent.\n3. Effective parallelism = min(consumers, active groups) = min(50, 10,000) = **50**.\n4. Contrast: if `MessageGroupId` were a constant like `\"all\"`, parallelism would be **1**, a very common mistake.\n5. Throughput ceiling still applies: 300 API calls/s per action without batching (3,000 messages/s with batches of 10), or higher in high-throughput mode.",
+    "link": {
+      "title": "Amazon SQS FIFO queues",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka consumer group's lag dashboard shows 11 of 12 partitions near zero, and partition 7 with lag growing steadily for an hour. Consumer CPU is low. What is the **most likely** cause?",
+    "options": [
+      {
+        "text": "The group needs more consumers",
+        "explanation": "Wrong. If capacity were short, lag would grow on all partitions. Adding consumers cannot help a single partition, since only one consumer per group can own it."
+      },
+      {
+        "text": "Retention on the topic is too short",
+        "explanation": "Wrong. Short retention deletes old data; it does not slow consumption. If anything, it would cause lag to look smaller as unread records were deleted."
+      },
+      {
+        "text": "The broker hosting partition 7 has run out of disk",
+        "explanation": "Wrong. Full disk would stop producers writing to partition 7, which would make its lag shrink or stay flat, not grow."
+      },
+      {
+        "text": "A poison message or a hot key on partition 7",
+        "explanation": "Correct. A single lagging partition points at something specific to it: a record that fails and is retried forever (low CPU, stuck offset) or a key with disproportionate traffic. Check whether the committed offset is moving at all."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use the diagnosis checklist:\n\n1. **All partitions or one?** One → partition-specific cause.\n2. **Is the committed offset moving?**\n   - Not moving + errors in logs → **poison message** stuck in a retry loop. CPU is low because the consumer spends its time in backoff sleeps.\n   - Moving slowly with high CPU on that one consumer → **hot key**.\n3. Low CPU here points to the poison message.\n4. Fix: route the failing record to a retry/dead-letter topic (or park its key) so the partition can proceed; add an alert on 'offset not advancing for N minutes'.",
+    "link": {
+      "title": "Error handling patterns in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A topic receives 2,000 records per second. A consumer group's total lag is 180,000 records and has been flat for 20 minutes. Roughly how far behind real time is the group, and is it keeping up?",
+    "options": [
+      {
+        "text": "About 90 seconds behind and falling further behind",
+        "explanation": "Wrong. The 90 seconds is right, but flat lag means the gap is not growing. Falling further behind would show as rising lag."
+      },
+      {
+        "text": "About 90 seconds behind; it is keeping up, since lag is flat",
+        "explanation": "Correct. Time lag ≈ 180,000 ÷ 2,000 = 90 seconds. Flat lag means the consumption rate equals the production rate: it is keeping pace, but carrying a steady 90-second delay."
+      },
+      {
+        "text": "About 3 minutes behind; it is keeping up",
+        "explanation": "Wrong. This seems to divide by 1,000 instead of 2,000. The incoming rate is 2,000 per second, so 180,000 records is 90 seconds of traffic."
+      },
+      {
+        "text": "It cannot be judged without knowing the number of partitions",
+        "explanation": "Wrong. Total lag and total rate are enough for an average estimate. Partition count matters for diagnosing skew, not for converting lag to time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Convert to time** (Little's Law): `180,000 ÷ 2,000/s = 90 s`.\n2. **Read the trend**: flat → consume rate = produce rate ≈ 2,000/s.\n3. **Interpretation**: steady state with a 90-second delay. The group is not falling behind, but it is not catching up either.\n4. **If 90 s is too slow** for the product, you need consumption above 2,000/s for a while. E.g. at 2,500/s the backlog drains at 500/s → 180,000 ÷ 500 = 360 s to catch up.",
+    "link": {
+      "title": "Kafka consumer (Confluent)",
+      "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka consumer for **account state changes** (`Opened`, `Frozen`, `Closed`) uses retry topics: on failure it publishes the record to `retry-5m` and commits. A transient error hits `Frozen` for account 9; seconds later `Closed` for account 9 succeeds. Five minutes later `Frozen` is retried and succeeds. What is the end state, and what should the design have done?",
+    "options": [
+      {
+        "text": "Frozen, which is wrong; the design should park account 9 so later events for it are diverted until the failed one succeeds",
+        "explanation": "Correct. The retry topic let Closed overtake Frozen, leaving the account Frozen even though it was closed. For state transitions, block the key (send its subsequent events behind the failed one) or use version checks so stale events are ignored."
+      },
+      {
+        "text": "Closed; retry topics preserve ordering because the retry consumer checks timestamps",
+        "explanation": "Wrong. The retry consumer only waits until the record is old enough to retry; it does not reorder against the main topic. The older event is applied last."
+      },
+      {
+        "text": "Closed, because Kafka guarantees per-key ordering in every topic",
+        "explanation": "Wrong. Kafka orders records within a partition. Once a record is republished to a different topic, there is no ordering relationship with records left on the original topic."
+      },
+      {
+        "text": "Frozen, which is correct, because the latest processed event should always win",
+        "explanation": "Wrong. 'Last processed wins' is precisely the bug. The business order was Frozen then Closed, so the correct final state is Closed."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nmain  P2: Frozen(9) ✗ → retry-5m\nmain  P2: Closed(9) ✓ state=Closed\nretry  +5m: Frozen(9) ✓ state=Frozen\n```\n\n1. Retry topics trade **per-key order** for **partition throughput**.\n2. For independent events (send email) that trade is fine; for a state machine it is not.\n3. Option A, **park the key**: on failure, record `blocked[9]`. Any later event for account 9 is also sent to the retry path, behind Frozen. When Frozen succeeds, release the key.\n4. Option B, **version checks**: each event carries a per-account sequence number; apply only if `seq > current_seq`. The late Frozen (seq 2) is ignored after Closed (seq 3).\n5. Option B is simpler and also protects against other sources of reordering.",
+    "link": {
+      "title": "Error handling patterns in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A consumer polls Kafka and submits each record to a thread pool backed by an **unbounded** queue. During a slow-database incident, consumers run out of memory, rejoin, and immediately run out again. What is the best fix?",
+    "options": [
+      {
+        "text": "Give the consumers more heap",
+        "explanation": "Wrong. More heap only delays the crash. With an unbounded queue, polling outpaces processing indefinitely during the incident, so any finite memory eventually fills."
+      },
+      {
+        "text": "Increase max.poll.records so each poll brings more work",
+        "explanation": "Wrong. Fetching more per poll worsens the problem: even more records pile into memory faster than the database can handle."
+      },
+      {
+        "text": "Bound the work queue and pause() partitions when it is full, resuming when it drains, while still calling poll()",
+        "explanation": "Correct. This restores backpressure: the consumer stops fetching when it cannot process, leaving the backlog safely in Kafka. Calling poll() while paused keeps the consumer in the group without fetching records."
+      },
+      {
+        "text": "Switch to auto-commit so offsets keep advancing",
+        "explanation": "Wrong. Auto-commit has nothing to do with memory use, and with asynchronous processing it would commit records not yet processed, risking loss after the crash."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Root cause**: Kafka's pull model gives you backpressure for free, but an unbounded in-memory queue throws it away. The consumer keeps pulling at network speed while the database processes at incident speed.\n2. **Memory maths**: 20,000 records/s fetched, 2,000/s processed, 2 KB each → 36 MB/s growth → a 4 GB heap is full in under 2 minutes.\n3. **Fix**:\n   - `ArrayBlockingQueue(capacity = 1000)`.\n   - When it is above 80%: `consumer.pause(assignment())`.\n   - When it is below 20%: `consumer.resume(...)`.\n   - Keep calling `poll()` (which returns nothing for paused partitions) so heartbeats and `max.poll.interval.ms` are satisfied.\n4. Commit only offsets whose records have completed.\n5. Now the backlog sits in Kafka as lag, visible and durable, instead of in RAM.",
+    "link": {
+      "title": "Kafka consumer (Confluent)",
+      "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine **backpressure** mechanisms, where slowness downstream causes upstream to slow down or stop? Select all that apply.",
+    "options": [
+      {
+        "text": "A Kafka producer's send() blocking when buffer.memory is full",
+        "explanation": "Correct. When the broker cannot accept records fast enough, the producer's buffer fills and send() blocks the calling thread for up to max.block.ms, pushing the slowdown into the application."
+      },
+      {
+        "text": "A Reactive Streams subscriber calling request(10)",
+        "explanation": "Correct. Demand is signalled upstream explicitly; the publisher may emit at most 10 items until more are requested."
+      },
+      {
+        "text": "RabbitMQ consumer prefetch",
+        "explanation": "Correct. Prefetch caps unacknowledged messages per consumer, so a slow consumer receives no more until it acks some."
+      },
+      {
+        "text": "Autoscaling consumers based on lag",
+        "explanation": "Wrong. Autoscaling increases downstream capacity; it does not tell upstream to slow down. It is a complementary response to load, not backpressure, and it stops helping once consumers reach the partition count."
+      },
+      {
+        "text": "Retrying failed messages immediately in a tight loop",
+        "explanation": "Wrong. This is the opposite of backpressure: it adds load to a struggling dependency. Retries need backoff with jitter."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask of each mechanism: **when the downstream is slow, does the upstream end up sending less?**\n\n1. Producer buffer full → `send()` blocks → application produces less. ✓\n2. `request(n)` → publisher limited to n. ✓\n3. Prefetch full → broker stops pushing to that consumer. ✓\n4. Autoscaling → downstream gets faster; upstream unchanged. ✗ (useful, but different)\n5. Tight retries → upstream sends **more**. ✗",
+    "link": {
+      "title": "Reactive Streams specification",
+      "url": "https://www.reactive-streams.org/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A chat app uses `userId` as the Kafka key for message events. One celebrity user generates 35% of all traffic. Their partition's consumer is pinned at 100% CPU and lagging, while others idle. Ordering is only needed **within a conversation**. What is the best change?",
+    "options": [
+      {
+        "text": "Change the key to conversationId",
+        "explanation": "Correct. Ordering is required per conversation, not per user. The celebrity takes part in thousands of conversations, so keying by conversation spreads their load across all partitions while keeping each conversation in order."
+      },
+      {
+        "text": "Add more partitions so the celebrity's traffic is spread out",
+        "explanation": "Wrong. All records with one key hash to one partition however many partitions exist. More partitions spread other users but leave the celebrity's 35% on a single partition."
+      },
+      {
+        "text": "Remove the key so records are spread round-robin",
+        "explanation": "Wrong. That fixes the skew but loses ordering within conversations, which is a stated requirement."
+      },
+      {
+        "text": "Give that one consumer a bigger machine",
+        "explanation": "Wrong. Vertical scaling buys a little time, but 35% of all traffic will keep growing on one partition and one thread. The key choice is the root cause."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. **Find the real ordering requirement**: messages in one conversation must be in order. Messages across conversations need not be.\n2. **Current key** (`userId`) is coarser than needed, so one heavy user maps to one partition.\n3. **Finer key** (`conversationId`): the celebrity's 35% is split across, say, 5,000 conversations, which hash across all 48 partitions → roughly 0.7% each from that user.\n4. **Check the new risk**: a single huge group conversation could become a hot key itself. If so, salt that key (`conv-1#0..#7`) and accept ordering per sub-stream, or route it to a dedicated topic.\n5. Remember that changing the key mid-stream reorders in-flight conversations briefly; switch at a quiet time or tolerate it.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A pipeline counts likes per post, keyed by `postId`, on a 48-partition topic. A viral post sends 40% of all events to one partition, whose consumer is saturated. The count is a sum, so the order of likes does not matter. What is the best change?",
+    "options": [
+      {
+        "text": "Salt the hot key: send its events to `postId#0` … `postId#15` at random, count each sub-key, and sum the partial counts downstream",
+        "explanation": "Correct. Because the aggregate is a sum, ordering across sub-keys does not matter. Sixteen sub-keys spread the viral post over up to 16 partitions, and a small second stage adds the partials."
+      },
+      {
+        "text": "Add more partitions",
+        "explanation": "Wrong. Every event with the same key hashes to the same partition, however many partitions exist. More partitions spread other posts but leave the viral one where it is."
+      },
+      {
+        "text": "Move the viral post to an SQS FIFO queue with `MessageGroupId = postId`",
+        "explanation": "Wrong. One message group is processed strictly in sequence, so this reproduces the same single-lane bottleneck in a different system."
+      },
+      {
+        "text": "Give the hot partition's consumer a bigger machine",
+        "explanation": "Wrong. It buys a little time, but one consumer thread is still handling 40% of all traffic, and the next viral post may be bigger."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. **What ordering is needed?** None: addition is commutative.\n2. So the single-key constraint is self-imposed. Salt it:\n\n```\nsalt = random.randrange(16)\nkey = f\"{post_id}#{salt}\"\n```\n\n3. Stage 1 counts per salted key (spread over up to 16 partitions).\n4. Stage 2 re-keys by `postId` and sums 16 partial counts. That stage handles one small update per sub-key per window, not every like.\n5. Load on the hottest partition drops from 40% to about 40% ÷ 16 = 2.5%.\n6. Salt only keys known or detected to be hot, so normal posts are unaffected.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Consumer logs show partitions being revoked every few minutes, and lag is growing on **all** partitions. Each `poll()` returns up to 500 records, and each record takes about 700 ms because of a slow API, so a batch takes about 6 minutes. `max.poll.interval.ms` is at its default. Which changes address the root cause? Select all that apply.",
+    "options": [
+      {
+        "text": "Reduce `max.poll.records`, for example to 100",
+        "explanation": "Correct. 100 × 0.7 s = 70 s per batch, comfortably inside the 5-minute default, so the consumer polls in time and stays in the group."
+      },
+      {
+        "text": "Increase `max.poll.records` to 2,000 to make better use of each poll",
+        "explanation": "Wrong. A batch would take about 23 minutes, making the problem four times worse."
+      },
+      {
+        "text": "Lower `session.timeout.ms` so failures are detected faster",
+        "explanation": "Wrong. Heartbeats run on a background thread, so the session timeout is not what is being breached here. Lowering it only adds spurious rebalances."
+      },
+      {
+        "text": "Raise `max.poll.interval.ms` above the worst-case batch time",
+        "explanation": "Correct. If long batches are genuinely needed, the interval must exceed them. The cost is slower detection of a consumer that is truly stuck."
+      },
+      {
+        "text": "Process records in a bounded worker pool, using `pause()` and `resume()` while continuing to call `poll()`",
+        "explanation": "Correct. The poll loop stays fast, so the consumer is never judged stuck, while the bounded pool and pause/resume keep backpressure intact."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "1. Default `max.poll.interval.ms` = **5 minutes** (300 s).\n2. Batch time = 500 × 0.7 s = **350 s** > 300 s.\n3. The client leaves the group → rebalance → partitions move → the new owner reprocesses from the last commit and hits the same limit. Lag grows everywhere.\n4. Fixes act on one side of the inequality `batch time < max.poll.interval.ms`:\n   - smaller batches (`max.poll.records = 100` → 70 s)\n   - a larger interval\n   - decouple processing from polling (pool + pause/resume)\n5. `session.timeout.ms` is the heartbeat liveness check, a separate mechanism.",
+    "link": {
+      "title": "Kafka consumer (Confluent docs)",
+      "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q10",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A consumer retries **every** failure 5 times with exponential backoff (about 30 minutes in total) before dead-lettering. Most DLQ entries turn out to be `JSONDecodeError`s, and during long dependency outages some HTTP 503 errors also end up in the DLQ. What is the best change?",
+    "options": [
+      {
+        "text": "Retry everything 20 times instead of 5",
+        "explanation": "Wrong. Parse errors will never succeed, so more retries just waste more time and capacity, and in an ordered partition they block everything behind them for longer."
+      },
+      {
+        "text": "Classify errors: send permanent ones such as parse errors straight to the DLQ, and retry transient ones such as 503s with backoff and jitter, pausing consumption if the dependency stays down",
+        "explanation": "Correct. Permanent and transient failures need opposite handling. Parse errors should fail fast; 503s deserve patience, and a circuit breaker stops a long outage from dead-lettering healthy messages."
+      },
+      {
+        "text": "Send every failure straight to the DLQ on the first attempt",
+        "explanation": "Wrong. Transient errors such as a brief 503 would be dead-lettered unnecessarily, creating manual redrive work for messages that would have succeeded seconds later."
+      },
+      {
+        "text": "Catch the exceptions and acknowledge the messages so the queue keeps moving",
+        "explanation": "Wrong. Silently acknowledging failures loses data with no trace. The DLQ exists so that failures are kept and investigated."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask of each error: **could retrying ever succeed?**\n\n| Error | Kind | Handling |\n|---|---|---|\n| JSONDecodeError | Permanent | DLQ now |\n| HTTP 503 | Transient | Back off |\n| Timeout | Transient | Back off |\n\n2. Permanent: retrying is pure waste. Dead-letter with the error attached.\n3. Transient: exponential backoff with jitter. If the dependency is down for minutes, a circuit breaker pauses consumption so messages wait in the broker instead of exhausting their retries.\n4. Classify explicitly, by exception type or status code, rather than treating every failure the same.",
+    "link": {
+      "title": "Error handling patterns in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A database outage lasts 4 minutes. Each of 200 consumer instances retries failed messages after a **fixed** 30-second delay. When the database comes back, it is immediately overwhelmed and fails again, and the cycle repeats several times. What is the best fix?",
+    "options": [
+      {
+        "text": "Shorten the fixed delay to 5 seconds so messages are processed sooner after recovery",
+        "explanation": "Wrong. Shorter fixed delays mean more retries during the outage and an even sharper synchronised spike at recovery."
+      },
+      {
+        "text": "Add more consumer instances to clear the backlog faster",
+        "explanation": "Wrong. The bottleneck is the recovering database. More consumers mean more simultaneous retries hitting it."
+      },
+      {
+        "text": "Use exponential backoff with jitter, and a circuit breaker that pauses consumption while the database is unhealthy and resumes gradually",
+        "explanation": "Correct. Jitter spreads retries out so they do not arrive in lockstep, backoff reduces pressure the longer the outage lasts, and the breaker stops consumers hammering a known-bad dependency. The backlog waits safely in the broker."
+      },
+      {
+        "text": "Increase the database connection pool size",
+        "explanation": "Wrong. A larger pool lets even more concurrent queries reach an already struggling database. It worsens the stampede rather than preventing it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Fixed delays synchronise clients: everything that failed at time *t* retries at *t* + 30 s, together.\n2. 200 instances × their in-flight batches all retrying at once is a **retry storm**, landing just as the database is weakest.\n3. Fix in layers:\n   - **Exponential backoff**: 1 s, 2 s, 4 s … capped.\n   - **Jitter**: randomise each delay (for example \"full jitter\": uniform between 0 and the backoff).\n   - **Circuit breaker**: after N consecutive failures, stop consuming for a period; probe with a few requests; resume gradually.\n4. For a log or queue, pausing is cheap: the data waits in the broker as lag.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Kinesis data stream must ingest **4,000 records per second** averaging **500 bytes** each. Each shard accepts up to 1 MB/s or 1,000 records per second of writes. What is the minimum number of shards?",
+    "options": [
+      {
+        "text": "2, because 4,000 × 500 bytes = 2 MB/s",
+        "explanation": "Wrong. That satisfies the byte limit but ignores the record limit. Two shards accept only 2,000 records per second."
+      },
+      {
+        "text": "1, because the data volume is small",
+        "explanation": "Wrong. One shard accepts 1,000 records per second, a quarter of what is needed, and 1 MB/s, half the bytes."
+      },
+      {
+        "text": "8, to allow for the 2 MB/s read limit",
+        "explanation": "Wrong. Read capacity per shard is 2 MB/s, which is higher than the write limit, so reads do not force extra shards here."
+      },
+      {
+        "text": "4, because the record-count limit binds before the byte limit",
+        "explanation": "Correct. By bytes you need 2 MB/s ÷ 1 MB/s = 2 shards; by records 4,000 ÷ 1,000 = 4. The larger figure wins."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Size against **both** write limits and take the larger:\n\n1. Bytes: `4,000 × 500 B = 2,000,000 B/s ≈ 2 MB/s` → `2 ÷ 1 = 2` shards.\n2. Records: `4,000 ÷ 1,000 = 4` shards.\n3. Minimum = max(2, 4) = **4**.\n\nSmall records hit the record limit first; large records hit the byte limit. In practice add headroom and check for hot partition keys, since the limits apply per shard, not to the stream on average.",
+    "link": {
+      "title": "Amazon Kinesis Data Streams quotas and limits (AWS docs)",
+      "url": "https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html"
+    }
+  }
+]

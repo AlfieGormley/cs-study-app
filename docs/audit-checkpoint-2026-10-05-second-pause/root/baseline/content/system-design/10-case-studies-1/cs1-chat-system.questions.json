@@ -1,0 +1,378 @@
+[
+  {
+    "id": "cs1-chat-system-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do chat apps use persistent **WebSocket** connections rather than having clients poll an HTTP endpoint every few seconds?",
+    "options": [
+      {
+        "text": "The server can push messages the instant they arrive over an open full-duplex connection, avoiding both polling delay and a flood of empty requests.",
+        "explanation": "Correct. With polling you choose between latency (long intervals) and load (short intervals); with 250M clients polling every 2 s you'd handle 125M mostly-empty requests per second. A WebSocket gives immediate push with tiny per-message overhead."
+      },
+      {
+        "text": "WebSockets are encrypted and HTTP isn't.",
+        "explanation": "Wrong. Both can be encrypted (WSS and HTTPS both use TLS). Encryption isn't the deciding factor."
+      },
+      {
+        "text": "WebSockets make the servers stateless, so they're easier to scale.",
+        "explanation": "Wrong. It's the opposite: each WebSocket pins a client to a specific gateway, making gateways stateful. That's a cost you accept for real-time delivery."
+      },
+      {
+        "text": "HTTP can't carry JSON payloads.",
+        "explanation": "Wrong. HTTP carries JSON all the time. The problem with polling is timing and wasted requests, not payload format."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Quantify polling for 250M connected clients:\n\n```\nPoll every 2 s:  250M / 2 = 125M req/s\nReal messages:   ~600k/s at peak\n```\n\nMore than 99% of polls would return nothing, and messages would still wait up to 2 s. With WebSockets, the connection idles cheaply (a heartbeat every ~30 s is ~8M tiny frames/s) and messages are pushed immediately.",
+    "link": {
+      "title": "MDN: the WebSocket API",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You expect **300 million concurrent connections** at peak, and you'll run each gateway at **200,000 connections** to leave headroom for failover. How many gateways do you need, and what happens if one crashes?",
+    "options": [
+      {
+        "text": "150 gateways; its users lose their messages.",
+        "explanation": "Wrong on both counts. 300M / 200k = 1,500, not 150. And messages aren't lost when a gateway dies: undelivered messages stay in device inboxes until acknowledged."
+      },
+      {
+        "text": "15,000 gateways; nothing happens because load balancers keep the sockets open.",
+        "explanation": "Wrong. 15,000 is 10x too many. And a load balancer can't keep a socket alive once the server holding it has died; the TCP connection is gone and the client must reconnect."
+      },
+      {
+        "text": "1,500 gateways; its 200k clients reconnect (with jittered backoff) to other gateways, and any unacked messages are redelivered from their inboxes.",
+        "explanation": "Correct. 300M / 200k = 1,500. Gateways hold sockets, not the only copy of messages, so a crash causes a reconnect wave, not data loss. Jitter stops the 200k reconnects from all landing in the same second."
+      },
+      {
+        "text": "1,500 gateways; the other gateways take over the dead gateway's sockets transparently.",
+        "explanation": "Wrong. TCP connections can't be migrated to another machine after a crash. Clients have to detect the failure (missed heartbeat or a reset) and reconnect."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nGateways = 300,000,000 / 200,000 = 1,500\n```\n\nIf one fails, 200,000 clients reconnect. Without jitter they might all retry within the same second, plus re-authenticate and re-register sessions, a spike other gateways must absorb. With exponential backoff and random jitter (say, uniformly over 0–10 s), it's ~20,000 reconnects/s, easily spread across 1,499 gateways.\n\nDelivery correctness comes from the inbox + ack protocol, not from the gateway: the server keeps each message until the recipient's device acks it.",
+    "link": {
+      "title": "WhatsApp blog: 1 million is so 2011",
+      "url": "https://blog.whatsapp.com/1-million-is-so-2011"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "When should the server send the sender their **first tick** (\"sent\")?",
+    "options": [
+      {
+        "text": "As soon as the gateway receives the frame, before anything else.",
+        "explanation": "Wrong. If the gateway or chat service crashes before persisting, the message is lost, yet the sender believes it was sent and won't retry."
+      },
+      {
+        "text": "After the recipient reads it.",
+        "explanation": "Wrong. That's the read receipt (blue ticks). Tying 'sent' to reading confuses three distinct states."
+      },
+      {
+        "text": "After the recipient's device acknowledges it.",
+        "explanation": "Wrong. That's the *second* tick (delivered). If the recipient is offline for a day, the sender would see no confirmation at all and might resend repeatedly."
+      },
+      {
+        "text": "After the message has been durably persisted (e.g. a quorum write), so the client can safely drop it from its outbox.",
+        "explanation": "Correct. The ack is a promise: 'we have it and won't lose it'. Only a durable write justifies it. Until then the client keeps the message in its outbox and retries with the same clientMsgId."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Map each tick to a durable fact:\n\n| Tick | Fact | Who knows |\n|---|---|---|\n| Sent | Server has persisted it | Chat service |\n| Delivered | Device has it | Recipient app |\n| Read | User saw it | Recipient app |\n\nFailure analysis for acking too early:\n\n```\n1. Gateway receives frame\n2. Server acks \"sent\"\n   (client deletes outbox copy)\n3. Crash before write\n   (message gone forever)\n```\n\nPersist-then-ack adds a few milliseconds of write latency, which is invisible to users.",
+    "link": {
+      "title": "Slack engineering: real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a group chat, Alice's phone clock is 3 seconds fast. She and Bob send messages about one second apart. Some members see the messages in different orders. What should determine display order?",
+    "options": [
+      {
+        "text": "The sender's device timestamp, adjusted by NTP.",
+        "explanation": "Wrong. Phones drift, users change clocks, and NTP corrections aren't guaranteed on mobile. Even perfectly synchronised clocks would tie or cross for near-simultaneous messages from different devices."
+      },
+      {
+        "text": "A per-conversation sequence number assigned by the server that owns the conversation.",
+        "explanation": "Correct. A single owner assigns monotonically increasing sequence numbers, so every participant sorts by the same numbers and sees the same order. Gaps (41, then 43) also reveal missing messages."
+      },
+      {
+        "text": "The order in which each recipient's device receives the messages.",
+        "explanation": "Wrong. Network paths differ per recipient, so arrival order differs; that's exactly why members see different orders."
+      },
+      {
+        "text": "Alphabetical order of sender names for messages within the same second.",
+        "explanation": "Wrong. It's deterministic but meaningless: replies could appear before the messages they answer whenever the responder's name sorts first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "What you need: **the same order for everyone in a conversation**. You don't need global order across conversations.\n\n1. Partition the chat service by `conv_id`, so one owner handles each conversation.\n2. The owner keeps `next_seq` per conversation and assigns `seq = next_seq++` on each accepted message.\n3. Clients display by `seq`.\n\n```\nAlice \"see you at 6\" -> seq 118\nBob   \"ok!\"          -> seq 119\n```\n\nEveryone sees 118 before 119. A busy group sends a few messages a second, so one owner per conversation is nowhere near a bottleneck. On owner failover, the new owner must read the last seq from storage before assigning more.",
+    "link": {
+      "title": "Lamport timestamp (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You support both 200-member family groups and **500,000-member** community channels. How should message fan-out differ between them?",
+    "options": [
+      {
+        "text": "Fan out on write for both: write a copy into every member's inbox.",
+        "explanation": "Wrong. For the big channel, every message becomes 500,000 inbox writes, most for members who aren't looking. A channel posting 10 messages a minute would generate ~83,000 writes/s on its own."
+      },
+      {
+        "text": "Fan out on read for both: store once and let everyone fetch.",
+        "explanation": "Wrong for small groups. Family members expect a push notification and instant delivery even when the app is closed; that needs per-device inbox entries and pushes, which fan-out on write provides cheaply at 200 members."
+      },
+      {
+        "text": "Small groups: fan out on write to each member device's inbox. Huge channels: store once, push only to currently connected subscribers, and let others read history with per-member read cursors.",
+        "explanation": "Correct. Group size changes the economics, just as in the news feed. Small groups get reliable per-device delivery; huge channels avoid write amplification and track unread state with cursors."
+      },
+      {
+        "text": "Reject groups larger than 1,000 members.",
+        "explanation": "Wrong. That's a product limit, not a design. WhatsApp caps groups for this reason, but Slack, Discord and Telegram channels support far larger audiences using the store-once model."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare write load for one message:\n\n```\nFamily group: 200 writes (trivial)\nBig channel:  500,000 writes (huge)\n```\n\nAt 10 messages/minute in the big channel:\n\n```\n10/60 x 500,000 ≈ 83,000 writes/s\n(from one channel)\n```\n\nStore-once instead: one write, plus a pub/sub publish to the gateways of the (say) 5,000 members online with the channel open. Offline members see an unread count computed from `channel_latest_seq - my_read_seq` when they return.",
+    "link": {
+      "title": "Discord: how Discord scaled Elixir to 5,000,000 concurrent users",
+      "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Presence updates (online/offline) are generating more traffic than messages. Which changes would reduce presence load? Select all that apply.",
+    "options": [
+      {
+        "text": "Push presence changes only to users who currently have a chat with that person open; others fetch presence lazily when they open the chat.",
+        "explanation": "Correct. Most of a user's contacts aren't looking at that user at any given moment. Subscribing only interested viewers removes the bulk of fan-out."
+      },
+      {
+        "text": "Debounce disconnects: wait several seconds after a socket drops before announcing offline.",
+        "explanation": "Correct. Mobile connections blip constantly (lifts, tunnels, Wi-Fi to 4G handover). Without debouncing, each blip broadcasts offline then online, doubling noise for nothing."
+      },
+      {
+        "text": "Store presence in the message database with a durable write for every heartbeat.",
+        "explanation": "Incorrect. Presence is ephemeral; a durable write per heartbeat (250M clients every 30 s is ~8M writes/s) is enormous cost for data that's worthless a minute later. Use an in-memory store with TTLs."
+      },
+      {
+        "text": "Lengthen the heartbeat interval from 10 s to 30 s and use a TTL of ~60–90 s.",
+        "explanation": "Correct. Heartbeat volume falls by 3x. The cost is slower detection of silent disconnects, which is acceptable for an 'online' indicator."
+      },
+      {
+        "text": "Broadcast every user's presence to all of their contacts on every heartbeat, to keep everyone accurate.",
+        "explanation": "Incorrect. This is the worst-case design: contacts × heartbeat rate, almost all of it unchanged state sent to people who aren't looking."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Estimate naive presence fan-out:\n\n```\n250M online, 200 contacts each\n1 status change per user per 10 min\n(flaps included)\n= 250M x 200 / 600 s\n≈ 83M presence events/s\n```\n\nThat dwarfs ~600k messages/s. Apply the fixes:\n\n- Only ~1% of contacts have the chat open → ~830k/s.\n- Debouncing removes most flaps → perhaps a few hundred thousand/s.\n- Heartbeats at 30 s: 250M / 30 ≈ 8M tiny in-memory TTL refreshes/s, handled by gateways and Redis, not fanned out.",
+    "link": {
+      "title": "Meta engineering: building mobile-first infrastructure for Messenger",
+      "url": "https://engineering.fb.com/2014/10/09/production-engineering/building-mobile-first-infrastructure-for-messenger/"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Bob's phone receives message `seq 57` from the gateway, but the connection drops before Bob's phone sends its delivery ack. What happens next in a correct design?",
+    "options": [
+      {
+        "text": "The message is lost, because the gateway already sent it.",
+        "explanation": "Wrong. Sending down a socket isn't proof of delivery. The server keeps the message in Bob's device inbox until it receives an ack, precisely to handle this case."
+      },
+      {
+        "text": "The server marks it delivered anyway, since the gateway wrote it to the socket.",
+        "explanation": "Wrong. That would show Alice two ticks for a message that might never have reached Bob's phone (if the bytes were still in a network buffer when the connection died)."
+      },
+      {
+        "text": "The sender's phone automatically resends the message with a new clientMsgId.",
+        "explanation": "Wrong. The sender already has a 'sent' ack, so it has no reason to resend. And a new clientMsgId would defeat server-side deduplication, creating a genuine duplicate."
+      },
+      {
+        "text": "On reconnect, the server redelivers seq 57 (it's still unacked in Bob's inbox); Bob's phone recognises the msgId it already has and discards the duplicate, then acks.",
+        "explanation": "Correct. At-least-once delivery from the server plus deduplication on the client by msgId gives the user exactly-once behaviour. The sender gets the 'delivered' tick once the ack arrives."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the protocol:\n\n```\n1. Server: inbox[bob-phone] = [57]\n2. Gateway pushes seq 57\n   (bytes may or may not arrive)\n3. Connection drops          (no ack)\n4. Bob reconnects:\n   \"last delivered seq = 56\"\n5. Server resends anything unacked: 57\n6. Phone: have msgId? -> drop dup\n7. Phone acks 57 -> inbox cleared\n   -> Alice sees 2 ticks\n```\n\nThe same pattern appears on the sender side with `clientMsgId`. Idempotency keys at both ends turn unreliable networks into reliable delivery.",
+    "link": {
+      "title": "Slack engineering: real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A huge community server posts an announcement with `@everyone`. Within seconds, 200,000 users open the same channel, all reading the same `(channel, bucket)` partition. The replicas holding it saturate and latency spikes spread across the cluster. What is the most targeted fix?",
+    "options": [
+      {
+        "text": "Use smaller time buckets so the partition is smaller.",
+        "explanation": "Wrong. Bucket size limits how *big* a partition grows, not how many people read it at once. Everyone still wants the same newest rows."
+      },
+      {
+        "text": "Put a data-service layer in front of the database, routed by channel, that coalesces identical concurrent reads into one database query and serves the result to all waiting requests.",
+        "explanation": "Correct. 200,000 reads for the same rows become a handful of queries. This is what Discord built in Rust before migrating to ScyllaDB, precisely for this hot-partition pattern."
+      },
+      {
+        "text": "Add more nodes to the database cluster.",
+        "explanation": "Wrong. A partition lives on its replica set (typically three nodes) however large the cluster is, so more nodes don't spread a single hot partition."
+      },
+      {
+        "text": "Rate limit the channel to 1,000 readers per second.",
+        "explanation": "Wrong. Making 199,000 people wait to read an announcement is a terrible user experience, and it treats demand as abuse."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Separate the two partition problems:\n\n| Problem | Cause | Fix |\n|---|---|---|\n| Too big | unbounded history | time buckets |\n| Too hot | many readers | coalesce, cache |\n\nWith coalescing, routing all requests for one channel to the same data-service instance (consistent hashing on `channel_id`) means concurrent identical reads meet in one place and share a single query.",
+    "link": {
+      "title": "Discord: how Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your chat app adopts end-to-end encryption with the Signal Protocol. Which consequences must the design handle? Select all that apply.",
+    "options": [
+      {
+        "text": "Message search must run on the device, because the server can't index ciphertext.",
+        "explanation": "Correct. The server never has plaintext, so any search index must be built and queried locally."
+      },
+      {
+        "text": "Push notifications can't include message text in clear; send a generic or encrypted payload and let the app decrypt locally.",
+        "explanation": "Correct. Otherwise the content would pass through the push provider in plaintext, defeating end-to-end encryption."
+      },
+      {
+        "text": "Each of a recipient's devices has its own keys, so a message to a user with three devices is encrypted (at least) three times.",
+        "explanation": "Correct. That's how WhatsApp's multi-device design works: the sender encrypts per device."
+      },
+      {
+        "text": "The server must decrypt messages to assign per-conversation sequence numbers.",
+        "explanation": "Incorrect. Sequence numbers are metadata the server assigns to the envelope; it doesn't need the content to order messages."
+      },
+      {
+        "text": "Delivery receipts become impossible.",
+        "explanation": "Incorrect. Receipts are acks and cursors over message IDs and sequence numbers, which the server can see without reading content."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask what the server needs to *read* for each feature:\n\n| Feature | Needs plaintext? |\n|---|---|\n| Routing, seq, receipts | No (metadata) |\n| Search | Yes → on device |\n| Notification text | Yes → on device |\n| Multi-device | Per-device keys |\n\nE2EE shifts work onto clients and leaves the server routing and storing opaque blobs.",
+    "link": {
+      "title": "Meta engineering: how WhatsApp enables multi-device capability",
+      "url": "https://engineering.fb.com/2021/07/14/security/whatsapp-multi-device/"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You partition message history by `(channel_id, bucket)`. Your busiest channel sustains **50 messages/s**, each about **200 B**. You want partitions under about **100 MB**. Roughly what's the largest bucket width that keeps this channel's partitions under the limit?",
+    "options": [
+      {
+        "text": "About 1 year",
+        "explanation": "Wrong. 50/s for a year is about 1.6 billion messages, over 300 GB in one partition."
+      },
+      {
+        "text": "About 1 day",
+        "explanation": "Wrong. 50 × 86,400 × 200 B ≈ 864 MB per day, nearly 9x over the target."
+      },
+      {
+        "text": "About 1 minute",
+        "explanation": "Wrong. That keeps partitions tiny (about 600 KB) but makes 'load the last 50 messages' of a quiet channel scan many empty buckets. Too narrow is also a cost."
+      },
+      {
+        "text": "About 2–3 hours",
+        "explanation": "Correct. 50 × 200 B = 10 KB/s, so 100 MB takes 10,000 s, about 2.8 hours. In practice you'd size buckets for typical channels and handle extreme ones specially, since one bucket width applies to everyone."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nBytes/s = 50 x 200 B = 10 KB/s\nLimit   = 100 MB = 100,000 KB\nTime    = 100,000 / 10 = 10,000 s\n        ≈ 2.8 hours\n```\n\nThe tension: wide buckets risk huge partitions for busy channels; narrow buckets force quiet channels to query many empty buckets to find recent history. Discord uses a static time window and walks back through buckets as needed.",
+    "link": {
+      "title": "Discord: how Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The chat-service instance that owns conversation 42 stalls in a 20-second GC pause. Its lease expires, a new owner takes over, reads `last_seq = 900` and starts assigning 901, 902... Then the old owner wakes up and also assigns 901 to a message it was holding. How do you prevent the duplicate sequence number?",
+    "options": [
+      {
+        "text": "Use NTP-synchronised timestamps instead of sequence numbers.",
+        "explanation": "Wrong. Clock-based ordering brings back the very skew problems that per-conversation sequence numbers were introduced to avoid."
+      },
+      {
+        "text": "Make GC pauses shorter so leases never expire unexpectedly.",
+        "explanation": "Wrong as the fix. Pauses, network blips and slow disks will always happen sometimes. Correctness can't depend on timing."
+      },
+      {
+        "text": "Tag each ownership lease with an increasing epoch (fencing token) and make message writes conditional on the stored epoch, so writes from the stale owner (old epoch) are rejected.",
+        "explanation": "Correct. The new owner bumps the epoch when it takes over. The old owner's conditional write fails, it learns it has lost ownership, and its message is retried through the new owner."
+      },
+      {
+        "text": "Let both owners write, and resolve conflicts later with last-writer-wins.",
+        "explanation": "Wrong. Last-writer-wins silently drops one of the two messages with seq 901, which is message loss."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nepoch 7: owner A holds conv 42\nA pauses 20 s; lease expires\nepoch 8: owner B, last_seq = 900\nB writes seq 901 (epoch 8) OK\nA wakes, writes seq 901 (epoch 7)\n  -> rejected: epoch 7 < 8\n```\n\nThis is the standard fencing-token pattern: a lease alone isn't safe, because the holder can't tell it has expired while paused. The storage layer must enforce the epoch.",
+    "link": {
+      "title": "Slack engineering: real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Bob's phone switches from Wi-Fi to 4G and reconnects to Gateway 31. For a few seconds the session registry still says Gateway 87. A message for Bob arrives and is sent to Gateway 87. What should a correct design do?",
+    "options": [
+      {
+        "text": "Gateway 87 drops the message silently, because Bob isn't connected there.",
+        "explanation": "Wrong as stated. Dropping is only safe because the inbox still has the message; silence alone would leave it waiting until Bob next syncs. Gateway 87 should reply 'not here' so the chat service can reroute."
+      },
+      {
+        "text": "Gateway 87 replies 'not connected'; the chat service re-reads the registry (which Gateway 31 has overwritten with a newer connection ID) and routes there. Either way, the message stays in Bob's inbox until his device acks it.",
+        "explanation": "Correct. Connection IDs make the newest registration win, a 'not here' reply triggers a retry, and the inbox guarantees nothing is lost while routing is briefly wrong."
+      },
+      {
+        "text": "The chat service marks the message as delivered because a gateway accepted it.",
+        "explanation": "Wrong. Delivered means Bob's device acknowledged it. A gateway accepting a message for a socket it doesn't hold proves nothing."
+      },
+      {
+        "text": "Gateway 87 holds the socket open for Bob until he reconnects there.",
+        "explanation": "Wrong. Bob's old TCP connection is gone; Gateway 87 can't hold a socket for a device that has moved."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Make routing *best effort* and delivery *guaranteed*:\n\n```\n1. inbox[bob] += msg\n2. registry: bob -> gw87 (stale)\n3. gw87: \"not here\"\n4. re-read: bob -> gw31 (conn 2)\n5. gw31 pushes; phone acks\n6. inbox[bob] -= msg\n```\n\nEven if step 4 also fails, Bob's next sync on reconnect fetches everything after his delivered seq.",
+    "link": {
+      "title": "Slack engineering: real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  }
+]

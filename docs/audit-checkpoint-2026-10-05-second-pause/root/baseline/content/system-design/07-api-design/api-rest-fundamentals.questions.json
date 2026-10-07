@@ -1,0 +1,378 @@
+[
+  {
+    "id": "api-rest-fundamentals-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which HTTP method is idempotent but **not** safe?",
+    "options": [
+      {
+        "text": "GET",
+        "explanation": "GET is both safe and idempotent. It's read-only in intent, so it isn't an example of 'idempotent but not safe'."
+      },
+      {
+        "text": "POST",
+        "explanation": "POST is neither safe nor idempotent. Sending the same POST twice can create two resources or run a process twice."
+      },
+      {
+        "text": "DELETE",
+        "explanation": "Correct. DELETE changes server state (so it isn't safe), but deleting the same resource twice leaves the server in the same state as deleting it once (so it is idempotent). The second response may be 404, but idempotency is about server state, not identical responses."
+      },
+      {
+        "text": "HEAD",
+        "explanation": "HEAD is a GET without the body, so it is safe and idempotent, just like GET."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Safe** = the client isn't asking for any state change. Only GET, HEAD, OPTIONS (and TRACE) qualify.\n2. **Idempotent** = N identical requests leave the server in the same state as one. All safe methods, plus PUT and DELETE.\n3. So 'idempotent but not safe' = {PUT, DELETE} minus the safe ones = PUT and DELETE.\n4. Of the options, only DELETE is in that set.\n\nCommon trap: thinking DELETE isn't idempotent because the second call returns 404. Idempotency is defined by the effect on the server, not the response code.",
+    "link": {
+      "title": "MDN: Idempotent",
+      "url": "https://developer.mozilla.org/en-US/docs/Glossary/Idempotent"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A client sends `GET /invoices/77` with a valid token. The invoice exists but belongs to a different company, and the user's role isn't allowed to see it. Which status code is most appropriate?",
+    "options": [
+      {
+        "text": "401 Unauthorized",
+        "explanation": "Despite its name, 401 means *unauthenticated*: the server doesn't know who you are, or your credentials are missing or invalid. Here the token is valid, so identity is known."
+      },
+      {
+        "text": "403 Forbidden",
+        "explanation": "Correct. The server knows who the caller is (valid token) but the caller isn't permitted to access this resource. That's exactly what 403 means. (Some APIs return 404 instead to avoid revealing the invoice exists, which is a legitimate privacy choice.)"
+      },
+      {
+        "text": "400 Bad Request",
+        "explanation": "400 is for malformed or invalid requests. The request here is perfectly well-formed; the problem is permissions."
+      },
+      {
+        "text": "500 Internal Server Error",
+        "explanation": "500 signals a server bug. A permission denial is an expected outcome, and a 5xx would wrongly encourage clients to retry and would page your on-call engineer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask two questions in order:\n\n1. **Do we know who this is?** The token is valid, so yes. That rules out 401 (which is really 'unauthenticated').\n2. **Are they allowed to do this?** No, the invoice belongs to another tenant.\n\n'Known but not allowed' = **403**. If you don't want to leak the existence of other tenants' invoice IDs, returning **404** is also defensible, and many multi-tenant APIs (GitHub for private repos, for example) do exactly that.",
+    "link": {
+      "title": "MDN: HTTP response status codes",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A mobile app calls `POST /payments`. The server charges the card, but the response is lost when the phone switches from Wi-Fi to 4G. The HTTP client library is configured to 'retry on timeout'. What's the most likely outcome, and why?",
+    "options": [
+      {
+        "text": "The library retries and the customer is charged twice",
+        "explanation": "This is the danger if the library retries POST blindly, but well-behaved HTTP libraries and proxies deliberately don't auto-retry non-idempotent methods for exactly this reason. Without an idempotency key, though, a manual retry *would* double-charge."
+      },
+      {
+        "text": "The server detects the duplicate automatically because HTTP is stateless",
+        "explanation": "Statelessness means the server *doesn't* remember previous requests, so it has no built-in way to recognise a duplicate. Deduplication needs explicit state, such as a stored idempotency key."
+      },
+      {
+        "text": "TCP guarantees exactly-once delivery, so the retry can't happen",
+        "explanation": "TCP guarantees ordered, reliable delivery within one connection. It says nothing about application-level retries over a *new* connection after a timeout, which is exactly this scenario."
+      },
+      {
+        "text": "Most HTTP libraries won't automatically retry a POST, because it isn't idempotent; the app has to decide, and without an idempotency key it can't tell if the charge happened",
+        "explanation": "Correct. Automatic retries are normally limited to idempotent methods (GET, PUT, DELETE...). For POST the client is left with an ambiguous timeout. The real fix is an idempotency key so that a retry is safe."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk the timeline:\n\n1. Request reaches server; card is charged.\n2. Response is lost; client times out.\n3. Client state: *unknown*. The charge may or may not have happened.\n\nNow consider retry rules. RFC 9110 says clients may automatically retry idempotent requests. POST isn't idempotent, so well-behaved libraries and proxies won't silently replay it. That pushes the decision to app code.\n\nIf the app retries naïvely, the customer is charged twice. If it doesn't, the customer may not be charged at all. Neither is acceptable, which is why payment APIs such as Stripe accept an `Idempotency-Key` header: the retry carries the same key and the server returns the original result instead of charging again.",
+    "link": {
+      "title": "RFC 9110: HTTP Semantics",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are consequences of a REST API being **stateless**? Select all that apply.",
+    "options": [
+      {
+        "text": "Any server behind the load balancer can handle any request, so sticky sessions aren't needed",
+        "explanation": "Correct. Because no client context lives in one server's memory, requests can be routed anywhere, which makes scaling out and failover simple."
+      },
+      {
+        "text": "The API can't store any data in a database",
+        "explanation": "Wrong. Statelessness is about *session* state between requests, not application data. Orders, users and so on live in the database as usual."
+      },
+      {
+        "text": "Each request must carry its own authentication, such as a token in the `Authorization` header",
+        "explanation": "Correct. The server can't rely on remembering that a client logged in earlier on that particular machine, so credentials (or a reference to a shared session) must accompany every request."
+      },
+      {
+        "text": "If a server crashes mid-session, the client's next request can succeed on another server without re-login",
+        "explanation": "Correct. Nothing the client depends on was held only in the crashed server's memory, so another instance can serve it."
+      },
+      {
+        "text": "Responses can never be cached",
+        "explanation": "Wrong. Statelessness actually *helps* caching, because a response depends only on the request, not on hidden per-connection state. REST lists cacheability as a separate constraint that works alongside statelessness."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Define the term precisely first: *stateless* means each request contains all the information needed to process it; the server keeps no client session context between requests.\n\nThen test each option:\n\n- Routing anywhere: follows directly. ✔\n- No database: confuses session state with application state. ✘\n- Auth per request: follows directly, since the server can't 'remember' you. ✔\n- Survive a crash: follows directly. ✔\n- No caching: the opposite is true. ✘",
+    "link": {
+      "title": "Fielding's dissertation, chapter 5: REST",
+      "url": "https://ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API exposes `PATCH /accounts/5` with body `{\"op\": \"increment\", \"field\": \"balance\", \"by\": 10}`. The balance starts at 100. A flaky proxy delivers the request **three** times. What is the final balance, and what does it show?",
+    "options": [
+      {
+        "text": "130: this PATCH isn't idempotent, so each delivery adds 10",
+        "explanation": "Correct. 100 + 10 + 10 + 10 = 130. A relative operation applied three times has three times the effect. A 'set balance to 110' patch would have been idempotent; 'add 10' isn't."
+      },
+      {
+        "text": "110: PATCH is always idempotent",
+        "explanation": "HTTP does not guarantee PATCH is idempotent. Whether it is depends on the patch semantics. An 'increment' operation is inherently non-idempotent."
+      },
+      {
+        "text": "100: the server rejects duplicates automatically",
+        "explanation": "There's no automatic duplicate detection in HTTP. Unless you build it (e.g. with an idempotency key or ETag precondition), each delivery is processed."
+      },
+      {
+        "text": "It's undefined because PATCH isn't allowed to change numbers",
+        "explanation": "PATCH can change any field. The issue is whether the change is absolute or relative, not the data type."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Start: balance = 100.\n2. Delivery 1: 100 + 10 = 110.\n3. Delivery 2: 110 + 10 = 120.\n4. Delivery 3: 120 + 10 = **130**.\n\nCompare with an absolute patch `{\"balance\": 110}`: after 1, 2 or 3 deliveries the balance is 110 every time. That one is idempotent.\n\nTwo ways to make the relative version safe:\n- Add `If-Match: \"<etag>\"` so only the first delivery matches the current version; the others get `412`.\n- Require an idempotency key so duplicates return the stored first result.",
+    "link": {
+      "title": "MDN: HTTP request methods",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two support agents open product 5 (ETag `\"v7\"`). Agent A changes the price and sends `PUT /products/5` with `If-Match: \"v7\"`. One second later Agent B changes the description and sends `PUT /products/5` with `If-Match: \"v7\"`. What should happen to B's request in a correctly designed API?",
+    "options": [
+      {
+        "text": "200 OK, and B's PUT overwrites the product, including A's new price",
+        "explanation": "That's the 'lost update' problem that `If-Match` exists to prevent. Without the precondition check, B's full replacement would silently revert A's price change."
+      },
+      {
+        "text": "409 Conflict, because two people edited at once",
+        "explanation": "409 is sometimes used for state conflicts, but HTTP defines a more specific code for a failed precondition header: 412. Using 412 tells the client exactly which mechanism rejected it."
+      },
+      {
+        "text": "412 Precondition Failed, because the current ETag is now `\"v8\"`, not `\"v7\"`",
+        "explanation": "Correct. A's successful write bumped the version to `\"v8\"`. B's `If-Match: \"v7\"` no longer matches, so the server refuses the write. B's client should re-fetch, merge and retry."
+      },
+      {
+        "text": "304 Not Modified, because the ETag is unchanged",
+        "explanation": "304 is the response to a *conditional GET* with `If-None-Match` when the cached copy is still fresh. It doesn't apply to a PUT, and the ETag *has* changed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "This is optimistic concurrency control over HTTP.\n\n```\nt=0  A, B GET  -> ETag \"v7\"\nt=1  A PUT If-Match \"v7\" -> match\n     server writes, ETag -> \"v8\"\nt=2  B PUT If-Match \"v7\"\n     current is \"v8\" -> no match\n     -> 412 Precondition Failed\n```\n\nB's client then:\n1. `GET /products/5` (gets `\"v8\"` with A's price).\n2. Re-applies B's description edit.\n3. `PUT` with `If-Match: \"v8\"`. Succeeds.\n\nNo lock was held, and nobody's change was silently lost.",
+    "link": {
+      "title": "MDN: If-Match",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Match"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "During a database outage, your API catches the exception and returns `400 Bad Request` with `{\"error\": \"could not save\"}`. What is the main operational problem with this choice?",
+    "options": [
+      {
+        "text": "400 responses can't have a JSON body",
+        "explanation": "Any status code can carry a body. Error details in JSON are normal for 4xx and 5xx."
+      },
+      {
+        "text": "Load balancers will mark the server unhealthy on any 400",
+        "explanation": "Load balancer health checks typically hit a dedicated endpoint, and passive checks look for 5xx or connection failures. A 400 would *not* mark the server unhealthy, which is part of the problem: the outage is invisible."
+      },
+      {
+        "text": "400 is reserved for CORS errors",
+        "explanation": "400 is a general 'bad request' code for malformed or invalid input. It has nothing specifically to do with CORS."
+      },
+      {
+        "text": "Clients and retry middleware treat 4xx as 'your request is wrong, don't retry', so transient failures become permanent, and your 5xx alerting and SLO dashboards don't see the outage",
+        "explanation": "Correct. The 4xx/5xx split is a contract. A 400 tells clients the request itself is at fault, so they won't retry, and it hides a server-side outage from error-rate monitors that track 5xx. The right code is 503 (perhaps with Retry-After) or 500."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think about who reads status codes and what they do:\n\n| Reader | Sees 400 | Sees 503 |\n|---|---|---|\n| Client retry logic | Give up | Back off, retry |\n| SLO dashboard | Client error | Server error |\n| Pager alerting | Silent | Fires |\n\nWith 400 the outage is both *invisible* to you and *unrecoverable* for clients. Use 503 (with `Retry-After` if you know roughly when you'll recover) or 500.",
+    "link": {
+      "title": "MDN: HTTP response status codes",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your sign-up endpoint `POST /users` receives two bad requests. Request A has a valid body, but the email is already registered. Request B has `{\"birthDate\": \"2031-01-01\"}`, a date in the future. Which pair of status codes fits best?",
+    "options": [
+      {
+        "text": "A: 422, B: 409",
+        "explanation": "This is the pair swapped. The duplicate email clashes with existing server state (409); the future birth date is invalid on its own terms, whatever the database holds (422)."
+      },
+      {
+        "text": "A: 409, B: 422",
+        "explanation": "Correct. A conflicts with the current state of the user collection: the same body would succeed if that email weren't taken. B is well-formed JSON that is semantically invalid regardless of state."
+      },
+      {
+        "text": "A: 500, B: 400",
+        "explanation": "A unique-constraint violation is an expected outcome, not a server bug. Letting the database exception bubble up as a 500 makes clients retry and pages your on-call engineer for nothing."
+      },
+      {
+        "text": "A: 403, B: 422",
+        "explanation": "403 means the server refuses the caller on authorisation grounds. Nothing here is about permissions; the caller is allowed to sign up, just not with that email."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask one question of each failure: *would this request succeed if the server's state were different?*\n\n- **A (duplicate email):** yes. If no user had that email, the same body would work. That's a clash with current state, so **409 Conflict**.\n- **B (future birth date):** no. No state of the database makes a future birth date valid. That's a semantic validation error, so **422 Unprocessable Content** (or plain 400, if that's your API's convention).\n\nThe useful consequence for clients: a 409 suggests showing 'that email is taken' and perhaps offering a login link, while a 422 points at a field to fix.",
+    "link": {
+      "title": "RFC 9110: 409 Conflict",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-409-conflict"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your generic HTTP client wrapper retries automatically with exponential backoff. For which of these responses is an **automatic** retry of the same request reasonable? Select all that apply.",
+    "options": [
+      {
+        "text": "`GET /orders/42` returned `503` with `Retry-After: 5`",
+        "explanation": "Correct. 503 is a temporary server-side condition, GET is idempotent, and the server even told you how long to wait."
+      },
+      {
+        "text": "`POST /orders` (no idempotency key) returned `500`",
+        "explanation": "Not safe to retry automatically. A 500 doesn't say whether the order was created before the crash, and POST isn't idempotent, so a retry could create a duplicate."
+      },
+      {
+        "text": "`PUT /users/7` returned `422`",
+        "explanation": "No. 422 says the body itself is semantically invalid. Sending the identical body again will get the identical answer."
+      },
+      {
+        "text": "`GET /search?q=van` returned `429` with `Retry-After: 30`",
+        "explanation": "Correct, as long as you honour the wait. 429 means 'you are over your limit for now'; retrying after the indicated delay is exactly what the server is asking for."
+      },
+      {
+        "text": "`DELETE /sessions/9` timed out with no response",
+        "explanation": "Correct. DELETE is idempotent, so even if the first attempt succeeded, repeating it leaves the server in the same state."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "An automatic retry needs **both** of these to be true:\n\n1. The failure is plausibly *transient* (5xx, 429, timeout, connection reset), not a 4xx that will repeat.\n2. Repeating the request is *harmless*: the method is idempotent, or the request carries an idempotency key.\n\n| Case | Transient? | Harmless? | Retry |\n|---|---|---|---|\n| GET 503 | Yes | Yes | Yes |\n| POST 500 | Yes | No | No |\n| PUT 422 | No | Yes | No |\n| GET 429 | Yes | Yes | Yes |\n| DELETE timeout | Yes | Yes | Yes |\n\nThe POST case is the classic trap: the status code says 'maybe later', but the method says 'not safe to repeat'.",
+    "link": {
+      "title": "RFC 9110: Idempotent methods",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-idempotent-methods"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your API returns `403 Forbidden` when an access token has **expired**. The mobile team reports that users get stuck on an error screen until they log out and back in, even though the app holds a valid refresh token. What's the best fix?",
+    "options": [
+      {
+        "text": "Return `401` with a `WWW-Authenticate` header for expired or invalid tokens, and keep `403` for valid tokens that lack permission",
+        "explanation": "Correct. 401 means 'your credentials didn't work; authenticate again', which is the signal the client's token-refresh logic is waiting for. 403 means 're-authenticating won't help', so the client correctly gives up."
+      },
+      {
+        "text": "Return `400`, because an expired token is a malformed request",
+        "explanation": "The request is well-formed. 400 is also treated as 'fix your request' by clients, so it doesn't trigger a token refresh either."
+      },
+      {
+        "text": "Keep `403` and make the client refresh its token on every 403",
+        "explanation": "This would make clients refresh tokens pointlessly on every genuine permission denial, and it hides the difference between 'who are you?' and 'you can't do that' from every other consumer of the API."
+      },
+      {
+        "text": "Return `419 Authentication Timeout`",
+        "explanation": "419 isn't defined by RFC 9110; it's a framework-specific code (Laravel uses it for CSRF failures). Generic clients won't know what to do with it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Map each failure to what the client should *do next*:\n\n| Situation | Next action | Code |\n|---|---|---|\n| No token | Log in | 401 |\n| Expired token | Refresh, retry | 401 |\n| Valid token, wrong role | Show 'no access' | 403 |\n\nRFC 9110 also requires a 401 to include `WWW-Authenticate`, e.g. `Bearer error=\"invalid_token\"` (the format OAuth's RFC 6750 defines). Client libraries key their refresh-and-retry behaviour off the 401. Returning 403 for expiry tells them re-authenticating won't help, so they never try.",
+    "link": {
+      "title": "RFC 9110: 401 Unauthorized",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-401-unauthorized"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`POST /reports` kicks off a PDF export that takes about two minutes. What's the most RESTful response?",
+    "options": [
+      {
+        "text": "Hold the connection open for two minutes, then return `200` with the PDF",
+        "explanation": "Long-held requests tie up connections and usually hit load-balancer or gateway timeouts (often 30–60 seconds) before the work finishes, which leaves the client with an ambiguous failure."
+      },
+      {
+        "text": "`201 Created` with the finished PDF in the body",
+        "explanation": "The PDF doesn't exist yet when the response is sent. 201 says a resource has been created now; it doesn't fit work that is still queued."
+      },
+      {
+        "text": "`204 No Content`, and the client polls `/reports` until a new one appears",
+        "explanation": "204 hides the one thing the client needs: which job to track. Polling a whole collection to find 'the new one' is fragile."
+      },
+      {
+        "text": "`202 Accepted` with a `Location` header pointing at a status resource such as `/reports/jobs/81`, which the client polls (or is notified about by webhook)",
+        "explanation": "Correct. 202 means 'accepted for processing, not finished'. Giving the job its own URL turns the long operation into an ordinary resource the client can GET."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The work outlives a sensible request timeout, so don't do it inline.\n2. Respond immediately with **202 Accepted** and a link to a job resource:\n\n```\nHTTP/1.1 202 Accepted\nLocation: /reports/jobs/81\n```\n\n3. The client polls `GET /reports/jobs/81`, which reports `queued`, then `running`, then `done` with a link to `/reports/81.pdf`.\n4. For many clients or long jobs, add a webhook so they don't have to poll.\n\nThe pattern makes a slow process look like a resource, which is the REST way to model it.",
+    "link": {
+      "title": "MDN: 202 Accepted",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/202"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`PUT /users/7` replaces the user, and the server also writes an audit-log row and sets `updatedAt` to the current time on every call. A reviewer claims this makes the endpoint non-idempotent, so clients mustn't retry it. Who is right?",
+    "options": [
+      {
+        "text": "The reviewer: any change between two calls, including a timestamp, breaks idempotency",
+        "explanation": "Idempotency in RFC 9110 is about the *intended effect* the client asked for, not every byte the server writes. Incidental side effects such as logs and bookkeeping timestamps don't count."
+      },
+      {
+        "text": "The reviewer: PUT is only idempotent when it returns 204",
+        "explanation": "Idempotency doesn't depend on the response code or body. Two identical PUTs may return different responses and still be idempotent."
+      },
+      {
+        "text": "Neither: PUT is idempotent by definition, so the implementation can do anything",
+        "explanation": "The method's semantics are a promise your implementation must keep. A PUT handler that appended a line item on every call would break that promise, and retries would then cause real harm."
+      },
+      {
+        "text": "The endpoint is still idempotent: the client's intended effect (user 7 has this representation) is the same after one call or five; audit rows and timestamps are incidental side effects",
+        "explanation": "Correct. RFC 9110 explicitly allows idempotent and even safe methods to have side effects such as logging. What matters is that repeating the request doesn't change the outcome the client asked for."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "RFC 9110 defines a method as idempotent if the *intended effect on the server* of several identical requests is the same as one.\n\n1. Intended effect of `PUT /users/7`: 'user 7 now looks like this body'.\n2. After 1 call: user 7 matches the body. After 5 calls: still matches. ✔\n3. Audit log has 5 rows instead of 1, and `updatedAt` moved. The client didn't ask for those, and repeating them causes no harm.\n\nContrast with a handler that, say, sends a 'profile updated' SMS on every PUT. That's a side effect users *notice*, so retries would be visible and you'd want to deduplicate.",
+    "link": {
+      "title": "RFC 9110: Idempotent methods",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-idempotent-methods"
+    }
+  }
+]

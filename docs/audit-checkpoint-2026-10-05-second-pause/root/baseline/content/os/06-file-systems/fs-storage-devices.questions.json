@@ -1,0 +1,377 @@
+[
+  {
+    "id": "fs-storage-devices-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A hard disk spins at **7,200 rpm**. What is its average rotational latency, the time spent waiting for the right sector to come under the head?",
+    "options": [
+      {
+        "text": "8.33 ms",
+        "explanation": "That's the time for a *full* revolution. On average the sector is half a turn away."
+      },
+      {
+        "text": "0.14 ms",
+        "explanation": "This is 1 / 7200 s, treating 7,200 as revolutions per *second*. rpm is per minute, so convert first: 7200 / 60 = 120 rev/s."
+      },
+      {
+        "text": "120 ms",
+        "explanation": "7200 / 60 = 120 is revolutions per second, not a time."
+      },
+      {
+        "text": "4.17 ms",
+        "explanation": "Correct. One revolution is 60 / 7200 s = 8.33 ms, and on average you wait half of one."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Revolutions per second: 7200 / 60 = 120.\n2. Time per revolution: 1 / 120 s = 8.33 ms.\n3. A random sector is equally likely to be anywhere on the track, so the expected wait is half a revolution:\n\n```\n8.33 ms / 2 = 4.17 ms\n```\n\nAt 15,000 rpm the same sum gives 2 ms, which is why fast SAS drives spun so quickly.",
+    "link": {
+      "title": "OSTEP: Hard Disk Drives (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can't an SSD simply overwrite a 4 KiB logical block in place, the way a hard disk does?",
+    "options": [
+      {
+        "text": "Flash can only be programmed after it has been erased, and erasing works on whole blocks of hundreds of pages",
+        "explanation": "Correct. Overwriting one page in place would mean erasing its whole block and rewriting everything else in it, so the FTL writes the new data elsewhere and remaps it."
+      },
+      {
+        "text": "The SATA protocol has no overwrite command",
+        "explanation": "The interface has ordinary writes to any LBA. The constraint is physical, inside the flash."
+      },
+      {
+        "text": "Flash pages are read-only once written, forever",
+        "explanation": "Pages can be rewritten many times, just not without an erase first, and only a limited number of P/E cycles."
+      },
+      {
+        "text": "The file system forbids overwrites to save wear",
+        "explanation": "File systems like ext4 overwrite blocks in place quite happily. It's the drive's FTL that turns them into out-of-place writes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Flash rules: read/program a **page** (e.g. 16 KiB); erase a **block** (e.g. 256 pages, 4 MiB).\n2. A programmed page must be erased before it can be programmed again.\n3. An in-place overwrite would therefore need: copy the 255 other pages out, erase 4 MiB, write 256 pages back. Thousands of times the work, plus a P/E cycle.\n4. Instead the FTL writes the new 4 KiB to a free page, updates its mapping table and marks the old page invalid. Garbage collection reclaims it later.",
+    "link": {
+      "title": "OSTEP: Flash-based SSDs (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-ssd.pdf"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You build a RAID 5 array from **six 4 TB** disks. What is its usable capacity, and how many disk failures can it survive?",
+    "options": [
+      {
+        "text": "24 TB, survives 1",
+        "explanation": "This forgets parity. One disk's worth of space in every stripe holds parity, not data."
+      },
+      {
+        "text": "12 TB, survives 3",
+        "explanation": "That's a three-way mirror or RAID 10-style figure. RAID 5 loses only one disk's capacity."
+      },
+      {
+        "text": "20 TB, survives 1",
+        "explanation": "Correct. RAID 5 gives (N − 1) × C = 5 × 4 TB = 20 TB and survives any single failure."
+      },
+      {
+        "text": "16 TB, survives 2",
+        "explanation": "That's RAID 6: (N − 2) × C with two parities."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. RAID 5 stores one parity chunk per stripe, rotating across disks.\n2. Across the array that costs exactly one disk's capacity:\n\n```\n(6 - 1) x 4 TB = 20 TB usable\n```\n\n3. Parity is an XOR, so it can rebuild **one** missing chunk per stripe. A second failure before the rebuild finishes loses the array.",
+    "link": {
+      "title": "Standard RAID levels — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Standard_RAID_levels"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 15,000 rpm SAS drive has an average seek time of **3.5 ms**. Ignoring transfer time, roughly how many random 4 KiB reads per second can it serve?",
+    "options": [
+      {
+        "text": "About 290",
+        "explanation": "This uses only the seek time (1 / 3.5 ms). Each random read also waits on average half a rotation."
+      },
+      {
+        "text": "About 180",
+        "explanation": "Correct. Rotational latency is 2 ms (half of 4 ms), so each I/O takes about 5.5 ms, and 1 / 5.5 ms ≈ 182 IOPS."
+      },
+      {
+        "text": "About 133",
+        "explanation": "This adds a full 4 ms revolution (1 / 7.5 ms). On average the sector is only half a turn away, 2 ms."
+      },
+      {
+        "text": "About 15,000",
+        "explanation": "That's the spin rate per minute, not operations per second."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. One revolution: 60 / 15000 s = 4 ms.\n2. Average rotational latency: 4 / 2 = 2 ms.\n3. Time per random I/O:\n\n```\n3.5 ms seek + 2 ms rotation\n  + ~0.02 ms transfer ~= 5.5 ms\n```\n\n4. IOPS = 1 / 0.0055 s ≈ 182.\n\nCompare one NVMe SSD at several hundred thousand IOPS: random I/O is where flash wins by three or more orders of magnitude.",
+    "link": {
+      "title": "OSTEP: Hard Disk Drives (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SSD under a steady random-write workload garbage-collects blocks that are, on average, **75% valid** when chosen. The host writes 100 MB/s. Roughly how much is actually written to flash?",
+    "options": [
+      {
+        "text": "100 MB/s",
+        "explanation": "This assumes a write amplification of 1, which only happens when GC victims contain no valid data."
+      },
+      {
+        "text": "175 MB/s",
+        "explanation": "This adds 75% on top, but the copying cost grows much faster than linearly as blocks get fuller."
+      },
+      {
+        "text": "133 MB/s",
+        "explanation": "That's 1 / 0.75, which inverts the fraction. It's the *free* fraction (0.25) that each clean recovers."
+      },
+      {
+        "text": "400 MB/s",
+        "explanation": "Correct. WA ≈ 1 / (1 − u) = 1 / 0.25 = 4, so 100 MB/s of host writes become about 400 MB/s of flash writes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Cleaning one block: copy its valid pages (75% of a block) elsewhere, then erase.\n2. Space gained: 25% of a block.\n3. Writes to fill that space: the 0.25 of new host data, plus the 0.75 copied.\n\n```\nflash writes per host write\n  = (0.25 + 0.75) / 0.25 = 4\n```\n\n4. 100 MB/s × 4 = 400 MB/s to the flash, and four times the wear.\n\nMore free space (over-provisioning, TRIM) lowers u and brings WA down sharply.",
+    "link": {
+      "title": "Write amplification — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Write_amplification"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An SSD in a database server is suffering from high write amplification. Which actions would reduce it? Select all that apply.",
+    "options": [
+      {
+        "text": "Make sure the file system issues TRIM/discard (e.g. enable `fstrim.timer`)",
+        "explanation": "Reduces it. Without TRIM the FTL treats deleted files' pages as live and copies them during GC, raising the valid fraction u."
+      },
+      {
+        "text": "Leave 20% of the drive unpartitioned",
+        "explanation": "Reduces it. Space the host never writes acts as extra over-provisioning, giving GC emptier victims."
+      },
+      {
+        "text": "Defragment the file system weekly",
+        "explanation": "Increases it. Defragmenting rewrites lots of data for no benefit on flash, where there's no seek penalty."
+      },
+      {
+        "text": "Keep the file system at 98% full",
+        "explanation": "Increases it. A nearly full drive forces GC to clean blocks that are mostly valid, so WA climbs steeply."
+      },
+      {
+        "text": "Turn off `discard` and never run `fstrim`",
+        "explanation": "Increases it, for the same reason as the first option in reverse."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Everything comes back to the formula WA ≈ 1 / (1 − u), where u is how full GC victims are with valid data.\n\n1. TRIM: lets the drive know dead data is dead, so u falls. Helps.\n2. Unpartitioned space: more free flash, so u falls. Helps.\n3. Defragmenting: pure extra host writes. Hurts.\n4. 98% full: very little free space, u is high. Hurts.\n5. No TRIM: u rises. Hurts.",
+    "link": {
+      "title": "Write amplification — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Write_amplification"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A RAID 6 array has **12 disks at 200 random IOPS** each. The workload is 50% random reads and 50% random small writes. Roughly what IOPS can the array deliver?",
+    "options": [
+      {
+        "text": "About 2,400",
+        "explanation": "That's raw read IOPS. Each small write on RAID 6 costs six disk I/Os."
+      },
+      {
+        "text": "About 1,200",
+        "explanation": "This halves the total, as if writes cost 2 I/Os like a mirror. RAID 6 has two parities to update."
+      },
+      {
+        "text": "About 690",
+        "explanation": "Correct. Each logical I/O costs 0.5 × 1 + 0.5 × 6 = 3.5 disk I/Os on average, and 2,400 / 3.5 ≈ 686."
+      },
+      {
+        "text": "About 400",
+        "explanation": "That's the all-write figure (2,400 / 6). Half the workload is reads, which cost only one I/O."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Raw capacity: 12 × 200 = 2,400 disk IOPS.\n2. Cost per logical operation:\n   - read: 1 disk I/O\n   - small write on RAID 6: read data, P, Q; write data, P, Q = 6 I/Os\n3. Weighted average:\n\n```\n0.5 x 1 + 0.5 x 6 = 3.5\n```\n\n4. Deliverable IOPS: 2,400 / 3.5 ≈ 686.\n\nOn RAID 10 the same mix would cost 0.5 + 0.5 × 2 = 1.5, giving 1,600 IOPS, which is why write-heavy databases often use mirrors.",
+    "link": {
+      "title": "OSTEP: Redundant Arrays of Inexpensive Disks (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-raid.pdf"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a 3-data-disk RAID 5 stripe, disk1 has failed. The surviving chunks (shown as 4 bits) are:\n\n```\nD0 = 1011\nD2 = 0110\nP  = 1100   (P = D0 xor D1 xor D2)\n```\n\nWhat was D1?",
+    "options": [
+      {
+        "text": "0001",
+        "explanation": "Correct. D1 = D0 ⊕ D2 ⊕ P = 1011 ⊕ 0110 ⊕ 1100 = 0001."
+      },
+      {
+        "text": "1101",
+        "explanation": "That's D0 ⊕ D2 only. You also need to XOR with the parity."
+      },
+      {
+        "text": "1110",
+        "explanation": "This looks like an OR or a bit error in the second step. Redo the XOR column by column."
+      },
+      {
+        "text": "It can't be recovered without D1's mirror",
+        "explanation": "RAID 5 has no mirror: parity is exactly what makes recovery possible."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "XOR is its own inverse, so from P = D0 ⊕ D1 ⊕ D2 we get D1 = D0 ⊕ D2 ⊕ P.\n\n```\nD0       1011\nD2       0110\nD0^D2    1101\nP        1100\nD1       0001\n```\n\nCheck: 1011 ⊕ 0001 ⊕ 0110 = 1010 ⊕ 0110 = 1100 = P. ✓",
+    "link": {
+      "title": "OSTEP: Redundant Arrays of Inexpensive Disks (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-raid.pdf"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A RAID 5 array of **six 12 TB** enterprise disks loses one disk. The spec sheet quotes an unrecoverable read error rate of **1 in 10¹⁵ bits**. Taking that figure at face value, what is the rough chance the rebuild hits at least one URE?",
+    "options": [
+      {
+        "text": "About 9%",
+        "explanation": "This counts one disk: 12 TB = 9.6 × 10¹³ bits, so 0.096 expected errors. But the rebuild must read all five surviving disks."
+      },
+      {
+        "text": "About 38%",
+        "explanation": "Correct. The rebuild reads 5 × 12 TB = 60 TB = 4.8 × 10¹⁴ bits; expected UREs = 0.48; P(none) ≈ e^−0.48 ≈ 0.62, so ≈ 38% chance of at least one."
+      },
+      {
+        "text": "About 99%",
+        "explanation": "That would follow from a 1 in 10¹⁴ rate on a much larger read. With 10¹⁵ the expected count is under one."
+      },
+      {
+        "text": "0%, because enterprise disks never have UREs",
+        "explanation": "The spec is a probability, not a guarantee. Enterprise disks are rated better, not perfect."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Data the rebuild must read: every sector of the 5 surviving disks.\n\n```\n5 x 12 TB = 60 TB\n60e12 B x 8 = 4.8e14 bits\n```\n\n2. Expected errors at 1 per 10¹⁵ bits: 4.8e14 / 1e15 = 0.48.\n3. Treat errors as a Poisson process: P(0 errors) = e^−0.48 ≈ 0.62.\n4. P(at least one) ≈ 0.38.\n\nReal drives usually beat their worst-case spec, so this is pessimistic, but it shows why big arrays move to RAID 6 or RAID-Z2: a URE during a rebuild is then just another recoverable error.",
+    "link": {
+      "title": "Standard RAID levels — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Standard_RAID_levels"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An NVMe SSD serves 4 KiB random reads with **80 µs** average latency. You want **800,000 IOPS** from it. Using Little's law, how many I/Os must be in flight, and could AHCI's single 32-command queue get there?",
+    "options": [
+      {
+        "text": "8 in flight; AHCI is fine",
+        "explanation": "This mixes up the units: 800,000 × 80 µs is 64, not 8."
+      },
+      {
+        "text": "640 in flight; even NVMe can't queue that many",
+        "explanation": "That's a factor of ten too many. And NVMe allows up to 65,535 queues of up to 65,536 commands each."
+      },
+      {
+        "text": "It doesn't depend on queue depth, only on the link bandwidth",
+        "explanation": "800,000 × 4 KiB ≈ 3.3 GB/s fits in PCIe 4 x4. For small random I/O, the limit is concurrency × latency, not bandwidth."
+      },
+      {
+        "text": "64 in flight; AHCI could not, since 32 outstanding at 80 µs caps out at 400,000 IOPS",
+        "explanation": "Correct. L = λ × W = 800,000/s × 0.00008 s = 64. With at most 32 outstanding, throughput is at most 32 / 80 µs = 400,000 IOPS."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Little's law: outstanding requests L = throughput λ × latency W.\n\n1. λ = 800,000 /s, W = 80 µs = 8 × 10⁻⁵ s.\n\n```\nL = 800,000 x 0.00008 = 64\n```\n\n2. Rearranged, max throughput = L / W. With AHCI's limit of 32:\n\n```\n32 / 0.00008 = 400,000 IOPS\n```\n\n3. So you need deeper queues (NVMe, with per-core queues) and software that keeps them full: many threads, `libaio` or `io_uring`.",
+    "link": {
+      "title": "NVM Express — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/NVM_Express"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these protect a parity array against the **RAID 5 write hole** (a crash between writing new data and writing the matching parity)? Select all that apply.",
+    "options": [
+      {
+        "text": "A hardware RAID controller with a battery- or flash-backed write cache",
+        "explanation": "Protects. The in-flight data and parity survive power loss in the cache and are completed when power returns."
+      },
+      {
+        "text": "Linux md's write journal or partial parity log (PPL)",
+        "explanation": "Protects. md records the pending stripe update (journal) or enough parity information (PPL) to fix the stripe after a crash."
+      },
+      {
+        "text": "ZFS RAID-Z",
+        "explanation": "Protects. RAID-Z writes full, variable-width stripes copy-on-write, so it never has a half-updated stripe on disk."
+      },
+      {
+        "text": "Using a larger stripe unit, such as 1 MiB instead of 64 KiB",
+        "explanation": "Doesn't protect. Bigger chunks change performance characteristics, but a crash can still separate the data write from the parity write."
+      },
+      {
+        "text": "Switching to RAID 0 for speed",
+        "explanation": "Doesn't protect anything: RAID 0 has no parity to get wrong, but also no redundancy at all."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The write hole exists because a stripe update is two or more independent writes with no atomicity.\n\nAny fix must make the update atomic or recoverable:\n\n1. Non-volatile cache: finishes the update after the crash. ✓\n2. md journal / PPL: logs enough to redo or repair it, like a file system journal. ✓\n3. RAID-Z: never updates a stripe in place; the old stripe stays valid until the new one is complete and referenced. ✓\n4. Stripe size: unrelated to atomicity. ✗\n5. RAID 0: removes the redundancy you were trying to protect. ✗",
+    "link": {
+      "title": "RAID arrays (md) — Linux kernel documentation",
+      "url": "https://docs.kernel.org/admin-guide/md.html"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You benchmark a brand-new SSD with random 4 KiB writes. For the first few minutes it sustains its rated figure, then throughput drops to under a quarter of that and tail latency spikes to tens of milliseconds. Nothing else is running. What is happening?",
+    "options": [
+      {
+        "text": "The drive is thermally throttling and will recover if cooled",
+        "explanation": "Throttling exists, but it affects reads and sequential writes too, and the pattern here (fast until free blocks run out) is the classic GC signature."
+      },
+      {
+        "text": "The pre-erased free blocks have run out, so every write now waits for garbage collection to copy valid pages and erase blocks",
+        "explanation": "Correct. A fresh drive writes straight into erased blocks. Once they're used, the FTL must clean blocks as it goes, adding write amplification and stalls."
+      },
+      {
+        "text": "The page cache filled up and the kernel started throttling writers",
+        "explanation": "A good benchmark of an SSD uses `O_DIRECT` to avoid the page cache. And the latency spikes inside the drive are tens of ms, the scale of GC."
+      },
+      {
+        "text": "TRIM is erasing the data as it's written",
+        "explanation": "TRIM tells the drive about deleted LBAs; it doesn't erase newly written data, and a raw benchmark issues none."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Out of the box, all of the flash (including over-provisioning) is erased and ready.\n2. Random writes consume it at the full program speed.\n3. When free blocks run low, the FTL must run GC in the foreground: pick a block, copy its valid pages, erase it.\n4. Random overwrites leave victims fairly full of valid data, so WA might be 3–5×, and host throughput drops by that factor.\n5. A host write that arrives during an erase or a GC burst waits, producing latency spikes.\n\nThis is the **steady state**. Test SSDs after preconditioning (fill the drive, then write for a while), as SNIA's performance test guidelines recommend.",
+    "link": {
+      "title": "OSTEP: Flash-based SSDs (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-ssd.pdf"
+    }
+  }
+]

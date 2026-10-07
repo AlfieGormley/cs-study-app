@@ -1,0 +1,168 @@
+[
+  {
+    "id": "secf-principles-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A thumbnail service only needs to read images from one S3 bucket and write thumbnails to another. It is deployed with a role granting `s3:*` on all buckets. Which principle is violated?",
+    "options": [
+      { "text": "Open design", "explanation": "Open design is about not relying on secrecy of the design. Nothing here depends on hidden mechanisms." },
+      { "text": "Psychological acceptability", "explanation": "That principle is about whether humans will tolerate a control. The issue here is excess permissions." },
+      { "text": "Economy of mechanism", "explanation": "Economy of mechanism is about keeping security code small and reviewable, not about the scope of granted rights." },
+      { "text": "Least privilege", "explanation": "Correct. The service needs two narrow permissions but holds every S3 permission on every bucket, so a compromise could read, delete or expose all of them." }
+    ],
+    "answer": 3,
+    "workedExample": "1. List what the job needs: `GetObject` on bucket A, `PutObject` on bucket B.\n2. Compare with what it has: every S3 action on every bucket.\n3. The gap is the blast radius of a compromise: an RCE in the image library becomes access to all company data in S3.\n4. Fix: a policy naming exactly those two actions and two bucket ARNs.",
+    "link": { "title": "Principle of least privilege — Wikipedia", "url": "https://en.wikipedia.org/wiki/Principle_of_least_privilege" }
+  },
+  {
+    "id": "secf-principles-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which function follows **fail-safe defaults**?\n\n```python\n# A\ndef can_export(u):\n    return u.role != \"guest\"\n\n# B\ndef can_export(u):\n    return u.role in {\"admin\",\n                      \"analyst\"}\n```",
+    "options": [
+      { "text": "A, because it lets more legitimate users work", "explanation": "Convenience isn't the criterion. A denylist grants access to every role nobody thought to exclude." },
+      { "text": "B, because unknown or new roles get no access by default", "explanation": "Correct. An allowlist fails safe: if someone adds a `contractor` role and forgets this function, contractors simply can't export." },
+      { "text": "Both are equivalent", "explanation": "They agree only for today's roles. They diverge the moment a new role is introduced, which is exactly when defaults matter." },
+      { "text": "Neither, because both check roles", "explanation": "Role checks are fine. The principle is about whether the default answer is grant or deny." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Add a new role, `contractor`.\n2. A: `\"contractor\" != \"guest\"` -> True. Contractors can export: fails dangerously.\n3. B: `\"contractor\" in {admin, analyst}` -> False. Contractors can't: fails safe.\n4. Saltzer and Schroeder: base access on permission, not exclusion.",
+    "link": { "title": "The Protection of Information in Computer Systems — Saltzer and Schroeder", "url": "https://www.cs.virginia.edu/~evans/cs551/saltzer/" }
+  },
+  {
+    "id": "secf-principles-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team argues their admin panel is safe because it lives at an unguessable URL, `/x7q-admin`, with no login. Which principle does this violate?",
+    "options": [
+      { "text": "Open design: security must not depend on the attacker not knowing how the system works", "explanation": "Correct. The URL will leak through browser history, logs, referrer headers or a former employee. Kerckhoffs: only keys should be secret, and a URL is not a key." },
+      { "text": "Least common mechanism", "explanation": "That's about shared mechanisms between users. The flaw is reliance on secrecy." },
+      { "text": "Separation of privilege", "explanation": "Requiring two conditions would help, but the core violation is depending on obscurity instead of authentication." },
+      { "text": "It doesn't violate any principle if the URL is long enough", "explanation": "A long URL is still not an authenticator: it's logged, shared and cached everywhere. Length doesn't make obscurity into access control." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Ask: what stops an attacker who knows the URL? Nothing.\n2. URLs appear in proxy logs, browser history, analytics and screenshots, so assume it will leak.\n3. Fix: authentication plus authorisation (admin role), ideally MFA and network restriction as extra layers.\n4. Keeping the URL unpublished is fine as minor friction, never as the control.",
+    "link": { "title": "Security through obscurity — Wikipedia", "url": "https://en.wikipedia.org/wiki/Security_through_obscurity" }
+  },
+  {
+    "id": "secf-principles-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The UI hides the 'Delete user' button from non-admins, but `DELETE /api/users/{id}` only checks that the caller is logged in. Which principle is violated, and what is the fix?",
+    "options": [
+      { "text": "Psychological acceptability; show the button to everyone with a warning", "explanation": "Showing the button changes UX, not security. The API still lets anyone delete users." },
+      { "text": "Open design; obfuscate the API path", "explanation": "Hiding the path is obscurity. Anyone with browser dev tools sees API calls." },
+      { "text": "Complete mediation; enforce the admin check on the API itself", "explanation": "Correct. Every access must be checked at the point of access. UI hiding is a convenience, not a control; the server must authorise each request." },
+      { "text": "Defence in depth; add a WAF rule for DELETE requests", "explanation": "A WAF can't know who is an admin. It might be an extra layer, but the missing control is the server-side authorisation check." }
+    ],
+    "answer": 2,
+    "workedExample": "1. The UI is client-side, under the attacker's control.\n2. A non-admin can send `DELETE /api/users/42` with curl and their own valid session.\n3. The server checks authentication only, so it complies.\n4. Complete mediation: the API handler (or central middleware) must check `role == admin` on every call. Add a test asserting non-admins get 403.",
+    "link": { "title": "Authorization Cheat Sheet — OWASP", "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html" }
+  },
+  {
+    "id": "secf-principles-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this code do if `policy.check` raises a timeout, and which design choice does it represent?\n\n```python\ndef allowed(user, act):\n    try:\n        return policy.check(user, act)\n    except TimeoutError:\n        return True\n```",
+    "options": [
+      { "text": "Denies the request; fail closed", "explanation": "The except branch returns True, which grants access. Read the return value carefully." },
+      { "text": "Raises the exception to the caller; no default", "explanation": "The exception is caught and swallowed, so the caller never sees it." },
+      { "text": "Allows the request; fail open, which means anyone who can slow the policy service down gets access", "explanation": "Correct. Returning True on error is fail-open. An attacker who can cause timeouts (load, network disruption) turns an availability problem into an authorisation bypass." },
+      { "text": "Allows the request, which is always correct for availability", "explanation": "Fail-open is sometimes right (fire exits), but for an authorisation check it usually isn't. 'Always' is the misconception." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `policy.check` times out -> `TimeoutError` -> caught.\n2. The handler returns `True`: access granted.\n3. That is **fail open**. For authorisation it means outages become bypasses.\n4. Safer: `return False`, log the failure, and alert. If availability really matters more, make that a documented decision for that specific action.",
+    "link": { "title": "Fail-safe — Wikipedia", "url": "https://en.wikipedia.org/wiki/Fail-safe" }
+  },
+  {
+    "id": "secf-principles-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine examples of **defence in depth** (independent layers)? Select all that apply.",
+    "options": [
+      { "text": "Database in a private subnet, plus parameterised queries in the app", "explanation": "Correct. Network isolation and query safety fail for different reasons, so an attacker must beat both." },
+      { "text": "Two WAFs from the same vendor with the same rule set in series", "explanation": "They share the same failure mode: a bypass for one bypasses both. Correlated layers are effectively one layer." },
+      { "text": "MFA on login, plus per-request authorisation checks", "explanation": "Correct. Stolen credentials are stopped by MFA; a logged-in user overreaching is stopped by authorisation." },
+      { "text": "Encryption at rest with keys in a separate KMS, plus access logging and alerting on bulk reads", "explanation": "Correct. Encryption limits what a stolen disk reveals; detection catches abuse via legitimate access paths." },
+      { "text": "Validating input in the browser and trusting it on the server", "explanation": "Client-side validation is attacker-controlled. It's a UX feature, not a layer, and trusting it removes the real layer." }
+    ],
+    "answer": [0, 2, 3],
+    "workedExample": "Test each pair: does one failure defeat both?\n\n1. Subnet + parameterised queries: an SQLi doesn't open the network, and network access doesn't make queries injectable. Independent.\n2. Two identical WAFs: one bypass beats both. Not independent.\n3. MFA + authz: different threats, different mechanisms. Independent.\n4. KMS encryption + detection: different mechanisms. Independent.\n5. Browser validation: bypassed with curl, so it isn't a layer.",
+    "link": { "title": "Defense in depth (computing) — Wikipedia", "url": "https://en.wikipedia.org/wiki/Defense_in_depth_(computing)" }
+  },
+  {
+    "id": "secf-principles-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A company forces password changes every 30 days with complex composition rules. Help-desk tickets show staff using `Winter2025!`, `Spring2026!` and writing passwords on sticky notes. Which principle best explains why the policy backfired?",
+    "options": [
+      { "text": "Psychological acceptability", "explanation": "Correct. Controls that are too burdensome get worked around, producing predictable patterns that are weaker than a stable long password. NIST now says verifiers shall not force periodic changes." },
+      { "text": "Least common mechanism", "explanation": "Nothing here is a shared mechanism between users. The problem is human behaviour under a burdensome rule." },
+      { "text": "Complete mediation", "explanation": "Every login is still checked. The weakness is in the passwords users choose." },
+      { "text": "Fail-safe defaults", "explanation": "Defaults aren't involved. The policy actively pushes users towards weak behaviour." }
+    ],
+    "answer": 0,
+    "workedExample": "1. Rotation every 30 days means people need memorable passwords that change.\n2. They pick a base and increment it: season + year + symbol.\n3. An attacker with one old password can guess the next.\n4. Saltzer and Schroeder's psychological acceptability: make the secure path easy. Modern guidance (NIST SP 800-63B) drops forced rotation and composition rules in favour of length and breached-password checks.",
+    "link": { "title": "NIST SP 800-63B", "url": "https://pages.nist.gov/800-63-4/sp800-63b.html" }
+  },
+  {
+    "id": "secf-principles-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A setuid-root program does this:\n\n```c\nif (access(path, W_OK) == 0) {\n    fd = open(path, O_WRONLY);\n    write(fd, data, n);\n}\n```\n\n`access` checks the *real* user's permission. What is the flaw?",
+    "options": [
+      { "text": "`access` is deprecated, so the result is random", "explanation": "`access` works as documented. The issue is what happens between the check and the use." },
+      { "text": "Time-of-check to time-of-use: between `access` and `open`, an attacker can swap `path` for a symlink to a file they can't write, and `open` runs as root", "explanation": "Correct. The check and the use refer to the name, not the same object. The fix is to drop privileges and then open (so the kernel checks at use), or use the file descriptor throughout." },
+      { "text": "It writes `n` bytes, which may overflow the file", "explanation": "Files grow as needed; there is no buffer overflow from writing to a file descriptor here." },
+      { "text": "Nothing; the check uses the real user's permissions, which is correct", "explanation": "The check is right at the moment it runs. The flaw is that the object can change before the privileged `open`." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Check: `access(path)` asks 'can the real user write this name?' -> yes, it's their own file.\n2. Gap: the attacker replaces `path` with a symlink to `/etc/passwd`.\n3. Use: `open(path)` runs with effective uid 0 and follows the symlink.\n4. Root writes attacker data to a protected file.\n5. This violates complete mediation: the check didn't cover the access actually made. Fix: drop to the real uid before `open` so the kernel's own check applies at use.",
+    "link": { "title": "Time-of-check to time-of-use — Wikipedia", "url": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use" }
+  },
+  {
+    "id": "secf-principles-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A web app has a 'fetch preview' feature: the user supplies a URL and the server fetches it. An attacker submits `http://169.254.169.254/...`, the cloud metadata endpoint, and receives the server's credentials. Which framing best describes the root design flaw?",
+    "options": [
+      { "text": "Open design: the metadata address is publicly documented", "explanation": "It is documented, and that's fine. Its being documented isn't the flaw; the server using its own authority for the user is." },
+      { "text": "Economy of mechanism: the feature is too complex", "explanation": "Fetching a URL is simple. Complexity isn't what went wrong." },
+      { "text": "Fail-safe defaults: the feature should be off", "explanation": "Defaults matter, but the deeper issue is whose authority the fetch uses." },
+      { "text": "A confused deputy: the server uses its own network position and credentials on behalf of a less privileged user", "explanation": "Correct. This is SSRF, a modern confused deputy. Fixes: allowlist destinations, block internal ranges, require tokens for metadata (IMDSv2) and give the instance role least privilege." }
+    ],
+    "answer": 3,
+    "workedExample": "1. The user can't reach `169.254.169.254` directly; it's only reachable from the instance.\n2. The server (the deputy) can, and it fetches whatever the user says.\n3. So the user borrows the server's authority: a confused deputy.\n4. Layered fixes:\n   - validate and allowlist destinations;\n   - block link-local and private ranges after DNS resolution;\n   - IMDSv2 session tokens;\n   - least-privilege instance role so leaked credentials do little.",
+    "link": { "title": "Confused deputy problem — Wikipedia", "url": "https://en.wikipedia.org/wiki/Confused_deputy_problem" }
+  },
+  {
+    "id": "secf-principles-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A shared HTTP cache in front of a multi-tenant SaaS keys responses only by URL path. Tenant A requests `/dashboard` and the response (containing A's data) is cached. Which statements are true? Select all that apply.",
+    "options": [
+      { "text": "Tenant B requesting `/dashboard` may receive A's cached data", "explanation": "Correct. The cache key ignores who is asking, so any user hitting the same path can get A's response." },
+      { "text": "This violates least common mechanism: a shared mechanism lets one user's data reach another", "explanation": "Correct. The cache is a mechanism common to all tenants, and it isn't partitioned by tenant." },
+      { "text": "Encrypting the cache at rest fixes the problem", "explanation": "The leak is through the normal read path; encryption at rest protects stolen disks, not wrong responses." },
+      { "text": "Fixes include `Cache-Control: private` on personalised responses or including tenant identity in the cache key", "explanation": "Correct. Either stop shared caching of personalised content or partition the shared mechanism by tenant." }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "1. Request from A -> cache miss -> origin returns A's dashboard -> cached under `/dashboard`.\n2. Request from B -> cache hit on `/dashboard` -> B sees A's data.\n3. Principle: least common mechanism. The more users share a mechanism, the more it must isolate them.\n4. Fixes: `Cache-Control: private, no-store` for personalised pages, or a cache key including the tenant (`Vary` on an appropriate header) where that is safe.",
+    "link": { "title": "The Protection of Information in Computer Systems — Saltzer and Schroeder", "url": "https://www.cs.virginia.edu/~evans/cs551/saltzer/" }
+  },
+  {
+    "id": "secf-principles-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your finance system lets one clerk both create a new supplier and approve payments to it. Auditors flag this. Which principle addresses it, and what is the typical control?",
+    "options": [
+      { "text": "Least privilege; remove the clerk's login", "explanation": "Removing the login stops the work entirely. The issue isn't that the clerk has access but that one person can complete the whole sensitive flow alone." },
+      { "text": "Separation of privilege (separation of duties); require a different person to approve payments to newly created suppliers", "explanation": "Correct. Requiring two people means fraud needs collusion, which is far less likely than one dishonest or compromised account." },
+      { "text": "Open design; publish the supplier list", "explanation": "Publication doesn't stop a fake supplier from being paid." },
+      { "text": "Defence in depth; add antivirus to the clerk's laptop", "explanation": "Antivirus addresses malware, not a business process that lets one person commit fraud." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Fraud pattern: create fake supplier -> approve payment -> money leaves.\n2. If one person can do both, one dishonest insider (or one phished account) is enough.\n3. Separation of privilege: split the steps between people, enforced by the system, not just policy.\n4. The same idea gives us two-person code review and MFA (two independent proofs).",
+    "link": { "title": "Separation of duties — Wikipedia", "url": "https://en.wikipedia.org/wiki/Separation_of_duties" }
+  }
+]

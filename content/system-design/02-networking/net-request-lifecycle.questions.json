@@ -1,0 +1,379 @@
+[
+  {
+    "id": "net-request-lifecycle-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume HTTPS over TCP, no cached DNS answer or open connection, and no TCP Fast Open or TLS early data. What is the normal order?",
+    "options": [
+      {
+        "text": "TCP handshake → DNS lookup → TLS handshake → HTTP request",
+        "explanation": "TCP needs a destination IP address to send the SYN to, so it can't happen before DNS has turned the name into an IP."
+      },
+      {
+        "text": "DNS lookup → TLS handshake → TCP handshake → HTTP request",
+        "explanation": "TLS (over TCP) runs inside an established TCP connection; there's nowhere to send the ClientHello until TCP is open."
+      },
+      {
+        "text": "DNS lookup → HTTP request → TLS handshake → TCP handshake",
+        "explanation": "For HTTPS the HTTP request is encrypted, so it can only be sent after TLS has established keys; it can't come before the transport and security layers exist."
+      },
+      {
+        "text": "DNS lookup → TCP handshake → TLS handshake → HTTP request",
+        "explanation": "Correct. The name must be resolved first, then a TCP connection opened to that IP, then TLS negotiated over it, and only then can the encrypted HTTP request be sent."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work from dependencies:\n\n1. TCP needs an **IP address** → DNS must come first.\n2. TLS messages travel **over** the TCP connection → TCP comes before TLS.\n3. The HTTP request is **encrypted with TLS keys** → TLS comes before HTTP.\n\nSo: DNS → TCP → TLS → HTTP. (With HTTP/3, QUIC merges the transport and TLS handshakes into one, but DNS still comes first.)",
+    "link": {
+      "title": "What happens when... (GitHub)",
+      "url": "https://github.com/alex/what-happens-when"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user in London fetches a page from a single server in Virginia. RTT is 80 ms. DNS is already cached, and the server takes 20 ms to generate the response. Using TLS 1.3 on a brand-new connection, roughly how long until the first byte of the response arrives?",
+    "options": [
+      {
+        "text": "About 100 ms",
+        "explanation": "This counts only one round trip plus server time, as if the connection were already open. A new connection must first pay for the TCP and TLS handshakes."
+      },
+      {
+        "text": "About 260 ms",
+        "explanation": "Correct. TCP (1 RTT = 80 ms) + TLS 1.3 (1 RTT = 80 ms) + request/response (1 RTT = 80 ms) + 20 ms server time = 260 ms."
+      },
+      {
+        "text": "About 340 ms",
+        "explanation": "This includes an uncached DNS lookup (~80–100 ms) or a TLS 1.2 two-RTT handshake. The question says DNS is cached and TLS 1.3 needs only one round trip."
+      },
+      {
+        "text": "About 180 ms",
+        "explanation": "This counts two round trips plus server time, so it has dropped one of TCP, TLS or the request itself. All three are needed on a new connection."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the round trips on a cold connection:\n\n| Step | RTTs | Time |\n|---|---|---|\n| DNS | 0 (cached) | 0 ms |\n| TCP SYN/SYN-ACK | 1 | 80 ms |\n| TLS 1.3 | 1 | 80 ms |\n| GET + response | 1 | 80 ms |\n| Server work | - | 20 ms |\n\nTotal = 80 + 80 + 80 + 20 = **260 ms**. Notice that 160 ms of that is setup. On a reused connection the same request would take only 100 ms.",
+    "link": {
+      "title": "High Performance Browser Networking: Building blocks of TCP",
+      "url": "https://hpbn.co/building-blocks-of-tcp/"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users report ~900 ms page loads from Sydney and ~150 ms from New York. Your only servers are in us-east-1 and HTML is uncacheable. Traces show that the Sydney delay is dominated by connection-setup round trips; servers are not saturated and transfer time is negligible. Which listed change directly reduces that delay?",
+    "options": [
+      {
+        "text": "Putting a CDN in front so TCP and TLS terminate at a Sydney edge, with the edge keeping warm connections to the origin",
+        "explanation": "Correct. The handshakes now cost a ~10 ms RTT instead of ~200 ms, and the edge reuses a long-lived connection to Virginia, so only the request itself crosses the Pacific. Even uncacheable HTML benefits."
+      },
+      {
+        "text": "Doubling the number of app servers in us-east-1",
+        "explanation": "More servers help if they're overloaded, but New York is fast, so server capacity isn't the bottleneck. Sydney's problem is the ~200 ms RTT, which extra servers in Virginia don't change."
+      },
+      {
+        "text": "Upgrading the database to a larger instance",
+        "explanation": "Database time is the same for both cities, and New York is already fast. The extra ~750 ms in Sydney comes from distance, not query time."
+      },
+      {
+        "text": "Switching from gzip to Brotli compression",
+        "explanation": "Brotli shaves a few kilobytes, which helps bandwidth, but the delay here is dominated by round trips, not bytes. A smaller body still pays the same 3–4 trans-Pacific RTTs."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Compare the cities: the supplied traces establish that connection-setup round trips dominate.\n2. Sydney to Virginia RTT ≈ 200 ms. A cold page load is DNS + TCP + TLS + request ≈ 4 RTT ≈ 800 ms, which matches the ~900 ms observed.\n3. With a Sydney edge: assume DNS costs 10 ms and TCP and TLS each cost 10 ms. The edge forwards the request over an already-open connection to the origin: 1 × 200 ms.\n4. New total ≈ 10 + 10 + 10 + 10 (client–edge request/response) + 200 + server time ≈ **250 ms**.\n\nAdding servers, a bigger database or better compression doesn't touch the round-trip count, which is where the time goes.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these let a browser skip one or more network round trips on a later visit to the same site? Select all that apply.",
+    "options": [
+      {
+        "text": "A fresh copy of the resource in the browser's HTTP cache",
+        "explanation": "Correct. If the cached response is still fresh, the browser uses it without any network request at all: no DNS, TCP, TLS or HTTP round trips."
+      },
+      {
+        "text": "An HSTS entry for the domain",
+        "explanation": "Correct. HSTS makes the browser go straight to HTTPS, skipping the round trip(s) of an `http://` request that would only return a 301 redirect to `https://`."
+      },
+      {
+        "text": "Reusing a kept-alive connection to the origin",
+        "explanation": "Correct. A reused connection has already done DNS, TCP and TLS, so the next request costs just one round trip."
+      },
+      {
+        "text": "Setting a longer `Content-Length` header",
+        "explanation": "`Content-Length` just tells the receiver how big the body is. It has no effect on handshakes or caching, so it saves no round trips."
+      },
+      {
+        "text": "A cached DNS answer still within its TTL",
+        "explanation": "Correct. A cached answer lets the client skip the resolver queries entirely, saving anything from a few ms to over 100 ms."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Go through each round trip and ask what removes it:\n\n- **DNS** → cached answer within TTL.\n- **http→https redirect** → HSTS.\n- **TCP + TLS** → reuse an existing connection.\n- **The whole request** → a fresh HTTP cache entry.\n\n`Content-Length` describes a body; it doesn't remove any step. So the answer is the cache, HSTS, connection reuse and DNS caching.",
+    "link": {
+      "title": "Strict-Transport-Security (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During an incident, users get `502 Bad Gateway` from `api.example.com`. Your setup is CDN → load balancer → app servers. What does the 502 tell you most directly?",
+    "options": [
+      {
+        "text": "DNS for `api.example.com` is broken",
+        "explanation": "If DNS were broken the client couldn't reach anything, and would see a 'server not found' error rather than an HTTP status. Getting a 502 means DNS, TCP and TLS to the first hop all worked."
+      },
+      {
+        "text": "The client sent a malformed request",
+        "explanation": "Malformed client requests produce 4xx errors such as 400 Bad Request. A 5xx code means the problem is on the server side."
+      },
+      {
+        "text": "The TLS certificate has expired",
+        "explanation": "An expired certificate on the edge makes the browser abort the handshake with a certificate error, before any HTTP status exists. The user wouldn't see a 502 page."
+      },
+      {
+        "text": "A proxy in the chain is up, but got an invalid or no response from the server behind it",
+        "explanation": "Correct. 502 is generated by a gateway or proxy (the CDN or load balancer) when its upstream fails, for example app servers crashing, refusing connections or closing them mid-response."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The user received an **HTTP status**, so DNS, TCP and TLS to the first hop succeeded.\n2. 5xx means server side; specifically, **502 and 504 come from intermediaries**.\n3. 502 = the upstream gave a bad or no response; 504 = the upstream was too slow.\n4. So check the hop *behind* the one reporting it: is the load balancer seeing healthy targets? Are app servers crashing or restarting?\n\nThis layer-by-layer reasoning narrows an incident fast.",
+    "link": {
+      "title": "An overview of HTTP (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Overview"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A page loads resources from three additional unrelated origins. Assume they cannot coalesce connections, RTT to each is 40 ms, each DNS lookup independently takes 40 ms, and each uses a new TLS 1.3/TCP connection without early data or retry. What setup cost does each origin add, and what helps?",
+    "options": [
+      {
+        "text": "The browser has to download the TLS certificate chain three extra times, which costs about 1 MB",
+        "explanation": "Certificate chains are a few kilobytes, not megabytes. The cost is round-trip latency for each handshake, not certificate bandwidth."
+      },
+      {
+        "text": "There's no extra cost because HTTP/2 multiplexes all origins over one connection",
+        "explanation": "HTTP/2 multiplexes requests within one connection to **one origin**. It can't carry requests for unrelated hostnames on different servers."
+      },
+      {
+        "text": "Each origin needs its own DNS + TCP + TLS (about 3 RTT ≈ 120 ms); consolidate onto fewer origins or use `preconnect` hints",
+        "explanation": "Correct. Connections can't be shared across different hostnames (without certificate and IP coalescing), so each new origin pays its own setup. Fewer origins or early `preconnect` hides or removes that cost."
+      },
+      {
+        "text": "Browsers block third-party scripts, so the scripts never load",
+        "explanation": "Browsers block some third-party cookies and trackers, not scripts in general. The question is about latency, and these resources do load."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A new origin = new hostname = new DNS lookup (~1 RTT to a resolver), a new TCP handshake (1 RTT) and a new TLS handshake (1 RTT).\n2. That's ≈ 3 × 40 = **120 ms** of setup per origin before its first request.\n3. The browser does these in parallel, but they start only once the HTML has been parsed far enough to discover them, so they sit on the critical path.\n4. Fixes: self-host fonts and scripts on the main origin (it's reusing a warm connection), or add `<link rel=\"preconnect\" href=\"https://fonts.cdn-a.net\">` so the setup starts while the HTML is still downloading.",
+    "link": {
+      "title": "How browsers work (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/How_browsers_work"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your product team wants a 100 ms time-to-first-byte target for users in Mumbai. Your origin is in Frankfurt (RTT ≈ 120 ms), and responses are personalised and uncacheable. What is the honest assessment?",
+    "options": [
+      {
+        "text": "Achievable by tuning the app server to respond in under 10 ms",
+        "explanation": "Even a 0 ms server can't beat physics: at least one 120 ms round trip to Frankfurt is needed to get personalised data, which already exceeds 100 ms."
+      },
+      {
+        "text": "Not achievable from Frankfurt; you need compute and data closer to Mumbai (e.g. an Indian region), and an edge only partly helps",
+        "explanation": "Correct. An edge removes the handshake RTTs, but the uncacheable request still needs one 120 ms trip to the origin. Meeting 100 ms means moving the origin, or the data it needs, nearer to the users."
+      },
+      {
+        "text": "Achievable with TLS 1.3 0-RTT alone",
+        "explanation": "0-RTT removes the TLS round trip on resumption, but the request still has to travel to Frankfurt and back (120 ms), so it can't reach 100 ms on its own."
+      },
+      {
+        "text": "Achievable by switching to UDP",
+        "explanation": "Changing transport can remove handshake round trips, but the request/response still has to cross the 120 ms path. UDP doesn't make light travel faster."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Assume each response requires a round trip to Frankfurt, with a fixed 120 ms RTT. That alone exceeds the 100 ms target.\n2. A Mumbai edge with 5 ms client RTT, a warm 120 ms origin path and new TCP/TLS connection takes 5 + 5 + 5 + 120 + server time = 135 ms plus server time.\n3. Meeting the target requires changing the dependency or placing the necessary compute/data closer. Actual routing improvements could also change the assumed RTT; 120 ms is a scenario input, not a universal physical constant.",
+    "link": {
+      "title": "Global Accelerator overview (AWS)",
+      "url": "https://docs.aws.amazon.com/global-accelerator/latest/dg/what-is-global-accelerator.html"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a client starts with an explicit `http://bank.example.com/` URL and has no HTTPS-first upgrading, HTTPS DNS upgrade, cached/inherited HSTS policy or preload entry. The server redirects HTTP to HTTPS and sends HSTS over HTTPS. What happens on the first visit?",
+    "options": [
+      {
+        "text": "The browser goes straight to HTTPS because the site supports HSTS",
+        "explanation": "HSTS itself cannot upgrade this request because this client has no applicable policy. Other browser features can prefer HTTPS, but the question explicitly excludes them."
+      },
+      {
+        "text": "The browser sends a plain `http://` request, gets a redirect to `https://`, and only then learns the HSTS policy for future visits",
+        "explanation": "Correct. The first request goes out unencrypted and the redirect costs an extra round trip (or more). That first hop is also the window an on-path attacker can exploit, which is exactly what the preload list closes."
+      },
+      {
+        "text": "The connection fails because HSTS forbids plain HTTP entirely",
+        "explanation": "HSTS tells a browser that has already seen the policy to refuse plain HTTP. It can't affect a browser that has never received it."
+      },
+      {
+        "text": "The DNS resolver upgrades the request to HTTPS",
+        "explanation": "DNS only maps names to addresses; it doesn't rewrite URL schemes. (An `HTTPS` DNS record can hint that a site supports HTTPS, but that's a browser decision, not the resolver's.)"
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. HSTS is learnt from a response header, so the browser must receive one HTTPS response first.\n2. First visit: the specified client starts with the explicit `http://` URL, connects to port 80 and sends the request in the clear.\n3. The server replies `301` to `https://bank.example.com/`: one wasted round trip, plus a new TCP connection to port 443.\n4. Over HTTPS, the response carries `Strict-Transport-Security: max-age=...`. From now on the browser upgrades by itself.\n5. To protect even the first visit, submit the domain to the **HSTS preload list**, which ships inside browsers.",
+    "link": {
+      "title": "Strict-Transport-Security (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your mobile app reports that connecting to `api.example.com` sometimes *hangs for about 20 seconds* and then fails, rather than failing instantly. DNS resolves correctly. Which explanation fits the symptom best?",
+    "options": [
+      {
+        "text": "Nothing is listening on port 443, so the server refuses the connection",
+        "explanation": "A host with nothing listening replies at once with a TCP reset, which the client reports immediately as 'connection refused'. That's fast, not a 20-second hang."
+      },
+      {
+        "text": "The certificate has expired",
+        "explanation": "Certificate checks happen after TCP connects, during the TLS handshake, and fail quickly with a certificate error. They don't cause a long silent wait before connecting."
+      },
+      {
+        "text": "The server returned `504 Gateway Timeout`",
+        "explanation": "A 504 is an HTTP response, which means TCP and TLS already succeeded. The symptom here is failing to connect at all."
+      },
+      {
+        "text": "SYN packets are being silently dropped (a firewall or security group rule, or a dead host), so the client keeps retransmitting until its connect timeout expires",
+        "explanation": "Correct. With no reply at all, the client's TCP stack retries the SYN with growing gaps (roughly 1 s, 2 s, 4 s...) until the app's connect timeout fires. Silence means drop; an instant failure means refusal."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Separate the two TCP failure shapes:\n\n| Symptom | Meaning |\n|---|---|\n| Instant 'refused' | Host replied with RST |\n| Long hang, timeout | No reply at all |\n\n1. DNS is fine and the failure happens *before* TLS, so it's at the TCP layer.\n2. A hang means SYNs vanish: a firewall rule dropping traffic, a host that's down, or a route that black-holes packets.\n3. The client retransmits the SYN with exponential backoff until its connect timeout.\n4. Fixes: check security groups and network ACLs, and set a short client connect timeout (a few seconds) so the app fails fast and can retry elsewhere.",
+    "link": {
+      "title": "High Performance Browser Networking: Building blocks of TCP",
+      "url": "https://hpbn.co/building-blocks-of-tcp/"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A London user requests an uncacheable page through a CDN edge in London (RTT 10 ms). The origin is in Virginia (edge-to-origin RTT 80 ms) and the edge already holds a warm connection to it. DNS is cached, TLS 1.3 is used, and the origin takes 20 ms. Roughly what is the time to first byte on a new user connection?",
+    "options": [
+      {
+        "text": "About 35 ms",
+        "explanation": "That's the cache-hit case from the lesson. On a miss, the edge still has to fetch the page from Virginia, which costs at least one 80 ms round trip."
+      },
+      {
+        "text": "About 340 ms",
+        "explanation": "That's going direct to Virginia with an uncached DNS lookup. The handshakes here happen with the nearby edge, not with Virginia."
+      },
+      {
+        "text": "About 130 ms",
+        "explanation": "Correct. TCP 10 + TLS 10 + request to the edge 10 + edge-to-origin round trip 80 + server 20 = 130 ms."
+      },
+      {
+        "text": "About 290 ms",
+        "explanation": "This charges full handshakes to Virginia as well. Because the edge reuses a warm connection, only the request itself crosses the Atlantic."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Split the path into the short hop and the long hop:\n\n| Step | Time |\n|---|---|\n| TCP to edge | 10 ms |\n| TLS 1.3 at edge | 10 ms |\n| Request to edge | 10 ms |\n| Edge to origin (warm) | 80 ms |\n| Origin work | 20 ms |\n| **Total** | **130 ms** |\n\nDirect, it would be 3 × 80 + 20 = 260 ms. The edge halves it by moving the handshakes, but it can't remove the one trip to wherever the data lives.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a 17,000 km fibre path at 200,000 km/s. What propagation floor does that imply for RTT and for four sequential round trips over this same path?",
+    "options": [
+      {
+        "text": "About 57 ms, so a well-tuned server could serve Sydney from London quickly",
+        "explanation": "57 ms is the one-way time for light in a *vacuum* (17,000 / 300,000 s). Fibre is slower, and a round trip goes there and back."
+      },
+      {
+        "text": "About 85 ms, so three round trips fit in a quarter of a second",
+        "explanation": "85 ms is the one-way time in fibre. A round trip doubles it."
+      },
+      {
+        "text": "About 340 ms, because each round trip crosses the distance four times",
+        "explanation": "A round trip crosses the distance twice (there and back), not four times."
+      },
+      {
+        "text": "About 170 ms for the assumed fibre path, so four sequential trips over it require at least 680 ms before other delays",
+        "explanation": "Correct. One-way: 17,000 / 200,000 = 85 ms; round trip ≈ 170 ms. Cables don't follow the great circle, so real RTTs are higher still. Only moving servers or edges closer beats this."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. One way: 17,000 / 200,000 s = 85 ms.\n2. Round trip: 170 ms before additional queueing or route distance.\n3. Four sequential trips over that same path take at least 680 ms. This does not automatically describe a cold HTTPS request: DNS may use a nearby resolver, while a normal TCP/TLS1.3 request needs three origin round trips.\n4. Protocol changes reduce trip counts; endpoint placement, physical route and transmission medium affect propagation time.",
+    "link": {
+      "title": "High Performance Browser Networking: Primer on latency",
+      "url": "https://hpbn.co/primer-on-latency-and-bandwidth/"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A network operator can inspect your decrypted IP packets on café Wi-Fi. You access `https://shop.example.com/cart` using plain UDP DNS, no VPN/proxy and no ECH. What can this passive observer learn directly? Select all that apply.",
+    "options": [
+      {
+        "text": "The IP address of the server you connect to",
+        "explanation": "Correct. IP headers must be readable for packets to be routed, so the destination address is always visible."
+      },
+      {
+        "text": "The path `/cart` and your session cookie",
+        "explanation": "These are inside the encrypted HTTP request. TLS hides the method, path, headers, cookies and body."
+      },
+      {
+        "text": "The hostname `shop.example.com`, from the DNS query",
+        "explanation": "Correct. Classic DNS over UDP port 53 is unencrypted, so the query and answer are visible. DoH or DoT would hide this hop."
+      },
+      {
+        "text": "The hostname `shop.example.com`, from the TLS ClientHello",
+        "explanation": "Correct. Without ECH, the SNI extension carries the hostname in the clear so the server can choose a certificate."
+      },
+      {
+        "text": "The exact prices on the page",
+        "explanation": "The response body is encrypted. An observer sees only its approximate size and timing."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. In this scenario the observer sees destination IP headers; a VPN would instead expose its outer endpoint.\n2. Plain UDP DNS reveals the queried hostname.\n3. Without ECH, SNI reveals the hostname again.\n4. TLS encrypts the HTTP path, cookies and body. Timing, size and destination IP can still leak information; encrypted DNS plus ECH does not guarantee site anonymity.",
+    "link": {
+      "title": "Server Name Indication (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Server_Name_Indication"
+    }
+  }
+]

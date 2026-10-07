@@ -1,0 +1,378 @@
+[
+  {
+    "id": "crypto-key-exchange-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does a plain (unauthenticated) Diffie–Hellman exchange achieve on its own?",
+    "options": [
+      {
+        "text": "Two parties agree a shared secret over a public channel that a passive eavesdropper can't compute",
+        "explanation": "Correct. That's exactly DH's job. It doesn't by itself tell either side who they're talking to."
+      },
+      {
+        "text": "Two parties prove their identities to each other",
+        "explanation": "DH has no identities in it. Proving identity needs signatures, certificates or pre-shared public keys."
+      },
+      {
+        "text": "A message is encrypted directly with the other party's public value",
+        "explanation": "DH produces a shared secret; you then derive symmetric keys from it and encrypt with AES-GCM or similar."
+      },
+      {
+        "text": "Protection against an attacker who can modify messages in transit",
+        "explanation": "An active attacker can run a separate exchange with each side (man in the middle). Plain DH only resists passive eavesdroppers."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Each side picks a secret exponent and publishes `g^secret mod p`.\n2. Each combines its own secret with the other's public value to get `g^(ab) mod p`.\n3. An eavesdropper sees `g^a` and `g^b` but can't compute `g^(ab)` without solving a discrete log.\n4. Nothing in the messages says *who* sent them, so an active attacker can substitute their own values. Authentication must be added separately.",
+    "link": {
+      "title": "Diffie–Hellman key exchange — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "With public parameters `p = 23` and `g = 5`, Alice picks the secret `a = 4`. What value `A` does she send to Bob?",
+    "options": [
+      {
+        "text": "`20`",
+        "explanation": "That's `5 × 4 = 20`. DH uses exponentiation, not multiplication: `A = g^a mod p`."
+      },
+      {
+        "text": "`625`",
+        "explanation": "That's `5^4` without reducing modulo 23. All values are taken mod `p`."
+      },
+      {
+        "text": "`4`",
+        "explanation": "Correct. `5^4 = 625`, and `625 = 27 × 23 + 4`, so `A = 4`. (It's a coincidence that it equals `a`.)"
+      },
+      {
+        "text": "`12`",
+        "explanation": "That's `4^5 mod 23` (1024 mod 23 = 12), with base and exponent swapped. The base is the public `g`; the exponent is the secret `a`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `A = g^a mod p = 5^4 mod 23`.\n2. Square and multiply:\n\n```\n5^2 = 25  = 2  (mod 23)\n5^4 = 2^2 = 4  (mod 23)\n```\n\n3. Or directly: `625 − 27 × 23 = 625 − 621 = 4`.\n4. Alice sends `A = 4`. Its equality with `a` is coincidence; for real parameters `A` reveals nothing obvious about `a`.",
+    "link": {
+      "title": "Diffie–Hellman key exchange — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Eve records `p`, `g`, `A = g^a mod p` and `B = g^b mod p` from a DH exchange using a 2,048-bit prime. Why can't she compute the shared secret?",
+    "options": [
+      {
+        "text": "The values are encrypted with AES before being sent",
+        "explanation": "DH public values are sent in the clear. Their safety comes from mathematics, not from extra encryption."
+      },
+      {
+        "text": "She would need to solve a discrete logarithm (find `a` from `g^a mod p`), which is infeasible at that size",
+        "explanation": "Correct. Exponentiation mod `p` is easy, but reversing it is believed hard. Without `a` or `b`, she can't form `g^(ab)`."
+      },
+      {
+        "text": "She would need to factor `p`",
+        "explanation": "`p` is prime; there's nothing to factor. Factoring is RSA's hard problem, not DH's."
+      },
+      {
+        "text": "Multiplying `A × B` gives `g^(a+b)`, not `g^(ab)`, and that difference can't be fixed",
+        "explanation": "This is a true observation, but the real reason is that no shortcut from `g^a`, `g^b` to `g^(ab)` is known without a discrete log."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Eve knows `g`, `p`, `g^a`, `g^b`.\n2. The secret is `g^(ab)`. Combining public values easily gives `g^(a+b)` (multiply) but not `g^(ab)`.\n3. To get `g^(ab)` she needs `a` or `b`: solve `g^x ≡ A (mod p)`, the **discrete logarithm problem**.\n4. With `p = 23` she can try all 22 exponents. With a 2,048-bit `p`, the best known algorithms are far too slow.",
+    "link": {
+      "title": "Diffie–Hellman key exchange — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using `p = 23`, `g = 5`: Alice's secret is `a = 4`. She receives `B = 10` from Bob. What shared secret does she compute?",
+    "options": [
+      {
+        "text": "`40`",
+        "explanation": "That's `a × B`. The shared secret is `B^a mod p`."
+      },
+      {
+        "text": "`18`",
+        "explanation": "Correct. `10^4 = 10,000`, and `10,000 mod 23 = 18`. Bob, whose secret is `b = 3`, gets the same: `4^3 mod 23 = 64 mod 23 = 18`."
+      },
+      {
+        "text": "`4`",
+        "explanation": "4 is Alice's own public value `A`. She needs to combine Bob's value with her secret."
+      },
+      {
+        "text": "`10`",
+        "explanation": "That's just Bob's public value. Without raising it to Alice's secret, Eve would know it too."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Alice computes `s = B^a mod p = 10^4 mod 23`.\n\n```\n10^2 = 100 = 8   (mod 23)\n10^4 = 8^2 = 64 = 18 (mod 23)\n```\n\n2. Check from Bob's side. `B = 10 = 5^3 mod 23`, so `b = 3`. Alice's `A = 4`.\n\n```\nA^b = 4^3 = 64 = 18 (mod 23)\n```\n\n3. Both get `18 = 5^(4×3) = 5^12 mod 23`.",
+    "link": {
+      "title": "Diffie–Hellman key exchange — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A smart-lock app pairs with its hub by running unauthenticated X25519 over Bluetooth, then encrypts commands with AES-GCM under the derived key. An attacker within radio range during pairing can intercept and alter packets. What can they do?",
+    "options": [
+      {
+        "text": "Nothing: X25519 and AES-GCM are both secure",
+        "explanation": "The primitives are secure, but the protocol never checks *whose* public key it received. That gap is the attack."
+      },
+      {
+        "text": "Only learn the AES-GCM nonces",
+        "explanation": "Nonces aren't secret anyway. The attacker gets much more: full control of the channel."
+      },
+      {
+        "text": "Brute-force the 256-bit shared secret",
+        "explanation": "Brute force is infeasible and unnecessary. The attacker simply becomes each side's peer."
+      },
+      {
+        "text": "Run a separate exchange with the app and with the hub, then decrypt, read and modify every command (a man-in-the-middle attack)",
+        "explanation": "Correct. Each side ends up sharing a key with the attacker. Pairing must be authenticated, e.g. by confirming a code shown on both devices or using a pre-installed hub public key."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. App sends its public key `A`. Attacker replaces it with their own `M1` before it reaches the hub.\n2. Hub sends `B`. Attacker replaces it with `M2`.\n3. App computes a key with `M2` (shared with attacker). Hub computes a key with `M1` (also shared with attacker).\n4. The attacker decrypts each command, can change `lock` to `unlock`, and re-encrypts for the hub.\n5. Neither side notices, because nothing ties the public keys to identities. Bluetooth's own secure pairing uses numeric comparison or passkeys for exactly this reason.",
+    "link": {
+      "title": "Man-in-the-middle attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Man-in-the-middle_attack"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker recorded a bank's TLS traffic in 2024. In 2026 they steal the server's long-term private key. For which sessions can they now decrypt the recorded traffic?",
+    "options": [
+      {
+        "text": "All of them, regardless of key exchange",
+        "explanation": "Ephemeral (EC)DHE sessions don't depend on the long-term key for secrecy, so they stay protected."
+      },
+      {
+        "text": "Sessions that used RSA key transport, but not sessions that used ephemeral ECDHE",
+        "explanation": "Correct. With RSA key transport the session key was encrypted to the long-term key. With ECDHE the long-term key only signed the exchange, and the ephemeral secrets were deleted: forward secrecy."
+      },
+      {
+        "text": "Sessions that used ECDHE, but not those that used RSA key transport",
+        "explanation": "This is backwards. ECDHE is the one with forward secrecy."
+      },
+      {
+        "text": "None of them, because TLS session keys expire",
+        "explanation": "Expiry doesn't help against recorded ciphertext: if the attacker can rederive the old session key, they decrypt the recording."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **RSA key transport** (TLS 1.2 and earlier): the client sends `Enc(server_pub, premaster)`. Recorded traffic contains this. Steal `server_priv`, decrypt the premaster, derive the session keys, decrypt everything.\n2. **ECDHE**: both sides use fresh key pairs per connection and discard them. The server's long-term key only *signed* the handshake.\n3. Stealing the signing key in 2026 lets the attacker impersonate the server from then on, but can't recreate 2024's ephemeral secrets.\n4. That's forward secrecy. TLS 1.3 requires ephemeral key exchange for certificate handshakes.",
+    "link": {
+      "title": "Forward secrecy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Forward_secrecy"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these stop a man in the middle from hijacking a Diffie–Hellman exchange? Select all that apply.",
+    "options": [
+      {
+        "text": "The TLS 1.3 server signs the handshake transcript with its certificate's private key, and the client validates the certificate",
+        "explanation": "Correct. The signature binds the server's DH share to an identity a trusted CA vouched for."
+      },
+      {
+        "text": "Using a 4,096-bit prime instead of a 2,048-bit one",
+        "explanation": "Bigger parameters resist discrete-log attacks, not active substitution. The MITM simply runs DH with each side."
+      },
+      {
+        "text": "SSH remembering the server's host key in `known_hosts` and warning if it changes",
+        "explanation": "Correct. The host key signs the exchange; after first use, a substituted key is detected."
+      },
+      {
+        "text": "WireGuard peers configured in advance with each other's static public keys",
+        "explanation": "Correct. The handshake mixes in those static keys, so only the expected peer can complete it."
+      },
+      {
+        "text": "Encrypting the DH public values with the key derived from the exchange",
+        "explanation": "Circular: the key doesn't exist until the exchange completes, and the MITM has their own version of it anyway."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "A MITM works because DH values aren't tied to identities. A defence must bind the exchange to something the attacker can't fake:\n\n1. TLS 1.3 `CertificateVerify`: signature by a CA-certified key. **Stops it.**\n2. Larger prime: still unauthenticated. **Doesn't.**\n3. SSH host key pinning: signature by a remembered key. **Stops it** (after first use).\n4. WireGuard static keys: pre-shared public keys. **Stops it.**\n5. Encrypting with the derived key: circular. **Doesn't.**",
+    "link": {
+      "title": "Man-in-the-middle attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Man-in-the-middle_attack"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After an X25519 exchange, a developer uses the 32-byte shared secret directly as the AES-GCM key for **both** directions, each side starting its nonce counter at 0. What's the most serious problem?",
+    "options": [
+      {
+        "text": "32 bytes is too long for an AES key",
+        "explanation": "AES-256 takes exactly 32 bytes; the length isn't the issue."
+      },
+      {
+        "text": "X25519 secrets are only valid for one message",
+        "explanation": "The secret can key a whole session. The issues are how it's used and shared across directions."
+      },
+      {
+        "text": "Both sides encrypt with the same key and the same nonces (0, 1, 2, ...), so nonces collide and GCM breaks",
+        "explanation": "Correct. Client message 0 and server message 0 share key and nonce, leaking their XOR and the GHASH key. Derive separate keys per direction with HKDF and distinct `info` labels."
+      },
+      {
+        "text": "AES-GCM can't be used after a key exchange",
+        "explanation": "AES-GCM after (EC)DHE is exactly what TLS 1.3 does. It needs properly derived keys."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Same key `K` used by client and server.\n2. Each starts its nonce counter at 0. Client's first message: `(K, nonce 0)`. Server's first message: `(K, nonce 0)`.\n3. GCM nonce reuse: `C1 XOR C2 = P1 XOR P2`, and the authentication key can be recovered, enabling forgeries.\n4. Also, raw DH output isn't uniformly random, so it shouldn't be used as a key directly.\n5. Fix:\n\n```\nk_c2s = HKDF(s, info=\"c2s key\")\nk_s2c = HKDF(s, info=\"s2c key\")\n```\n\nTLS 1.3's key schedule derives separate client and server traffic keys this way.",
+    "link": {
+      "title": "RFC 5869: HKDF",
+      "url": "https://www.rfc-editor.org/rfc/rfc5869"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a DH exchange with `p = 23`, `g = 5`, Alice's secret is `a = 6`. Mallory replaces Bob's value with `B = 22` (which is `−1 mod 23`). What shared secret does Alice compute, and what's the lesson?",
+    "options": [
+      {
+        "text": "`22`, so Mallory learns nothing",
+        "explanation": "`22^6 = (−1)^6 = 1`, not 22. And either way Mallory would know the result, since only two values are possible."
+      },
+      {
+        "text": "A random-looking value that only Alice knows",
+        "explanation": "Values of tiny order force the result into a tiny set. That's the whole attack."
+      },
+      {
+        "text": "`1`, because `(−1)^6 = 1`; values of small order collapse the secret into a tiny, guessable set, so received values must be validated",
+        "explanation": "Correct. `22` has order 2, so `22^a` is 1 (even `a`) or 22 (odd `a`). Libraries reject 0, 1 and `p − 1` and check subgroup membership; X25519 is designed to sidestep most such checks."
+      },
+      {
+        "text": "An error, because 22 isn't a valid DH value",
+        "explanation": "Mathematically it's a fine number mod 23. Only a validating implementation would reject it, which is exactly the point."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `22 ≡ −1 (mod 23)`.\n2. Alice computes `s = 22^6 mod 23 = (−1)^6 = 1`.\n\n```\n22^a mod 23 = 1   (a even)\n            = 22  (a odd)\n```\n\n3. Mallory knows `s` is 1 or 22, and can decrypt with either.\n4. Variants with larger small-order elements can leak `a mod (order)`, bit by bit, from a long-term key.\n5. Defences: safe primes `p = 2q + 1` (23 = 2 × 11 + 1), generators of the prime-order subgroup, and validating received values. Or use X25519, which avoids most of this by design.",
+    "link": {
+      "title": "Diffie–Hellman key exchange — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A home-made protocol uses `p = 23` with generator `g = 2` instead of 5. Powers of 2 mod 23 cycle with period 11. How many distinct shared secrets `g^(ab) mod 23` are possible?",
+    "options": [
+      {
+        "text": "22",
+        "explanation": "That would be true for a generator of the full group, like 5. The base 2 only reaches half the elements."
+      },
+      {
+        "text": "11",
+        "explanation": "Correct. 2 has order 11, so every power of 2, and therefore every shared secret, lies in an 11-element subgroup."
+      },
+      {
+        "text": "23",
+        "explanation": "There are only 22 non-zero residues mod 23, and powers of 2 reach just 11 of them."
+      },
+      {
+        "text": "2",
+        "explanation": "Two values is what you get from an element of order 2 (like 22). The element 2 has order 11."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The order of 2 mod 23 is the smallest `k` with `2^k ≡ 1`:\n\n```\n2^1=2  2^2=4  2^3=8  2^4=16\n2^5=9  2^6=18 2^7=13 2^8=3\n2^9=6  2^10=12 2^11=1\n```\n\n2. So `{2^x}` has 11 elements, and `g^(ab)` must be one of them.\n3. Using 5 (order 22) would give 22 possibilities.\n4. At real sizes the principle is the same: the security depends on the size of the subgroup `g` generates, not just on `p`. Vetted groups (RFC 7919) specify `p` and `g` so the subgroup has large prime order.",
+    "link": {
+      "title": "RFC 7919: Negotiated FFDHE groups for TLS",
+      "url": "https://www.rfc-editor.org/rfc/rfc7919"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which conclusions follow from the 2015 Logjam research? Select all that apply.",
+    "options": [
+      {
+        "text": "Servers that still accepted 512-bit export-grade DH could be downgraded and broken by an active attacker",
+        "explanation": "Correct. A MITM could force export-grade parameters and solve the discrete log in minutes."
+      },
+      {
+        "text": "Many servers sharing a few standard 1,024-bit primes made one-off precomputation by a nation-state attacker plausible",
+        "explanation": "Correct. Most of the number field sieve's work depends only on `p`, so a shared prime is a shared target."
+      },
+      {
+        "text": "Moving to a larger RSA certificate key fixes the problem",
+        "explanation": "Certificate key size doesn't change the DH group; the weak discrete-log parameters remain."
+      },
+      {
+        "text": "Use groups of at least 2,048 bits (e.g. RFC 7919 `ffdhe2048`) or elliptic-curve DH",
+        "explanation": "Correct. These were the recommended mitigations; ECDH such as X25519 isn't subject to the number field sieve at all."
+      },
+      {
+        "text": "Diffie–Hellman as a concept is broken and should be abandoned",
+        "explanation": "The attacks targeted weak and shared parameters, not DH itself. ECDHE remains the backbone of TLS 1.3."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Logjam (weakdh.org) found two problems with **finite-field DH parameters**:\n\n1. **Export-grade downgrade.** Servers accepting `DHE_EXPORT` let a MITM force 512-bit groups. With precomputation, individual connections broke in minutes. **True.**\n2. **Shared 1,024-bit primes.** The number field sieve's expensive precomputation depends only on `p`. A few primes covered a large fraction of servers. **True.**\n3. RSA certificate size: irrelevant to the DH group. **False.**\n4. Mitigations: ≥2,048-bit groups or ECDH. **True.**\n5. DH itself is fine with good parameters. **False.**",
+    "link": {
+      "title": "Imperfect Forward Secrecy: the Logjam attack",
+      "url": "https://weakdh.org/"
+    }
+  },
+  {
+    "id": "crypto-key-exchange-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On the toy curve `y² = x³ + 2x + 2 (mod 17)` with `G = (5, 1)` (order 19), Alice's ECDH secret is `a = 3` and Bob's public point is `7G = (0, 6)`. The multiples include `2G = (6, 3)` and `3G = (10, 6)`. What shared point do they compute?",
+    "options": [
+      {
+        "text": "`(10, 6)`",
+        "explanation": "That's Alice's public point `3G`. The shared point is `a × (Bob's point) = 3 × 7G`."
+      },
+      {
+        "text": "`(0, 6)`",
+        "explanation": "That's Bob's public point. Alice must multiply it by her secret."
+      },
+      {
+        "text": "`(6, 3)`",
+        "explanation": "Correct. `3 × 7G = 21G`, and since `19G` is the identity, `21G = 2G = (6, 3)`. Bob computes `7 × 3G` and gets the same point."
+      },
+      {
+        "text": "The point at infinity",
+        "explanation": "That would require `21` to be a multiple of 19. `21 mod 19 = 2`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. ECDH: shared point = `a × B = a × (bG) = (ab)G`.\n2. `a = 3`, `b = 7`, so `(ab)G = 21G`.\n3. `G` has order 19, so reduce: `21 mod 19 = 2`.\n4. `21G = 2G = (6, 3)`.\n\n```\nAlice: 3 * (7G) = 21G = 2G\nBob:   7 * (3G) = 21G = 2G\nshared = (6, 3)\n```\n\nIn real X25519 the group has about 2^252 elements, and the shared point's x-coordinate goes into HKDF.",
+    "link": {
+      "title": "RFC 7748: Elliptic Curves for Security (X25519)",
+      "url": "https://www.rfc-editor.org/rfc/rfc7748"
+    }
+  }
+]

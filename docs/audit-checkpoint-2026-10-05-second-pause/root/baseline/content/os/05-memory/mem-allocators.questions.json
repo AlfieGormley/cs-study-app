@@ -1,0 +1,370 @@
+[
+  {
+    "id": "mem-allocators-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On x86-64 Linux with glibc, a program calls `malloc(30)`. Chunks are multiples of 16 bytes (minimum 32) and carry an 8-byte size header. What does `malloc_usable_size` report, and how big is the chunk?",
+    "options": [
+      {
+        "text": "30 usable bytes in a 38-byte chunk",
+        "explanation": "Chunks are rounded to multiples of 16 bytes for alignment, so 38 is not a possible size."
+      },
+      {
+        "text": "32 usable bytes in a 32-byte chunk",
+        "explanation": "A 32-byte chunk loses 8 bytes to the header, leaving only 24 usable. That is too small for 30."
+      },
+      {
+        "text": "40 usable bytes in a 48-byte chunk",
+        "explanation": "Correct. 30 + 8 = 38, rounded up to 48. The usable part is the chunk minus the 8-byte header: 40 bytes."
+      },
+      {
+        "text": "48 usable bytes in a 64-byte chunk",
+        "explanation": "This over-rounds. 38 bytes fit in a 48-byte chunk."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Add the header: 30 + 8 = **38** bytes needed.\n2. Round up to a multiple of 16: **48**.\n3. Usable = 48 − 8 = **40** bytes.\n\n```\nmalloc(24) -> 32 chunk, 24 usable\nmalloc(25) -> 48 chunk, 40 usable\nmalloc(30) -> 48 chunk, 40 usable\n```\n\nSo 10 of the 40 usable bytes are internal fragmentation, plus the 8-byte header.",
+    "link": {
+      "title": "MallocInternals — glibc wiki",
+      "url": "https://sourceware.org/glibc/wiki/MallocInternals"
+    }
+  },
+  {
+    "id": "mem-allocators-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A heap has 2 MiB free in total, but a `malloc(64 * 1024)` has to request fresh memory from the OS because no single free region is 64 KiB long. What is this called?",
+    "options": [
+      {
+        "text": "Internal fragmentation",
+        "explanation": "Internal fragmentation is waste *inside* allocated blocks, from rounding up. Here the waste is in the gaps between blocks."
+      },
+      {
+        "text": "External fragmentation",
+        "explanation": "Correct. Enough memory is free in total, but it is split into holes too small for the request."
+      },
+      {
+        "text": "A memory leak",
+        "explanation": "A leak is memory that is still allocated but no longer reachable. Here the memory is genuinely free, just badly shaped."
+      },
+      {
+        "text": "Thrashing",
+        "explanation": "Thrashing is about working sets exceeding RAM and constant paging, not about the layout of free space in a heap."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Total free: 2 MiB, more than enough in principle.\n2. But it is in pieces smaller than 64 KiB, so no contiguous block fits.\n3. That is **external** fragmentation.\n4. A C allocator cannot fix it by moving live objects, because the program holds raw pointers to them. It can only coalesce neighbouring free blocks, or pick placements (size classes, best fit) that make such holes less likely.",
+    "link": {
+      "title": "OSTEP: Free-Space Management (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-freespace.pdf"
+    }
+  },
+  {
+    "id": "mem-allocators-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A driver asks the Linux buddy allocator for **12 KiB** of physically contiguous memory (pages are 4 KiB). What order of block does it get, and how much is wasted?",
+    "options": [
+      {
+        "text": "Order 3 (32 KiB), wasting 20 KiB",
+        "explanation": "The allocator picks the smallest power of two that fits. 16 KiB already fits 12 KiB."
+      },
+      {
+        "text": "Exactly 3 pages, wasting nothing",
+        "explanation": "Buddy blocks are always 2^k pages. Three pages is not a power of two."
+      },
+      {
+        "text": "Order 1 (8 KiB), plus a separate 4 KiB block",
+        "explanation": "Two separate blocks are not guaranteed to be contiguous, and the request asked for one contiguous region."
+      },
+      {
+        "text": "Order 2 (16 KiB), wasting 4 KiB",
+        "explanation": "Correct. 12 KiB is 3 pages; the next power of two is 4 pages (order 2). One page is internal fragmentation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Convert to pages: 12 KiB / 4 KiB = **3 pages**.\n2. Round up to a power of two: 2^2 = **4 pages**, so order 2.\n3. Block size 16 KiB, waste 16 − 12 = **4 KiB** (25%).\n\nIn the worst case (2^k + 1 pages) buddy allocation wastes almost half the block, which is why the kernel uses slab caches on top of it for small objects.",
+    "link": {
+      "title": "Buddy memory allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Buddy_memory_allocation"
+    }
+  },
+  {
+    "id": "mem-allocators-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a buddy allocator, a **32 KiB** block at offset **0x18000** is freed. Where is its buddy, and if the buddy is free, what block results from merging?",
+    "options": [
+      {
+        "text": "Buddy at 0x20000; merged block at 0x18000, 64 KiB",
+        "explanation": "A 64 KiB block must start on a 64 KiB boundary. 0x18000 is not a multiple of 0x10000, so this merge is impossible."
+      },
+      {
+        "text": "Buddy at 0x10000; merged block at 0x10000, 64 KiB",
+        "explanation": "Correct. 0x18000 XOR 0x8000 = 0x10000. The merged block starts at the lower address and is twice the size."
+      },
+      {
+        "text": "Buddy at 0x1C000; merged block at 0x18000, 48 KiB",
+        "explanation": "0x1C000 is 16 KiB away, not 32. Buddies are always the same size as each other, and merges always double."
+      },
+      {
+        "text": "Any adjacent free 32 KiB block is a buddy",
+        "explanation": "Only one specific neighbour is the buddy, the other half of the block this one was split from. Merging with the wrong neighbour would break alignment."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Size 32 KiB = **0x8000**.\n2. Buddy address = offset XOR size:\n\n```\n0x18000 = 1 1000 0000 0000 0000\n0x08000 = 0 1000 0000 0000 0000\nXOR     = 1 0000 0000 0000 0000\n        = 0x10000\n```\n\n3. The pair is [0x10000, 0x18000) and [0x18000, 0x20000).\n4. If both are free, they merge into one 64 KiB block at the lower address, **0x10000**, which is 64 KiB aligned. The allocator then tries to merge again at the next order.",
+    "link": {
+      "title": "Physical Page Allocation — Understanding the Linux VMM",
+      "url": "https://www.kernel.org/doc/gorman/html/understand/understand009.html"
+    }
+  },
+  {
+    "id": "mem-allocators-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C service using glibc malloc builds a 2 GiB cache of small objects during a traffic spike, then frees 95% of them. A random 5% stay alive for hours. RSS stays near 2 GiB. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "A memory leak: freed memory should always return to the OS",
+        "explanation": "free() returns memory to the allocator, not necessarily to the OS. Nothing is lost; it is reusable by later mallocs."
+      },
+      {
+        "text": "The kernel caches freed pages in RSS until swap is needed",
+        "explanation": "The kernel has no idea the program freed anything. RSS counts pages still mapped, and the allocator still has them mapped."
+      },
+      {
+        "text": "The survivors are scattered across almost every page, so the allocator cannot release those pages, and brk can only shrink the heap from the top",
+        "explanation": "Correct. A page with even one live object must stay resident. With 5% of objects spread randomly, nearly every page still holds one."
+      },
+      {
+        "text": "glibc never returns memory to the OS under any circumstances",
+        "explanation": "It does: it trims the top of the heap past `M_TRIM_THRESHOLD`, unmaps mmapped chunks on free, and `malloc_trim` can release whole free pages in the middle."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Say objects are 64 bytes: 64 per 4 KiB page.\n2. With 5% surviving at random, the chance that a page has **no** survivor is about 0.95^64 ≈ 0.04.\n3. So about **96%** of pages still hold at least one live object and must stay mapped. RSS barely falls.\n4. The freed slots are reusable, so the next spike may not grow RSS further. It is retention, not a leak.\n5. Mitigations: allocate long-lived objects from a separate pool or arena, call `malloc_trim(0)`, or try jemalloc, whose size-class slabs and decay-based purging often fragment less.",
+    "link": {
+      "title": "MallocInternals — glibc wiki",
+      "url": "https://sourceware.org/glibc/wiki/MallocInternals"
+    }
+  },
+  {
+    "id": "mem-allocators-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about glibc malloc on 64-bit Linux are true? Select all that apply.",
+    "options": [
+      {
+        "text": "By default, a `malloc(1 << 20)` (1 MiB) in a fresh process is served by its own `mmap`",
+        "explanation": "Correct. 1 MiB is above the default 128 KiB `M_MMAP_THRESHOLD`, so glibc maps it separately (the threshold may rise later as the program frees mmapped chunks)."
+      },
+      {
+        "text": "The per-thread tcache lets most small `malloc`/`free` pairs avoid taking any lock",
+        "explanation": "Correct. The tcache (since glibc 2.26) holds a few chunks per small size class for each thread, so the fast path is lock-free."
+      },
+      {
+        "text": "All threads share one arena protected by a single lock",
+        "explanation": "Incorrect. glibc creates additional arenas (up to 8 × cores by default) so threads contend less."
+      },
+      {
+        "text": "A pointer from `malloc` is preceded by an 8-byte size field that a heap overflow from the previous chunk can overwrite",
+        "explanation": "Correct. That in-band header is what many heap exploitation techniques target, and why glibc added integrity checks."
+      },
+      {
+        "text": "`free` on any chunk immediately returns its pages to the kernel",
+        "explanation": "Incorrect. Only mmapped chunks are unmapped at once. Heap chunks go to the tcache or bins for reuse."
+      }
+    ],
+    "answer": [0, 1, 3],
+    "workedExample": "Walk through the allocator's tiers:\n\n1. **Size check**: ≥ `M_MMAP_THRESHOLD` (128 KiB initially) → dedicated `mmap`, freed with `munmap`.\n2. **tcache**: per-thread, no lock. Most small requests end here.\n3. **Arena**: the thread's arena (one of up to 8 × cores), locked, with fastbins, small and large bins, then the top chunk.\n4. Each chunk has an in-band header holding its size, just before the user pointer.\n5. `free` of a heap chunk only puts it back in a cache or bin.",
+    "link": {
+      "title": "mallopt(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
+    }
+  },
+  {
+    "id": "mem-allocators-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A kernel slab cache holds **700-byte** objects, and each slab is an order-1 block (2 pages, 8 KiB = 8,192 bytes). Ignoring metadata, how many objects fit per slab, and how many bytes are left over?",
+    "options": [
+      {
+        "text": "11 objects, 492 bytes left over",
+        "explanation": "Correct. 8,192 / 700 = 11.7, so 11 objects use 7,700 bytes, leaving 492."
+      },
+      {
+        "text": "12 objects, 0 bytes left over",
+        "explanation": "12 × 700 = 8,400, which exceeds 8,192. Objects cannot span slabs."
+      },
+      {
+        "text": "5 objects per page, so 10 objects, 1,192 bytes left over",
+        "explanation": "This packs each 4 KiB page separately. A multi-page slab is contiguous, so objects can straddle the page boundary inside it."
+      },
+      {
+        "text": "8 objects, rounding 700 up to 1,024",
+        "explanation": "Slab caches use the object's own size (plus alignment), not the next power of two. Avoiding that waste is the point of a dedicated cache."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Slab size: 2 × 4,096 = **8,192** bytes.\n2. Objects that fit: ⌊8,192 / 700⌋ = **11**.\n3. Used: 11 × 700 = 7,700. Leftover: 8,192 − 7,700 = **492** bytes (6%).\n4. Compare one page per slab: ⌊4,096 / 700⌋ = 5, using 3,500 and wasting 596 bytes (15%). Larger slabs waste less per object, which is why SLUB picks the slab order per cache.",
+    "link": {
+      "title": "Slab allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Slab_allocation"
+    }
+  },
+  {
+    "id": "mem-allocators-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "jemalloc's size classes above 128 bytes run four per doubling: 160, 192, 224, 256, 320, 384, 448, 512... A program allocates many **257-byte** objects. What fraction of each allocation is rounding waste?",
+    "options": [
+      {
+        "text": "About 0.4%: 1 byte over 256",
+        "explanation": "The object doesn't fit in the 256 class, so it is rounded to the next class, 320, not to 257."
+      },
+      {
+        "text": "About 50%: rounded up to 512",
+        "explanation": "That is power-of-two rounding. jemalloc's intermediate classes exist precisely to avoid it."
+      },
+      {
+        "text": "About 25%: 63 out of 257",
+        "explanation": "Waste is usually measured against the block size given out (320), not the request. 63 / 320 ≈ 20%."
+      },
+      {
+        "text": "About 20%: 63 of the 320-byte slot",
+        "explanation": "Correct. 257 rounds to 320; 320 − 257 = 63 bytes wasted, 63 / 320 ≈ 19.7%, near jemalloc's worst case."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The smallest class ≥ 257 is **320**.\n2. Waste: 320 − 257 = **63** bytes.\n3. Fraction of the slot: 63 / 320 ≈ **19.7%**.\n4. With four classes per doubling, adjacent classes differ by 25% of the lower boundary, so waste is bounded at about 20% of the slot. Pure power-of-two classes would allow nearly 50%.\n\nIf you control the struct, shrinking it to 256 bytes would cut its memory use by 20%.",
+    "link": {
+      "title": "jemalloc",
+      "url": "https://jemalloc.net/"
+    }
+  },
+  {
+    "id": "mem-allocators-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Ruby web server with glibc malloc runs 64 threads on a 32-core box. Its RSS creeps up to 3× what the heap profiler says is live, and `/proc/<pid>/maps` shows dozens of 64 MiB anonymous regions. What is the most likely cause, and a common fix?",
+    "options": [
+      {
+        "text": "A leak in Ruby's GC; upgrading Ruby is the only fix",
+        "explanation": "The live heap is stable per the profiler. The gap between live data and RSS points at the allocator holding free memory, not lost objects."
+      },
+      {
+        "text": "Per-thread arena fragmentation: threads spread across many glibc arenas, each retaining its own free memory; set `MALLOC_ARENA_MAX=2` or switch to jemalloc",
+        "explanation": "Correct. Each arena reserves its own 64 MiB heap region and keeps its own free lists. Freed memory in one arena cannot serve another, so RSS grows with the number of arenas."
+      },
+      {
+        "text": "The kernel is using transparent huge pages for the thread stacks",
+        "explanation": "Thread stacks are usually 8 MiB, not 64 MiB, and THP would not explain a mismatch between live heap data and RSS."
+      },
+      {
+        "text": "Each thread's tcache holds 64 MiB",
+        "explanation": "The tcache holds at most a handful of small chunks per size class: kilobytes, not megabytes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 64 MiB anonymous regions are the signature of glibc's non-main arena heaps on 64-bit.\n2. With 32 cores, glibc may create up to 8 × 32 = 256 arenas; 64 threads can each land on a different one.\n3. Each arena fragments independently and keeps freed chunks for its own reuse. Memory freed in arena 7 cannot satisfy a malloc in arena 12.\n4. Total RSS = live data + retained free space in every arena, so it can be several times the live heap.\n5. Fixes: `MALLOC_ARENA_MAX=2` (fewer arenas, a bit more lock contention), or `LD_PRELOAD` jemalloc, a widely used fix in the Ruby community.",
+    "link": {
+      "title": "mallopt(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
+    }
+  },
+  {
+    "id": "mem-allocators-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 48-thread image service allocates a fresh **64 MiB** scratch buffer per request with `malloc`, fills it, and frees it. `perf` shows most CPU time in page-fault handling and TLB-shootdown IPIs, not in image code. What is happening and what is the best fix?",
+    "options": [
+      {
+        "text": "64 MiB is above glibc's mmap threshold ceiling, so every malloc is a fresh mmap (16,384 page faults to fill it) and every free a munmap (shootdowns across all cores); reuse a per-thread buffer pool instead",
+        "explanation": "Correct. The dynamic threshold tops out at 32 MiB on 64-bit, so these buffers always bypass the heap. Reusing buffers removes both the faults and the shootdowns."
+      },
+      {
+        "text": "The heap is fragmented; call `malloc_trim` after each request",
+        "explanation": "These buffers never touch the heap. `malloc_trim` would add work, not remove it."
+      },
+      {
+        "text": "Transparent huge pages are disabled; enabling them fixes the problem completely",
+        "explanation": "THP would cut the fault count by up to 512×, which helps, but each free still unmaps and shoots down TLBs on every core. The allocation pattern is the root cause."
+      },
+      {
+        "text": "Swap is too small",
+        "explanation": "Nothing here suggests swapping: the faults are minor demand-zero faults on brand-new mappings."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. glibc serves requests ≥ `M_MMAP_THRESHOLD` with `mmap`. The threshold adjusts upward after frees, but only to a maximum of **32 MiB** on 64-bit. 64 MiB is always mmapped.\n2. Fill cost per request: 64 MiB / 4 KiB = **16,384** minor faults, each zeroing a page.\n3. `free` → `munmap`. The process has 48 threads on many cores, so the kernel must send IPIs to flush stale TLB entries everywhere.\n4. Per second at, say, 200 requests: 3.3 million faults and 200 machine-wide shootdowns.\n5. Fix: allocate one buffer per thread at start-up and reuse it (or raise `M_MMAP_THRESHOLD` explicitly). Steady state then needs no system calls at all.",
+    "link": {
+      "title": "mallopt(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
+    }
+  },
+  {
+    "id": "mem-allocators-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the Linux kernel's buddy and slab allocators are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "After long uptime, `/proc/buddyinfo` may show many free order-0 blocks but almost no order-9 blocks, so 2 MiB huge-page allocations need compaction",
+        "explanation": "Correct. External fragmentation of physical memory is the classic buddy weakness; compaction migrates movable pages to rebuild large blocks."
+      },
+      {
+        "text": "SLUB is currently the only slab implementation in mainline Linux",
+        "explanation": "Correct. SLOB was removed in 6.4 and SLAB in 6.8, leaving SLUB."
+      },
+      {
+        "text": "A slab cache stores each object with a size header, like glibc chunks",
+        "explanation": "Incorrect. Every object in a cache is the same size, so no per-object size header is needed. That is one of the design's main wins."
+      },
+      {
+        "text": "Merging buddies requires searching the free list for any adjacent block",
+        "explanation": "Incorrect. The buddy's address is computed directly with one XOR of the block's offset and size; only that block can merge."
+      },
+      {
+        "text": "Memory used by kernel slab caches, such as millions of dentries, does not appear in any process's RSS",
+        "explanation": "Correct. It is kernel memory, visible in `/proc/meminfo` (Slab, SReclaimable) and `slabtop`, not in user RSS."
+      }
+    ],
+    "answer": [0, 1, 4],
+    "workedExample": "1. **Buddy fragmentation**: free memory can be plentiful but split into small blocks. `buddyinfo` columns are orders 0, 1, 2..., so zeros on the right mean no large contiguous runs. THP and some drivers then rely on compaction.\n2. **SLUB**: the only allocator since 6.8.\n3. **Slab objects** are fixed-size slots in pre-carved pages: no header, no search.\n4. **Buddy address** = offset XOR block size: O(1).\n5. **Where it shows up**: slab memory is kernel memory. A box whose processes total 2 GiB RSS but whose `free` shows 20 GiB used may have huge dentry or inode caches; check `SReclaimable` in `/proc/meminfo`.",
+    "link": {
+      "title": "Slab Allocator — Understanding the Linux VMM",
+      "url": "https://www.kernel.org/doc/gorman/html/understand/understand011.html"
+    }
+  },
+  {
+    "id": "mem-allocators-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You must keep **10 million** 20-byte records in memory. Option A: `malloc(20)` each with glibc (32-byte chunks). Option B: one big array of 20-byte slots from a custom pool. Roughly how much memory does each use, ignoring pointers to the records?",
+    "options": [
+      {
+        "text": "A ≈ 200 MB, B ≈ 200 MB",
+        "explanation": "This ignores glibc's per-chunk header and 16-byte rounding. A 20-byte request occupies a 32-byte chunk."
+      },
+      {
+        "text": "A ≈ 280 MB, B ≈ 200 MB",
+        "explanation": "This adds only the 8-byte header (28 bytes each). Chunks are then rounded up to a multiple of 16, giving 32."
+      },
+      {
+        "text": "A ≈ 320 MB, B ≈ 200 MB",
+        "explanation": "Correct. 10^7 × 32 B = 320 MB for glibc versus 10^7 × 20 B = 200 MB for the pool: glibc uses 60% more."
+      },
+      {
+        "text": "A ≈ 640 MB, B ≈ 200 MB",
+        "explanation": "This double-counts the overhead. The header is part of the 32-byte chunk, not added on top of it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. glibc: 20 + 8 = 28, rounded to a multiple of 16 → **32-byte chunk** (24 usable, enough for 20).\n2. Option A: 10,000,000 × 32 = **320 MB** (≈ 305 MiB).\n3. Option B: 10,000,000 × 20 = **200 MB** (≈ 191 MiB), plus a negligible header for the whole array.\n4. Overhead of A: 120 MB, **60%** more.\n\nThis is the slab idea in user space: when you have huge numbers of identical objects, a dedicated pool removes per-object headers and rounding. It also improves locality, since records sit contiguously.",
+    "link": {
+      "title": "MallocInternals — glibc wiki",
+      "url": "https://sourceware.org/glibc/wiki/MallocInternals"
+    }
+  }
+]

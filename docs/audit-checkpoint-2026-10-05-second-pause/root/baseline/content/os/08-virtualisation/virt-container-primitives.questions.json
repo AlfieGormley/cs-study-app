@@ -1,0 +1,344 @@
+[
+  {
+    "id": "virt-container-primitives-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two containers on the same host each run a web server listening on port 80, with no errors. Which namespace makes this possible?",
+    "options": [
+      {
+        "text": "mnt",
+        "explanation": "The mount namespace isolates the file system view, not network ports."
+      },
+      {
+        "text": "pid",
+        "explanation": "PID namespaces give separate process numbering; ports belong to the network stack."
+      },
+      {
+        "text": "net",
+        "explanation": "Correct. Each network namespace has its own interfaces, routing table and port space, so both can bind port 80."
+      },
+      {
+        "text": "uts",
+        "explanation": "UTS isolates the hostname, which has nothing to do with binding ports."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Binding a port reserves it in a network stack.\n2. Normally there is one stack, so a second bind to :80 fails with `EADDRINUSE`.\n3. Each **network namespace** is a whole separate stack with its own interfaces and ports.\n4. To reach them from outside, the host maps different host ports (e.g. 8080 and 8081) to each container's port 80.",
+    "link": {
+      "title": "namespaces(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which kernel feature stops a container from using more than 512 MiB of RAM?",
+    "options": [
+      {
+        "text": "A cgroup memory limit (`memory.max`)",
+        "explanation": "Correct. cgroups control how much a group of processes can *use*; `memory.max` is a hard cap."
+      },
+      {
+        "text": "The mount namespace",
+        "explanation": "Namespaces control what a process can *see*, not how much it consumes."
+      },
+      {
+        "text": "The user namespace",
+        "explanation": "User namespaces remap UIDs and capabilities; they set no resource limits."
+      },
+      {
+        "text": "overlayfs",
+        "explanation": "overlayfs provides the layered root file system; it has nothing to do with RAM limits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Remember the split:\n\n- **Namespaces**: visibility (PIDs, mounts, network, hostname...).\n- **cgroups**: quantity (CPU time, memory, I/O, process count).\n\nWriting `512M` to the container's `memory.max` makes the kernel reclaim memory, and OOM-kill a process in the group if reclaim fails.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `sudo unshare --pid --fork --mount-proc bash`, then type `echo $$` in the new shell. What is printed?",
+    "options": [
+      {
+        "text": "The same PID the shell has on the host, e.g. 48213",
+        "explanation": "Inside the new namespace, the shell sees its namespace-local PID, not the host one."
+      },
+      {
+        "text": "1",
+        "explanation": "Correct. The first process in a new PID namespace is PID 1 in that namespace."
+      },
+      {
+        "text": "0",
+        "explanation": "PID 0 is not a user-visible process ID."
+      },
+      {
+        "text": "An error, because `$$` is unavailable in namespaces",
+        "explanation": "`$$` is a shell variable holding getpid(), which works fine."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `--pid --fork`: `unshare` creates a new PID namespace and forks; the child is the first process in it.\n2. That child execs bash, so bash is **PID 1** inside.\n3. `echo $$` prints getpid() as seen from the caller's namespace: `1`.\n4. From the host, `ps` shows the same bash with an ordinary PID. A process has one PID per namespace level it is visible in.\n5. `--mount-proc` remounts `/proc` so tools like `ps` show the new namespace's view.",
+    "link": {
+      "title": "pid_namespaces(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A cgroup has `cpu.max` set to `25000 100000`. A process in it has 4 threads that are all CPU-bound. In each 100 ms period, roughly how long do the threads run before being throttled?",
+    "options": [
+      {
+        "text": "100 ms, because there are 4 threads to share the quota",
+        "explanation": "Threads share one quota; more threads use it up faster, not slower."
+      },
+      {
+        "text": "25 ms",
+        "explanation": "25 ms is the CPU time budget, but four threads running in parallel consume it four times faster in wall-clock time."
+      },
+      {
+        "text": "6.25 ms, then throttled for about 93.75 ms",
+        "explanation": "Correct. 25 ms of CPU time spread over 4 cores lasts 25 / 4 = 6.25 ms of wall time."
+      },
+      {
+        "text": "They are never throttled because the machine has spare cores",
+        "explanation": "Quota is enforced regardless of idle capacity; that is what distinguishes `cpu.max` from `cpu.weight`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `25000 100000` = quota 25,000 µs per 100,000 µs period, i.e. 0.25 CPU.\n2. Quota is CPU time summed across all threads in the cgroup.\n3. Four threads on four cores burn 4 ms of CPU per 1 ms of wall time.\n4. 25 ms ÷ 4 = **6.25 ms** until the quota is gone.\n5. The group is then throttled until the next period starts: 100 − 6.25 = 93.75 ms of stall. Average use is still 0.25 CPU, but in sharp bursts.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A container's image contains a 1 GB file `/data/archive.bin`. The container appends 10 bytes to it. Using overlayfs, roughly how much does the container's upper layer grow?",
+    "options": [
+      {
+        "text": "10 bytes",
+        "explanation": "overlayfs does not copy blocks; it copies whole files."
+      },
+      {
+        "text": "About 1 GB",
+        "explanation": "Correct. The first write triggers copy-up of the entire file into upperdir; then the 10 bytes are appended to the copy."
+      },
+      {
+        "text": "Nothing; the write goes to the lower layer",
+        "explanation": "Lower layers are read-only and shared by other containers; writing to them is never allowed."
+      },
+      {
+        "text": "2 GB, because the original is moved and duplicated",
+        "explanation": "The original stays in the lower layer; only one copy is made, in the upper layer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The file exists only in a read-only lower layer.\n2. Opening it for writing triggers **copy-up**: overlayfs copies the whole file (data and metadata) into upperdir.\n3. The 10-byte append then happens on the upper copy.\n4. Upper layer grows by about 1 GB; total disk use for this file is now ~2 GB (the shared lower copy plus this one).\n5. This is why databases and large mutable files should live on a volume instead.",
+    "link": {
+      "title": "OverlayFS storage driver — Docker docs",
+      "url": "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Inside a running container you `rm /usr/share/big.dat`, a 500 MB file that came from the image. What happens on disk?",
+    "options": [
+      {
+        "text": "The 500 MB is freed on the host",
+        "explanation": "The file lives in a shared, read-only lower layer that other containers may use; it cannot be deleted."
+      },
+      {
+        "text": "The command fails with 'read-only file system'",
+        "explanation": "The merged view is writable; deletes are allowed, they are just recorded differently."
+      },
+      {
+        "text": "The file is copied up and then deleted",
+        "explanation": "Copy-up is for modifications; a delete does not need the contents."
+      },
+      {
+        "text": "A whiteout is created in the upper layer hiding the file; the 500 MB stays in the lower layer",
+        "explanation": "Correct. The whiteout is a 0/0 character device that masks the lower file in the merged view."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Lookups go top-down through the layers.\n2. Deleting a lower file creates a **whiteout** entry with the same name in upperdir.\n3. When the merged view is read, the whiteout hides the lower file, so `ls` no longer shows it.\n4. The lower layer is untouched: no space is reclaimed.\n5. The same thing happens in image builds: a `RUN rm` in a later layer cannot shrink an earlier one.",
+    "link": {
+      "title": "Overlay Filesystem — Linux kernel docs",
+      "url": "https://docs.kernel.org/filesystems/overlayfs.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your container's main process is a small Python script started as PID 1 in its PID namespace. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "If the script exits, the kernel kills every other process in the container",
+        "explanation": "Correct. When the init of a PID namespace terminates, all other processes in it receive `SIGKILL`."
+      },
+      {
+        "text": "A `SIGTERM` sent from within the namespace is ignored unless the script installed a handler",
+        "explanation": "Correct. The kernel gives namespace init the same protection as the real init: signals with default action are not delivered."
+      },
+      {
+        "text": "Orphaned child processes are re-parented to it, so it should reap them",
+        "explanation": "Correct. PID 1 inherits orphans; if it never calls wait(), zombies accumulate. Tools like `tini` do this for you."
+      },
+      {
+        "text": "It can see all host processes with `ps`",
+        "explanation": "With its own PID namespace and `/proc` mounted for it, it sees only processes in that namespace."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Go through what being PID 1 means:\n\n1. **Lifetime**: namespace init dying tears down the namespace. True.\n2. **Signals**: init is protected from signals it has no handler for. `docker stop` sends `SIGTERM`, waits 10 s by default, then `SIGKILL`. A script with no handler gets killed the hard way. True.\n3. **Orphans**: children whose parent dies are re-parented to PID 1, which must reap them. True.\n4. **Visibility**: it only sees its own namespace. False.",
+    "link": {
+      "title": "pid_namespaces(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do container runtimes use `pivot_root` in a new mount namespace instead of `chroot`?",
+    "options": [
+      {
+        "text": "`chroot` cannot change to a directory on overlayfs",
+        "explanation": "`chroot` works on any directory; the issue is what remains reachable."
+      },
+      {
+        "text": "`pivot_root` is faster",
+        "explanation": "Speed is irrelevant; both are single system calls done once at start-up."
+      },
+      {
+        "text": "`chroot` only changes the process's root directory while the host's file system stays mounted, so a root process can escape; after `pivot_root` and unmounting the old root, the host root is not mounted at all",
+        "explanation": "Correct. There is nothing outside the container's root left in its mount table to escape to."
+      },
+      {
+        "text": "`chroot` requires a user namespace",
+        "explanation": "`chroot` needs `CAP_SYS_CHROOT`, not a user namespace."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `chroot` alters one attribute of a process: the directory it resolves `/` from.\n2. Everything else is unchanged: the host's mounts are all still there.\n3. Classic escape (as root): `mkdir x; chroot x` while your cwd stays outside, then `chdir(\"..\")` up to the real root and `chroot(\".\")`.\n4. `pivot_root(new, old)` swaps the root **mount** in a private mount namespace; `umount2(old, MNT_DETACH)` then removes the host's file system from that namespace entirely.",
+    "link": {
+      "title": "pivot_root(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/pivot_root.2.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A container has `memory.max = 512M`. Its app uses about 150 MB of heap and then streams through a 2 GB log file. `memory.current` climbs to about 510 MB and stays there. What happens next?",
+    "options": [
+      {
+        "text": "The app is OOM-killed as soon as the limit is reached",
+        "explanation": "The OOM killer runs only when reclaim fails. Most of this usage is reclaimable page cache."
+      },
+      {
+        "text": "The kernel reclaims the log file's page cache to stay under the limit, and the app keeps running",
+        "explanation": "Correct. Page cache is charged to the cgroup but can be dropped; anonymous memory (the 150 MB heap) is what would trigger an OOM kill."
+      },
+      {
+        "text": "The file read fails with ENOMEM",
+        "explanation": "Reads do not fail; the kernel evicts older cached pages to make room for new ones."
+      },
+      {
+        "text": "The limit is ignored for file reads",
+        "explanation": "Page cache *is* charged to the cgroup, which is why `memory.current` rises."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. cgroup memory accounting charges both anonymous memory (heap, stacks) and page cache (file data read or written).\n2. Reading 2 GB fills the cache; `memory.current` rises until it nears `memory.max`.\n3. At the limit, the kernel reclaims within the cgroup first. Clean page cache is cheap to drop.\n4. Only ~150 MB is anonymous, far below 512 MB, so reclaim always succeeds.\n5. Check `memory.stat` (`anon` vs `file`) before concluding a container is about to OOM. `memory.events` counts real `oom_kill`s.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How does `docker exec -it web sh` start a shell \"inside\" an already-running container?",
+    "options": [
+      {
+        "text": "It starts a new container that copies the first one's file system",
+        "explanation": "A new container would get new namespaces; the exec'd shell sees the running container's processes and network, so it must share them."
+      },
+      {
+        "text": "It SSHes into the container",
+        "explanation": "Containers do not run an SSH server by default; no network login is involved."
+      },
+      {
+        "text": "It sends the command to the container's PID 1, which forks the shell",
+        "explanation": "PID 1 is just the application; it has no protocol for running commands on request."
+      },
+      {
+        "text": "The runtime opens the container's `/proc/<pid>/ns/*` files and calls `setns()` on each, joins its cgroup, then execs `sh`",
+        "explanation": "Correct. `setns` lets a new process join existing namespaces, which is exactly what `nsenter` does too."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The running container's namespaces are exposed as files: `/proc/<pid>/ns/net`, `.../mnt`, `.../pid` and so on.\n2. A helper process opens those files and calls `setns(fd, 0)` for each.\n3. It also writes itself into the container's cgroup so limits apply.\n4. It applies the same capabilities, seccomp filter and LSM profile, then `execve(\"sh\")`.\n5. The shell now sees the container's file system, processes and network, without having been started by its PID 1.",
+    "link": {
+      "title": "namespaces(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+    }
+  },
+  {
+    "id": "virt-container-primitives-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about cgroups v2 are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A cgroup with weight 200 is guaranteed two full CPUs",
+        "explanation": "`cpu.weight` is relative, used only when CPUs are contended. It guarantees a proportion, not a number of cores."
+      },
+      {
+        "text": "On an idle host, a cgroup with `cpu.weight` 10 and no `cpu.max` can use every core",
+        "explanation": "Correct. Weights only divide CPU among competing groups; with no competition there is nothing to divide."
+      },
+      {
+        "text": "`pids.max` can stop a fork bomb from exhausting the host's process table",
+        "explanation": "Correct. Once the group reaches the limit, `fork()` and `clone()` fail with `EAGAIN`."
+      },
+      {
+        "text": "A non-root cgroup that enables controllers for its children cannot itself contain processes",
+        "explanation": "Correct. This is the 'no internal processes' rule; processes must live in leaf cgroups."
+      },
+      {
+        "text": "Each controller (cpu, memory) has its own separate hierarchy",
+        "explanation": "That describes cgroups v1. v2 has one unified hierarchy for all controllers."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Check each:\n\n1. Weight 200 vs 100 means twice the share *when both want CPU*. Not a guarantee of cores. False.\n2. Weights are work-conserving: idle CPU goes to whoever wants it. True.\n3. `pids.max` caps tasks in the subtree. True.\n4. The no-internal-processes rule. True.\n5. Separate trees per controller is v1. False.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    }
+  }
+]

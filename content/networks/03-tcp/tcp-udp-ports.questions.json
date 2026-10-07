@@ -1,0 +1,351 @@
+[
+  {
+    "id": "tcp-udp-ports-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How big is the UDP header?",
+    "options": [
+      {
+        "text": "20 bytes",
+        "explanation": "20 bytes is the minimum size of the IPv4 header and of the TCP header, not UDP. UDP is deliberately tiny."
+      },
+      {
+        "text": "8 bytes",
+        "explanation": "Correct. Four 16-bit fields: source port, destination port, length and checksum."
+      },
+      {
+        "text": "4 bytes",
+        "explanation": "That would only fit the two port numbers. UDP also carries a length and a checksum."
+      },
+      {
+        "text": "It varies with options",
+        "explanation": "The base UDP header remains eight bytes. RFC 9868 defines UDP options in a surplus area after user data, rather than making that base header variable length."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "UDP's header is four fields of 16 bits each:\n\n```\nsrc port   16 bits\ndst port   16 bits\nlength     16 bits\nchecksum   16 bits\n---------------------\ntotal      64 bits = 8 bytes\n```\n\nCompare TCP's minimum of 20 bytes, which has to carry sequence numbers, acknowledgement numbers, flags and a window. UDP needs none of those because it promises none of those services.",
+    "link": {
+      "title": "RFC 768: UDP",
+      "url": "https://www.rfc-editor.org/rfc/rfc768"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Over IPv4 with a 20-byte IP header (no options), what is the largest payload a single UDP datagram can carry?",
+    "options": [
+      {
+        "text": "65,535 bytes",
+        "explanation": "65,535 is the maximum of the 16-bit length field, but that value counts the 8-byte UDP header, and the IPv4 total-length field also has to fit the IP header."
+      },
+      {
+        "text": "1,472 bytes",
+        "explanation": "That is the largest payload that avoids fragmentation on a 1,500-byte Ethernet MTU (1,500 − 20 − 8). It is a practical limit, not the protocol maximum."
+      },
+      {
+        "text": "65,527 bytes",
+        "explanation": "This subtracts the UDP header from 65,535 but forgets that the IPv4 total-length field (also 16 bits) must include the 20-byte IP header."
+      },
+      {
+        "text": "65,507 bytes",
+        "explanation": "Correct. The IPv4 total length is at most 65,535 bytes; subtract 20 for the IP header and 8 for the UDP header."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. IPv4 total length is at most 65,535 bytes.\n2. Subtract the specified 20-byte IPv4 header and eight-byte UDP header: 65,507 payload bytes.\n3. With fragmentation permitted, equal 20-byte fragment headers and MTU 1,500, the 65,515-byte IP payload needs 45 fragments (44 × 1,480 + 395). All fragments are needed for reassembly.\n4. Otherwise sending may fail locally or on the path. With those same headers and MTU, 1,472 UDP payload bytes fit without fragmentation; other paths and encapsulation have different limits.",
+    "link": {
+      "title": "RFC 768: UDP",
+      "url": "https://www.rfc-editor.org/rfc/rfc768"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which facilities does base UDP provide, without higher-level reliability protocols? Select all that apply.",
+    "options": [
+      {
+        "text": "Delivery to the right application via port numbers",
+        "explanation": "Correct. UDP uses port fields to support application demultiplexing; not every possible transport protocol must use UDP-style ports."
+      },
+      {
+        "text": "Detection of corrupted datagrams via a checksum",
+        "explanation": "Correct. When enabled and verified, the checksum detects some corruption, including in the pseudo-header. It does not detect all errors or authenticate the sender, and IPv4 permits omission."
+      },
+      {
+        "text": "Retransmission of lost datagrams",
+        "explanation": "UDP never retransmits. If an application needs reliability (as DNS resolvers do), it must implement timeouts and retries itself."
+      },
+      {
+        "text": "Preservation of message boundaries",
+        "explanation": "Correct for ordinary UDP socket use. Received datagrams remain separate; too-small buffers can truncate a datagram, and successful sending does not guarantee delivery."
+      },
+      {
+        "text": "In-order delivery",
+        "explanation": "Base UDP does not specify ordered delivery or receive-side resequencing. Applications can add their own sequence information and ordering policy."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Base UDP defines source/destination ports, a datagram length and a checksum. These support demultiplexing, message boundaries and limited error detection. It does not define ordered delivery or automatic loss recovery. Protocol guarantees follow from the specification and state machine, not merely from whether a similarly named header field exists.",
+    "link": {
+      "title": "RFC 768: UDP",
+      "url": "https://www.rfc-editor.org/rfc/rfc768"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On localhost, a UDP client runs:\n\n```python\ns.sendto(b\"a\" * 100, srv)\ns.sendto(b\"b\" * 200, srv)\ns.sendto(b\"c\" * 300, srv)\n```\n\nThe server loops on `data, _ = s.recvfrom(2048)` and prints `len(data)`. Assuming ordinary datagram socket calls, no loss, duplication or reordering, what does it print?",
+    "options": [
+      {
+        "text": "`600`",
+        "explanation": "That is what a TCP receiver might see, since TCP is a byte stream and can merge writes. UDP never merges datagrams."
+      },
+      {
+        "text": "`100`, `200`, `300` on separate lines",
+        "explanation": "Correct. UDP preserves message boundaries: three `sendto()` calls produce three datagrams, and each `recvfrom()` returns exactly one."
+      },
+      {
+        "text": "`2048` three times",
+        "explanation": "The 2048 is the buffer size, the maximum the call will return. `recvfrom` returns the actual datagram length."
+      },
+      {
+        "text": "It depends on how the kernel chooses to split the data",
+        "explanation": "Ordinary UDP sockets preserve datagram boundaries. Here the buffer is large enough; smaller receive buffers can truncate a message rather than return it whole."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each `sendto()` builds one UDP datagram with its own length field: 100, 200, 300 bytes of payload.\n2. The receiver's kernel queues each datagram as a separate unit.\n3. Each `recvfrom(2048)` dequeues one datagram. The buffer is big enough, so nothing is truncated.\n4. Output:\n\n```\n100\n200\n300\n```\n\nTwo caveats: over a real network the order could change or one could vanish; and if the buffer were smaller than a datagram (say `recvfrom(50)`), the excess would be **discarded**, not saved for the next call.",
+    "link": {
+      "title": "RFC 768: UDP",
+      "url": "https://www.rfc-editor.org/rfc/rfc768"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A proxy uses one source IP and automatic source ports restricted to 32768–60999, all available initially. It repeatedly connects to one backend, 10.0.0.5:5432. Assume negligible active connection duration, exactly 60 seconds of tuple unavailability after closure, no early reuse and no other bottleneck. What approximate sustained rate does this model allow?",
+    "options": [
+      {
+        "text": "About 65,000 per second",
+        "explanation": "This assumes all 65,536 port numbers are usable and each is freed instantly. Only the ephemeral range is used, and each port is held for 60 s."
+      },
+      {
+        "text": "About 28,000 per second",
+        "explanation": "28,232 is the number of ports, but each is unavailable for 60 seconds after use, so they can't all be reused every second."
+      },
+      {
+        "text": "About 470 per second",
+        "explanation": "Correct. 28,232 ports ÷ 60 seconds ≈ 470 new connections per second to that one destination."
+      },
+      {
+        "text": "Unlimited, because the 5-tuple includes the destination",
+        "explanation": "The destination is fixed here (one IP, one port), as are protocol and source IP. Only the source port varies, so it is the bottleneck."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Four of the five tuple fields are fixed: TCP, the proxy's IP, `10.0.0.5`, port 5432. Only the **source port** can vary.\n2. Ports available: 60999 − 32768 + 1 = **28,232**.\n3. Each one is unusable for 60 seconds after its connection closes.\n4. Under the stated model, steady-state rate = ports ÷ hold time:\n\n```\n28,232 / 60 s ≈ 470 conn/s\n```\n\nFixes: reuse connections (a pool), add backend IPs or source IPs (can add tuple capacity, subject to allocation and bind behaviour), or widen the port range.",
+    "link": {
+      "title": "Ephemeral port — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Ephemeral_port"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An HTTPS service accepts 100,000 simultaneous TCP connections on one server IP and local port 443. How many distinct local TCP port numbers do those accepted sockets use?",
+    "options": [
+      {
+        "text": "100,000, one per client",
+        "explanation": "The server does not allocate a new port per client. Each accepted connection gets a new socket, but it shares the listening port."
+      },
+      {
+        "text": "At most 65,535, so it cannot have 100,000 clients",
+        "explanation": "This confuses the port space with the connection space. Connections are identified by 5-tuples, of which there are vastly more than 65,535."
+      },
+      {
+        "text": "About 28,000, the size of the ephemeral range",
+        "explanation": "These accepted sockets retain the listener’s local port. The initiating endpoint may choose an ephemeral source port or explicitly bind one."
+      },
+      {
+        "text": "One: port 443, with connections told apart by the client's IP and port",
+        "explanation": "Correct. All connections have destination port 443; the kernel demultiplexes them by the full 5-tuple, in which the client's address and port differ."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Every client connects to `server_ip:443`.\n2. On the server, `accept()` returns a new socket for each connection, but that socket's local address is still `server_ip:443`.\n3. The kernel tells them apart by the 5-tuple:\n\n```\n(TCP, c1_ip, c1_port, srv, 443)\n(TCP, c2_ip, c2_port, srv, 443)\n...\n```\n\n4. So the server uses one port. Practical limits include memory, file descriptors, CPU and connection-tuple availability; this question specifies a service using just one local port.",
+    "link": {
+      "title": "Transmission Control Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Transmission_Control_Protocol"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which requirements can motivate an application to use ordinary UDP datagrams with application-specific control instead of one TCP byte stream? This compares base transports, not reliable protocols such as QUIC built above UDP. Select all that apply.",
+    "options": [
+      {
+        "text": "Independent full-state game snapshots where superseded updates should not block newer ones",
+        "explanation": "Correct. The application can discard stale snapshots and avoid TCP byte-stream head-of-line blocking. Important events or delta-dependent state may require separate reliability."
+      },
+      {
+        "text": "A software download whose only stated requirement is reliable delivery of every file byte",
+        "explanation": "That requirement alone does not motivate replacing TCP with base UDP. A higher-level reliable protocol such as QUIC can also carry downloads; this is not a claim that files cannot use UDP-based transports."
+      },
+      {
+        "text": "A small DNS request/reply where avoiding a fresh transport handshake is useful",
+        "explanation": "Correct. UDP can carry the small exchange without a transport handshake; DNS still needs retries, validation and TCP support where required. Existing TCP connections can be reused."
+      },
+      {
+        "text": "Deadline-sensitive voice packets for which later packets should not wait for expired ones",
+        "explanation": "Correct. Media-specific loss recovery can respect playback deadlines. Concealment, FEC or timely retransmission can all be useful; retransmission is not universally pointless."
+      },
+      {
+        "text": "A payment API whose only stated requirement is that the transaction must not be lost",
+        "explanation": "Base UDP adds no delivery guarantee. TCP or QUIC can carry reliable data, but neither alone guarantees durable payment processing: acknowledgements, retries and idempotency belong at the application layer."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Select the requirements that benefit from independent datagrams or no fresh transport handshake: snapshots, a small DNS exchange and deadline-sensitive voice. A file’s completeness requirement or a payment’s durability requirement alone does not motivate bare UDP. Reliable transports built over UDP remain valid options, and application correctness is separate from byte delivery.",
+    "link": {
+      "title": "User Datagram Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/User_Datagram_Protocol"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A resolver sends a DNS query over UDP. The answer is too large for the UDP size the server is willing to send. What happens in standard DNS?",
+    "options": [
+      {
+        "text": "The server sends a truncated reply with the TC flag set, and the client retries the query over TCP",
+        "explanation": "Correct for this standard truncation/retry path. DNS-over-TCP supports larger messages, but still uses a two-byte message-length field; it is not unlimited."
+      },
+      {
+        "text": "The server fragments the response into several UDP datagrams and the client reassembles them",
+        "explanation": "DNS has no application-level reassembly of UDP replies. IP fragmentation can occur, but it is exactly what DNS tries to avoid."
+      },
+      {
+        "text": "The server silently drops the query",
+        "explanation": "The server does answer: it marks the reply as truncated so the client knows to retry."
+      },
+      {
+        "text": "UDP automatically switches to TCP mode",
+        "explanation": "UDP has no such mode. The switch to TCP is done by the DNS client, prompted by the TC flag."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Original UDP DNS used a 512-byte limit; EDNS lets a requester advertise a larger UDP payload size.\n2. DNS Flag Day 2020 recommended 1,232 bytes to reduce fragmentation risk under IPv6 minimum-MTU/header assumptions.\n3. A truncated response sets TC; the resolver can retry using TCP as specified by DNS handling rules.\n4. A new TCP connection adds handshake cost; a reusable connection changes that timing. DNS-over-TCP messages still have a 65,535-byte length-field limit.",
+    "link": {
+      "title": "RFC 7766: DNS-over-TCP requirements",
+      "url": "https://www.rfc-editor.org/rfc/rfc7766"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker controls machines that can send 100 Mbit/s of spoofed UDP queries, with the source address set to a victim's IP, to open servers whose replies are 50 times bigger than the queries. Why does this work, and how much traffic hits the victim? Assume the factor includes the same overhead basis as the 100 Mbit/s figure, and all queries/replies are delivered without rate limiting or capacity constraints.",
+    "options": [
+      {
+        "text": "It works because UDP has no checksum; about 100 Mbit/s",
+        "explanation": "UDP does have a checksum, and it is irrelevant here. The trick is the spoofed source, and the traffic is multiplied."
+      },
+      {
+        "text": "It works because TCP SYN cookies are disabled; about 5 Gbit/s",
+        "explanation": "SYN cookies are a TCP defence and have nothing to do with UDP. The figure is right but the mechanism is wrong."
+      },
+      {
+        "text": "It can't work: the replies go back to the attacker's machines",
+        "explanation": "With a spoofed source address, the replies go to whatever address is in the source field: the victim."
+      },
+      {
+        "text": "It works because UDP has no handshake, so servers reply to a forged address; about 5 Gbit/s",
+        "explanation": "Correct under the assumptions. UDP itself performs no return-routability handshake, and these servers respond without additional validation: 100 Mbit/s × 50 = 5 Gbit/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The scenario explicitly allows spoofed requests through source-address filters.\n2. These servers send responses to the claimed source without further validation.\n3. With consistent size accounting and no limiting bottleneck, 100 Mbit/s × 50 = 5 Gbit/s at the victim.\n4. Source validation, response limits and protocol-level address validation can reduce this risk. TCP’s handshake changes the attack surface but does not make all TCP reflection or denial-of-service attacks impossible.",
+    "link": {
+      "title": "Memcrashed — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/memcrashed-major-amplification-attacks-from-port-11211/"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A game sends 60 small position updates per second to the server over **TCP**. RTT is 100 ms. One segment carrying an update is lost. What does the server's game loop experience?",
+    "options": [
+      {
+        "text": "It misses that one update and carries on with the next one 16 ms later",
+        "explanation": "TCP does not skip missing stream bytes to expose later ones. UDP-based independent snapshots can avoid that stream-ordering constraint, subject to loss and scheduling."
+      },
+      {
+        "text": "Nothing at all, because TCP retransmits transparently",
+        "explanation": "The retransmission is transparent to correctness, not to timing. The delay it causes is the whole problem."
+      },
+      {
+        "text": "Later bytes on that TCP stream wait for the missing bytes; after recovery, several buffered updates may become readable",
+        "explanation": "Correct. TCP exposes an ordered byte stream. The question’s RTT does not specify an exact stall duration or imply the application’s whole game loop freezes."
+      },
+      {
+        "text": "The TCP connection is reset",
+        "explanation": "One lost segment does not by itself instruct TCP to reset. Recovery is normally attempted; repeated failure can eventually reach an implementation or application timeout."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Later stream bytes can arrive out of order and be buffered.\n2. TCP cannot expose them as contiguous application data until the earlier gap is filled.\n3. Detection and recovery time depend on ACKs, timers, the loss position and implementation. RTT alone provides no exact pause duration.\n4. At 60 Hz, six update intervals span 100 ms, but that arithmetic is only an illustration, not a guaranteed six-update stall.\n5. An application can continue local prediction or other work while waiting.",
+    "link": {
+      "title": "Head-of-line blocking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Head-of-line_blocking"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Why does QUIC run on top of UDP rather than as a brand-new IP protocol alongside TCP and UDP? Select all that apply.",
+    "options": [
+      {
+        "text": "Using existing UDP support can ease traversal of middleboxes compared with introducing a new IP protocol number",
+        "explanation": "Correct. Some devices filter unknown protocols or lack suitable translation support. Devices can support other transports too, and UDP can itself be blocked."
+      },
+      {
+        "text": "UDP lets QUIC be implemented in an application or library in user space, without waiting for OS kernels to be updated",
+        "explanation": "Correct. Existing UDP socket interfaces allow QUIC implementations in application libraries; operating-system policy and network access still apply."
+      },
+      {
+        "text": "UDP provides the reliability QUIC needs, so QUIC doesn't have to implement it",
+        "explanation": "UDP provides no reliability. QUIC implements acknowledgements, retransmission and congestion control itself."
+      },
+      {
+        "text": "UDP's checksum replaces the need for encryption",
+        "explanation": "The checksum is not cryptographic authentication. QUIC uses TLS 1.3 for its handshake and derives keys for packet protection; a checksum does not replace that."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Reusing UDP allows implementations to use existing endpoint socket APIs and network support.\n2. This can reduce the deployment changes required by a new IP protocol.\n3. It does not make UDP universally reachable or restrict QUIC to user-space implementations.\n4. QUIC supplies its own loss recovery, stream ordering, congestion control and packet protection above UDP.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  }
+]

@@ -1,0 +1,347 @@
+[
+  {
+    "id": "sql-group-by-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Five customers live in London, Leeds, NULL, London and Bristol. What does this return?\n\n```sql\nSELECT COUNT(*), COUNT(city),\n  COUNT(DISTINCT city)\nFROM customers;\n```",
+    "options": [
+      {
+        "text": "5, 5, 4",
+        "explanation": "This counts the NULL city as a value. `COUNT(city)` skips NULLs, so it is 4, and the distinct count is 3."
+      },
+      {
+        "text": "5, 4, 4",
+        "explanation": "The distinct count includes London twice here. London, Leeds and Bristol are only three distinct values once NULL is skipped."
+      },
+      {
+        "text": "5, 4, 3",
+        "explanation": "Correct. `COUNT(*)` counts all 5 rows, `COUNT(city)` counts the 4 non-NULL cities, and `COUNT(DISTINCT city)` counts London, Leeds and Bristol: 3."
+      },
+      {
+        "text": "4, 4, 3",
+        "explanation": "`COUNT(*)` counts rows, whatever their contents. Chloe's row exists, so it is counted."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `COUNT(*)`: every row counts. 5.\n2. `COUNT(city)`: skip NULLs. London, Leeds, London, Bristol = 4.\n3. `COUNT(DISTINCT city)`: remove duplicates from those 4. London, Leeds, Bristol = 3.\n\nThe gap between the first two numbers is a quick way to find how many rows have a NULL in a column.",
+    "link": {
+      "title": "Built-in aggregate functions — SQLite documentation",
+      "url": "https://www.sqlite.org/lang_aggfunc.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Orders have statuses shipped ×3, pending ×2 and cancelled ×1. What does this return?\n\n```sql\nSELECT status, COUNT(*)\nFROM orders\nGROUP BY status\nHAVING COUNT(*) >= 2;\n```",
+    "options": [
+      {
+        "text": "One row: shipped, 3",
+        "explanation": "`>= 2` includes groups with exactly 2, so pending is kept too."
+      },
+      {
+        "text": "Two rows: pending 2 and shipped 3",
+        "explanation": "Correct. `GROUP BY` makes three groups, and `HAVING` keeps the ones with at least two rows."
+      },
+      {
+        "text": "Three rows, one per status",
+        "explanation": "`HAVING` removes the cancelled group, which has only one row."
+      },
+      {
+        "text": "An error: COUNT can't be used in HAVING",
+        "explanation": "Aggregates are exactly what `HAVING` is for. It is `WHERE` that can't contain them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Group by status: cancelled (1), pending (2), shipped (3).\n2. `HAVING COUNT(*) >= 2` tests each group: cancelled fails, pending and shipped pass.\n3. Output: pending 2, shipped 3. Without `ORDER BY` the row order isn't guaranteed.",
+    "link": {
+      "title": "GROUP BY and HAVING — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want the number of orders per status, counting only orders placed in March 2026. Where does the date condition belong?",
+    "options": [
+      {
+        "text": "In HAVING, because the query uses GROUP BY",
+        "explanation": "`HAVING` filters whole groups by their aggregates. The date is a property of each row, and `ordered_on` isn't even a grouped column."
+      },
+      {
+        "text": "In GROUP BY, alongside status",
+        "explanation": "Grouping by date would give one row per (status, date) pair, not filter anything out."
+      },
+      {
+        "text": "In WHERE, so rows are filtered before they are grouped",
+        "explanation": "Correct. `WHERE ordered_on >= '2026-03-01' AND ordered_on < '2026-04-01'` removes the other months before `GROUP BY` runs."
+      },
+      {
+        "text": "In ORDER BY",
+        "explanation": "`ORDER BY` only sorts. It never removes rows."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: is the condition about a single row or about a group's total? \"Placed in March\" is about each row.\n2. Row conditions go in `WHERE`, which runs before grouping:\n\n```sql\nSELECT status, COUNT(*)\nFROM orders\nWHERE ordered_on >= '2026-03-01'\n  AND ordered_on <  '2026-04-01'\nGROUP BY status;\n```\n\n3. Result: shipped 1 (104), cancelled 1 (105), pending 1 (106).\n4. Use HAVING for group-level conditions such as COUNT(*) > 1. It can also filter grouped columns, but a row-date filter belongs in WHERE here.",
+    "link": {
+      "title": "GROUP BY and HAVING — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "No product costs over £1,000. What do these two queries return?\n\n```sql\n-- A\nSELECT SUM(price) FROM products\nWHERE price > 1000;\n-- B\nSELECT category, SUM(price)\nFROM products\nWHERE price > 1000\nGROUP BY category;\n```",
+    "options": [
+      {
+        "text": "A: one row containing 0. B: no rows",
+        "explanation": "`SUM` over zero rows is NULL, not 0. Only `COUNT` returns 0 for empty input."
+      },
+      {
+        "text": "A: one row containing NULL. B: no rows",
+        "explanation": "Correct. Without `GROUP BY` there is always exactly one group, so A returns one row whose sum is NULL. With `GROUP BY`, no input rows means no groups, so B returns nothing."
+      },
+      {
+        "text": "A: no rows. B: no rows",
+        "explanation": "An ungrouped aggregate always produces one row, even over an empty input."
+      },
+      {
+        "text": "A: one row containing NULL. B: one row of NULLs",
+        "explanation": "`GROUP BY` creates groups from the rows that exist. With no rows, there are no groups to output."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Query A has no `GROUP BY`, so the whole (empty) input is a single group. One output row. `SUM` of no values is NULL.\n2. Query B groups by category. The filtered input is empty, so there are zero groups and zero output rows.\n3. Practical consequences:\n   - Write `COALESCE(SUM(price), 0)` when a report needs 0.\n   - Code that expects \"one row per category\" from B must cope with categories that have no rows at all.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "PostgreSQL rejects this query because `ordered_on` is neither grouped nor aggregated:\n\n```sql\nSELECT customer_id, ordered_on\nFROM orders\nGROUP BY customer_id;\n```\n\nYou want one row per customer showing their **most recent** order date. Which rewrites do that? Select all that apply.",
+    "options": [
+      {
+        "text": "`SELECT customer_id, MAX(ordered_on) ... GROUP BY customer_id`",
+        "explanation": "Correct. `MAX` reduces each customer's dates to one value, the latest. ISO dates sort correctly, and PostgreSQL `date` values compare chronologically."
+      },
+      {
+        "text": "`... GROUP BY customer_id, ordered_on`",
+        "explanation": "This runs, but it makes one group per (customer, date) pair. Asha gets two rows, one per order, so it no longer answers the question."
+      },
+      {
+        "text": "`SELECT customer_id, MAX(ordered_on) AS last ... GROUP BY customer_id ORDER BY last DESC`",
+        "explanation": "Correct. Same aggregate, just sorted. `ORDER BY` can use the alias because it runs after `SELECT`."
+      },
+      {
+        "text": "Run the original in SQLite instead, which allows it",
+        "explanation": "SQLite accepts it, but the date it shows comes from an arbitrary row in each group, not necessarily the latest. A query that \"works\" can still be wrong."
+      },
+      {
+        "text": "`SELECT DISTINCT customer_id, ordered_on FROM orders`",
+        "explanation": "`DISTINCT` removes duplicate (customer, date) pairs only. Asha still appears twice."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "1. The rule: after `GROUP BY customer_id`, each output row stands for all of a customer's orders. A column like `ordered_on` has several values per group, so you must say how to collapse them.\n2. \"Most recent\" means `MAX(ordered_on)`.\n3. Asha's group holds 2026-01-05 and 2026-02-11. `MAX` gives 2026-02-11.\n4. Grouping by both columns, or `DISTINCT`, keeps one row per order, which defeats the purpose.\n5. SQLite's leniency picks some row's value. Here it happened to show 2026-01-05 for Asha, which is the wrong answer to this question.",
+    "link": {
+      "title": "GROUP BY and HAVING — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Asha has two orders: 101 with 2 line items, and 102 with 1. What does this return for Asha?\n\n```sql\nSELECT c.name, COUNT(*) AS n\nFROM customers c\nJOIN orders o\n  ON o.customer_id = c.id\nJOIN order_items oi\n  ON oi.order_id = o.id\nGROUP BY c.id;\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "That is how many orders she has, but the join to `order_items` repeats each order once per line, and `COUNT(*)` counts joined rows."
+      },
+      {
+        "text": "1",
+        "explanation": "Grouping by customer doesn't make the count 1; it counts every joined row in her group."
+      },
+      {
+        "text": "6",
+        "explanation": "This multiplies 2 orders by 3 items. The join matches each item only to its own order, so the rows add (2 + 1) rather than multiply."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. After the joins, Asha has one row per order line: two for 101 and one for 102. `COUNT(*)` counts those three rows."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Join customers to orders: Asha matches 101 and 102 (2 rows).\n2. Join to order_items: 101 has Kettle and Mug, 102 has Lamp. That gives 3 rows.\n\n```\nAsha 101 Kettle\nAsha 101 Mug\nAsha 102 Lamp\n```\n\n3. `COUNT(*)` = 3.\n4. To count orders, use `COUNT(DISTINCT o.id)` = 2, or don't join the items table at all.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Kitchen products cost 30 and 25, stored as PostgreSQL integer (32-bit) and SQLite integer values. What do SQLite and PostgreSQL return?\n\n```sql\nSELECT SUM(price) / COUNT(*)\nFROM products\nWHERE category = 'kitchen';\n```",
+    "options": [
+      {
+        "text": "27.5 in both",
+        "explanation": "That's the true average, but `SUM(price)` and `COUNT(*)` are both integers here, and integer division truncates."
+      },
+      {
+        "text": "27 in both",
+        "explanation": "Correct. 55 / 2 with two integers is 27 in both databases. Use `AVG(price)`, or `SUM(price) * 1.0 / COUNT(*)`, for 27.5."
+      },
+      {
+        "text": "27 in SQLite, 27.5 in PostgreSQL",
+        "explanation": "PostgreSQL also truncates integer division (`55 / 2` is 27). It's `AVG` that returns `numeric` in PostgreSQL."
+      },
+      {
+        "text": "28 in both, because it rounds",
+        "explanation": "Integer division truncates towards zero; it does not round."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `SUM(price)` = 30 + 25 = 55, an integer.\n2. `COUNT(*)` = 2, an integer.\n3. Integer ÷ integer = integer, truncated: 55 / 2 = 27.\n4. Fixes:\n   - `AVG(price)` gives 27.5 in SQLite and `27.5000000000000000` (numeric) in PostgreSQL.\n   - `SUM(price) * 1.0 / COUNT(*)` forces non-integer arithmetic.\n\nThe same trap appears in hand-rolled percentages like `shipped / total * 100`, which is 0 for any ratio under 1.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Erin has no orders. In this query's result, what are Erin's two counts?\n\n```sql\nSELECT c.name, COUNT(*) AS a,\n       COUNT(o.id) AS b\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.id\nGROUP BY c.id;\n```",
+    "options": [
+      {
+        "text": "a = 0, b = 0",
+        "explanation": "`COUNT(*)` counts rows, and the LEFT JOIN keeps one row for Erin (with NULL order columns). So `a` is 1."
+      },
+      {
+        "text": "Erin doesn't appear",
+        "explanation": "That would happen with an inner join. A LEFT JOIN keeps every customer."
+      },
+      {
+        "text": "a = 1, b = 0",
+        "explanation": "Correct. The LEFT JOIN produces one row for Erin with `o.id` NULL. `COUNT(*)` counts that row (1); `COUNT(o.id)` skips the NULL (0)."
+      },
+      {
+        "text": "a = 1, b = 1",
+        "explanation": "`COUNT(o.id)` ignores NULL values, and Erin's only `o.id` is NULL."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. LEFT JOIN: customers with no matching order still get one row, padded with NULLs:\n\n```\nErin  o.id = NULL\n```\n\n2. `COUNT(*)` counts rows in the group: 1.\n3. `COUNT(o.id)` counts non-NULL `o.id` values: 0.\n4. For \"orders per customer, including zero\", count a column from the right-hand table, ideally its primary key.",
+    "link": {
+      "title": "Built-in aggregate functions — SQLite documentation",
+      "url": "https://www.sqlite.org/lang_aggfunc.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A dashboard shows each customer's spend and number of referrals in one query:\n\n```sql\nSELECT c.name,\n  SUM(oi.qty * p.price) AS spent,\n  COUNT(DISTINCT r.id) AS refs\nFROM customers c\nJOIN orders o ON ...\nJOIN order_items oi ON ...\nJOIN products p ON ...\nLEFT JOIN customers r\n  ON r.referred_by = c.id\nGROUP BY c.id;\n```\n\nAsha really spent £142 and referred 2 people. What does the dashboard show for her?",
+    "options": [
+      {
+        "text": "spent 142, refs 2",
+        "explanation": "`COUNT(DISTINCT r.id)` repairs the referral count, but nothing repairs the sum: each order line is repeated once per referral."
+      },
+      {
+        "text": "spent 284, refs 2",
+        "explanation": "Correct. Her 3 order lines join to 2 referrals, giving 6 rows. Each line's value appears twice, so the sum doubles to 284. The distinct count still shows 2."
+      },
+      {
+        "text": "spent 284, refs 6",
+        "explanation": "`DISTINCT` collapses the six referral values to the two distinct ids, so refs is 2."
+      },
+      {
+        "text": "spent 426, refs 2",
+        "explanation": "That would need three copies of every line. The multiplier is the number of referrals (2), not the number of lines."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Asha's order lines: 101 Kettle (30), 101 Mug (4 × 8 = 32), 102 Lamp (2 × 40 = 80). Total 142.\n2. Her referrals: Ben and Chloe (2 rows).\n3. The join pairs every line with every referral: 3 × 2 = 6 rows.\n4. `SUM` sees each line twice: 2 × 142 = 284.\n5. `COUNT(DISTINCT r.id)` sees ids {2, 3}: 2.\n6. Fix: aggregate each relationship on its own (a subquery or CTE per child table), then join the one-row-per-customer results. `SUM(DISTINCT ...)` is not a fix; it would wrongly merge two genuinely equal line values.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Trace this query (shipped orders: 101 and 102 for customer 1, 104 for customer 3):\n\n```sql\nSELECT customer_id, COUNT(*)\nFROM orders\nWHERE status = 'shipped'\nGROUP BY customer_id\nHAVING COUNT(*) = 1;\n```",
+    "options": [
+      {
+        "text": "customer 3 only",
+        "explanation": "Correct. WHERE keeps 101, 102 and 104. Grouping gives customer 1 → 2 and customer 3 → 1. HAVING keeps only the group with exactly one row."
+      },
+      {
+        "text": "customers 2, 3 and 4",
+        "explanation": "That would be \"customers with exactly one order of any status\" (the guest order aside). WHERE removed the non-shipped orders before grouping."
+      },
+      {
+        "text": "customers 1 and 3",
+        "explanation": "Customer 1 has two shipped orders, so the group's count is 2 and HAVING drops it."
+      },
+      {
+        "text": "No rows, because HAVING runs before WHERE",
+        "explanation": "WHERE always runs first, then GROUP BY, then HAVING."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FROM orders: 6 rows.\n2. WHERE status = 'shipped': 101 (c1), 102 (c1), 104 (c3).\n3. GROUP BY customer_id: {1: 2 rows}, {3: 1 row}.\n4. HAVING COUNT(*) = 1: only customer 3.\n5. SELECT: (3, 1).\n\nNote what the query means: \"customers with exactly one *shipped* order\", which isn't the same as \"customers with exactly one order\".",
+    "link": {
+      "title": "GROUP BY and HAVING — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about GROUP BY in SQLite and PostgreSQL are true? Select all that apply.",
+    "options": [
+      {
+        "text": "PostgreSQL allows `SELECT c.id, c.name, COUNT(*) ... GROUP BY c.id` when `c.id` is the primary key of `c`",
+        "explanation": "Correct. PostgreSQL recognises that the primary key functionally determines the other columns of that table, so `c.name` has one value per group."
+      },
+      {
+        "text": "`HAVING spent > 50`, where `spent` is a select-list alias, works in both",
+        "explanation": "Only SQLite accepts it. HAVING is evaluated before SELECT, and PostgreSQL raises `column \"spent\" does not exist`. Repeat the aggregate expression instead."
+      },
+      {
+        "text": "In SQLite, `SELECT category, MAX(price), name ... GROUP BY category` returns the name of the most expensive product in each category",
+        "explanation": "Correct. SQLite documents that with a single `min()` or `max()`, bare columns take their values from the row holding the extreme. PostgreSQL rejects the query."
+      },
+      {
+        "text": "All NULL values in a grouping column fall into a single group",
+        "explanation": "Correct. Although `NULL = NULL` isn't true in a WHERE clause, GROUP BY (like DISTINCT) treats NULLs as one group. The Mug forms a single NULL-category group."
+      },
+      {
+        "text": "`COUNT(*) FILTER (WHERE price >= 30)` is PostgreSQL-only",
+        "explanation": "SQLite has supported the FILTER clause on aggregates since 3.30. It is standard SQL."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each claim:\n\n1. Grouping by a primary key: allowed in PostgreSQL (since 9.1), because id determines name. True.\n2. Alias in HAVING: PostgreSQL rejects it, SQLite tolerates it. False.\n3. SQLite's min/max bare-column rule: documented, returns Rug for home and Kettle for kitchen. True (but not portable).\n4. NULLs group together: the products query gives one NULL row with count 1. True.\n5. FILTER: standard, in PostgreSQL since 9.4 and SQLite since 3.30. False.",
+    "link": {
+      "title": "Bare columns in aggregate queries — SQLite documentation",
+      "url": "https://www.sqlite.org/lang_select.html#bare_columns_in_an_aggregate_query"
+    }
+  }
+]

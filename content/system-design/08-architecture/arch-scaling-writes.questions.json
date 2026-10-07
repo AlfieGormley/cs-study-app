@@ -1,0 +1,381 @@
+[
+  {
+    "id": "arch-scaling-writes-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a single-writer architecture with full read replicas, why does replication not partition the write stream?",
+    "options": [
+      {
+        "text": "Every replica must apply every write, so adding copies multiplies the total write work instead of dividing it.",
+        "explanation": "Each full replica replays the write stream. Read offload can free primary headroom, but replication does not assign independent subsets of writes to additional primaries."
+      },
+      {
+        "text": "Replicas are read-only, so they reject writes, and the primary then has to retry them.",
+        "explanation": "A correctly routed application sends writes to the primary. Rejected misrouted writes are not the architectural reason."
+      },
+      {
+        "text": "Replicas use a different storage engine that is slower at writes.",
+        "explanation": "Replication need not change the engine. Replaying writes can cost differently from executing transactions on the primary."
+      },
+      {
+        "text": "They do increase write capacity, linearly with the number of replicas.",
+        "explanation": "Neither replication nor sharding guarantees linear scaling; sharding can divide write ownership when load and other resources permit."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Suppose the primary handles 10,000 writes/s.\n2. Each of 5 replicas also applies those 10,000 writes/s.\n3. Total write work across the cluster = 60,000 applies/s, but the *useful* write throughput is still 10,000/s.\n4. Contrast with 4 shards: each takes 2,500 of 10,000 writes/s, so they could support more writes if each has spare capacity and no shared bottleneck dominates.\n5. Copying helps reads; splitting helps writes.",
+    "link": {
+      "title": "Azure Architecture Center: Sharding pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A messaging app is sharding its `messages` table. The most common query is \"load the latest 50 messages in conversation X\". Which shard key is best?",
+    "options": [
+      {
+        "text": "`message_id` (random UUID)",
+        "explanation": "Wrong. It spreads writes evenly, but a conversation's messages would be scattered across every shard, so the common query becomes a scatter-gather across all of them."
+      },
+      {
+        "text": "`sent_date`",
+        "explanation": "Wrong. All of today's messages land on one shard, a hot partition, and conversations still span many shards over time."
+      },
+      {
+        "text": "`conversation_id`",
+        "explanation": "Correct. All messages for one conversation live on one shard, so the main query hits a single shard, and there are millions of conversations to spread load across."
+      },
+      {
+        "text": "`sender_country`",
+        "explanation": "Wrong. Low cardinality and very skewed (a few countries dominate), and conversations between countries would span shards."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Criteria: (a) even spread of writes, (b) the hot query hits one shard.\n2. `message_id`: (a) yes, (b) no.\n3. `sent_date`: (a) no, today is hot; (b) no.\n4. `sender_country`: (a) no, (b) no.\n5. `conversation_id`: (a) yes, many conversations; (b) yes.\n6. Caveat: a giant group chat could become hot. Discord, for example, buckets messages by channel *and* time window to bound partition size.",
+    "link": {
+      "title": "Discord: How Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An ingest service inserts telemetry rows one per transaction. Each commit costs about 2 ms of fsync on networked storage, and commits are effectively serialised. What's the approximate maximum rate, and what's the rate if you batch 500 rows per transaction (assume the fsync still dominates)?",
+    "options": [
+      {
+        "text": "About 500 rows/s unbatched; about 250,000 rows/s batched.",
+        "explanation": "Correct under the stated simplified assumptions: 500 commits/s multiplied by 500 rows/commit gives 250,000 rows/s. This is a model, not a measured throughput prediction."
+      },
+      {
+        "text": "About 2,000 rows/s unbatched; about 4,000 rows/s batched.",
+        "explanation": "Wrong. 2,000/s would need 0.5 ms commits, and batching 500 rows per commit multiplies throughput by roughly 500, not by 2."
+      },
+      {
+        "text": "About 500 rows/s either way, because the disk is the bottleneck.",
+        "explanation": "Wrong. The disk bottleneck is per *flush*, not per row. Batching puts many rows into one flush."
+      },
+      {
+        "text": "Batching reduces throughput because transactions are larger.",
+        "explanation": "Wrong. Larger transactions take a little longer to write, but they amortise the fixed fsync cost over many rows, so total throughput rises sharply."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Unbatched: each row needs its own commit and fsync.\n   - 1,000 ms / 2 ms = 500 commits/s, so 500 rows/s.\n2. Batched: 500 rows share one commit.\n   - Still about 500 commits/s, now × 500 rows = 250,000 rows/s.\n3. In reality CPU, network and index maintenance cap it lower, and no typical gain is asserted without a representative benchmark.\n4. Trade-off: rows wait in the batch buffer (say up to 100 ms), and an unflushed batch can be lost on crash unless it was read from a durable queue.",
+    "link": {
+      "title": "Azure Architecture Center: Queue-Based Load Leveling",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Ticket sales open and 30,000 orders/s arrive for 5 minutes. The orders database can sustain 6,000 writes/s. Orders are put on a durable queue and drained by workers at 6,000/s. After the 5-minute burst, traffic drops to almost zero. Roughly how long after the burst ends is the backlog cleared?",
+    "options": [
+      {
+        "text": "About 5 minutes",
+        "explanation": "Wrong. That would only be true if the drain rate equalled the excess arrival rate. Here the excess is 4× the drain rate."
+      },
+      {
+        "text": "About 1 minute",
+        "explanation": "Wrong. That badly underestimates the backlog: 24,000 excess orders/s for 300 s is millions of orders."
+      },
+      {
+        "text": "About 20 minutes",
+        "explanation": "Correct. Backlog = (30,000 − 6,000) × 300 s = 7.2 million orders. At 6,000/s, that takes 1,200 s = 20 minutes to drain."
+      },
+      {
+        "text": "Never, because queues grow without bound.",
+        "explanation": "Wrong. Queues only grow without bound when arrivals exceed the drain rate *indefinitely*. Here the burst ends, so the backlog drains."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Net growth during burst = arrivals − drain = 30,000 − 6,000 = 24,000/s.\n2. Burst length = 5 min = 300 s.\n3. Peak backlog = 24,000 × 300 = 7,200,000 orders.\n4. Drain after burst at 6,000/s: 7,200,000 / 6,000 = 1,200 s = 20 min.\n5. Design implications:\n   - The queue must hold more than 7.2M messages.\n   - Users wait up to 20 min for confirmation, so show 'order received, confirming…'.\n   - If that's unacceptable, add write capacity (shard) or shed load with a waiting room.",
+    "link": {
+      "title": "Azure Architecture Center: Queue-Based Load Leveling",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A DynamoDB table stores a live view count per video, keyed by `video_id`. A viral video gets 15,000 increments per second and is being throttled, even though the table has plenty of total capacity. Which fixes work? Select all that apply. Assume ordinary updates of items at most 1 KiB. Consider these as mitigation designs requiring validation.",
+    "options": [
+      {
+        "text": "Write sharding: split the counter into N sub-items (`video_id#0` … `video_id#19`), increment a random one, and sum them on read.",
+        "explanation": "This reduces per-key demand to about 750 writes/s if balanced. Multiple keys do not guarantee separate physical partitions; verify distribution and throttling."
+      },
+      {
+        "text": "Aggregate increments in a stream processor or in memory and write the total once per second.",
+        "explanation": "Aggregation reduces requests but adds delay. Durable input, deduplication and coordinated checkpoints are needed to prevent loss or double counting on recovery."
+      },
+      {
+        "text": "Increase the table's provisioned capacity tenfold.",
+        "explanation": "Wrong. Total table capacity isn't the limit. A single item lives in a single partition, which has its own throughput cap regardless of table-level capacity."
+      },
+      {
+        "text": "Add a global secondary index on `video_id`.",
+        "explanation": "Wrong. An index does not distribute updates to the base item. It adds index work when indexed keys or projected attributes change; unprojected-only changes need not update the index."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Constraint: one partition ≈ 1,000 write units/s; one item = one partition.\n2. Demand: 15,000 writes/s on one item, so ~15× over the limit.\n3. Option A, salting: 20 sub-keys ≈ 750 writes/s each, under the limit. Read the 20 keys using individual or batch gets and sum; a single Query cannot span distinct partition-key values. Verify their physical distribution.\n4. Option B, aggregation: buffer counts for 1 s, then apply an idempotently identified batch; a retry of bare ADD can double count. Writes fall from 15,000/s to about 1/s.\n5. Raising table capacity doesn't touch the per-partition cap, and a GSI adds writes.",
+    "link": {
+      "title": "AWS: Using write sharding to distribute workloads evenly (DynamoDB)",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-sharding.html"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A metrics system needs to ingest 2 million data points per second with mostly time-range reads. The team is choosing between a B-tree–based relational store with in-place updates and an LSM-tree–based store. Which reasoning is most accurate?",
+    "options": [
+      {
+        "text": "B-trees are always faster for writes because they keep data sorted on disk.",
+        "explanation": "B-tree pages may be cached and buffered; neither B-trees nor LSM trees universally win on write throughput."
+      },
+      {
+        "text": "LSM trees buffer writes and flush sorted files, which can suit heavy ingestion; reads and compaction add costs, so benchmark the workload and sustained compaction behavior.",
+        "explanation": "This states the trade-off without promising a universal winner. Time partitioning can help locality and retention, depending on layout and compaction policy."
+      },
+      {
+        "text": "LSM trees avoid all write amplification because they never rewrite data.",
+        "explanation": "Wrong. Compaction rewrites data repeatedly as files merge, so LSM trees do have write amplification. They just turn it into sequential I/O done in the background."
+      },
+      {
+        "text": "The storage engine makes no difference; only the number of servers matters.",
+        "explanation": "Wrong. The engine's write path determines per-node throughput by a large factor, which determines how many servers you need."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. B-tree inserts traverse and modify pages, potentially from cache, and may split pages; durable engines also log changes.\n2. A typical LSM engine logs writes, updates a memtable, flushes sorted files and later compacts them.\n3. Measure sustained ingestion, read latency, write amplification and stalls with the chosen durability settings.\n4. Time windows can help range locality and expiry, but late data and compaction policy affect repeated work.",
+    "link": {
+      "title": "Wikipedia: Log-structured merge-tree",
+      "url": "https://en.wikipedia.org/wiki/Log-structured_merge-tree"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A multi-tenant SaaS shards by `tenant_id` across 32 shards. One enterprise tenant now generates 40% of all writes, and its shard is saturated while others are idle. What's the best approach? The product must continue accepting the tenant's contracted traffic.",
+    "options": [
+      {
+        "text": "Re-hash all tenants with a new function so the big tenant lands on a different shard.",
+        "explanation": "Wrong. Moving the hot tenant to another shard just moves the hotspot. One tenant still produces 40% of the load on one machine."
+      },
+      {
+        "text": "Double the shard count to 64.",
+        "explanation": "Wrong. All of one tenant's data still maps to one shard, so adding shards spreads only the small tenants and the hot shard stays hot."
+      },
+      {
+        "text": "Isolate the big tenant on dedicated capacity and sub-shard its data by a finer key (e.g. `tenant_id + project_id` or a salted suffix), keeping small tenants on the shared shards.",
+        "explanation": "Correct. Heavy hitters need their own partitioning. A compound key spreads one tenant across several shards while queries scoped to a project still hit one shard."
+      },
+      {
+        "text": "Throttle the tenant to the same write rate as the others.",
+        "explanation": "Wrong. It protects others but caps your biggest customer far below their contracted needs. Rate limits are a safety net, not a scaling strategy."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The issue is *skew*: shard key `tenant_id` has one value carrying 40% of load.\n2. Any scheme that maps a single tenant to a single shard keeps the hotspot, so re-hashing and adding shards don't help.\n3. Fix in two parts:\n   - Isolation: give the tenant dedicated shards (can reduce noisy-neighbour interference).\n   - Finer key: partition its data by `tenant_id + project_id` (or similar) across, say, 8 dedicated shards. If evenly distributed, that is about 5% of total load each.\n4. Keep a directory (lookup table) mapping tenants to shard sets so routing is flexible.\n5. Many SaaS companies combine pooled shards for small tenants with dedicated cells for big ones.",
+    "link": {
+      "title": "Azure Architecture Center: Sharding pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users are sharded with `hash(user_id) % 4`. You add a fifth shard and switch to `% 5`. Roughly what fraction of users now map to a different shard? Assume hash values are approximately uniform.",
+    "options": [
+      {
+        "text": "About 20%, the share the new shard should take.",
+        "explanation": "Wrong. That's the ideal amount to move, but modulo hashing doesn't achieve it: changing N reshuffles almost every key."
+      },
+      {
+        "text": "None; existing keys stay where they are.",
+        "explanation": "Wrong. The shard is recomputed from the new modulus, so most keys get a new answer."
+      },
+      {
+        "text": "About 80%: a key stays put only if `h % 4 == h % 5`, which holds for 4 of every 20 hash values.",
+        "explanation": "Correct. Only about 1 in 5 keys keeps its shard, so roughly 80% of the data must move. Logical shards or consistent hashing avoid this."
+      },
+      {
+        "text": "Exactly 50%.",
+        "explanation": "Wrong. There's no reason for half; work it out over one full cycle of 20 hash values."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `h % 4` and `h % 5` repeat together every lcm(4, 5) = 20 values.\n2. Count h in 0..19 where both agree: h = 0, 1, 2, 3 → 4 values.\n3. Unchanged = 4/20 = 20%; moved = 80%.\n4. Fix: thousands of logical shards, mapped to physical servers in a lookup table. Adding a server moves whole logical shards, about 1/5 of them.\n\n```\nsum(h % 4 == h % 5\n    for h in range(20))  # 4\n```",
+    "link": {
+      "title": "Azure Architecture Center: Sharding pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka producer sends 50,000 small messages per second and is CPU-bound on request overhead. It uses `linger.ms=0`. What does raising `linger.ms` to 10 do?",
+    "options": [
+      {
+        "text": "It makes each message durable 10 ms sooner.",
+        "explanation": "Wrong. Linger adds a wait before sending; it doesn't speed up durability."
+      },
+      {
+        "text": "It permits up to 10 ms of batching delay for an unfilled batch, potentially reducing request overhead; measure the resulting throughput and latency.",
+        "explanation": "The batch may send earlier when full. Backpressure can delay it longer, and reduced overhead can improve total latency under load; linger is not an end-to-end bound."
+      },
+      {
+        "text": "It drops messages that wait longer than 10 ms.",
+        "explanation": "Wrong. Lingering delays sending; nothing is dropped."
+      },
+      {
+        "text": "It has no effect unless `acks=0`.",
+        "explanation": "Wrong. Batching works with any `acks` setting."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Even linger.ms=0 can batch records when records accumulate before sending.\n2. linger.ms=10 permits waiting for an unfilled per-partition batch, normally until its delay expires or it fills.\n3. At a uniform 50,000 records/s, 10 ms brings 500 records total, distributed across partitions.\n4. Measure request counts, compression and end-to-end latency; broker backpressure and queues can delay sends beyond linger.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A wallet service stores balances as one row per account, updated with `UPDATE ... SET balance = balance - x`. Popular merchant accounts receive thousands of payments per second and lock contention is high. The team considers an append-only ledger instead. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Appending independent entries can reduce contention on the balance row, though indexes, constraints and balance validation can still contend.",
+        "explanation": "The original update lock can be avoided on this path; this does not make the entire write operation conflict-free."
+      },
+      {
+        "text": "Current balances must be derived, for example by a running projection or periodic snapshots plus the entries since.",
+        "explanation": "Correct. Reads now need a projection; a naive SUM over millions of entries per read would be slow."
+      },
+      {
+        "text": "Every change becomes auditable history, which suits financial data.",
+        "explanation": "Retained entries support history, but these three fields alone do not establish a complete, tamper-resistant or balanced double-entry accounting system."
+      },
+      {
+        "text": "Overdraft checks become trivial, since appends never conflict.",
+        "explanation": "A fresh read alone cannot prevent two simultaneous debits from overspending; validation and spending must be atomic or use safely reserved rights."
+      },
+      {
+        "text": "Append-only means you can never correct a mistake.",
+        "explanation": "Wrong. You correct by appending a compensating entry, which keeps the history intact."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Update-in-place: every payment locks the same row, so payments are serialised.\n2. Ledger: every payment inserts a row, potentially avoiding that shared row lock while other contention remains.\n3. Balance = snapshot + sum of entries since the snapshot.\n4. Crediting a merchant needs no balance check, which is the hot path here.\n5. Debits that must not overdraw need atomic balance validation and spending: serialise per account, or reserve funds.\n6. Corrections: append `-x` with a reference to the original entry.",
+    "link": {
+      "title": "Martin Fowler: Event Sourcing",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your queue-based ingest dashboard shows the worker drain rate is steady at 5,000/s, but the age of the oldest message has grown steadily throughout the observation period. Input averages 5,300/s. What should you conclude?",
+    "options": [
+      {
+        "text": "The queue is doing its job; it absorbs load and will drain on its own.",
+        "explanation": "Wrong. Queues absorb *temporary* bursts. Here input exceeds drain on average, so the backlog grows forever."
+      },
+      {
+        "text": "This is sustained overload: arrivals exceed the drain rate by about 300/s on average, so the backlog grows by about 26 million a day. Add consumer and database capacity, or shed or degrade load.",
+        "explanation": "The measured average arrival rate exceeds the drain rate. Rising age alone could have other causes, but these rates imply backlog growth while they persist."
+      },
+      {
+        "text": "The workers are crashing; restart them.",
+        "explanation": "Wrong. The drain rate is steady at 5,000/s, so workers are running. They just aren't fast enough."
+      },
+      {
+        "text": "Increase the queue's retention so messages aren't lost.",
+        "explanation": "Wrong as a fix. It may avoid data loss for a while, but latency keeps rising without limit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Net growth = 5,300 − 5,000 = 300/s.\n2. Per day: 300 × 86,400 ≈ 25.9 million messages.\n3. Age keeps rising because the backlog never drains.\n4. Options: scale workers if the DB has headroom; batch writes to raise per-worker throughput; shard the DB; drop or sample low-value events.\n5. Alert on oldest-message age, not just queue length.",
+    "link": {
+      "title": "Azure Architecture Center: Queue-Based Load Leveling",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An IoT platform writes sensor readings to a DynamoDB-style store. Which partition key choices are likely to create hot partitions? Select all that apply.",
+    "options": [
+      {
+        "text": "`date` (for example `2026-10-01`), so all of today's writes share one key.",
+        "explanation": "This concentrates demand on one logical key. Depending on sort keys, indexes and adaptive splitting, it need not remain one physical partition."
+      },
+      {
+        "text": "`device_id` across 2 million devices that each report every 10 seconds.",
+        "explanation": "Wrong. 2 million evenly active keys spread writes across many partitions."
+      },
+      {
+        "text": "`customer_id` where one customer owns 60% of the devices.",
+        "explanation": "Correct. One key value carries most of the load, which is skew."
+      },
+      {
+        "text": "`device_id + date`, to keep each partition's size bounded over time.",
+        "explanation": "With roughly even device traffic, high cardinality helps. A day bounds the time window, not bytes unless each device's rate and item size are bounded."
+      },
+      {
+        "text": "`sensor_type` with only 5 possible values.",
+        "explanation": "Five logical key values concentrate demand. They do not imply a permanent maximum of five physical partitions in a store that can split item collections."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Ask of each key: how many distinct values, and how evenly is traffic spread?\n2. `date`: 1 hot value per day. Hot.\n3. `device_id`: 2M values, roughly even. Fine.\n4. `customer_id` with 60% skew: hot.\n5. `device_id + date`: high cardinality; bounded time window, with bytes bounded only if rate and item size are bounded. Fine.\n6. `sensor_type`: 5 values. Hot.",
+    "link": {
+      "title": "AWS: Using write sharding to distribute workloads evenly (DynamoDB)",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-sharding.html"
+    }
+  }
+]

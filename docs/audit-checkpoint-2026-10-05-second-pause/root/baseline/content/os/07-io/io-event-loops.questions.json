@@ -1,0 +1,344 @@
+[
+  {
+    "id": "io-event-loops-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Node.js handler calls a function that spins the CPU for 2 seconds computing a hash. What happens to the other 5,000 open connections on that process during those 2 seconds?",
+    "options": [
+      {
+        "text": "They all stall: no callbacks, timers or I/O are processed until the handler returns",
+        "explanation": "Correct. Callbacks run to completion; while one runs, the loop can't get back to `epoll_wait`, so everything else waits."
+      },
+      {
+        "text": "They're served normally by other threads in the event loop",
+        "explanation": "There's only one event-loop thread. JavaScript callbacks all run on it."
+      },
+      {
+        "text": "The kernel preempts the handler and runs the other callbacks",
+        "explanation": "The kernel may preempt the *thread*, but it can't run another JavaScript callback on that loop; the loop is the only thread doing so."
+      },
+      {
+        "text": "Only connections that share the same remote IP stall",
+        "explanation": "The stall is process-wide; it has nothing to do with which client is sending."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The loop: `wait → run callbacks → wait`.\n2. The hash callback is running, so the loop is stuck in the 'run callbacks' step.\n3. Data from the 5,000 clients piles up in kernel socket buffers, unread.\n4. Timers due during the 2 s fire late.\n5. When the handler returns, the loop catches up.\n\nFix: move CPU work to a worker thread or another process.",
+    "link": {
+      "title": "The Node.js Event Loop — Node.js docs",
+      "url": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+    }
+  },
+  {
+    "id": "io-event-loops-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the Python `selectors` echo server, what does this line do?\n\n```python\nfor key, _ in sel.select():\n    key.data(key.fileobj)\n```",
+    "options": [
+      {
+        "text": "Reads data from every registered socket",
+        "explanation": "It only touches sockets that are ready, and it doesn't read: it calls whatever handler was registered."
+      },
+      {
+        "text": "Blocks until every socket has data",
+        "explanation": "`select()` returns as soon as at least one registered descriptor is ready (or the timeout expires)."
+      },
+      {
+        "text": "Calls the callback stored at registration (accept or echo) for each ready descriptor",
+        "explanation": "Correct. `key.data` is the object passed to `register`, here a function, so this is the dispatch step."
+      },
+      {
+        "text": "Copies the received bytes into `key.data`",
+        "explanation": "`key.data` holds the handler, not received bytes. The handler calls `recv` itself."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Registration stored a callback with each fd:\n\n```\nls   -> accept\nconn -> echo\n```\n\n`sel.select()` (epoll on Linux) returns keys for ready fds. `key.data(key.fileobj)` becomes `accept(ls)` when the listener is ready, or `echo(conn)` when a client sent data. This is the reactor pattern: the loop tells you what's ready, and your handler does the I/O.",
+    "link": {
+      "title": "selectors — Python documentation",
+      "url": "https://docs.python.org/3/library/selectors.html"
+    }
+  },
+  {
+    "id": "io-event-loops-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is a **proactor** rather than a reactor?",
+    "options": [
+      {
+        "text": "A loop built on epoll",
+        "explanation": "epoll reports readiness ('you can read now'), which is the reactor pattern."
+      },
+      {
+        "text": "A loop built on kqueue",
+        "explanation": "kqueue is also readiness-based, so it's a reactor."
+      },
+      {
+        "text": "A loop built on `select`",
+        "explanation": "`select` is the original readiness API, so a reactor."
+      },
+      {
+        "text": "A loop built on io_uring or Windows IOCP",
+        "explanation": "Correct. They report completed operations ('your read finished, here are n bytes'), which is the proactor pattern."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask: does the loop tell me *I can do it* or *it's done*?\n\n| API | Reports | Pattern |\n|---|---|---|\n| select/poll/epoll/kqueue | ready | reactor |\n| IOCP, io_uring | done | proactor |",
+    "link": {
+      "title": "Design overview — libuv documentation",
+      "url": "https://docs.libuv.org/en/v1.x/design.html"
+    }
+  },
+  {
+    "id": "io-event-loops-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this Node.js program print?\n\n```js\nconst fs = require('fs');\nfs.readFile(__filename, () => {\n  setTimeout(() =>\n    console.log('timeout'), 0);\n  setImmediate(() =>\n    console.log('immediate'));\n});\n```",
+    "options": [
+      {
+        "text": "`timeout` then `immediate`, always",
+        "explanation": "A 0 ms timer is checked in the timers phase, which comes after check in the cycle from the poll phase."
+      },
+      {
+        "text": "`immediate` then `timeout`, always",
+        "explanation": "Correct. The readFile callback runs in the poll phase; the next phase is check (setImmediate), then the loop wraps to timers."
+      },
+      {
+        "text": "The order is random every time",
+        "explanation": "That's true only when both are scheduled from the main module. Inside an I/O callback the order is fixed."
+      },
+      {
+        "text": "Only `immediate`; the timeout is cancelled",
+        "explanation": "Both callbacks run; nothing cancels the timer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Phase order: timers → pending → idle/prepare → **poll** → **check** → close → timers...\n\n1. The readFile callback runs in **poll**.\n2. It schedules a timer (timers phase) and an immediate (check phase).\n3. After poll comes **check**: prints `immediate`.\n4. close, then the next iteration's **timers**: prints `timeout`.\n\nFrom the main module, whether the loop enters timers before 1 ms has passed decides the order, so it varies.",
+    "link": {
+      "title": "The Node.js Event Loop — Node.js docs",
+      "url": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+    }
+  },
+  {
+    "id": "io-event-loops-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Node.js service makes outbound HTTPS calls to `api.partner.com`. During a burst of `crypto.pbkdf2` password hashing, the outbound calls suddenly take seconds to start. What's the most likely cause?",
+    "options": [
+      {
+        "text": "pbkdf2 blocks the event loop thread",
+        "explanation": "Async `crypto.pbkdf2` runs on the libuv thread pool, not the loop thread. The loop is free; something else is queued."
+      },
+      {
+        "text": "Sockets are handled by the thread pool and it's full",
+        "explanation": "Network sockets go through epoll on the loop thread, not the pool."
+      },
+      {
+        "text": "The 4-thread libuv pool is busy with pbkdf2, so `dns.lookup` (getaddrinfo, also on the pool) queues behind it",
+        "explanation": "Correct. Both use the pool. With the default 4 threads saturated, hostname resolution waits, delaying the connect."
+      },
+      {
+        "text": "TLS handshakes are limited to 4 at a time",
+        "explanation": "There's no such limit; the bottleneck is the DNS lookup before the connection even starts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `http.request('https://api.partner.com')` first resolves the name with `dns.lookup` → `getaddrinfo` → thread pool.\n2. `crypto.pbkdf2` (async) → thread pool.\n3. Pool size = 4 (default `UV_THREADPOOL_SIZE`).\n4. 4 hashing jobs occupy every thread, and lookups wait for one to free up.\n\nFixes: raise `UV_THREADPOOL_SIZE`, cache DNS or use `dns.resolve` (c-ares, not the pool), or move hashing elsewhere.",
+    "link": {
+      "title": "Thread pool work scheduling — libuv documentation",
+      "url": "https://docs.libuv.org/en/v1.x/threadpool.html"
+    }
+  },
+  {
+    "id": "io-event-loops-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An event loop has pending timers at 120 ms, 150 ms and 400 ms (absolute). It's now 100 ms and there's no I/O ready. What timeout should it pass to `epoll_wait`?",
+    "options": [
+      {
+        "text": "20 ms",
+        "explanation": "Correct. The earliest expiry is 120 ms (the heap's root), so sleep 120 − 100 = 20 ms, waking sooner if I/O arrives."
+      },
+      {
+        "text": "0 ms, so it can check timers continuously",
+        "explanation": "That's busy-polling and burns a core for nothing."
+      },
+      {
+        "text": "300 ms, the time until the last timer",
+        "explanation": "Sleeping that long would fire the 120 ms and 150 ms timers far too late."
+      },
+      {
+        "text": "-1 (forever), since timers fire by signal",
+        "explanation": "Loop timers don't use signals; the wait timeout is how they fire on time."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Timers sit in a min-heap; the root is the earliest: 120 ms.\n2. timeout = 120 − 100 = 20 ms.\n3. `epoll_wait(ep, evs, n, 20)` returns on I/O or after 20 ms.\n4. Then the loop runs expired timers and recomputes: next root 150 ms → wait 30 ms.\n\nCost: O(1) to peek, O(log n) to pop or insert.",
+    "link": {
+      "title": "Design overview — libuv documentation",
+      "url": "https://docs.libuv.org/en/v1.x/design.html"
+    }
+  },
+  {
+    "id": "io-event-loops-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these would block a Redis server's main thread and raise latency for **every** client? Select all that apply.",
+    "options": [
+      {
+        "text": "`KEYS *` on a database with 10 million keys",
+        "explanation": "Correct. It walks the whole keyspace in one command on the single command thread."
+      },
+      {
+        "text": "`DEL` on a set with 5 million members",
+        "explanation": "Correct. Freeing that much memory synchronously takes a long time; `UNLINK` hands the freeing to a background thread."
+      },
+      {
+        "text": "`SCAN 0 COUNT 100` repeated until the cursor returns 0",
+        "explanation": "`SCAN` does a small bounded chunk per call, so other clients' commands interleave between calls."
+      },
+      {
+        "text": "A Lua script that loops for 3 seconds",
+        "explanation": "Correct. Scripts run atomically on the main thread; nothing else executes until they finish."
+      },
+      {
+        "text": "`GET` on a 100-byte string",
+        "explanation": "A tiny memory lookup, around a microsecond."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Redis executes commands one at a time on one thread. Cost per command decides who waits:\n\n- `KEYS *`: O(N) over all keys → blocks.\n- `DEL` big set: O(members) to free → blocks; `UNLINK` → background.\n- `SCAN`: O(COUNT) per call → fine.\n- Long Lua: atomic → blocks.\n- `GET`: O(1) → fine.",
+    "link": {
+      "title": "Redis latency diagnosis — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/"
+    }
+  },
+  {
+    "id": "io-event-loops-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does nginx run one single-threaded event loop per worker process, with `worker_processes auto`, instead of one big multi-threaded loop?",
+    "options": [
+      {
+        "text": "Because epoll can only be used by one thread in a whole system",
+        "explanation": "Any number of threads and processes can use epoll; each can have its own instance."
+      },
+      {
+        "text": "To use every core while keeping each worker free of locks: workers share no hot-path state, and one crashing worker doesn't take down the rest",
+        "explanation": "Correct. One worker per core gives parallelism; independence avoids lock contention and isolates failures."
+      },
+      {
+        "text": "Because the master process handles all requests and workers only log",
+        "explanation": "It's the other way round: the master manages config and workers; workers handle all traffic."
+      },
+      {
+        "text": "To allow each request its own thread",
+        "explanation": "nginx explicitly avoids thread-per-request; each worker handles thousands of connections."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. One loop = one core.\n2. N cores → `worker_processes auto` → N workers.\n3. Each worker: own epoll, own connections, no locks.\n4. With `reuseport`, the kernel spreads incoming connections across per-worker listening sockets.\n5. Capacity ≈ workers × `worker_connections`, e.g. 8 × 4,096 ≈ 32,768.",
+    "link": {
+      "title": "Inside NGINX: How We Designed for Performance & Scale",
+      "url": "https://blog.nginx.org/blog/inside-nginx-how-we-designed-for-performance-scale"
+    }
+  },
+  {
+    "id": "io-event-loops-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An nginx worker serves large video files from a disk much bigger than RAM. Throughput is poor and latency for small cached files on the same worker is erratic. Which change targets the root cause?",
+    "options": [
+      {
+        "text": "Increase `worker_connections`",
+        "explanation": "More connection slots don't help if the loop is stuck in blocking disk reads."
+      },
+      {
+        "text": "Switch from epoll to select",
+        "explanation": "select is strictly worse, and neither can make regular-file reads non-blocking."
+      },
+      {
+        "text": "Enable `aio threads` so reads that miss the page cache run in a thread pool, not on the worker's loop",
+        "explanation": "Correct. A page-cache miss makes `read()` block on the disk, freezing every connection on that worker. Offloading it keeps the loop responsive."
+      },
+      {
+        "text": "Set the files' sockets to `O_NONBLOCK`",
+        "explanation": "`O_NONBLOCK` has no effect on regular-file reads; they block on disk regardless."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Cached file: `read()` copies from page cache in microseconds. Fine.\n2. Uncached: `read()` sleeps for a disk seek, several ms on HDD.\n3. The worker's loop is one thread, so every client on it waits.\n4. epoll can't help: regular files are always 'ready'.\n5. `aio threads`: hand the read to a pool thread, carry on with other connections, resume on completion.",
+    "link": {
+      "title": "aio and thread pools — nginx documentation",
+      "url": "https://nginx.org/en/docs/http/ngx_http_core_module.html#aio"
+    }
+  },
+  {
+    "id": "io-event-loops-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A proxy built on an event loop reads from a fast upstream and writes to a slow mobile client. Memory grows until the process is OOM-killed. What's the correct fix?",
+    "options": [
+      {
+        "text": "Apply backpressure: stop reading from upstream (unregister read interest) while the client's outgoing buffer is above a high-water mark, and resume when it drains",
+        "explanation": "Correct. Reads are paused, so TCP flow control in turn slows the upstream. Memory stays bounded."
+      },
+      {
+        "text": "Make the upstream socket blocking so reads wait for the client",
+        "explanation": "A blocking socket on an event loop freezes every other connection."
+      },
+      {
+        "text": "Increase the kernel send buffer size",
+        "explanation": "That only moves the problem; a big enough response still outruns any buffer."
+      },
+      {
+        "text": "Run the garbage collector more often",
+        "explanation": "The memory is live (unsent data), not garbage."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Upstream sends 100 MB/s; client drains 1 MB/s.\n2. Without backpressure: 99 MB/s piles up in the proxy's user-space buffer.\n3. Fix: when `pending > HIGH` (say 1 MB), stop watching upstream for `EVENT_READ`.\n4. The kernel receive buffer fills, the TCP window shrinks, and the upstream slows.\n5. When the client's socket is writable and `pending < LOW`, start reading again.\n\nNode streams do this with `highWaterMark` and `pipe()`.",
+    "link": {
+      "title": "selectors — Python documentation",
+      "url": "https://docs.python.org/3/library/selectors.html"
+    }
+  },
+  {
+    "id": "io-event-loops-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Redis 6.0 added `io-threads`. Which statements about it are true? Select all that apply.",
+    "options": [
+      {
+        "text": "I/O threads read requests from and write replies to sockets in parallel",
+        "explanation": "Correct. Socket read/write and protocol handling dominate at high connection counts, so parallelising them helps."
+      },
+      {
+        "text": "Commands still execute one at a time on the main thread, so single-command atomicity is unchanged",
+        "explanation": "Correct. That's the design point: more throughput without introducing locks into the data structures."
+      },
+      {
+        "text": "A slow `KEYS *` no longer blocks other clients",
+        "explanation": "Command execution is still serial, so a slow command still blocks everyone."
+      },
+      {
+        "text": "It's mainly useful at high load with many connections, not for a lightly loaded instance",
+        "explanation": "Correct. If the main thread isn't saturated by socket work, extra threads add little."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Split a request's cost:\n\n```\nread+parse | execute | write reply\n  threads  |  main   |  threads\n```\n\nOnly the outer parts are parallel. So:\n\n1. Throughput rises when syscalls and parsing are the bottleneck.\n2. Atomicity holds, because `execute` is still serial.\n3. A slow command still blocks every client.",
+    "link": {
+      "title": "Redis latency diagnosis — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/"
+    }
+  }
+]

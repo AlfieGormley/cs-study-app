@@ -1,0 +1,374 @@
+[
+  {
+    "id": "rel-disaster-recovery-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A business says: \"If our region fails, we can tolerate losing up to 5 minutes of orders, and we must be back online within 1 hour.\" Which statement maps these correctly?",
+    "options": [
+      {
+        "text": "RPO = 1 hour, RTO = 5 minutes",
+        "explanation": "This swaps the two. Data loss tolerance (5 minutes of orders) is the recovery *point*; time to come back online is the recovery *time*."
+      },
+      {
+        "text": "RPO = 5 minutes, RTO = 1 hour",
+        "explanation": "Correct. RPO measures acceptable data loss in time (the last 5 minutes of writes); RTO measures acceptable downtime (1 hour to restore service)."
+      },
+      {
+        "text": "RPO = RTO = 5 minutes, because they must match",
+        "explanation": "RPO and RTO are independent targets. A system can have near-zero RPO (synchronous replication) and still take an hour to fail over, or vice versa."
+      },
+      {
+        "text": "SLA = 5 minutes, SLO = 1 hour",
+        "explanation": "SLAs and SLOs describe ongoing service levels (e.g. 99.9% availability), not recovery from a specific disaster."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Draw the timeline:\n\n```\nlast copy   disaster        restored\n   │◀─RPO─▶│◀─────RTO──────▶│\n```\n\n1. \"Lose up to 5 minutes of orders\" looks *backwards* from the disaster to the last good copy: **RPO = 5 min**. This means replication or backups must ship data off-site at least every 5 minutes.\n2. \"Back online within 1 hour\" looks *forwards*: **RTO = 1 h**. That rules out a multi-hour restore and points to pilot light or warm standby.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your 30 TB database is backed up nightly to another region. A restore runs at an effective **400 MB/s**, followed by about 2 hours of log replay and validation. The business asks for an RTO of 4 hours. Can backup-and-restore meet it?",
+    "options": [
+      {
+        "text": "Yes, it takes about 3 hours in total",
+        "explanation": "This underestimates the copy phase. 30 TB at 400 MB/s is about 21 hours, not 1 hour; check the unit conversion (TB to MB is a factor of 10⁶)."
+      },
+      {
+        "text": "Yes, because the backup is in another region",
+        "explanation": "Location determines whether the backup survives the disaster, not how fast it can be restored. RTO depends on restore throughput and steps."
+      },
+      {
+        "text": "No: around 23 hours in total; you need pilot light or warm standby with a live replica",
+        "explanation": "Correct. 30,000,000 MB / 400 MB/s = 75,000 s ≈ 20.8 h, plus 2 h replay ≈ 23 h. A continuously replicated database in the DR region avoids the bulk restore entirely."
+      },
+      {
+        "text": "No, but only because the RPO is 24 hours",
+        "explanation": "The nightly schedule does give an RPO of up to 24 hours, which may also be unacceptable, but the question is about RTO, which fails on restore time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Convert: `30 TB = 30,000,000 MB` (decimal units).\n2. Copy time: `30,000,000 / 400 = 75,000 s`.\n3. In hours: `75,000 / 3,600 ≈ 20.8 h`.\n4. Add replay and validation: `≈ 22.8 h`.\n5. Compare with RTO = 4 h: misses by ~19 h.\n\nOptions: keep a cross-region replica (pilot light) so recovery is \"promote and scale the app tier\" (tens of minutes), or warm standby (minutes). Note too that nightly backups mean up to **24 h RPO**, which most businesses with a 4 h RTO won't accept either.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A developer accidentally runs `DELETE FROM customers;` without a `WHERE` clause on the primary database. The database has two synchronous replicas in other zones. What protects you?",
+    "options": [
+      {
+        "text": "The synchronous replicas, since they hold full copies of the data",
+        "explanation": "Synchronous replication copies the DELETE to the replicas almost instantly. Replicas protect against hardware loss, not against logically valid but wrong operations."
+      },
+      {
+        "text": "Point-in-time recovery from backups and archived logs, restored to just before the DELETE",
+        "explanation": "Correct. PITR lets you restore a copy to the second before the mistake, then recover the deleted rows. This is why replication is not a backup."
+      },
+      {
+        "text": "Failing over to a replica",
+        "explanation": "The replica already executed the same DELETE. Failing over just gives you an empty table on a different machine."
+      },
+      {
+        "text": "The database's transaction isolation level",
+        "explanation": "Isolation controls how concurrent transactions see each other. A committed DELETE is durable; isolation doesn't let you undo it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Classify the failure: **logical** (a valid command with a disastrous effect), not physical.\n2. Replication's job is to make replicas identical to the primary, so it propagates the DELETE within milliseconds.\n3. You need a copy from *before* the event: a snapshot plus write-ahead log (WAL/binlog) archive.\n4. Restore to a new instance at `T_delete − 1s`, extract the customers table, and reinsert it into production.\n\nPrevention also helps: least-privilege access (no ad-hoc writes to prod), and immutable backups so the same mistake (or an attacker) can't also delete the backups.",
+    "link": {
+      "title": "Data integrity: what you read is what you wrote (Google SRE book)",
+      "url": "https://sre.google/sre-book/data-integrity/"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're running a regional failover from a primary to a standby database using async replication. Which risks must the runbook address? Select all that apply.",
+    "options": [
+      {
+        "text": "Split brain if the old primary is still accepting writes",
+        "explanation": "Correct. If the old primary is partitioned rather than dead, clients that can still reach it keep writing. You must fence it (revoke access, stop its writes) before promoting the standby."
+      },
+      {
+        "text": "Loss of writes that hadn't replicated before the failure",
+        "explanation": "Correct. With async replication, the replication lag at the moment of failure is lost on promotion. This gap is your effective RPO and should be measured and reported."
+      },
+      {
+        "text": "Clients continuing to use the old address because of DNS caching",
+        "explanation": "Correct. Resolvers cache records for the TTL (and some ignore it), so traffic moves gradually. Low TTLs, global load balancers or anycast reduce this delay."
+      },
+      {
+        "text": "The standby having more recent data than the primary",
+        "explanation": "Incorrect. With async replication the standby lags the primary; it can never be ahead, because it only applies changes the primary has already committed."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Walk through the failover:\n\n1. **Detect**: primary region unreachable. But is it dead, or partitioned? Assume it might be alive.\n2. **Fence**: revoke the old primary's ability to accept writes (e.g. block its security group, revoke credentials). This prevents split brain.\n3. **Promote**: the standby becomes primary. Any writes in the replication lag window (say 4 s) are lost: that's the RPO.\n4. **Redirect**: update DNS or the global load balancer. With a 60 s TTL, expect several minutes for most clients.\n5. **Plan failback**: re-seed the old region from the new primary later.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team wants to verify their checkout service tolerates the recommendations service failing. Which experiment design best follows the principles of chaos engineering?",
+    "options": [
+      {
+        "text": "Shut down recommendations for all users on Friday evening and see if anyone complains",
+        "explanation": "This ignores blast-radius minimisation, defines no steady state or abort condition, and uses complaints as a lagging signal. It's an outage, not an experiment."
+      },
+      {
+        "text": "Read the code and confirm there's a try/catch around the recommendations call",
+        "explanation": "Code review is useful but isn't an experiment; it can't reveal emergent behaviour like thread-pool exhaustion when the call hangs instead of erroring."
+      },
+      {
+        "text": "Run it once in a staging environment with synthetic traffic and declare it safe",
+        "explanation": "Staging rarely matches production traffic, configuration and dependencies, and a one-off run doesn't catch regressions. The principles favour production and continuous automation."
+      },
+      {
+        "text": "Define steady state as checkout success rate, inject recommendation failures for 5% of production users, abort if success drops below threshold, and automate it",
+        "explanation": "Correct. This follows each principle: a measurable steady-state metric, a hypothesis, a realistic fault, minimised blast radius, an abort condition, production traffic, and automation for continuous verification."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Map the experiment to the principles:\n\n| Principle | This design |\n|---|---|\n| Steady state | checkout success ≥ 99.5% |\n| Hypothesis | unchanged with recs failing |\n| Real-world event | recs errors / latency |\n| Production | yes, real users |\n| Blast radius | 5% of users |\n| Safety | abort below 99% |\n| Automate | run weekly in CI/CD |\n\nAlso inject **latency** (e.g. 10 s hangs), not just errors: hangs expose missing timeouts and bulkheads that clean errors don't.",
+    "link": {
+      "title": "Principles of chaos engineering",
+      "url": "https://principlesofchaos.org/"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A SaaS company needs RPO ≈ 0 and RTO < 1 minute across a full regional failure. It runs Postgres in one region with an async replica in another, plus DNS failover with a 300 s TTL. Which statement best describes the gap?",
+    "options": [
+      {
+        "text": "It meets the targets, because the replica is in another region",
+        "explanation": "Having a cross-region copy is necessary but not sufficient. Async replication loses the lag window, and a 300 s TTL alone exceeds the 1-minute RTO."
+      },
+      {
+        "text": "Async replication loses in-flight writes (RPO > 0) and DNS caching alone can take 5+ minutes (RTO > 1 min); it needs synchronous or quorum cross-region writes and active-active routing",
+        "explanation": "Correct. RPO ≈ 0 requires each write to be durable in a second region before acknowledging (e.g. synchronous replication or a Spanner/CockroachDB-style quorum), costing write latency. RTO < 1 min needs traffic already flowing to multiple regions or anycast, not a DNS change."
+      },
+      {
+        "text": "Lowering the TTL to 10 s would meet both targets",
+        "explanation": "A lower TTL helps RTO (though some resolvers ignore it), but it does nothing for RPO: async replication still loses unreplicated writes."
+      },
+      {
+        "text": "Taking backups every minute would give RPO ≈ 0",
+        "explanation": "Minute-level backups give an RPO of up to a minute, not zero, and restoring from backup takes far longer than 1 minute."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Check each target separately.\n\n**RPO ≈ 0**\n1. Async replica lag is typically 100 ms to seconds; under load, more.\n2. On regional loss, those writes are gone: RPO = lag > 0.\n3. Fix: acknowledge writes only after a second region persists them. London ↔ Frankfurt RTT is ~15 ms, so each write gains ~15 ms+; US-East ↔ US-West ~65 ms.\n\n**RTO < 1 min**\n1. DNS TTL 300 s means many clients keep the old IP for ≥5 min.\n2. Plus detection time (say 30 s) and promotion time.\n3. Fix: active-active behind a global anycast load balancer, where health checks remove a region in seconds and traffic is already flowing to the others.\n\nThat's warm standby at best today; the targets need multi-site active-active, with its cost and write-latency trade-offs.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Ransomware compromises a production admin account and encrypts both the database and all backups in the same cloud account. Which backup design would most directly have prevented losing the backups?",
+    "options": [
+      {
+        "text": "Taking backups more frequently",
+        "explanation": "More frequent backups still live in the compromised account, so the attacker deletes or encrypts them all the same. Frequency improves RPO, not survivability."
+      },
+      {
+        "text": "Encrypting the backups at rest",
+        "explanation": "Encryption at rest protects against someone reading the backup media. An attacker with admin access can still delete or overwrite encrypted backups."
+      },
+      {
+        "text": "Immutable (write-once) backups in a separate account that production credentials cannot modify or delete",
+        "explanation": "Correct. Object Lock-style retention prevents deletion even by administrators for the retention period, and account isolation means compromising production doesn't grant access to backups."
+      },
+      {
+        "text": "Using RAID 10 on the database servers",
+        "explanation": "RAID protects against disk failure. It faithfully stores the attacker's encrypted data, offering no protection against logical or malicious changes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Threat model: the attacker has **production admin credentials**.\n2. Anything those credentials can delete is not a safe backup.\n3. Defences:\n   - **Isolation**: copy backups to a separate account or organisation with separate credentials and MFA, and no trust relationship that lets production delete them.\n   - **Immutability**: S3 Object Lock in compliance mode (or equivalent) blocks deletion for the retention period, even by the root user.\n   - **3-2-1**: three copies, two media, one off-site.\n4. Then *test restores* from the isolated copy so you know it works.",
+    "link": {
+      "title": "Data integrity: what you read is what you wrote (Google SRE book)",
+      "url": "https://sre.google/sre-book/data-integrity/"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Postgres database takes a full backup every night at 02:00 and archives WAL segments to another region at least every **5 minutes**. The primary region is destroyed at 15:47. What is the worst-case data loss (the effective RPO)?",
+    "options": [
+      {
+        "text": "About 5 minutes, the gap since the last archived WAL segment",
+        "explanation": "Correct. Point-in-time recovery restores the 02:00 backup and replays WAL up to the last segment that left the region. Anything written after that, up to ~5 minutes, is lost."
+      },
+      {
+        "text": "About 14 hours, back to the nightly backup",
+        "explanation": "The nightly backup is only the starting point. Replaying archived WAL on top of it recovers changes up to the last archived segment."
+      },
+      {
+        "text": "Zero, because WAL records every change",
+        "explanation": "WAL records every change on the primary, but only archived segments survive the region's loss. Changes still in the current, unarchived segment are gone."
+      },
+      {
+        "text": "24 hours, because backups are daily",
+        "explanation": "The daily cadence sets RPO only if you have nothing but full backups. Continuous log archiving shrinks it to the archive interval."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. What survives in the other region: the 02:00 base backup plus every WAL segment archived since.\n2. Restore: base backup, then replay WAL up to the last archived segment (say 15:43).\n3. Lost: writes between 15:43 and 15:47. Worst case, the full archive interval: **~5 minutes**.\n4. RTO is a separate question: restoring the base backup plus replaying ~14 hours of WAL may take hours.\n\nRPO comes from how often data leaves the failure domain; RTO from how long recovery takes. Postgres's `archive_timeout` and RDS's five-minute log upload are examples of the knob.",
+    "link": {
+      "title": "Point-in-time recovery (Amazon RDS user guide)",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIT.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An order-management system needs **RPO ≤ 15 minutes** and **RTO ≤ 2 hours** for a regional disaster, at the lowest reasonable cost. Its database is 5 TB. Which DR strategy fits best?",
+    "options": [
+      {
+        "text": "Backup and restore from nightly snapshots",
+        "explanation": "Nightly snapshots give up to 24 h of data loss, and restoring 5 TB plus rebuilding everything can easily exceed 2 hours."
+      },
+      {
+        "text": "Warm standby running at 100% of production capacity",
+        "explanation": "That's effectively a second full production environment, paying for much more than a 2-hour RTO requires."
+      },
+      {
+        "text": "Multi-site active-active across three regions",
+        "explanation": "It would meet the targets, but at the highest cost and with multi-region write complexity the requirements don't need."
+      },
+      {
+        "text": "Pilot light: a continuously replicated database in the DR region, with the app tier defined in code and scaled up on failover",
+        "explanation": "Correct. Replication keeps data loss to seconds or minutes (inside 15 min), and scaling an app tier from infrastructure as code typically takes tens of minutes (inside 2 h). You pay mainly for the replica."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Match targets to strategies (AWS whitepaper ranges):\n\n| Strategy | RPO | RTO |\n|---|---|---|\n| Backup/restore | hours | hours+ |\n| Pilot light | mins | 10s of mins |\n| Warm standby | secs–mins | mins |\n| Active-active | ~0 | ~0 |\n\n1. RPO 15 min rules out nightly backups.\n2. RTO 2 h rules out a 5 TB restore with everything rebuilt from scratch (at 500 MB/s the copy alone is ~2.8 h).\n3. Cheapest strategy meeting both: **pilot light**.\n4. Make it real: script and rehearse the scale-up, and check you can actually get the capacity in the DR region.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're designing a regional failover that must work even if the primary region's cloud control plane is impaired. Which mechanisms rely only on the **data plane** and are safe to depend on? Select all that apply.",
+    "options": [
+      {
+        "text": "A standby already running at enough capacity to take the load",
+        "explanation": "Correct. Capacity that already exists doesn't need provisioning; failover is routing, not building."
+      },
+      {
+        "text": "DNS failover records configured in advance, switched automatically by health checks",
+        "explanation": "Correct. The records and health checks already exist; the DNS service's data plane answers queries differently when a check fails. Nothing is created during the event."
+      },
+      {
+        "text": "A global load balancer or anycast front end whose health checks remove an unhealthy region",
+        "explanation": "Correct. Routing changes happen inside the running data plane, typically within seconds."
+      },
+      {
+        "text": "Launching database instances from snapshots in the DR region during the incident",
+        "explanation": "Incorrect. Creating resources is a control-plane action, and capacity or API throttling problems are common during large events."
+      },
+      {
+        "text": "Logging in to the console to edit DNS records by hand",
+        "explanation": "Incorrect. Editing records is a control-plane operation, plus a manual step that depends on people having access at the worst moment."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For each mechanism ask: *does it create or modify resources through a management API during the event?*\n\n| Mechanism | During event | Plane |\n|---|---|---|\n| Pre-set DNS failover | answers change | data ✓ |\n| Global LB health checks | routing change | data ✓ |\n| Launch from snapshot | create | control ✗ |\n| Edit DNS by hand | modify | control ✗ |\n| Running standby | none | data ✓ |\n\nAWS's guidance is to keep recovery paths on the data plane, and to rehearse them, because control planes are more complex and more likely to degrade in exactly the events you're planning for.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A primary database commits **2,000 writes/s** and replicates asynchronously to another region. Replication lag is usually 200 ms, but its p99 is **3 s** during peak. The primary region is lost at peak. Roughly how many acknowledged writes could be lost, and what's the honest RPO to report?",
+    "options": [
+      {
+        "text": "None, because the writes were acknowledged to clients",
+        "explanation": "With async replication, the primary acknowledges before the replica has the write. Acknowledged-but-unreplicated writes are exactly what's lost."
+      },
+      {
+        "text": "About 400 writes; RPO 200 ms",
+        "explanation": "That uses the typical lag. Disasters don't pick a quiet moment; at peak lag the gap is 15 times bigger. Report the tail, not the median."
+      },
+      {
+        "text": "About 6,000 writes or more; RPO should be stated as at least the peak lag (seconds), and measured continuously",
+        "explanation": "Correct. At 3 s of lag, 2,000 × 3 = 6,000 committed writes exist only on the primary. RPO is the lag at the moment of failure, so report its tail and alert when it grows."
+      },
+      {
+        "text": "About 2,000 writes; RPO 1 s",
+        "explanation": "There's no reason to assume 1 s. The data loss equals the write rate multiplied by the lag at the moment of failure."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Data loss = write rate × lag at the moment of failure.\n\n```\ntypical: 2,000 × 0.2 s =   400\np99:     2,000 × 3 s   = 6,000\n```\n\n2. Disasters often coincide with peak load or trouble, when lag is at its worst, so plan on the tail.\n3. Make RPO observable: export replication lag as a metric and alert when it exceeds the agreed RPO.\n4. If the business needs RPO ≈ 0 for this data, the write path must wait for a second region (synchronous or quorum replication), at a cost of a cross-region round trip per write.\n\nAlso reconcile after failover: lost orders may still exist in downstream systems such as payment providers.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Peak traffic needs 100 units of capacity. You're choosing between active-active across **2 regions** or **3 regions**, where the service must survive losing any one region with no scaling. How much total capacity must you provision in each case?",
+    "options": [
+      {
+        "text": "200 units for 2 regions, 150 units for 3 regions",
+        "explanation": "Correct. With 2 regions, each must handle 100% alone: 2 × 100 = 200. With 3 regions, any 2 must carry 100, so each needs 50: 3 × 50 = 150."
+      },
+      {
+        "text": "100 units in both cases; traffic is just split differently",
+        "explanation": "Splitting traffic doesn't help when a region dies: the survivors must absorb its share instantly, so each must have headroom."
+      },
+      {
+        "text": "150 units for 2 regions, 200 units for 3 regions",
+        "explanation": "This is the wrong way round. More regions means each survivor absorbs a smaller share of the lost one."
+      },
+      {
+        "text": "300 units for 3 regions, since each must carry the full load",
+        "explanation": "Each region needs to carry only its share after one loss: 100 / 2 = 50 units, not the full 100."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "With N regions surviving 1 loss, each region must carry `100 / (N − 1)`:\n\n| Regions | Per region | Total | Utilisation |\n|---|---|---|---|\n| 2 | 100 | 200 | 50% |\n| 3 | 50 | 150 | 67% |\n| 4 | 33 | 133 | 75% |\n\nMore regions cut the headroom cost but add operational complexity, more places for data to be replicated and, for synchronous writes, more round trips. Many teams settle on three regions (or three AZs) for this reason.",
+    "link": {
+      "title": "Static stability using Availability Zones (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  }
+]

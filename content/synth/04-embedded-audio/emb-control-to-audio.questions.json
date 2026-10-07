@@ -1,0 +1,339 @@
+[
+  {
+    "id": "emb-control-to-audio-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A knob's latest position must reach the audio callback. If the callback occasionally misses an intermediate value, nothing bad happens. Which mechanism fits best?",
+    "options": [
+      {
+        "text": "A queue that stores every knob reading",
+        "explanation": "That works but is overkill: only the latest position matters, and a queue can fill up with stale readings."
+      },
+      {
+        "text": "A mutex-protected variable the callback locks before reading",
+        "explanation": "The callback must never wait on a lock held by the foreground."
+      },
+      {
+        "text": "A shared atomic value using verified lock-free loads and stores",
+        "explanation": "Correct. Verify lock-free support on the target: some atomic types use internal locks. Latest-value data can safely skip intermediate readings."
+      },
+      {
+        "text": "A plain global variable with no special handling",
+        "explanation": "Without atomics the compiler may cache the value and multi-word values may tear."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask: does every update matter, or only the latest?\n\n- Knob position: only the latest. Use an atomic.\n- Note on/off: every one. Use a queue.\n\nThen smooth the value in the callback so the change is continuous.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should note-on and note-off messages travel to the callback through a queue rather than as an atomic \"is key down\" flag that the callback polls once per block?",
+    "options": [
+      {
+        "text": "Because atomics cannot hold integers",
+        "explanation": "Atomics can hold integers. The issue is losing events, not data type."
+      },
+      {
+        "text": "A note-on and note-off within one block would vanish, and a missed note-off would leave a stuck note; a queue delivers every event in order",
+        "explanation": "Correct. Events carry meaning individually. Polled state loses anything that happens between polls."
+      },
+      {
+        "text": "Queues are faster than atomics",
+        "explanation": "An atomic load is cheaper than a queue pop; the choice is about correctness, not speed."
+      },
+      {
+        "text": "MIDI requires a queue by specification",
+        "explanation": "The MIDI spec defines the wire format, not how firmware passes events internally."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace a fast tap within one 1 ms block:\n\n```\nt=0.2 ms  note-on 60\nt=0.7 ms  note-off 60\nt=1.0 ms  callback polls: up\n```\n\nThe poll sees 'up' and the note never sounds. With a queue the callback pops both events and can at least start and release the voice.",
+    "link": {
+      "title": "Circular buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_buffer"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does the `volatile` keyword actually guarantee for a variable shared between the main loop and an interrupt?",
+    "options": [
+      {
+        "text": "That the compiler performs every access to that variable rather than caching it or removing reads and writes",
+        "explanation": "Correct. That is its purpose, which is why it suits hardware registers. It says nothing about atomicity or ordering of other memory."
+      },
+      {
+        "text": "That reads and writes of the variable are atomic, so `x = x + 1` cannot be interrupted",
+        "explanation": "The read, add and write remain separate operations; an interrupt can land between them."
+      },
+      {
+        "text": "That all memory writes before it are visible to the other side first",
+        "explanation": "volatile does not order non-volatile accesses around it. That needs release/acquire atomics or barriers."
+      },
+      {
+        "text": "That the variable is stored in flash",
+        "explanation": "volatile is unrelated to which memory a variable lives in."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Volatile preserves volatile accesses but supplies neither inter-thread synchronisation nor indivisible compound operations. Atomic loads/stores prevent tearing. An explicit atomic RMW such as fetch_add is indivisible; x = x + 1 remains a separate load and store even when x is atomic. Ordering other data requires suitable release/acquire (or stronger) operations; relaxed atomics alone do not publish a payload.",
+    "link": {
+      "title": "Why volatile should not be used — Linux kernel docs",
+      "url": "https://github.com/torvalds/linux/blob/master/Documentation/process/volatile-considered-harmful.rst"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The main loop fills a 4-field preset struct and then sets `volatile bool preset_ready = true`. The callback checks the flag and copies the struct. Very occasionally a preset loads with one field from the previous preset. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The flag should be an int instead of a bool",
+        "explanation": "The type of the flag is irrelevant; the problem is ordering between the struct writes and the flag write."
+      },
+      {
+        "text": "The struct is too large for the callback to copy",
+        "explanation": "Copying four fields is trivial work; size is not the cause."
+      },
+      {
+        "text": "Switch bounce on the preset button",
+        "explanation": "Bounce would load presets twice, not mix fields from two presets."
+      },
+      {
+        "text": "The struct writes are ordinary accesses that may be reordered after the volatile flag write, so the callback can see the flag before all fields are stored; use a release store on the flag (and acquire load), or send the preset as a queued message",
+        "explanation": "Correct for publication when the acquire load observes the release store. The producer must also wait for acknowledgement before overwriting the struct; release/acquire alone does not protect reuse."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Intended order:\n\n```\nwrite a, b, c, d\nready = true\n```\n\nAllowed order with only volatile on the flag:\n\n```\nwrite a, b, c\nready = true   <- callback runs\nwrite d        <- too late\n```\n\nA release store on `ready` forbids moving the field writes after it; an acquire load in the callback forbids reading fields before it.\n\nDo not modify the published struct again until the reader acknowledges its completed copy. A queue provides this ownership protocol.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an SPSC ring buffer, which side writes the `head` index and which writes `tail`?",
+    "options": [
+      {
+        "text": "Both sides write both indices, protected by a lock",
+        "explanation": "That defeats the point. The design is lock-free precisely because each index has one writer."
+      },
+      {
+        "text": "The producer writes only `head`; the consumer writes only `tail`; each only reads the other's index",
+        "explanation": "Correct. One writer per index means no two sides ever write the same variable, so atomic loads and stores with release/acquire are enough."
+      },
+      {
+        "text": "The consumer writes `head`; the producer writes `tail`",
+        "explanation": "Convention aside, the essential property is one writer per index; here the roles are reversed relative to the lesson's definitions."
+      },
+      {
+        "text": "Neither; the indices are constants",
+        "explanation": "They advance as items are pushed and popped."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nproducer: writes buf[head],\n          then head += 1 (release)\nconsumer: reads head (acquire),\n          reads buf[tail],\n          then tail += 1 (release)\n```\n\nNo variable has two writers, so there is no lost update.",
+    "link": {
+      "title": "Circular buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_buffer"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A ring buffer has capacity 4. Starting empty, the producer pushes items 0–5, then the consumer pops twice, then the producer pushes 6 and 7. What does draining the buffer return?",
+    "options": [
+      {
+        "text": "2, 3, 4, 5",
+        "explanation": "Pushes of 4 and 5 failed because the buffer was full; they were dropped, not stored."
+      },
+      {
+        "text": "0, 1, 2, 3, 6, 7",
+        "explanation": "0 and 1 were already popped before the drain."
+      },
+      {
+        "text": "2, 3, 6, 7",
+        "explanation": "Correct. 0–3 fill it, 4 and 5 are refused, popping 0 and 1 frees two slots, 6 and 7 fill them. The drain returns the remaining four in order."
+      },
+      {
+        "text": "6, 7, 2, 3",
+        "explanation": "A ring buffer is FIFO: older items 2 and 3 come out before 6 and 7, even though 6 and 7 occupy lower array slots."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\npush 0..3  -> [0 1 2 3] full\npush 4,5   -> refused\npop, pop   -> 0, 1\npush 6,7   -> slots 0,1\ndrain      -> 2 3 6 7\n```\n\nThe lesson's Python run prints `drain [2, 3, 6, 7, None]`; the final None is the empty result.",
+    "link": {
+      "title": "Circular buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_buffer"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The MIDI event queue is full when the UART parser wants to push a new note-on. What should the parser (running in the foreground or UART interrupt) do?",
+    "options": [
+      {
+        "text": "Refuse the push without blocking, count the overflow, and request a defined recovery action for lost note events",
+        "explanation": "Correct. Use a separately published panic/reset flag if event loss invalidates held-note state; do not rely on silent drops."
+      },
+      {
+        "text": "Spin until the callback frees a slot",
+        "explanation": "If the parser runs at higher priority than the callback (as a UART interrupt may), waiting can deadlock; in any case it blocks other work."
+      },
+      {
+        "text": "Overwrite the oldest event",
+        "explanation": "Overwriting can discard a note-off, causing a stuck note. For event data, losing silently is worse than dropping visibly."
+      },
+      {
+        "text": "Allocate a bigger buffer on the fly",
+        "explanation": "Allocation at runtime is unbounded and can fail; buffers are fixed at start-up."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "DIN MIDI is limited to 3,125 bytes/s, but running status uses two bytes per note event and realtime events use one. USB bursts can be larger. Size for worst-case bursts and drain delays, bound callback work, count overflow and provide recovery. A full queue can indicate insufficient capacity or workload, not necessarily a programming bug.",
+    "link": {
+      "title": "Real-time audio programming 101 — Ross Bencina",
+      "url": "http://www.rossbencina.com/code/real-time-audio-programming-101-time-waits-for-nothing"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A synth receives filter cutoff from a knob scanned at 1 kHz and from MIDI CC (7-bit). The callback uses the latest value directly and you hear zipper noise on sweeps. Which fixes address it? Select all that apply.",
+    "options": [
+      {
+        "text": "Smooth the target per sample in the callback with a one-pole (for example τ ≈ 5–20 ms)",
+        "explanation": "Correct. Audio-rate smoothing turns steps into continuous curves."
+      },
+      {
+        "text": "Ramp linearly from the old value to the new across each block",
+        "explanation": "Correct. A per-block linear ramp also removes the step at block boundaries."
+      },
+      {
+        "text": "Apply hysteresis to the value the callback uses",
+        "explanation": "Hysteresis makes values change in larger steps, which worsens zipper noise. It belongs on change-detection paths."
+      },
+      {
+        "text": "Increase the ADC resolution to 16 bits",
+        "explanation": "More bits don't remove the step at each update, and the MIDI CC path is still 7-bit."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Zipper noise = audible steps in a parameter. Fix it where the sample rate is known:\n\n```\na = 1 - exp(-1/(0.005*48000))\n  = 0.004158\ncur += a * (target - cur)\n```\n\nor a block ramp of (new − old)/48 per sample. Both make the change continuous.",
+    "link": {
+      "title": "Introduction to Digital Filters — J. O. Smith, CCRMA",
+      "url": "https://ccrma.stanford.edu/~jos/filters/"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On a single-core MCU, the main loop does `count = count + 1` and the audio callback (an interrupt) does `count = count - 1` on the same `volatile int count`. Over time the count drifts. Why?",
+    "options": [
+      {
+        "text": "Integer overflow",
+        "explanation": "Overflow would cause a large jump at the limit, not a slow random drift."
+      },
+      {
+        "text": "The compiler caches `count` in a register",
+        "explanation": "volatile prevents caching, so this is not the cause here."
+      },
+      {
+        "text": "Read-modify-write is three steps; if the callback interrupts between the main loop's read and write, the main loop then writes back a stale value and erases the callback's decrement",
+        "explanation": "Correct. That is a lost update. volatile does not make the sequence indivisible; use an atomic fetch-add, or have each side own its own counter."
+      },
+      {
+        "text": "The callback runs twice per block",
+        "explanation": "It runs once per block; frequency is not the issue."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nmain: r = count      (r = 5)\n  -- interrupt --\ncb:   count = count-1 (now 4)\n  -- return --\nmain: count = r + 1  (6!)\n```\n\nExpected 5, got 6: the decrement vanished. A design with one writer per variable avoids the problem entirely.",
+    "link": {
+      "title": "Why volatile should not be used — Linux kernel docs",
+      "url": "https://github.com/torvalds/linux/blob/master/Documentation/process/volatile-considered-harmful.rst"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A preset change must update ten parameters together so the callback never renders a block with a mix of old and new values. Which approach is safe and never makes the callback wait?",
+    "options": [
+      {
+        "text": "Ten separate atomics written in sequence by the main loop",
+        "explanation": "Each is safe individually, but the callback can run between writes and see five new and five old."
+      },
+      {
+        "text": "Wrap the ten writes in a mutex that the callback also locks",
+        "explanation": "The callback would wait if the main loop held the lock: forbidden in real-time code."
+      },
+      {
+        "text": "Write the ten values into a plain struct and set a volatile flag",
+        "explanation": "volatile does not order the struct writes before the flag (see the reordering problem)."
+      },
+      {
+        "text": "Send the whole preset as one queued message, or use double buffering with atomic publication and an acknowledgement before reusing the old buffer",
+        "explanation": "Correct. Complete sets stay immutable while the callback reads them; publication alone does not make reuse safe."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Prefer a bounded SPSC queue for the whole preset. For double buffering, permit only one unacknowledged publication. Publish index plus generation with release ordering. The callback acquire-loads that publication and, after its last read of the old set, release-stores the adopted generation as acknowledgement. Only after acquiring that exact acknowledgement may the producer refill the old set. A block-start counter can change before adoption, so it is insufficient. The callback never waits.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You port your synth from a single-core MCU to a multi-core Raspberry Pi, where the control thread and audio thread run simultaneously. Which statements hold? Select all that apply.",
+    "options": [
+      {
+        "text": "Atomics with release/acquire ordering remain correct, because they also provide the memory barriers multi-core CPUs need",
+        "explanation": "Correct. That is one reason to write atomics even on a single-core MCU."
+      },
+      {
+        "text": "Code relying on 'an aligned 32-bit store is one instruction' plus volatile, without atomics, may now fail through hardware reordering between cores",
+        "explanation": "Correct. Multi-core processors can make writes visible to other cores in a different order unless barriers are used."
+      },
+      {
+        "text": "Disabling interrupts in the control thread is a valid way to stop the audio thread running",
+        "explanation": "On a multi-core OS, the audio thread may be on another core; disabling local interrupts (if even permitted) does not stop it."
+      },
+      {
+        "text": "A lock-free SPSC ring buffer with correct orderings still works between the two threads",
+        "explanation": "Correct. SPSC queues are a standard real-time inter-thread mechanism on desktop and Linux audio too."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "What changes on multi-core:\n\n1. True parallelism: both sides run at once.\n2. Each core may see the other's writes in a different order without barriers.\n3. Interrupt masking is per-core and usually unavailable to user programs.\n\nPatterns built on atomics with explicit ordering survive the port; patterns built on single-core assumptions do not.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  }
+]

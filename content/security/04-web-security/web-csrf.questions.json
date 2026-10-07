@@ -1,0 +1,347 @@
+[
+  {
+    "id": "web-csrf-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume the browser permits the bank's session cookie on a cross-site form POST, and the transfer endpoint accepts predictable parameters without CSRF checks or additional confirmation. Why can evil.example trigger a transfer?",
+    "options": [
+      {
+        "text": "Because the attacker has stolen the user's session cookie",
+        "explanation": "CSRF doesn't need the cookie value. The browser attaches it by itself; the attacker never sees it."
+      },
+      {
+        "text": "The browser attaches an eligible session cookie to the cross-site form submission, and SOP does not prevent that submission",
+        "explanation": "Correct. Possession of the ambient session credential does not establish user intent."
+      },
+      {
+        "text": "Because the bank's CORS policy allows `evil.example`",
+        "explanation": "CORS controls reading responses. A form POST is a simple request that goes out without any CORS permission."
+      },
+      {
+        "text": "Because the bank's site has an XSS vulnerability",
+        "explanation": "XSS is a different bug (script in the bank's origin). CSRF works from the attacker's own site with no bug in the bank's HTML."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The user logged in earlier, so the browser holds `sid` for `bank.example`.\n2. `evil.example` serves an auto-submitting form targeting `bank.example/transfer`.\n3. Form submissions to other origins are allowed (they're writes).\n4. With all applicable cookie policies permitting it, the browser includes `Cookie: sid=...`.\n5. The bank sees an authenticated, valid request and acts.\n\nThe attacker never reads anything, which is why CSRF is called blind.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An app deletes a user's account with `GET /account/delete`. Why is this especially bad for CSRF?",
+    "options": [
+      {
+        "text": "A single click on an attacker's link (or a redirect) triggers it, because `SameSite=Lax` still sends cookies on top-level GET navigations",
+        "explanation": "Correct. GET is supposed to be safe; making it state-changing means ordinary links and redirects trigger it, and Lax cookies are sent on those. With `SameSite=None` cookies, even an image tag would do."
+      },
+      {
+        "text": "GET requests are always sent without cookies",
+        "explanation": "GETs carry cookies like any other request (subject to SameSite). That's why this is dangerous."
+      },
+      {
+        "text": "GET requests can't carry CSRF tokens",
+        "explanation": "Tokens can appear in query strings but risk exposure in logs and, depending on referrer policy, Referer headers. Use an unsafe method for the operation and retain CSRF protection."
+      },
+      {
+        "text": "GET is fine as long as the response is JSON",
+        "explanation": "The response format is irrelevant: CSRF doesn't need to read the response; the deletion has already happened."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. HTTP defines GET as safe: no requested state-changing operation (incidental logging is allowed).\n2. Browsers issue GETs everywhere: images, prefetches, links, previews.\n3. `<img src=...>` cross-site is a subresource, so `Lax` cookies aren't sent; but a link click or a redirect is a top-level navigation, and `Lax` *does* send cookies then.\n4. So a single click on an attacker link deletes the account.\n\nFix: `POST /account/delete` (or `DELETE`) with a CSRF token.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  },
+  {
+    "id": "web-csrf-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user follows a top-level link from a cross-site HTTPS webmail page to https://shop.example/orders. Authentication relies solely on a SameSite=Strict session cookie. What happens on that initial request?",
+    "options": [
+      {
+        "text": "The cookie is sent, because clicking a link is a user action",
+        "explanation": "That's `Lax` behaviour. `Strict` withholds the cookie on *every* cross-site request, including top-level link clicks."
+      },
+      {
+        "text": "The browser blocks the navigation",
+        "explanation": "SameSite never blocks requests; it only controls whether the cookie is attached."
+      },
+      {
+        "text": "The request arrives without the cookie, so the user appears logged out on landing",
+        "explanation": "Correct. The initial cross-site navigation omits the Strict cookie. Do not assume that a browser reload necessarily changes its SameSite classification."
+      },
+      {
+        "text": "The cookie is sent only if the link uses HTTPS",
+        "explanation": "`Secure` controls HTTPS-only sending; `SameSite` is about the request's initiating site."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Initiator: webmail site (cross-site). Target: `shop.example`.\n2. `Strict` → cookie omitted on any cross-site request.\n3. Server sees an anonymous request → login page or logged-out view.\n4. This UX cost is why many sites use `Lax` for the main session cookie, sometimes plus a separate `Strict` cookie checked only for sensitive actions.",
+    "link": {
+      "title": "Set-Cookie: SameSite — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie"
+    }
+  },
+  {
+    "id": "web-csrf-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "The session cookie is set with `SameSite=Lax`. Which cross-site requests from `evil.example` to `app.example` will include it? Assume all other cookie conditions permit sending, the link and location examples navigate the top-level window, and no redirects intervene. Select all that apply.",
+    "options": [
+      {
+        "text": "An auto-submitted hidden `<form method=\"POST\">`",
+        "explanation": "Lax withholds cookies on cross-site POSTs. (The Lax+POST exception applies only to cookies with *no* SameSite attribute.)"
+      },
+      {
+        "text": "The user clicking `<a href=\"https://app.example/x\">`",
+        "explanation": "Correct. A top-level navigation with a safe method gets `Lax` cookies."
+      },
+      {
+        "text": "`<img src=\"https://app.example/avatar\">`",
+        "explanation": "Images are subresource requests, not top-level navigations, so Lax cookies aren't sent."
+      },
+      {
+        "text": "`fetch(\"https://app.example/api\", {credentials: \"include\"})`",
+        "explanation": "A cross-site fetch is not a top-level navigation; Lax cookies are withheld even with `credentials: \"include\"`."
+      },
+      {
+        "text": "`window.location = \"https://app.example/y\"` (GET)",
+        "explanation": "Correct. Script-initiated top-level GET navigation is still a top-level safe navigation, so Lax cookies go."
+      }
+    ],
+    "answer": [
+      1,
+      4
+    ],
+    "workedExample": "Lax rule: send on cross-site requests **only** if top-level navigation **and** safe method.\n\n| Request | Top-level? | Safe? | Sent |\n|---|---|---|---|\n| form POST | yes | no | no |\n| link click | yes | yes | yes |\n| img | no | yes | no |\n| fetch | no | yes | no |\n| location= | yes | yes | yes |\n\nSo Lax stops the classic POST CSRF but not unsafe GET endpoints.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  },
+  {
+    "id": "web-csrf-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace this CSRF check when the session has **no** `csrf` key yet and the attacker's form sends no token:\n\n```python\nsent = request.form.get(\"csrf\", \"\")\nif not hmac.compare_digest(\n        sent,\n        session.get(\"csrf\", \"\")):\n    abort(403)\n```",
+    "options": [
+      {
+        "text": "403: a missing token is always rejected",
+        "explanation": "Trace it: both sides default to the empty string, and `compare_digest(\"\", \"\")` is True, so `abort` is never reached."
+      },
+      {
+        "text": "The request passes: both values are `\"\"`, which compare equal",
+        "explanation": "Correct. Defaults on both sides collapse to the same value. The check must reject when the expected token is missing."
+      },
+      {
+        "text": "`compare_digest` raises a TypeError on empty strings",
+        "explanation": "It accepts empty strings fine and returns True when both are empty."
+      },
+      {
+        "text": "The request passes only if the user is logged in",
+        "explanation": "This snippet has no login check at all; the result is the same either way."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Both missing values default to the empty string; compare_digest(\"\", \"\") is True, so the vulnerable check passes. Reject missing expected values and non-ASCII strings before comparison:\n\n```python\nwant = session.get(\"csrf\")\nif (not isinstance(want, str)\n        or not want\n        or not want.isascii()\n        or not sent.isascii()):\n    abort(403)\nif not hmac.compare_digest(sent, want):\n    abort(403)\n```\n\nHere sent is the form string from the question. The ASCII guard also prevents a TypeError on hostile Unicode input.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SPA's API accepts only an Authorization bearer token held in JS memory, with no alternative ambient authentication. Assume no XSS, token leak or client-side confused-deputy behavior. Can a hostile site's direct cross-site request perform classic authenticated CSRF?",
+    "options": [
+      {
+        "text": "Yes: any API that changes state needs a CSRF token",
+        "explanation": "CSRF tokens defend against *ambient* credentials. Here the credential isn't ambient, so there's nothing for the attacker's page to ride on."
+      },
+      {
+        "text": "No: the browser never adds the bearer token automatically, so a forged cross-site request arrives unauthenticated",
+        "explanation": "Correct. The attacker's page can't read the token (different origin) and the browser won't attach it, so forged requests fail authentication."
+      },
+      {
+        "text": "No, but only because the API uses JSON",
+        "explanation": "JSON alone doesn't protect a cookie-based API (text/plain tricks). Here the reason is the non-ambient credential."
+      },
+      {
+        "text": "Yes, if the user has another tab open on the SPA",
+        "explanation": "Other tabs don't share the in-memory token with the attacker's page; the SOP prevents that."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The browser does not automatically attach the token to a request made by the hostile page, so that request fails authentication. This does not prove the SPA immune to client-side CSRF: attacker-controlled input could cause the legitimate app to send an authenticated request. XSS and token theft remain separate risks.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A state-changing request arrives with `Sec-Fetch-Site: same-site`. Your app is `https://app.example.com`. Using the Fetch Metadata policy from the lesson (allow only `same-origin` and `none` for unsafe methods), what should happen, and why does it matter?",
+    "options": [
+      {
+        "text": "Allow it: same-site means it came from your own site",
+        "explanation": "Same-*site* includes every subdomain of `example.com`, such as a forgotten marketing subdomain. That's exactly the gap SameSite cookies leave."
+      },
+      {
+        "text": "Reject it under the stated policy: same-site is not the allowed same-origin or none value",
+        "explanation": "Correct. A sibling subdomain can be same-site while being a different origin. The header is a browser request-context signal, not proof of authentication or user intent; non-browser clients can forge it."
+      },
+      {
+        "text": "Reject it: `same-site` is only sent by old browsers",
+        "explanation": "Supporting browsers can report same-site for cross-origin same-site contexts. Missing headers can reflect client or context differences, not just age; redirect history can also affect classification."
+      },
+      {
+        "text": "Allow it, but only if the method is POST",
+        "explanation": "POST is the dangerous case. The method doesn't change whether the initiator is trusted."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `Sec-Fetch-Site` values: `same-origin` (exact origin), `same-site` (e.g. `blog.example.com` → `app.example.com`), `cross-site`, `none` (typed URL/bookmark).\n2. The policy accepts only `same-origin` and `none`.\n3. `same-site` → 403.\n4. Why it matters: if `blog.example.com` is taken over, SameSite cookies still flow (same site). Fetch Metadata can tell the difference; SameSite can't.\n\nIf you genuinely have cross-origin callers on your own domain, allowlist them explicitly.",
+    "link": {
+      "title": "Protect your resources with Fetch Metadata — web.dev",
+      "url": "https://web.dev/articles/fetch-metadata"
+    }
+  },
+  {
+    "id": "web-csrf-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A cookie-authenticated API endpoint does `data = json.loads(request.get_data())` without checking `Content-Type`. CORS is locked down. Assume cookies are eligible, there is no independent CSRF check, and the accepted schema can be encoded by the crafted form. How could an attacker still mount CSRF?",
+    "options": [
+      {
+        "text": "They can't: JSON requests are always preflighted",
+        "explanation": "The body being JSON does not itself trigger preflight. application/json is not a CORS-safelisted request content type; other method/header conditions can also require permission."
+      },
+      {
+        "text": "Submit a cross-site form with `enctype=\"text/plain\"` whose body happens to parse as JSON; it's a simple request, sent with cookies",
+        "explanation": "Correct. `text/plain` is a safelisted type, so no preflight; the lenient server parses the body as JSON anyway."
+      },
+      {
+        "text": "Use `fetch` with `mode: \"no-cors\"` and `Content-Type: application/json`",
+        "explanation": "`no-cors` mode only allows safelisted content types; the browser won't send `application/json` in that mode."
+      },
+      {
+        "text": "Read the CORS policy and copy an allowed origin into the `Origin` header",
+        "explanation": "Pages can't set the `Origin` header; the browser sets it. That's why it is useful for defence."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Preflight is triggered by a non-safelisted `Content-Type`, not by the body's shape.\n2. A form with `enctype=\"text/plain\"` sends `name=value` pairs joined in a way an attacker can arrange to look like a JSON object.\n3. The request is simple → no preflight → cookies attached (subject to SameSite).\n4. The server ignores `Content-Type` and parses JSON successfully.\n\nDefences:\n- Reject anything not `application/json`.\n- Require a custom header with a restrictive CORS policy (requires preflight permission, which may be cached).\n- Check `Origin` / `Sec-Fetch-Site`, and use SameSite.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A naive double-submit scheme checks equality between a cookie and a submitted value. Its normal JS client reads the cookie into a header; the server also accepts the value in a form field. Which changes strengthen it against cookie injection or network attackers? Select all that apply.",
+    "options": [
+      {
+        "text": "Authenticate a random token together with session-specific binding data using an HMAC with a server secret, and verify it",
+        "explanation": "Correct. A session-bound signed double-submit token prevents an attacker choosing a valid value for another session."
+      },
+      {
+        "text": "Name the cookie with the `__Host-` prefix",
+        "explanation": "Correct. `__Host-` cookies must be `Secure`, have `Path=/` and no `Domain`, so a sibling subdomain can't set or overwrite them."
+      },
+      {
+        "text": "Make the CSRF cookie `HttpOnly`",
+        "explanation": "The app's own JS needs to read the cookie to copy it into the header, so `HttpOnly` breaks the pattern. And it doesn't stop cookie *injection*."
+      },
+      {
+        "text": "Serve the whole site over HTTPS with HSTS",
+        "explanation": "Correct. HTTPS prevents HTTP response injection on protected connections. HSTS helps when its policy is already known or preloaded; an unprotected first visit and uncovered subdomains remain deployment concerns."
+      },
+      {
+        "text": "Make the token longer (256 bits instead of 128)",
+        "explanation": "The weakness is the attacker *setting* both values, not guessing them. Length doesn't help."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Cookie injection alone does not let a hostile page set a custom request header through restrictive CORS. Here the server additionally accepts a form token, letting an attacker submit the planted value. Bind the signed token to the authenticated session and random nonce. A browser-enforced __Host- prefix prevents sibling-domain injection of that named cookie. HTTPS plus known/preloaded HSTS addresses network injection, subject to host coverage. HttpOnly would break the stated JS cookie-reading client; making an already-unpredictable token longer does not address injection.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume a Chromium configuration with Lax-by-default and the 120-second Lax-allowing-unsafe exception. A session cookie with no SameSite attribute was newly created 60 seconds ago. A malicious page now submits a top-level cross-site POST; all other cookie conditions permit sending. Is the cookie sent?",
+    "options": [
+      {
+        "text": "No: Chrome treats missing SameSite as Lax, which never sends cookies on cross-site POSTs",
+        "explanation": "Lax-by-default has a temporary exception for fresh cookies. Missing it is a common misunderstanding."
+      },
+      {
+        "text": "Yes: Chrome's Lax+POST exception sends cookies under two minutes old (without an explicit SameSite) on top-level cross-site POSTs",
+        "explanation": "Correct. The cookie is 60 s old, under the 2-minute window, so it's sent. Setting `SameSite=Lax` explicitly removes the exception."
+      },
+      {
+        "text": "Yes: cookies without SameSite are always treated as `None`",
+        "explanation": "Not under the stated configuration: missing SameSite uses a default mode with a limited recent-cookie exception, rather than unrestricted None behavior."
+      },
+      {
+        "text": "No: Chrome blocks all cross-site POST form submissions",
+        "explanation": "Chrome doesn't block form submissions; SameSite only controls cookies."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Under the stated configuration, the newly created cookie is 60 seconds old, inside the assumed 120-second window, and the request is a top-level navigation. The cookie is sent. Explicit SameSite=Lax does not get this default-mode exception. Cookie creation time matters; a later replacement does not necessarily reset it. Maintain independent CSRF protection and check supported-client behavior.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  },
+  {
+    "id": "web-csrf-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The authenticated delete-account page loads in a cross-site iframe because browser cookie policies permit it. It contains a valid CSRF token. An attacker overlays its transparent iframe on a decoy prize button so a click hits the real delete control. In a browser enforcing the response policies below, which defence prevents this framing attack?",
+    "options": [
+      {
+        "text": "Rotating the CSRF token on every request",
+        "explanation": "The click happens on your genuine page, which includes a valid token. Token rotation doesn't matter."
+      },
+      {
+        "text": "`Content-Security-Policy: frame-ancestors 'none'` (and `X-Frame-Options: DENY`)",
+        "explanation": "Correct. These response headers prevent the page being embedded in the described frame; they do not eliminate every form of deceptive UI."
+      },
+      {
+        "text": "Nothing extra: the CSRF token already prevents it",
+        "explanation": "The genuine framed page submits its valid token. Possession of that token does not prove the user understood or intended the action."
+      },
+      {
+        "text": "A strict `script-src` CSP",
+        "explanation": "No attacker script runs on your page; `script-src` is irrelevant. `frame-ancestors` is the CSP directive that matters."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Clickjacking isn't a forged request: the user really clicks your real button inside a hidden frame.\n2. The framed page was rendered by your server, so its CSRF token is valid.\n3. Under the question’s assumptions, browser policies permit the session cookie in this iframe. SameSite=None alone does not guarantee this; third-party-cookie restrictions can still block it. (With `Lax` or `Strict` the frame would load logged out, which is one reason those are safer defaults.)\n4. The real control: tell the browser never to render your page in someone else's frame.\n\n```\nframe-ancestors 'none'\n```\n\nOr `'self'` if you frame yourself, or list the partner origins for the widget pages only.",
+    "link": {
+      "title": "Clickjacking Defense Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html"
+    }
+  }
+]

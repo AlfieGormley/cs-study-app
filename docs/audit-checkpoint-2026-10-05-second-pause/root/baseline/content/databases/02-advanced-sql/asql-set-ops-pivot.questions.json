@@ -1,0 +1,378 @@
+[
+  {
+    "id": "asql-set-ops-pivot-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "January order lines name Rug, Kettle, Toaster and Mug (4 rows). February's name Kettle, Rug, Mug, Toaster and Mug (5 rows). How many rows do `jan UNION ALL feb` and `jan UNION feb` return?",
+    "options": [
+      {
+        "text": "9 and 4",
+        "explanation": "Correct. UNION ALL appends: 4 + 5 = 9. UNION removes duplicates across the whole result, leaving the 4 distinct names."
+      },
+      {
+        "text": "9 and 5",
+        "explanation": "UNION deduplicates the combined result, not just the second branch. February's two Mugs and all of January's names collapse to 4 distinct values."
+      },
+      {
+        "text": "4 and 4",
+        "explanation": "UNION ALL never removes rows; it simply concatenates both results."
+      },
+      {
+        "text": "9 and 9",
+        "explanation": "UNION (without ALL) removes duplicate rows, so it can't return the same count as UNION ALL when duplicates exist."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. UNION ALL: keep every row from both sides: 4 + 5 = **9**.\n2. UNION: combine, then deduplicate. The distinct names are Kettle, Mug, Rug, Toaster = **4**.\n3. Note that UNION also removes duplicates *within* one branch (February's two Mugs), not just across branches.\n4. The deduplication needs a sort or hash of all 9 rows, which is why UNION ALL is faster when duplicates are impossible or wanted.",
+    "link": {
+      "title": "Combining queries — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-union.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "January products: Kettle, Mug, Rug, Toaster. March products: Kettle, Mug, Rug, Lamp. What does `march EXCEPT january` return?",
+    "options": [
+      {
+        "text": "Toaster",
+        "explanation": "That's `january EXCEPT march`. EXCEPT is not symmetric: it keeps rows from the left query that are missing from the right."
+      },
+      {
+        "text": "Lamp and Toaster",
+        "explanation": "That's the symmetric difference, which needs `(A EXCEPT B) UNION (B EXCEPT A)`."
+      },
+      {
+        "text": "Kettle, Mug and Rug",
+        "explanation": "Those are the products in both months, the result of INTERSECT."
+      },
+      {
+        "text": "Lamp",
+        "explanation": "Correct. Lamp is the only March product that wasn't sold in January."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Start with the left set: {Kettle, Mug, Rug, Lamp}.\n2. Remove anything that appears in the right set {Kettle, Mug, Rug, Toaster}.\n3. Kettle, Mug and Rug go; Lamp stays.\n4. Result: **Lamp**. Swapping the operands gives Toaster instead.",
+    "link": {
+      "title": "Set operations (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Set_operations_(SQL)"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What are the column names of this result?\n\n```sql\nSELECT name AS who, city\nFROM customers\nUNION\nSELECT city, name\nFROM customers;\n```",
+    "options": [
+      {
+        "text": "`city, name`, from the second query",
+        "explanation": "Names come from the first query only. Later branches contribute rows, not headers."
+      },
+      {
+        "text": "`who, city`, and the second branch's values are placed by position, so cities land under `who`",
+        "explanation": "Correct. Columns are matched by position. Rows from the second branch put each city in the first column and each name in the second."
+      },
+      {
+        "text": "An error, because the column names don't match",
+        "explanation": "Set operations only check the number of columns and their types. Names are never compared."
+      },
+      {
+        "text": "`who, city`, and the second branch is reordered by name to match",
+        "explanation": "SQL never matches set-operation columns by name. If you list them in a different order, the values go into the wrong columns."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A UNION requires the same number of columns (2 and 2) with compatible types (text and text). Both hold.\n2. Output columns take their names from the first SELECT: `who`, `city`.\n3. The second SELECT's first column (city) goes into `who`, its second (name) into `city`.\n4. So the result mixes rows like (Ana, London) and (London, Ana). This is a common bug when branches are written separately; list columns in the same order every time.",
+    "link": {
+      "title": "Combining queries — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-union.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this return in SQLite and in PostgreSQL?\n\n```sql\nSELECT 1\nUNION SELECT 2\nINTERSECT SELECT 2;\n```",
+    "options": [
+      {
+        "text": "Both return 1 and 2",
+        "explanation": "Postgres does, because INTERSECT binds tighter. SQLite evaluates compound selects left to right, which gives a different answer."
+      },
+      {
+        "text": "Both return 2",
+        "explanation": "That's SQLite's answer only. Postgres gives INTERSECT higher precedence, as the SQL standard requires."
+      },
+      {
+        "text": "SQLite returns 2; Postgres returns 1 and 2",
+        "explanation": "Correct. SQLite computes (1 UNION 2) INTERSECT 2 = {2}. Postgres computes 1 UNION (2 INTERSECT 2) = {1, 2}."
+      },
+      {
+        "text": "SQLite returns 1 and 2; Postgres returns 2",
+        "explanation": "This has the two databases swapped. It's Postgres that follows the standard and binds INTERSECT first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **SQLite**: all compound operators have equal precedence, evaluated left to right.\n   - `1 UNION 2` gives {1, 2}.\n   - `{1, 2} INTERSECT {2}` gives {2}.\n2. **Postgres**: INTERSECT binds tighter than UNION and EXCEPT.\n   - `2 INTERSECT 2` gives {2}.\n   - `1 UNION {2}` gives {1, 2}.\n3. Same SQL, different results. Make the order explicit with subqueries, e.g. `SELECT * FROM (SELECT 1 UNION SELECT 2) INTERSECT SELECT 2`, which both databases evaluate the same way.",
+    "link": {
+      "title": "Combining queries — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-union.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Table `a` has rows `(1, NULL)` and `(2, 5)`. Table `b` has `(1, NULL)` and `(2, 6)`. What does `a EXCEPT b` return, and what does the NOT EXISTS version return?\n\n```sql\nSELECT * FROM a\nWHERE NOT EXISTS (\n  SELECT 1 FROM b\n  WHERE b.x = a.x\n    AND b.y = a.y);\n```",
+    "options": [
+      {
+        "text": "Both return only (2, 5)",
+        "explanation": "EXCEPT does, but NOT EXISTS compares with `=`, and `NULL = NULL` is UNKNOWN, so (1, NULL) finds no match and is kept too."
+      },
+      {
+        "text": "EXCEPT returns (2, 5); NOT EXISTS returns (1, NULL) and (2, 5)",
+        "explanation": "Correct. Set operations treat NULLs as not distinct, so the (1, NULL) rows cancel. The `=` comparison never matches a NULL."
+      },
+      {
+        "text": "Both return (1, NULL) and (2, 5)",
+        "explanation": "EXCEPT uses distinctness, not equality, so the two (1, NULL) rows are considered identical and removed."
+      },
+      {
+        "text": "EXCEPT returns nothing; NOT EXISTS returns (2, 5)",
+        "explanation": "(2, 5) and (2, 6) differ in y, so (2, 5) survives EXCEPT."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. EXCEPT compares whole rows for **distinctness**, where NULL is not distinct from NULL. (1, NULL) is in both tables, so it is removed. (2, 5) isn't in `b`, so it stays.\n2. NOT EXISTS uses `b.y = a.y`. For (1, NULL) that is `NULL = NULL`, which is UNKNOWN, so the subquery finds no row and NOT EXISTS is TRUE: (1, NULL) is kept.\n3. To make the join version behave like EXCEPT, write `b.y IS NOT DISTINCT FROM a.y` (Postgres) or `b.y IS a.y` (SQLite).\n4. This is why EXCEPT is a good tool for diffing two copies of a table.",
+    "link": {
+      "title": "Set operations (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Set_operations_(SQL)"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "February's order lines are: Kettle x2 (30 each), Rug x2 (90), Mug x2 (10), Toaster x1 (25), Mug x2 (10). Kitchen covers Kettle, Toaster and Mug. What is the `kitchen` value for February?\n\n```sql\nSUM(CASE WHEN p.category = 'Kitchen'\n    THEN i.qty * p.price\n    ELSE 0 END) AS kitchen\n```",
+    "options": [
+      {
+        "text": "105",
+        "explanation": "That leaves out one of the two Mug lines (20). Both Mug lines are Kitchen."
+      },
+      {
+        "text": "305",
+        "explanation": "305 is February's whole revenue, including 180 of Rugs in Home."
+      },
+      {
+        "text": "180",
+        "explanation": "180 is the Home column: two Rugs at 90."
+      },
+      {
+        "text": "125",
+        "explanation": "Correct. Kettle 60 + Mug 20 + Toaster 25 + Mug 20 = 125. The Rug line contributes 0 through the ELSE branch."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Apply the CASE to each February line:\n\n| line | category | adds |\n|---|---|---|\n| Kettle x2 | Kitchen | 60 |\n| Rug x2 | Home | 0 |\n| Mug x2 | Kitchen | 20 |\n| Toaster x1 | Kitchen | 25 |\n| Mug x2 | Kitchen | 20 |\n\nSum: 60 + 20 + 25 + 20 = **125**. The Home column does the same with the opposite condition: 180. Together they make the month's 305.",
+    "link": {
+      "title": "Pivot: rows to columns — Modern SQL",
+      "url": "https://modern-sql.com/use-case/pivot"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, from `customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, which expressions give each customer's number of February orders, showing **0** (not NULL) for customers with none? Let `feb` stand for `o.ordered_on >= '2026-02-01' AND o.ordered_on < '2026-03-01'`.",
+    "options": [
+      {
+        "text": "`SUM(CASE WHEN feb THEN 1 END)`",
+        "explanation": "With no ELSE, non-matching rows contribute NULL, and SUM over only NULLs is NULL, not 0. Ben and Eve would show NULL."
+      },
+      {
+        "text": "`COUNT(*) FILTER (WHERE feb)`",
+        "explanation": "Correct. COUNT never returns NULL; with no matching rows it gives 0."
+      },
+      {
+        "text": "`SUM(CASE WHEN feb THEN 1 ELSE 0 END)`",
+        "explanation": "Correct. Every row contributes 0 or 1, so the sum is 0 for customers without February orders."
+      },
+      {
+        "text": "`COUNT(CASE WHEN feb THEN 1 END)`",
+        "explanation": "Correct. The CASE yields NULL for non-matching rows and COUNT ignores NULLs, so non-matching customers get 0."
+      },
+      {
+        "text": "`SUM(feb)`",
+        "explanation": "This SQLite shortcut fails in Postgres: `function sum(boolean) does not exist`. You'd need `SUM(feb::int)`."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Check each against Ben (orders only in January and March) and Eve (no orders):\n\n| expression | Ben | Eve |\n|---|---|---|\n| COUNT(*) FILTER | 0 | 0 |\n| SUM(CASE ... ELSE 0) | 0 | 0 |\n| COUNT(CASE ... END) | 0 | 0 |\n| SUM(CASE ... END) | NULL | NULL |\n| SUM(boolean) | error | error |\n\nThe rule: COUNT returns 0 for empty input; SUM, AVG, MIN and MAX return NULL. `FILTER` is the clearest way to write it.",
+    "link": {
+      "title": "FILTER clause — Modern SQL",
+      "url": "https://modern-sql.com/feature/filter"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A report unions this year's orders table with last year's archive table. Order ids are unique across both, and the query is slow. What is the simplest safe speed-up?\n\n```sql\nSELECT id, total FROM orders\nUNION\nSELECT id, total FROM orders_2025;\n```",
+    "options": [
+      {
+        "text": "Change UNION to UNION ALL",
+        "explanation": "Correct. The branches can't share an id, so there are no duplicates to remove. UNION ALL skips the sort or hash over the entire combined result."
+      },
+      {
+        "text": "Add `DISTINCT` to each branch",
+        "explanation": "That adds deduplication work rather than removing it. UNION already deduplicates the whole result."
+      },
+      {
+        "text": "Rewrite it as a FULL OUTER JOIN on id",
+        "explanation": "A join on id would put matching rows side by side, which is the wrong shape, and there are no matches anyway."
+      },
+      {
+        "text": "Add `ORDER BY id` to each branch",
+        "explanation": "ORDER BY applies only to the final result; inside a branch it needs a subquery and doesn't remove the deduplication step."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. UNION = UNION ALL + remove duplicates. The removal needs a sort or hash of every combined row.\n2. Ask whether duplicates are possible. Ids are unique across both tables, so every row is already distinct.\n3. UNION ALL gives exactly the same rows, minus that work.\n4. On tens of millions of rows the dedup can dominate the query, and may spill to disk once it exceeds `work_mem`.",
+    "link": {
+      "title": "Combining queries — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-union.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Imagine April had Kitchen sales but no Home sales. In the pivot below, what is `home` for April?\n\n```sql\nSELECT month,\n  SUM(qty * price)\n    FILTER (WHERE category = 'Home')\n    AS home\nFROM sales\nGROUP BY month;\n```",
+    "options": [
+      {
+        "text": "0, because FILTER skips the rows and the sum is zero",
+        "explanation": "SUM over zero rows is NULL, not 0. That's the difference from the `CASE ... ELSE 0` version."
+      },
+      {
+        "text": "NULL, because no rows pass the filter and SUM over no rows is NULL",
+        "explanation": "Correct. FILTER removes every April row from this aggregate, leaving SUM with no input, so it returns NULL. Wrap it in COALESCE(..., 0) if the report needs zeros."
+      },
+      {
+        "text": "April doesn't appear in the result",
+        "explanation": "April has Kitchen rows, so its group exists. FILTER affects only this aggregate's input, not which groups appear."
+      },
+      {
+        "text": "An error, because FILTER can't be used with GROUP BY",
+        "explanation": "FILTER is designed for exactly this, and is supported in Postgres 9.4+ and SQLite 3.30+."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. GROUP BY month creates an April group from its Kitchen rows.\n2. For the `home` aggregate, FILTER keeps only Home rows: none in April.\n3. SUM of an empty set is NULL.\n4. Compare `SUM(CASE WHEN category = 'Home' THEN qty * price ELSE 0 END)`, which sums a column of zeros and returns 0.\n5. Neither is wrong, but be deliberate: NULL means \"no data\" and 0 means \"zero sales\", and charts treat them differently.",
+    "link": {
+      "title": "FILTER clause — Modern SQL",
+      "url": "https://modern-sql.com/feature/filter"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A product manager wants a report with one column per product category, and categories are added every month. Why can't a single static SQL query do this?",
+    "options": [
+      {
+        "text": "SQL can't aggregate over a CASE expression",
+        "explanation": "Conditional aggregation over CASE is exactly how static pivots work."
+      },
+      {
+        "text": "Postgres limits a table to 32 columns",
+        "explanation": "Postgres allows up to 1,600 columns in a table, and the issue is unrelated to limits."
+      },
+      {
+        "text": "Pivoting requires the tablefunc extension in all databases",
+        "explanation": "Conditional aggregation works everywhere. Even `crosstab()` from tablefunc needs the output columns declared up front."
+      },
+      {
+        "text": "The number and names of output columns must be known when the query is planned, so they can't depend on the data",
+        "explanation": "Correct. A query's result shape is fixed at plan time. A pivot over unknown categories needs SQL generated after reading the distinct values, or a pivot step outside SQL."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Before a query runs, the database must know the result's columns and types, for planning and for the client protocol.\n2. \"One column per category in the data\" makes the column list depend on the data, which isn't known until the query runs.\n3. Options:\n   - Query `SELECT DISTINCT category`, then build the pivot SQL in application code (whitelist or quote the names to avoid SQL injection).\n   - Return long rows (month, category, revenue) and pivot in the BI tool or with pandas `pivot_table`.\n   - Postgres `crosstab()` or SQL Server `PIVOT` still need the columns listed.",
+    "link": {
+      "title": "Pivot: rows to columns — Modern SQL",
+      "url": "https://modern-sql.com/use-case/pivot"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`customers` has 5 people across 3 cities (each name unique). How many rows does this Postgres query return?\n\n```sql\nSELECT city, name, COUNT(*)\nFROM customers\nGROUP BY ROLLUP (city, name);\n```",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "That counts only the most detailed (city, name) level. ROLLUP adds subtotal rows."
+      },
+      {
+        "text": "8",
+        "explanation": "That counts (city, name) rows plus per-city subtotals, but forgets the grand total."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. ROLLUP(city, name) computes the groupings (city, name), (city) and (): 5 + 3 + 1 = 9 rows."
+      },
+      {
+        "text": "14",
+        "explanation": "14 is the CUBE answer, which also adds the (name) grouping: 5 + 3 + 5 + 1."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "`ROLLUP (a, b)` is shorthand for `GROUPING SETS ((a, b), (a), ())`: each prefix of the list.\n\n| grouping | rows |\n|---|---|\n| (city, name) | 5 |\n| (city) | 3 |\n| () | 1 |\n| total | 9 |\n\n`CUBE (a, b)` uses every subset: (a, b), (a), (b) and (), giving 5 + 3 + 5 + 1 = 14. In the subtotal rows, the rolled-up columns are NULL; `GROUPING(name)` returns 1 there, telling them apart from genuine NULLs.",
+    "link": {
+      "title": "Table expressions (GROUPING SETS, LATERAL) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're porting a reporting query from PostgreSQL to SQLite. Which features will you need to rewrite?",
+    "options": [
+      {
+        "text": "`SUM(x) FILTER (WHERE ...)`",
+        "explanation": "SQLite has supported FILTER on aggregates since 3.30, so this ports unchanged."
+      },
+      {
+        "text": "`EXCEPT ALL`",
+        "explanation": "Correct. SQLite supports only UNION ALL; EXCEPT and INTERSECT always deduplicate. A multiset difference needs ROW_NUMBER tricks or a join on counts."
+      },
+      {
+        "text": "`CROSS JOIN LATERAL (VALUES ...)` to unpivot",
+        "explanation": "Correct. SQLite has no LATERAL. Rewrite the unpivot as a UNION ALL with one branch per column."
+      },
+      {
+        "text": "`GROUP BY ROLLUP (city)`",
+        "explanation": "Correct. SQLite has no ROLLUP, CUBE or GROUPING SETS. Add the total row with a UNION ALL of an ungrouped query."
+      },
+      {
+        "text": "`UNION ALL` of two SELECTs",
+        "explanation": "Standard and supported everywhere."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Go through the features this lesson used:\n\n| feature | Postgres | SQLite |\n|---|---|---|\n| UNION / UNION ALL | yes | yes |\n| INTERSECT/EXCEPT ALL | yes | no |\n| FILTER on aggregates | 9.4+ | 3.30+ |\n| LATERAL | yes | no |\n| ROLLUP / CUBE | yes | no |\n\nEvery missing feature has a UNION ALL-based workaround, but those usually scan the data once per branch, so expect the SQLite version to do more work.",
+    "link": {
+      "title": "Table expressions (GROUPING SETS, LATERAL) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

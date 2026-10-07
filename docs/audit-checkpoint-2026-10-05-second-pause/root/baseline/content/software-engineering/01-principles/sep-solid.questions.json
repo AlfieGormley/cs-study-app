@@ -1,0 +1,370 @@
+[
+  {
+    "id": "sep-solid-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which SOLID principle does this class most clearly violate?\n\n```python\nclass Invoice:\n    def total(self): ...\n    def to_pdf(self): ...\n    def save_to_db(self): ...\n```",
+    "options": [
+      {
+        "text": "Liskov substitution",
+        "explanation": "LSP concerns subtypes standing in for parents. There's no inheritance here."
+      },
+      {
+        "text": "Single responsibility",
+        "explanation": "Correct. Pricing rules (finance), PDF layout (design/marketing) and persistence (IT) change for different people's reasons, yet they all live in one class."
+      },
+      {
+        "text": "Interface segregation",
+        "explanation": "ISP is about clients being forced to depend on methods they don't use. It's related, but the root problem is one class answering to several actors."
+      },
+      {
+        "text": "Open/closed",
+        "explanation": "OCP is about adding behaviour without editing existing code. Nothing here shows a type-switch or extension point."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask \"who would ask for each method to change?\"\n   - `total`: finance (tax rules, discounts).\n   - `to_pdf`: whoever owns the invoice layout.\n   - `save_to_db`: whoever owns the schema.\n2. Three actors, one class: an SRP violation in Martin's \"one actor\" sense.\n3. Risk: a schema migration and a layout tweak land in the same file, conflict in review, and could break each other through shared helpers.\n4. Split into `Invoice` (data and pricing), `InvoicePdfRenderer` and `InvoiceRepository`.",
+    "link": {
+      "title": "The Single Responsibility Principle — Robert C. Martin",
+      "url": "https://blog.cleancoder.com/uncle-bob/2014/05/08/SingleReponsibilityPrinciple.html"
+    }
+  },
+  {
+    "id": "sep-solid-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Every time the business adds a payment method, developers edit this function, plus similar `if` ladders in `refund()` and `fees()`. Which principle is being violated?\n\n```python\ndef charge(p, amount):\n    if p.kind == \"card\":\n        ...\n    elif p.kind == \"paypal\":\n        ...\n    elif p.kind == \"klarna\":\n        ...\n```",
+    "options": [
+      {
+        "text": "Open/closed: adding a payment method should mean adding code, not modifying existing functions",
+        "explanation": "Correct. Each new kind forces edits to working code in several places. Polymorphism (a `PaymentMethod` with `charge`, `refund`, `fees`) lets you add `ApplePay` as a new class."
+      },
+      {
+        "text": "Dependency inversion",
+        "explanation": "DIP is about high-level policy depending on abstractions rather than low-level details. That could come into a fix, but the symptom here is modification on every extension."
+      },
+      {
+        "text": "Liskov substitution",
+        "explanation": "No subtype is breaking a parent's contract. There are no subtypes at all."
+      },
+      {
+        "text": "Interface segregation",
+        "explanation": "No client is forced to depend on methods it doesn't use."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The symptom: a new *kind* of thing means editing *existing* functions, and the same switch on `p.kind` is repeated in several places.\n2. That's what OCP targets: be open to extension (new payment methods) while closed to modification (old code untouched).\n3. Refactor:\n\n```python\nclass Card:\n    def charge(self, amount): ...\n    def refund(self, amount): ...\n\ndef charge(p, amount):\n    p.charge(amount)\n```\n\n4. Now `Klarna` and `ApplePay` are new classes. Old classes, and their tests, don't change.",
+    "link": {
+      "title": "Open–closed principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team's `Storage` interface has `read`, `write`, `delete`, `list` and `presign_url`. A read-only cache client must implement all five, so four of them throw. Which principle best addresses this?",
+    "options": [
+      {
+        "text": "Single responsibility",
+        "explanation": "SRP is about how many actors a module serves. The pain here is clients and implementers being forced to depend on methods they don't need."
+      },
+      {
+        "text": "Dependency inversion",
+        "explanation": "The code may well depend on an abstraction already; the problem is that the abstraction is too wide."
+      },
+      {
+        "text": "Open/closed",
+        "explanation": "OCP is about extending behaviour without editing old code, not about the width of an interface."
+      },
+      {
+        "text": "Interface segregation: split it into small role interfaces such as `Reader` and `Writer`",
+        "explanation": "Correct. A fat interface forces the read-only client to implement methods it can't support. Smaller role interfaces let each implementer and client depend only on what it uses."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The smell: implementations that throw \"not supported\" for most of the interface.\n2. ISP says clients shouldn't be forced to depend on methods they don't use, and implementers shouldn't be forced to fake them.\n3. Split by role:\n\n```python\nclass Reader(Protocol):\n    def read(self, key) -> bytes: ...\n\nclass Writer(Protocol):\n    def write(self, key, b): ...\n```\n\n4. A read-only client implements `Reader`. Code that only reads asks for a `Reader`, so it can be handed the cache or the full store.\n5. Bonus: the throwing methods were also a Liskov violation; ISP removes them.",
+    "link": {
+      "title": "Interface segregation principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Interface_segregation_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the `Rectangle` and `Square` classes from the lesson (where `Square.setWidth` and `setHeight` set both sides), what does this print?\n\n```java\nRectangle r = new Square();\nr.setWidth(5);\nr.setHeight(4);\nSystem.out.println(r.area());\n```",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "That's what a caller of `Rectangle` expects, which is exactly the LSP problem. But the object is a `Square`, so `setHeight(4)` also resets the width."
+      },
+      {
+        "text": "25",
+        "explanation": "That would be the result if only `setWidth` had run. The later `setHeight(4)` overwrites both sides."
+      },
+      {
+        "text": "16",
+        "explanation": "Correct. `setWidth(5)` makes both sides 5; `setHeight(4)` then makes both sides 4. Area = 4 × 4 = 16."
+      },
+      {
+        "text": "It doesn't compile, because a `Square` can't be assigned to a `Rectangle`",
+        "explanation": "`Square extends Rectangle`, so the assignment is valid. The compiler is happy, which is why LSP bugs are dangerous."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace the fields:\n\n| Call | w | h |\n|---|---|---|\n| `new Square()` | 0 | 0 |\n| `setWidth(5)` | 5 | 5 |\n| `setHeight(4)` | 4 | 4 |\n\n`area()` = 4 × 4 = **16**.\n\nCode written against `Rectangle` reasonably assumes that setting the height leaves the width alone. `Square` breaks that postcondition, so it is not substitutable, even though \"a square is a rectangle\" sounds right. The compiler can't catch this: LSP is about behaviour, not types.",
+    "link": {
+      "title": "Liskov substitution principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Liskov_substitution_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which change applies the dependency inversion principle to this class?\n\n```python\nclass Signup:\n    def __init__(self):\n        self.mailer = SendGrid(KEY)\n\n    def register(self, email):\n        ...\n        self.mailer.send(email, \"Hi\")\n```",
+    "options": [
+      {
+        "text": "Make `SendGrid` a singleton so it's created only once",
+        "explanation": "A singleton changes how many instances exist, not which way the dependency points. `Signup` would still depend directly on SendGrid."
+      },
+      {
+        "text": "Move the `SendGrid(KEY)` line into `register`",
+        "explanation": "That still has the high-level class creating and depending on a concrete low-level client; it just does so later."
+      },
+      {
+        "text": "Subclass `SendGrid` to make `Signup`",
+        "explanation": "Inheriting from the mail client couples signup logic to SendGrid even more tightly."
+      },
+      {
+        "text": "Have `Signup` depend on a `Mailer` protocol it defines, and pass in a SendGrid-backed implementation",
+        "explanation": "Correct. Policy (signup) now owns an abstraction shaped by what it needs. The SendGrid adapter depends on that abstraction, and tests can pass a fake."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Identify the levels: `Signup` is policy; `SendGrid` is a detail (one vendor's HTTP API).\n2. Currently policy → detail. Switching to another provider, or testing without network access, means editing `Signup`.\n3. Invert it:\n\n```python\nclass Mailer(Protocol):\n    def send(self, to, body): ...\n\nclass Signup:\n    def __init__(self, mailer: Mailer):\n        self.mailer = mailer\n```\n\n4. A `SendGridMailer` implements `Mailer`. In tests, a `FakeMailer` records messages.\n5. The abstraction belongs to the high-level side, so its shape is \"send a message\", not \"SendGrid's 14 parameters\".",
+    "link": {
+      "title": "Dependency inversion principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dependency_inversion_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`Account.withdraw(amount)` accepts any positive amount and guarantees the balance falls by exactly `amount`. Which subclass behaviours would violate the Liskov substitution principle? Select **all** that apply.",
+    "options": [
+      {
+        "text": "`FrozenAccount.withdraw` raises `AccountFrozen` for any amount",
+        "explanation": "Correct. It throws an exception callers of `Account` have no reason to expect, and effectively refuses every valid input."
+      },
+      {
+        "text": "`CappedAccount.withdraw` raises `ValueError` for amounts over 500",
+        "explanation": "Correct. This **strengthens the precondition**: the parent accepts any positive amount, the subtype accepts fewer. Code that worked with `Account` can now fail."
+      },
+      {
+        "text": "`FeeAccount.withdraw` deducts `amount + 1` as a fee",
+        "explanation": "Correct. This **weakens the postcondition** (balance falls by exactly `amount`). Callers that reconcile balances will be wrong by 1 per withdrawal."
+      },
+      {
+        "text": "`AuditedAccount.withdraw` behaves identically and also writes an audit log entry",
+        "explanation": "Not a violation. It keeps every promise the parent makes and adds a harmless extra. Subtypes may do more, as long as they don't break the contract."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each subtype against the parent's contract:\n\n| Subtype | Pre | Post | Verdict |\n|---|---|---|---|\n| Frozen | narrower | n/a | breaks |\n| Capped | narrower | same | breaks |\n| Fee | same | weaker | breaks |\n| Audited | same | same+ | fine |\n\nRules:\n1. Preconditions: a subtype may accept **more**, never less.\n2. Postconditions: a subtype may promise **more**, never less.\n3. No new exceptions callers can't anticipate.\n\nIf an account genuinely can be frozen, the parent's contract should say so (`withdraw` may raise `AccountFrozen`), and every caller handles it.",
+    "link": {
+      "title": "Liskov substitution principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Liskov_substitution_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer says: \"We follow DIP. Every class gets its dependencies through the constructor.\" Their code:\n\n```python\nclass Reports:\n    def __init__(self, db: PgClient):\n        self.db = db\n```\n\nWhich is the most accurate response?",
+    "options": [
+      {
+        "text": "Correct: constructor injection is the dependency inversion principle",
+        "explanation": "Injection is a technique, DIP is a principle about dependency direction. They're often confused."
+      },
+      {
+        "text": "This is dependency injection, but `Reports` still depends on a concrete low-level class, so it doesn't invert the dependency",
+        "explanation": "Correct. The source code of `Reports` still names `PgClient`. DIP would have it depend on an abstraction it owns (say a `ReportStore` protocol), which Postgres code implements."
+      },
+      {
+        "text": "It violates DIP because dependencies must be created by a framework such as Spring",
+        "explanation": "Frameworks are one way to wire dependencies. Neither DI nor DIP requires one; plain constructors work fine."
+      },
+      {
+        "text": "It violates the single responsibility principle",
+        "explanation": "Nothing here suggests multiple actors. The question is about the direction of the dependency."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Dependency injection**: dependencies are passed in rather than created inside. This code does that.\n2. **Dependency inversion**: high-level modules depend on abstractions, and low-level modules implement them. Check the import graph: `Reports` → `PgClient`. Not inverted.\n3. Practical consequence: you can pass in a different `PgClient`, but not a different *kind* of store, and type checkers will complain about a fake.\n4. Fix:\n\n```python\nclass ReportStore(Protocol):\n    def rows(self, q) -> list: ...\n\nclass Reports:\n    def __init__(self, db: ReportStore):\n        self.db = db\n```\n\nDI is a great way to *deliver* DIP, but it isn't the same thing.",
+    "link": {
+      "title": "Dependency inversion principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dependency_inversion_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Given this code, what does a static type checker such as mypy report for the last line?\n\n```python\nclass SupportsClose(Protocol):\n    def close(self) -> None: ...\n\nclass Conn:  # no base class\n    def close(self) -> None:\n        print(\"closed\")\n\ndef shutdown(x: SupportsClose):\n    x.close()\n\nshutdown(Conn())\n```",
+    "options": [
+      {
+        "text": "No error: `Conn` has a compatible `close` method, so it satisfies the protocol structurally",
+        "explanation": "Correct. PEP 544 protocols are checked by shape. Any class with `close() -> None` fits, which makes small role interfaces (ISP) cheap and keeps implementations free of framework base classes."
+      },
+      {
+        "text": "An error: `Conn` doesn't inherit from `SupportsClose`",
+        "explanation": "That's how nominal typing works (as with Java interfaces). `Protocol` is structural: matching methods are enough."
+      },
+      {
+        "text": "A runtime `TypeError` when `shutdown` is called",
+        "explanation": "Protocols don't add runtime checks. Without `@runtime_checkable` and an explicit `isinstance` call, nothing is checked at runtime at all."
+      },
+      {
+        "text": "An error because `Protocol` classes can't have methods with bodies",
+        "explanation": "Protocol methods conventionally have `...` bodies, but that's not the issue here; `Conn` is a normal class."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `SupportsClose` is a **Protocol**, so it describes a shape: \"has a `close()` returning `None`\".\n2. The checker compares `Conn`'s members with that shape. `Conn.close` matches.\n3. So `Conn()` is a valid `SupportsClose`, with no inheritance needed.\n4. Why this matters for SOLID:\n   - ISP: functions can ask for exactly the capability they use.\n   - DIP: the high-level module defines the protocol; low-level classes satisfy it without importing it.",
+    "link": {
+      "title": "PEP 544: Protocols (structural subtyping)",
+      "url": "https://peps.python.org/pep-0544/"
+    }
+  },
+  {
+    "id": "sep-solid-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're building an expression evaluator. The set of node types (`Number`, `Add`, `Mul`, ...) has been fixed for years, but you keep adding new operations: `evaluate`, `pretty_print`, `simplify`, `to_latex`, `type_check`. Which design is the better fit, and why?",
+    "options": [
+      {
+        "text": "One class per node with a method per operation, because that's what OCP prescribes",
+        "explanation": "That design is 'open' to new node types. Here node types don't change; operations do, so every new operation edits every class."
+      },
+      {
+        "text": "Keep operations as separate functions (or visitors) that pattern-match over the fixed node types, because the axis that varies is operations",
+        "explanation": "Correct. This is the expression problem. Classes-with-methods make new types cheap and new operations expensive; functions over a closed set of types do the opposite. Protect the axis that actually changes."
+      },
+      {
+        "text": "It makes no difference; both designs satisfy OCP equally",
+        "explanation": "They're each closed against different kinds of change. Which one 'satisfies OCP' depends on what changes."
+      },
+      {
+        "text": "Use a single giant class with all operations, to keep everything together",
+        "explanation": "That trades one problem for an SRP and cohesion problem, and still means editing the class for every operation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Picture a grid: node types × operations.\n\n```\n          eval  print  latex  ...\nNumber     .      .      .\nAdd        .      .      .\nMul        .      .      .\n```\n\n2. Methods on classes: adding a **row** (node type) is one new class; adding a **column** (operation) touches every class.\n3. Functions over types (`match` statements, the visitor pattern): adding a column is one new function; adding a row touches every function.\n4. Here rows are fixed and columns keep growing, so choose functions/visitors:\n\n```python\ndef to_latex(n):\n  match n:\n    case Number(v):\n      return str(v)\n    case Add(a, b):\n      return (to_latex(a) + \" + \"\n              + to_latex(b))\n```\n\n5. OCP isn't absolute: you choose which kind of change your design is closed against.",
+    "link": {
+      "title": "Open–closed principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`ImmutableRectangle` has `width`, `height` and `area()`, with no setters; \"changing\" a dimension returns a new object. `ImmutableSquare` extends it and guarantees `width == height`. Does this subtype violate LSP?",
+    "options": [
+      {
+        "text": "Yes: a square can never be a valid rectangle subtype",
+        "explanation": "The mutable version fails because of the setters' postconditions. Remove mutation and that broken promise disappears."
+      },
+      {
+        "text": "Yes: the extra invariant `width == height` strengthens a precondition",
+        "explanation": "Adding an invariant to a subtype is allowed as long as the parent's own contract still holds. Invariants restrict the subtype's own states; they aren't preconditions on callers."
+      },
+      {
+        "text": "No: without setters, every promise `ImmutableRectangle` makes (it has a width, a height and the right area) is true of an immutable square",
+        "explanation": "Correct. The classic violation came from `setWidth` promising to leave the height unchanged. With no mutators, nothing a caller can do reveals a difference, so the square is substitutable."
+      },
+      {
+        "text": "It depends on whether the classes are written in Java or Python",
+        "explanation": "LSP is about behavioural contracts, which are language-independent."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Recall why the mutable `Square` failed: `setWidth(5)` on a `Rectangle` promises the height is unchanged, and `Square` broke that.\n2. List the immutable parent's promises: `width` and `height` are non-negative numbers, and `area() == width * height`.\n3. Check each for `ImmutableSquare`: all true.\n4. Any \"with_width\" operation returns a *new* object. If it returns a `Rectangle` when the sides differ, no contract is broken.\n5. Conclusion: substitutability depends on the operations in the contract, not on the real-world taxonomy. Immutability often makes LSP problems vanish.",
+    "link": {
+      "title": "Circle–ellipse problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circle%E2%80%93ellipse_problem"
+    }
+  },
+  {
+    "id": "sep-solid-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these are signs that SOLID is being misapplied? Select **all** that apply.",
+    "options": [
+      {
+        "text": "Every class has a matching interface (`IUserService`, `UserServiceImpl`) with exactly one implementation and no test fakes",
+        "explanation": "Correct. An abstraction with one implementation and no second user (not even a test) adds indirection and files for no benefit. Introduce it when the need appears."
+      },
+      {
+        "text": "A feature is split across 15 classes of one method each, and understanding it means opening them all",
+        "explanation": "Correct. That reads SRP as 'one method per class' and destroys cohesion. SRP is about reasons to change, not size."
+      },
+      {
+        "text": "A class used by the billing team and the compliance team is split after their changes keep conflicting",
+        "explanation": "Not a misapplication: that's SRP applied for exactly the right reason, two actors with different change pressures."
+      },
+      {
+        "text": "Every class has hooks and extension points 'in case someone needs to extend it later'",
+        "explanation": "Correct. Speculative OCP. Extension points cost complexity now for a benefit that may never come (see YAGNI)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. SOLID is a response to change pressure. Ask, for each case, whether there's real pressure.\n2. Single-implementation interfaces: no second implementation, no fake. No pressure. Indirection only.\n3. 15 one-method classes: the principle was applied to size instead of actors.\n4. Two teams' changes colliding: real, observed pressure. Splitting is right.\n5. Hooks 'in case': predicted pressure that may never arrive.\n6. Rule of thumb: apply a principle when it removes a pain you have, or a near-certain one you can name.",
+    "link": {
+      "title": "SOLID — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/SOLID"
+    }
+  },
+  {
+    "id": "sep-solid-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "This Java method compiles and passes code review:\n\n```java\nvoid addDefaults(List<String> tags) {\n    tags.add(\"new\");\n}\n```\n\nAt runtime, a caller passes `Collections.unmodifiableList(existing)`. What happens, and what does it reveal?",
+    "options": [
+      {
+        "text": "It works; `unmodifiableList` only prevents removing elements",
+        "explanation": "Unmodifiable lists reject all structural changes: `add`, `remove`, `clear`, `set`."
+      },
+      {
+        "text": "It throws `NullPointerException`",
+        "explanation": "Nothing is null here. The exception is about the operation being unsupported."
+      },
+      {
+        "text": "It fails to compile because `unmodifiableList` returns a different type",
+        "explanation": "It returns `List<T>`, so the call type-checks. That's why the failure only shows at runtime."
+      },
+      {
+        "text": "It throws `UnsupportedOperationException`, showing that a `List` reference doesn't guarantee `add` works: the interface's 'optional operations' weaken substitutability",
+        "explanation": "Correct. The JDK documents `add` as optional, so an unmodifiable list technically honours the written contract but breaks what most callers assume. It's a well-known LSP grey area."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `Collections.unmodifiableList` returns a `List<String>` view whose mutators throw `UnsupportedOperationException`.\n2. The compiler sees `List<String>` and allows `add`.\n3. At runtime the view rejects it.\n4. Is this an LSP violation? The `List` Javadoc marks `add` as an \"optional operation\", so the *documented* contract permits it. But it means code that receives a `List` can't rely on being able to add, which pushes the burden onto every caller.\n5. Designs that avoid this split read and write capabilities into separate types (Kotlin's `List` versus `MutableList`, for example). That's ISP and LSP working together.",
+    "link": {
+      "title": "Collections (Java SE 8 API)",
+      "url": "https://docs.oracle.com/javase/8/docs/api/java/util/Collections.html"
+    }
+  }
+]

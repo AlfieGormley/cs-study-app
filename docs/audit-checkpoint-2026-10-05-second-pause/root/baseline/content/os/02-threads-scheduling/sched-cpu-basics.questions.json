@@ -1,0 +1,344 @@
+[
+  {
+    "id": "sched-cpu-basics-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Jobs A (5 ms), B (2 ms) and C (3 ms) all arrive at time 0 and are scheduled **FCFS** in the order A, B, C. What is the average waiting time?",
+    "options": [
+      {
+        "text": "4 ms",
+        "explanation": "Correct. A waits 0, B waits 5 (behind A), C waits 7 (behind A and B): (0 + 5 + 7) / 3 = 4 ms."
+      },
+      {
+        "text": "3.33 ms",
+        "explanation": "That is the burst average, (5 + 2 + 3) / 3. Waiting time is time spent queued, not running."
+      },
+      {
+        "text": "7.33 ms",
+        "explanation": "That's the average **turnaround** time: (5 + 7 + 10) / 3. Waiting time excludes each job's own burst."
+      },
+      {
+        "text": "2.33 ms",
+        "explanation": "That's what SJF would give (B, C, A: waits 0, 2, 5 → 7/3). The question says FCFS in the order A, B, C."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Draw the Gantt chart:\n\n```\n|   A   | B |  C  |\n0       5   7    10\n```\n\nWaiting = start time − arrival (each job runs in one piece):\n\n| Job | Start | Wait |\n|---|---|---|\n| A | 0 | 0 |\n| B | 5 | 5 |\n| C | 7 | 7 |\n\nAverage = 12 / 3 = **4 ms**. Running the shortest first (B, C, A) would give 7/3 ≈ 2.33 ms.",
+    "link": {
+      "title": "Scheduling: Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You are tuning the scheduler for a text editor that must react to each keypress quickly, even while a large build runs in the background. Which metric matters most?",
+    "options": [
+      {
+        "text": "Throughput",
+        "explanation": "Throughput counts jobs finished per second. Maximising it favours the build, not the editor's keypress handling."
+      },
+      {
+        "text": "Turnaround time",
+        "explanation": "Turnaround is arrival to completion of a whole job, which matters for batch work. A keypress handler's issue is how quickly it starts."
+      },
+      {
+        "text": "Response time",
+        "explanation": "Correct. Response time is the delay from becoming ready to first getting the CPU, which is exactly what the user perceives as lag."
+      },
+      {
+        "text": "CPU utilisation",
+        "explanation": "Utilisation measures how busy the CPU is. The build alone keeps it at 100%, regardless of how laggy the editor feels."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The editor thread is I/O-bound: it sleeps until a key arrives, needs a fraction of a millisecond of CPU, and sleeps again.\n2. What the user feels is the gap between the keypress (thread becomes ready) and the thread running: **response time**.\n3. Throughput and utilisation are dominated by the build and would look fine even if the editor lagged.\n\nThat's why interactive schedulers favour threads that wake from sleep.",
+    "link": {
+      "title": "Scheduling (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Scheduling_(computing)"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a Python `asyncio` program, one coroutine runs a CPU-heavy loop for 2 seconds without any `await`. What happens to the other coroutines in the same event loop during those 2 seconds?",
+    "options": [
+      {
+        "text": "The OS preempts the coroutine every few milliseconds so the others keep running",
+        "explanation": "The OS can preempt the **thread**, but all coroutines share that one thread. The event loop itself can only switch at an `await`."
+      },
+      {
+        "text": "asyncio automatically moves the loop to a background thread",
+        "explanation": "asyncio does nothing of the sort. Offloading needs an explicit `run_in_executor` or `asyncio.to_thread`."
+      },
+      {
+        "text": "They keep running in parallel on other cores",
+        "explanation": "An event loop runs on one thread, so its coroutines are never in parallel with each other."
+      },
+      {
+        "text": "They all stall until the loop finishes, because the event loop schedules cooperatively",
+        "explanation": "Correct. The event loop only regains control when a coroutine awaits, so a CPU-bound section blocks every other task in the loop."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. asyncio is **cooperative** scheduling: tasks hand control back to the event loop only at `await`.\n2. The busy coroutine never awaits for 2 seconds, so the loop never gets to run anything else.\n3. Timers fire late, network requests wait and health checks may time out.\n4. The OS still preempts the thread, but when it resumes it is the same coroutine still looping.\n\nFix: run the CPU work with `await asyncio.to_thread(...)` (or a process pool), or break it up with periodic `await asyncio.sleep(0)`.",
+    "link": {
+      "title": "Scheduling (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Scheduling_(computing)"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using **non-preemptive SJF**, what is the average turnaround time?\n\n| Job | Arrival | Burst |\n|---|---|---|\n| A | 0 | 6 |\n| B | 1 | 2 |\n| C | 2 | 8 |\n| D | 3 | 3 |",
+    "options": [
+      {
+        "text": "8.25",
+        "explanation": "That's the SRTF (preemptive) result. Non-preemptive SJF can't interrupt A once it has started at time 0."
+      },
+      {
+        "text": "4.75",
+        "explanation": "That's the average **waiting** time. Turnaround also includes each job's own burst."
+      },
+      {
+        "text": "9.5",
+        "explanation": "Correct. Order A, B, D, C with completions 6, 8, 11, 19; turnarounds 6, 7, 8, 17; average 38 / 4 = 9.5."
+      },
+      {
+        "text": "10.75",
+        "explanation": "That's FCFS in arrival order (A, B, C, D finishing at 6, 8, 16, 19, turnarounds 6, 7, 14, 16). SJF picks D before C at time 8 because D is shorter."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. t = 0: only A is present, so A runs to completion (non-preemptive): 0–6.\n2. t = 6: B (2), C (8) and D (3) are waiting. Shortest is B: 6–8.\n3. t = 8: C (8) and D (3). D: 8–11.\n4. C: 11–19.\n\n```\n|  A   |B |  D  |    C    |\n0      6  8    11        19\n```\n\nTurnaround = completion − arrival:\n\n| Job | Done | Arr | TAT |\n|---|---|---|---|\n| A | 6 | 0 | 6 |\n| B | 8 | 1 | 7 |\n| D | 11 | 3 | 8 |\n| C | 19 | 2 | 17 |\n\nAverage = 38 / 4 = **9.5**.",
+    "link": {
+      "title": "Shortest job next — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Shortest_job_next"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Same jobs, now with **SRTF** (preemptive SJF): A (arrives 0, burst 6), B (1, 2), C (2, 8), D (3, 3). What is the average waiting time?",
+    "options": [
+      {
+        "text": "4.75",
+        "explanation": "That's non-preemptive SJF. With SRTF, B preempts A at time 1, which changes everyone's waits."
+      },
+      {
+        "text": "3.5",
+        "explanation": "Correct. Schedule: A 0–1, B 1–3, D 3–6, A 6–11, C 11–19. Waits: A 5, B 0, C 9, D 0, so 14 / 4 = 3.5."
+      },
+      {
+        "text": "2.25",
+        "explanation": "That's the average **response** time (first run − arrival: 0, 0, 9, 0). Waiting counts all time spent ready, including A's wait after being preempted."
+      },
+      {
+        "text": "8.25",
+        "explanation": "That's the average turnaround time. Subtract each burst to get waiting time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Check for preemption at every arrival:\n\n1. t = 0: A starts (remaining 6).\n2. t = 1: B arrives (2) < A's remaining 5 → B runs.\n3. t = 2: C arrives (8); B has 1 left → B continues.\n4. t = 3: B finishes. D arrives (3). Remaining: A 5, C 8, D 3 → D runs 3–6.\n5. t = 6: A (5) beats C (8) → A runs 6–11. Then C 11–19.\n\n```\n|A|B |  D  |   A   |    C    |\n0 1  3     6      11        19\n```\n\nWaiting = completion − arrival − burst:\n- A: 11 − 0 − 6 = 5\n- B: 3 − 1 − 2 = 0\n- C: 19 − 2 − 8 = 9\n- D: 6 − 3 − 3 = 0\n\nAverage = 14 / 4 = **3.5**.",
+    "link": {
+      "title": "Shortest job next — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Shortest_job_next"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Round robin with a **2 ms quantum**. Jobs A (5 ms), B (3 ms) and C (1 ms) all arrive at time 0 and are queued in that order. At what time does **B** finish?",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "That's when C finishes. B still has 1 ms left at that point."
+      },
+      {
+        "text": "9",
+        "explanation": "That's when A, the longest job, finishes."
+      },
+      {
+        "text": "3",
+        "explanation": "That would be true only if B ran first and uninterrupted. A runs its first quantum before B starts."
+      },
+      {
+        "text": "8",
+        "explanation": "Correct. A 0–2, B 2–4, C 4–5, A 5–7, B 7–8. B completes at 8."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk the queue, 2 ms at a time:\n\n| Time | Runs | Left after |\n|---|---|---|\n| 0–2 | A | A 3 |\n| 2–4 | B | B 1 |\n| 4–5 | C | C done |\n| 5–7 | A | A 1 |\n| 7–8 | B | B done |\n| 8–9 | A | A done |\n\n```\n| A | B |C| A |B|A|\n0   2   4 5   7 8 9\n```\n\nB finishes at **8**. Note C only used 1 ms of its quantum and the next job started immediately.",
+    "link": {
+      "title": "Round-robin scheduling — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Round-robin_scheduling"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Every context switch costs 0.5 ms and the round-robin quantum is 4.5 ms. If every job uses its full quantum, what fraction of CPU time is spent switching?",
+    "options": [
+      {
+        "text": "About 11%",
+        "explanation": "That's 0.5 / 4.5. The overhead fraction should be measured against the whole cycle, quantum plus switch: 0.5 / 5."
+      },
+      {
+        "text": "10%",
+        "explanation": "Correct. Each cycle is 4.5 ms of work plus 0.5 ms of switching = 5 ms, and 0.5 / 5 = 10%."
+      },
+      {
+        "text": "0.5%",
+        "explanation": "That treats 0.5 ms as 0.5% without relating it to the quantum. The switch is a sizeable fraction of a 4.5 ms slice."
+      },
+      {
+        "text": "It depends on the number of jobs",
+        "explanation": "With every job using full quanta, each slice is followed by one switch, whatever the number of jobs, so the fraction is fixed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. One cycle = one quantum + one switch = 4.5 + 0.5 = 5 ms.\n2. Wasted per cycle = 0.5 ms.\n3. Fraction = 0.5 / 5 = **10%**.\n\nCompare a 9.5 ms quantum: 0.5 / 10 = 5%. Halving overhead costs response time, which is the basic quantum trade-off. (Real direct switch costs are nearer a few microseconds, but cache refills add hidden cost.)",
+    "link": {
+      "title": "Round-robin scheduling — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Round-robin_scheduling"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** true statements about shortest job first (SJF) scheduling.",
+    "options": [
+      {
+        "text": "When all jobs arrive together, it minimises average waiting time",
+        "explanation": "Correct. Any schedule that runs a longer job before a shorter one can be improved by swapping them."
+      },
+      {
+        "text": "A real OS must estimate burst lengths, for example from past bursts",
+        "explanation": "Correct. The scheduler can't see the future; it predicts, typically with an exponential average of previous bursts."
+      },
+      {
+        "text": "Long jobs can starve if short jobs keep arriving",
+        "explanation": "Correct. A steady stream of short jobs always beats the long one, which may wait indefinitely."
+      },
+      {
+        "text": "It gives long jobs good response time",
+        "explanation": "Wrong: long jobs are always last in line, so their response time is the worst of all."
+      },
+      {
+        "text": "SJF is preemptive by definition",
+        "explanation": "Wrong: classic SJF is non-preemptive. The preemptive variant has its own name, SRTF."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. **Optimality.** Two jobs of lengths 2 and 10: short first gives waits 0 and 2 (average 1); long first gives 0 and 10 (average 5). Swapping any out-of-order pair helps, so sorted order is optimal.\n2. **Prediction.** Burst lengths aren't known in advance, so they are estimated.\n3. **Starvation.** The rule \"shortest first\" never promises the long job a turn.\n4. **Terminology.** SJF = non-preemptive; SRTF = preemptive.",
+    "link": {
+      "title": "Shortest job next — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Shortest_job_next"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A scheduler predicts CPU bursts with `next = a × last + (1 − a) × guess`, where a = 0.5 and the initial guess is 12 ms. A thread's next three bursts are 4, 8 and 2 ms. What is the prediction for its fourth burst?",
+    "options": [
+      {
+        "text": "4.67 ms",
+        "explanation": "That's the plain average of 4, 8 and 2. Exponential averaging weights recent bursts more and includes the initial guess."
+      },
+      {
+        "text": "2 ms",
+        "explanation": "That's just the last burst (a = 1). With a = 0.5, history still counts for half."
+      },
+      {
+        "text": "5 ms",
+        "explanation": "Correct. 12 → 0.5·4 + 0.5·12 = 8 → 0.5·8 + 0.5·8 = 8 → 0.5·2 + 0.5·8 = 5."
+      },
+      {
+        "text": "6.5 ms",
+        "explanation": "Check the arithmetic: the second update gives 8 (not 11), because the burst (8) equals the current guess (8)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Update after each actual burst:\n\n| Step | Actual | Calc | Guess |\n|---|---|---|---|\n| start | | | 12 |\n| 1 | 4 | 0.5·4 + 0.5·12 | 8 |\n| 2 | 8 | 0.5·8 + 0.5·8 | 8 |\n| 3 | 2 | 0.5·2 + 0.5·8 | 5 |\n\nPrediction for burst 4 = **5 ms**. Each older value's weight halves at every step: the initial guess now contributes only 0.5³ = 1/8.",
+    "link": {
+      "title": "Shortest job next — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Shortest_job_next"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Under **FCFS**, one CPU-bound job (100 ms bursts) shares a machine with five I/O-bound jobs (1 ms of CPU, then a disk read). What happens, and what helps most?",
+    "options": [
+      {
+        "text": "Nothing bad: FCFS is fair because everyone eventually runs",
+        "explanation": "Everyone runs eventually, but in convoys: the disk idles while I/O jobs queue behind the 100 ms burst, then the CPU idles while they all do I/O."
+      },
+      {
+        "text": "The I/O jobs queue behind the CPU hog while the disk sits idle, then the CPU idles while they wait for the disk; preemptive scheduling with a short quantum fixes this",
+        "explanation": "Correct. This is the convoy effect. With RR (or any scheduler favouring short bursts), each I/O job gets its 1 ms promptly and issues its next read, keeping both CPU and disk busy."
+      },
+      {
+        "text": "The CPU-bound job starves, because the five I/O-bound jobs outnumber it",
+        "explanation": "FCFS runs whoever is first in the queue; numbers don't matter. The CPU-bound job, if anything, does too well."
+      },
+      {
+        "text": "Increase the quantum so that each job runs longer",
+        "explanation": "FCFS has no quantum. And under RR, a bigger quantum moves it back towards FCFS, worsening the convoy."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow one cycle under FCFS:\n\n1. The CPU job runs for 100 ms. The five I/O jobs finish their disk reads quickly and then **wait** in the ready queue. The disk is idle.\n2. The CPU job blocks or finishes its burst. The five I/O jobs run 1 ms each (5 ms total) and all issue disk reads.\n3. The CPU job runs again for 100 ms; the I/O jobs complete their reads and queue behind it again.\n\nDisk utilisation is tiny and the I/O jobs make one step every ~105 ms.\n\nWith round robin (say a 10 ms quantum), an I/O job waits at most about 10 ms (plus other jobs' short bursts), so it does many more reads per second, and the CPU job barely slows down.",
+    "link": {
+      "title": "Convoy effect — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Convoy_effect"
+    }
+  },
+  {
+    "id": "sched-cpu-basics-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Three jobs, each needing 10 ms of CPU, arrive at time 0. Compare FCFS with round robin using a 1 ms quantum, ignoring switch costs. Select **all** true statements.",
+    "options": [
+      {
+        "text": "RR's average turnaround time is higher than FCFS's",
+        "explanation": "Correct. FCFS finishes them at 10, 20 and 30 (average 20). RR finishes them at 28, 29 and 30 (average 29)."
+      },
+      {
+        "text": "RR's average response time is lower than FCFS's",
+        "explanation": "Correct. RR starts them at 0, 1 and 2 (average 1); FCFS at 0, 10 and 20 (average 10)."
+      },
+      {
+        "text": "Both finish all the work at time 30",
+        "explanation": "Correct. With no switch costs, the CPU is busy for 30 ms either way; only the order changes."
+      },
+      {
+        "text": "RR has higher throughput",
+        "explanation": "Wrong: both complete 3 jobs in 30 ms. With real switch costs, RR's throughput would be slightly *lower*."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "**FCFS**:\n\n```\n|   A    |   B    |   C    |\n0       10       20       30\n```\n\nTurnarounds 10, 20, 30 → average 20. Responses 0, 10, 20 → average 10.\n\n**RR, q = 1**: A, B, C, A, B, C, ... Each job's 10th slice comes in the last round:\n\n- A's last slice: 27–28\n- B's: 28–29\n- C's: 29–30\n\nTurnarounds 28, 29, 30 → average 29. Responses 0, 1, 2 → average 1.\n\nSo RR trades turnaround for response time. When jobs are equal in length, slicing them finely makes *everyone* finish late.",
+    "link": {
+      "title": "Scheduling: Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf"
+    }
+  }
+]

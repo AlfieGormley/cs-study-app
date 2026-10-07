@@ -1,0 +1,370 @@
+[
+  {
+    "id": "sep-writing-for-others-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which comment adds the most value?",
+    "options": [
+      {
+        "text": "`total = 0  # set total to zero`",
+        "explanation": "Restates the code. It adds reading time and nothing a reader couldn't see."
+      },
+      {
+        "text": "`# loop over the orders` above `for o in orders:`",
+        "explanation": "Again it narrates what the code already says plainly."
+      },
+      {
+        "text": "`# Bank rejects amounts with >2 dp, so round before sending (see PAY-311)`",
+        "explanation": "Correct. It explains *why* the code does something non-obvious and points to the source. That's information the code can't express."
+      },
+      {
+        "text": "`# TODO: fix this`",
+        "explanation": "A TODO with no description, owner or ticket tells nobody what's wrong or who will fix it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask of each comment: \"what does it tell me that the code doesn't?\"\n2. `# set total to zero`: nothing.\n3. `# loop over the orders`: nothing.\n4. `# TODO: fix this`: that something is wrong, but not what.\n5. The bank comment gives a **reason** (an external constraint) and a **reference** (the ticket). Without it, a future maintainer might 'simplify' away the rounding and break payments.\n6. Rule: comments explain why, warn, or reference; code says what.",
+    "link": {
+      "title": "PEP 8: Comments",
+      "url": "https://peps.python.org/pep-0008/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What's the best fix here?\n\n```python\n# Retry up to 3 times\nfor _ in range(5):\n    if try_send():\n        break\n```",
+    "options": [
+      {
+        "text": "Change the comment to say 5",
+        "explanation": "That fixes it today, but the comment and code will drift again the next time someone changes one of them."
+      },
+      {
+        "text": "Delete the comment and give the number a name, such as `MAX_SEND_ATTEMPTS = 5`, so the code states the intent itself",
+        "explanation": "Correct. A named constant carries the meaning, and there's no separate comment to fall out of step. (First check with the author whether 3 or 5 was intended.)"
+      },
+      {
+        "text": "Change the code to `range(3)` to match the comment",
+        "explanation": "Maybe, but you don't know which is right. The comment may be the stale part. Find out, then remove the duplication."
+      },
+      {
+        "text": "Add a second comment explaining the first",
+        "explanation": "More comments means more text to rot."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The comment and the code disagree. One of them is stale, and nothing checked either.\n2. Find out which is intended (the commit history or the author can tell you).\n3. Then remove the duplication between comment and code:\n\n```python\nMAX_SEND_ATTEMPTS = 5\n\nfor _ in range(MAX_SEND_ATTEMPTS):\n    if try_send():\n        break\n```\n\n4. The name now says what the comment said, and it can't drift because it *is* the code.",
+    "link": {
+      "title": "Code smells catalogue — Refactoring.Guru",
+      "url": "https://refactoring.guru/refactoring/smells"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your library is at version 2.4.1. You add a new **required** parameter to a public function. Following semantic versioning, what is the next version?",
+    "options": [
+      {
+        "text": "2.4.2",
+        "explanation": "PATCH bumps are for backwards-compatible bug fixes. Existing calls without the new argument will now fail."
+      },
+      {
+        "text": "2.5.0",
+        "explanation": "MINOR bumps are for backwards-compatible additions. A new *optional* parameter would be minor; a required one breaks callers."
+      },
+      {
+        "text": "3.0.0",
+        "explanation": "Correct. Existing calls stop working, which is an incompatible API change, so MAJOR increments and MINOR and PATCH reset to 0."
+      },
+      {
+        "text": "2.4.1-breaking",
+        "explanation": "Pre-release labels such as `-rc.1` mark unstable versions *before* a release. They don't signal a breaking change on their own."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: do existing callers still work?\n   - `f(a)` was valid; now `f` needs `b` too, so `f(a)` raises `TypeError`.\n2. Not backwards-compatible means **MAJOR**.\n3. Bumping MAJOR resets the others: `2.4.1` → `3.0.0`.\n4. To avoid the major bump, add the parameter with a default (a MINOR change, `2.5.0`), deprecate calls that omit it, and make it required in 3.0.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your search API's docs say results are returned \"in no particular order\". In practice they always came back sorted by id. You switch to a faster index that returns them unsorted, and three customers report broken integrations. What does this illustrate?",
+    "options": [
+      {
+        "text": "Hyrum's Law: with enough users, every observable behaviour is depended on, whatever the contract says",
+        "explanation": "Correct. The sort order was never promised, but it was observable, so someone relied on it. The contract didn't protect you."
+      },
+      {
+        "text": "The customers violated the Liskov substitution principle",
+        "explanation": "LSP concerns subtypes honouring their parents' contracts. This is about clients relying on undocumented behaviour."
+      },
+      {
+        "text": "YAGNI: you didn't need the faster index",
+        "explanation": "Whether the optimisation was needed doesn't change the lesson: the behaviour change broke users who relied on an accident."
+      },
+      {
+        "text": "The change was fine, because the docs were clear",
+        "explanation": "Technically true, but the integrations are still broken, and 'read the docs' doesn't repair customer relationships."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Contract: 'no particular order'.\n2. Observable behaviour: 'always sorted by id'.\n3. Some users coded against the observable behaviour, often without realising it.\n4. That's **Hyrum's Law**. Contracts reduce your obligations on paper, not in practice.\n5. Defences for next time:\n   - Avoid accidental guarantees (Go randomises map iteration order for this reason).\n   - Offer an explicit `sort=` parameter if order matters to people.\n   - Roll behaviour changes out gradually and announce them.",
+    "link": {
+      "title": "Hyrum's Law",
+      "url": "https://www.hyrumslaw.com/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does this deprecation use `stacklevel=2`?\n\n```python\ndef connect(host, port=None):\n    if port is None:\n        warnings.warn(\n            \"port will be required\",\n            DeprecationWarning,\n            stacklevel=2,\n        )\n```",
+    "options": [
+      {
+        "text": "It makes the warning appear twice so it's noticed",
+        "explanation": "`stacklevel` doesn't change how often the warning is issued."
+      },
+      {
+        "text": "It raises the warning to an error after two calls",
+        "explanation": "Turning warnings into errors is done with warning filters (`-W error`), not `stacklevel`."
+      },
+      {
+        "text": "It sets the warning's severity to level 2",
+        "explanation": "Python warnings have categories, not numeric severity levels."
+      },
+      {
+        "text": "It attributes the warning to the caller's line, which is the code that needs changing, rather than to the line inside `connect`",
+        "explanation": "Correct. With the default `stacklevel=1`, the warning would point at the `warnings.warn` line inside your library, which the user can't and shouldn't change."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `stacklevel` chooses which stack frame the warning is reported against.\n   - `1` (default): the line that calls `warnings.warn`, inside `connect`.\n   - `2`: the line that called `connect`, in the user's code.\n2. The user needs to find *their* call that omits `port`, so `2` is right.\n3. The message then looks like:\n\n```\napp.py:42: DeprecationWarning:\n  port will be required\n```\n\n4. If the deprecated function is reached through another wrapper inside your library, you'd use 3, and so on.",
+    "link": {
+      "title": "warnings — Python docs",
+      "url": "https://docs.python.org/3/library/warnings.html"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your library emits a `DeprecationWarning` from inside `mylib/client.py` using the default `stacklevel`. A user's application, `app.py`, calls the deprecated function, but when they run `python app.py` they see no warning. Why?",
+    "options": [
+      {
+        "text": "By default Python ignores `DeprecationWarning` unless it's triggered by code in `__main__`; here it's attributed to library code. Test runners like pytest show them",
+        "explanation": "Correct. PEP 565 (Python 3.7) shows deprecation warnings by default only when triggered directly by `__main__`. The warning was attributed to a frame inside the library, so the default filter hid it."
+      },
+      {
+        "text": "Warnings are only shown in debug builds of Python",
+        "explanation": "Warnings work in normal builds; what's shown depends on the active filters."
+      },
+      {
+        "text": "The user must call `warnings.enable()` first",
+        "explanation": "There's no such function. Visibility is controlled with filters (`-W`, `PYTHONWARNINGS`, `warnings.simplefilter`)."
+      },
+      {
+        "text": "`DeprecationWarning` is only shown once per Python installation",
+        "explanation": "The 'default' action shows a warning once per location per process, not once per installation."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Python's default filters ignore `DeprecationWarning`, with one exception (PEP 565): warnings attributed to `__main__` are shown.\n2. With `stacklevel=1`, the warning is attributed to a line in `mylib/client.py`, not `__main__`, so it's ignored.\n3. With `stacklevel=2` *and* the call coming directly from `app.py` (which runs as `__main__`), the user would see it.\n4. Ways users see them anyway:\n   - Test runners (pytest shows them in its summary).\n   - `python -W default app.py`.\n5. For warnings meant for application end users, Python recommends `FutureWarning`, which is shown by default.",
+    "link": {
+      "title": "PEP 565: Show DeprecationWarning in __main__",
+      "url": "https://peps.python.org/pep-0565/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A public function is called like this across many codebases:\n\n```python\nsend(addr, subj, body, True, False, 0)\n```\n\nWhich changes make it harder to misuse? Select **all** that apply.",
+    "options": [
+      {
+        "text": "Make the flags keyword-only: `send(addr, subj, body, *, html=False, track=False, timeout=10)`",
+        "explanation": "Correct. Call sites now read `html=True, track=False`, and swapping two booleans by position becomes impossible."
+      },
+      {
+        "text": "Replace `timeout=0` meaning 'wait forever' with a sensible finite default",
+        "explanation": "Correct. A safe default protects callers who don't think about it. (Python's `requests` has no default timeout, a well-known cause of hung processes.)"
+      },
+      {
+        "text": "Accept `\"html\"`, `\"HTML\"`, `\"Html\"` and `\"text/html\"` as a string format parameter",
+        "explanation": "This widens what callers can pass and invites typos that fail silently. An enum (`Format.HTML`) catches mistakes early."
+      },
+      {
+        "text": "Add type hints and a docstring stating units (`timeout` in seconds) and what's raised",
+        "explanation": "Correct. Types let tools catch wrong arguments; the docstring answers what callers can't see in the signature."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Read the call site as a stranger would: `True, False, 0`. Meaningless.\n\n1. **Keyword-only flags**: the call site explains itself.\n\n```python\nsend(addr, subj, body,\n     html=True, track=False)\n```\n\n2. **Safe defaults**: the default should be what most callers want. 'Hang forever' rarely is.\n3. **Types and docs**: say `timeout: float` in seconds and list the exceptions.\n4. Accepting many spellings is the opposite of 'hard to misuse'. And, under Hyrum's Law, every spelling you accept becomes one you must support forever.",
+    "link": {
+      "title": "Principle of least astonishment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Principle_of_least_astonishment"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A docs page titled **\"How to rotate your API keys\"** opens with four paragraphs on the history of the key system and the cryptography behind it, before reaching step 1. According to Diátaxis, what's wrong?",
+    "options": [
+      {
+        "text": "Nothing: more context is always better",
+        "explanation": "Context is valuable, but on a how-to page it gets in the way of a reader trying to complete a task."
+      },
+      {
+        "text": "It should be a tutorial instead",
+        "explanation": "A tutorial is for learning by doing as a newcomer. Someone rotating keys has a specific task; a how-to is the right type."
+      },
+      {
+        "text": "It mixes explanation into a how-to; move the background to a separate explanation page and link to it",
+        "explanation": "Correct. A reader of a how-to wants steps now. Explanation is valuable, but it belongs in its own page, which the how-to can link to."
+      },
+      {
+        "text": "It should be reference documentation",
+        "explanation": "Reference is for looking up facts (parameters, endpoints). Rotating keys is a goal with steps."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Identify the reader's goal from the title: *do a task* (rotate keys). That's a **how-to**.\n2. Identify what the page contains first: background and theory. That's **explanation**.\n3. Diátaxis says pages fail when they mix types: here the reader has to wade through theory to reach the steps.\n4. Fix:\n   - How-to page: prerequisites, numbered steps, how to verify.\n   - Separate 'How API key signing works' explanation page.\n   - A one-line link from the how-to to the explanation.",
+    "link": {
+      "title": "Diátaxis",
+      "url": "https://diataxis.fr/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your JSON API has always silently accepted requests with a misspelt field `\"quanity\"`, treating it as `\"quantity\"`. A new parser rejects unknown fields, and several clients break. In light of RFC 9413 and Hyrum's Law, what was the underlying mistake?",
+    "options": [
+      {
+        "text": "Rejecting unknown fields; APIs should always be liberal in what they accept",
+        "explanation": "That's the robustness principle taken at face value. RFC 9413 argues that this tolerance is exactly what made the misspelling part of your protocol."
+      },
+      {
+        "text": "Not versioning the parser",
+        "explanation": "Versioning would help manage the change, but the root mistake happened earlier: accepting malformed input at all."
+      },
+      {
+        "text": "Clients should have read the docs",
+        "explanation": "True in theory, but under Hyrum's Law the observed behaviour (typos work) mattered more than the docs."
+      },
+      {
+        "text": "Silently tolerating malformed input: once accepted, the tolerance became behaviour clients depended on. Rejecting it clearly from the start would have exposed client bugs immediately",
+        "explanation": "Correct. RFC 9413 notes that unchecked leniency accumulates into a de facto protocol that's hard to remove. A clear 400 error on day one would have made clients fix the typo."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Postel's principle: 'be liberal in what you accept'. Here that meant accepting a typo.\n2. Hyrum's Law: since the typo worked, clients shipped with it.\n3. Now the leniency is part of the real contract; removing it is a breaking change.\n4. RFC 9413 (Maintaining Robust Protocols, 2023) argues for addressing such deviations actively rather than silently tolerating them.\n5. Recovery options today:\n   - Accept both for a while, log uses of the old spelling, and warn clients (with a deprecation header).\n   - Then reject it in the next major API version.",
+    "link": {
+      "title": "RFC 9413: Maintaining Robust Protocols",
+      "url": "https://www.rfc-editor.org/rfc/rfc9413.html"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which design best \"makes illegal states unrepresentable\"?\n\n```python\n@dataclass\nclass Order:\n    status: str  # \"new\" | \"paid\" | ...\n    paid_at: datetime | None = None\n```\n\nBugs keep appearing where `status == \"paid\"` but `paid_at is None`.",
+    "options": [
+      {
+        "text": "Add a comment saying `paid_at` must be set when status is paid",
+        "explanation": "Comments aren't enforced. The illegal combination is still easy to construct."
+      },
+      {
+        "text": "Model each state as its own type, e.g. `NewOrder` and `PaidOrder(paid_at: datetime)`, so a paid order without a payment time can't be built",
+        "explanation": "Correct. The type now requires `paid_at` exactly when it's meaningful. Type checkers and constructors reject the bad state, so no runtime check is needed elsewhere."
+      },
+      {
+        "text": "Check `if o.status == \"paid\" and o.paid_at is None` everywhere orders are used",
+        "explanation": "Scattered checks are easy to forget and duplicate a rule across the codebase."
+      },
+      {
+        "text": "Make `paid_at` default to `datetime.now()`",
+        "explanation": "That hides the bug by inventing a payment time, even for orders that were never paid."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The current model permits 2 fields × many values, including nonsense combinations.\n2. Find the rule: 'paid ⇔ has a payment time'.\n3. Encode it in types:\n\n```python\n@dataclass(frozen=True)\nclass NewOrder:\n    id: int\n\n@dataclass(frozen=True)\nclass PaidOrder:\n    id: int\n    paid_at: datetime\n\nOrder = NewOrder | PaidOrder\n```\n\n4. A `PaidOrder` can't exist without `paid_at`. A `NewOrder` has no `paid_at` to get wrong.\n5. Bonus: `match` over `Order` makes each state's handling explicit.",
+    "link": {
+      "title": "A Philosophy of Software Design — John Ousterhout",
+      "url": "https://web.stanford.edu/~ouster/cgi-bin/book.php"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're reviewing this commit message. Which criticisms are valid? Select **all** that apply.\n\n```\nfixed stuff\n\nchanged the retry loop in client.py,\nrenamed some variables and also bumped\nthe requests version\n```",
+    "options": [
+      {
+        "text": "The subject doesn't say what was fixed; 'fixed stuff' is useless in `git log --oneline`",
+        "explanation": "Correct. A good subject (imperative, about 50 chars) says what the commit does: 'Cap retry backoff at 30 seconds'."
+      },
+      {
+        "text": "The body describes *how* (which file, renames) but not *why* the change was needed",
+        "explanation": "Correct. The diff already shows how. The message is the only place to record the reason (the bug, incident or requirement)."
+      },
+      {
+        "text": "It bundles unrelated changes (a fix, renames, a dependency bump) into one commit",
+        "explanation": "Correct. Mixed commits are hard to review, revert and bisect. Each logical change deserves its own commit."
+      },
+      {
+        "text": "Commit messages should never have a body",
+        "explanation": "Bodies are recommended for anything non-trivial; they're where the 'why' goes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Picture the reader: someone running `git blame` on the retry loop a year from now.\n2. They see 'fixed stuff' and learn nothing.\n3. The body tells them which file changed (they knew) but not why.\n4. If the requests bump caused a regression, reverting this commit also reverts the fix.\n5. Better: three commits, e.g.\n\n```\nCap retry backoff at 30 seconds\n\nUnbounded backoff left clients idle\nfor over 30 minutes after an outage.\nSee INC-482.\n```\n\nplus 'Rename retry loop variables' and 'Bump requests to 2.32'.",
+    "link": {
+      "title": "How to Write a Git Commit Message — Chris Beams",
+      "url": "https://cbea.ms/git-commit/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which docstring would most help a caller of this function?\n\n```python\ndef normalise(scores):\n    m = max(scores)\n    for i in range(len(scores)):\n        scores[i] /= m\n```",
+    "options": [
+      {
+        "text": "`\"\"\"Normalise the scores.\"\"\"`",
+        "explanation": "It restates the name. A caller still doesn't know the function mutates its argument, returns `None` or fails on some inputs."
+      },
+      {
+        "text": "`\"\"\"Loop over scores and divide each by the max.\"\"\"`",
+        "explanation": "This narrates the implementation. Callers need the contract (effects, return value, failure cases), not the loop."
+      },
+      {
+        "text": "`\"\"\"Scale scores in place so the max is 1.0. Returns None. Raises ValueError if empty, ZeroDivisionError if the max is 0.\"\"\"`",
+        "explanation": "Correct. It states the effect, that the list is mutated, the return value and the failure cases: everything a caller can't see from the signature."
+      },
+      {
+        "text": "No docstring; the code is self-explanatory",
+        "explanation": "The code is short, but a caller importing it sees only `normalise(scores)`. Mutation and failure modes are not obvious from the name."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "List what a caller can't tell from `normalise(scores)`:\n\n1. **Mutation**: it modifies the list in place. A caller expecting a new list would lose their original data.\n2. **Return value**: `None`. `x = normalise(s)` gives `None`.\n3. **Failures**:\n   - `max([])` raises `ValueError`.\n   - If the max is `0`, division raises `ZeroDivisionError`.\n4. A good docstring states the contract: effect, return, errors. It doesn't narrate the loop.\n5. Even better might be redesigning the API: return a new list (no surprising mutation), or name it `normalise_in_place`.",
+    "link": {
+      "title": "PEP 257: Docstring Conventions",
+      "url": "https://peps.python.org/pep-0257/"
+    }
+  }
+]

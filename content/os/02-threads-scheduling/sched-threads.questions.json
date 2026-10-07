@@ -1,0 +1,348 @@
+[
+  {
+    "id": "sched-threads-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these does each thread in a process get **its own copy** of?",
+    "options": [
+      {
+        "text": "The heap",
+        "explanation": "The heap is shared: memory one thread allocates with `malloc` (or any Python object it creates) is visible to every thread that has a pointer to it."
+      },
+      {
+        "text": "Global variables",
+        "explanation": "Globals live in the process's data segment, which all threads share. That is exactly why unprotected globals cause races."
+      },
+      {
+        "text": "The table of open file descriptors",
+        "explanation": "File descriptors belong to the process. If one thread opens a file, another thread can read from that descriptor, and closing it closes it for all."
+      },
+      {
+        "text": "The stack",
+        "explanation": "Correct. Each thread has its own stack holding its local variables and return addresses, because each thread is at a different point in its own chain of function calls."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask what a thread *is*: an independent sequence of execution. To run independently it needs:\n\n1. its own program counter (where it is in the code);\n2. its own registers;\n3. its own **stack**, because each thread is in a different chain of function calls with different local variables.\n\nEverything else (code, heap, globals, open files) belongs to the process and is shared. So the stack is the per-thread item.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Select **all** of the following that are shared by every thread of a single process.",
+    "options": [
+      {
+        "text": "Objects allocated on the heap",
+        "explanation": "Correct. There is one heap per process; any thread holding a pointer or reference can use the object."
+      },
+      {
+        "text": "Open file descriptors",
+        "explanation": "Correct. The file descriptor table belongs to the process (on Linux, threads are created with `CLONE_FILES`)."
+      },
+      {
+        "text": "The program counter",
+        "explanation": "Wrong: each thread is at its own point in the code, so each has its own program counter. Sharing it would mean they were one thread."
+      },
+      {
+        "text": "Global variables",
+        "explanation": "Correct. Globals live in the shared data segment, which is why they need protection when several threads write them."
+      },
+      {
+        "text": "The CPU registers",
+        "explanation": "Wrong: registers are part of each thread's private execution context; the kernel saves and restores them on every switch."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Sort each item into \"process resource\" or \"execution context\":\n\n| Item | Belongs to |\n|---|---|\n| Heap | Process (shared) |\n| File descriptors | Process (shared) |\n| Globals | Process (shared) |\n| Program counter | Thread (private) |\n| Registers | Thread (private) |\n\nThe execution context (PC, registers, stack) is what makes a thread a thread. Everything else is shared.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Three threads each run `work()` once, concurrently. What does each thread print?\n\n```c\n#include <stdatomic.h>\natomic_int hits = 0;\n\nvoid *work(void *arg) {\n    int mine = 0;\n    mine++;\n    atomic_fetch_add(&hits, 1);\n    printf(\"mine=%d\\n\", mine);\n    return NULL;\n}\n```",
+    "options": [
+      {
+        "text": "`mine=1`, `mine=2`, `mine=3` in some order",
+        "explanation": "This would be true only if `mine` were shared. It is a local variable, so each thread has its own copy on its own stack."
+      },
+      {
+        "text": "`mine=1` three times",
+        "explanation": "Correct. `mine` lives on each thread's private stack, starts at 0 and is incremented once, so every thread prints 1. It is `hits` that is shared."
+      },
+      {
+        "text": "`mine=3` three times",
+        "explanation": "That assumes all three increments land on the same variable before anyone prints. Locals are per thread, so no thread ever sees another's increment."
+      },
+      {
+        "text": "It is unpredictable because of a data race on `mine`",
+        "explanation": "There is no race on mine, and the shared hits update uses an atomic operation. Each call prints its own mine value."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each call has its own automatic mine variable, increments it from 0 to 1 and prints mine=1. The shared hits counter is now atomic, so three completed calls increment it to 3 without a data race. The original non-atomic hits++ would make the entire C program undefined, even though mine itself was not shared.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A runtime uses the **N:1** model: 20 user-level threads multiplexed onto one kernel thread. One user thread calls a blocking `read()` on a socket that has no data yet. What happens?",
+    "options": [
+      {
+        "text": "Only that user thread waits; the runtime switches to another user thread",
+        "explanation": "That is how M:N runtimes such as Go behave, because they use non-blocking I/O or extra kernel threads. In plain N:1, the kernel only sees one thread, and it is now blocked."
+      },
+      {
+        "text": "The kernel schedules another of the 20 user threads instead",
+        "explanation": "The kernel doesn't know the 20 user threads exist. It sees a single kernel thread, which is asleep in `read()`."
+      },
+      {
+        "text": "All 20 user threads stop until the read returns",
+        "explanation": "Correct. The one kernel thread is blocked inside the kernel, so the runtime's scheduler never gets to run, and no user thread can make progress."
+      },
+      {
+        "text": "The read fails immediately with EAGAIN",
+        "explanation": "Only a socket set to non-blocking mode returns EAGAIN. The question says a blocking `read()`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In N:1, the kernel sees **one** schedulable entity.\n2. A blocking `read()` with no data puts that kernel thread to sleep inside the kernel.\n3. The user-level scheduler is just code running on that same kernel thread, so it can't run either.\n4. All 20 user threads are stuck until data arrives.\n\nThis is the classic weakness of N:1, and why M:N runtimes wrap blocking calls (non-blocking sockets plus `epoll`, or handing off to another kernel thread).",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  },
+  {
+    "id": "sched-threads-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Linux, process 1234 has 5 threads. The **main** thread calls `getpid()` and `gettid()`, and another thread calls `getpid()`. What values do they see?",
+    "options": [
+      {
+        "text": "Main: 1234 and 1234. Other thread: 1234",
+        "explanation": "Correct. The PID is really the thread group ID, which equals the TID of the first (main) thread. Every thread in the group gets 1234 from `getpid()`; other threads have their own TIDs."
+      },
+      {
+        "text": "Main: 1234 and 0. Other thread: 1235",
+        "explanation": "TIDs are never 0, and `getpid()` returns the thread group ID for every thread, not a per-thread number."
+      },
+      {
+        "text": "Main: 1234 and 1. Other thread: 1234",
+        "explanation": "Thread IDs are not numbered from 1 within a process; they come from the same system-wide ID space as PIDs."
+      },
+      {
+        "text": "Main: 1234 and 1234. Other thread: a different number",
+        "explanation": "`getpid()` returns the same thread group ID in every thread. Only `gettid()` differs between threads."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In Linux every thread is a task with its own ID (the TID).\n2. Threads of one process form a **thread group**; the group's ID (TGID) is what user space calls the PID.\n3. The TGID is the TID of the first task in the group, the main thread. So in the main thread `getpid() == gettid() == 1234`.\n4. Another thread has its own TID (say 1240), but `getpid()` still returns 1234.\n\nYou can see the TIDs with `ls /proc/1234/task/`.",
+    "link": {
+      "title": "clone(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/clone.2.html"
+    }
+  },
+  {
+    "id": "sched-threads-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A CPU-bound program creates 32 user-level threads with an **N:1** threads library and runs on an 8-core machine. At best, how much faster is it than running the same work in a single thread?",
+    "options": [
+      {
+        "text": "8 times faster",
+        "explanation": "That would need 8 kernel threads on 8 cores. N:1 maps everything onto a single kernel thread, which can be on only one core at a time."
+      },
+      {
+        "text": "32 times faster",
+        "explanation": "You can't exceed the number of cores even with 1:1, and here there is only one kernel thread."
+      },
+      {
+        "text": "4 times faster, because of hyper-threading",
+        "explanation": "Hyper-threading helps only when there are several kernel threads to place on the logical CPUs; with N:1 there is just one."
+      },
+      {
+        "text": "About the same speed, or slightly slower",
+        "explanation": "Correct. All user threads share one kernel thread, so only one core is ever used. The extra switching makes it, if anything, slightly slower."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Parallelism requires several **kernel** threads, because the kernel is what places threads on cores.\n2. N:1 gives the kernel exactly one thread to schedule.\n3. One kernel thread can run on one core at a time, so the maximum speedup over a single thread is 1×.\n4. User-level switches cost a little, so it may even be slightly slower.\n\nN:1 is useful for structuring concurrent code (and for very cheap switches) but not for using multiple cores.",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  },
+  {
+    "id": "sched-threads-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** correct reasons why switching between two threads of the **same** process is usually cheaper than switching between two different processes.",
+    "options": [
+      {
+        "text": "The page tables stay the same, so there is no address-space switch",
+        "explanation": "Correct. Both threads use the same address space, so the kernel doesn't load a new page-table root."
+      },
+      {
+        "text": "Cached address translations in the TLB stay valid",
+        "explanation": "Correct. Because the address space doesn't change, the TLB entries still apply, avoiding a burst of TLB misses afterwards."
+      },
+      {
+        "text": "Threads don't have registers that need saving",
+        "explanation": "Wrong: every thread has its own registers and the kernel must save and restore them on each switch, just as for processes."
+      },
+      {
+        "text": "The kernel is not involved in switching between kernel threads",
+        "explanation": "Wrong: kernel threads are scheduled by the kernel, so a switch still involves entering the kernel. Only user-level threads avoid it."
+      },
+      {
+        "text": "The CPU caches are more likely to hold useful data",
+        "explanation": "Correct. The threads share code and often data, so the incoming thread may find some of its working set already in cache."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Both cases save/restore thread state. Sharing an address space can avoid changing memory maps, and shared code/data can preserve useful locality. Translation validity is not guaranteed cache residency; PCID can preserve process translations too. These are possible savings, not a universal ordering of measured switch latency.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker in a 50-thread process incurs a memory fault that generates SIGSEGV, with its default terminating disposition unchanged. What happens?",
+    "options": [
+      {
+        "text": "The whole process, including all 50 threads, is killed",
+        "explanation": "Correct. Threads share one address space and one set of signal dispositions, so a fatal signal in any thread terminates the entire process."
+      },
+      {
+        "text": "Only that worker thread dies; the other 49 keep serving",
+        "explanation": "That is the isolation processes give you, not threads. A SIGSEGV's default action terminates the whole process."
+      },
+      {
+        "text": "The thread is restarted automatically by the threads library",
+        "explanation": "pthreads has no supervisor that restarts crashed threads. The default action for SIGSEGV kills the process."
+      },
+      {
+        "text": "Nothing, because each thread has its own private memory",
+        "explanation": "Threads share memory; only their stacks are separate, and even those aren't protected. A NULL dereference raises SIGSEGV for the process."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "SIGSEGV with its ordinary default action terminates the process, ending all 50 threads. Separate processes provide a memory-isolation boundary, but shared resources and recovery policy can still couple failures; a worker crash does not guarantee that every other service process continues uninterrupted.",
+    "link": {
+      "title": "pthreads(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+    }
+  },
+  {
+    "id": "sched-threads-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 64-bit Linux service requests 10,000 threads, each with an explicitly configured 8 MiB user stack. It has 32 GiB of RAM. Which statement correctly distinguishes virtual reservations from physical memory?",
+    "options": [
+      {
+        "text": "It needs about 80 GB of RAM, so thread creation fails partway through",
+        "explanation": "This confuses reserved virtual memory with physical memory. Stacks are mapped lazily; untouched pages use no RAM."
+      },
+      {
+        "text": "User stacks reserve about 78.125 GiB of address space; physical memory is demand-backed, but creation can still fail because of resource or commit limits",
+        "explanation": "10,000 × 8 MiB = 80,000 MiB = 78.125 GiB of virtual stack space, excluding guards and other mappings. Actual resident and kernel memory, commit policy and task limits determine feasibility."
+      },
+      {
+        "text": "All 10,000 threads share one 8 MB stack, so it uses only 8 MB",
+        "explanation": "Each thread needs its own stack; sharing one would mean threads overwrite each other's local variables."
+      },
+      {
+        "text": "It is impossible: Linux allows at most 1,024 threads per process",
+        "explanation": "There is no 1,024 limit. Limits come from settings such as `threads-max`, `pid_max`, `ulimit -u` and memory, and are typically far higher."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "User-stack reservations total 78.125 GiB. For an explicitly hypothetical 20 KiB touched user stack plus 16 KiB kernel stack per thread, that subtotal is 360,000 KiB = 351.5625 MiB; task metadata, guards, mappings and other memory add costs. This does not establish that 10,000 creations succeed: check limits, commit policy and workload.",
+    "link": {
+      "title": "pthreads(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+    }
+  },
+  {
+    "id": "sched-threads-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Thread A calls `fork()` while thread B, in the same process, is inside a logging library's `log()` function holding the library's internal mutex. In the child, the single thread then calls `log()`. What is the risk?",
+    "options": [
+      {
+        "text": "None: the child gets fresh copies of all locks in the unlocked state",
+        "explanation": "`fork()` copies memory as-is, so a lock that was held is copied in its held state. Nothing resets it."
+      },
+      {
+        "text": "The child deadlocks: it has a copy of the lock in its held state, but thread B was not copied, so nothing will ever release it",
+        "explanation": "Correct. Only the calling thread exists in the child. The lock B held is still marked as held in the child's memory, and its owner is gone."
+      },
+      {
+        "text": "Thread B is copied too and finishes its `malloc`, releasing the lock",
+        "explanation": "POSIX `fork()` duplicates only the calling thread. Thread B doesn't exist in the child."
+      },
+      {
+        "text": "The kernel detects the held lock and makes `fork()` fail",
+        "explanation": "The kernel knows nothing about user-space locks like a library's mutex. `fork()` succeeds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `fork()` makes the child's memory a copy-on-write copy of the parent's, including the bytes that represent locks.\n2. Only the thread that called `fork()` is duplicated.\n3. At the instant of the fork, B held the logging mutex, so the copied mutex says \"held\".\n4. In the child, `log()` tries to take the mutex and waits forever for an owner that doesn't exist.\n\n(glibc protects its own `malloc` locks with special fork handling, but an arbitrary library's locks are not protected.) The rule: after `fork()` in a multithreaded program, call only async-signal-safe functions until `exec()`. Tools like `posix_spawn` avoid the problem.",
+    "link": {
+      "title": "fork(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/fork.2.html"
+    }
+  },
+  {
+    "id": "sched-threads-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Go service on Linux has 100,000 goroutines, each waiting on its own TCP connection most of the time. `GOMAXPROCS` is 4. Roughly how many OS threads does the process use?",
+    "options": [
+      {
+        "text": "About 100,000: one per goroutine",
+        "explanation": "That would be a 1:1 model. Go multiplexes goroutines onto a small number of OS threads."
+      },
+      {
+        "text": "Exactly 1: Go runs all goroutines on a single thread",
+        "explanation": "That would be N:1, and Go would be unable to use more than one core. Go runs goroutines on up to GOMAXPROCS threads at once."
+      },
+      {
+        "text": "GOMAXPROCS limits simultaneous Go execution to 4; network waiters are parked, but total OS-thread count is not determined by these facts",
+        "explanation": "Go can multiplex many network waiters without one OS thread each. Runtime work, blocking calls, cgo and locked threads affect the total; four is an execution-parallelism limit."
+      },
+      {
+        "text": "About 25,000: one OS thread per 4 goroutines",
+        "explanation": "There is no fixed ratio of goroutines to threads. Threads track parallelism (GOMAXPROCS) plus threads stuck in blocking syscalls, not goroutine count."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Four Ps limit simultaneous ordinary Go execution to four threads. Network goroutines can park on the Linux netpoller without dedicating one thread to each connection. The total thread count also depends on runtime, blocking calls and thread-affinity requirements, so it cannot be calculated from the supplied goroutine count and GOMAXPROCS alone.",
+    "link": {
+      "title": "Container-aware GOMAXPROCS — The Go Blog",
+      "url": "https://go.dev/blog/container-aware-gomaxprocs"
+    }
+  }
+]

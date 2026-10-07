@@ -1,0 +1,2121 @@
+{
+  "module": "os-threads",
+  "author": {
+    "agent": "historical author unknown",
+    "date": "2026-10-05",
+    "note": "Audit bookkeeping date only."
+  },
+  "verifier": {
+    "agent": "audit_systems",
+    "date": "2026-10-05",
+    "independent": true,
+    "sources": [
+      "https://catless.ncl.ac.uk/Risks/19.54.html",
+      "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html",
+      "https://docs.kernel.org/locking/rt-mutex.html",
+      "https://docs.kernel.org/scheduler/sched-bwc.html",
+      "https://docs.kernel.org/scheduler/sched-deadline.html",
+      "https://docs.kernel.org/scheduler/sched-design-CFS.html",
+      "https://docs.kernel.org/scheduler/sched-ext.html",
+      "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+      "https://docs.python.org/3/howto/free-threading-python.html",
+      "https://docs.python.org/3/library/asyncio-task.html",
+      "https://docs.python.org/3/library/concurrent.futures.html",
+      "https://go.dev/blog/container-aware-gomaxprocs",
+      "https://go.dev/src/runtime/HACKING",
+      "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+      "https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/",
+      "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling",
+      "https://man7.org/linux/man-pages/man2/fork.2.html",
+      "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+      "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+      "https://man7.org/linux/man-pages/man7/sched.7.html",
+      "https://numpy.org/doc/stable/reference/thread_safety.html",
+      "https://openjdk.org/jeps/444",
+      "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+      "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+      "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/core.c",
+      "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/deadline.c",
+      "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+    ]
+  },
+  "summary": {
+    "claimsChecked": 66,
+    "errorsCorrected": 152,
+    "hedgedOrRemoved": 73
+  },
+  "countingMethod": "claimsChecked counts question-answer propositions, correction records include repeated fields, qualifications and formatting rather than distinct false facts.",
+  "reviewScope": "Full six lesson/66 question semantic review, selected primary checks, 40 runtime/model assertions.",
+  "corrections": [
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "Start three threads running `work` and each prints `mine=1`, because each has its own `mine`. They all increment the one `hits`. Usually it ends at 3, but because `hits++` is a read, an add and a write, two threads can interleave and lose an update.",
+      "correction": "Each call has its own `mine`, but the unsynchronised accesses to shared `hits` create a C data race and therefore undefined behaviour: this program has no guaranteed output. The read/add/write lost-update model illustrates one possible failure, not the full language semantics. Use an atomic counter or lock before relying on the output.",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "A segmentation fault, an uncaught signal or a call to `exit()` in any thread terminates the whole process, every thread with it.",
+      "correction": "A signal with a terminating disposition (such as ordinary default-action SIGSEGV), or a call to exit(), terminates the whole process. Not every uncaught signal has a terminating default action.",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "| Create / switch | Syscall, around µs | Function call, ~100s of ns |",
+      "correction": "| Create / switch | OS-managed work | Runtime-managed work |",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "fork():   clone() sharing nothing",
+      "correction": "fork():   private address space",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "`GOMAXPROCS` (by default the number of CPUs available) sets how many can execute Go code at once.",
+      "correction": "`GOMAXPROCS` limits simultaneous Go execution. Go 1.25 introduced defaults that also consider container CPU limits; explicit settings and compatibility controls can override that policy.",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "so one busy goroutine cannot starve the others.",
+      "correction": "improving responsiveness for ordinary tight loops; this is not an unconditional scheduling-latency guarantee.",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "Tens of thousands of OS threads are workable; millions are not.",
+      "correction": "The feasible thread count depends on resource limits, stack configuration and workload.",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "On 8 cores, 8 CPU-bound threads is roughly the useful maximum. More just adds switching.",
+      "correction": "For CPU-bound work, start from available logical CPUs and measure; SMT, quotas, memory bandwidth and serial work affect the useful concurrency.",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "## Key takeaways",
+      "correction": "> [!note] Content gap: thread capacity and timing\n> No reproducible benchmark supports universal thread creation/switch timings, maximum thread counts or a fixed Go OS-thread count. These figures are omitted; limits and costs depend on runtime, platform and workload.\n\n## Key takeaways",
+      "reason": "Correct C data-race semantics, shared resources and runtime/performance assumptions.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q3",
+      "field": "prompt",
+      "option": null,
+      "original": "Three threads each run `work()` once, concurrently. What does each thread print?\n\n```c\nint hits = 0;\n\nvoid *work(void *arg) {\n    int mine = 0;\n    mine++;\n    hits++;\n    printf(\"mine=%d\\n\", mine);\n    return NULL;\n}\n```",
+      "correction": "Three threads each run `work()` once, concurrently. What does each thread print?\n\n```c\n#include <stdatomic.h>\natomic_int hits = 0;\n\nvoid *work(void *arg) {\n    int mine = 0;\n    mine++;\n    atomic_fetch_add(&hits, 1);\n    printf(\"mine=%d\\n\", mine);\n    return NULL;\n}\n```",
+      "reason": "Remove undefined data race so private-local output has a defined answer.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q3",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. `mine` is declared inside the function, so it is allocated on the **calling thread's stack**.\n2. Three threads means three stacks, so three separate `mine` variables, each starting at 0.\n3. Each thread increments its own to 1 and prints `mine=1`.\n4. `hits` is global, so all three threads increment the same variable. Its final value is usually 3 but can be lower if two `hits++` operations interleave (read, add, write), losing an update. That race is the subject of the next module.",
+      "correction": "Each call has its own automatic mine variable, increments it from 0 to 1 and prints mine=1. The shared hits counter is now atomic, so three completed calls increment it to 3 without a data race. The original non-atomic hits++ would make the entire C program undefined, even though mine itself was not shared.",
+      "reason": "Do not guarantee print output in a program with unrelated undefined behaviour.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q3",
+      "field": "explanation",
+      "option": 3,
+      "original": "There is no race on `mine`: no two threads touch the same `mine`. The race is on the global `hits`, which isn't printed.",
+      "correction": "There is no race on mine, and the shared hits update uses an atomic operation. Each call prints its own mine value.",
+      "reason": "Keep distractor consistent with repaired example.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q7",
+      "field": "workedExample",
+      "option": null,
+      "original": "What a context switch must do:\n\n1. Save the old thread's registers and restore the new one's. Needed for **both** cases.\n2. Switch the address space (page-table root) if it differs. Needed only between processes.\n3. Afterwards, refill TLB and caches with the new task's data. Cheaper if the address space and data are shared.\n\nSo the savings come from steps 2 and 3. Register save/restore and entering the kernel happen either way. (CPU features like PCID reduce the TLB cost of process switches too, but same-process switches still win.)",
+      "correction": "Both cases save/restore thread state. Sharing an address space can avoid changing memory maps, and shared code/data can preserve useful locality. Translation validity is not guaranteed cache residency; PCID can preserve process translations too. These are possible savings, not a universal ordering of measured switch latency.",
+      "reason": "Same-process switches do not universally win.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q8",
+      "field": "prompt",
+      "option": null,
+      "original": "A web server handles requests on 50 worker threads in one process. A bug in one request handler dereferences a NULL pointer. What happens?",
+      "correction": "A worker in a 50-thread process incurs a memory fault that generates SIGSEGV, with its default terminating disposition unchanged. What happens?",
+      "reason": "Null dereference is undefined in C; state the actual delivered signal.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q8",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Dereferencing NULL triggers a page fault the kernel can't satisfy, so it sends **SIGSEGV**.\n2. Signal dispositions are per process, and the default for SIGSEGV is to terminate the process (with a core dump).\n3. All threads belong to that process, so all 50 die.\n\nThis is why some servers (e.g. classic Apache prefork, PostgreSQL, Chrome's renderers) use processes for isolation: a crash takes down one worker, not everything.",
+      "correction": "SIGSEGV with its ordinary default action terminates the process, ending all 50 threads. Separate processes provide a memory-isolation boundary, but shared resources and recovery policy can still couple failures; a worker crash does not guarantee that every other service process continues uninterrupted.",
+      "reason": "Remove overly broad crash-isolation claims about PostgreSQL/browser implementations.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q9",
+      "field": "prompt",
+      "option": null,
+      "original": "A 64-bit Linux service creates 10,000 threads, each with the default 8 MB stack size. The machine has 32 GB of RAM. Which statement is most accurate?",
+      "correction": "A 64-bit Linux service requests 10,000 threads, each with an explicitly configured 8 MiB user stack. It has 32 GiB of RAM. Which statement correctly distinguishes virtual reservations from physical memory?",
+      "reason": "Stack limit is not universally 8MB, and successful creation is not implied.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q9",
+      "field": "text",
+      "option": 1,
+      "original": "It reserves about 80 GB of virtual address space, but physical memory is only used for stack pages actually touched (plus a small kernel stack per thread), so it typically works",
+      "correction": "User stacks reserve about 78.125 GiB of address space; physical memory is demand-backed, but creation can still fail because of resource or commit limits",
+      "reason": "Correct units and remove guaranteed feasibility.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q9",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. 10,000 × 8 MB ≈ 80 GB of *virtual* reservations, tiny compared with a 64-bit address space. If each thread only touches a few tens of KB of stack, RSS stays in the hundreds of MB.",
+      "correction": "10,000 × 8 MiB = 80,000 MiB = 78.125 GiB of virtual stack space, excluding guards and other mappings. Actual resident and kernel memory, commit policy and task limits determine feasibility.",
+      "reason": "Correct virtual-memory arithmetic and necessary limits.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q9",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Virtual reservation: 10,000 × 8 MB = 80,000 MB, about 80 GB.\n2. A 64-bit process has roughly 128 TB of user address space, so 80 GB of reservations fits easily.\n3. Linux maps stack pages on demand. A thread that uses 20 KB of stack has about 5 pages (4 KB each) of real memory.\n4. Each thread also needs a kernel stack (16 KB on x86-64) and a `task_struct`:\n\n```\n10,000 × (20 KB user + 16 KB kernel)\n  ≈ 360 MB physical\n```\n\nSo it works, but it is still heavy: scheduling 10,000 threads, and any thread that does use deep recursion consumes real memory. Lowering the stack size with `pthread_attr_setstacksize` or using an event loop or goroutines are common fixes.",
+      "correction": "User-stack reservations total 78.125 GiB. For an explicitly hypothetical 20 KiB touched user stack plus 16 KiB kernel stack per thread, that subtotal is 360,000 KiB = 351.5625 MiB; task metadata, guards, mappings and other memory add costs. This does not establish that 10,000 creations succeed: check limits, commit policy and workload.",
+      "reason": "Correct units and avoid unsupported thread-capacity claim.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q11",
+      "field": "text",
+      "option": 2,
+      "original": "A small number: around 4 running Go code plus a handful for the runtime and any blocking system calls",
+      "correction": "GOMAXPROCS limits simultaneous Go execution to 4; network waiters are parked, but total OS-thread count is not determined by these facts",
+      "reason": "Total Go thread count is not fixed by GOMAXPROCS or goroutine count.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q11",
+      "field": "explanation",
+      "option": 2,
+      "original": "Correct. Goroutines waiting for network data are parked by the runtime's netpoller (epoll on Linux), and don't occupy a thread. Only runnable goroutines need one of the 4 Ps.",
+      "correction": "Go can multiplex many network waiters without one OS thread each. Runtime work, blocking calls, cgo and locked threads affect the total; four is an execution-parallelism limit.",
+      "reason": "Avoid unsupported small fixed number estimate.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.questions.json",
+      "questionId": "sched-threads-q11",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Go is M:N: many goroutines (G) run on OS threads (M), and `GOMAXPROCS` sets how many processors (P) can execute Go code at once, here 4.\n2. A goroutine reading from a socket with no data is **parked**. The runtime registers the socket with `epoll` and moves on. No OS thread waits.\n3. When data arrives, the netpoller makes the goroutine runnable again and one of the 4 Ps runs it.\n4. Extra threads exist for the runtime (e.g. `sysmon`) and for goroutines inside genuinely blocking syscalls such as some file I/O.\n\nSo expect around 4 plus a handful, not anything near 100,000.",
+      "correction": "Four Ps limit simultaneous ordinary Go execution to four threads. Network goroutines can park on the Linux netpoller without dedicating one thread to each connection. The total thread count also depends on runtime, blocking calls and thread-affinity requirements, so it cannot be calculated from the supplied goroutine count and GOMAXPROCS alone.",
+      "reason": "Distinguish parallelism from total thread count.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs",
+        "https://go.dev/src/runtime/HACKING",
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html",
+        "https://man7.org/linux/man-pages/man2/fork.2.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "#define NT 4",
+      "correction": "#define NT 4\n_Static_assert(sizeof(long) >= 8,\n               \"needs 64-bit long\");",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "    long *data = malloc(LEN * sizeof *data);",
+      "correction": "    long *data = malloc(LEN * sizeof *data);\n    if (!data) return 1;",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "        pthread_join(tid[t], NULL);",
+      "correction": "        int rc = pthread_join(tid[t], NULL);\n        if (rc != 0) return 1;",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "**pthreads functions return an error number**",
+      "correction": "**Lifecycle calls such as create/join return an error number**",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "The four `struct job`s sit next to each other in memory, probably on the same 64-byte cache line.",
+      "correction": "The structs are adjacent; result fields from different structs may share a cache line depending on alignment and layout.",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "or the value cast through `intptr_t`.",
+      "correction": "or a platform-supported value-through-pointer convention (not a universally portable integer transport).",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "Creating a thread costs a system call, a stack allocation and some scheduler work, typically tens of microseconds.",
+      "correction": "Creating a thread involves allocation and runtime/OS work; no reproducible creation-time benchmark is supplied here.",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "Nearly every serious server works this way:",
+      "correction": "Examples include",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "This prints `[0, 1, 4, 9, 16] 1.0s`.",
+      "correction": "The values are `[0, 1, 4, 9, 16]`; the elapsed-time suffix is machine-dependent and should be near or above the ideal one-second schedule.",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "Python's `ThreadPoolExecutor` defaults to `min(32, cpu_count + 4)` workers, a compromise aimed at I/O-bound work.",
+      "correction": "Since Python 3.13, ThreadPoolExecutor defaults to `min(32, (os.process_cpu_count() or 1) + 4)`, rather than the earlier os.cpu_count-based formula.",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "CPython (the standard Python interpreter) has a **Global Interpreter Lock**",
+      "correction": "A GIL-enabled CPython interpreter has a **Global Interpreter Lock**",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "On CPython 3.14 this usually prints something like `3198334` instead of `4000000`, a different number each run (and occasionally, by luck, the right one).",
+      "correction": "This is a race demonstration, not a reproducible output guarantee. Depending on build, scheduling and implementation, it may lose updates or print the expected count; a passing run does not establish correctness.",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "Individual operations on built-in types implemented in C, such as `list.append` or `dict[key] = value`, are atomic with respect to other threads. Sequences of them, like \"check if key exists, then insert\", are not.",
+      "correction": "Some simple built-in operations have useful implementation-level locking or atomicity, but callbacks, custom key methods and free-threaded builds complicate the rules. Use documented guarantees and explicit synchronisation for shared invariants; check-then-insert is not automatically atomic.",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "pthreads calls return error numbers instead of setting `errno`.",
+      "correction": "Many pthread lifecycle calls report errors directly rather than through errno.",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "## Key takeaways",
+      "correction": "> [!note] Content gap: runtime measurements\n> No reproducible record supports exact thread-creation timing, a particular racy counter output, false-sharing slowdown or ideal pool speed-up. Examples show mechanisms; timing and capacity must be measured for the chosen runtime and workload.\n\n## Key takeaways",
+      "reason": "Correct code portability/error checks, runtime defaults and unsupported measurements.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q4",
+      "field": "prompt",
+      "option": null,
+      "original": "This program prints four numbers. Which output is possible?\n\n```c\nvoid *f(void *arg) {\n    printf(\"%d\\n\", *(int *)arg);\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t[4];\n    int i;\n    for (i = 0; i < 4; i++)\n        pthread_create(&t[i], NULL,\n                       f, &i);\n    for (int j = 0; j < 4; j++)\n        pthread_join(t[j], NULL);\n}\n```",
+      "correction": "What correctness problem does this code have?\n\n```c\nvoid *f(void *arg) {\n    printf(\"%d\\n\", *(int *)arg);\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t[4];\n    int i;\n    for (i = 0; i < 4; i++)\n        pthread_create(&t[i], NULL,\n                       f, &i);\n    for (int j = 0; j < 4; j++)\n        pthread_join(t[j], NULL);\n}\n```",
+      "reason": "A C data race does not have a bounded set of outputs.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q4",
+      "field": "text",
+      "option": 0,
+      "original": "Something like `2 2 4 3`, with duplicates and even 4",
+      "correction": "All threads receive the same changing i; concurrent unsynchronised reads and writes cause undefined behaviour",
+      "reason": "State C data-race consequence, not only surprising numbers.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q4",
+      "field": "explanation",
+      "option": 0,
+      "original": "Correct. Every thread dereferences the one shared `i`. By the time a thread runs, the loop may have advanced, so values repeat and a thread can see 4, the value after the loop ends.",
+      "correction": "Duplicate or unexpected numbers can occur in ordinary runs, but the C language guarantees no output once the read/write data race occurs.",
+      "reason": "Data race is undefined, not merely nondeterministic interleaving.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q4",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. `&i` is the address of the single variable `i` in `main`'s stack frame.\n2. All four threads get that same pointer.\n3. Each thread reads `*arg` whenever it gets scheduled, and the loop keeps incrementing `i` in the meantime.\n4. Typical runs:\n\n```\n2 2 4 3\n3 3 3 4\n```\n\n5. The read in `f` also races with the write in the loop, so strictly it is a data race.\n\nFix: give each thread its own slot, e.g. `int ids[4]; ids[i] = i;` and pass `&ids[i]`.",
+      "correction": "The threads receive &i rather than copies of its value. The loop writes i while workers may read it without synchronisation, so there is a data race and undefined behaviour. Give each thread a distinct initialised element, pass its address, and keep that array alive until all joins complete.",
+      "reason": "Remove invented exact racy output as a guarantee.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q8",
+      "field": "prompt",
+      "option": null,
+      "original": "You have a pure-Python, CPU-bound image filter to run over 10,000 images on an 8-core machine, using standard CPython. Which approach is most likely to give close to an 8× speed-up?",
+      "correction": "For independent pure-Python CPU-bound image tasks in one GIL-enabled CPython interpreter, which option can use multiple CPU cores, provided task sizes amortise startup and data-transfer overhead?",
+      "reason": "Parallel-capable architecture does not guarantee near8x speedup.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q9",
+      "field": "prompt",
+      "option": null,
+      "original": "What happens when you run this?\n\n```python\nfrom concurrent.futures import (\n    ThreadPoolExecutor)\n\npool = ThreadPoolExecutor(max_workers=2)\n\ndef child():\n    return 1\n\ndef parent():\n    f = pool.submit(child)\n    return f.result()\n\nfs = [pool.submit(parent)\n      for _ in range(2)]\nprint([f.result() for f in fs])\n```",
+      "correction": "What happens when you run this?\n\n```python\nfrom concurrent.futures import (\n    ThreadPoolExecutor)\nfrom threading import Barrier\n\npool = ThreadPoolExecutor(max_workers=2)\nbarrier = Barrier(2)\n\ndef child():\n    return 1\n\ndef parent():\n    barrier.wait()\n    f = pool.submit(child)\n    return f.result()\n\nfs = [pool.submit(parent)\n      for _ in range(2)]\nprint([f.result() for f in fs])\n```",
+      "reason": "Original schedule could execute child before second parent, so deadlock was possible rather than guaranteed; barrier makes the question deterministic.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q9",
+      "field": "workedExample",
+      "option": null,
+      "original": "Trace it:\n\n1. Two `parent` tasks are submitted; the two workers pick them up.\n2. Each `parent` submits a `child`. Both children go into the queue.\n3. Each `parent` then blocks in `f.result()` waiting for its child.\n4. A child can only run on a free worker, but both workers are blocked inside `parent`.\n5. Nobody can make progress: deadlock.\n\nWith 3 workers it would work, which is why this bug often hides until load increases. Fixes: a separate pool for child tasks, not blocking inside tasks (compose futures or use `asyncio`), or doing the child work inline.",
+      "correction": "Trace it:\n\n1. Both parent tasks reach the barrier, ensuring they occupy the two workers before either submits its child.\n2. Each `parent` submits a `child`. Both children go into the queue.\n3. Each `parent` then blocks in `f.result()` waiting for its child.\n4. A child can only run on a free worker, but both workers are blocked inside `parent`.\n5. Nobody can make progress: deadlock.\n\nWith 3 workers it would work, which is why this bug often hides until load increases. Fixes: a separate pool for child tasks, not blocking inside tasks (compose futures or use `asyncio`), or doing the child work inline.",
+      "reason": "Match worked trace to guaranteed deadlock trigger.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q10",
+      "field": "prompt",
+      "option": null,
+      "original": "Four threads each increment their own element of a shared array 100 million times. On 4 cores this runs **slower** than doing all the work in one thread. Why?\n\n```c\nlong counts[4];\n\nvoid *work(void *arg) {\n    int me = *(int *)arg;\n    for (long i = 0; i < 100000000;\n         i++)\n        counts[me]++;\n    return NULL;\n}\n```",
+      "correction": "Assume 64-byte cache lines, 8-byte long, distinct valid me values and repeated memory accesses as shown. Which cache-coherence problem can make this four-thread loop slower?\n\n```c\n_Alignas(64) volatile long counts[4];\n\nvoid *work(void *arg) {\n    int me = *(int *)arg;\n    for (long i = 0; i < 100000000;\n         i++)\n        counts[me]++;\n    return NULL;\n}\n```",
+      "reason": "Force alignment/repeated accesses; original loop may collapse to one addition and array may cross cache-line boundary.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q10",
+      "field": "explanation",
+      "option": 1,
+      "original": "Creating four threads takes microseconds; the loop does 400 million increments. The overhead is negligible.",
+      "correction": "Creation has overhead, but the question asks about repeated updates to neighbouring locations. Its absolute contribution requires measurement; it is not universally negligible.",
+      "reason": "Remove unmeasured creation timing and dominance claim.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q10",
+      "field": "explanation",
+      "option": 3,
+      "original": "Correct. Cache coherence works on whole lines, not individual variables. Every increment invalidates the line in the other three cores' caches, so most writes become slow cross-core transfers.",
+      "correction": "The aligned counters share a cache line. Ownership transfers can occur as cores alternate writes to different counters; not every increment necessarily transfers ownership.",
+      "reason": "Coherence invalidation depends on ownership, not every store unconditionally.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q10",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. `counts` is 4 × 8 = 32 bytes, so all four elements fit in one 64-byte cache line.\n2. Coherence protocols (such as MESI) track ownership per **line**. To write, a core needs the line in exclusive state.\n3. Thread 0 writes `counts[0]`: the line moves to core 0 and is invalidated on cores 1–3. Thread 1 writes `counts[1]`: the line moves to core 1. And so on, millions of times.\n4. Each move costs tens of nanoseconds, against about 1 ns for a cached write.\n\nFixes:\n- accumulate in a local variable and write once at the end (as the lesson's sum example does);\n- or pad each counter to its own line, e.g. `struct { long n; char pad[56]; }`.",
+      "correction": "With the explicit size and alignment assumptions, four counters occupy 32 bytes within one 64-byte line. Different cores repeatedly writing different elements can transfer ownership of that line: false sharing despite no same-element race. Accumulate locally then publish once, or use a suitably aligned per-counter stride of at least the measured cache-line size. No fixed slowdown or nanosecond transfer cost is implied.",
+      "reason": "Correct alignment, compiler optimisation and per-write cost assumptions.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.python.org/3/howto/free-threading-python.html",
+        "https://man7.org/linux/man-pages/man3/pthread_create.3.html",
+        "https://numpy.org/doc/stable/reference/thread_safety.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.md",
+      "original": "At any moment a machine has far more runnable threads than cores. A laptop typically has hundreds of threads, most asleep, and a few dozen that want the CPU in any given second.",
+      "correction": "A machine can have more runnable threads than available logical CPUs; at other times many or all threads are asleep.",
+      "reason": "State scheduling model assumptions and omit unsupported empirical ranges.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.md",
+      "original": "Most real bursts are short: a burst-length histogram usually has a big peak under a few milliseconds and a long tail.",
+      "correction": "Burst distributions depend on workload; interactive tasks often have short bursts between waits.",
+      "reason": "State scheduling model assumptions and omit unsupported empirical ranges.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.md",
+      "original": "Python's `asyncio` and JavaScript's event loop switch tasks only at `await`,",
+      "correction": "Python asyncio tasks yield when an await actually suspends, while event loops also move on when callbacks or tasks return;",
+      "reason": "State scheduling model assumptions and omit unsupported empirical ranges.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.md",
+      "original": "Direct costs are on the order of a microsecond or two; the cache effects can be larger.",
+      "correction": "There is no platform-independent switch-time constant; both direct and cache costs need measurement.",
+      "reason": "State scheduling model assumptions and omit unsupported empirical ranges.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.md",
+      "original": "A common guideline is to make the quantum longer than most CPU bursts (often quoted as 80%), so that typical interactive jobs finish their burst and block before being preempted. Real systems use slices of roughly 1 to 100 ms.",
+      "correction": "Choose the quantum from measured burst lengths, latency goals and overhead. No workload trace or platform-specific measurement is supplied to justify a universal percentile target or slice range here.",
+      "reason": "State scheduling model assumptions and omit unsupported empirical ranges.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.md",
+      "original": "SJF minimises average waiting time but needs burst predictions",
+      "correction": "For the stated single-CPU, equal-arrival, known-burst, zero-switch-cost model, SJF minimises average waiting time; general workloads need additional assumptions or burst estimates",
+      "reason": "State scheduling model assumptions and omit unsupported empirical ranges.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.questions.json",
+      "questionId": "sched-cpu-basics-q3",
+      "field": "explanation",
+      "option": 0,
+      "original": "The OS can preempt the **thread**, but all coroutines share that one thread. The event loop itself can only switch at an `await`.",
+      "correction": "The OS preempts the thread, not individual asyncio tasks. The event loop resumes other tasks only when control returns to it; an await that completes immediately need not suspend.",
+      "reason": "await is not an unconditional scheduling point.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.questions.json",
+      "questionId": "sched-cpu-basics-q3",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. asyncio is **cooperative** scheduling: tasks hand control back to the event loop only at `await`.\n2. The busy coroutine never awaits for 2 seconds, so the loop never gets to run anything else.\n3. Timers fire late, network requests wait and health checks may time out.\n4. The OS still preempts the thread, but when it resumes it is the same coroutine still looping.\n\nFix: run the CPU work with `await asyncio.to_thread(...)` (or a process pool), or break it up with periodic `await asyncio.sleep(0)`.",
+      "correction": "The CPU loop does not return control to the event loop, so other tasks in that loop stall. The OS may schedule other threads, but resuming this thread continues the same loop. Offload suitable work or yield explicitly with asyncio.sleep(0). In a GIL-enabled interpreter, to_thread can improve responsiveness but does not itself provide parallel execution of pure-Python CPU work; a process pool can.",
+      "reason": "Distinguish event-loop responsiveness from GIL parallelism.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.questions.json",
+      "questionId": "sched-cpu-basics-q7",
+      "field": "prompt",
+      "option": null,
+      "original": "Every context switch costs 0.5 ms and the round-robin quantum is 4.5 ms. If every job uses its full quantum, what fraction of CPU time is spent switching?",
+      "correction": "Assume at least two continuously runnable jobs, one 0.5 ms switch after every full 4.5 ms round-robin quantum, and no other costs. What fraction of each steady-state cycle is switching?",
+      "reason": "A single runnable job need not switch; supply cycle assumptions.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.questions.json",
+      "questionId": "sched-cpu-basics-q7",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. One cycle = one quantum + one switch = 4.5 + 0.5 = 5 ms.\n2. Wasted per cycle = 0.5 ms.\n3. Fraction = 0.5 / 5 = **10%**.\n\nCompare a 9.5 ms quantum: 0.5 / 10 = 5%. Halving overhead costs response time, which is the basic quantum trade-off. (Real direct switch costs are nearer a few microseconds, but cache refills add hidden cost.)",
+      "correction": "One cycle is 4.5 + 0.5 = 5 ms, of which 0.5 ms is switching: 10%. With a 9.5 ms quantum the same assumed overhead would be 5%. These are hypothetical costs, not a measured real-kernel timing.",
+      "reason": "Remove unsupported real microsecond benchmark.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.questions.json",
+      "questionId": "sched-cpu-basics-q10",
+      "field": "text",
+      "option": 1,
+      "original": "The I/O jobs queue behind the CPU hog while the disk sits idle, then the CPU idles while they wait for the disk; preemptive scheduling with a short quantum fixes this",
+      "correction": "Short I/O-bound jobs can wait behind the long CPU burst while the disk is idle; preemptive time slicing can reduce that convoy delay",
+      "reason": "CPU need not become idle if CPU-bound work stays runnable.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-cpu-basics.questions.json",
+      "questionId": "sched-cpu-basics-q10",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. This is the convoy effect. With RR (or any scheduler favouring short bursts), each I/O job gets its 1 ms promptly and issues its next read, keeping both CPU and disk busy.",
+      "correction": "The convoy effect delays short bursts. Preemption gives them earlier opportunities to issue I/O; actual CPU/disk utilisation depends on all burst and I/O timings.",
+      "reason": "Avoid guaranteed idle alternation and complete fix.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf",
+        "https://docs.python.org/3/library/asyncio-task.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "Each thread has a priority, and the scheduler always runs the highest-priority ready thread.",
+      "correction": "In a strict-priority model, the scheduler chooses the highest-priority ready thread. Linux nice values instead set relative fair-scheduling weights; they are not strict priorities.",
+      "reason": "Correct model-specific timing, priority weighting and historical defaults.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "so it runs after about 107 seconds, then drops back once it has had its turn.",
+      "correction": "so it reaches equal priority after 107 seconds. Actual first service also depends on tie-breaking and queue length; a chosen policy may reset priority after service.",
+      "reason": "Correct model-specific timing, priority weighting and historical defaults.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "B gets the CPU within microseconds of becoming ready.",
+      "correction": "In the idealised zero-overhead trace, B runs immediately when ready; no measured wake-up latency is implied.",
+      "reason": "Correct model-specific timing, priority weighting and historical defaults.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "Solaris's time-sharing class used a table of 60 priority levels with quanta ranging from 20 ms at the top to around 200 ms at the bottom (by default).",
+      "correction": "The cited historical Solaris documentation describes 60 time-sharing priorities and default quanta from 40 ms at priority 59 to 200 ms at priority 0; these are version/configuration-specific values.",
+      "reason": "Correct model-specific timing, priority weighting and historical defaults.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "H now waits at most for L's critical section.",
+      "correction": "In this isolated three-thread example, H waits for L's remaining critical section plus scheduling overhead. General bounds must include nesting, higher-priority interference and any blocking by the holder.",
+      "reason": "Correct model-specific timing, priority weighting and historical defaults.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "the **priority ceiling** protocol:",
+      "correction": "an **immediate priority ceiling** protocol:",
+      "reason": "Correct model-specific timing, priority weighting and historical defaults.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "Priority inheritance (or ceilings) bounds the delay; Pathfinder was fixed by turning it on.",
+      "correction": "Priority inheritance mitigates inversion under stated scheduling/locking assumptions; Pathfinder's fix enabled it for the relevant semaphore mechanism.",
+      "reason": "Correct model-specific timing, priority weighting and historical defaults.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "Pathfinder landed on Mars on 4 July 1997. A few days later, after it began collecting weather data, the spacecraft started suffering total system resets.\n\nIts VxWorks software had an \"information bus\" (shared memory) protected by a mutex:\n\n- **H**: a high-priority bus management task, running frequently;\n- **L**: a low-priority meteorological task that took the mutex to publish data;\n- **M**: a medium-priority, long-running communications task.\n\nVery occasionally, M preempted L while L held the mutex and H was blocked on it. The bus task then failed to run on time, a watchdog timer concluded that something had gone badly wrong, and it reset the whole computer.\n\nJPL engineers reproduced the fault on an identical replica on the ground with VxWorks's full event tracing switched on, and the trace showed the inversion. The mutex had been created with **priority inheritance turned off**. The flag lived in a global variable, and the spacecraft still had VxWorks's built-in C interpreter enabled, so they uploaded a short program that set it to true. The resets stopped.\n\n> [!note] Lessons engineers still quote\n> Tracing made the diagnosis possible. Leaving debug facilities in flight software made the fix possible. And the original reasoning, that priority inheritance was too expensive for such a time-critical task, was exactly backwards. A reset or two had even been seen in pre-launch testing and written off as a hardware glitch.\n\n",
+      "correction": "Glenn Reeves, who led Pathfinder's software team, describes a priority inversion involving a semaphore inside VxWorks `select`/pipe handling. The low-priority ASI/MET task held the resource; intermediate work delayed it while the higher-priority `bc_dist` task waited. A deadline check by `bc_sched` triggered a reset.\n\nEngineers reproduced the failure with tracing, enabled priority inheritance through a configuration change, tested the wider effects and deployed it using their validated spacecraft patch mechanism. Reeves explicitly says they **did not use the VxWorks shell** for the update. He also says the pre-landing occurrence was investigated and remained unresolved, rather than being dismissed as a hardware glitch.\n\nThis firsthand correction matters: retain the inversion lesson without repeating the inaccurate interpreter-fix and ignored-warning story.\n\n",
+      "reason": "Replace secondhand historical details contradicted by spacecraft software lead.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.md",
+      "original": "- [What really happened on Mars Pathfinder — Mike Jones (Cornell mirror)](https://www.cs.cornell.edu/courses/cs614/1999sp/papers/pathfinder.html)",
+      "correction": "- [Glenn Reeves: what happened on Pathfinder — firsthand correction in RISKS](https://catless.ncl.ac.uk/Risks/19.54.html)",
+      "reason": "Use firsthand correction rather than disputed secondhand account.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q1",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. Lower nice means higher priority, so −5 beats 10. Only privileged users can lower a nice value below its current setting.",
+      "correction": "Lower nice means greater fair-scheduling weight when competing within the same scheduling group. Lowering nice normally needs permission, but RLIMIT_NICE can authorise an unprivileged process to do so.",
+      "reason": "Nice is relative weight and can be lowered under resource-limit authorisation.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q4",
+      "field": "prompt",
+      "option": null,
+      "original": "Priorities run from 0 (highest) to 127. A waiting thread's priority improves by 1 every **2 seconds**. A thread at priority 100 competes with a constant stream of work at priority 40 (newcomers always arrive at 40). Roughly how long until the waiting thread runs?",
+      "correction": "Priorities run from 0 (highest) to 127. A waiting thread improves by one level every 2 seconds, starting at 100. How long until it reaches the same priority as work arriving at priority 40?",
+      "reason": "Reaching equal priority is computable; exact first-run time needs queue assumptions.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q4",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Gap to close: 100 − 40 = **60** levels.\n2. Rate: 1 level per 2 s.\n3. Time: 60 × 2 = **120 s**.\n\nAt that point the waiting thread is at 40 (or better), ties or beats the newcomers, and runs. Afterwards its priority resets, so it doesn't hog the CPU. The constant you choose for aging is a trade-off: faster aging means less starvation but weaker priorities.",
+      "correction": "The gap is 100 - 40 = 60 levels; 60 × 2 = 120 seconds. That establishes equal priority, not an exact first-run time. Tie-breaking, queue length and scheduling overhead determine when it actually runs.",
+      "reason": "Separate ageing threshold from scheduling guarantee.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q7",
+      "field": "explanation",
+      "option": 0,
+      "original": "Correct. After a boost everyone is at the top and shares round robin, so bottom-queue jobs get some CPU at least once every period S.",
+      "correction": "Boosting gives low-queue jobs access to the top queue again. With fair queue ordering it combats starvation, but service within every boost period is not guaranteed when the runnable queue is large.",
+      "reason": "Boost period is not a universal bound on time to service.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q7",
+      "field": "workedExample",
+      "option": null,
+      "original": "Ask what goes wrong *without* boosts:\n\n1. Jobs only ever move down. If the top queues always have work, the bottom never runs: **starvation**. A boost lifts everyone, so bottom jobs run at least once per period.\n2. A job's behaviour can change. Without boosts, a formerly CPU-bound job can't climb back up. A boost resets it to the top.\n\nWhat the boost doesn't do: fix lock-related inversion (that needs inheritance), or remove tuning. S must be chosen carefully.",
+      "correction": "A boost returns low-priority jobs to the highest queue, helping old jobs and jobs whose behaviour changed. Queue ordering and available capacity still determine service; not every job must run once per period. Boosting does not by itself solve lock-owner inversion or eliminate tuning parameters.",
+      "reason": "Remove false once-per-period bound.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q9",
+      "field": "text",
+      "option": 1,
+      "original": "Priority inversion on a mutex created without priority inheritance; fixed by uploading code that set the inheritance flag to true",
+      "correction": "Priority inversion in a select/pipe semaphore; engineers enabled inheritance, tested the change and applied it through the spacecraft patch process",
+      "reason": "Correct historical fix mechanism.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q9",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. M preempted L while L held the bus mutex and H was blocked. The watchdog reset the computer. Engineers used the on-board C interpreter to switch inheritance on.",
+      "correction": "Reeves identifies the semaphore in VxWorks select/pipe handling. His firsthand account rejects the claim that the shell/C interpreter was used to patch it.",
+      "reason": "Prefer firsthand account over original secondhand narrative.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q9",
+      "field": "workedExample",
+      "option": null,
+      "original": "Map the Pathfinder tasks onto the H/M/L pattern:\n\n| Role | Task |\n|---|---|\n| H | Bus management |\n| M | Communications |\n| L | Meteorological data |\n\n1. L took the information-bus mutex.\n2. H blocked on it.\n3. M preempted L for a long time.\n4. H missed its deadline; a watchdog decided the system had failed and reset it.\n\nThe mutex had priority inheritance **off**. Because VxWorks's C interpreter was still enabled, JPL uploaded a short program that turned it on. Tracing on a ground replica made the diagnosis possible.",
+      "correction": "The ASI/MET task held a resource needed by bc_dist. Intermediate-priority work delayed the holder; bc_sched detected the missed deadline and initiated reset. After reproducing the failure, engineers enabled inheritance, checked system-wide effects and used the validated onboard patch mechanism. This was not an interactive C-interpreter fix.",
+      "reason": "Correct mechanism and deployment procedure.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q9",
+      "field": "link",
+      "option": null,
+      "original": {
+        "title": "What really happened on Mars Pathfinder — Mike Jones (Cornell mirror)",
+        "url": "https://www.cs.cornell.edu/courses/cs614/1999sp/papers/pathfinder.html"
+      },
+      "correction": {
+        "title": "Glenn Reeves: firsthand Pathfinder correction in RISKS",
+        "url": "https://catless.ncl.ac.uk/Risks/19.54.html"
+      },
+      "reason": "Link to direct project testimony.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q10",
+      "field": "explanation",
+      "option": 3,
+      "original": "It bounds the wait to the length of the low-priority thread's critical section(s); it doesn't remove it. H still waits for L to finish with the lock.",
+      "correction": "Inheritance removes the medium-priority interference in the simple example. General delay bounds also depend on nested locks, holder blocking and higher-priority work; inheritance does not eliminate waiting.",
+      "reason": "Priority inheritance alone is not a universal critical-section-only bound.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q11",
+      "field": "explanation",
+      "option": 2,
+      "original": "That's when B's sixth burst would start. B is demoted at the end of its fifth burst, two milliseconds earlier.",
+      "correction": "The fifth burst ends at 92; 100 is eight milliseconds later, when the next burst becomes ready after its I/O wait.",
+      "reason": "Correct two-versus-eight-millisecond arithmetic.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf",
+        "https://docs.kernel.org/locking/rt-mutex.html",
+        "https://catless.ncl.ac.uk/Risks/19.54.html",
+        "https://jacobfilipp.com/DrDobbs/articles/DDJ/1999/9911/9911a/9911as1.htm",
+        "https://docs.oracle.com/cd/E19504-01/802-5750/6i9g464te/index.html",
+        "https://learn.microsoft.com/en-us/windows/win32/procthread/scheduling"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "A class only gets the CPU if every class above it has nothing runnable.",
+      "correction": "Ordinary selection considers higher classes first, subject to bandwidth limits. A deadline-class fair server can also dispatch fair work to prevent starvation.",
+      "reason": "Runnable tasks may be throttled and fair-server dispatch is an exception to the simple class diagram.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "So a runnable `SCHED_FIFO` thread *always* beats every normal thread, whatever their nice values. Almost everything you run is `SCHED_NORMAL` (called `SCHED_OTHER` in POSIX) in the fair class.",
+      "correction": "Ignoring throttling and fair-server service, an eligible `SCHED_FIFO` thread outranks normal threads regardless of nice. Ordinary applications usually use `SCHED_NORMAL` (`SCHED_OTHER` in the userspace API). A loaded sched_ext scheduler can take over normal, batch and idle-policy tasks; in partial mode it handles only `SCHED_EXT` tasks.",
+      "reason": "Explain sched_ext full-switch and partial modes.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-ext.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "The ratio was chosen so that one nice step changes a CPU-bound task's share by roughly 10%.",
+      "correction": "For two otherwise equal competitors in one fair group, moving one from nice 0 to nice 1 changes the split from 50/50 to about 55.5/44.5. The share change depends on the competitors.",
+      "reason": "A relative weight ratio is not a universal percentage-point CPU share change.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "It is never starved.",
+      "correction": "That proportional share assumes competition within the same fair group, available CPU bandwidth and no overriding higher-class work.",
+      "reason": "No unconditional starvation guarantee across scheduler classes or quotas.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "Three CPU-bound tasks share one CPU:",
+      "correction": "Three CPU-bound tasks in the same fair group share one CPU:",
+      "reason": "Weight fractions require same scheduling group.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "A process with 16 busy threads would get 16 times the CPU of a single-threaded one.",
+      "correction": "Within one fair group, equal-weight runnable threads compete individually: sixteen such threads collectively receive sixteen shares against one for a single-threaded competitor, when CPU capacity is contested.",
+      "reason": "State assumptions for process aggregate shares.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "# Needs root or CAP_SYS_NICE",
+      "correction": "# Needs CAP_SYS_NICE or sufficient RLIMIT_RTPRIO",
+      "reason": "Resource limits also permit unprivileged realtime scheduling.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "Older kernels used RT throttling: by default RT tasks may use 950 ms of every 1 s (`sched_rt_runtime_us` / `sched_rt_period_us`). Newer kernels use a \"fair server\", a deadline reservation of about 50 ms per second that runs normal tasks if RT work would otherwise starve them.",
+      "correction": "RT throttling commonly limits RT work to 950 ms per 1 s (`sched_rt_runtime_us` / `sched_rt_period_us`). Linux 6.12 also introduced a deadline-class fair server that can supply CPU to fair tasks. These are distinct mechanisms; behaviour depends on kernel version, configuration and tunables.",
+      "reason": "Fair server does not imply RT bandwidth controls disappeared.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html",
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "You get a guarantee, or you get an error up front.",
+      "correction": "Admission checks reserve bandwidth; acceptance alone is not a universal proof that application deadlines will be met. Worst-case execution time, blocking, deadline versus period, CPU topology and scheduling assumptions still matter. The kernel documentation distinguishes schedulability tests from the simpler utilization admission test.",
+      "reason": "Kernel docs explicitly show feasible utilization can still miss constrained or multiprocessor deadlines.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "- **SCHED_IDLE**: weaker than nice 19, for work that should run only when nothing else wants the CPU.",
+      "correction": "- **SCHED_IDLE**: extremely low-weight background work in the fair class. It is not the per-CPU idle task and does not promise zero service whenever normal work is runnable.",
+      "reason": "SCHED_IDLE has nonzero fair weight; not strict idle-only policy.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c",
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "Nice 19 still runs; for \"only when idle\" use `SCHED_IDLE`.",
+      "correction": "Nice 19 gets a small fair share; `SCHED_IDLE` gives background work an even smaller weight, not a strict idle-only guarantee.",
+      "reason": "Keep pitfall consistent with actual policy.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "A higher class always wins.",
+      "correction": "Bandwidth controls and deadline-class fair-server service qualify this ordering.",
+      "reason": "Avoid contradiction with safety mechanisms.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "(about 10% of CPU per step)",
+      "correction": "(CPU shares depend on competing weights)",
+      "reason": "Weight ratio does not imply fixed CPU percentage change.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "SCHED_DEADLINE gives runtime/deadline/period guarantees with admission control.",
+      "correction": "SCHED_DEADLINE reserves runtime using deadline/period parameters and admission control; application deadline guarantees require additional schedulability assumptions.",
+      "reason": "Admission is not universal hard-deadline proof.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q1",
+      "field": "prompt",
+      "option": null,
+      "original": "On a single-CPU Linux machine, thread X is `SCHED_FIFO` priority **1** and is stuck in a busy loop. Thread Y is `SCHED_NORMAL` at **nice −20**. Ignoring RT throttling, which runs?",
+      "correction": "On one Linux CPU, X is SCHED_FIFO priority 1 and busy-loops. Y is SCHED_NORMAL at nice −20. Ignoring RT throttling, fair-server service and other tasks, which runs?",
+      "reason": "Both starvation prevention mechanisms must be excluded.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q1",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Identify the classes: X is in **rt**, Y is in **fair**.\n2. Classes are checked in order: deadline → rt → fair → idle. A lower class runs only when every higher class has nothing runnable.\n3. X is always runnable (busy loop), so the rt class always has work.\n4. So **X runs** and Y starves.\n\nThis is why Linux keeps a safety valve: historically RT throttling (950 ms per second for RT), in newer kernels a fair server reserving ~50 ms per second for normal tasks.",
+      "correction": "X belongs to the real-time class and outranks Y in the fair class. Under the stated exclusions, X remains runnable and Y receives no CPU. On a real system, RT bandwidth limits and fair-server service can change this outcome.",
+      "reason": "Remove misleading replacement chronology and unconditional class claim.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q3",
+      "field": "prompt",
+      "option": null,
+      "original": "You set a backup job to **nice 19**, expecting it to run only when the machine is otherwise idle. A CPU-bound nice 0 service is also running on the same CPU. What actually happens?",
+      "correction": "Two CPU-bound tasks compete alone in the same fair group on one CPU: a nice 19 backup and a nice 0 service, with no quota or higher-class interference. What share does the backup receive?",
+      "reason": "State assumptions needed for exact proportions.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q3",
+      "field": "text",
+      "option": 2,
+      "original": "The backup gets roughly 1–2% of the CPU; for idle-only work you'd use SCHED_IDLE",
+      "correction": "Roughly 1–2% of the CPU",
+      "reason": "Remove false idle-only recommendation.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q3",
+      "field": "explanation",
+      "option": 2,
+      "original": "Correct. 15 / (1024 + 15) ≈ 1.4%. SCHED_IDLE is the policy that is weaker still, intended for work that should run only when nothing else wants the CPU.",
+      "correction": "Correct: 15 / (1024 + 15) is about 1.44%. SCHED_IDLE offers still lower-weight background scheduling, not strict idle-only execution.",
+      "reason": "Nonzero fair weight.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q3",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Look up weights: nice 0 = 1024, nice 19 = 15.\n2. Share for the backup: 15 / (1024 + 15) = 15 / 1039 ≈ **1.4%**.\n3. The service gets ≈ 98.6%.\n\nNice is **proportional sharing**, not priority. It never starves anyone. If you truly want 'only when idle', use `SCHED_IDLE` (e.g. `chrt -i 0 ./backup`).",
+      "correction": "Nice 0 has weight 1024 and nice 19 has weight 15. The backup share is 15/1039 ≈ 1.44%; the service receives about 98.56%. These are long-run proportions under the stated assumptions. SCHED_IDLE remains in the fair class and does not guarantee execution only when all normal tasks are absent.",
+      "reason": "Scope proportional result; remove starvation guarantee.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q4",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Weights: nice 0 = 1024, nice 1 = 820.\n2. Total = 1844.\n3. Shares:\n   - nice 0: 1024 / 1844 ≈ 0.555 → **55.5%**\n   - nice 1: 820 / 1844 ≈ 0.445 → **44.5%**\n4. The difference is about 10 percentage points.\n\nThe weight table uses a ratio of about 1.25 per step precisely so that one step moves a CPU-bound task's share by roughly 10%, whatever the starting nice values.",
+      "correction": "Within one fair group, weights 1024 and 820 give shares 1024/1844 ≈ 55.53% and 820/1844 ≈ 44.47%. The gap is about 11.06 percentage points. Each share moved about 5.53 percentage points from 50%; this is not a fixed share change for every possible workload.",
+      "reason": "Differentiate relative percentage, points and weight.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q7",
+      "field": "text",
+      "option": 1,
+      "original": "A SCHED_FIFO thread runs until it blocks, yields or is preempted by a higher-priority RT thread",
+      "correction": "Ignoring throttling and higher scheduling classes, FIFO has no time slice and runs until blocking, yielding or higher RT priority preemption",
+      "reason": "Qualify listed events.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q7",
+      "field": "workedExample",
+      "option": null,
+      "original": "Go through each claim:\n\n1. RT priorities 1–99, higher wins: **true**.\n2. FIFO: no slice; runs until it blocks, yields or a higher RT priority arrives: **true**.\n3. RR: like FIFO, but equal-priority threads take turns using a slice (`sched_rr_timeslice_ms`, 100 ms by default): **true**.\n4. RR at the end of a slice goes to the back of its own priority's list, still in the rt class: **false**.\n5. Setting an RT policy is privileged: **false**.",
+      "correction": "Options 1, 2 and 3 are true under the stated exclusions. RT priority is 1–99; FIFO has no quantum; RR rotates equals. RR does not demote into fair scheduling. Option 5 is false: setting FIFO requires CAP_SYS_NICE or suitable RLIMIT_RTPRIO permissions, not merely ownership.",
+      "reason": "Original worked step labelled different proposition false.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q8",
+      "field": "explanation",
+      "option": 1,
+      "original": "An unprivileged user would get an error (EACCES) for a negative nice, not a silent no-op. And the question still applies as root.",
+      "correction": "Without sufficient RLIMIT_NICE or privilege, lowering the numeric nice value fails rather than silently succeeding. Assume the requested change succeeds here.",
+      "reason": "Negative nice not always privileged.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q8",
+      "field": "explanation",
+      "option": 2,
+      "original": "Video encoding is CPU-bound. The issue is how the CPU is divided between groups.",
+      "correction": "The question assumes CPU-bound encoding and build work. Group scheduling explains why changing an individual thread weight may not change the group share.",
+      "reason": "Encoding is not inherently always CPU-bound.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/sched.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q10",
+      "field": "workedExample",
+      "option": null,
+      "original": "Utilisation of each task = runtime / period:\n\n| Task | U |\n|---|---|\n| 1 | 30/100 = 0.30 |\n| 2 | 40/100 = 0.40 |\n| New | 12/40 = 0.30 |\n\nTotal = 1.00, which exceeds the 0.95 limit, so `sched_setattr()` returns **EBUSY**.\n\nIf the new task asked for 10 ms per 40 ms (U = 0.25), the total would be 0.95 and it would be admitted. That's the deal: a guarantee or an error, never a silent overload.",
+      "correction": "The requested total utilization is 30/100 + 40/100 + 12/40 = 1.00, above the configured 0.95 admission limit, so the request is rejected with EBUSY, assuming otherwise valid parameters and permissions. A request of 10/40 makes utilization 0.95 and passes this bandwidth check. Passing admission does not alone prove all application deadlines will be met.",
+      "reason": "Remove unconditional guarantee and distinguish check from complete syscall validation.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-deadline.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "A modern server has dozens or hundreds, arranged in a hierarchy of hyper-threads, cores, shared caches and memory nodes.",
+      "correction": "Servers may expose many logical CPUs, arranged in hardware-dependent hierarchies of SMT threads, cores, caches and memory nodes.",
+      "reason": "Not all servers have this count/topology.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Two busy siblings each run noticeably slower than two separate cores.",
+      "correction": "Resource contention can make two busy siblings slower than using separate physical cores; the effect depends on the workloads.",
+      "reason": "Performance comparison is not universal.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "With one global queue, every scheduling decision on every CPU takes the same lock, which doesn't scale past a few cores, and a thread lands on whichever CPU happens to be free, so it hops around and loses its cache.",
+      "correction": "In a simple global-queue design, scheduling decisions contend for one lock and may move tasks between CPUs. The scaling limit and cache cost depend on implementation and workload; a global queue can also incorporate affinity heuristics.",
+      "reason": "Remove unsupported core threshold and inevitability.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Load is measured not as a count of tasks but with PELT, a decaying average of each task's recent utilisation, weighted by nice.",
+      "correction": "Balancing considers several signals, including runnable task counts and PELT averages. PELT tracks load, runnable time and running utilization separately; weighted load and CPU utilization are not interchangeable.",
+      "reason": "Linux uses both task counts and separate load/util signals.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Kubernetes's static CPU manager uses this to give pods exclusive cores.",
+      "correction": "Kubernetes's static CPU manager can give eligible Guaranteed containers with integer CPU requests exclusive logical CPUs. Whole-core allocation additionally depends on policy options such as `full-pcpus-only`.",
+      "reason": "Static policy does not universally allocate exclusive full cores.",
+      "sources": [
+        "https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Remote accesses typically take something like 1.5 to 2 times as long as local ones, and the interconnect has less bandwidth than local memory.",
+      "correction": "Remote access cost and interconnect bandwidth depend on the machine and workload.\n\n> [!note] Content gap\n> No reproducible machine-specific NUMA measurements accompany this lesson, so no universal remote/local latency multiplier is provided.",
+      "reason": "Unsupported benchmark ratio removed visibly.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Linux's default memory policy is **first touch**: a page is allocated on the node of the CPU that first writes to it.",
+      "correction": "Linux normally prefers local allocation. For new private anonymous memory, the first write fault commonly allocates a page near the executing CPU. Explicit policies, cpusets, fallback under memory pressure, huge pages and later migration can change placement.",
+      "reason": "First-write shorthand is not universal allocation guarantee.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Every page is on node 0.",
+      "correction": "Assume the main thread stays on node 0, local memory is sufficient, writes fault in new pages and no policy or migration changes placement. The pages then start on node 0.",
+      "reason": "Supply missing placement assumptions.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "no locality, but no hot spot either.",
+      "correction": "distributed allocation rather than guaranteed per-thread locality. It can reduce concentration on one node, but does not guarantee removal of all hot spots.",
+      "reason": "Interleaving can still include local pages and workload hot spots.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "because a thread moved away from its memory makes every access remote until the memory follows.",
+      "correction": "because moving a thread can turn accesses to its existing memory into remote accesses; cache hits and pages already elsewhere are exceptions.",
+      "reason": "Every access remote ignores caches/shared distribution.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "The quota is consumed by **all threads on all CPUs combined**. When it runs out, every thread in the group is **throttled** until the next period starts, even if the machine has idle cores.",
+      "correction": "Fair-class CPU time is charged across the group. Exhausted local bandwidth allocations cause throttling even with idle CPUs. Ancestor quotas, per-CPU runtime accounting and configured burst credit also affect the exact timeline.",
+      "reason": "Bandwidth cap is fair-class and hierarchical with accounting caveats.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "A burst of requests makes all 8 threads busy.",
+      "correction": "In an idealized model, all 8 run simultaneously from the period boundary, with no other contention, overhead, burst credit or carried local runtime.",
+      "reason": "Exact 25/75ms outcome requires model assumptions.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "A request that needs 5 ms of CPU and arrives at t = 26 ms waits until t = 100 ms before it gets any: about 79 ms of latency for 5 ms of work.",
+      "correction": "A request arriving at t = 26 ms waits at least 74 ms for replenishment in this model. If it then immediately receives a CPU for 5 ms, its latency is 79 ms; queueing behind existing work can add more.",
+      "reason": "Original exact latency ignored busy worker queue.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Many organisations do this; the trade-off is weaker isolation from noisy neighbours.",
+      "correction": "The trade-off is weaker isolation from competing workloads; inherited parent quotas can still throttle the group.",
+      "reason": "Unsupported adoption generalization and ancestorquota caveat.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "**Use exclusive cores** (Kubernetes static CPU manager with integer CPU requests)",
+      "correction": "**Use exclusive CPUs** (eligible Guaranteed containers under Kubernetes static CPU management; whole cores require appropriate policy options)",
+      "reason": "Exclusive logicalCPUvsphysicalcore.",
+      "sources": [
+        "https://kubernetes.io/docs/tasks/administer-cluster/cpu-management-policies/"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "Go before 1.25 set `GOMAXPROCS` to the host CPU count; since Go 1.25 it defaults to the cgroup quota when lower.",
+      "correction": "Go 1.25 introduced container-aware defaults: logical CPUs, affinity and cgroup CPU bandwidth all participate. Fractional quotas are rounded up, and the default generally stays at least 2 unless CPU count or affinity is lower. Explicit settings and compatibility controls can override this.",
+      "reason": "Default not simply minquota, versionsetting matters.",
+      "sources": [
+        "https://go.dev/blog/container-aware-gomaxprocs"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "So a `ProcessPoolExecutor()` with no arguments, inside a 2-CPU container on a 64-core host, starts 64 workers that are throttled together. Read the quota yourself:",
+      "correction": "For example, 64 visible logical CPUs, no narrower affinity and no Python CPU-count override can yield a default maximum of 64 processes despite a two-CPU quota. Workers start as jobs are submitted, with behavior depending on Python version and start method. A simple cgroup-v2 quota reader is:",
+      "reason": "Constructor does not eagerlystartallworkers; coreslogicaldistinction.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "# \"200000 100000\" -> 2.0",
+      "correction": "# \"200000 100000\" -> 2.0\n# Assumes this path is the relevant cgroup.",
+      "reason": "Path notuniversallyowncgroup.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.md",
+      "original": "## Pitfalls",
+      "correction": "This helper reads one visible cgroup only. It does not discover the process's cgroup or ancestor limits, handle cgroup v1, or combine quota with affinity. An unlimited leaf can still have a constrained ancestor.\n\n## Pitfalls",
+      "reason": "Clarify helper limitations instead of claiming robust quota discovery.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q3",
+      "field": "prompt",
+      "option": null,
+      "original": "A batch container has `cpu.weight` = 10 (the default is 100) and no `cpu.max` limit. It runs a CPU-bound job on a 16-core host where **nothing else** is running. How much CPU can it use?",
+      "correction": "A fair-class batch container has cpu.weight=10, no leaf or ancestor quota, access to all 16 physical cores, and enough runnable workers. With no competing work, how much CPU can it use?",
+      "reason": "Need parallelworkers and unrestrictedancestor/affinity.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q4",
+      "field": "prompt",
+      "option": null,
+      "original": "A container has `cpu.max = 300000 100000` and runs **10** worker threads on a 32-core host. During a burst all 10 are busy. In each 100 ms period, for how long is the container **throttled**?",
+      "correction": "In an idealized quota model, a container has cpu.max = 300000 100000. Ten threads run continuously on ten CPUs from each period boundary, without contention, overhead, burst credit or carried runtime. How long is the group throttled in each 100 ms period?",
+      "reason": "Explicit model assumptions preserve arithmetic without claiming exactmeasurement.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q5",
+      "field": "prompt",
+      "option": null,
+      "original": "On a two-socket NUMA server, a program's main thread allocates and zeroes a 100 GiB array, then starts 48 worker threads spread across both sockets to process it. Throughput is far below expectations. What's the most likely cause?",
+      "correction": "A main thread pinned to NUMA node 0 writes every page of a new private 100 GiB array, with enough local memory and no explicit policy or migration. Workers then run on both nodes and bandwidth falls below expectations. Which placement problem fits this setup?",
+      "reason": "No guarantee unpinned thread/allocationfallbackplacesallpagesnode0.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q5",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. Linux's default policy is **first touch**: a page lives on the node of the CPU that first writes it.\n2. The main thread on node 0 zeroed every page, so all 100 GiB sits on node 0.\n3. Workers on node 1 access remote memory, typically about 1.5–2× slower, over a shared interconnect.\n4. All 48 workers also share node 0's memory bandwidth while node 1's sits idle.\n\nFixes: parallel initialisation (each worker touches its own slice), `numactl --interleave=all`, or binding workers and memory to the same node.",
+      "correction": "Under the stated assumptions, first-write faults allocate the new pages on node 0. Workers on node 1 then need remote memory for cache misses to those pages, and requests concentrate on node 0. The exact cost is hardware-dependent; no measured multiplier is available here. Parallel initialization, deliberate interleaving or matching workers to memory can improve placement, subject to measurement.",
+      "reason": "Remove unsupported NUMA ratio and everyaccessclaim.",
+      "sources": [
+        "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q6",
+      "field": "prompt",
+      "option": null,
+      "original": "A Python service runs in a Kubernetes pod with a CPU limit of **2** on a **64-core** node, with no affinity restrictions. It creates `ProcessPoolExecutor()` with no arguments for CPU-bound work. What happens?",
+      "correction": "On Linux Python 3.13+, with 64 visible logical CPUs, no CPU-count override or affinity restriction, a pod has a two-CPU quota. A default ProcessPoolExecutor is given enough CPU-bound jobs to fill it. What problem can occur?",
+      "reason": "VersionlogicalCPUandlazy startup assumptions.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q6",
+      "field": "text",
+      "option": 1,
+      "original": "It starts 64 workers, which share 2 CPUs of quota and get heavily throttled",
+      "correction": "Up to 64 workers compete for two CPUs of aggregate quota, risking heavy throttling",
+      "reason": "Maximum count notconstructoreagerness.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q6",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. The default pool size comes from the CPU count, which is the host's 64. They collectively burn the 200 ms quota in a few milliseconds each period.",
+      "correction": "Correct. The default maximum uses process_cpu_count(), which considers affinity but not CPU bandwidth quota. Running many CPU-bound workers can exhaust each period budget early.",
+      "reason": "Defaultmaxnotalwaysworkersactual.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q6",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. `ProcessPoolExecutor()` defaults to the usable CPU count: `os.process_cpu_count()` on 3.13+, `os.cpu_count()` before that.\n2. With no affinity restriction, both return **64** (the host).\n3. The pod's quota is 2 CPUs: 200 ms per 100 ms.\n4. With many workers busy, the quota runs out within a few ms of each period, then all are throttled.\n\nResult: lots of memory used, context switching and throttling, and no more throughput than 2 workers. Fix: read `/sys/fs/cgroup/cpu.max` and pass `max_workers=2`.",
+      "correction": "With the specified environment, process_cpu_count() returns 64, so the default maximum is 64 workers. Their CPU time shares the two-CPU quota. Enough runnable workers may exhaust the budget early and then wait for replenishment. Benchmark a smaller pool; discover effective affinity and cgroup hierarchy limits rather than assuming the host count is usable bandwidth.",
+      "reason": "Remove guaranteed identicalthroughput and insufficientleafpathfix.",
+      "sources": [
+        "https://docs.python.org/3/library/concurrent.futures.html",
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q7",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. Without cpu.max there is no throttling; the trade-off is weaker isolation from noisy neighbours.",
+      "correction": "Correct, if no ancestor quota remains: removing the limiting bandwidth cap can remove this cause of throttling. Fairness then depends on competing weights and available CPUs.",
+      "reason": "Ancestorcapsremain.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q7",
+      "field": "workedExample",
+      "option": null,
+      "original": "Throttling happens when the group's pooled quota runs out before the period ends. So ask which changes avoid running out:\n\n1. **Fewer threads**: the same quota lasts longer within each period. Helps.\n2. **No limit**: no quota, no throttling. Helps (at some isolation cost).\n3. **Burst**: saved quota covers spikes. Helps.\n4. **More weight**: weight isn't the cap. No effect on throttling.\n5. **More threads**: exhausts quota sooner. Worse.",
+      "correction": "A smaller CPU-bound pool can consume budget more smoothly; removing all relevant quota caps avoids quota throttling; accumulated burst credit can absorb short spikes. Raising weight does not raise the quota. More workers can exhaust it earlier. These are workload-dependent remedies: compare throughput and latency, and inspect ancestor limits.",
+      "reason": "Avoidabsolute unchangedthrottling and guaranteedimprovement.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q8",
+      "field": "text",
+      "option": 1,
+      "original": "It was throttled in 40% of periods, so many requests probably waited for the next period",
+      "correction": "Throttling was reported for 40% of the counted periods; request latency needs separate measurement",
+      "reason": "Counters cannotinfermanyrequestsprobablywait.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q8",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. `nr_periods` = 36000. An hour is 3600 s, and at 100 ms per period that's 36000 periods: consistent.\n2. `nr_throttled` = 14400 = periods where the quota ran out.\n3. Ratio: 14400 / 36000 = **40%**.\n\nThat's a strong signal of quota-induced latency. Next, look at `throttled_usec` to see how long, and compare p99 latency with the throttle ratio over time.",
+      "correction": "14400 / 36000 = 40%. With continuously active 100 ms enforcement periods, 36000 periods correspond to one hour. These counters alone do not measure request latency or the fraction of wall time stalled. Compare interval deltas, throttled_usec, usage and latency measurements; throttled time can aggregate across per-CPU run queues.",
+      "reason": "Do notconfuseperiodcountwithwalltime/requestcounts.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q9",
+      "field": "prompt",
+      "option": null,
+      "original": "A pod has a CPU limit of **0.5** (`cpu.max = 50000 100000`). A single-threaded request needs **80 ms** of CPU and starts exactly at the beginning of a period, with no other work in the pod. Roughly when does it finish?",
+      "correction": "In an idealized quota model, cpu.max = 50000 100000. One request needs 80 ms CPU and starts at a period boundary. Assume no other work, contention, overhead, burst credit or carried runtime. Roughly when does it finish?",
+      "reason": "Exact timing simplifiedmodel.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-bwc.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q11",
+      "field": "explanation",
+      "option": 4,
+      "original": "Linux uses PELT, a decaying average of each task's utilisation weighted by nice, so one heavy task and five near-idle tasks aren't treated as five times the load.",
+      "correction": "Linux considers runnable counts alongside PELT load, runnable and utilization averages, CPU capacity and other signals. It does not rely purely on task counts.",
+      "reason": "Original falselysaysno countsand conflatesweightedutil.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-multicore.questions.json",
+      "questionId": "sched-multicore-q11",
+      "field": "workedExample",
+      "option": null,
+      "original": "Check each against how scheduling domains work:\n\n1. **Newidle** balancing: a CPU going idle pulls work. True.\n2. Domains are balanced **more eagerly lower down** (SMT, LLC) and less at the NUMA level. False.\n3. **Wake-up placement** prefers prev CPU / idle CPU in the same LLC. True.\n4. **Cache-hot** tasks (ran within `sched_migration_cost`, 0.5 ms) are left alone. True.\n5. Load uses **PELT** utilisation and weight, not task count. False.",
+      "correction": "The correct statements are 1, 3 and 4. Newidle balancing may pull work; wake-up placement considers locality and idle CPUs; recently running tasks may be treated as cache-hot. Cross-node balancing has different costs. Linux uses multiple signals, including task counts and distinct PELT averages; no one metric describes every balancing decision.",
+      "reason": "Removeabsolute cachehotnevermove and exclusivelyPELT.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "# Needs CAP_SYS_NICE or sufficient RLIMIT_RTPRIO",
+      "correction": "# Needs CAP_SYS_NICE or\n# sufficient RLIMIT_RTPRIO",
+      "reason": "Code width.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "All four threads get a pointer to the *same* `i`, which the loop keeps changing. A thread may start after `i` has moved on, so you see duplicates or even `4`.",
+      "correction": "All four threads get a pointer to the *same* `i`. Concurrent unsynchronized reads and writes constitute a C data race (undefined behavior), and use after the loop can also exceed its lifetime. Duplicates or `4` are possible symptoms, not guaranteed outcomes.",
+      "reason": "Consistent with corrected quiz language semantics.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "hands back a pointer into its own stack, which is freed when it exits.",
+      "correction": "hands back a pointer to an object whose lifetime has ended, regardless of whether its stack storage is physically reclaimed yet.",
+      "reason": "Object lifetime notphysicalfree determinesinvalidity.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "**CPU-bound** tasks (compression, image processing): about one thread per core. More threads cannot run at once and just add switching.",
+      "correction": "**CPU-bound** tasks (compression, image processing): start near the effective logical CPU capacity or quota, then measure. SMT, memory bandwidth, blocking, the GIL and task granularity can change the best size.",
+      "reason": "Physicalcore notuniversal runtimeparallelism.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-threads.md",
+      "original": "millions of cheap threads mounted on a small pool of carrier OS threads.",
+      "correction": "lightweight threads mounted on carrier OS threads; achievable counts and carrier behavior depend on memory, runtime version and workload.",
+      "reason": "Removeunsupporteduniversalcapacity.",
+      "sources": [
+        "https://openjdk.org/jeps/444"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.md",
+      "original": "The default base slice is about 0.7–0.75 ms depending on kernel version, scaled like CFS's tunables (so about 3 ms on a machine with 8 or more CPUs).",
+      "correction": "In the checked Linux 6.12 source the unscaled base slice is 0.75 ms; the default logarithmic scaling gives 3 ms at eight or more CPUs. Tunables and later kernels can differ.",
+      "reason": "Pin default to sourcecheckedversion.",
+      "sources": [
+        "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.questions.json",
+      "questionId": "sched-thread-apis-q11",
+      "field": "workedExample",
+      "option": null,
+      "original": "1. `result` is a local, so it is on the thread's stack.\n2. `return &result` hands back the address of that stack slot.\n3. When the thread exits, its stack is freed (or cached for reuse by a new thread).\n4. `main` reads through a dangling pointer. It may *seem* to work in a test and fail in production.\n\nFixes:\n- `malloc` the result and have the joiner `free` it;\n- or let the caller pass in a struct with a result field (as in the lesson's sum example);\n- or, for small integers, return the value cast through `intptr_t`.",
+      "correction": "The local result object ends its lifetime when the function returns, regardless of stack caching or physical reclamation. Dereferencing its returned address is undefined behavior. Return heap storage with a clear owner, or write into a caller-owned result field. Integer-to-pointer conversions are not a universally portable result transport.",
+      "reason": "Object lifetime and pointer portability.",
+      "sources": [
+        "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q4",
+      "field": "explanation",
+      "option": 2,
+      "original": "That counts climbing all the way to 0 (100 × 2). It only needs to match or beat the competitors at 40.",
+      "correction": "Aging lowers the numeric priority under this model. The question asks when it reaches 40; actual service also depends on the runnable queue and tie-breaking.",
+      "reason": "Equal priority doesnotguaranteeruntime.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q6",
+      "field": "prompt",
+      "option": null,
+      "original": "MLFQ with the game-proof Rule 4 and a **10 ms allotment** at the top queue. An interactive job runs **2 ms**, then blocks on I/O, over and over. After how many bursts is it demoted from the top queue?",
+      "correction": "MLFQ has cumulative CPU accounting and a 10 ms top-queue allotment. A job runs 2 ms then blocks repeatedly, with no intervening priority boost. After how many bursts is it demoted?",
+      "reason": "Excludebooststhatresetaccounting.",
+      "sources": [
+        "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-mlfq.questions.json",
+      "questionId": "sched-priority-mlfq-q10",
+      "field": "workedExample",
+      "option": null,
+      "original": "Check each claim against the mechanism:\n\n1. Inheritance boosts L **when H blocks** on L's lock. True.\n2. If L is waiting on a lock held by X, boosting L alone is useless, so X must be boosted too: **transitive**. True.\n3. Ceiling: each mutex's ceiling = highest priority of any thread that may lock it, known in advance. True.\n4. H still waits for L's critical section. Inheritance *bounds* the wait; it doesn't eliminate it. False.\n5. The constants: `PTHREAD_PRIO_INHERIT` is inheritance, `PTHREAD_PRIO_PROTECT` is ceiling. False.",
+      "correction": "Options 1, 2 and 3 describe inheritance, transitive inheritance and immediate priority ceilings. Option 4 is false: inheritance removes medium-priority interference in the simple example but H still waits for the holder; general bounds depend on nesting and other interference. Option 5 reverses the constants: INHERIT requests inheritance and PROTECT requests a priority ceiling.",
+      "reason": "General bound requires assumptions.",
+      "sources": [
+        "https://docs.kernel.org/locking/rt-mutex.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-thread-apis.md",
+      "original": "and it fails on free-threaded builds",
+      "correction": "and it is not a safe shared-counter protocol on free-threaded builds",
+      "reason": "Failurepossible notuniversaloutcome.",
+      "sources": [
+        "https://docs.python.org/3/howto/free-threading-python.html"
+      ],
+      "confidence": "high"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-linux.questions.json",
+      "questionId": "sched-linux-q4",
+      "field": "explanation",
+      "option": 1,
+      "original": "Correct. 1024 / (1024 + 820) ≈ 55.5% and 820 / 1844 ≈ 44.5%. That ~10-point gap is what the 1.25× ratio was designed to produce.",
+      "correction": "Correct: 1024/1844 ≈ 55.5% and 820/1844 ≈ 44.5%, a gap of about 11.1 percentage points. Each share changes about 5.5 points from 50%.",
+      "reason": "Clarify percentagepointarithmetic.",
+      "sources": [
+        "https://docs.kernel.org/scheduler/sched-design-CFS.html"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "lowConfidence": [
+    {
+      "lesson": "sched-threads",
+      "claim": "Version-dependent implementation details and completeness of illustrative examples",
+      "confidence": "medium",
+      "reason": "Core reviewed with primary sources; runtime-specific exceptions and deployment behavior remain qualified."
+    },
+    {
+      "lesson": "sched-thread-apis",
+      "claim": "Version-dependent implementation details and completeness of illustrative examples",
+      "confidence": "medium",
+      "reason": "Core reviewed with primary sources; runtime-specific exceptions and deployment behavior remain qualified."
+    },
+    {
+      "lesson": "sched-cpu-basics",
+      "claim": "Version-dependent implementation details and completeness of illustrative examples",
+      "confidence": "medium",
+      "reason": "Core reviewed with primary sources; runtime-specific exceptions and deployment behavior remain qualified."
+    },
+    {
+      "lesson": "sched-priority-mlfq",
+      "claim": "Version-dependent implementation details and completeness of illustrative examples",
+      "confidence": "medium",
+      "reason": "Core reviewed with primary sources; runtime-specific exceptions and deployment behavior remain qualified."
+    },
+    {
+      "lesson": "sched-linux",
+      "claim": "Version-dependent implementation details and completeness of illustrative examples",
+      "confidence": "medium",
+      "reason": "Core reviewed with primary sources; runtime-specific exceptions and deployment behavior remain qualified."
+    },
+    {
+      "lesson": "sched-multicore",
+      "claim": "Version-dependent implementation details and completeness of illustrative examples",
+      "confidence": "medium",
+      "reason": "Core reviewed with primary sources; runtime-specific exceptions and deployment behavior remain qualified."
+    }
+  ],
+  "gaps": [
+    "All six lessons and all fields of 66 questions received semantic review. Primary-source checks cover selected API contracts, scheduler algorithms, version-sensitive details and disputed claims; this is not independent source proof of every sentence.",
+    "30 host assertions passed: compiled pthread sum, Python pool and race-demo execution (no race output guarantee), observed barrier-enforced pool deadlock with subprocess termination, independent FCFS/SJF/SRTF/RR schedules and quota/weight arithmetic. Ten Linux 6.12.76 aarch64 assertions checked affinity replacement/inheritance, priority bounds and SCHED_IDLE selection.",
+    "No full kernel scheduling benchmark, privileged realtime workload, NUMA multiprocessor experiment, Kubernetes deployment or Go/JVM execution was performed. Example toy timing is qualified; unsupported universal thread/switch/NUMA measurements are explicitly absent.",
+    "Intentionally undefined C examples were analyzed as undefined behavior rather than treated as valid output tests. Partial snippets and Linux-specific privileged commands are illustrative, not complete production implementations.",
+    "Source and runtime defaults depend on versions/configuration. Whole-project links and mobile/diagram rendering are integrated by parent."
+  ],
+  "lessons": {
+    "sched-threads": {
+      "confidence": "medium",
+      "hash": "b26956a6f574f9d3"
+    },
+    "sched-thread-apis": {
+      "confidence": "medium",
+      "hash": "b15b219a3a42a5b2"
+    },
+    "sched-cpu-basics": {
+      "confidence": "medium",
+      "hash": "3262a30bb2fb1525"
+    },
+    "sched-priority-mlfq": {
+      "confidence": "medium",
+      "hash": "376219ec1919bdb0"
+    },
+    "sched-linux": {
+      "confidence": "medium",
+      "hash": "986a302bd85ffa59"
+    },
+    "sched-multicore": {
+      "confidence": "medium",
+      "hash": "3cdcf3e8c9842e81"
+    }
+  }
+}

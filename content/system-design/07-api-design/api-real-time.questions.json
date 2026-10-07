@@ -1,0 +1,378 @@
+[
+  {
+    "id": "api-real-time-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An app short-polls for new notifications every 10 seconds. Notifications arrive at random times. What is the **average** delay between a notification being created and the client seeing it (ignoring network time)?",
+    "options": [
+      {
+        "text": "10 seconds",
+        "explanation": "That's the *worst* case: a notification created just after a poll waits the full interval. On average it lands halfway between polls."
+      },
+      {
+        "text": "5 seconds",
+        "explanation": "Correct. Arrival times are uniformly spread across the 10 s interval, so the expected wait until the next poll is 10 / 2 = 5 s."
+      },
+      {
+        "text": "0 seconds",
+        "explanation": "Only a push mechanism (long polling, SSE, WebSocket) delivers near-instantly. Short polling always waits for the next scheduled request."
+      },
+      {
+        "text": "20 seconds",
+        "explanation": "A notification is always picked up by the very next poll, so the delay can never exceed one interval."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Polls happen at t = 0, 10, 20, ...\n2. A notification arrives at a uniformly random time within an interval, say at offset `u` in [0, 10).\n3. It's seen at the next poll, after 10 − u seconds.\n4. E[10 − u] = 10 − E[u] = 10 − 5 = **5 s**.\n\nTo halve the latency you'd halve the interval, which doubles the request load. Push techniques break that trade-off.",
+    "link": {
+      "title": "Wikipedia: Push technology",
+      "url": "https://en.wikipedia.org/wiki/Push_technology"
+    }
+  },
+  {
+    "id": "api-real-time-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You have 2 million connected clients. Option A: short polling every 4 seconds. Option B: long polling with a 30-second server timeout, where messages arrive independently as a Poisson process averaging one per client every 2 minutes, polls restart immediately, and network time is ignored. Roughly how many requests per second does each option generate?",
+    "options": [
+      {
+        "text": "A: 500,000/s; B: roughly 75,000–83,000/s",
+        "explanation": "Correct. A = 2,000,000 / 4 = 500,000 req/s. In B each poll ends at a message or the 30 s timeout, whichever comes first. A quick upper bound is 2,000,000 × (1/30 + 1/120) ≈ 83,000 req/s; allowing for polls that a message ends early brings it to about 75,000 req/s."
+      },
+      {
+        "text": "A: 8,000,000/s; B: 60,000,000/s",
+        "explanation": "These multiply the client count by the interval instead of dividing by it. Request rate = clients ÷ seconds between requests."
+      },
+      {
+        "text": "A: 500,000/s; B: 500,000/s",
+        "explanation": "Long polling doesn't re-poll on a short fixed timer. A client only sends a new request when a message arrives or the 30 s timeout fires, so it's far fewer requests."
+      },
+      {
+        "text": "A: 500,000/s; B: 0/s, because long polling holds connections open",
+        "explanation": "The request is held, but each message delivery or timeout completes it, and the client immediately sends a new one. That's still real request traffic."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Short polling**\n\n2,000,000 clients ÷ 4 s = **500,000 req/s**.\n\n**Long polling**, quick estimate per client:\n\n1. Timeouts: messages are rare, so the client is usually waiting. At most one timeout every 30 s → ≤ 1/30 req/s.\n2. Messages: one every 120 s, each ends a poll → 1/120 req/s.\n3. Per client ≤ 0.0333 + 0.0083 = 0.0417 req/s.\n4. Total ≤ 2,000,000 × 0.0417 ≈ **83,000 req/s**.\n\nThat slightly overcounts: a poll that a message ends early isn't also a timeout. If messages arrive at random (a Poisson process), a poll lasts on average 120 × (1 − e^(−30/120)) ≈ 26.5 s, so the total is 2,000,000 ÷ 26.5 ≈ **75,000 req/s**.\n\nEither way it's 6–7× fewer requests than short polling, and messages arrive almost instantly instead of 2 s late on average. Raising the timeout to 60 s would cut it to roughly 42,000–50,000 req/s, provided proxies and load balancers don't kill idle requests sooner.",
+    "link": {
+      "title": "RFC 6202: Long polling and streaming",
+      "url": "https://www.rfc-editor.org/rfc/rfc6202"
+    }
+  },
+  {
+    "id": "api-real-time-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're building a live football scores page. Updates flow only from server to browser, a few per minute, to millions of viewers. You want automatic reconnection and resumption after mobile network drops with minimal custom code. Which is the best fit?",
+    "options": [
+      {
+        "text": "WebSockets",
+        "explanation": "WebSockets would work, but they're full-duplex (you don't need client→server streaming), the browser API has no automatic reconnect, and you'd have to build resume logic yourself."
+      },
+      {
+        "text": "Short polling every second",
+        "explanation": "Millions of viewers polling every second means millions of requests per second, nearly all returning no change. Wasteful and still up to 1 s late."
+      },
+      {
+        "text": "Server-Sent Events",
+        "explanation": "Correct. SSE is one-way server push over plain HTTP. `EventSource` reconnects automatically and sends `Last-Event-ID`, so the server can replay missed goals. Configure HTTP intermediaries for streaming; native EventSource supports cookies, but not custom Authorization headers."
+      },
+      {
+        "text": "gRPC bidirectional streaming",
+        "explanation": "Browsers can't use raw gRPC without gRPC-Web and a proxy, and bidirectional streaming is unnecessary for one-way updates."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Requirements checklist:\n\n| Need | SSE | WebSocket |\n|---|---|---|\n| Server→client | ✔ | ✔ |\n| Client→server stream | not needed | ✔ |\n| Auto-reconnect | built in | DIY |\n| Resume missed events | `Last-Event-ID` | DIY |\n| Plain HTTP infra | ✔ | upgrade needed |\n\nSSE meets every requirement with the least custom code.",
+    "link": {
+      "title": "MDN: Using server-sent events",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events"
+    }
+  },
+  {
+    "id": "api-real-time-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about classic WebSocket over HTTP/1.1 are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The connection starts as an HTTP request with `Upgrade: websocket` and the server replies `101 Switching Protocols`",
+        "explanation": "Correct. The opening handshake is HTTP, which lets WebSockets share ports 80/443 and pass through HTTP infrastructure."
+      },
+      {
+        "text": "After the handshake, both client and server can send messages at any time",
+        "explanation": "Correct. WebSockets are full-duplex: neither side has to wait for the other."
+      },
+      {
+        "text": "The browser's WebSocket API reconnects automatically after a dropped connection",
+        "explanation": "Wrong. That's a feature of SSE's `EventSource`. With WebSockets you must implement reconnection (ideally with backoff and jitter) yourself or use a library."
+      },
+      {
+        "text": "Each message carries full HTTP headers",
+        "explanation": "Wrong. After the upgrade, each base frame header occupies 2–14 bytes, excluding extensions and transport overhead; a message can span several frames. That's a key efficiency advantage over polling."
+      },
+      {
+        "text": "WebSockets support both text and binary messages",
+        "explanation": "Correct. Frames have an opcode for text (UTF-8) or binary. SSE, by contrast, is text-only."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Walk through the life of a WebSocket:\n\n1. **Handshake**: HTTP `GET` + `Upgrade` → `101`. (Option 1 ✔)\n2. **Data**: frames both ways, any time (option 2 ✔), text or binary (option 5 ✔), tiny frame headers (option 4 ✘).\n3. **Drop**: `onclose` fires; nothing reconnects for you (option 3 ✘).",
+    "link": {
+      "title": "RFC 6455: The WebSocket Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc6455"
+    }
+  },
+  {
+    "id": "api-real-time-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A chat service has 20 WebSocket gateway servers behind a load balancer. Alice (on gateway 3) sends a message to a group whose members are spread across 12 gateways. What's the standard way to deliver it?",
+    "options": [
+      {
+        "text": "Use sticky sessions so all group members end up on the same gateway",
+        "explanation": "Group members connect independently from all over the world. You can't force thousands of users into one server, and a user in many groups can only be on one gateway."
+      },
+      {
+        "text": "Gateway 3 opens a direct connection to every other gateway and broadcasts",
+        "explanation": "A full mesh of N² connections that sends every message to every gateway, even those with no members, doesn't scale and couples gateways tightly."
+      },
+      {
+        "text": "Members poll a REST endpoint for new group messages",
+        "explanation": "That throws away the point of having WebSockets and reintroduces polling load and latency."
+      },
+      {
+        "text": "The message is published to a pub/sub channel for the group (for example, Redis Pub/Sub; Kafka needs explicit consumer-group and routing design); each gateway holding a member's connection is subscribed and pushes it down to its local sockets",
+        "explanation": "Correct. Gateways stay stateless apart from connections, targeted subscriptions can route to interested gateways. Slack uses channel/gateway routing; Socket.IO's standard Redis adapter broadcasts between nodes and does not guarantee this exact selective-delivery topology."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nAlice -> GW3 -> chat service\n  1. persist message\n  2. PUBLISH group:42 msg\n\nGW1, GW5, ... (12 of 20)\n  SUBSCRIBEd to group:42\n  -> push to local members\n```\n\nKey properties:\n- Only the 12 gateways with members get the message (not all 20).\n- Gateways subscribe when a member connects and unsubscribe when the last one leaves.\n- Persisting first means offline members can fetch it later. Use an outbox or equivalent recovery mechanism so a crash between persistence and publish does not permanently suppress live delivery.\n\nMessaging systems themselves are covered in the messaging module.",
+    "link": {
+      "title": "Slack engineering: Real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "api-real-time-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You deploy a new version to a WebSocket gateway holding 200,000 connections by killing the process. Within seconds, your auth service falls over. Why, and what are the best mitigations?",
+    "options": [
+      {
+        "text": "All 200,000 clients reconnect at once, each re-authenticating: a thundering herd. Drain gradually, reconnect with exponential backoff and jitter, and resume from the last-seen sequence number",
+        "explanation": "Correct. Killing the process drops every connection simultaneously, and naïve clients reconnect immediately. Gradual draining spreads the load over minutes, jitter de-synchronises clients, and resume avoids a full state reload."
+      },
+      {
+        "text": "The new version uses a different WebSocket protocol version",
+        "explanation": "WebSocket version 13 has been stable since 2011. A protocol mismatch would cause handshake failures, not an auth-service overload."
+      },
+      {
+        "text": "Long-lived connections leak memory in the auth service",
+        "explanation": "Auth isn't holding the WebSocket connections; the gateway is. The auth load comes from the burst of new handshakes."
+      },
+      {
+        "text": "The load balancer can't route WebSockets after a deploy",
+        "explanation": "The LB keeps routing fine; it's the sudden volume of reconnects, not routing, that causes the failure."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Estimate the burst:\n\n- 200,000 clients reconnect within ~2 s → **100,000 auth checks/s**.\n- If auth normally handles ~5,000/s, that's 20× overload.\n\nWith a 5-minute graceful drain (close connections in batches):\n\n- 200,000 / 300 s ≈ **667 reconnects/s**, comfortably handled.\n\nAdd client-side backoff with full jitter (e.g. random 0–30 s on first retry) so even an unplanned crash spreads reconnects out. Resuming from a sequence number keeps each reconnect cheap.",
+    "link": {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "api-real-time-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Each idle WebSocket connection on your gateway uses about 40 KB of memory (socket buffers, TLS state, app state). Servers have 32 GB of RAM, of which you reserve 25% for the OS and runtime. You want each server to run at most 70% full so the fleet can absorb failures. How many servers do you need for 10 million concurrent connections? (Use 1 GB = 1,000,000 KB.)",
+    "options": [
+      {
+        "text": "About 13",
+        "explanation": "This uses all 32 GB for connections (800,000 per server) and no headroom. The OS and runtime need memory too, and a fully loaded fleet can't absorb a server failure."
+      },
+      {
+        "text": "About 17",
+        "explanation": "This correctly reserves 25% (600,000 connections per server) but runs every server at 100%. Losing one server would push its 600,000 clients onto already-full machines."
+      },
+      {
+        "text": "About 24",
+        "explanation": "Correct. 24 GB usable ÷ 40 KB = 600,000 connections per server. At 70% utilisation that's 420,000. 10,000,000 ÷ 420,000 ≈ 23.8, so 24 servers."
+      },
+      {
+        "text": "About 2,400",
+        "explanation": "This would use roughly 4 MB per connection, 100 times the given assumption. Actual memory depends on the runtime, buffering, TLS and workload; the question supplies 40 KB only as a sizing input."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Usable RAM per server = 32 GB × 0.75 = **24 GB** = 24,000,000 KB.\n2. Max connections per server = 24,000,000 ÷ 40 = **600,000**.\n3. Target utilisation 70% → 600,000 × 0.7 = **420,000** per server.\n4. Servers = 10,000,000 ÷ 420,000 = 23.8 → round up to **24**.\n\nSanity check: if one of 24 servers dies, its ~417,000 clients spread over 23 servers, adding ~18,000 each, well within the 180,000 of spare capacity per server.\n\nIn practice, file descriptor limits, CPU for heartbeats and TLS handshakes during reconnect storms may bind before memory does, so load-test.",
+    "link": {
+      "title": "Discord: How Discord scaled Elixir to 5,000,000 concurrent users",
+      "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+    }
+  },
+  {
+    "id": "api-real-time-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your SSE notifications stream sends `id:` on every event. A phone drops off the network for 20 seconds during which events 340–352 are sent, then `EventSource` reconnects with `Last-Event-ID: 339`. Users report missing notifications after reconnecting. What's the most likely server-side gap?",
+    "options": [
+      {
+        "text": "The server ignores `Last-Event-ID` or has nowhere to read past events from, so it only sends new events from the moment of reconnection",
+        "explanation": "Correct. The browser does its half automatically: reconnect and report the last id. The server has to keep a replay buffer (or query a log) and send everything after 339 before resuming live events."
+      },
+      {
+        "text": "`EventSource` doesn't reconnect automatically, so the client must do it",
+        "explanation": "It does reconnect automatically; that's one of SSE's selling points. The client did reconnect here and sent the header."
+      },
+      {
+        "text": "SSE can't carry ids larger than 255",
+        "explanation": "The `id` field is an arbitrary string. There's no numeric limit."
+      },
+      {
+        "text": "The events were binary, which SSE drops",
+        "explanation": "SSE is text-only, but that would fail on every event, not just during the outage. Binary data is sent base64-encoded."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Split the resume work into its two halves:\n\n| Step | Who does it |\n|---|---|\n| Detect drop, reconnect | Browser |\n| Send `Last-Event-ID: 339` | Browser |\n| Find events 340+ | **Server** |\n| Send them, then go live | **Server** |\n\nImplementation sketch: keep each user's recent events in a capped Redis list or stream (say, the last 5 minutes). Avoid a replay-to-live race: consume a durable stream continuously after the last ID, or establish and buffer a live subscription before replaying to a captured high-water mark, then deduplicate the overlap. If the requested id is older than the buffer, tell the client to do a full refresh.",
+    "link": {
+      "title": "MDN: Using server-sent events",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events"
+    }
+  },
+  {
+    "id": "api-real-time-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your WebSocket fleet has 10 gateways, each with about 100,000 connections. During a traffic spike you add 10 more. An hour later the new gateways have only a few thousand connections each and the old ones are still overloaded. Which actions help? Select all that apply.",
+    "options": [
+      {
+        "text": "Use least-connections balancing, so new connections prefer the emptier gateways",
+        "explanation": "Correct. Round-robin would send only half of new connections to the new gateways; least-connections sends nearly all of them there until the fleet evens out."
+      },
+      {
+        "text": "Have overloaded gateways gradually close a slice of connections, asking clients to reconnect with jittered backoff",
+        "explanation": "Correct. Connections only move when clients reconnect. Closing a controlled slice, slowly, lets them land on the new gateways without a reconnect storm."
+      },
+      {
+        "text": "Enable sticky sessions on the load balancer",
+        "explanation": "Stickiness tries to send a client back to the *same* gateway, which is the opposite of what you need here."
+      },
+      {
+        "text": "Set a maximum connection age with jitter, so connections naturally recycle over time",
+        "explanation": "Correct. A max age (e.g. a few hours ± random) means the fleet keeps rebalancing on its own, including after future scale-outs."
+      },
+      {
+        "text": "Restart the old gateways all at once so every client reconnects",
+        "explanation": "That moves the connections, but 1 million simultaneous reconnects hammer auth and the gateways: a self-inflicted thundering herd."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. The root cause: balancing happens only at **connect** time. Existing connections stay where they were.\n2. To fix it, you need *new* connections to go to the right place, and *some* old connections to become new ones:\n   - least-connections → new connects go to new gateways ✔\n   - gradual, jittered shedding → old connects move, slowly ✔\n   - max connection age → continuous rebalancing ✔\n3. Moving all of them at once is the reconnect-storm failure mode. ✘\n4. Stickiness is for keeping clients where they are. ✘\n\nTarget: 1,000,000 connections across 20 gateways = 50,000 each.",
+    "link": {
+      "title": "Slack engineering: Real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "api-real-time-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your chat app's WebSocket connections run through an AWS Application Load Balancer with its default settings. Users in quiet rooms keep getting disconnected roughly every minute, but busy rooms are fine. What's the fix?",
+    "options": [
+      {
+        "text": "Switch from WebSockets to short polling",
+        "explanation": "That throws away the real-time design to work around a timeout setting. It would also add far more load than the occasional ping."
+      },
+      {
+        "text": "Send WebSocket ping/pong heartbeats every ~30 s (and/or raise the ALB idle timeout), so idle connections never look idle",
+        "explanation": "Correct. The ALB closes connections with no traffic for its idle timeout, 60 s by default. Quiet rooms send nothing for a minute; busy rooms always have traffic. Heartbeats keep the connection active and also detect dead clients."
+      },
+      {
+        "text": "Enable sticky sessions",
+        "explanation": "A WebSocket is already one long-lived connection to one target. Stickiness affects where *new* requests go, not idle timeouts."
+      },
+      {
+        "text": "Use binary frames instead of text frames",
+        "explanation": "The frame type doesn't matter. The connection is being closed because no frames of any kind are flowing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Read the clue: **quiet** rooms disconnect, **busy** rooms don't, at about **60 s** intervals.\n\n1. Something closes connections after ~60 s of silence.\n2. AWS ALB's default idle timeout is 60 s.\n3. Busy rooms reset the idle timer with every message; quiet rooms don't.\n\nFix: have the server send a protocol ping roughly every 30 s (browsers automatically pong; browser JavaScript cannot send protocol ping frames directly), comfortably inside the timeout, and optionally raise the ALB idle timeout. The same pings let the server notice clients that vanished without closing the socket (a phone losing signal), so it can free their resources.",
+    "link": {
+      "title": "AWS: Application Load Balancer idle timeout",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-load-balancer-attributes.html"
+    }
+  },
+  {
+    "id": "api-real-time-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A gateway holds 200,000 WebSocket connections, and every reconnect costs one call to the auth service. Auth can absorb about 2,000 extra calls/s on top of normal load. For a deploy, you drain the gateway by closing connections at a steady rate, and clients reconnect promptly. Ignoring variability and all other bottlenecks, what lower bound does auth capacity place on drain time?",
+    "options": [
+      {
+        "text": "About 10 seconds",
+        "explanation": "That's 20,000 reconnects per second, ten times what auth can absorb."
+      },
+      {
+        "text": "It doesn't matter, as long as clients use exponential backoff",
+        "explanation": "Backoff helps after *failures*. If you close everything at once and auth falls over, backoff spreads out the wreckage, but you've still caused an outage. Draining controls the rate at the source."
+      },
+      {
+        "text": "About 100 seconds",
+        "explanation": "Correct. 200,000 ÷ 2,000 per second = 100 s. In practice you'd add headroom, say 3–5 minutes, and jitter on the client side."
+      },
+      {
+        "text": "About 2,000 seconds",
+        "explanation": "That divides by 100 instead of 2,000. It's safe, but over half an hour per gateway makes deploys needlessly slow."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Reconnects to absorb: **200,000**.\n2. Auth headroom: **2,000/s**.\n3. Minimum drain time = 200,000 ÷ 2,000 = **100 s**.\n4. Add headroom for other gateways, retries and failures: drain over a few minutes.\n\nCompare with killing the process: 200,000 reconnects in maybe 1–2 seconds, around 100,000/s, which is 50× auth's headroom.\n\nIf you deploy 10 gateways one after another at this pace, the whole rollout takes about 17 minutes, which is why large fleets drain several gateways in parallel only when auth has the capacity.",
+    "link": {
+      "title": "Discord: How Discord scaled Elixir to 5,000,000 concurrent users",
+      "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+    }
+  },
+  {
+    "id": "api-real-time-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're building a collaborative whiteboard. Each user's cursor position is broadcast to everyone else in the room about 20 times a second, and users also send strokes as they draw. Which transport fits best?",
+    "options": [
+      {
+        "text": "Server-Sent Events, with cursor updates sent as `POST` requests",
+        "explanation": "SSE handles the downstream well, but 20 POSTs per second per user means full HTTP headers on every tiny update. The upstream is as busy as the downstream here."
+      },
+      {
+        "text": "Long polling",
+        "explanation": "Without batching, each delivered update completes a poll and requires a new request. Batching reduces requests but adds waiting. It's built for occasional pushes."
+      },
+      {
+        "text": "Short polling every second",
+        "explanation": "One-second polling makes cursors jump rather than glide and still sends a request per second per user. It can batch multiple updates, but delivers them in delayed bursts rather than smoothly."
+      },
+      {
+        "text": "WebSockets",
+        "explanation": "Correct. Both directions carry frequent, small messages. A base WebSocket frame header adds 2–14 bytes, excluding extensions and transport overhead; HTTP request overhead depends on headers and HTTP version, and either side can send at any time."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use the lesson's rule: SSE for server push, WebSockets when the client also streams, polling when updates are rare.\n\n1. Client → server: about 20 updates/s per user, plus strokes. **The client streams.**\n2. Server → client: about 20 updates/s × (users − 1).\n3. Overhead per cursor update:\n\n| Transport | Overhead |\n|---|---|\n| HTTP/1.1 POST | assume 300–800 B headers |\n| WS base frame header | 2–14 B |\n\nFor an illustrative 20-byte cursor payload and the assumed HTTP header sizes, header overhead is 15–40× the data; these are arithmetic inputs, not measured universal values. (HTTP/2 header compression shrinks this, but each update is still a full request with its own response.) WebSockets win clearly. Figma and similar tools use persistent connections for exactly this reason.",
+    "link": {
+      "title": "MDN: The WebSocket API",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API"
+    }
+  }
+]

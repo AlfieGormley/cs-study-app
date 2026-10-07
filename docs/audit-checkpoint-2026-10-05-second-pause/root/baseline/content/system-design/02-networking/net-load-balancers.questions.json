@@ -1,0 +1,379 @@
+[
+  {
+    "id": "net-load-balancers-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need to send `/api/*` requests to one server pool and `/images/*` to another, from the same hostname. Which kind of load balancer do you need?",
+    "options": [
+      {
+        "text": "An L4 load balancer, because it's faster",
+        "explanation": "L4 balancers only see IP addresses and ports. The URL path is inside the HTTP request (and usually inside TLS), so an L4 balancer can't route on it."
+      },
+      {
+        "text": "Round-robin DNS",
+        "explanation": "DNS works on hostnames only; it never sees URL paths. Both paths share a hostname, so DNS can't separate them."
+      },
+      {
+        "text": "Either; all load balancers can route by path",
+        "explanation": "Only balancers that understand HTTP can route by path. That's the defining difference between L4 and L7."
+      },
+      {
+        "text": "An L7 load balancer",
+        "explanation": "Correct. An L7 balancer terminates the connection and parses HTTP, so it can read the path and pick a pool per request."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. What information is needed? The **path** (`/api` vs `/images`).\n2. Where does it live? In the HTTP request line, inside the TLS-encrypted stream.\n3. Who can see it? Only something that terminates TLS and parses HTTP, i.e. **L7**.\n4. Examples: AWS ALB path rules, NGINX `location` blocks, Envoy route config.",
+    "link": {
+      "title": "What is an Application Load Balancer? (AWS)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html"
+    }
+  },
+  {
+    "id": "net-load-balancers-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A pool has four identical servers behind round robin. Most requests take 5 ms, but 1% are report exports taking 30 s. What problem will round robin cause?",
+    "options": [
+      {
+        "text": "None; round robin gives each server exactly a quarter of the work",
+        "explanation": "Round robin gives each server a quarter of the **requests**, not the work. A server that happens to receive several 30 s exports is far busier than the others but keeps getting its full share."
+      },
+      {
+        "text": "Servers that pick up the slow exports pile up in-flight requests and slow down, while round robin keeps sending them new traffic",
+        "explanation": "Correct. Round robin ignores current load. A least-requests or power-of-two-choices algorithm would steer new requests away from servers busy with exports."
+      },
+      {
+        "text": "Round robin will crash when request times differ",
+        "explanation": "Round robin doesn't know or care about request durations; it won't crash. It just distributes unevenly in terms of actual load."
+      },
+      {
+        "text": "Round robin will send all exports to the same server",
+        "explanation": "Round robin doesn't look at request type at all. Exports land wherever the rotation happens to be."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Round robin balances **count**, assuming equal cost.\n2. Here cost varies 6,000× (5 ms vs 30 s).\n3. Suppose server B gets three exports in a minute: it has three long requests occupying workers, yet still gets 25% of the new 5 ms requests, which queue behind them.\n4. **Least outstanding requests** sees B has more in flight and favours A, C, D.\n5. Better still: move exports to a separate worker pool or async job queue.",
+    "link": {
+      "title": "Supported load balancers (Envoy)",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers"
+    }
+  },
+  {
+    "id": "net-load-balancers-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You route requests to 10 cache servers using `hash(user_id) % N`. You add an 11th server. Roughly what fraction of users now map to a different server?",
+    "options": [
+      {
+        "text": "About 91% (10/11)",
+        "explanation": "Correct. A key keeps its server only if `h % 10 == h % 11`, which holds for about 1 in 11 keys. So about 10/11 ≈ 91% move, and the caches are effectively flushed."
+      },
+      {
+        "text": "About 9% (1/11)",
+        "explanation": "That's what consistent hashing achieves: only the keys that move to the new server change. Modulo hashing reshuffles nearly everything."
+      },
+      {
+        "text": "About 50%",
+        "explanation": "There's no reason for exactly half; the actual fraction depends on how the moduli line up and is much higher."
+      },
+      {
+        "text": "0%, because existing keys stay where they are",
+        "explanation": "With modulo hashing, every key's server is recomputed with the new N, so existing keys do move."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A key stays put only if `h mod 10 = h mod 11`.\n2. Over `h = 0..109` (the least common multiple is 110), this holds for `h = 0..9` only: 10 out of 110 values.\n3. So ~1/11 ≈ 9% stay and **~91% move**.\n4. With consistent hashing (with virtual nodes), the new server takes over ~1/11 of the ring, so only **~9% move**.\n5. That difference decides whether adding capacity causes a cache stampede on the database.",
+    "link": {
+      "title": "Consistent hashing (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  },
+  {
+    "id": "net-load-balancers-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Every app server's `/healthz` checks that it can query the shared primary database. The database has a 20-second failover. What happens, and what's a better design?",
+    "options": [
+      {
+        "text": "Nothing bad; the balancer just waits for the database",
+        "explanation": "The balancer doesn't know about the database. It sees every backend failing its health check and removes them all."
+      },
+      {
+        "text": "Only one backend fails, so traffic moves to the others",
+        "explanation": "All backends share the same database, so they all fail the same check at the same moment. There's nowhere to move traffic to."
+      },
+      {
+        "text": "The balancer automatically switches to the database replica",
+        "explanation": "Load balancers in front of app servers don't manage database connections; failing over the database is a separate mechanism."
+      },
+      {
+        "text": "All backends fail health checks together, the balancer removes all of them, and even requests that don't need the database get errors. Health checks should reflect the server's own ability to serve, with fail-open when most backends look unhealthy.",
+        "explanation": "Correct. A deep dependency check turns a shared-dependency blip into a total outage. Check local health (process, thread pool, ability to respond) for readiness, handle dependency failures per request, and rely on fail-open or panic thresholds as a safety net."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Database fails over: ~20 s of errors.\n2. Each backend's `/healthz` fails; after 2–3 failures (10–30 s), the balancer marks it unhealthy.\n3. **All** backends are now unhealthy → balancer returns 503 to everything, including cached pages, static assets and health-independent endpoints.\n4. When the database returns, backends must pass M consecutive checks before re-entering, prolonging the outage.\n5. Better: shallow readiness checks, per-request error handling (circuit breakers, degraded responses) and a panic threshold (Envoy routes to all hosts if fewer than 50% are healthy).",
+    "link": {
+      "title": "Health checks for target groups (AWS)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html"
+    }
+  },
+  {
+    "id": "net-load-balancers-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your app stores user sessions in server memory and relies on sticky sessions at the load balancer. Which problems should you expect? Select all that apply.",
+    "options": [
+      {
+        "text": "When a server crashes, its users lose their sessions and get logged out",
+        "explanation": "Correct. The session data only existed in that server's memory; affinity can't move it elsewhere."
+      },
+      {
+        "text": "Newly added servers take a long time to share the load, because existing users stay pinned",
+        "explanation": "Correct. Only new sessions go to new servers. Scale-out during a spike barely helps the already-hot servers."
+      },
+      {
+        "text": "Load can become uneven if some pinned users are much heavier than others",
+        "explanation": "Correct. Affinity overrides the balancing algorithm; a server with a few heavy users can't shed them."
+      },
+      {
+        "text": "TLS stops working with sticky sessions",
+        "explanation": "Stickiness is implemented with cookies or hashing at the L7 balancer, which terminates TLS anyway. It has no effect on TLS."
+      },
+      {
+        "text": "If affinity is by client IP, users behind one carrier NAT all land on the same server",
+        "explanation": "Correct. Thousands of mobile users can share a few public IPs, so IP-hash stickiness concentrates them."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Walk through the life of a sticky session:\n\n1. **Placement** fixed at first request → no rebalancing later (uneven load, slow scale-out).\n2. **State** lives only on that server → lost on crash or deploy.\n3. **Key choice**: cookies are per browser; IP hash is per NAT gateway → hot spots.\n\nFix: move session state to Redis or a signed token, so any server can serve any request; keep stickiness only as a cache-locality optimisation.",
+    "link": {
+      "title": "Sticky sessions for your Application Load Balancer (AWS)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/sticky-sessions.html"
+    }
+  },
+  {
+    "id": "net-load-balancers-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run 50 independent L7 proxy instances, each doing global *least-connections* to 200 backends based on its own view. A backend that just restarted has 0 connections. What tends to happen, and what algorithm mitigates it?",
+    "options": [
+      {
+        "text": "Nothing; least-connections handles this perfectly",
+        "explanation": "Each proxy independently sees the restarted backend as the least loaded and sends it new traffic at the same time. Together they overwhelm it."
+      },
+      {
+        "text": "The backend is ignored until it reaches the average connection count",
+        "explanation": "Least-connections does the opposite: a backend with the fewest connections is the most attractive target."
+      },
+      {
+        "text": "All 50 proxies simultaneously pick the empty backend (herding), overloading it; power of two choices limits this because each proxy only compares two random backends",
+        "explanation": "Correct. With P2C, the empty backend wins only when it's one of the two sampled, so its share of new traffic rises gradually rather than all proxies piling on together."
+      },
+      {
+        "text": "Round robin would be worse, because it can't spread load",
+        "explanation": "Round robin would actually not herd onto the restarted node (it'd get 1/200 of traffic), though it ignores load in other ways. The specific fix for herding with load awareness is P2C."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Global least-connections: each proxy picks `argmin(connections)` across 200 backends.\n2. A fresh backend at 0 connections is the argmin for **every** proxy at once.\n3. 50 proxies × their request rates all land on it until their (stale, local) counts catch up → overload, possibly a crash loop.\n4. **P2C**: sample 2 of 200 at random; the fresh backend is in the sample with probability ≈ 2/200 = 1%, so it gets roughly twice its fair share, not all traffic.\n5. Add **slow start** (ramp new backends' weight over 30–60 s) for warm-up, as Envoy and HAProxy support.",
+    "link": {
+      "title": "Power of two choices load balancing (HAProxy)",
+      "url": "https://www.haproxy.com/blog/power-of-two-load-balancing"
+    }
+  },
+  {
+    "id": "net-load-balancers-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You serve 40 Gbps of video responses but only 1 Gbps of requests. Your software L4 balancers are saturating their network links. Which technique most directly cuts balancer bandwidth?",
+    "options": [
+      {
+        "text": "Switch to an L7 balancer",
+        "explanation": "An L7 balancer proxies both directions and does more work per byte, so it would carry the full 41 Gbps and need even more capacity."
+      },
+      {
+        "text": "Direct server return (DSR), so backends send responses straight to clients and the balancer only handles the inbound 1 Gbps",
+        "explanation": "Correct. With DSR, backends reply using the service IP as the source address, bypassing the balancer. It's a classic L4 technique for asymmetric traffic."
+      },
+      {
+        "text": "Enable sticky sessions",
+        "explanation": "Stickiness changes which backend gets a connection, not how much data flows through the balancer."
+      },
+      {
+        "text": "Use weighted round robin",
+        "explanation": "Weights change how traffic is split among backends; every byte still passes through the balancer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Traffic is asymmetric: 1 Gbps in, 40 Gbps out.\n2. In a full proxy (or NAT-based L4), the balancer carries **41 Gbps**.\n3. With DSR: the balancer forwards inbound packets (e.g. via IP-in-IP encapsulation or MAC rewriting); the backend has the service IP on a loopback interface and replies directly.\n4. Balancer load drops to **~1 Gbps**, a 40× reduction.\n5. Trade-offs: the balancer can't see responses (no L7 features, no response-based health checks), and network setup is more complex. Google's Maglev uses this approach.",
+    "link": {
+      "title": "Maglev: a fast and reliable software network load balancer (Google Research)",
+      "url": "https://research.google/pubs/maglev-a-fast-and-reliable-software-network-load-balancer/"
+    }
+  },
+  {
+    "id": "net-load-balancers-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your balancer probes `/healthz` every 10 s and marks a backend unhealthy after 3 consecutive failures. One of 10 backends, each taking about 200 requests per second, crashes hard just after passing a check. With no retries and no passive checks, roughly how many user requests fail before it's removed?",
+    "options": [
+      {
+        "text": "About 200",
+        "explanation": "That's one second's worth of traffic. Detection takes three failed probes 10 s apart, so it's closer to 30 s."
+      },
+      {
+        "text": "About 6,000",
+        "explanation": "Correct. Detection takes about 3 × 10 s = 30 s, and the dead backend keeps receiving its share: 30 × 200 = 6,000 failed requests."
+      },
+      {
+        "text": "About 60,000",
+        "explanation": "That would be the whole fleet's traffic (2,000 rps) for 30 s. Only the dead backend's share fails."
+      },
+      {
+        "text": "None, because the balancer notices instantly",
+        "explanation": "Active checks only notice at the next probe; the balancer has no instant signal unless passive outlier detection is enabled."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Detection time ≈ interval × unhealthy threshold = 10 s × 3 = **30 s** (worst case, just after a pass).\n2. Traffic to that backend: 200 rps.\n3. Failed requests ≈ 30 × 200 = **6,000**.\n4. Ways to shrink it:\n  - **Passive outlier detection:** eject after, say, 5 consecutive 5xx or connection failures, within a fraction of a second at this rate.\n  - **Retries** of idempotent requests to another backend.\n  - Shorter intervals, at the cost of more probe traffic.",
+    "link": {
+      "title": "Health checks for target groups (AWS ALB)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html"
+    }
+  },
+  {
+    "id": "net-load-balancers-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For which of these requirements do you need an **L7** load balancer rather than an L4 one? Select all that apply.",
+    "options": [
+      {
+        "text": "Spreading individual gRPC calls from a few long-lived clients across many backends",
+        "explanation": "Correct. gRPC multiplexes many calls over one HTTP/2 connection; only something that parses HTTP/2 can balance per call rather than per connection."
+      },
+      {
+        "text": "Sending requests with header `x-canary: true` to a canary pool",
+        "explanation": "Correct. Headers are inside the (usually TLS-encrypted) HTTP request, so only an L7 balancer can read them."
+      },
+      {
+        "text": "Balancing PostgreSQL client connections across read replicas",
+        "explanation": "The Postgres wire protocol isn't HTTP; an L4 balancer spreading TCP connections works fine (or a Postgres-aware proxy, which isn't an HTTP L7 balancer)."
+      },
+      {
+        "text": "Using direct server return so responses bypass the balancer",
+        "explanation": "DSR is an L4 technique: the balancer only forwards inbound packets. An L7 proxy must see responses, so it can't use DSR."
+      },
+      {
+        "text": "Routing `/checkout` and `/search` to different services on the same hostname",
+        "explanation": "Correct. The path is part of the HTTP request, which only an L7 balancer parses."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Ask, for each requirement: **does the decision need anything above IP and port?**\n\n| Need | Data needed | Layer |\n|---|---|---|\n| Per-call gRPC | HTTP/2 streams | L7 |\n| Header canary | HTTP header | L7 |\n| Postgres conns | TCP connection | L4 |\n| DSR | IP packets | L4 |\n| Path routing | URL path | L7 |\n\nL4 decisions are made once per connection from the 5-tuple. Anything about individual requests needs L7.",
+    "link": {
+      "title": "Load balancing (computing) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Load_balancing_%28computing%29"
+    }
+  },
+  {
+    "id": "net-load-balancers-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You use consistent hashing with **one** point per server for 4 cache servers. One server ends up owning 45% of the ring and another only 8%. When that busy server fails, all its keys move to a single neighbour. What fixes both problems?",
+    "options": [
+      {
+        "text": "Switch to `hash(key) % 4`",
+        "explanation": "Modulo hashing spreads keys evenly, but adding or removing a server remaps almost every key, which is the problem consistent hashing solves."
+      },
+      {
+        "text": "Use a stronger hash function such as SHA-256",
+        "explanation": "Even a perfect hash places 4 random points unevenly on the ring; with so few points, arc sizes vary wildly. Better randomness doesn't fix small numbers."
+      },
+      {
+        "text": "Give each server many virtual nodes (say 100–200 points) on the ring",
+        "explanation": "Correct. With many points per server, each server's total arc averages out close to 25%, and a failed server's arcs are scattered, so its keys spread across all survivors instead of one neighbour."
+      },
+      {
+        "text": "Make every key go to the two nearest servers",
+        "explanation": "Replication improves availability, but it doesn't even out arc sizes or stop one neighbour inheriting all of a failed server's load."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With 4 random points, the 4 gaps between them are very uneven: 45% vs 8% is quite normal.\n2. Each server owns the arc before its point → uneven load.\n3. On failure, its single arc merges into its clockwise neighbour → one server takes all the load.\n4. With 150 virtual nodes per server: 600 points; each server owns 150 small arcs → totals close to 25% each.\n5. On failure, its 150 small arcs go to many different neighbours → load spreads roughly evenly over 3 survivors.",
+    "link": {
+      "title": "Consistent hashing (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  },
+  {
+    "id": "net-load-balancers-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your chat service holds WebSocket connections that last for hours behind an ALB with a 300 s deregistration delay. On every deploy, about 50,000 clients disconnect within the same second and then reconnect at once, causing a load spike and failed logins. What's the best improvement?",
+    "options": [
+      {
+        "text": "Raise the deregistration delay to 24 hours",
+        "explanation": "Deploys would then take a day to complete, and connections would still all be cut at the end of the window. It delays the problem instead of fixing it."
+      },
+      {
+        "text": "Disable health checks during deploys",
+        "explanation": "Health checks don't cause the disconnects; draining does. Turning them off risks sending traffic to broken instances."
+      },
+      {
+        "text": "Switch to round-robin balancing",
+        "explanation": "The algorithm chooses where new connections go; it doesn't change the fact that 50,000 clients reconnect at the same moment."
+      },
+      {
+        "text": "Have draining servers close their WebSockets gradually over the drain window, and make clients reconnect with exponential backoff plus random jitter",
+        "explanation": "Correct. Spreading closes over the window and jittering client reconnects turn a 50,000-in-one-second spike into a steady trickle that the fleet absorbs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Draining lets in-flight work finish, but a WebSocket is never 'finished'; at the end of the delay, the balancer cuts everything still open.\n2. All of a server's clients drop together → they all reconnect together → **thundering herd**.\n3. Server side: on drain, close connections in batches over, say, 250 s with a 'please reconnect' close code.\n4. Client side: reconnect after `random(0, base × 2^attempt)` seconds.\n5. Result: 50,000 reconnects spread over minutes ≈ a few hundred per second, instead of 50,000 in one second.",
+    "link": {
+      "title": "Load balancing, visualised (Sam Rose)",
+      "url": "https://samwho.dev/load-balancing/"
+    }
+  },
+  {
+    "id": "net-load-balancers-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An Envoy cluster has 10 backends. A bad deploy makes 6 of them fail health checks, while the other 4 are fine. Envoy's panic threshold is the default 50%. How does Envoy route traffic?",
+    "options": [
+      {
+        "text": "Only to the 4 healthy backends",
+        "explanation": "That's what happens while at least 50% of hosts are healthy. Here only 40% are, which is below the threshold."
+      },
+      {
+        "text": "It returns 503 to every request until more backends recover",
+        "explanation": "Panic mode exists to avoid exactly that. Envoy keeps serving rather than failing everything."
+      },
+      {
+        "text": "It sends all traffic to a single backend",
+        "explanation": "Nothing in Envoy's behaviour concentrates traffic on one host in this situation."
+      },
+      {
+        "text": "Across all 10 backends, ignoring health status, because healthy hosts (40%) are below the 50% panic threshold",
+        "explanation": "Correct. Envoy assumes that when most hosts look unhealthy, the health checks themselves may be wrong, or the healthy few would be overwhelmed. Some requests fail, but roughly 40% succeed instead of risking a total collapse."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Healthy fraction = 4 / 10 = **40%**.\n2. Panic threshold = 50% → 40% < 50% → **panic mode**.\n3. In panic mode, Envoy balances across **all** hosts as if they were healthy.\n4. Expected success ≈ 40% of requests (those reaching good hosts), versus the risk that 4 hosts receiving 100% of the load fall over too.\n5. Trade-off: if the 6 really are dead, you serve some errors; if the checks are wrong, you avoid a self-inflicted outage.",
+    "link": {
+      "title": "Panic threshold (Envoy docs)",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/panic_threshold"
+    }
+  }
+]

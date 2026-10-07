@@ -1,0 +1,374 @@
+[
+  {
+    "id": "io-multiplexing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Linux glibc server built on select corrupts memory after descriptor numbers grow beyond 1023. Which API misuse best explains this?",
+    "options": [
+      {
+        "text": "`select` returns `EMFILE` above 1,024 descriptors",
+        "explanation": "`EMFILE` comes from the per-process open-file limit, raised by `accept()` or `open()`, not from `select`. And an error wouldn't corrupt memory."
+      },
+      {
+        "text": "`FD_SET` on a descriptor ≥ 1024 writes past the end of the fixed-size `fd_set` bitmap, which is undefined behaviour",
+        "explanation": "Correct. On Linux glibc `FD_SETSIZE` is 1024. `FD_SET(1050, &set)` sets a bit beyond the structure, scribbling on neighbouring memory. Use poll or epoll."
+      },
+      {
+        "text": "The kernel's TCP stack can't handle more than 1,024 connections",
+        "explanation": "The TCP stack is not capped at 1024 sockets by this API; actual capacity depends on resources and configuration."
+      },
+      {
+        "text": "`select` scans too slowly and the kernel kills the process",
+        "explanation": "`select` gets slower with more descriptors, but slowness doesn't corrupt memory and the kernel doesn't kill slow processes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `fd_set` is a bitmap of `FD_SETSIZE` bits = 1024 bits = 128 bytes.\n2. Descriptor k sets bit k. Valid k: 0 to 1023.\n3. At ~1,100 connections, new sockets get numbers above 1023.\n4. `FD_SET(1050, &s)` touches byte 1050 / 8 = 131, past the 128-byte struct, typically on the stack.\n5. That's a silent buffer overflow. glibc's fortify checks can catch it, but the real fix is `poll` or `epoll`.",
+    "link": {
+      "title": "select(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/select.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why must a select loop restore its intended fd_set before each call, either rebuilding it or copying a saved master set?",
+    "options": [
+      {
+        "text": "Because `select` overwrites the sets on return, leaving only the descriptors that are ready",
+        "explanation": "Correct. The sets are in-out parameters. After the call, bits for non-ready descriptors are cleared, so reusing them would watch only the previously ready ones."
+      },
+      {
+        "text": "Because descriptors are renumbered after each call",
+        "explanation": "Descriptor numbers are stable until closed; nothing renumbers them."
+      },
+      {
+        "text": "Because `FD_ZERO` resets the kernel's internal list of watched descriptors",
+        "explanation": "`select` keeps no kernel state between calls; the bitmap you pass is the entire interest set every time."
+      },
+      {
+        "text": "It doesn't need to; that's only a performance optimisation",
+        "explanation": "Skipping the rebuild is a correctness bug: idle connections silently stop being watched."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Watching fds {4, 5, 6}:\n\n```\nbefore: bits 4,5,6 set\nselect: fd 5 readable\nafter:  only bit 5 set\n```\n\nIf you call `select` again with that same set, you only watch fd 5. Data on 4 or 6 would never be noticed. `poll` avoids this by putting results in a separate `revents` field.",
+    "link": {
+      "title": "select(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/select.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an epoll-based server, which call adds a newly accepted connection to the set of descriptors being watched?",
+    "options": [
+      {
+        "text": "`epoll_wait(ep, evs, 64, -1)`",
+        "explanation": "`epoll_wait` waits for and returns events; it doesn't change what's being watched."
+      },
+      {
+        "text": "`epoll_create1(0)`",
+        "explanation": "That creates a new epoll instance. You do it once at start-up, not per connection."
+      },
+      {
+        "text": "`epoll_ctl(ep, EPOLL_CTL_ADD, fd, &ev)`",
+        "explanation": "Correct. `epoll_ctl` modifies the interest list; `EPOLL_CTL_ADD` inserts the fd with the events in `ev`."
+      },
+      {
+        "text": "`poll()` with the new fd appended to the array",
+        "explanation": "That's how you'd do it with `poll`, which keeps no kernel state. epoll's interest list lives in the kernel and is changed with `epoll_ctl`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "epoll splits the job:\n\n1. `epoll_create1`: make the instance (once).\n2. `epoll_ctl(ADD/MOD/DEL)`: change the interest list (per connection or per interest change).\n3. `epoll_wait`: sleep until events, get the ready ones (in the loop).\n\nAfter `accept()` returns fd 12, set it non-blocking and call `epoll_ctl(ep, EPOLL_CTL_ADD, 12, &ev)`.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Use a simplified one-scan-per-wake model: 50,000 registered connections, 50 ready candidates per wake, 2,000 wakes per second. Ignoring rescans, contention and registration work, compare poll scan entries with epoll ready-candidate processing.",
+    "options": [
+      {
+        "text": "poll: 100,000; epoll: 100,000",
+        "explanation": "That treats both as scanning only ready descriptors. poll checks every entry on every call."
+      },
+      {
+        "text": "poll: 100 million; epoll: 100 million",
+        "explanation": "epoll doesn't scan the interest list on `epoll_wait`; it takes items off a ready list."
+      },
+      {
+        "text": "poll: 50,000; epoll: 50",
+        "explanation": "Those are per-call figures, not per-second. Multiply by 2,000 wake-ups."
+      },
+      {
+        "text": "poll: about 100 million; epoll: about 100,000",
+        "explanation": "Correct. poll: 50,000 × 2,000 = 10⁸. epoll: only ready entries, 50 × 2,000 = 10⁵, a thousand times less."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. poll scan model: 50,000 × 2,000 = 100,000,000 entries/s.\n2. epoll candidate model: 50 × 2,000 = 100,000 entries/s.\n3. The modeled entry-count ratio is 1,000; it is not a measured CPU-speedup ratio.\n4. Assuming an 8-byte pollfd and Linux v6.12 copying behavior: 400,000 input bytes per call → 800 MB/s of input at this rate. The kernel writes 2-byte revents fields, totaling 100,000 output bytes per call → 200 MB/s of result fields, not 800 MB/s each way.",
+    "link": {
+      "title": "epoll(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A non-blocking EPOLLET socket already has all 4 KiB of a request buffered. After receiving the event, the handler reads 1024 bytes and waits only for another epoll event, keeping no local pending-work entry. The peer awaits a response. What correctness risk does this create?",
+    "options": [
+      {
+        "text": "`epoll_wait` immediately reports the fd again, since 3 KB is still unread",
+        "explanation": "A repeat notification is not guaranteed merely because data remains. This is the behavior an ET application must avoid relying on."
+      },
+      {
+        "text": "The connection can stall with 3 KiB unread because another notification is not guaranteed",
+        "explanation": "Correct. Drain until EAGAIN, EOF or error, or keep unfinished work on your own queue so processing can resume without a new kernel notification."
+      },
+      {
+        "text": "The kernel discards the unread 3 KB",
+        "explanation": "Unread data stays in the socket's receive buffer; the kernel doesn't drop it."
+      },
+      {
+        "text": "`read` returns `EAGAIN` next time and the server closes the connection",
+        "explanation": "A further read would ordinarily find remaining data here. The bug is waiting for a notification that may not recur, rather than attempting that read."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The event is delivered with 4096 bytes already buffered.\n2. One 1024-byte read leaves 3072 bytes.\n3. ET does not guarantee a reminder solely for these remaining bytes, so returning only to epoll_wait can stall the request.\n4. Further activity can produce notifications, but correctness cannot depend on that.\n5. Continue non-blocking reads to EAGAIN/EOF/error, or enforce fairness with an application pending-work list.",
+    "link": {
+      "title": "epoll(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the Linux implementation using a red-black-tree epoll interest index, what is the asymptotic cost of the index insertion/search component for N registrations, excluding allocation, locks and target-specific checks?",
+    "options": [
+      {
+        "text": "O(1), because it is appended to the ready list",
+        "explanation": "Adding to the interest set is not adding to the ready list. A newly added fd goes on the ready list only if it already has events."
+      },
+      {
+        "text": "O(N), because the kernel rescans all descriptors",
+        "explanation": "Rescanning is what `poll` does on every call; epoll exists to avoid that."
+      },
+      {
+        "text": "O(log N), because the interest list is a red-black tree keyed by file and fd",
+        "explanation": "Correct for the balanced-tree component. Registration can also perform target polling, wait-queue setup, allocation and locking, whose costs are not captured by this tree bound."
+      },
+      {
+        "text": "O(N log N), because the tree is re-sorted",
+        "explanation": "Balanced trees insert one element in O(log N) without re-sorting."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The interest index distinguishes the pair of open file description and descriptor number.\n2. Balanced red-black-tree search/insertion takes O(log N) comparisons.\n3. log2(1,000,000) is about 20, indicating scale, not an exact count of comparisons or a bound on total syscall time.\n4. Registration includes additional work, and epoll_wait may inspect candidates that no longer produce returned events.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A level-triggered epoll server registers every connection for `EPOLLIN | EPOLLOUT` from the start. CPU sits at 100% even when clients are idle. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "A socket with free send-buffer space is writable almost all the time, so level-triggered `EPOLLOUT` fires on every `epoll_wait`; only register `EPOLLOUT` while there is unsent output",
+        "explanation": "Correct. The loop spins handling 'writable' events with nothing to write. Add `EPOLLOUT` with `EPOLL_CTL_MOD` when a write returns `EAGAIN`, and remove it once the backlog drains."
+      },
+      {
+        "text": "`EPOLLIN` and `EPOLLOUT` can't be combined; use two epoll instances",
+        "explanation": "They can be combined in one registration; the problem is level-triggered `EPOLLOUT` on idle sockets."
+      },
+      {
+        "text": "Idle TCP connections send keep-alives that wake the loop",
+        "explanation": "Successful keepalive probes are handled within TCP and do not deliver application payload. Keepalive is configurable, often not enabled on a socket at all; persistent writable notifications explain this scenario."
+      },
+      {
+        "text": "`epoll_wait` with timeout -1 busy-waits",
+        "explanation": "A timeout of -1 means block indefinitely, which sleeps. The wake-ups come from always-ready `EPOLLOUT`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. 'Writable' means the send buffer has space, which is true almost always for an idle connection.\n2. Level-triggered: report while the condition holds, so every idle socket is reported every call.\n3. `epoll_wait` returns immediately with thousands of `EPOLLOUT` events; the loop does nothing with them and calls again: a spin.\n4. Fix: write directly when you have output. If `write` returns `EAGAIN`, `EPOLL_CTL_MOD` to add `EPOLLOUT`; when the buffer drains, remove it.\n5. Alternatively use edge-triggered for `EPOLLOUT`.",
+    "link": {
+      "title": "epoll(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about level-triggered (LT) and edge-triggered (ET) epoll are true? Select all that apply.",
+    "options": [
+      {
+        "text": "LT keeps a descriptor eligible for reporting while its readiness condition persists",
+        "explanation": "Correct. A particular bounded wait call may return only a subset of ready descriptors, and readiness can change before user code acts."
+      },
+      {
+        "text": "ET requires non-blocking descriptors in practice, because you must read until `EAGAIN`",
+        "explanation": "Correct. With a blocking fd, the final read in the drain loop would sleep once the buffer is empty, freezing the loop."
+      },
+      {
+        "text": "ET guarantees you never miss data, even if you read only part of it",
+        "explanation": "Wrong way round. ET won't remind you of unread data, so partial reads can stall a connection."
+      },
+      {
+        "text": "ET can reduce redundant wake-ups compared with LT",
+        "explanation": "Correct. ET can avoid repeated reports solely because a condition remains true; notification counts and performance still depend on workload and event coalescing."
+      },
+      {
+        "text": "LT is incompatible with non-blocking descriptors",
+        "explanation": "LT works fine with non-blocking fds, and event loops normally use them anyway."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. LT keeps a nonempty socket eligible for reporting; each result batch is limited by maxevents.\n2. ET is activity-driven and can coalesce events. It does not promise exactly one event per empty-to-nonempty transition.\n3. Leaving unread data may not generate another reminder. Drain to EAGAIN, EOF or error, or keep your own unfinished-work queue.\n4. Non-blocking descriptors prevent the drain loop from sleeping when no more bytes are available.",
+    "link": {
+      "title": "epoll(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server registers socket fd 9 with epoll, then calls `dup(9)`, getting fd 10, and hands fd 10 to a logging subsystem. Later it calls `close(9)` without `EPOLL_CTL_DEL`. What happens when data arrives on that socket?",
+    "options": [
+      {
+        "text": "Nothing; closing fd 9 removed it from the epoll set",
+        "explanation": "Registrations are removed automatically only when *all* descriptors referring to the open file description are closed. fd 10 still refers to it."
+      },
+      {
+        "text": "epoll reports fd 10, because the registration moved to the duplicate",
+        "explanation": "The registration key includes the original fd number and open file description. Its user-supplied data is stored separately and does not automatically change to the duplicate fd."
+      },
+      {
+        "text": "The kernel crashes",
+        "explanation": "No crash; this is documented, if surprising, behaviour."
+      },
+      {
+        "text": "epoll still reports an event carrying fd 9's registration data, even though fd 9 is closed (and may now be reused for another file)",
+        "explanation": "Correct. epoll tracks the open file description. Since fd 10 keeps it alive, events continue to fire with the old `data`, which may point to freed state or a reused fd number."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `epoll_ctl(ADD, 9)` creates an entry keyed by (file description F, fd 9).\n2. `dup(9)` → fd 10, also pointing to F.\n3. `close(9)` drops one reference; F stays open because of fd 10.\n4. epoll only auto-removes the entry when F is finally released, so the entry stays.\n5. Data arrives on F → epoll returns an event with the `data` you registered for fd 9.\n6. If fd 9 has since been reused for another socket, you'll act on the wrong one. Always `EPOLL_CTL_DEL` before `close`.",
+    "link": {
+      "title": "epoll(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Four worker threads all call `epoll_wait` on one shared epoll instance (level-triggered). Occasionally two threads process the same connection at once and its request is parsed out of order. Which change fixes this with the least redesign?",
+    "options": [
+      {
+        "text": "Switch to `EPOLLET`",
+        "explanation": "Edge-triggered reduces duplicate reports, but a new edge (more data arriving) can still wake a second thread while the first is mid-read. It doesn't guarantee exclusive ownership."
+      },
+      {
+        "text": "Register connections with `EPOLLONESHOT` and re-arm with `EPOLL_CTL_MOD` after the handling thread finishes",
+        "explanation": "Correct when one registration and a proper ownership protocol cover the connection. Finish processing before rearming; other I/O paths and duplicate registrations still require coordination."
+      },
+      {
+        "text": "Use `EPOLLEXCLUSIVE` on every connection",
+        "explanation": "`EPOLLEXCLUSIVE` controls wake-ups across *multiple epoll instances* watching one fd. It isn't meant for this, and it doesn't stop a still-ready, level-triggered fd being handed to a second thread waiting on the same instance."
+      },
+      {
+        "text": "Call `epoll_wait` with `maxevents = 1`",
+        "explanation": "Each thread then gets one event at a time, but with level-triggered mode a still-readable fd can be handed to another thread straight away."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Thread A gets 'fd 42 readable' and starts reading.\n2. With LT, fd 42 is still readable, so thread B's `epoll_wait` can return fd 42 too.\n3. Both read different chunks: the request is split between threads.\n4. `EPOLLONESHOT`: after fd 42 is reported once, epoll disables it.\n5. A reads until done, then `EPOLL_CTL_MOD` re-enables fd 42 with `EPOLLIN | EPOLLONESHOT`.\n6. The cost is one extra `epoll_ctl` per event.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A pre-fork server has 32 worker processes, each with its own epoll instance watching the same inherited listening socket. When one connection arrives, all 32 wake up, one wins `accept()`, and 31 get `EAGAIN`. Which fixes address this thundering herd? Pick the best answer.",
+    "options": [
+      {
+        "text": "Add the listening socket with `EPOLLEXCLUSIVE` in each worker, or give each worker its own `SO_REUSEPORT` listening socket so the kernel spreads connections",
+        "explanation": "Correct. `EPOLLEXCLUSIVE` (Linux 4.5) wakes one (or a few) of the waiting instances rather than all. `SO_REUSEPORT` (Linux 3.9) gives each worker a separate accept queue, so there's no shared wait at all. nginx supports both."
+      },
+      {
+        "text": "Make the listening socket blocking",
+        "explanation": "Blocking `accept()` in 32 processes would avoid busy failures, but those processes couldn't serve their other connections while blocked."
+      },
+      {
+        "text": "Switch every worker to `select`",
+        "explanation": "`select` has the same herd problem (and worse scaling)."
+      },
+      {
+        "text": "Use `EPOLLONESHOT` on the listening socket",
+        "explanation": "One-shot disables the fd per instance after one event, but all 32 instances still get the first event; it also means re-arming after every accept."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In the stated scenario a completed connection makes the listening socket readable, waking multiple epoll instances.\n2. One worker accepts it; others can find no pending connection and get EAGAIN.\n3. EPOLLEXCLUSIVE reduces this herd but documents one or more exclusive waiters, not exactly one. Nonexclusive watchers can still be notified.\n4. SO_REUSEPORT gives workers separate listening sockets/queues and distributes flows; it does not guarantee equal application work per worker.\n5. Non-blocking accept and correct drain/error handling remain necessary.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're porting an epoll server to macOS using kqueue. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "One `kevent()` call can both apply a batch of registration changes and return ready events",
+        "explanation": "Correct. The changelist and eventlist are separate arguments of the same call, whereas epoll needs one `epoll_ctl` syscall per change."
+      },
+      {
+        "text": "kqueue can watch process exit, signals and timers directly with filters such as `EVFILT_PROC`, `EVFILT_SIGNAL` and `EVFILT_TIMER`",
+        "explanation": "Correct. Linux achieves the same by turning them into descriptors (`pidfd`, `signalfd`, `timerfd`) and adding those to epoll."
+      },
+      {
+        "text": "Edge-triggered behaviour is requested with `EV_CLEAR`",
+        "explanation": "Correct. `EV_CLEAR` resets the filter's state after the event is retrieved, giving edge-like semantics."
+      },
+      {
+        "text": "kqueue is completion-based like IOCP, so reads finish in the kernel",
+        "explanation": "kqueue is readiness-based: `EVFILT_READ` tells you data is available (and how many bytes), and you still call `read()`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Both APIs maintain registrations, but the mapping is conceptual:\n\n| epoll concept | kqueue counterpart |\n|---|---|\n| create instance | kqueue |\n| modify interest | kevent changelist |\n| retrieve events | kevent eventlist |\n| readable socket | EVFILT_READ |\n| edge-like handling | EV_CLEAR, filter-dependent |\n| disable after delivery | EV_DISPATCH |\n| remove after delivery | EV_ONESHOT |\n\nEPOLLONESHOT disables until MOD rearms; EV_ONESHOT deletes and must be added again. EVFILT_READ is readiness, not a completed socket read.",
+    "link": {
+      "title": "Kqueue: A generic and scalable event notification facility (PDF)",
+      "url": "https://people.freebsd.org/~jlemon/papers/kqueue.pdf"
+    }
+  }
+]

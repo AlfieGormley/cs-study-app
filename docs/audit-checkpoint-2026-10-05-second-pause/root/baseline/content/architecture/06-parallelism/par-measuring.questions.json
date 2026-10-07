@@ -1,0 +1,374 @@
+[
+  {
+    "id": "par-measuring-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`perf stat` reports 8.0 billion instructions over 10.0 billion cycles on a core that can retire 4 instructions per cycle. What is the IPC, and what does it suggest?",
+    "options": [
+      {
+        "text": "IPC 1.25: the core is close to its limit",
+        "explanation": "This divides cycles by instructions, which is the inverse (CPI). And 1.25 would still be far below a width of 4."
+      },
+      {
+        "text": "IPC 0.8: the core is mostly stalled, probably waiting on memory or recovering from mispredictions",
+        "explanation": "Correct. 8.0 / 10.0 = 0.8, a fifth of the core's width of 4. Most issue slots go unused."
+      },
+      {
+        "text": "IPC 0.8: the program is compute-bound and needs a faster clock",
+        "explanation": "A compute-bound core would show IPC near its width. Low IPC means the core is idle much of the time, so a faster clock would mostly mean waiting faster."
+      },
+      {
+        "text": "IPC 3.2: the core is using most of its width",
+        "explanation": "This multiplies 0.8 by the width. IPC is just instructions divided by cycles."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nIPC = instructions / cycles\n    = 8.0e9 / 10.0e9 = 0.8\nwidth = 4  ->  0.8 / 4 = 20% used\n```\n\nIPC far below the width says the core is waiting. The next step is to find out *on what*: `perf stat --topdown` splits slots into retiring, bad speculation, frontend bound and backend bound.",
+    "link": {
+      "title": "Linux perf examples — Brendan Gregg",
+      "url": "https://www.brendangregg.com/perf.html"
+    }
+  },
+  {
+    "id": "par-measuring-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You time a function with `timeit.repeat(..., repeat=5)` and get 1.02, 1.01, 1.31, 1.02 and 1.05 seconds. Why is the **minimum** the usual figure to report for the code's own cost?",
+    "options": [
+      {
+        "text": "Because the first run is always the fastest",
+        "explanation": "Often the first run is the *slowest*, because it pays warm-up costs. Here the minimum is the second run."
+      },
+      {
+        "text": "Because the minimum hides bugs in the benchmark",
+        "explanation": "Taking the minimum does not hide or fix anything about the benchmark's design. It filters out noise in one direction."
+      },
+      {
+        "text": "Because noise such as other processes and interrupts only ever adds time, so the fastest run is closest to the true cost",
+        "explanation": "Correct. Interference makes runs slower, never faster, so the minimum is the best estimate of the code's own cost. The spread still tells you how noisy the machine is."
+      },
+      {
+        "text": "Because the mean is mathematically undefined for timing data",
+        "explanation": "The mean is well defined; it just mixes the code's cost with whatever interference happened, such as the 1.31 s outlier."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The 1.31 s run was probably disturbed by something else on the machine.\n2. Nothing can make the code run *faster* than its true cost, so noise is one-sided.\n3. The minimum, 1.01 s, is the run with the least interference.\n\nFor user-facing latency you would instead look at the whole distribution (median, p99), because users do experience the noise.",
+    "link": {
+      "title": "timeit — Python documentation",
+      "url": "https://docs.python.org/3/library/timeit.html"
+    }
+  },
+  {
+    "id": "par-measuring-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your program is slow and you want to know **which functions** the time is spent in, with low overhead. Which tool fits best?",
+    "options": [
+      {
+        "text": "`perf record -g` followed by `perf report`, perhaps rendered as a flame graph",
+        "explanation": "Correct. Sampling records the instruction pointer and call stack thousands of times a second, so time per function shows up as a share of samples."
+      },
+      {
+        "text": "`perf stat`",
+        "explanation": "`perf stat` counts events across the whole run (cycles, instructions, misses). It tells you *what* happened, not *where* in the code."
+      },
+      {
+        "text": "Timing the whole program with `time.perf_counter()`",
+        "explanation": "That gives one total, with no breakdown by function."
+      },
+      {
+        "text": "Adding a timer to the start and end of every function",
+        "explanation": "That works but is not low overhead: instrumenting every call can distort the very timings you want, especially for small, frequent functions."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Match the question to the tool:\n\n| Question | Tool |\n|---|---|\n| How long overall? | timer |\n| What did the CPU do? | perf stat |\n| Where in the code? | perf record |\n\nSampling is statistical: a function using 1% of the time gets about 1% of samples, so very short runs give imprecise profiles.",
+    "link": {
+      "title": "Flame graphs — Brendan Gregg",
+      "url": "https://www.brendangregg.com/flamegraphs.html"
+    }
+  },
+  {
+    "id": "par-measuring-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A machine has peak compute 2,000 GFLOP/s and memory bandwidth 200 GB/s. A kernel has arithmetic intensity 0.5 FLOP/byte. What is its attainable performance on the roofline?",
+    "options": [
+      {
+        "text": "2,000 GFLOP/s",
+        "explanation": "That is the flat compute roof. At AI 0.5 the kernel is far to the left of the ridge (10 FLOP/byte), on the sloped bandwidth roof."
+      },
+      {
+        "text": "400 GFLOP/s",
+        "explanation": "This divides bandwidth by AI (200 / 0.5). Attainable is AI × bandwidth."
+      },
+      {
+        "text": "1,000 GFLOP/s",
+        "explanation": "This multiplies peak by AI. The memory roof depends on bandwidth, not on peak compute."
+      },
+      {
+        "text": "100 GFLOP/s",
+        "explanation": "Correct. min(2,000, 0.5 × 200) = 100 GFLOP/s. The kernel is memory-bound at 5% of peak."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nridge = 2000 / 200 = 10 FLOP/B\nAI 0.5 < 10  -> memory-bound\nattainable = min(2000, 0.5 x 200)\n           = 100 GFLOP/s\n```\n\nEvery byte delivered supports half a FLOP, and the machine delivers 200 GB/s. No amount of SIMD tuning lifts this kernel above 100 GFLOP/s; only raising its intensity (or the bandwidth) can.",
+    "link": {
+      "title": "Roofline model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Roofline_model"
+    }
+  },
+  {
+    "id": "par-measuring-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A GPU offers 20 TFLOP/s and 1 TB/s of memory bandwidth. Where is its ridge point, and is a kernel with AI = 4 FLOP/byte compute- or memory-bound?",
+    "options": [
+      {
+        "text": "Ridge at 0.05 FLOP/byte; the kernel is compute-bound",
+        "explanation": "This divides bandwidth by peak. The ridge is peak / bandwidth = 20 FLOP/byte."
+      },
+      {
+        "text": "Ridge at 20 FLOP/byte; the kernel is memory-bound and can reach at most about 4 TFLOP/s",
+        "explanation": "Correct. 20 × 10¹² / 1 × 10¹² = 20. At AI 4 the kernel is left of the ridge: 4 × 1 TB/s = 4 TFLOP/s, 20% of peak."
+      },
+      {
+        "text": "Ridge at 20 FLOP/byte; the kernel is compute-bound because 4 FLOP/byte is a high intensity",
+        "explanation": "Whether an AI is \"high\" depends on the machine. 4 FLOP/byte is below this GPU's ridge of 20, so the bandwidth roof is the limit."
+      },
+      {
+        "text": "Ridge at 4 FLOP/byte; the kernel sits exactly at the ridge",
+        "explanation": "The ridge is a property of the machine (P / B), not of the kernel."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nridge = P / B = 20e12 / 1e12\n      = 20 FLOP/byte\nAI 4 < 20  -> memory-bound\nmax = 4 x 1e12 = 4 TFLOP/s\n```\n\nGPUs have very high ridge points, so many kernels that look compute-heavy are still memory-bound on them. That is why fusing operations, keeping data in shared memory and using lower precision matter so much on GPUs.",
+    "link": {
+      "title": "Roofline performance model — NERSC documentation",
+      "url": "https://docs.nersc.gov/tools/performance/roofline/"
+    }
+  },
+  {
+    "id": "par-measuring-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A colleague's benchmark reports that a new C function runs in 0.3 ns per call. Which of these could explain a misleading result? Select all that apply.",
+    "options": [
+      {
+        "text": "The result is never used, so the optimising compiler deleted the work",
+        "explanation": "Plausible. 0.3 ns is about one clock cycle; dead-code elimination is a classic cause of impossibly fast benchmarks."
+      },
+      {
+        "text": "Only a single run was measured, with no warm-up or repeats",
+        "explanation": "Plausible. One run cannot separate the code's cost from noise or warm-up effects."
+      },
+      {
+        "text": "Turbo boost raised the clock during the short benchmark, above what a sustained workload would get",
+        "explanation": "Plausible. Short benchmarks can run at boost clocks that long-running or heavily vectorised code will not sustain."
+      },
+      {
+        "text": "The benchmark used a high-resolution monotonic clock such as `perf_counter` instead of wall-clock `time.time()`",
+        "explanation": "Not a problem. A monotonic, high-resolution clock is the right choice; `time.time()` can jump when the system clock is adjusted."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Sanity-check the number first. At 3 GHz one cycle is about 0.33 ns, so 0.3 ns per call means roughly one cycle per call. Unless the function is trivial, that is a red flag.\n\nChecklist:\n\n1. Is the result used (printed, stored, or passed to a black-box sink)?\n2. Warm-up discarded, many repeats, spread reported?\n3. Frequency fixed or at least noted?\n4. Right clock (monotonic, high-resolution)?\n\nThe first three are traps; the fourth is good practice.",
+    "link": {
+      "title": "timeit — Python documentation",
+      "url": "https://docs.python.org/3/library/timeit.html"
+    }
+  },
+  {
+    "id": "par-measuring-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Top-down analysis of a hot loop shows: retiring 20%, bad speculation 5%, frontend bound 5%, backend bound 70% (almost all of it memory bound). Which change is most likely to help?",
+    "options": [
+      {
+        "text": "Adding branch hints and reordering `if` statements",
+        "explanation": "Bad speculation is only 5% of slots. Even eliminating it entirely would barely move the total."
+      },
+      {
+        "text": "Improving data locality, for example blocking the loop or changing an array-of-structs to a struct-of-arrays",
+        "explanation": "Correct. The core is mostly waiting on memory, so the fix is to touch fewer cache lines, reuse each line while it is cached, or make access predictable for the prefetcher."
+      },
+      {
+        "text": "Reducing code size so the instruction cache fits it better",
+        "explanation": "That targets frontend bound, which is only 5% here."
+      },
+      {
+        "text": "Using a wider SIMD instruction set to do more arithmetic per instruction",
+        "explanation": "Wider SIMD speeds up the 20% that retires, but the core is already idle 70% of the time waiting for data. More arithmetic per cycle does not bring data faster."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Top-down is a drill-down: attack the biggest category.\n\n```\nretiring        20%\nbad speculation  5%\nfrontend bound   5%\nbackend bound   70%  <- here\n  memory bound  ~70%\n```\n\nMemory bound means slots are lost waiting for loads. Typical fixes: improve locality (blocking, SoA layout), avoid pointer chasing, shrink data types, or prefetch. Then measure again; the bottleneck often moves.",
+    "link": {
+      "title": "Top-down analysis — perf wiki",
+      "url": "https://perfwiki.github.io/main/top-down-analysis/"
+    }
+  },
+  {
+    "id": "par-measuring-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`c[i] = a[i] + b[i]` runs over large **float32** (4-byte) arrays on a CPU with write-allocate caches and 50 GB/s of memory bandwidth. What is its arithmetic intensity and its roofline limit?",
+    "options": [
+      {
+        "text": "1/12 FLOP/byte and about 4.2 GFLOP/s",
+        "explanation": "This counts 12 bytes (two reads, one write) but forgets that the store miss first reads c's line into the cache, adding 4 bytes."
+      },
+      {
+        "text": "1/32 FLOP/byte and about 1.6 GFLOP/s",
+        "explanation": "This uses the lesson's figure for 8-byte doubles. With 4-byte floats every byte count halves."
+      },
+      {
+        "text": "1/16 FLOP/byte and about 3.1 GFLOP/s",
+        "explanation": "Correct. 4 + 4 bytes read, 4 written, 4 more for write-allocate = 16 bytes per FLOP; 50 GB/s / 16 ≈ 3.1 GFLOP/s."
+      },
+      {
+        "text": "1 FLOP/byte and 50 GFLOP/s",
+        "explanation": "This counts elements rather than bytes. Each element moved is 4 bytes, and three arrays are involved."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count bytes per element:\n\n```\nread a[i]           4 B\nread b[i]           4 B\nwrite-allocate c    4 B\nwrite c[i]          4 B\ntotal              16 B\nFLOPs               1\nAI = 1/16 = 0.0625\n```\n\nRoofline: 0.0625 × 50 GB/s = 3.125 GFLOP/s, whatever the peak compute. Non-temporal (streaming) stores can skip the write-allocate read, raising AI to 1/12.",
+    "link": {
+      "title": "Roofline model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Roofline_model"
+    }
+  },
+  {
+    "id": "par-measuring-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Multiplying two n × n float64 matrices does 2n³ FLOPs. If every matrix crossed the memory bus exactly once (A and B read, C written), what is the **smallest n** at which it could be compute-bound on a machine whose ridge point is 10 FLOP/byte?",
+    "options": [
+      {
+        "text": "n = 10",
+        "explanation": "This sets n equal to the ridge, forgetting the factor of 12 in AI = n / 12."
+      },
+      {
+        "text": "n = 120",
+        "explanation": "Correct. AI = 2n³ / (3 × 8n²) = n / 12. Setting n / 12 = 10 gives n = 120."
+      },
+      {
+        "text": "n = 40",
+        "explanation": "This counts 8n² bytes for one matrix rather than all three: 2n³ / 8n² = n / 4 = 10 gives 40."
+      },
+      {
+        "text": "No n: matrix multiply is always memory-bound",
+        "explanation": "Its intensity grows with n, which is exactly why tuned BLAS reaches near peak on large matrices."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nFLOPs = 2 n^3\nbytes = 3 matrices x 8 B x n^2\n      = 24 n^2\nAI    = 2n^3 / 24n^2 = n / 12\nn / 12 = 10  ->  n = 120\n```\n\nThat assumes ideal reuse. A naive triple loop re-streams a matrix from DRAM many times, so its real AI is far lower. Cache blocking keeps tiles of A and B in cache so actual traffic approaches the ideal.",
+    "link": {
+      "title": "Roofline: an insightful visual performance model (Williams et al.)",
+      "url": "https://people.eecs.berkeley.edu/~kubitron/cs252/handouts/papers/RooflineVyNoYellow.pdf"
+    }
+  },
+  {
+    "id": "par-measuring-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A kernel with AI = 0.25 FLOP/byte moves 45 GB/s on a machine where STREAM measures 50 GB/s and peak compute is 1 TFLOP/s. A teammate proposes rewriting it with AVX-512 intrinsics. What do you advise?",
+    "options": [
+      {
+        "text": "Go ahead: it reaches only about 1% of peak FLOP/s, so there is huge headroom from vectorising",
+        "explanation": "The headroom is against the compute roof, which this kernel cannot reach. Its own ceiling is the bandwidth roof, and it is already at 90% of that."
+      },
+      {
+        "text": "Add more threads; that always raises performance",
+        "explanation": "More threads help a memory-bound kernel only until bandwidth is saturated. At 45 of 50 GB/s there is little left to gain."
+      },
+      {
+        "text": "Raise the CPU clock, since the kernel is compute-bound",
+        "explanation": "At AI 0.25, far below the ridge of 20, the kernel is memory-bound. A faster core clock does not raise DRAM bandwidth."
+      },
+      {
+        "text": "Don't: it is already at about 90% of its bandwidth roof; raise intensity instead, for example by fusing it with neighbouring passes or using smaller data types",
+        "explanation": "Correct. The attainable ceiling is 0.25 × 50 = 12.5 GFLOP/s and it achieves 11.25. Only more FLOPs per byte can lift it substantially."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Place it on the roofline:\n\n```\nridge   = 1000 / 50 = 20 FLOP/B\nAI 0.25 << 20  -> memory-bound\nroof    = 0.25 x 50 = 12.5 GFLOP/s\nachieved= 0.25 x 45 = 11.25\nshare   = 11.25 / 12.5 = 90%\n```\n\nVectorising speeds up arithmetic that is not the bottleneck. To go meaningfully faster, move fewer bytes per FLOP: fuse loops, block for cache, or use float32 or bfloat16 instead of float64.",
+    "link": {
+      "title": "Roofline performance model — NERSC documentation",
+      "url": "https://docs.nersc.gov/tools/performance/roofline/"
+    }
+  },
+  {
+    "id": "par-measuring-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two passes over large float32 arrays: pass 1 computes `y[i] = a * x[i]`, then pass 2 computes `z[i] = y[i] + b[i]`. Fusing them gives `z[i] = a * x[i] + b[i]` with no `y`. Ignoring write-allocate and assuming the arrays are far bigger than cache, what is the roughly expected speed-up from fusion?",
+    "options": [
+      {
+        "text": "About 1.7×",
+        "explanation": "Correct. Unfused moves 8 + 12 = 20 bytes per element for 2 FLOPs; fused moves 12 bytes for the same 2 FLOPs. A memory-bound kernel speeds up by 20 / 12 ≈ 1.67."
+      },
+      {
+        "text": "About 2×, because there are half as many loops",
+        "explanation": "Loop count is not the cost; bytes moved are. Fusion removes y's write and re-read (8 bytes), not half of all traffic."
+      },
+      {
+        "text": "None, because the number of FLOPs is the same",
+        "explanation": "The FLOPs are the same, but this kernel is memory-bound, so time follows bytes moved, which fusion reduces."
+      },
+      {
+        "text": "About 1.2×",
+        "explanation": "This would follow if fusion saved only 4 bytes per element. It saves both the write of y in pass 1 and the read of y in pass 2."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Count bytes per element (4 B each):\n\n```\npass 1: read x, write y   8 B\npass 2: read y, b; write z 12 B\nunfused total            20 B\nfused: read x, b; write z 12 B\n```\n\nFLOPs: 2 either way, so AI rises from 2/20 = 0.1 to 2/12 ≈ 0.167. Memory-bound time is proportional to bytes: 20 / 12 ≈ **1.67×**. This is why ML compilers such as XLA fuse element-wise operations so aggressively.",
+    "link": {
+      "title": "Roofline model — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Roofline_model"
+    }
+  },
+  {
+    "id": "par-measuring-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the roofline model are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A kernel's arithmetic intensity depends on which memory level you measure traffic at, so DRAM and L1 rooflines can place it differently",
+        "explanation": "True. Cache reuse means a kernel moves fewer bytes from DRAM than from L1, so its DRAM intensity is higher. Hierarchical rooflines plot each level."
+      },
+      {
+        "text": "Raising the core clock raises the sloped (bandwidth) part of the roof",
+        "explanation": "False. The sloped roof is DRAM bandwidth, which is set by the memory system, not the core clock. A faster clock raises the flat compute roof."
+      },
+      {
+        "text": "Lower ceilings such as \"no SIMD\" or \"no FMA\" show how much of the compute roof a kernel can reach without those features",
+        "explanation": "True. If a kernel is stuck at the no-SIMD ceiling, vectorising is the next lever."
+      },
+      {
+        "text": "For a memory-bound kernel, adding more FMA units is the most effective upgrade",
+        "explanation": "False. More FMA units raise the flat roof, which a memory-bound kernel is not touching. It needs more bandwidth or more intensity."
+      },
+      {
+        "text": "A single thread often cannot reach the full bandwidth roof, because it can keep only a limited number of cache misses in flight",
+        "explanation": "True. By Little's law, saturating 100 GB/s at 100 ns latency needs about 10,000 bytes (around 156 lines) in flight, more than one core's miss buffers can track."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Separate the two roofs and what moves each.\n\n| Roof | Set by |\n|---|---|\n| Flat (compute) | cores, clock, SIMD, FMA |\n| Sloped (memory) | memory bandwidth |\n\nThen check each claim: core clock and FMA units move only the flat roof (claims 2 and 4 false). Ceilings and per-level rooflines are standard refinements (1 and 3 true). Little's law explains the single-thread bandwidth ceiling:\n\n```\nin flight = 100e9 B/s x 100e-9 s\n          = 10,000 B ~ 156 lines\n```",
+    "link": {
+      "title": "Roofline performance model — NERSC documentation",
+      "url": "https://docs.nersc.gov/tools/performance/roofline/"
+    }
+  }
+]

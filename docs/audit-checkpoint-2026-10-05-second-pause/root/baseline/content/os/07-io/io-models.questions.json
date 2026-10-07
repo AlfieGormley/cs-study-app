@@ -1,0 +1,343 @@
+[
+  {
+    "id": "io-models-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A blocking `read()` on a TCP socket returns `0`. What does that mean?",
+    "options": [
+      {
+        "text": "No data has arrived yet; try again later",
+        "explanation": "A blocking read never returns early for 'no data yet'; it sleeps. A non-blocking read reports that case as -1 with `errno == EAGAIN`, not 0."
+      },
+      {
+        "text": "The peer has closed its side of the connection (end of file)",
+        "explanation": "Correct. A return of 0 means EOF: the other side has shut down writing and no more data will arrive."
+      },
+      {
+        "text": "An error occurred; check `errno`",
+        "explanation": "Errors are signalled by a return of -1. A return of 0 is a normal, successful result meaning EOF."
+      },
+      {
+        "text": "The buffer passed in was too small",
+        "explanation": "A small buffer just means a short read of up to that many bytes; the remaining data stays in the kernel buffer for the next call."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "`read()` has three outcomes:\n\n| Return | Meaning |\n|---|---|\n| n > 0 | n bytes copied |\n| 0 | EOF: peer closed |\n| -1 | error in `errno` |\n\nFor a non-blocking socket with nothing to read, the result is -1 with `EAGAIN`. Treating 0 as 'try again' is a classic bug that makes a server spin forever on a closed connection.",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "io-models-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Consider this Python snippet. The server at the other end accepts the connection but sends nothing.\n\n```python\ns = socket.create_connection(\n    (host, port))\ns.setblocking(False)\ntry:\n    print(s.recv(100))\nexcept BlockingIOError:\n    print(\"later\")\n```\n\nWhat does it print?",
+    "options": [
+      {
+        "text": "Nothing; it hangs until the server sends data",
+        "explanation": "That's the behaviour of a *blocking* socket. `setblocking(False)` sets `O_NONBLOCK`, so `recv` won't sleep."
+      },
+      {
+        "text": "`b''`",
+        "explanation": "An empty bytes object means EOF (the peer closed). Here the peer is still connected, just silent."
+      },
+      {
+        "text": "`later`",
+        "explanation": "Correct. With no data in the receive buffer, the non-blocking `recv` fails with `EAGAIN`, which Python raises as `BlockingIOError`."
+      },
+      {
+        "text": "It raises `ConnectionResetError`",
+        "explanation": "A reset needs the peer to send an RST. An idle, open connection simply has no data yet."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `create_connection` completes the TCP handshake (in blocking mode).\n2. `setblocking(False)` sets `O_NONBLOCK` on the descriptor.\n3. `recv(100)` checks the receive buffer: empty.\n4. A blocking socket would sleep here. A non-blocking one returns -1 with `errno = EAGAIN`.\n5. Python maps `EAGAIN` to `BlockingIOError`, so the `except` branch prints `later`.",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "io-models-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Stevens' classification, which phase of a read does **I/O multiplexing** (e.g. `select`) take off the individual `read()` call?",
+    "options": [
+      {
+        "text": "Both phases: `select` waits for data and copies it into your buffer",
+        "explanation": "`select` only reports readiness. You still call `read()` afterwards to copy the data."
+      },
+      {
+        "text": "Neither phase: it is just a faster form of blocking I/O",
+        "explanation": "It does change things: the waiting happens once, for many descriptors, inside `select`, rather than inside each `read()`."
+      },
+      {
+        "text": "The copy phase: `select` copies data into the kernel so `read()` is faster",
+        "explanation": "The data is already in the kernel when it arrives; `select` doesn't move it anywhere."
+      },
+      {
+        "text": "The waiting phase: the thread blocks in `select` until some descriptor is ready, then `read()` only copies",
+        "explanation": "Correct. Waiting moves into one call that covers many descriptors; the copy remains a synchronous `read()`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Phases: (1) wait for data, (2) copy kernel to user.\n\n```\nselect([a,b,c]) blocks  <- phase 1\n -> b ready\nread(b)          copies <- phase 2\n```\n\nThe gain isn't that the copy disappears; it's that one thread waits on thousands of sockets at once.",
+    "link": {
+      "title": "Asynchronous I/O — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    }
+  },
+  {
+    "id": "io-models-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "By the POSIX definition Stevens uses, why is I/O multiplexing with `epoll` classed as **synchronous** I/O, even though one thread handles thousands of connections?",
+    "options": [
+      {
+        "text": "Because `epoll_wait` must be called from the main thread",
+        "explanation": "There's no such restriction, and it isn't what 'synchronous' means here."
+      },
+      {
+        "text": "Because the process is blocked while the data is copied from kernel to user space in `read()`",
+        "explanation": "Correct. POSIX calls an operation synchronous if the requesting process is blocked until it completes. The copy in `read()` happens on the caller's time, so the operation is synchronous."
+      },
+      {
+        "text": "Because the kernel processes connections one at a time",
+        "explanation": "The kernel handles packets for many connections concurrently; this is about who performs the I/O operation, not kernel scheduling."
+      },
+      {
+        "text": "Because epoll uses blocking sockets",
+        "explanation": "Event loops normally use non-blocking sockets. Even so, the copy is performed synchronously by the caller."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. POSIX: a synchronous I/O operation causes the requesting process to be blocked until that operation completes.\n2. With epoll: `epoll_wait` (wait), then `read()` (copy). During the copy the thread is busy inside the syscall.\n3. So the read is synchronous, even though the *waiting* was shared.\n4. Asynchronous I/O (io_uring, IOCP, `aio_read`) differs: the kernel does the copy, and you learn about it afterwards.",
+    "link": {
+      "title": "Asynchronous I/O — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    }
+  },
+  {
+    "id": "io-models-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An event-loop server sets `O_NONBLOCK` on a regular file and reads it in the loop, expecting `EAGAIN` on a page-cache miss. Under load, the loop stalls for tens of milliseconds at a time. Why?",
+    "options": [
+      {
+        "text": "`O_NONBLOCK` is ignored for regular files, so a page-cache miss blocks the loop thread while the disk is read",
+        "explanation": "Correct. Regular files are always considered 'ready'; a read that needs the disk simply sleeps. That's why libuv and nginx push file I/O onto thread pools (or use io_uring)."
+      },
+      {
+        "text": "`EAGAIN` is returned, but the loop retries in a tight spin",
+        "explanation": "No `EAGAIN` is ever returned for regular files, so there's nothing to spin on; the read itself sleeps."
+      },
+      {
+        "text": "The file system locks the whole file during reads",
+        "explanation": "Concurrent reads of a file don't take an exclusive lock that would explain this. The stall is waiting for the device."
+      },
+      {
+        "text": "Regular files need `O_DIRECT` to be readable from an event loop",
+        "explanation": "`O_DIRECT` bypasses the page cache, so every read goes to the device; with a normal read that blocks even more often."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Sockets and pipes have a notion of 'no data yet'; regular files don't. The data always exists; it just may be on disk.\n2. Linux ignores `O_NONBLOCK` for regular files and block devices.\n3. A cache miss means the thread sleeps until the device returns the block: often hundreds of microseconds on an SSD, milliseconds on a busy disk.\n4. In a single-threaded loop, every other connection waits too.\n5. Fixes: thread pool (libuv, nginx `aio threads`) or completion I/O (io_uring).",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "io-models-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are **completion-based** (the kernel performs the I/O and notifies you when it is finished)? Select all that apply.",
+    "options": [
+      {
+        "text": "Windows I/O completion ports (IOCP)",
+        "explanation": "Correct. You post an overlapped read with a buffer; the kernel fills it and queues a completion packet."
+      },
+      {
+        "text": "Linux `epoll`",
+        "explanation": "epoll is readiness-based: it tells you a descriptor can be read without blocking, then you call `read()` yourself."
+      },
+      {
+        "text": "Linux io_uring",
+        "explanation": "Correct. You submit SQEs describing operations and buffers; the kernel posts CQEs once they have completed."
+      },
+      {
+        "text": "BSD/macOS `kqueue` with `EVFILT_READ`",
+        "explanation": "`EVFILT_READ` reports readiness (and how many bytes are available); you still perform the read."
+      },
+      {
+        "text": "POSIX `aio_read`",
+        "explanation": "Correct in its interface: you hand over a buffer and later collect the result. (On Linux glibc implements it with threads, but the model is completion.)"
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Ask of each API: do I give it a buffer up front and get told when the data is *in* the buffer?\n\n| API | Model |\n|---|---|\n| IOCP | completion |\n| epoll | readiness |\n| io_uring | completion |\n| kqueue READ | readiness |\n| aio_read | completion |\n\nReadiness APIs need a second call to do the I/O; completion APIs don't.",
+    "link": {
+      "title": "Asynchronous I/O — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    }
+  },
+  {
+    "id": "io-models-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why is signal-driven I/O (`O_ASYNC` + `SIGIO`) rarely used for TCP servers?",
+    "options": [
+      {
+        "text": "Linux doesn't support `SIGIO` on sockets",
+        "explanation": "Linux does support it via `F_SETOWN` and `O_ASYNC`; the problem is how useful the signal is."
+      },
+      {
+        "text": "It requires root privileges",
+        "explanation": "Any process can enable `O_ASYNC` on its own descriptors."
+      },
+      {
+        "text": "It blocks during the wait phase, which defeats the purpose",
+        "explanation": "It doesn't block during the wait; that's its one advantage. The process runs until the signal arrives."
+      },
+      {
+        "text": "`SIGIO` fires for many different TCP events, so the handler can't tell what happened, and signals are awkward to handle safely and don't queue reliably",
+        "explanation": "Correct. Stevens notes that for TCP the signal is generated on connect completion, data arrival, data acknowledgement, half-close and more, making it nearly useless. Multiplexing gives clearer, per-descriptor information."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A TCP socket can generate `SIGIO` for: connection request completed, disconnect initiated or completed, half-close, data arrived, data sent (buffer space freed), an error.\n2. The handler receives just 'SIGIO'. Was it data? An ACK? With many sockets, which one?\n3. Standard signals of the same type coalesce, so several events can become one signal.\n4. The handler can only safely call async-signal-safe functions.\n5. `select`/`epoll` instead give a precise list of ready descriptors and events. For UDP, 'datagram arrived' dominates, so `SIGIO` is somewhat usable there.",
+    "link": {
+      "title": "fcntl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/fcntl.2.html"
+    }
+  },
+  {
+    "id": "io-models-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A thread-per-connection server on Linux handles 20,000 mostly idle WebSocket clients. Each thread has the default 8 MB stack. Roughly how much virtual address space is reserved for stacks, and is it all physical RAM?",
+    "options": [
+      {
+        "text": "About 160 MB, all of it resident",
+        "explanation": "20,000 × 8 MB is 160,000 MB, not 160 MB: off by a factor of 1,000."
+      },
+      {
+        "text": "About 160 GB of virtual address space, but only touched stack pages (often a few tens of KB per thread) use physical RAM",
+        "explanation": "Correct. 20,000 × 8 MB ≈ 160 GB of reservation, which a 64-bit address space can hold. RAM use is far smaller, but scheduler, memory and context-switch overhead still grow with thread count."
+      },
+      {
+        "text": "About 160 GB, all resident, so the server will run out of memory immediately",
+        "explanation": "Linux reserves stack address space lazily; pages are only backed by RAM when first touched, so idle threads use much less."
+      },
+      {
+        "text": "Nothing; threads share the process's stack",
+        "explanation": "Each thread needs its own stack, because each has its own call chain."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 20,000 threads × 8 MB = 160,000 MB ≈ 160 GB (≈ 156 GiB).\n2. That's **virtual** address space; a 64-bit process has plenty.\n3. Physical RAM is allocated on first touch. An idle thread blocked in `read()` may have touched only a few pages: say 16-64 KB.\n4. 20,000 × 32 KB ≈ 640 MB of real stack memory: manageable, but not free.\n5. The bigger costs are 20,000 kernel tasks for the scheduler, context switches as clients wake, and per-thread kernel structures. Event loops avoid all of this.",
+    "link": {
+      "title": "Asynchronous I/O — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    }
+  },
+  {
+    "id": "io-models-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Python developer says: \"`asyncio` gives us asynchronous I/O, so the kernel copies data into our buffers in the background.\" On Linux, what actually happens when a coroutine awaits a socket read?",
+    "options": [
+      {
+        "text": "asyncio submits the read to io_uring and the kernel copies the data asynchronously",
+        "explanation": "The default asyncio event loop on Linux uses the `selectors` module (epoll), not io_uring."
+      },
+      {
+        "text": "asyncio runs each socket read on a thread in its default executor",
+        "explanation": "The executor is for blocking calls you hand it explicitly (e.g. `run_in_executor`); socket reads go through the selector."
+      },
+      {
+        "text": "asyncio uses POSIX `aio_read` for sockets",
+        "explanation": "POSIX AIO isn't used by asyncio for sockets, and glibc implements it with threads anyway."
+      },
+      {
+        "text": "The event loop registers the socket with epoll, suspends the coroutine, and when epoll reports it readable, performs a synchronous non-blocking `recv()` and resumes the coroutine with the bytes",
+        "explanation": "Correct. It's readiness-based multiplexing. The copy happens synchronously in the event-loop thread; 'async' describes the programming model, not the kernel I/O model."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `await reader.read(n)` finds no buffered data, so the transport is waiting on a socket registered with the selector (epoll on Linux).\n2. The coroutine is suspended; the loop runs other tasks.\n3. The loop calls `epoll_wait`. A packet arrives; epoll reports the fd readable.\n4. The loop calls `sock.recv()` on the non-blocking socket. That is a synchronous copy in the loop thread.\n5. The data is passed to the protocol and the coroutine is resumed.\n\nStevens model: I/O multiplexing (model 3).",
+    "link": {
+      "title": "selectors — Python docs",
+      "url": "https://docs.python.org/3/library/selectors.html"
+    }
+  },
+  {
+    "id": "io-models-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are choosing between a readiness API (epoll) and a completion API (io_uring) for a server with 100,000 mostly idle connections. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With a naive completion design, every idle connection needs a receive buffer submitted in advance, which could pin a lot of memory",
+        "explanation": "Correct. 100,000 × 16 KB ≈ 1.6 GB of buffers waiting for data that may never come. io_uring addresses this with provided buffer rings, where the kernel picks a buffer only when data arrives."
+      },
+      {
+        "text": "With readiness, a buffer can be allocated only when a socket is reported readable",
+        "explanation": "Correct. This is one reason readiness APIs suited servers with many idle connections."
+      },
+      {
+        "text": "Completion APIs can't be used for network sockets, only files",
+        "explanation": "Both IOCP and io_uring handle sockets; IOCP has been used for Windows network servers for decades."
+      },
+      {
+        "text": "Readiness APIs can efficiently tell you when a regular file read will complete",
+        "explanation": "Readiness doesn't apply to regular files: they always report 'ready' (or epoll refuses them). Completion APIs are the ones that work for files."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Completion: 'read into buffer B when data arrives'. B must exist from submission to completion.\n2. 100,000 sockets × 16 KB buffers = 1,600,000 KB ≈ 1.6 GB tied up while idle.\n3. Readiness: wait without a buffer; allocate (or borrow from a pool) only when the socket is readable.\n4. io_uring's fix: register a pool of buffers; each recv says 'pick one from group G', so only active connections hold memory.\n5. Files: only completion works properly; readiness treats them as always ready.",
+    "link": {
+      "title": "Ringing in a new asynchronous I/O API — LWN.net",
+      "url": "https://lwn.net/Articles/776703/"
+    }
+  },
+  {
+    "id": "io-models-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team uses glibc's POSIX `aio_read` on Linux to read 50,000 small files concurrently, expecting the kernel to do it all asynchronously. They observe hundreds of extra threads and no improvement over a simple thread pool. Why?",
+    "options": [
+      {
+        "text": "POSIX AIO requires `O_DIRECT`, without which it fails with `EINVAL`",
+        "explanation": "That's a limitation of the kernel's native AIO (`io_submit`), which falls back to blocking rather than failing; glibc's POSIX AIO doesn't require it."
+      },
+      {
+        "text": "glibc implements POSIX AIO in user space with a pool of threads making ordinary blocking calls, so it is effectively a thread pool",
+        "explanation": "Correct. The aio(7) man page says as much. The interface is completion-based, but the implementation is threads, so it offers no advantage over your own pool."
+      },
+      {
+        "text": "POSIX AIO only works on sockets",
+        "explanation": "The interface is aimed primarily at files; sockets are usually handled with multiplexing."
+      },
+      {
+        "text": "The kernel serialises all AIO requests onto one queue",
+        "explanation": "There's no single kernel queue here at all, because the work is being done by glibc threads in user space."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `aio_read` hands glibc an `aiocb` and returns.\n2. Internally glibc queues the request to one of its helper threads.\n3. That thread calls ordinary `pread()`, which blocks on the disk.\n4. On completion it updates the `aiocb` and optionally signals you.\n5. Net effect: a thread pool with a different API. For genuinely kernel-driven async file I/O on Linux, use io_uring.",
+    "link": {
+      "title": "aio(7) — POSIX asynchronous I/O overview",
+      "url": "https://man7.org/linux/man-pages/man7/aio.7.html"
+    }
+  }
+]

@@ -1,0 +1,378 @@
+[
+  {
+    "id": "msg-sync-vs-async-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Checkout synchronously calls Payments, Inventory and Fraud on every request. Each dependency is independently 99.9% available. Ignoring Checkout's own failures, what is the best-case availability of the checkout request?",
+    "options": [
+      {
+        "text": "99.9%, because the chain is only as weak as its weakest link",
+        "explanation": "Wrong. 'Weakest link' would apply if only one dependency could fail. Here any of the three failing fails the request, so the probabilities multiply and availability is lower than any single dependency."
+      },
+      {
+        "text": "About 99.97%, because the three services provide redundancy for each other",
+        "explanation": "Wrong. Redundancy means any one of several copies can serve the request. These are three different services that are all required, which is a series dependency, not a parallel one."
+      },
+      {
+        "text": "About 99.7%",
+        "explanation": "Correct. The request succeeds only if all three succeed: 0.999 × 0.999 × 0.999 ≈ 0.997. Unavailability roughly triples, from about 8.8 hours a year to about 26."
+      },
+      {
+        "text": "97%, because each dependency removes 1% of availability",
+        "explanation": "Wrong. Each dependency is unavailable 0.1% of the time, not 1%. Multiplying 0.999 three times gives about 99.7%, so this answer is out by a factor of ten in unavailability."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A synchronous request needs **every** dependency to answer, so the dependencies are in series.\n2. For independent components in series, multiply availabilities: `0.999³`.\n3. `0.999 × 0.999 = 0.998001`, then `× 0.999 = 0.997003`.\n4. So the request is ≈ **99.70%** available, or 0.3% unavailable.\n5. In hours: a year has 8,760 hours. `8,760 × 0.003 ≈ 26 hours` of downtime, versus `8,760 × 0.001 ≈ 8.8 hours` for one service.\n\nThis is one reason to move non-essential work (for example, post-order analytics) off the synchronous path and onto a queue.",
+    "link": {
+      "title": "Queue-Based Load Leveling pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is the **main** thing a durable message queue gives you that a direct HTTP call does not?",
+    "options": [
+      {
+        "text": "Temporal decoupling: the consumer can be offline when the producer sends",
+        "explanation": "Correct. The broker stores the message durably until a consumer is ready, so producer and consumer no longer need to be up at the same moment."
+      },
+      {
+        "text": "Freedom to change the message format without breaking consumers",
+        "explanation": "Wrong. A queue does not decouple schemas. If the producer changes the payload shape, consumers still break. You need versioned schemas or a schema registry for that."
+      },
+      {
+        "text": "Lower end-to-end latency for each piece of work",
+        "explanation": "Wrong. A broker adds at least one extra hop and often a polling delay, so the work usually completes later, not sooner. What gets faster is the producer's response, not the work itself."
+      },
+      {
+        "text": "Strong consistency between producer and consumer state",
+        "explanation": "Wrong. Asynchronous messaging makes the consumer's state lag behind the producer's. It gives you eventual consistency, not strong consistency."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk through what a queue physically does:\n\n1. The producer writes a message to the broker, and the broker persists it.\n2. The producer gets an acknowledgement from the **broker**, not from the consumer, and moves on.\n3. The consumer reads the message whenever it is next running.\n\nStep 2 is the key: the producer depends only on the broker being up. If the consumer is mid-deploy or has crashed, messages simply wait. That is temporal decoupling. Latency, schema compatibility and consistency are unchanged or made worse.",
+    "link": {
+      "title": "What is a message queue? (AWS)",
+      "url": "https://aws.amazon.com/message-queue/"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A video-upload service receives 1,500 jobs per second for 20 seconds during a burst, then a steady 100 per second afterwards. You run 4 workers behind a queue, each processing 75 jobs per second. Roughly how long **after the burst ends** is the backlog cleared?",
+    "options": [
+      {
+        "text": "About 80 seconds",
+        "explanation": "Wrong. This divides the 24,000 backlog by the full 300 per second capacity, forgetting that 100 new jobs per second keep arriving. Only 200 per second of capacity is available for the backlog."
+      },
+      {
+        "text": "About 2.5 minutes",
+        "explanation": "Wrong. This assumes the backlog is the whole burst (1,500 × 20 = 30,000), ignoring that the workers were already processing 300 per second during the burst. The real backlog is 24,000."
+      },
+      {
+        "text": "Never, because 1,500 per second exceeds capacity",
+        "explanation": "Wrong. The burst exceeds capacity only temporarily. Draining depends on the arrival rate **after** the burst (100 per second) being below capacity (300 per second), which it is."
+      },
+      {
+        "text": "About 2 minutes",
+        "explanation": "Correct. Backlog = (1,500 − 300) × 20 = 24,000 jobs. Net drain rate = 300 − 100 = 200 per second. 24,000 ÷ 200 = 120 seconds."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Capacity**: 4 workers × 75 = 300 jobs per second.\n2. **Growth during the burst**: arrivals exceed capacity by 1,500 − 300 = 1,200 per second.\n3. **Backlog at the end of the burst**: 1,200 × 20 s = 24,000 jobs.\n4. **Net drain rate afterwards**: capacity minus new arrivals = 300 − 100 = 200 per second.\n5. **Time to clear**: 24,000 ÷ 200 = 120 s = **2 minutes**.\n\nUnder FIFO, the last job in the burst waits roughly 24,000 / 300 = 80 seconds. The queue becomes empty after 120 seconds because later arrivals join behind that job. If that is acceptable for your product, 4 workers is enough; without a queue you would need 1,500 ÷ 75 = 20 workers to avoid dropping work during the burst.",
+    "link": {
+      "title": "Queue-Based Load Leveling pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are designing an e-commerce checkout whose immediate success response requires payment authorisation and whose loyalty points may appear later. Which of these steps are good candidates to move **off** the synchronous request path and onto a queue? Select all that apply.",
+    "options": [
+      {
+        "text": "Sending the order confirmation email",
+        "explanation": "Correct. The user does not need the email to arrive before the page loads, and email providers are slow and occasionally unavailable. A queue with retries is a natural fit."
+      },
+      {
+        "text": "Authorising the card payment",
+        "explanation": "Wrong. The user needs to know immediately whether the payment succeeded before you can show 'order placed'. This is the classic case where synchronous communication is the right choice."
+      },
+      {
+        "text": "Updating the recommendation model with the purchase",
+        "explanation": "Correct. Recommendations can lag by seconds or minutes without harming the user, and the ML pipeline should not be able to slow down or fail checkout."
+      },
+      {
+        "text": "Awarding loyalty points",
+        "explanation": "Correct. Points can be applied eventually. The UI can say 'points will appear shortly', and failures can be retried from the queue rather than failing the purchase."
+      },
+      {
+        "text": "Checking the basket total against the price the user saw",
+        "explanation": "Wrong. This is a validation that must pass **before** you charge the customer, so it belongs on the synchronous path. Doing it later would mean charging the wrong amount and fixing it afterwards."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask one question of each step: **does the user's immediate response depend on the result?**\n\n| Step | Needed for response? | Placement |\n|---|---|---|\n| Price check | Yes, before charging | Sync |\n| Card auth | Yes, shows success | Sync |\n| Email | No | Async |\n| Recommendations | No | Async |\n| Loyalty points | No | Async |\n\nThe pattern is **sync at the edge, async inside**: validate and charge synchronously, write the order, publish `OrderPlaced`, and let everything else react to that event.",
+    "link": {
+      "title": "Event-driven architecture style (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/guide/architecture-styles/event-driven"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your dashboard shows a queue receiving 250 messages per second with a fairly steady average of 15,000 waiting (not currently processing) messages. Roughly how long does a typical message wait before processing starts?",
+    "options": [
+      {
+        "text": "About 0.017 seconds",
+        "explanation": "Wrong. This is λ ÷ L (250 ÷ 15,000), which inverts the formula. Little's Law is L = λW, so W = L ÷ λ."
+      },
+      {
+        "text": "About 60 seconds",
+        "explanation": "Correct. By Little's Law, W = L ÷ λ = 15,000 ÷ 250 = 60 seconds. In a stable system, depth divided by throughput gives average time in the queue."
+      },
+      {
+        "text": "About 15 seconds",
+        "explanation": "Wrong. There is no basis for this number in the data. It confuses depth in thousands with seconds, but delay depends on depth relative to throughput."
+      },
+      {
+        "text": "It cannot be estimated without knowing the number of consumers",
+        "explanation": "Wrong. Little's Law holds regardless of how many consumers there are. In a stable queue, throughput out equals throughput in, so 250 per second plus the depth is enough to estimate the wait."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Little's Law: **L = λ × W**, where L is the average number in the system, λ is the arrival rate and W is the average time spent in it.\n2. Rearrange for W: `W = L ÷ λ`.\n3. Plug in: `W = 15,000 ÷ 250 = 60 s`.\n4. Sanity check: if each second 250 messages join the back of a 15,000-message line and 250 leave the front, a new message must wait for 15,000 ÷ 250 = 60 seconds' worth of departures.\n\nThis is why mature teams alarm on **age of oldest message** (SQS exposes `ApproximateAgeOfOldestMessage`) as well as depth: it is a useful backlog signal, but it is not average user delay: the SQS metric excludes some repeatedly received poison messages and resets age when messages move to a DLQ.",
+    "link": {
+      "title": "Little's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A queue sits in front of a PDF-rendering service. Every weekday, depth climbs from 9am and **never quite returns to zero overnight**; each morning starts higher than the last. Arrivals average 180 per second for 10 working hours and 20 per second for the other 14 hours. Workers process 80 per second in total. What is the right diagnosis and fix?",
+    "options": [
+      {
+        "text": "Capacity is below the average daily arrival rate (about 87 per second), so add enough workers to exceed it with headroom",
+        "explanation": "Correct. Daily arrivals are about 7.49 million versus capacity of about 6.91 million, so roughly 576,000 messages carry over each day. Capacity must exceed the daily average, ideally with margin to catch up after incidents."
+      },
+      {
+        "text": "Load levelling is working as intended; the backlog is just the daytime peak being smoothed",
+        "explanation": "Wrong. Load levelling only smooths a peak if capacity exceeds the **average** arrival rate across the whole cycle. A backlog that ratchets up day after day is the signature of genuine overload."
+      },
+      {
+        "text": "The queue's maximum size is too small; raise it so it can hold the daily backlog",
+        "explanation": "Wrong. Size is not the constraint. With capacity below the daily average arrival rate, the backlog grows every day however big the queue is, until messages exceed their retention period and are lost."
+      },
+      {
+        "text": "Consumers are processing messages out of order, which slows them down",
+        "explanation": "Wrong. Ordering requirements can constrain throughput, but nothing here attributes the deficit to ordering. Nothing in the symptoms points to ordering; the arithmetic shows a pure capacity deficit."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. **Daily arrivals**\n   - Day: 180/s × 36,000 s = 6,480,000\n   - Night: 20/s × 50,400 s = 1,008,000\n   - Total: **7,488,000**, an average of 7,488,000 ÷ 86,400 ≈ **86.7/s**\n2. **Daily capacity**: 80/s × 86,400 s = **6,912,000**.\n3. **Carry-over**: 7,488,000 − 6,912,000 = **576,000 messages per day**.\n4. Check it against the symptoms: during the day the queue grows at 180 − 80 = 100/s (3.6 million in 10 hours). Overnight it drains at 80 − 20 = 60/s (3.02 million in 14 hours). It never catches up, exactly as observed.\n5. **Fix**: provision above 86.7/s. For illustration, 120/s provides 33.3/s of daily average headroom; whether it recovers from a particular incident within one night depends on the extra backlog, and alarm on oldest-message age, not just depth.\n\nWithout the fix, SQS's default 4-day retention (maximum 14 days) means old jobs would eventually be silently deleted.",
+    "link": {
+      "title": "Avoiding insurmountable queue backlogs (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/avoiding-insurmountable-queue-backlogs/"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A reporting endpoint takes 2–8 minutes to build a spreadsheet. Clients currently hold an HTTP connection open and frequently hit the load balancer's 60-second idle timeout. What is the most robust redesign?",
+    "options": [
+      {
+        "text": "Raise the load balancer idle timeout to 10 minutes",
+        "explanation": "Wrong. This papers over the problem. Long-held connections tie up server resources, may encounter intermediary timeouts. Without durable job identity and idempotent submission, disconnects can lose access to results and retries can duplicate work."
+      },
+      {
+        "text": "Have the client retry the request automatically whenever it times out",
+        "explanation": "Wrong. Each retry starts another 2–8 minute job while the first may still be running, multiplying load. Without idempotency it can also produce duplicate reports."
+      },
+      {
+        "text": "Return 202 Accepted with a job ID, enqueue the work, and let the client poll a status URL or receive a callback",
+        "explanation": "Correct. This is asynchronous request-reply. The request can be acknowledged after durable acceptance, the work is load-levelled by a queue, and the result survives client disconnects because it is stored against the job ID."
+      },
+      {
+        "text": "Run the report on a bigger server so it finishes inside 60 seconds",
+        "explanation": "Wrong. Vertical scaling may help a little but will not reliably cut an 8-minute job below 60 seconds, and the problem returns as data grows. It also leaves bursts of requests able to overload the service."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Identify the mismatch**: the work takes minutes, but the existing request path has timeouts shorter than the job duration.\n2. **Split acceptance from completion**: `POST /reports` validates the request, atomically records a job (`status = PENDING`) and an outbox entry for `{jobId}`, then returns `202 Accepted` with `Location: /reports/{jobId}`.\n3. **Process asynchronously**: a relay publishes committed outbox entries; workers pull from the queue, build the file, upload it to object storage and set `status = DONE`.\n4. **Deliver the result**: the client polls `GET /reports/{jobId}` (with a `Retry-After` hint) or registers a webhook.\n5. **Failure behaviour**: after durable acceptance, the job survives client disconnects; a retry uses the same idempotency key. Worker crashes can trigger redelivery within retention limits, so processing and completion updates must tolerate duplicates.\n\nWebhooks themselves are covered in the API design module.",
+    "link": {
+      "title": "Queue-Based Load Leveling pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After checkout, the orders service sends three messages: `SendReceiptEmail` to the email queue, `AwardPoints` to the loyalty queue and `ReserveStock` to the warehouse queue. Every new team that wants to react to orders needs a change and a redeploy of the orders service. Which redesign best addresses this?",
+    "options": [
+      {
+        "text": "Bundle the three commands into one message so there is only one send to maintain",
+        "explanation": "Wrong. The orders service would still know every consumer and what each must do. Adding a fourth team still means changing the bundle and redeploying orders."
+      },
+      {
+        "text": "Publish a single `OrderPlaced` event to a topic and let each team subscribe and decide what to do with it",
+        "explanation": "Correct. An event states a fact rather than instructing a particular handler. The publisher no longer knows who reacts, so new teams add a subscription without touching the orders service: fan-out decoupling."
+      },
+      {
+        "text": "Let each downstream team poll the orders database for new rows",
+        "explanation": "Wrong. This removes the sends but couples every team to the orders table's internal schema and adds polling load to the orders database. The schema becomes an accidental public contract."
+      },
+      {
+        "text": "Replace the queues with synchronous HTTP calls so failures are visible to orders",
+        "explanation": "Wrong. That re-couples availability, latency and load: a slow warehouse would now slow checkout. It also keeps the orders service aware of every consumer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Spot the smell: the producer is sending **commands**, each addressed to one specific handler. So the producer must know every consumer.\n2. Ask what the producer actually knows: *an order was placed*. That is an **event**.\n3. Publish `OrderPlaced` once to a pub/sub topic.\n4. Email, loyalty and warehouse each subscribe and translate the event into their own work.\n5. A new fraud team? It adds a subscription. The orders service is unchanged.\n\nCommands still have their place (one intended handler, for example `ShipOrder` to the warehouse), but facts that many teams care about should be events.",
+    "link": {
+      "title": "Publish–subscribe pattern (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A product page calls 10 backend services **in parallel** and waits for all of them before rendering. Each service answers in about 50 ms 99% of the time, but 1% of its calls take about 1 second, independently of the others. Roughly what fraction of page loads take about a second or more?",
+    "options": [
+      {
+        "text": "About 1%, the same as each service",
+        "explanation": "Wrong. The page waits for the slowest of 10 calls. It is slow if **any** one of them is slow, which is far more likely than one particular call being slow."
+      },
+      {
+        "text": "Essentially never, because all 10 would have to be slow at once",
+        "explanation": "Wrong. That is 0.01¹⁰, the chance that every call is slow. The page only needs one slow call to be slow, because it waits for all of them."
+      },
+      {
+        "text": "About 10%",
+        "explanation": "Correct. The chance that all 10 calls are fast is 0.99¹⁰ ≈ 0.904, so about 9.6% of page loads include at least one 1-second call. This illustrates tail amplification: about 9.6% of page loads include a slow dependency; exact quantile labels depend on the distribution and convention."
+      },
+      {
+        "text": "About 50%",
+        "explanation": "Wrong. That would need roughly 70 parallel calls (0.99⁷⁰ ≈ 0.5). With 10, it is just under 10%."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The page is slow if **at least one** of the 10 calls is slow.\n2. Easier to compute the opposite: all 10 fast.\n   - `P(one fast) = 0.99`\n   - `P(all fast) = 0.99¹⁰ ≈ 0.904`\n3. `P(at least one slow) = 1 − 0.904 ≈ 0.096`, about **10%**.\n4. So 1-in-100 slowness per service becomes 1-in-10 slowness per page.\n\nWays out:\n- Move calls whose results are not needed for the response onto a queue.\n- Set tight timeouts and render without non-essential parts.\n- Send a hedged (duplicate) request when a call is slower than its p95, as described in Google's *The Tail at Scale*.",
+    "link": {
+      "title": "The Tail at Scale (Google Research)",
+      "url": "https://research.google/pubs/the-tail-at-scale/"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A team replaces a direct HTTP call from Orders to Invoicing with a single SQS queue that Invoicing consumes. Which kinds of decoupling have they gained? Select all that apply.",
+    "options": [
+      {
+        "text": "Fan-out: a new Analytics service can also receive every order without changing Orders",
+        "explanation": "Wrong. A queue gives each message to **one** consumer. If Analytics read from the same queue it would compete with Invoicing and steal some of its messages. Fan-out needs a topic, such as SNS feeding a queue per subscriber."
+      },
+      {
+        "text": "Temporal: Invoicing can be down while Orders keeps sending",
+        "explanation": "Correct. SQS stores the messages durably, so Orders only needs the queue to be available. Invoicing catches up when it returns."
+      },
+      {
+        "text": "Format: Invoicing keeps working if Orders renames payload fields",
+        "explanation": "Wrong. A queue carries bytes; it does nothing about schemas. Renamed fields still break Invoicing. That needs versioned schemas and compatibility rules."
+      },
+      {
+        "text": "Rate: Orders can burst above Invoicing's processing speed",
+        "explanation": "Correct. The backlog builds in the queue and Invoicing drains it at its own pace. This is queue-based load levelling."
+      },
+      {
+        "text": "Location: Orders needs only the queue's URL, not Invoicing's hosts",
+        "explanation": "Correct. Invoicing can move, scale or change its address and Orders never notices, because both sides only know the queue."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Go through the four kinds of decoupling from the lesson, plus schema:\n\n| Kind | Queue gives it? |\n|---|---|\n| Temporal | Yes |\n| Rate | Yes |\n| Location | Yes |\n| Fan-out | No, needs a topic |\n| Format | No, never |\n\n1. Temporal, rate and location all come from the broker sitting in the middle and storing messages.\n2. Fan-out needs one **copy** per consumer. A point-to-point queue makes no copies.\n3. A plain queue does not supply schema compatibility; schema tooling and compatibility rules must be explicitly designed.",
+    "link": {
+      "title": "What is a message queue? (AWS)",
+      "url": "https://aws.amazon.com/message-queue/"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A settings page used to save notification preferences synchronously. To \"improve resilience\", a team changed it to publish `PreferencesChanged` to a queue and return `200 OK` at once; a worker writes the database a few hundred milliseconds later. Users now report that after saving, the page reloads and shows their **old** settings. What is the best response?",
+    "options": [
+      {
+        "text": "Add more workers so the queue is drained faster",
+        "explanation": "Wrong. More workers shrink the window but cannot remove it: there is always some delay between the response and the write, and under load or during a worker outage it grows to seconds or minutes."
+      },
+      {
+        "text": "Switch the queue to FIFO",
+        "explanation": "Wrong. FIFO controls the order messages are processed in, not when. The reload can still happen before the worker has written anything."
+      },
+      {
+        "text": "Have the client wait one second before reloading",
+        "explanation": "Wrong. A fixed sleep is slow for everyone and still wrong whenever the backlog exceeds one second. It hides the design problem rather than fixing it."
+      },
+      {
+        "text": "Write the preferences synchronously, because the user needs to read their own write, then publish an event for other systems that react to it",
+        "explanation": "Correct. The user is waiting for this answer and immediately reads it back, which is the case where synchronous is right. Systems that merely react to the change, such as an email digest, can still consume an event published afterwards (ideally via an outbox)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Apply the lesson's question: **does the user need the result now?** Here, yes. They save and immediately read back.\n2. \"Strong read-after-write needed\" is in the *Sync* column of the decision table.\n3. The async version returns before the write exists, so a reload races the worker.\n4. Better split:\n   - Sync: validate and commit the preferences row, return the saved state, and route immediate reads to an authority that includes that commit.\n   - Async: publish `PreferencesChanged` for search, analytics or notification services.\n5. Resilience still improves where it matters: the downstream consumers are decoupled, while the user-facing path stays correct.",
+    "link": {
+      "title": "Queue-Based Load Leveling pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your distributed traces show the checkout request ending at the moment it publishes `OrderPlaced` to a queue. The email worker's spans appear as separate, unconnected traces, so support cannot follow one order from click to confirmation email. What fixes this?",
+    "options": [
+      {
+        "text": "Propagate the trace context (for example a W3C `traceparent` value) in the message attributes, and have consumers continue the trace from it",
+        "explanation": "Correct. Tracing links spans through a shared trace ID passed along with each request. Over HTTP that travels in a header; over a broker it must travel in the message, and consumer instrumentation uses a parent relationship or span links as appropriate, especially for batched or multiple-message processing."
+      },
+      {
+        "text": "Make the email call synchronous so it appears in the checkout trace",
+        "explanation": "Wrong. This sacrifices the benefits of async (checkout now waits for email) just to fix observability. Context propagation solves the tracing gap without changing the architecture."
+      },
+      {
+        "text": "Increase the tracing sample rate to 100%",
+        "explanation": "Wrong. Sampling decides how many traces are recorded, not whether spans in different processes are linked. Two unconnected traces sampled at 100% are still unconnected."
+      },
+      {
+        "text": "Log the queue name in every service",
+        "explanation": "Wrong. The queue name is the same for every order, so it cannot link one order's spans together. You need an identifier unique to the request, carried across the hop."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A trace is held together by a **trace ID** that each hop passes to the next.\n2. Instrumented HTTP clients and servers can propagate it in headers such as `traceparent`.\n3. A message broker is a hop too, but the trace context only crosses it if you put it **in the message**: SQS message attributes, Kafka record headers, AMQP headers.\n4. The consumer extracts it and connects processing using a parent relationship or span links according to the instrumentation conventions.\n5. Check the specific producer and consumer instrumentation for supported propagation and span relationships; do not assume propagation is automatic.",
+    "link": {
+      "title": "Trace Context (W3C Recommendation)",
+      "url": "https://www.w3.org/TR/trace-context/"
+    }
+  }
+]

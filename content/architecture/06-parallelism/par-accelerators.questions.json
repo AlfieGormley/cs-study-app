@@ -1,0 +1,378 @@
+[
+  {
+    "id": "par-accelerators-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can a specialised accelerator do far more arithmetic per joule than a general-purpose CPU core built on the same process?",
+    "options": [
+      {
+        "text": "Its multipliers and adders use a fundamentally cheaper kind of transistor",
+        "explanation": "A fundamentally different transistor is not required. Specialised arithmetic, control and data movement can improve efficiency within a process."
+      },
+      {
+        "text": "It can reduce or amortise instruction-control overhead and data movement for a suitable workload",
+        "explanation": "Correct. Reuse and specialised execution can reduce energy per useful result; the magnitude depends on design, precision and utilisation."
+      },
+      {
+        "text": "Accelerators run at much higher clock speeds",
+        "explanation": "Higher clock is not required; TPU v1’s reported clock was 700 MHz. Clock rate alone does not determine energy per result."
+      },
+      {
+        "text": "Accelerators do not need memory, so they avoid DRAM entirely",
+        "explanation": "They still need memory; the TPU read weights from DDR3 and later HBM. They reduce how often each value is fetched, but cannot avoid fetching it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A specialised datapath can reuse operands locally and perform a regular sequence with less per-operation instruction control. This can reduce overhead relative to a general-purpose implementation, but does not eliminate storage or control. Compare equivalent precision and useful results across the whole system rather than assuming a universal per-operation energy ratio.",
+    "link": {
+      "title": "In-Datacenter Performance Analysis of a TPU (Jouppi et al., 2017)",
+      "url": "https://arxiv.org/abs/1704.04760"
+    }
+  },
+  {
+    "id": "par-accelerators-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which device provides a field-configurable logic fabric that can implement a direct hardware pipeline without fetching an instruction for each operation?",
+    "options": [
+      {
+        "text": "A GPU",
+        "explanation": "A GPU fetches and decodes instructions; it just shares each one across a warp of threads."
+      },
+      {
+        "text": "An ASIC",
+        "explanation": "A conventional ASIC’s fabricated logic is fixed, though it may include programmable processors or configurable functions. It does not provide the FPGA fabric described."
+      },
+      {
+        "text": "An FPGA",
+        "explanation": "Correct. Its LUTs, flip-flops, DSP blocks and routing are configured by a bitstream, so the circuit is the program, and a new bitstream gives a new circuit."
+      },
+      {
+        "text": "A CPU with a large instruction cache",
+        "explanation": "A big I-cache makes fetching cheaper but the CPU is still driven by an instruction stream."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "An FPGA bitstream configures logic and routing for a circuit. That circuit may be a direct pipeline or even a soft processor executing instructions. Reconfigurable fabric is the distinguishing feature; “no instruction stream anywhere” is not a valid definition of all FPGAs or ASICs.",
+    "link": {
+      "title": "Field-programmable gate array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Field-programmable_gate_array"
+    }
+  },
+  {
+    "id": "par-accelerators-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A hypothetical accelerator has a 128 × 128 array of multiply-accumulate (MAC) units clocked at 1 GHz. Assume each unit sustains one MAC per cycle. Counting each MAC as two operations, what is its peak throughput?",
+    "options": [
+      {
+        "text": "About 16 TOPS",
+        "explanation": "This counts each MAC as one operation. A MAC is a multiply and an add, so it is two."
+      },
+      {
+        "text": "About 256 GOPS",
+        "explanation": "This uses 128 × 2 instead of 128 × 128: it counts one row of the array, not the whole grid."
+      },
+      {
+        "text": "About 65 TOPS",
+        "explanation": "This uses a 256 × 256 array (65,536 MACs) counted once per cycle. The array here is 128 × 128."
+      },
+      {
+        "text": "About 33 TOPS",
+        "explanation": "Correct. 16,384 MACs × 2 ops × 10⁹ cycles/s ≈ 32.8 × 10¹² ops/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work it out the same way as the TPU v1 figure in the lesson:\n\n```\nMACs   = 128 x 128     = 16,384\nops    = 16,384 x 2    = 32,768/cyc\npeak   = 32,768 x 1e9  ~ 32.8 TOPS\n```\n\nFor comparison, TPU v1 was 65,536 MACs × 2 × 700 MHz ≈ 92 TOPS. Peak assumes every MAC is busy every cycle, which requires a suitable schedule, enough independent work and adequate data supply; large dimensions alone do not ensure it.",
+    "link": {
+      "title": "Systolic array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Systolic_array"
+    }
+  },
+  {
+    "id": "par-accelerators-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Use the lesson's output-stationary systolic array, where at cycle `t` PE(i, j) multiplies `A[i][k] * B[k][j]` with `k = t - i - j` (if `0 <= k < n`). With n = 4, what does PE(1, 2) compute at cycle t = 4?",
+    "options": [
+      {
+        "text": "`A[1][1] * B[1][2]`",
+        "explanation": "Correct. k = 4 − 1 − 2 = 1, so PE(1, 2) multiplies A[1][1] by B[1][2] and adds it to C[1][2]."
+      },
+      {
+        "text": "`A[1][4] * B[4][2]`",
+        "explanation": "This uses k = t. Row i is delayed by i cycles and column j by j cycles, so you must subtract i + j."
+      },
+      {
+        "text": "Nothing; it is idle at cycle 4",
+        "explanation": "It is idle only when k falls outside 0..3. Here k = 1, which is valid."
+      },
+      {
+        "text": "`A[1][2] * B[2][2]`",
+        "explanation": "This uses k = j, as if the PE's column index picked the term. The term index depends on the cycle and both delays."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Row 1 of A enters 1 cycle late; column 2 of B enters 2 cycles late.\n2. So at cycle t the values meeting at PE(1, 2) have index k = t − 1 − 2.\n3. At t = 4, k = 1: the PE computes A[1][1] × B[1][2].\n\nPE(1, 2) is active for k = 0..3, i.e. cycles 3 to 6. The whole 4 × 4 multiply finishes after 3n − 2 = 10 cycles (t = 0..9), with PE(3, 3) doing its last MAC at t = 9.",
+    "link": {
+      "title": "Systolic array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Systolic_array"
+    }
+  },
+  {
+    "id": "par-accelerators-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is a numerical advantage of bfloat16 over IEEE binary16 for some training workloads?",
+    "options": [
+      {
+        "text": "bfloat16 has more mantissa bits, so it is more precise than FP16",
+        "explanation": "bfloat16 has 7 stored fraction bits versus binary16’s 10, so it has less significand precision."
+      },
+      {
+        "text": "Its 8-bit exponent gives a much wider normal exponent range than binary16 while using half the storage of float32",
+        "explanation": "Correct. This can reduce range-related difficulties, but accuracy and underflow still need testing. Cloud TPU conversion rounds to nearest, ties to even, and flushes bfloat16 subnormals; it is not simple truncation."
+      },
+      {
+        "text": "bfloat16 is an integer format, so it needs no floating-point hardware",
+        "explanation": "bfloat16 is a floating-point format: sign, exponent and mantissa. Integer formats like int8 were what TPU v1 used for inference."
+      },
+      {
+        "text": "bfloat16 uses 8 bits, so twice as many values fit in memory as FP16",
+        "explanation": "bfloat16 is 16 bits, the same size as FP16. It splits those bits differently."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Stored sign/exponent/fraction bits are float32: 1/8/23, binary16: 1/5/10, and bfloat16: 1/8/7. Binary16’s largest finite value is 65,504. Bfloat16 has a wider normal exponent range but lower precision than binary16. Some training workflows benefit from loss scaling; the need depends on numerical behaviour. Accumulation precision and conversion rules must be checked for the actual operation.",
+    "link": {
+      "title": "bfloat16 floating-point format — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bfloat16_floating-point_format"
+    }
+  },
+  {
+    "id": "par-accelerators-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A job spends 60% of its time on matrix multiplies. Moving them to an accelerator makes them 20× faster, but copying data to and from the device adds time equal to 10% of the original runtime. Assume unchanged remaining work and no overlap or other overhead. What is the overall speed-up?",
+    "options": [
+      {
+        "text": "About 20×",
+        "explanation": "Only 60% of the work gets the 20× speed-up. The other 40% and the transfer time do not shrink."
+      },
+      {
+        "text": "About 2.3×",
+        "explanation": "This is Amdahl's law without the transfer cost: 1 / (0.4 + 0.03) ≈ 2.33. The copies add another 0.1."
+      },
+      {
+        "text": "About 1.9×",
+        "explanation": "Correct. New time = 0.4 + 0.6/20 + 0.1 = 0.53 of the original, so the speed-up is 1 / 0.53 ≈ 1.89×."
+      },
+      {
+        "text": "About 1.1×",
+        "explanation": "A speedup of 1.1× would require total time about 0.9091, hence transfer overhead about 0.4791 of the original runtime with the same compute times."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Normalise the original runtime to 1.\n\n```\nnot offloaded   0.40\nmatmul 0.6/20   0.03\ntransfers       0.10\n----------------------\nnew total       0.53\nspeed-up 1/0.53 ~ 1.89x\n```\n\nWith the fixed 0.10 transfer cost, the infinite-compute-speed limit is 1/(0.4 + 0.1) = 2×. If transfers were eliminated, it would be 2.5×. Data residency can amortise transfers across operations; it does not automatically eliminate every transfer.",
+    "link": {
+      "title": "In-Datacenter Performance Analysis of a TPU (Jouppi et al., 2017)",
+      "url": "https://arxiv.org/abs/1704.04760"
+    }
+  },
+  {
+    "id": "par-accelerators-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which proposed uses directly exploit an FPGA’s reconfigurable hardware fabric? Assume each proposed pipeline can meet its specified timing and resource constraints. Select all that apply.",
+    "options": [
+      {
+        "text": "A custom packet-processing pipeline whose logic must be field-updatable and whose verified timing meets the application’s latency budget",
+        "explanation": "Yes. Configurable logic can implement the verified pipeline; fixed latency is a property of its complete design and traffic assumptions."
+      },
+      {
+        "text": "Choosing an FPGA solely because enormous unit volume guarantees it is cheaper than a custom fixed implementation",
+        "explanation": "No such guarantee exists; compare development, unit, power, support and deployment costs."
+      },
+      {
+        "text": "Prototyping and verifying a new chip design before committing to masks",
+        "explanation": "Yes. Reconfigurable hardware can prototype logic before fabrication, although FPGA timing and physical behaviour do not fully replicate the ASIC."
+      },
+      {
+        "text": "Treating frequently changed web business logic as ordinary CPU code without hardware mapping, timing or verification work",
+        "explanation": "No. A configurable fabric does not remove hardware implementation work; a processor remains appropriate for ordinary software execution."
+      },
+      {
+        "text": "A field-updatable packet-processing datapath with validated throughput and resource use",
+        "explanation": "Yes. Custom parallel stages and field updates directly use the fabric’s capabilities; packet-per-cycle throughput is not automatic."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "The custom packet pipelines and logic prototype use reconfigurable hardware directly. High volume alone does not prove an FPGA’s cost advantage, and CPU-like software expectations do not remove hardware design requirements. The correct choices are 1, 3 and 5.",
+    "link": {
+      "title": "Field-programmable gate array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Field-programmable_gate_array"
+    }
+  },
+  {
+    "id": "par-accelerators-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the lesson’s full n × n output-stationary tile, why can one operand read from the local buffer support n MACs?",
+    "options": [
+      {
+        "text": "The value is cached in an L1 cache beside every PE, so later reads are cheap",
+        "explanation": "The illustrated reuse comes from neighbour forwarding, not a private L1 lookup at each PE. A whole accelerator may still have caches and buffers."
+      },
+      {
+        "text": "Each PE fetches its own copy of the value from memory, but memory is very fast",
+        "explanation": "The illustrated dataflow forwards an operand between neighbours rather than independently reloading it for each use."
+      },
+      {
+        "text": "The value is compressed so it takes 1/n of the bandwidth",
+        "explanation": "Compression is not part of the systolic idea. The saving is reuse, not smaller values."
+      },
+      {
+        "text": "The value enters at one edge and is passed PE to PE along its row or column, so every PE it passes uses it once",
+        "explanation": "Correct. One fetch, n uses. With n = 256 that is 256 MACs per value read from the buffer."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Follow one element of A, say A[2][0], through a 4 × 4 output-stationary array.\n\n1. It enters row 2 at the left edge.\n2. Each cycle it moves one PE right: PE(2,0), PE(2,1), PE(2,2), PE(2,3).\n3. Each of those PEs multiplies it by a different B value.\n\nSo one read feeds 4 MACs; for a 256-wide array, 256. Short neighbour-to-neighbour wires replace register-file and cache accesses, which is where the energy saving comes from.",
+    "link": {
+      "title": "Systolic array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Systolic_array"
+    }
+  },
+  {
+    "id": "par-accelerators-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An FPGA packet pipeline runs at 300 MHz and accepts one packet per cycle. A server has 8 CPU cores at 3 GHz, each needing about 200 cycles per packet. Assume steady state, no stalls, enough input/link bandwidth and ideal CPU scaling. Roughly how do their packet rates compare?",
+    "options": [
+      {
+        "text": "The CPU is 10× faster because its clock is 10× higher",
+        "explanation": "Clock speed alone says nothing about throughput. The FPGA finishes one packet per cycle; each CPU core needs 200 cycles per packet."
+      },
+      {
+        "text": "The FPGA handles about 300 M packets/s, the CPU about 120 M packets/s, so the FPGA is about 2.5× faster",
+        "explanation": "Correct. 300 × 10⁶ × 1 against 8 × 3 × 10⁹ / 200 = 120 × 10⁶."
+      },
+      {
+        "text": "They are equal, because both process 8 packets at once",
+        "explanation": "The FPGA pipeline depth is unspecified; its throughput follows from the stated initiation rate, not a count of eight in-flight packets."
+      },
+      {
+        "text": "The FPGA is 200× faster",
+        "explanation": "This compares one packet per cycle against 200 cycles per packet but forgets the CPU's 10× higher clock and its 8 cores."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compute throughput for each.\n\n```\nFPGA: 300e6 cyc/s x 1 pkt/cyc\n    = 300 M pkt/s\nCPU core: 3e9 / 200 = 15 M pkt/s\nCPU x 8 cores        = 120 M pkt/s\nratio 300 / 120      = 2.5x\n```\n\nThe model predicts throughput only. Latency and jitter need pipeline depth, stalls, queueing and system measurements; they do not follow from these rates.",
+    "link": {
+      "title": "Field-programmable gate array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Field-programmable_gate_array"
+    }
+  },
+  {
+    "id": "par-accelerators-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An inference server fills its accelerator efficiently only with batches of 64. Requests arrive exactly 1 ms apart, with an empty batch initially. The server is ready to start immediately when 64 requests are collected; ignore service queueing and launch overhead. What is the **longest** batch-formation delay a request suffers from batching?",
+    "options": [
+      {
+        "text": "About 1 ms",
+        "explanation": "That is the gap between two arrivals. The first request of a batch waits for the next 63 to arrive."
+      },
+      {
+        "text": "About 32 ms",
+        "explanation": "That is roughly the *average* wait across a batch (from 63 ms for the first request down to 0 for the last). The question asks for the worst case."
+      },
+      {
+        "text": "About 64 seconds",
+        "explanation": "This confuses the batch size with seconds. At 1,000 requests per second, 64 requests arrive in 64 ms."
+      },
+      {
+        "text": "About 63 ms",
+        "explanation": "Correct. The first request in a batch waits while 63 more arrive, at 1 ms apart."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Arrivals are 1 / 1,000 s = 1 ms apart.\n2. The first request of a batch arrives at t = 0; the 64th at t = 63 ms.\n3. The batch launches at 63 ms, so the first request waited 63 ms before any compute.\n\nAverage wait is about 31.5 ms. Real servers cap this with a timeout (\"run whatever we have after 5 ms\"), trading accelerator utilisation for latency. Actual utilisation also depends on service demand and other work; a timeout does not by itself bound total service-queue delay.",
+    "link": {
+      "title": "In-Datacenter Performance Analysis of a TPU (Jouppi et al., 2017)",
+      "url": "https://arxiv.org/abs/1704.04760"
+    }
+  },
+  {
+    "id": "par-accelerators-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "TPU v1 peaks at about 92 TOPS but reads weights from DRAM at about 34 GB/s. In a fully connected layer, each int8 weight (1 byte) is used once per example in the batch, as one MAC (2 ops). Assume each weight is transferred once per batch and ignore activations and all other traffic. Roughly where do the arithmetic and weight-bandwidth ceilings intersect?",
+    "options": [
+      {
+        "text": "About 1,350",
+        "explanation": "Correct. The chip needs 92 × 10¹² / 34 × 10⁹ ≈ 2,700 ops per weight byte; with 2 ops per weight per example, that is a batch of about 1,350."
+      },
+      {
+        "text": "About 2,700",
+        "explanation": "2,700 is the ops per byte needed, but each example contributes 2 ops (a multiply and an add) per weight byte, so you need half as many examples."
+      },
+      {
+        "text": "About 64",
+        "explanation": "At batch 64 the layer does only 128 ops per weight byte, so it can reach about 34 × 10⁹ × 128 ≈ 4.4 TOPS, under 5% of peak."
+      },
+      {
+        "text": "Batch size does not matter; the layer is always compute-bound on a TPU",
+        "explanation": "The TPU paper found several production networks were memory-bound for exactly this reason: weight reuse depends on batch size."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "This is a roofline calculation (next lesson).\n\n```\nneeded = peak / bandwidth\n       = 92e12 / 34e9\n       ~ 2,700 ops per byte\nlayer  = 2 ops x B per weight byte\n2B = 2,700  ->  B ~ 1,350\n```\n\nBelow that, the weight-bandwidth upper bound is 34 GB/s × 2B ops/byte. At B = 200 that is 13.6 TOPS, around 15% of peak. Reaching that bound still requires adequate scheduling and utilisation; the calculation alone does not establish a historical product-design decision.",
+    "link": {
+      "title": "In-Datacenter Performance Analysis of a TPU (Jouppi et al., 2017)",
+      "url": "https://arxiv.org/abs/1704.04760"
+    }
+  },
+  {
+    "id": "par-accelerators-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A start-up is deciding between building an ASIC and shipping on FPGAs for a new compression algorithm. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "ASIC development has up-front design, verification and manufacturing-preparation costs that must be compared with projected deployment benefits",
+        "explanation": "True. The amount and break-even point depend on the design, technology and deployment; no universal dollar threshold applies."
+      },
+      {
+        "text": "An FPGA can load a new supported circuit configuration; ASIC adaptability depends on its built-in programmable or configurable features",
+        "explanation": "True. Fixed gates cannot be rewritten, but firmware or configuration may support algorithm changes within the design."
+      },
+      {
+        "text": "An FPGA will always beat an ASIC on performance per watt, because it is reconfigurable",
+        "explanation": "False. Configurability has costs, and efficiency must be compared for the actual implementations and workload."
+      },
+      {
+        "text": "Custom parallel and pipelined logic can perform several operations per cycle, subject to timing closure and resource constraints",
+        "explanation": "True. Throughput depends on initiation interval, width, clock and data supply; a deep pipeline alone is insufficient."
+      },
+      {
+        "text": "Choosing an FPGA removes the need for hardware design skills, because you program it like a CPU",
+        "explanation": "False. You still design a circuit in Verilog, VHDL or HLS, then synthesise, place and route it, which can take hours."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Compare implementation cost, supported changes, performance per watt, development risk and deployment volume. Configurable fabric enables changes within device resources; an ASIC’s programmable features determine its flexibility. Parallel pipelines can improve throughput when timing and data supply support them. None of this establishes a universal cost or efficiency ranking. Correct choices: 1, 2 and 4.",
+    "link": {
+      "title": "Application-specific integrated circuit — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Application-specific_integrated_circuit"
+    }
+  }
+]

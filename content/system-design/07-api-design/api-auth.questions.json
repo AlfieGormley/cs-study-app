@@ -1,0 +1,378 @@
+[
+  {
+    "id": "api-auth-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague says: \"Our JWTs are safe to put the user's National Insurance number in, because they're signed.\" What's wrong with this?",
+    "options": [
+      {
+        "text": "Nothing; a signed JWT is encrypted",
+        "explanation": "Signing and encryption are different. A signature (JWS) proves the token wasn't tampered with; it doesn't hide the contents."
+      },
+      {
+        "text": "JWTs can't contain numbers",
+        "explanation": "JWT claims are JSON, so numbers and strings are fine. The issue is confidentiality, not data type."
+      },
+      {
+        "text": "The payload is only base64url-encoded, so anyone who holds the token (browser extensions, logs, proxies) can decode and read it",
+        "explanation": "Correct. Paste any JWT into a base64 decoder and the claims appear in plain text. Signing guarantees integrity, not secrecy. Keep sensitive data out of tokens, or use encrypted JWTs (JWE) if you truly must."
+      },
+      {
+        "text": "Signed JWTs expire too quickly to carry personal data",
+        "explanation": "Expiry is unrelated to confidentiality. Even a token valid for 5 minutes exposes its contents to anyone who sees it, and copies in logs persist far longer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Decode a JWT payload yourself:\n\n```\neyJzdWIiOiJ1c2VyXzQyIn0\n  base64url decode ->\n{\"sub\":\"user_42\"}\n```\n\nNo key needed. A signature only lets the *verifier* detect modification. So:\n\n- Integrity: ✔ (signed)\n- Confidentiality: ✘ (not encrypted)\n\nTokens end up in access logs, browser storage and error reports. Treat the payload as public.",
+    "link": {
+      "title": "RFC 7519: JSON Web Token",
+      "url": "https://www.rfc-editor.org/rfc/rfc7519"
+    }
+  },
+  {
+    "id": "api-auth-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user is logged in with a valid token and calls `GET /invoices/1009`. The API checks the token is valid and returns the invoice, without checking who owns invoice 1009. What class of vulnerability is this?",
+    "options": [
+      {
+        "text": "Broken object-level authorisation (an IDOR): authentication passed, but authorisation for *this object* was never checked",
+        "explanation": "Correct. Any logged-in user can enumerate ids and read others' invoices. It's the top item in the OWASP API Security Top 10 because it's so common."
+      },
+      {
+        "text": "Cross-site request forgery",
+        "explanation": "CSRF tricks a victim's browser into making a request with the victim's credentials. Here the attacker uses their *own* valid credentials to access someone else's data."
+      },
+      {
+        "text": "Broken authentication",
+        "explanation": "Authentication worked correctly: the server knows exactly who the caller is. The failure is in the authorisation step that follows."
+      },
+      {
+        "text": "SQL injection",
+        "explanation": "Nothing is being injected into a query. The query is legitimate; it's just missing an ownership filter."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Separate the two checks:\n\n1. **Authn**: is the token valid? Yes → caller = user 42.\n2. **Authz**: may user 42 read invoice 1009? **Never asked.**\n\nFix: scope every lookup to the caller.\n\n```\nSELECT * FROM invoices\nWHERE id = $1\n  AND account_id = $caller_account\n```\n\nReturn 404 if no row, so attackers can't even learn which ids exist. Using unguessable ids (UUIDs) helps but isn't a substitute for the check.",
+    "link": {
+      "title": "OWASP API Security Top 10: Broken object level authorization",
+      "url": "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    }
+  },
+  {
+    "id": "api-auth-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the OAuth 2.0 authorisation code flow with PKCE, a malicious app on the same phone intercepts the redirect containing `?code=xyz`. Why can't it obtain an access token?",
+    "options": [
+      {
+        "text": "Authorisation codes are encrypted with the user's password",
+        "explanation": "Codes are opaque random strings; they aren't encrypted with anything the attacker lacks. The protection comes from what the token exchange requires."
+      },
+      {
+        "text": "The code expires after one second",
+        "explanation": "Codes are short-lived (often around a minute) and single-use, but an attacker can act within that window. Expiry alone isn't the defence PKCE provides."
+      },
+      {
+        "text": "Exchanging the intercepted code requires the original code_verifier; with S256 the server checks BASE64URL(SHA256(verifier)) against the saved challenge",
+        "explanation": "Correct. The challenge went out through the browser, but the verifier never did. Without it, the stolen code is useless."
+      },
+      {
+        "text": "The authorisation server checks the attacker's IP address",
+        "explanation": "OAuth doesn't bind codes to IP addresses, and both apps are on the same phone, with the same IP anyway."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Legit app generates random `v` (43–128 chars), computes `c = BASE64URL(SHA256(v))`.\n2. Redirect to `/authorize?code_challenge=c&code_challenge_method=S256`.\n3. User logs in; auth server stores `c` with the code.\n4. Attacker intercepts `code=xyz`.\n5. Attacker calls `/token` with `code=xyz` but doesn't know `v`. Without the high-entropy verifier, finding a value whose BASE64URL(SHA256(v')) matches c is computationally infeasible → **rejected**.\n6. Legit app sends `code=xyz&code_verifier=v` → matches → tokens issued.\n\nSHA-256 is one-way, so seeing `c` doesn't reveal `v`.",
+    "link": {
+      "title": "oauth.net: PKCE",
+      "url": "https://oauth.net/2/pkce/"
+    }
+  },
+  {
+    "id": "api-auth-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly batch job in your billing service needs to call your internal reporting API. No user is involved. Which OAuth 2.0 grant fits?",
+    "options": [
+      {
+        "text": "Authorisation code with PKCE",
+        "explanation": "That flow needs a user to log in and consent via a browser. There's no user in a nightly batch job."
+      },
+      {
+        "text": "Implicit grant",
+        "explanation": "Implicit is deprecated and was designed for browser apps with a user. It's wrong on both counts here."
+      },
+      {
+        "text": "Resource owner password grant",
+        "explanation": "This grant collects a user's password, which is deprecated and irrelevant when no user exists."
+      },
+      {
+        "text": "Client credentials",
+        "explanation": "Correct. The service authenticates as itself with its client id and secret (or a private-key JWT or mTLS) and receives an access token scoped to what the service, not a user, may do."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Decision tree:\n\n```\nIs a user involved?\n  yes -> has a browser?\n           yes -> auth code + PKCE\n           no  -> device code\n  no  -> client credentials\n```\n\nRequest:\n\n```\nPOST /token\ngrant_type=client_credentials\n&client_id=billing\n&client_secret=...\n&scope=reports:read\n```\n\nThe token authorizes the billing client under the server's contract; OAuth does not require every access token to be a JWT or contain a sub claim.",
+    "link": {
+      "title": "oauth.net: Client credentials",
+      "url": "https://oauth.net/2/grant-types/client-credentials/"
+    }
+  },
+  {
+    "id": "api-auth-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For signed JWT access tokens whose API profile requires issuer, audience and expiry, which verification practices are appropriate? Select all that apply.",
+    "options": [
+      {
+        "text": "Pin the accepted algorithm(s) on the server rather than trusting the token header's `alg`",
+        "explanation": "Correct. Trusting `alg` enables both `alg: none` (no signature at all) and RS256→HS256 confusion, where the public key is misused as an HMAC secret."
+      },
+      {
+        "text": "Check that `aud` matches this API",
+        "explanation": "Correct. Without an audience check, a token minted for one service (perhaps a less-trusted one) can be replayed against another."
+      },
+      {
+        "text": "Check required `exp` and any present `nbf` against the current time",
+        "explanation": "Correct. Otherwise a token stolen months ago still works forever."
+      },
+      {
+        "text": "Decrypt the payload with the private key before reading claims",
+        "explanation": "Wrong. A standard signed JWT (JWS) isn't encrypted; verification checks the signature, usually with the *public* key. Decryption only applies to JWE."
+      },
+      {
+        "text": "Reject any token larger than 256 bytes",
+        "explanation": "Wrong. An RSA-2048 signature alone encodes to 342 base64url characters, before the header and claims. A size cap is reasonable for DoS protection, but 256 bytes would reject legitimate tokens and isn't a defence against these attacks."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Map each check to the attack it stops:\n\n| Check | Stops |\n|---|---|\n| Pin `alg` | `none`, alg confusion |\n| Validate `aud` | Cross-service replay |\n| Validate `exp` | Use of old stolen tokens |\n| Validate `iss` | Tokens from a rogue issuer |\n\n'Decrypt with private key' confuses signing with encryption, and a universal 256-byte cap rejects valid tokens. RFC 8725 lists the full set of recommendations.",
+    "link": {
+      "title": "RFC 8725: JWT Best Current Practices",
+      "url": "https://www.rfc-editor.org/rfc/rfc8725"
+    }
+  },
+  {
+    "id": "api-auth-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An account is disabled at 09:00. Its stateless JWT access token was issued at 08:30 and expires eight hours later. The API validates signature and claims, including exp, but does no revocation/account lookup. What exposure remains, and what reduces it without a per-request database lookup?",
+    "options": [
+      {
+        "text": "No exposure; disabling the account invalidates the JWT",
+        "explanation": "A stateless JWT is verified purely by its signature and claims. The API never consults the account table, so disabling the account changes nothing until expiry."
+      },
+      {
+        "text": "Until 16:30. Shorten access tokens to ~10 minutes and use refresh tokens that are checked against the account on each refresh",
+        "explanation": "Correct. Exposure drops from 7.5 hours to at most ~10 minutes, and the only stateful check happens once per refresh, not per request. For instant revocation you can add a small `jti` deny-list."
+      },
+      {
+        "text": "Until 16:30. Switch from RS256 to HS256",
+        "explanation": "Changing the signing algorithm doesn't affect lifetime or revocation. It would also make every verifier capable of forging tokens."
+      },
+      {
+        "text": "Until 16:30. Rotate the signing key",
+        "explanation": "Issuing a new signing key alone does not invalidate tokens signed by a still-trusted old key. Removing the old verification key from every verifier can invalidate all tokens using it, with propagation/cache delays and broad disruption."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Token issued 08:30 + 8 h → `exp` = **16:30**.\n2. Account disabled 09:00. Exposure window = 16:30 − 09:00 = **7.5 hours**.\n3. With 10-minute access tokens: worst case the token was issued at 08:59:59, so exposure ≤ **10 minutes**. At 09:10 the client tries to refresh; the auth server sees the account is disabled and refuses.\n\nCost: one auth-server check every 10 minutes per client, instead of one DB lookup per API request. If you need sub-minute revocation (a compromised admin), push the `jti` to a deny-list cached on every gateway.",
+    "link": {
+      "title": "RFC 8725: JWT Best Current Practices",
+      "url": "https://www.rfc-editor.org/rfc/rfc8725"
+    }
+  },
+  {
+    "id": "api-auth-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A single-page app receives both an **ID token** and an **access token** from an OpenID Connect provider. A developer sends the ID token as `Authorization: Bearer ...` to your orders API. Why is that wrong?",
+    "options": [
+      {
+        "text": "ID tokens aren't JWTs, so the API can't parse them",
+        "explanation": "OIDC ID tokens *are* JWTs. The API could parse one; the issue is that it shouldn't accept it."
+      },
+      {
+        "text": "ID tokens are encrypted and only the browser can read them",
+        "explanation": "OIDC ID tokens are signed and may also be encrypted. Encryption is not what decides whether the orders API should accept one; purpose and audience are the issue."
+      },
+      {
+        "text": "It's fine as long as the signature is valid",
+        "explanation": "A valid signature only proves the provider issued it. It doesn't prove the token was intended for, or authorises calls to, this API."
+      },
+      {
+        "text": "This ID token authenticates the user to the client app; it is not the access credential issued for the orders API. Use the access token under that API’s validation contract.",
+        "explanation": "Correct. Validate token purpose and intended recipient, not just signature or presence of claims. Access tokens may be opaque or JWTs; their format and audience validation depend on the API’s authorization-server contract."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Illustrative claims for a JWT access-token profile; opaque access tokens need the issuer's validation mechanism:\n\n| Claim | ID token | Access token |\n|---|---|---|\n| `aud` | spa-client | orders-api |\n| purpose | identity | authorisation |\n| scopes | not the API authorization credential | `orders:read` |\n\nYour API should validate `aud == orders-api`. An ID token fails that check, and that's the point: any app the user signed into would otherwise get a token usable against your API.",
+    "link": {
+      "title": "OpenID Foundation: How OpenID Connect works",
+      "url": "https://openid.net/developers/how-connect-works/"
+    }
+  },
+  {
+    "id": "api-auth-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A document-sharing product has rules like \"you can view a doc if you're in a group that has access to any folder containing it\", with nested folders and groups. Which authorisation model fits best?",
+    "options": [
+      {
+        "text": "RBAC with a role per folder",
+        "explanation": "With thousands of folders and nested groups, you'd need a role per folder per permission, a classic role explosion, while hierarchical RBAC can express inheritance, it may be a cumbersome fit for this resource-sharing graph."
+      },
+      {
+        "text": "Relationship-based access control (ReBAC), as in Google Zanzibar, OpenFGA or SpiceDB",
+        "explanation": "Correct. Permissions are naturally a graph: user → member of → group → viewer of → folder → parent of → doc. ReBAC evaluates such paths directly and can also answer 'who can see this?'."
+      },
+      {
+        "text": "API keys with scopes",
+        "explanation": "API keys may be associated with accounts or users, but coarse scopes can't express per-document sharing."
+      },
+      {
+        "text": "ABAC with only user attributes",
+        "explanation": "ABAC can express rules over attributes, but this rule depends on *relationships* between many entities, which attribute policies represent awkwardly and evaluate expensively."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Write the check as a path:\n\n```\nalice --member--> eng-team\neng-team --viewer--> /design\n/design --parent--> /design/2026\n/design/2026 --parent--> spec.doc\n```\n\nCan alice view spec.doc? Walk the graph: yes, via eng-team → /design → /design/2026.\n\nZanzibar models access using relation tuples. ReBAC directly matches this sharing graph; RBAC with hierarchy or ABAC with suitable relationship data can also model inheritance, so this is a modeling-fit comparison, not a claim of impossibility.",
+    "link": {
+      "title": "Google Research: Zanzibar, Google's consistent, global authorization system",
+      "url": "https://research.google/pubs/zanzibar-googles-consistent-global-authorization-system/"
+    }
+  },
+  {
+    "id": "api-auth-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're building a new single-page React app in 2026 that calls your API on behalf of logged-in users through your own OAuth server. Which flow should it use?",
+    "options": [
+      {
+        "text": "Implicit grant, because SPAs can't keep a client secret",
+        "explanation": "That was the original reasoning for implicit, but returning tokens in the URL fragment exposes them to browser history and page scripts (ordinary HTTP Referer headers do not include fragments). RFC 9700 says not to use it, and OAuth 2.1 removes it."
+      },
+      {
+        "text": "Authorisation code with a client secret embedded in the JavaScript bundle",
+        "explanation": "Anything in a browser bundle is public. An embedded secret is readable by anyone who opens dev tools, so it authenticates nothing."
+      },
+      {
+        "text": "Authorisation code + PKCE with `S256`, as a public client",
+        "explanation": "Correct. PKCE binds the authorization code to this transaction; it is not client authentication and does not replace a confidential client's secret: only the app instance that created the verifier can redeem the code. Tokens come back over a direct request, not through the URL."
+      },
+      {
+        "text": "Resource owner password grant, collecting the password in your own login form",
+        "explanation": "The password grant teaches users to type passwords into apps, and it can't support MFA or federated login. RFC 9700 says it must not be used."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work through the constraints:\n\n1. A user is present with a browser → a user-facing redirect flow.\n2. The SPA is a **public client**: it can't keep a secret.\n3. Implicit (tokens in the URL) and password grants are deprecated by RFC 9700 and gone from OAuth 2.1.\n4. That leaves **authorisation code + PKCE**, with `code_challenge_method=S256`.\n\nMany teams go one step further with a *backend-for-frontend*: a small server does the OAuth flow as a confidential client and gives the browser only an `HttpOnly` session cookie, so tokens never touch JavaScript.",
+    "link": {
+      "title": "RFC 9700: OAuth 2.0 Security Best Current Practice",
+      "url": "https://www.rfc-editor.org/rfc/rfc9700"
+    }
+  },
+  {
+    "id": "api-auth-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume a vulnerable JWT verifier trusts the header algorithm and incorrectly permits RSA public-key PEM bytes as an HMAC secret. An attacker sends an HS256 token MACed with those public bytes. What happens, and how should the verifier be fixed?",
+    "options": [
+      {
+        "text": "It's rejected, because HMAC can't be verified with an RSA key",
+        "explanation": "Vulnerable libraries don't check that the key *type* matches. They treat the PEM bytes as an HMAC secret, and the HMAC verifies."
+      },
+      {
+        "text": "It's accepted, because the library computes HMAC-SHA256 with the public key bytes as the secret, which matches. Fix: pass an explicit allow-list, e.g. `algorithms=[\"RS256\"]`, and use a key object bound to one algorithm",
+        "explanation": "Correct. This is algorithm confusion. The public key is public, so the attacker can compute the same HMAC. Pinning the algorithm on the verifier closes it."
+      },
+      {
+        "text": "It's accepted, but only until the key is rotated, so the fix is rotating keys daily",
+        "explanation": "The attacker simply re-reads the new public key from your JWKS endpoint and forges again. Rotation doesn't address the flaw."
+      },
+      {
+        "text": "It's rejected, because `aud` validation catches forged tokens",
+        "explanation": "The attacker writes the payload, so they set `aud` to whatever you expect. Claim checks only help once the signature is genuinely trustworthy."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Your verifier holds `PUBLIC_KEY_PEM`, which is published at your JWKS endpoint.\n2. The attacker builds header `{\"alg\":\"HS256\"}` and any payload, e.g. `{\"sub\":\"admin\",\"aud\":\"orders-api\"}`.\n3. They compute `HMAC-SHA256(PEM, header.payload)`, since they know the PEM.\n4. A library that honours the header runs HMAC with the same 'secret' and gets a match. **Forged token accepted.**\n\nFix, per RFC 8725: the verifier decides the algorithm, never the token.\n\n```\njwt.decode(token, key,\n  algorithms=[\"RS256\"],\n  audience=\"orders-api\")\n```",
+    "link": {
+      "title": "RFC 8725: JWT Best Current Practices",
+      "url": "https://www.rfc-editor.org/rfc/rfc8725"
+    }
+  },
+  {
+    "id": "api-auth-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A traditional server-rendered web app is a **confidential** OAuth client with a client secret. You're aligning it with RFC 9700 and OAuth 2.1. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "It should use PKCE too: OAuth 2.1 requires it for confidential clients, apart from a narrow OIDC `nonce` exception",
+        "explanation": "Correct. PKCE is no longer just for public clients. Even where the exception applies, OAuth 2.1 still recommends using it."
+      },
+      {
+        "text": "Its client secret already stops a stolen authorisation code being used, so PKCE adds nothing",
+        "explanation": "Wrong. In a code injection attack, the attacker plants a stolen code into the *legitimate* client's callback, and that client redeems it with its own secret. PKCE stops this, because the code is bound to a verifier that client never issued."
+      },
+      {
+        "text": "Use `code_challenge_method=S256`, not `plain`",
+        "explanation": "Correct. With `plain` the challenge *is* the verifier, so anyone who sees the authorisation request learns it. OAuth 2.1 prohibits `plain`."
+      },
+      {
+        "text": "Because it's confidential, the implicit grant is acceptable for it",
+        "explanation": "Wrong. Implicit is deprecated for every client type. Its problem is tokens in the URL, not whether the client has a secret."
+      },
+      {
+        "text": "For this web client, the authorization server should match redirect URIs exactly against registered values",
+        "explanation": "Correct. Pattern or prefix matching has repeatedly let attackers redirect codes to URLs they control. RFC 9700 and OAuth 2.1 require exact string matching."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "**Code injection**, step by step, against a client that has a secret but no PKCE:\n\n1. The attacker steals a code issued to the *victim* (e.g. from a leaky log).\n2. The attacker starts a login on the real client in their own browser, then swaps the stolen code into the callback.\n3. The client redeems it with its own valid secret. The attacker's session is now logged in as the victim.\n\nWith PKCE, the code was bound to the victim's `code_challenge`. The attacker's session holds a different verifier, so redemption fails.\n\nThe other rules: `S256` keeps the verifier secret, exact redirect matching keeps codes from going astray, and implicit is out for everyone.",
+    "link": {
+      "title": "oauth.net: OAuth 2.1",
+      "url": "https://oauth.net/2.1/"
+    }
+  },
+  {
+    "id": "api-auth-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your auth server rotates refresh tokens. A user's refresh token R1 is stolen. The legitimate app refreshes first, receiving R2 (and R1 is invalidated). An hour later the attacker presents R1. What should the server do?",
+    "options": [
+      {
+        "text": "Reject R1 and do nothing else, since it has already been used",
+        "explanation": "Rejecting is right, but it wastes the signal. Reuse of a rotated token signals possible compromise (or a duplicate legitimate attempt), and the server can't tell which, so R2 should be distrusted too."
+      },
+      {
+        "text": "Accept R1, because refresh tokens are long-lived",
+        "explanation": "Accepting an already-rotated token defeats the entire point of rotation, which is to make each refresh token single-use."
+      },
+      {
+        "text": "Issue a new access token but no new refresh token",
+        "explanation": "That still hands the attacker an access token. A rotated refresh token should never produce anything."
+      },
+      {
+        "text": "Treat it as theft: reject R1 and revoke the whole token family, including R2, so the user must log in again",
+        "explanation": "Correct for the stated theft scenario: reject reuse and revoke the active refresh-token lineage. Reuse is a compromise signal, though duplicate legitimate refresh attempts can also cause it. Already issued self-contained access tokens need separate revocation enforcement or expire naturally."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Timeline:\n\n```\n09:00  issue R1\n09:05  attacker copies R1\n09:30  app uses R1 -> gets R2\n       R1 marked used\n10:30  attacker uses R1\n       -> REUSE DETECTED\n       revoke the refresh lineage\n       access tokens: revoke separately\n       or wait for their short expiry\n```\n\nIf the *attacker* had refreshed first, the legitimate app's later use of R1 would trigger the same detection. Either way, the reuse is caught and the stolen chain dies. RFC 9700 requires refresh tokens for public clients to be either rotated like this or sender-constrained (e.g. with DPoP or mTLS).",
+    "link": {
+      "title": "RFC 9700: OAuth 2.0 Security Best Current Practice",
+      "url": "https://www.rfc-editor.org/rfc/rfc9700"
+    }
+  }
+]

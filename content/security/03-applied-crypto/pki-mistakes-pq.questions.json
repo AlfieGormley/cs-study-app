@@ -1,0 +1,378 @@
+[
+  {
+    "id": "pki-mistakes-pq-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A service generates password-reset tokens with `random.choice(string.ascii_letters)` repeated 32 times. What is wrong, and what should it use?",
+    "options": [
+      {
+        "text": "Nothing; 52^32 possibilities is far too many to guess",
+        "explanation": "The space is large, but the generator is predictable. An attacker doesn't guess randomly; they reconstruct the RNG's state."
+      },
+      {
+        "text": "The tokens are too short; use 64 characters",
+        "explanation": "Length doesn't fix predictability: if the RNG state is known, every character is known."
+      },
+      {
+        "text": "`random` is a Mersenne Twister whose state can be reconstructed from observed outputs, so future tokens can be predicted; use `secrets.token_urlsafe()`",
+        "explanation": "Correct. Python's `random` is for simulations. `secrets` (backed by the OS CSPRNG) is designed for tokens and keys."
+      },
+      {
+        "text": "It should hash each token with SHA-256 first",
+        "explanation": "Hashing a predictable value gives a predictable hash."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "MT19937 is not a cryptographic generator. A suitable sequence of 624 full 32-bit outputs allows state cloning; random.choice tokens expose partial outputs through rejection sampling, so that simple count is not an exact recovery guarantee for this API. Predictability risk is sufficient reason to use secrets.token_urlsafe(32), backed by the operating system CSPRNG.",
+    "link": {
+      "title": "secrets — Python docs",
+      "url": "https://docs.python.org/3/library/secrets.html"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A hypothetical leaked password database uses 3DES in ECB mode under one shared key and includes plaintext password hints. Why does encryption still reveal useful information to an attacker?",
+    "options": [
+      {
+        "text": "ECB mode encrypts equal blocks to equal ciphertext, so identical passwords had identical ciphertexts and could be grouped, then guessed using users' password hints",
+        "explanation": "Correct. ECB leaks equality. Millions of users sharing `123456` showed up as one repeated ciphertext."
+      },
+      {
+        "text": "3DES was broken, so the passwords were decrypted directly",
+        "explanation": "No practical 3DES key recovery was needed. The problem was the mode, not the cipher."
+      },
+      {
+        "text": "The key was stored in the password field",
+        "explanation": "Not what happened; and even without the key the ciphertexts leaked a lot."
+      },
+      {
+        "text": "3DES has a 64-bit block size, so each password was split in half",
+        "explanation": "The block size made the ECB leak finer-grained, but the core problem is ECB's determinism."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "ECB maps equal plaintext blocks to equal ciphertext blocks under the same key. Repeated padded passwords can therefore be grouped; hints may make those groups easier to guess without recovering the key. For login verification, use a salted password hash. Applications that genuinely need to retrieve an external password have a different secret-storage requirement.",
+    "link": {
+      "title": "Block cipher mode of operation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which Python comparison should you use to check a received HMAC tag against the expected one?",
+    "options": [
+      {
+        "text": "`tag == expected`",
+        "explanation": "Ordinary equality is not a constant-time API. Its timing behavior depends on implementation; do not rely on it for secret-tag comparison."
+      },
+      {
+        "text": "`tag in [expected]`",
+        "explanation": "This still uses `==` under the hood, with the same timing leak."
+      },
+      {
+        "text": "`hash(tag) == hash(expected)`",
+        "explanation": "Python's `hash()` is not a cryptographic hash and the comparison is still variable-time; it also adds collision risk."
+      },
+      {
+        "text": "`hmac.compare_digest(tag, expected)`",
+        "explanation": "Correct. It avoids content-based short-circuit comparison; types and lengths can still affect behavior, so validate the expected tag representation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "An idealised bytewise early-exit comparison can leak the matching-prefix length, but a real attack depends on timing signal, implementation and repeated samples. There is no universal 32 × 256-request upper bound for Python equality. hmac.compare_digest is the appropriate content-independent comparison API for validated equal-type/equal-length tags.",
+    "link": {
+      "title": "Timing attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Timing_attack"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the lesson's nonce-reuse example, an attacker sees `c1` and `c2` (same key, same nonce) and correctly guesses that `p1 = b\"attack at dawn!\"`. What can they compute, and what extra damage occurs because the mode is GCM?",
+    "options": [
+      {
+        "text": "Nothing without the key",
+        "explanation": "With a repeated nonce the keystream cancels: `c1 XOR c2 XOR p1 = p2`. No key needed."
+      },
+      {
+        "text": "The overlapping p2 bytes; GCM nonce reuse also compromises authentication and can enable tag forgery",
+        "explanation": "Correct. XOR cancels the repeated keystream. Repeated-nonce tags give equations involving the authentication subkey; recovery and forgery depend on available messages/tags and nonce masks."
+      },
+      {
+        "text": "`p2`, but GCM's tag prevents any further damage",
+        "explanation": "The tag is exactly what is compromised. Nonce reuse in GCM breaks integrity as well as confidentiality."
+      },
+      {
+        "text": "The AES key",
+        "explanation": "The AES key is not recovered by this XOR attack. Authentication-subkey recovery and tag forgery are separate consequences with message-dependent conditions."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. CTR part: `c = p XOR KS(key, nonce)`. Same nonce → same KS.\n2. `c1 XOR c2 = p1 XOR p2`, so `p2 = c1 XOR c2 XOR p1`. The example prints `b'retreat at ten!'`.\n3. GCM tag: a polynomial in the hash key H, plus a nonce-dependent mask. Two tags with the same mask can be subtracted to cancel it, leaving a polynomial whose roots include H.\n4. With H and the known keystream, the attacker forges valid ciphertext and tags for that nonce. This is the 'forbidden attack' Böck et al. demonstrated against real HTTPS servers.",
+    "link": {
+      "title": "Nonce-disrespecting adversaries: practical forgery attacks on GCM in TLS",
+      "url": "https://eprint.iacr.org/2016/475"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API authenticates requests with `sig = SHA256(secret_key + params)`. An attacker has one valid request `params = \"user=alice&amount=10\"` and its `sig`, but not the key. What can they do?",
+    "options": [
+      {
+        "text": "Nothing; SHA-256 is preimage-resistant",
+        "explanation": "The attack never inverts SHA-256. It continues the hash from its output state."
+      },
+      {
+        "text": "Recover the secret key",
+        "explanation": "Length extension does not reveal the key; it only lets the attacker extend messages."
+      },
+      {
+        "text": "Compute a valid `sig` for `params` with padding and extra data appended (e.g. `&amount=1000000`) via a length-extension attack",
+        "explanation": "Correct for the raw secret-prefix SHA-256 construction when key length is known or guessed. Whether the forged byte string is accepted as a useful request also depends on parser and format validation."
+      },
+      {
+        "text": "Only replay the same request",
+        "explanation": "Replay is possible too, but length extension lets them create new valid requests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Merkle–Damgård hashes (MD5, SHA-1, SHA-256) output their full internal state.\n2. `SHA256(key || m)` = state after processing `key || m || pad`.\n3. Load that state and keep hashing `extra`. The result equals `SHA256(key || m || pad || extra)`.\n4. The attacker only needs to guess the key's length to construct `pad`.\n5. The server parses the params; many parsers take the last `amount=`, so the attacker's value wins.\n6. Fix: HMAC-SHA256, which is immune by design. (SHA-3 and BLAKE2/3 are also not vulnerable, but use HMAC or a real MAC anyway.)",
+    "link": {
+      "title": "Length extension attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Length_extension_attack"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A legacy service decrypts AES-CBC cookies and returns HTTP 500 for bad padding but 403 for a valid-padding cookie that fails other checks. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The different responses form a padding oracle that lets an attacker decrypt cookies without the key",
+        "explanation": "Correct. Each query reveals whether a modified ciphertext's padding was valid, which leaks plaintext a byte at a time."
+      },
+      {
+        "text": "An attacker can also forge cookies with chosen plaintext using the same oracle",
+        "explanation": "Correct. The padding oracle can be run in reverse to construct ciphertexts that decrypt to chosen values; this happened with ASP.NET in 2010."
+      },
+      {
+        "text": "Using a correctly implemented AEAD API that withholds unauthenticated plaintext and uniformly rejects invalid tags removes this CBC padding oracle",
+        "explanation": "Correct. With authentication checked first, tampered ciphertexts are rejected uniformly and padding is never examined."
+      },
+      {
+        "text": "Using a random IV for each cookie fixes it",
+        "explanation": "CBC already needs a random IV. The attack works with random IVs because it manipulates the ciphertext and IV the attacker received."
+      },
+      {
+        "text": "Returning the same status code for both errors guarantees it's fixed",
+        "explanation": "It helps, but timing differences often still reveal which check failed. Authenticate before decrypting."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "An attacker varies preceding ciphertext/IV bytes and observes padding validity to constrain plaintext. False positives and message format affect query count; no universal 128-queries-per-byte guarantee applies. A padding oracle can also support chosen-plaintext ciphertext construction when the IV/format permits. Correct AEAD avoids CBC padding altogether and must not release unauthenticated plaintext; encrypt-then-MAC must verify before CBC decryption.",
+    "link": {
+      "title": "Padding oracle attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Padding_oracle_attack"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must store data that has to stay confidential for 25 years. Migrating your systems to new crypto takes about 7 years. If a cryptographically relevant quantum computer might exist in 15 years, what does Mosca's inequality say?",
+    "options": [
+      {
+        "text": "Under this hypothetical timeline, 25 + 7 = 32 exceeds 15 by 17 years, indicating a migration urgency window rather than 17 years of measured historical lateness",
+        "explanation": "Correct. The arithmetic is a planning model, not a forecast. Data protected only by vulnerable classical key establishment could remain sensitive after the assumed quantum capability arrives."
+      },
+      {
+        "text": "You have 8 years to spare",
+        "explanation": "This subtracts the migration time from the quantum estimate and ignores how long the data must stay secret."
+      },
+      {
+        "text": "You are safe because 25 > 15",
+        "explanation": "The comparison is the wrong way round: the data's secrecy period *exceeding* the quantum timeline is the danger."
+      },
+      {
+        "text": "Only signatures need changing, so key exchange can wait",
+        "explanation": "It is the other way round: recorded key exchanges are what harvest-now-decrypt-later targets, so key exchange is the urgent part."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nx = 25  (secrecy lifetime)\ny = 7   (migration time)\nz = 15  (time to quantum)\nx + y = 32 > 15\n```\n\n1. Data encrypted at the end of migration (year 7) must stay secret until year 32.\n2. The adversary can decrypt recorded traffic from year 15.\n3. Even data encrypted today (year 0) must survive until year 25, beyond 15.\n4. So harvested ciphertext will be readable while still sensitive. Start with hybrid post-quantum key exchange now.",
+    "link": {
+      "title": "Post-quantum cryptography — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Post-quantum_cryptography"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which of these would a large quantum computer running Shor's algorithm break?",
+    "options": [
+      {
+        "text": "AES-256 and SHA-256",
+        "explanation": "Shor does not directly break AES or SHA-256. Grover gives an idealised square-root search advantage; SHA-256 preimage and collision analyses are different security questions."
+      },
+      {
+        "text": "RSA, Diffie–Hellman, ECDH, ECDSA and Ed25519",
+        "explanation": "Correct. Shor solves factoring and discrete logarithms (including on elliptic curves) efficiently, which is the hardness all these rely on."
+      },
+      {
+        "text": "ML-KEM and ML-DSA",
+        "explanation": "These are lattice-based, designed specifically to resist Shor. No efficient quantum attack on them is known."
+      },
+      {
+        "text": "HMAC-SHA256",
+        "explanation": "HMAC relies on hash properties, which quantum computers weaken only modestly."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Shor's algorithm finds periods, which solves integer factorisation and discrete logarithms in polynomial time.\n2. RSA relies on factoring; DH, ECDH, ECDSA and Ed25519 rely on discrete logs.\n3. Grover's algorithm searches unstructured spaces in about √N steps: AES-256 → ~2^128 work, which is fine.\n4. Lattice problems (ML-KEM, ML-DSA) and hash-based signatures (SLH-DSA) have no known Shor-like attack.",
+    "link": {
+      "title": "Shor's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Shor%27s_algorithm"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A TLS server sends a leaf and one intermediate certificate, both with ML-DSA-65 keys and ML-DSA-65 signatures, and signs CertificateVerify with ML-DSA-65 (public key 1,952 B, signature 3,309 B). Ignoring names, extensions and SCTs, roughly how many bytes of keys and signatures does the client receive, and why does it matter?",
+    "options": [
+      {
+        "text": "About 5 KB; it doesn't matter",
+        "explanation": "This counts only one key and one signature. The chain carries two keys and three signatures."
+      },
+      {
+        "text": "About 33 KB",
+        "explanation": "This overcounts: the root's key is not sent, and only three signatures are involved."
+      },
+      {
+        "text": "About 1 KB, the same as ECDSA",
+        "explanation": "This ignores the stated ML-DSA sizes. A P-256 comparison would also need explicit public-key encoding and signature sizes, plus certificate metadata."
+      },
+      {
+        "text": "About 14 KB, close to TCP's initial congestion window (about 14.6 KB with 10 segments), so with real certificate overhead the handshake may need an extra round trip",
+        "explanation": "Correct. 2 × 1,952 + 3 × 3,309 = 13,831 bytes. Add names, extensions and SCTs, and the server's flight can exceed the initial window."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Two public keys: 2 × 1,952 = 3,904 bytes. Three signatures: 3 × 3,309 = 9,927 bytes. Total 13,831 bytes. With a configured ten-segment initial window and 1,460-byte MSS, the nominal window is 14,600 bytes; other handshake bytes can exceed it. Additional pacing depends on actual window, ACK behavior and the rest of the flight, so a full extra RTT is not guaranteed.",
+    "link": {
+      "title": "The state of the post-quantum Internet — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/pq-2024/"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Why might a deployment choose hybrid X25519MLKEM768 instead of ML-KEM alone? Select all that apply.",
+    "options": [
+      {
+        "text": "The new schemes have had far less cryptanalysis than X25519; SIKE and Rainbow were broken late in NIST's process",
+        "explanation": "Correct. Hybrids hedge against a classical break of the new scheme."
+      },
+      {
+        "text": "Implementations are new and may have bugs such as the KyberSlash timing leaks",
+        "explanation": "Correct for a flaw confined to the PQ component without exposing the classical secret or shared process state. A memory-safety bug compromising both components is not contained by hybrid mathematics."
+      },
+      {
+        "text": "Combining both secrets keeps the session secure if either algorithm holds",
+        "explanation": "Correct under the specified combiner assumptions and correct implementations; it is not a guarantee against endpoint compromise."
+      },
+      {
+        "text": "ML-KEM is much slower than X25519, so X25519 is needed for performance",
+        "explanation": "A hybrid performs both operations and does not avoid ML-KEM work. Relative CPU speeds vary; larger payloads are an additional consideration."
+      },
+      {
+        "text": "Hybrids make signatures quantum-safe as well",
+        "explanation": "Hybrid key exchange only protects confidentiality. Authentication still uses classical signatures."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Hybrids hedge against failure of one cryptographic component, under the combiner assumptions. The original SIKEp434 attack authors reported about one hour on a single core; that is a particular measured implementation, not a universal runtime. Implementation bugs still matter: a bug exposing both secrets defeats the hedge. Authentication/signature migration remains separate.",
+    "link": {
+      "title": "The state of the post-quantum Internet — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/pq-2024/"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team builds a new file-encryption feature. Which design avoids the most mistakes from this lesson?",
+    "options": [
+      {
+        "text": "A high-level AEAD API (e.g. libsodium's `secretstream` or Tink) with keys from a CSPRNG held in a KMS, a fresh DEK per file, and the file ID as associated data",
+        "explanation": "Correct. The library picks the algorithm and nonces; per-file DEKs keep nonce counts low; AAD binds each ciphertext to its file."
+      },
+      {
+        "text": "AES-128-ECB, because it is the fastest mode",
+        "explanation": "ECB leaks equality between blocks: the ECB penguin and Adobe."
+      },
+      {
+        "text": "AES-256-CBC with a fixed IV, plus `SHA256(key + ciphertext)` as an integrity check",
+        "explanation": "A fixed IV leaks equal prefixes, and `SHA256(key || data)` is length-extendable. Two mistakes from the lesson."
+      },
+      {
+        "text": "AES-256-GCM with a nonce derived from the current timestamp in seconds",
+        "explanation": "With one shared key, two files encrypted in the same second reuse a nonce. Independently generated per-file keys change that analysis, but timestamp-only nonce generation is unsafe for a reused key."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Score each against the mistakes:\n\n| Design | Problems |\n|---|---|\n| CBC + fixed IV + SHA256(k‖c) | IV reuse, length extension |\n| ECB | equal blocks leak |\n| High-level AEAD + KMS | none of these |\n| GCM + timestamp nonce | nonce reuse |\n\nThe pattern: use misuse-resistant libraries, a CSPRNG, AEAD, per-object keys (envelope encryption from the key-management lesson) and context binding.",
+    "link": {
+      "title": "Cryptographic Storage Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In 2012 researchers factored the RSA keys of tens of thousands of network devices by computing GCDs between public keys, without any quantum computer. What was the root cause?",
+    "options": [
+      {
+        "text": "RSA-1024 is too short",
+        "explanation": "Even 2048-bit keys would fall: the attack works on shared primes regardless of length."
+      },
+      {
+        "text": "Devices generated keys at first boot with almost no entropy, so different devices produced the same primes; `gcd(n1, n2)` reveals a shared prime instantly",
+        "explanation": "Correct. If two moduli share one prime p, `gcd(n1, n2) = p`, and both factor immediately. This is a randomness failure, not a weakness of RSA."
+      },
+      {
+        "text": "Shor's algorithm was run on a classical computer",
+        "explanation": "Shor needs a sufficiently capable quantum computer for its efficient factoring advantage. Classical GCD can reveal a shared prime without factoring either modulus independently; timing depends on input and implementation."
+      },
+      {
+        "text": "The devices used ECB mode",
+        "explanation": "ECB is a symmetric cipher mode, unrelated to RSA key generation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "If n1=p×q1 and n2=p×q2 with distinct other primes, gcd(n1,n2)=p. Dividing yields the remaining factors. Batch-GCD techniques scale this check to collections of public keys. Insufficient entropy can cause shared factors; a universal microsecond or multi-hour runtime is omitted because no benchmark setup is specified.",
+    "link": {
+      "title": "Mining your Ps and Qs: weak keys in network devices",
+      "url": "https://factorable.net/"
+    }
+  }
+]

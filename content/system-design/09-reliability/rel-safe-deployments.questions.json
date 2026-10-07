@@ -1,0 +1,374 @@
+[
+  {
+    "id": "rel-safe-deployments-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need to be able to roll back a release in seconds, and you can afford double capacity during the deploy. Assume a router that switches new requests promptly and backward-compatible shared state. Which strategy fits best?",
+    "options": [
+      {
+        "text": "Rolling deployment",
+        "explanation": "Rolling deploys need little extra capacity, but rollback is another rolling deploy through every batch, which takes minutes or longer rather than seconds."
+      },
+      {
+        "text": "Blue-green deployment",
+        "explanation": "Correct. The old environment stays running, idle, after cutover. Rolling back is a router flip back to blue, which takes seconds. The cost is running two full environments."
+      },
+      {
+        "text": "Recreate (stop all v1, then start v2)",
+        "explanation": "Recreate causes downtime between stopping v1 and starting v2, and rolling back means repeating that in reverse. It fails both requirements."
+      },
+      {
+        "text": "Manual deploy over SSH to each server",
+        "explanation": "Manual per-server deploys are slow, inconsistent and error-prone, so a seconds-level rollback is out of the question."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Score each strategy against the two requirements:\n\n| Strategy | Rollback time | Extra capacity |\n|---|---|---|\n| Rolling | minutes+ | ~0 |\n| Blue-green | seconds | ~1× extra |\n| Canary | fast | small |\n| Recreate | minutes + downtime | 0 |\n\nBlue-green's fast routing rollback comes precisely from keeping the full old environment warm. Canary is also fast to roll back (route 0% to v2) and is often preferred because it limits exposure too; many teams combine them.",
+    "link": {
+      "title": "Blue-green deployment (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/BlueGreenDeployment.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must rename `users.fullname` to `users.display_name` on a 200-million-row PostgreSQL table, with zero downtime and app rollback during the compatible migration stages, before deliberately retiring old versions. Which sequence is safe?",
+    "options": [
+      {
+        "text": "`ALTER TABLE users RENAME COLUMN fullname TO display_name`, then deploy the app that uses `display_name`",
+        "explanation": "Between the rename and the deploy finishing, every running old instance queries `fullname`, which no longer exists, so they all fail. Rolling back the app also breaks because the old name is gone."
+      },
+      {
+        "text": "Deploy the app using `display_name` first, then rename the column",
+        "explanation": "Now the new app fails until the rename happens, and during a rolling deploy you'd have both versions running against a schema only one of them understands."
+      },
+      {
+        "text": "Add `display_name`; dual-write both; backfill in batches; switch reads to `display_name`; stop writing `fullname`; drop it later",
+        "explanation": "Correct with safeguards: synchronize both columns in one transaction, retire all single-column writers before final backfill/read switch, verify consistency, and drop fullname only after old code and its rollback window are retired. Contraction is not automatically reversible."
+      },
+      {
+        "text": "Create a new table, copy all rows in one transaction, then swap table names",
+        "explanation": "Copying 200M rows in one transaction holds locks and resources for a long time, floods replication, and loses writes made during the copy unless they're captured. It also lacks a safe rollback path."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Check compatibility at each step (old app = reads/writes `fullname`):\n\n| Step | Schema | Old app OK? | New app OK? |\n|---|---|---|---|\n| 1 Add column | both | ✓ | ✓ |\n| 2 Dual-write | both | until read switch | ✓ |\n| 3 Backfill | both | ✓ | ✓ |\n| 4 Read new | both | only synchronized writers | ✓ |\n| 5 Stop old write | both | (retired) | ✓ |\n| 6 Drop old | new only | ✗, so only after old app is gone | ✓ |\n\nAssuming all writers now synchronize both columns and measured sustainable throughput permits it, backfill maths: at 10,000 rows per batch and 20 batches/s, 200M rows takes `200M / 200,000 = 1,000 s` ≈ 17 minutes, throttled on replica lag so replicas don't fall behind.",
+    "link": {
+      "title": "Parallel change (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Version 2 of a service writes cache entries in a new serialisation format that v1 can't parse. During v2's rollout an unrelated bug appears, and you roll back to v1. What happens, and what should you have done?",
+    "options": [
+      {
+        "text": "v1 fails to read entries v2 wrote, so the rollback causes errors; deploy a reader-first version (reads both, writes old) to 100% before the writer version",
+        "explanation": "Correct. This is the two-phase deployment AWS recommends. Once every instance can read both formats, rolling back from the writer version leaves no instance unable to read the data."
+      },
+      {
+        "text": "Nothing; caches are temporary so the old format is irrelevant",
+        "explanation": "Cache entries can live for hours and are shared across instances. v1 instances will hit v2-format entries and fail to parse them until they expire or are flushed."
+      },
+      {
+        "text": "The rollback is safe as long as it's done within 5 minutes",
+        "explanation": "Time doesn't matter; even one second of v2 writes leaves incompatible data that v1 cannot read."
+      },
+      {
+        "text": "v1 automatically upgrades to understand the new format",
+        "explanation": "v1's code is fixed; it knows nothing about a format introduced later. Forward compatibility has to be built in before the change."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. During the rollout, some v2 instances write format B to the shared cache.\n2. After rollback, all instances are v1 and only understand format A. Reading a B entry → deserialisation error → user-facing failures.\n3. Two-phase approach:\n   - **Phase 1**: deploy v1.5 that reads A *and* B but writes A. Roll to 100%.\n   - **Phase 2**: deploy v2 that writes B.\n4. Rolling back phase 2 returns you to v1.5, which reads B fine.\n\nTest it: AWS recommends explicitly testing rollback (deploy, roll back, verify) as part of the pipeline.",
+    "link": {
+      "title": "Ensuring rollback safety during deployments (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/ensuring-rollback-safety-during-deployments/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service handles 200 req/s with a baseline error rate of 0.1%. You canary a release on 1% of traffic. If the canary actually has a 0.5% error rate, roughly how long until you'd expect to have seen even **10** errors from the canary?",
+    "options": [
+      {
+        "text": "About 10 seconds",
+        "explanation": "This assumes the canary receives all 200 req/s. At 1% it only gets 2 req/s."
+      },
+      {
+        "text": "About 17 minutes",
+        "explanation": "Correct as an expected count: 2 × 0.005 = 0.01 errors/s, giving 1,000 s for ten errors on average. Detection confidence depends on the test, traffic independence and baseline evidence."
+      },
+      {
+        "text": "About 1 minute",
+        "explanation": "This is off by a factor of about 17. Work through the rates: 200 × 1% = 2 req/s, × 0.5% = 0.01 errors/s."
+      },
+      {
+        "text": "About 14 hours",
+        "explanation": "That would be the time at 0.001% error rate or at far lower traffic. At 0.01 errors/s, 10 errors arrive in about 1,000 s."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Canary traffic: `200 × 0.01 = 2 req/s`.\n2. Canary errors: `2 × 0.005 = 0.01 errors/s`.\n3. Time to 10 errors: `10 / 0.01 = 1,000 s ≈ 17 min`.\n4. Over the same time, a baseline group of equal size (2 req/s) would see `2 × 0.001 × 1000 = 2` errors. 10 vs 2 is suggestive but noisy at these counts.\n\nLesson from the SRE workbook: canary size and duration must give enough events for statistical significance. Options: a bigger canary (5% gives 10 errors in ~3.3 min), longer bake times, and a representative contemporaneous control group; equal sizing can reduce confounding but does not itself increase sample count.",
+    "link": {
+      "title": "Canarying releases (Google SRE workbook)",
+      "url": "https://sre.google/workbook/canarying-releases/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about feature flags are true? Select all that apply.",
+    "options": [
+      {
+        "text": "They let you deploy code to production while keeping the behaviour switched off",
+        "explanation": "Correct. This decoupling of deploy from release is the main point: code can ship dark and be enabled later without another deploy."
+      },
+      {
+        "text": "Changing a flag is not a production change, so it doesn't need review or staging",
+        "explanation": "Incorrect. A flag flip changes production behaviour instantly, often globally. Several large outages have come from config or flag changes pushed everywhere at once; treat them like deploys."
+      },
+      {
+        "text": "An ops toggle can act as a kill switch to disable an expensive feature under load",
+        "explanation": "Correct. Ops toggles are a graceful-degradation tool: switch off, say, recommendations during a traffic spike to protect the core experience."
+      },
+      {
+        "text": "Release flags should be removed once the feature is fully rolled out",
+        "explanation": "Correct. Every flag adds a code path and a combination to test. Stale release flags are technical debt and a source of surprising behaviour."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Go through the flag categories from Pete Hodgson's article on martinfowler.com:\n\n| Type | Lifespan | Example |\n|---|---|---|\n| Release | days–weeks | new checkout |\n| Experiment | weeks | A/B test |\n| Ops | long | kill switch |\n| Permission | long | premium tier |\n\n- Release flags: decouple deploy from release, then delete.\n- Ops flags: deliberately long-lived kill switches.\n- All flag changes are production changes: roll them out gradually, audit them and watch metrics.",
+    "link": {
+      "title": "Feature toggles (Pete Hodgson, martinfowler.com)",
+      "url": "https://martinfowler.com/articles/feature-toggles.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A global service runs in 20 regions, each made of independent cells. A deploy with a latent bug triggers only under traffic patterns seen in some regions. Which rollout plan best limits blast radius while still finishing in reasonable time?",
+    "options": [
+      {
+        "text": "Deploy to all 20 regions at once, with automated rollback if errors rise",
+        "explanation": "Automated rollback helps, but all users have received the new version before the rollback triggers; actual impact depends on which traffic activates the bug. Exposure isn't limited at all."
+      },
+      {
+        "text": "Blue-green switch of the whole global fleet after testing in staging",
+        "explanation": "Staging didn't reproduce the regional traffic pattern, so the bug passes testing and then hits all users at the switch."
+      },
+      {
+        "text": "Waves: one box → one cell → one region → a few regions → the rest, with automated canary analysis and bake time at each stage",
+        "explanation": "Correct. Staged waves (as AWS describes) cap exposure at each step, give region-specific traffic a chance to trigger the bug while impact is small, and roll back automatically on regression. The cost is that full rollout takes hours to days."
+      },
+      {
+        "text": "Deploy to the smallest region only and, if fine after an hour, everywhere else",
+        "explanation": "Better than all-at-once, but a single small region may not exhibit the traffic pattern that triggers the bug, and the jump straight from one region to nineteen gives a huge blast radius."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare worst-case exposure when the bug triggers:\n\n| Plan | Users exposed |\n|---|---|\n| All at once | 100% |\n| Global blue-green | 100% |\n| 1 small region → rest | ~95% if missed |\n| Waves | cumulative deployed footprint |\n\nWave design:\n1. One box in one cell: catches crashes and obvious errors.\n2. One cell: real traffic mix for that cell's customers.\n3. One region, then 2–3 diverse regions: different traffic shapes, so the regional bug is likely triggered here, at a limited footprint determined by regional traffic; already-deployed regions also remain exposed.\n4. Remaining regions in larger waves.\n\nAutomated rollback at each stage, plus bake time long enough to see daily patterns, makes this hands-off.",
+    "link": {
+      "title": "Automating safe, hands-off deployments (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/automating-safe-hands-off-deployments/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a Kubernetes rolling deployment, v2 starts, passes its readiness probe (an HTTP `GET /healthz` returning 200), and the rollout completes. But v2 returns wrong prices because of a config bug. What's the most important gap in this pipeline?",
+    "options": [
+      {
+        "text": "The readiness probe interval is too long",
+        "explanation": "A faster probe still only checks that `/healthz` returns 200, which v2 does. Probe frequency can't catch wrong business results."
+      },
+      {
+        "text": "`maxUnavailable` should have been set to 0",
+        "explanation": "That controls capacity during the rollout, not correctness. v2 would still roll out fully with wrong prices."
+      },
+      {
+        "text": "Rolling deployments can't be used for pricing services",
+        "explanation": "Rolling deployments are used for all kinds of services; the issue is what's checked between batches, not the strategy itself."
+      },
+      {
+        "text": "This shallow readiness probe misses correctness; add business-level validation and canary comparison gates",
+        "explanation": "Correct. Validate known prices and compare relevant business metrics against a representative baseline. These improve detection but cannot guarantee every bug will be caught."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. What the readiness probe verified: the process started and serves HTTP. ✓\n2. What it didn't verify: prices are correct. ✗\n3. This is a wrong-answer failure; it won't show up in liveness or 5xx rates.\n4. Fixes:\n   - Canary a small slice and compare **business metrics** (conversion rate, average basket value, price-validation alerts) with the baseline.\n   - Add synthetic tests that check known products return expected prices after each batch.\n   - Pause between batches long enough for analysis; roll back automatically on divergence.\n5. Since it was a config bug: ship config through the same staged pipeline as code.",
+    "link": {
+      "title": "Canarying releases (Google SRE workbook)",
+      "url": "https://sre.google/workbook/canarying-releases/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The new checkout code was deployed to every server a week ago behind a feature flag, switched off. Today the team enables it for 5% of users and conversion drops sharply. Assume the old path still supports data written by the new one and flag updates propagate promptly. What is the fastest safe response?",
+    "options": [
+      {
+        "text": "Roll back the deployment on every server",
+        "explanation": "That works but is slow and risky, and unnecessary: the code has been running safely while dark for a week. Only the *release* changed today."
+      },
+      {
+        "text": "Fix forward with a hot patch as quickly as possible",
+        "explanation": "Fixing forward under pressure is slower and riskier than flipping a flag. Restore service first, then fix calmly."
+      },
+      {
+        "text": "Turn the flag off for that 5%, then investigate",
+        "explanation": "Correct. Deploy and release were decoupled, so undoing the release is a flag change that takes effect in seconds, with no build or deploy."
+      },
+      {
+        "text": "Raise the flag to 100% so the problem is easier to see in the metrics",
+        "explanation": "That spreads a known-bad release to every user. Exposure should shrink, not grow, when a release misbehaves."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Separate the two events:\n   - **Deploy** (a week ago): code shipped, flag off. No problem seen.\n   - **Release** (today): flag on for 5%. Problem appears.\n2. The change that caused the regression is the flag, so revert the flag.\n3. Routing behavior may change in seconds, but verify propagation and reconcile any completed harmful effects; versus a rollback deploy that may take tens of minutes.\n4. Afterwards: treat the flag change like a deploy next time, with automated comparison of the 5% cohort against the other 95%.",
+    "link": {
+      "title": "Feature toggles (Pete Hodgson, martinfowler.com)",
+      "url": "https://martinfowler.com/articles/feature-toggles.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team runs `ALTER TABLE orders ADD COLUMN note text;` on a busy PostgreSQL table. The change is normally instant, but this time every query on `orders` hangs for minutes and the site goes down. A long-running analytics query was reading `orders` at the time. What happened, and what prevents it?",
+    "options": [
+      {
+        "text": "Adding a column rewrote the whole table",
+        "explanation": "Adding a nullable column is metadata-only in PostgreSQL. The table wasn't rewritten; the problem was waiting for a lock."
+      },
+      {
+        "text": "Analytics queries can't run while columns exist with NULL values",
+        "explanation": "There's no such restriction; NULL columns are normal."
+      },
+      {
+        "text": "The new column made every row larger, so queries slowed",
+        "explanation": "Existing rows aren't changed by adding a nullable column, and the queries weren't slow; they were blocked."
+      },
+      {
+        "text": "The ALTER waited for an exclusive lock behind the analytics query, and every new query queued behind the ALTER; set a short `lock_timeout` and retry",
+        "explanation": "Correct. ALTER TABLE needs a brief ACCESS EXCLUSIVE lock. While it waits for the long query, it blocks all later queries on the table. A `lock_timeout` of a few seconds makes the ALTER abort so a controlled retry can be scheduled instead of stalling the table."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The analytics query holds an ACCESS SHARE lock on `orders` for, say, 10 minutes.\n2. `ALTER TABLE` requests ACCESS EXCLUSIVE and must wait.\n3. PostgreSQL queues lock requests: new `SELECT`s and `INSERT`s now wait behind the ALTER.\n4. Result: the whole table is effectively locked for as long as the analytics query runs.\n\nFix:\n\n```\nSET lock_timeout = '3s';\nALTER TABLE orders\n  ADD COLUMN note text;\n-- on timeout: wait, then retry\n```\n\nAlso keep long analytics queries off the primary (run them on a replica).",
+    "link": {
+      "title": "ALTER TABLE (PostgreSQL documentation)",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q10",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these changes are appropriate candidates for a **two-phase (reader-first) deployment** to stay rollback-safe? Assume v1 uses strict parsers that reject unknown values. Select all that apply.",
+    "options": [
+      {
+        "text": "v2 adds a new HTTP endpoint that nothing calls yet",
+        "explanation": "Incorrect. A new unused endpoint changes no shared data. Rolling back just removes it."
+      },
+      {
+        "text": "v2 writes messages to a shared queue in a new format that v1 consumers can't parse",
+        "explanation": "Correct. During a rollout, or after a rollback, v1 consumers will read v2 messages. Ship a version that reads both formats first."
+      },
+      {
+        "text": "v2 persists a new enum value (`status = 'ON_HOLD'`) that v1 rejects",
+        "explanation": "Correct. Once stored, the new value is there after a rollback, and v1 will fail on those rows. Teach every instance to read it before any instance writes it."
+      },
+      {
+        "text": "v2 refactors internal code with no change to stored data or APIs",
+        "explanation": "Incorrect. Nothing v2 writes is new to v1, so rolling back is safe as it is."
+      },
+      {
+        "text": "v2 switches the shared cache's serialisation from JSON to Protobuf",
+        "explanation": "Correct. Shared caches outlive deployments; v1 would hit Protobuf entries it can't decode."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Ask one question per change: **after a rollback, will v1 encounter anything that v2 wrote and v1 can't read?**\n\n| Change | v1 sees v2's data? | Two-phase? |\n|---|---|---|\n| Queue format | yes | ✓ |\n| New enum value | yes | ✓ |\n| Internal refactor | no | ✗ |\n| Cache format | yes | ✓ |\n| New endpoint | no | ✗ |\n\nPhase 1 deploys a reader that accepts old and new; phase 2 deploys the writer. Rolling back phase 2 lands on phase 1, which reads both.",
+    "link": {
+      "title": "Ensuring rollback safety during deployments (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/ensuring-rollback-safety-during-deployments/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service handles **2,000 req/s** with a 0.2% error rate. A new release would double that to 0.4%. You canary it on **5%** of traffic for 10 minutes, compared with an equal-sized representative baseline group. Assume independent requests and stable rates. Roughly how many errors would you expect from each group?",
+    "options": [
+      {
+        "text": "Canary about 240, baseline about 120: a clear difference",
+        "explanation": "Correct in expectation: each group has 60,000 requests, giving 240 versus 120 expected errors. Independent rare-event counting gives a standard deviation of about 19 error counts for the difference; real correlated failures require a different uncertainty model."
+      },
+      {
+        "text": "Canary about 24, baseline about 12",
+        "explanation": "This is off by a factor of ten, typically from using 0.5% of traffic instead of 5%."
+      },
+      {
+        "text": "Canary about 4,800, baseline about 2,400",
+        "explanation": "These are the counts for the whole fleet over 10 minutes. Each group gets only 5% of traffic."
+      },
+      {
+        "text": "Canary about 240, baseline about 2,280",
+        "explanation": "This compares the canary with the rest of the fleet (95%) rather than an equal-sized baseline. Raw counts are then not comparable; you'd have to compare rates."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Traffic per group: `2,000 × 5% = 100 req/s`.\n2. Requests in 10 minutes: `100 × 600 = 60,000`.\n3. Expected errors:\n\n```\ncanary:   60,000 × 0.4% = 240\nbaseline: 60,000 × 0.2% = 120\n```\n\n4. Error counts are roughly Poisson, so the standard deviation of the difference is about `√(240 + 120) ≈ 19`. A gap of 120 is about 6.3 standard deviations under this model, strong evidence against equal rates for such observed counts.\n5. Compare a 1% canary: 12,000 requests each, 48 vs 24 errors, still detectable but much noisier, and subtler regressions would be invisible.\n\nAn equal-sized baseline, started at the same time, helps control time-of-day effects; it does not remove cohort differences or correlated incidents.",
+    "link": {
+      "title": "Canarying releases (Google SRE workbook)",
+      "url": "https://sre.google/workbook/canarying-releases/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team's 60 application instances each run pending database migrations on start-up. During a rolling deploy the first batch of 15 starts together, and a migration that adds an index locks the table and runs on several instances at once. What's the best practice?",
+    "options": [
+      {
+        "text": "Run migrations as a separate, single, observable pipeline step before the code that needs them is deployed, keeping each migration backwards compatible",
+        "explanation": "Correct. A single authorized runner with migration locking prevents competing pipeline runs; a separate step can be monitored, paused and retried; and because the migration is compatible with the running version, the app can deploy afterwards, or roll back, safely."
+      },
+      {
+        "text": "Keep migrations on start-up but add a random delay before each instance runs them",
+        "explanation": "Jitter reduces simultaneous starts but still lets several instances attempt the same DDL, and ties every start-up to migration success."
+      },
+      {
+        "text": "Run migrations after the deploy completes, from the last instance to start",
+        "explanation": "Then the new code runs against the old schema during the whole rollout, which breaks unless the code is compatible with both, and 'last instance' is hard to define reliably."
+      },
+      {
+        "text": "Use blue-green so the migration runs only in the green environment",
+        "explanation": "Blue and green normally share the database, so a migration in green changes blue's schema too. It doesn't avoid the problem."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Problems with migrate-on-start:\n   - concurrency: N instances race to run the same DDL;\n   - coupling: a slow or failed migration blocks start-up across the fleet;\n   - visibility: it's buried in app logs, not a pipeline stage.\n2. Better pipeline:\n\n```\n1 migrate (expand, compatible)\n2 deploy app (rolling/canary)\n3 later: contract migration\n```\n\n3. Make the DDL itself safe: CREATE INDEX CONCURRENTLY where supported and a short lock_timeout. Concurrent index creation must run outside a transaction block; inspect and clean up invalid indexes after a failed build.\n\nThe expand/contract discipline is what makes step 1 safe while the old code is still running.",
+    "link": {
+      "title": "Parallel change (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  }
+]

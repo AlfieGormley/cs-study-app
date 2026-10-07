@@ -1,0 +1,377 @@
+[
+  {
+    "id": "mlc-ensembles-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A random forest trains each tree on a bootstrap sample of the n = 10,000 training rows. Roughly what fraction of the rows does any one tree *not* see?",
+    "options": [
+      {
+        "text": "0%: every row is used by every tree",
+        "explanation": "A bootstrap sample draws n rows with replacement, so some rows are repeated and others are left out."
+      },
+      {
+        "text": "About 37%",
+        "explanation": "Correct. Each row is missed by a single draw with probability 1 − 1/n, so it is missed by all n draws with probability (1 − 1/n)ⁿ ≈ 1/e ≈ 0.368."
+      },
+      {
+        "text": "About 63%",
+        "explanation": "That is the fraction of distinct rows that *are* in the sample."
+      },
+      {
+        "text": "50%",
+        "explanation": "There is no reason for exactly half; the maths gives 1/e."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each of the n draws picks a given row with probability 1/n, so misses it with probability `1 − 1/n`.\n2. All n draws miss it with probability `(1 − 1/n)ⁿ`.\n3. For large n this tends to `e⁻¹ ≈ 0.368`. (Even at n = 10, `0.9¹⁰ ≈ 0.349`.)\n4. So about 36.8% of rows are out-of-bag for each tree, and about 63.2% of distinct rows are in its sample.\n5. These OOB rows give each tree a free validation set; `oob_score=True` in scikit-learn uses them.",
+    "link": {
+      "title": "Bootstrap aggregating — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bootstrap_aggregating"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague says: \"Don't use 2,000 trees in the random forest, it'll overfit.\" Is that right?",
+    "options": [
+      {
+        "text": "Yes: like boosting, each extra tree fits more noise",
+        "explanation": "Random forest trees are independent and averaged; they do not fit each other's residuals, so adding them does not increase overfitting."
+      },
+      {
+        "text": "Yes: more trees means more parameters, so more variance",
+        "explanation": "Averaging more independent trees *reduces* the variance of the ensemble, it does not increase it."
+      },
+      {
+        "text": "No: adding trees to a random forest does not cause overfitting; it only costs training time, memory and prediction latency, with diminishing gains",
+        "explanation": "Correct. The ensemble's error converges as trees are added. Overfitting in a forest is controlled by tree complexity (depth, leaf size), not the number of trees."
+      },
+      {
+        "text": "No, because random forests cannot overfit at all",
+        "explanation": "Forests can overfit, for example with very deep trees on noisy data. It is just that the number of trees is not the cause."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In a random forest, each tree is trained independently on its own bootstrap sample.\n2. The prediction is an average. Adding trees moves the average closer to its limit (the expected tree), so the variance term `(1 − ρ)σ²/B` shrinks.\n3. Error therefore flattens out as B grows; it does not turn upwards.\n4. The real costs are linear in B: training time, model size, prediction latency.\n5. Contrast gradient boosting, where each new tree fits the remaining residuals and can start fitting noise, so the number of rounds must be controlled with early stopping.",
+    "link": {
+      "title": "Random forest — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Random_forest"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Gradient boosting with squared error starts from `F₀ = mean(y)`. For targets `y = [3, 5, 10]`, what does the first tree get trained to predict?",
+    "options": [
+      {
+        "text": "The targets `[3, 5, 10]`",
+        "explanation": "Only the starting constant uses the raw targets. Each tree is trained on what is left over."
+      },
+      {
+        "text": "The residuals `[−3, −1, 4]`",
+        "explanation": "Correct. F₀ = 6, so residuals y − F₀ are [−3, −1, 4]. For squared error, these are the negative gradients."
+      },
+      {
+        "text": "The residuals `[3, 1, −4]`",
+        "explanation": "These are F₀ − y, the wrong sign. Adding a tree that predicts these would move predictions away from the targets."
+      },
+      {
+        "text": "The class labels weighted by error",
+        "explanation": "That describes AdaBoost's reweighting idea, not gradient boosting on a regression target."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `F₀ = (3 + 5 + 10)/3 = 6`.\n2. Residuals `rᵢ = yᵢ − F₀ = [3 − 6, 5 − 6, 10 − 6] = [−3, −1, 4]`.\n3. The first tree h₁ is fitted to these residuals.\n4. Then `F₁ = F₀ + η·h₁`. If h₁ were perfect and η = 1, F₁ would equal y exactly; with η = 0.1, it moves 10% of the way.\n5. Why \"gradient\": for `½(y − F)²`, the derivative with respect to F is `F − y`, so the negative gradient is `y − F`, the residual.",
+    "link": {
+      "title": "Gradient boosting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Gradient_boosting"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each tree in an ensemble has prediction variance σ² = 1, and any two trees' errors have correlation ρ = 0.3. What is the variance of the average of 100 trees, and how could you lower it further?",
+    "options": [
+      {
+        "text": "0.01; add more trees",
+        "explanation": "That is σ²/B, which assumes independent trees (ρ = 0). With ρ = 0.3, the correlated part does not average away."
+      },
+      {
+        "text": "0.307; adding trees barely helps now, so reduce correlation, for example with a smaller `max_features`",
+        "explanation": "Correct. 0.3 + 0.7/100 = 0.307. The floor is ρσ² = 0.3. Decorrelating the trees lowers the floor."
+      },
+      {
+        "text": "0.3; it cannot be lowered",
+        "explanation": "The floor ρσ² = 0.3 can be lowered by reducing ρ, which is exactly what random feature subsets do."
+      },
+      {
+        "text": "0.7; use fewer, deeper trees",
+        "explanation": "This mixes up the terms. (1 − ρ) = 0.7 is divided by B. Fewer trees raises variance."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Formula: `Var = ρσ² + (1 − ρ)σ²/B`.\n2. Plug in: `0.3·1 + 0.7·1/100 = 0.3 + 0.007 = 0.307`.\n3. Going from 100 to 10,000 trees would only reach 0.30007: almost no gain.\n4. The dominant term is ρσ². Random forests reduce ρ by considering a random subset of features at each split (`max_features`), and by bootstrapping rows.\n5. Trade-off: each individual tree gets slightly worse (higher σ² or bias), so the best `max_features` is found by validation.",
+    "link": {
+      "title": "Random forest — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Random_forest"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a boosted regression model, a point's current prediction is F = 6.0. The next tree's leaf for that point outputs 4.0, and the learning rate is η = 0.1. What is the point's new prediction?",
+    "options": [
+      {
+        "text": "10.0",
+        "explanation": "This adds the leaf output at full strength (η = 1). Shrinkage scales each tree's contribution by η."
+      },
+      {
+        "text": "4.0",
+        "explanation": "The tree's output is added to the existing prediction; it does not replace it."
+      },
+      {
+        "text": "6.4",
+        "explanation": "Correct. F ← F + η·h(x) = 6.0 + 0.1 × 4.0 = 6.4."
+      },
+      {
+        "text": "5.6",
+        "explanation": "Sign error. The leaf predicts a positive residual (the target is above the prediction), so F moves up."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Boosting update: `F_new(x) = F_old(x) + η·h(x)`.\n2. `F_old = 6.0`, `h(x) = 4.0`, `η = 0.1`.\n3. `F_new = 6.0 + 0.4 = 6.4`.\n4. The leaf said \"targets here are about 4 above current predictions\"; boosting deliberately moves only 10% of the way and lets later trees take further steps. Small steps generalise better.",
+    "link": {
+      "title": "Gradient boosting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Gradient_boosting"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You train gradient boosting for 2,000 rounds at η = 0.1. Validation loss falls until about round 400, then slowly rises while training loss keeps falling. What should you do?",
+    "options": [
+      {
+        "text": "Train for more rounds; the validation loss will come back down",
+        "explanation": "Rising validation loss with falling training loss is overfitting. More rounds fit more noise."
+      },
+      {
+        "text": "Use early stopping: keep the model at around round 400, chosen on a validation set (not the test set)",
+        "explanation": "Correct. Stop when validation loss has not improved for some patience (e.g. 50 rounds) and keep the best iteration. Optionally lower η and allow more rounds."
+      },
+      {
+        "text": "Increase the learning rate to 0.5 so it converges faster",
+        "explanation": "A larger η makes each tree's step bigger, which usually overfits sooner and worse."
+      },
+      {
+        "text": "Switch to a random forest, because boosting cannot be regularised",
+        "explanation": "Boosting has many regularisers: early stopping, shrinkage, depth limits, subsampling, L2 on leaves."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Training loss always falls as you add trees, because each fits the remaining residuals.\n2. After round ~400 the residuals are mostly noise, so new trees fit noise and validation loss rises.\n3. Early stopping: monitor validation loss each round and stop after, say, 50 rounds without improvement; keep the best iteration.\n4. Use a separate validation split. Stopping on the test set means the test score is no longer an honest estimate.\n5. If you halve η, expect to need roughly twice as many rounds, often for slightly better generalisation.",
+    "link": {
+      "title": "Ensembles — scikit-learn user guide",
+      "url": "https://scikit-learn.org/stable/modules/ensemble.html"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these changes reduce the correlation between trees in a random forest? Select all that apply.",
+    "options": [
+      {
+        "text": "Lowering `max_features` (fewer features considered per split)",
+        "explanation": "Correct. Trees can no longer all pick the same dominant feature at every split, so their structures diverge."
+      },
+      {
+        "text": "Training each tree on a bootstrap sample rather than the full data",
+        "explanation": "Correct. Different samples lead to different splits, especially deeper in the tree."
+      },
+      {
+        "text": "Increasing `n_estimators` from 200 to 2,000",
+        "explanation": "More trees shrink the (1 − ρ)σ²/B term but do not change ρ, the correlation between any two trees."
+      },
+      {
+        "text": "Training every tree on the full dataset with all features and the same random seed",
+        "explanation": "This makes every tree identical (ρ = 1), so averaging achieves nothing."
+      },
+      {
+        "text": "Setting `max_features=1.0` (all features at every split)",
+        "explanation": "Considering every feature lets the strongest feature dominate every tree's top splits, raising correlation. This is plain bagging."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Correlation ρ measures how similar two trees' errors are.\n2. Sources of diversity in a random forest:\n   - Row randomness: bootstrap samples.\n   - Feature randomness: a fresh random subset of features at each split.\n3. Lowering `max_features` strengthens the second; bootstrapping provides the first.\n4. The number of trees does not change how similar any pair is; it only averages more of them.\n5. All features plus identical data and seed gives identical trees, the worst case.",
+    "link": {
+      "title": "Random forest — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Random_forest"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your gradient-boosting model reaches its best validation score at 300 trees with η = 0.1. You lower η to 0.05 to try to squeeze out more accuracy. What should you expect?",
+    "options": [
+      {
+        "text": "It needs roughly twice as many trees (around 600) to reach a similar fit, often with slightly better validation performance",
+        "explanation": "Correct. Each tree's contribution halves, so about twice as many rounds are needed. Smaller steps typically generalise a little better, at the cost of training and prediction time."
+      },
+      {
+        "text": "The same 300 trees will now give a better score",
+        "explanation": "With half the step size, 300 trees have moved only about half as far; the model will usually underfit at 300."
+      },
+      {
+        "text": "It will overfit faster because the learning rate is smaller",
+        "explanation": "Smaller learning rates overfit *more slowly*; each round changes the model less."
+      },
+      {
+        "text": "No change: the learning rate only affects training speed, not predictions",
+        "explanation": "η scales every tree's contribution, so it directly changes the predictions for a given number of trees."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Each round adds `η·h(x)`. Halving η halves each step.\n2. To travel the same distance in function space, you need roughly twice as many steps: ~600 trees.\n3. Empirically (and in Friedman's original work), smaller η with more trees tends to give slightly better test error, with diminishing returns.\n4. Cost: training and prediction time roughly double. Use early stopping to find the new best round count automatically.",
+    "link": {
+      "title": "Gradient boosting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Gradient_boosting"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In XGBoost with squared error, a leaf contains 4 examples whose gradients `g = ŷ − y` sum to G = −20 (each Hessian h = 1, so H = 4). With λ = 1, what is the leaf's value w*?",
+    "options": [
+      {
+        "text": "−4",
+        "explanation": "Sign error. w* = −G/(H + λ), and G is negative, so w* is positive. Predictions are below the targets, so the leaf should push them up."
+      },
+      {
+        "text": "5",
+        "explanation": "That is −G/H, the unregularised value (the mean residual). λ = 1 adds to the denominator."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. w* = −(−20)/(4 + 1) = 20/5 = 4. λ shrinks the leaf value from the plain mean residual of 5."
+      },
+      {
+        "text": "−20",
+        "explanation": "That is the raw gradient sum. The optimal leaf value divides it by H + λ and flips the sign."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. XGBoost's optimal leaf value: `w* = −G / (H + λ)`.\n2. G = −20, H = 4, λ = 1: `w* = 20 / 5 = 4`.\n3. Without regularisation (λ = 0): `w* = 20/4 = 5`, the average residual.\n4. λ pulls leaf values towards 0. The effect is strongest when H is small (few examples in the leaf), exactly where the mean residual is least reliable.\n5. The leaf's contribution to predictions is then `η·w*`, e.g. 0.1 × 4 = 0.4.",
+    "link": {
+      "title": "Introduction to boosted trees — XGBoost docs",
+      "url": "https://xgboost.readthedocs.io/en/stable/tutorials/model.html"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An XGBoost candidate split has `G_L = 10, H_L = 4` and `G_R = −6, H_R = 2`, with λ = 1 and γ = 5. What is its gain, and is the split made?",
+    "options": [
+      {
+        "text": "About 9.86; yes, because the gain is positive",
+        "explanation": "Correct. ½[100/5 + 36/3 − 16/7] − 5 = ½[20 + 12 − 2.29] − 5 ≈ 14.86 − 5 ≈ 9.86 > 0."
+      },
+      {
+        "text": "About 14.86; yes",
+        "explanation": "That is the gain before subtracting γ. The γ term is the cost of adding a leaf."
+      },
+      {
+        "text": "About −2.29; no",
+        "explanation": "That is only the parent term with its sign. The children's terms are added before subtracting it."
+      },
+      {
+        "text": "About 4.86; yes",
+        "explanation": "This subtracts γ twice (14.86 − 10). γ is the cost of the one extra leaf a split adds, so it is subtracted once, giving about 9.86."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Formula:\n\n```\nGain = ½[G_L²/(H_L+λ)\n       + G_R²/(H_R+λ)\n       − (G_L+G_R)²/(H_L+H_R+λ)] − γ\n```\n\n1. Left: `10² / (4 + 1) = 100/5 = 20`.\n2. Right: `(−6)² / (2 + 1) = 36/3 = 12`.\n3. Parent: `(10 − 6)² / (4 + 2 + 1) = 16/7 ≈ 2.29`.\n4. Bracket: `20 + 12 − 2.29 = 29.71`; half is `14.86`.\n5. Subtract γ: `14.86 − 5 = 9.86`.\n6. Positive, so the split improves the regularised objective and is kept. If γ were 15, it would be pruned.",
+    "link": {
+      "title": "Introduction to boosted trees — XGBoost docs",
+      "url": "https://xgboost.readthedocs.io/en/stable/tutorials/model.html"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about modern gradient-boosting libraries are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "XGBoost uses both first and second derivatives of the loss when choosing splits and leaf values",
+        "explanation": "Correct. g and h feed into w* = −G/(H + λ) and the gain formula: a Newton-style step."
+      },
+      {
+        "text": "LightGBM grows trees leaf-wise, always splitting the leaf with the largest gain, which is why `num_leaves` is its key complexity control",
+        "explanation": "Correct. Leaf-wise growth can produce deep, unbalanced trees that overfit small data if `num_leaves` is too large."
+      },
+      {
+        "text": "CatBoost computes target statistics for categories using only rows earlier in a random permutation, to avoid leaking a row's own label",
+        "explanation": "Correct. Naive target encoding leaks the label into the feature (prediction shift); ordered statistics avoid it."
+      },
+      {
+        "text": "Gradient-boosting libraries train all trees in parallel, like a random forest",
+        "explanation": "Trees are sequential, because each one needs the previous predictions. Libraries parallelise *within* a tree (split finding across features and bins)."
+      },
+      {
+        "text": "Boosting usually uses fully grown, deep trees, like random forests",
+        "explanation": "Boosting uses weak learners, typically depth 3 to 8 or a capped number of leaves. Deep trees would overfit the residuals quickly."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "| Statement | Verdict |\n|---|---|\n| XGBoost second-order | True |\n| LightGBM leaf-wise | True |\n| CatBoost ordered stats | True |\n| Trees in parallel | False |\n| Deep trees | False |\n\n1. XGBoost's objective is a second-order Taylor expansion, so each example contributes g and h.\n2. LightGBM's leaf-wise strategy gives lower loss per tree than level-wise but needs `num_leaves` (and `max_depth`, `min_data_in_leaf`) to stay in check.\n3. CatBoost's ordered target statistics stop each row seeing its own label.\n4. Boosting is inherently sequential; random forests are the parallel ones.",
+    "link": {
+      "title": "Introduction to boosted trees — XGBoost docs",
+      "url": "https://xgboost.readthedocs.io/en/stable/tutorials/model.html"
+    }
+  },
+  {
+    "id": "mlc-ensembles-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You forecast weekly sales with LightGBM using features like week number and price. Sales have grown steadily for three years. On the next quarter, forecasts are consistently too low and look flat. What is the most likely cause and fix?",
+    "options": [
+      {
+        "text": "The learning rate is too low; raise it",
+        "explanation": "A higher η would fit the training period harder but still could not predict above the training range."
+      },
+      {
+        "text": "Trees cannot extrapolate beyond the training targets, so forecasts flatline at recent levels; model the trend separately (or predict changes / ratios) and let the trees model the rest",
+        "explanation": "Correct. Every leaf value is learned from past targets, so the ensemble cannot predict values beyond those it saw. Detrending, differencing or a linear-trend component fixes this."
+      },
+      {
+        "text": "Too few trees; add more",
+        "explanation": "More trees refine the fit within the training range but cannot extend it."
+      },
+      {
+        "text": "The model is overfitting; increase λ",
+        "explanation": "Regularisation pulls predictions towards the mean, which would make the under-forecasting worse."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A tree ensemble's prediction is a sum of leaf values learned from training residuals. For future weeks beyond the training range, \"week number\" falls past every threshold, so those weeks land in the same leaves as the most recent training weeks.\n2. Result: the forecast is roughly the most recent level, flat, while the true series keeps rising.\n3. Fixes:\n   - Fit a trend (e.g. linear regression on time) and train the trees on the detrended residual.\n   - Predict week-on-week change or the ratio to last year, which are stationary.\n   - Use lag features (last week's sales) so the level is carried forward.\n4. This is a model-family limitation, not a tuning problem.",
+    "link": {
+      "title": "Gradient boosting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Gradient_boosting"
+    }
+  }
+]

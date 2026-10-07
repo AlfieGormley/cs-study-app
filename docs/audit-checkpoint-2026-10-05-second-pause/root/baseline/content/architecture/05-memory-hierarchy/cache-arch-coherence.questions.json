@@ -1,0 +1,348 @@
+[
+  {
+    "id": "cache-arch-coherence-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In MESI, a core holds a line and wants to write it **without sending any request** to other caches. Which state must the line be in (before the write)?",
+    "options": [
+      {
+        "text": "Shared",
+        "explanation": "S means other caches may hold copies; they must be invalidated (BusUpgr) before writing."
+      },
+      {
+        "text": "Invalid",
+        "explanation": "An invalid line isn't usable; a write needs a BusRdX to fetch it with ownership."
+      },
+      {
+        "text": "Exclusive (or already Modified)",
+        "explanation": "Correct. E means this is the only copy and it is clean, so the core can switch to M silently. (A line already in M can of course be written again silently too.)"
+      },
+      {
+        "text": "Owned",
+        "explanation": "Owned is a MOESI state meaning dirty *and* shared; other copies exist, so a write must invalidate them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A write needs exclusive ownership. Check each state:\n\n| State | Others have it? | Write needs |\n|---|---|---|\n| M | no | nothing |\n| E | no | nothing (→ M) |\n| S | maybe | BusUpgr |\n| I | ? | BusRdX |\n\nE is the state that exists exactly to make \"read then write private data\" cost one request instead of two.",
+    "link": {
+      "title": "MESI protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/MESI_protocol"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two threads each increment their **own** counter, but the two counters are adjacent `long`s in one struct. Running on two cores is slower than running both loops on one core. What is the cause?",
+    "options": [
+      {
+        "text": "A data race corrupts the counters",
+        "explanation": "Each thread writes only its own variable, so there's no race on the values. The problem is performance, not correctness."
+      },
+      {
+        "text": "False sharing: both counters sit in one cache line, which bounces between the cores' caches on every write",
+        "explanation": "Correct. Coherence tracks lines. Each write needs the line in M, so the cores keep invalidating each other even though they never touch the same variable."
+      },
+      {
+        "text": "The cores are throttled to run at a lower frequency",
+        "explanation": "Frequency effects exist but are small and wouldn't make two cores slower than one."
+      },
+      {
+        "text": "The struct is too large to fit in L1",
+        "explanation": "Two `long`s are 16 bytes; fitting isn't the issue."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `a` at offset 0, `b` at offset 8: same 64-byte line.\n2. Core 0 writes `a`: needs line in M → invalidates core 1's copy.\n3. Core 1 writes `b`: miss, fetches the line from core 0, takes M → invalidates core 0.\n4. Repeat 100 million times: each increment pays a cross-core transfer of tens of ns instead of an L1 hit of ~1 ns.\n5. Fix: put each counter on its own line (`alignas(64)`), or accumulate locally and combine at the end.",
+    "link": {
+      "title": "False sharing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/False_sharing"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Eight threads repeatedly **read** (never write) the same 4 KB lookup table. What does cache coherence cost them?",
+    "options": [
+      {
+        "text": "Each read invalidates the other cores' copies, so it's very slow",
+        "explanation": "Reads never invalidate. Only writes need exclusive ownership."
+      },
+      {
+        "text": "Almost nothing: after the first misses, each core holds the lines in Shared state and reads hit locally",
+        "explanation": "Correct. Read-only sharing is cheap. Every core keeps an S copy, and no coherence traffic happens until somebody writes."
+      },
+      {
+        "text": "The lines must be written back to memory after each read",
+        "explanation": "Clean S lines never need write-backs."
+      },
+      {
+        "text": "Only one core at a time can cache a line, so the threads take turns",
+        "explanation": "That's the rule for *writable* (M/E) lines. Any number of caches can share a line in S."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Single writer **or** multiple readers:\n\n1. First read on each core: miss → BusRd → line arrives in S (or E for the first reader, then S).\n2. All later reads: L1/L2 hits in S. No messages.\n3. Cost appears only when someone writes: then all S copies are invalidated and the next reads miss.\n\nSo \"shared data is slow\" is wrong; *shared written* data is slow.",
+    "link": {
+      "title": "Cache coherence — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_coherence"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Three cores, MESI, line X initially uncached. Sequence: core 0 reads X; core 1 reads X; core 2 writes X; core 0 reads X. What are the final states in cores 0, 1 and 2?",
+    "options": [
+      {
+        "text": "S, S, S",
+        "explanation": "Core 1's copy was invalidated by core 2's write and core 1 hasn't read again, so it stays I."
+      },
+      {
+        "text": "E, I, I",
+        "explanation": "Core 2 has a copy (it supplied the data), so core 0 can't be the only holder."
+      },
+      {
+        "text": "S, I, S",
+        "explanation": "Correct. Core 2's write invalidated cores 0 and 1. Core 0's read then hits core 2's M copy, which is supplied and downgraded to S."
+      },
+      {
+        "text": "S, I, M",
+        "explanation": "Core 2 can't stay in M once another cache holds a copy; a snooped read moves M to S (in MESI)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Track each core (c0, c1, c2):\n\n```\nstart            I  I  I\nc0 read  BusRd   E  I  I\nc1 read  BusRd   S  S  I\nc2 write BusRdX  I  I  M\nc0 read  BusRd   S  I  S\n          (c2 supplies,\n           writes back)\n```\n\nFinal: **c0 S, c1 I, c2 S**.",
+    "link": {
+      "title": "MESI protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/MESI_protocol"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A single thread reads a private variable and then writes it (the line is not cached anywhere). How many coherence requests does that cost under MSI versus MESI?",
+    "options": [
+      {
+        "text": "MSI 2, MESI 1",
+        "explanation": "Correct. MSI: BusRd brings it in S, then BusUpgr to get M. MESI: BusRd brings it in E (no sharers), and the write is a silent E → M."
+      },
+      {
+        "text": "MSI 1, MESI 1",
+        "explanation": "MSI has no E state, so the read can only leave the line in S, and writing from S requires an upgrade."
+      },
+      {
+        "text": "MSI 1, MESI 2",
+        "explanation": "Reversed. E is what saves the second request."
+      },
+      {
+        "text": "MSI 2, MESI 2",
+        "explanation": "MESI's E state exists to avoid the second request when no one else has the line."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. MSI: read miss → BusRd → **S** (it can't know it's alone). Write → BusUpgr → M. **2** requests.\n2. MESI: read miss → BusRd → no sharers respond → **E**. Write → E → M with no request. **1** request.\n3. Since most data in real programs is private to one thread, E halves the traffic for this very common read-modify-write pattern.",
+    "link": {
+      "title": "MESI protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/MESI_protocol"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each of 8 threads updates `long counts[8]` at index `tid`. The array is 64-byte aligned. How many cache lines does it span, and what's a correct fix for false sharing?",
+    "options": [
+      {
+        "text": "8 lines; no fix needed",
+        "explanation": "8 × 8 bytes = 64 bytes, which is *one* line, not eight."
+      },
+      {
+        "text": "1 line; use `counts[tid * 8]` in a 64-element array, or a struct padded to 64 bytes per thread",
+        "explanation": "Correct. All 8 counters share one line, so all 8 threads fight over it. Spreading them 64 bytes apart gives each its own line."
+      },
+      {
+        "text": "1 line; make the array `volatile`",
+        "explanation": "`volatile` only stops the compiler caching values in registers. It doesn't move the counters to different lines, so false sharing remains."
+      },
+      {
+        "text": "2 lines; split it into two arrays of 4",
+        "explanation": "Two arrays of 4 counters still put 4 writers on each line."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Size: 8 × 8 B = 64 B. Aligned to 64 → exactly **one line**.\n2. Every thread's write needs that line in M, so it ping-pongs among 8 cores.\n3. Fix: give each counter its own line:\n\n```\nstruct slot {\n  alignas(64) long v;\n};\nstruct slot counts[8];\n```\n\n   Now `sizeof(counts) = 512` bytes, 8 lines, one per thread.\n4. Better still: count in a local variable and write once at the end.",
+    "link": {
+      "title": "False sharing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/False_sharing"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about snooping and directory coherence are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "In snooping, every cache observes every coherence request and checks its own tags",
+        "explanation": "Correct. That's the definition: requests are broadcast, and each cache reacts if it holds the line."
+      },
+      {
+        "text": "A directory records which caches hold each line, so invalidations can go only to actual sharers",
+        "explanation": "Correct. That point-to-point messaging is why directories scale to many cores and sockets."
+      },
+      {
+        "text": "Snooping scales better than directories as the core count grows",
+        "explanation": "Broadcast traffic and tag-check bandwidth grow with core count; directories scale better."
+      },
+      {
+        "text": "An inclusive L3 can serve as a snoop filter, because a line absent from L3 can't be in any core's private cache",
+        "explanation": "Correct. Inclusion guarantees it, so a miss in L3 needs no snooping of the cores."
+      },
+      {
+        "text": "Directory protocols remove the need for invalidations",
+        "explanation": "They still invalidate; they just know *whom* to send the invalidations to."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "- Snooping = broadcast + every cache looks. ✔\n- Directory = track sharers, send targeted messages. ✔\n- Snooping scaling better: no; broadcasts grow with cores. ✘\n- Inclusive L3 as filter: yes, a common trick. ✔\n- Directories still invalidate, they're just targeted. ✘\n\nReal many-core chips combine both: snoop filters or directory caches decide when a broadcast is needed.",
+    "link": {
+      "title": "Directory-based cache coherence — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Directory-based_cache_coherence"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A producer core repeatedly writes a status line, and three consumer cores then each read it. Compared with MESI, what does AMD's MOESI save when the first consumer reads the freshly written (Modified) line?",
+    "options": [
+      {
+        "text": "Nothing; MOESI and MESI behave identically here",
+        "explanation": "They differ exactly here: what happens to a Modified line when another core reads it."
+      },
+      {
+        "text": "The write-back to memory: the producer's line goes M → Owned and it keeps supplying the dirty data to readers",
+        "explanation": "Correct. In MESI the M line must be written back so it can become a clean S. In MOESI it becomes O (dirty but shared); memory is updated only when the O line is eventually evicted."
+      },
+      {
+        "text": "The invalidation of the consumers' copies on the next write",
+        "explanation": "The next producer write must still invalidate the three S copies; Owned doesn't change that."
+      },
+      {
+        "text": "The consumers' cache misses, because MOESI pushes updates to them",
+        "explanation": "MOESI is still write-invalidate; consumers miss and fetch after each write."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "MESI, consumer 1 reads producer's M line:\n1. Producer supplies data **and writes it back to memory**.\n2. Producer M → S; consumer → S.\n\nMOESI, same step:\n1. Producer supplies data; **no memory write**.\n2. Producer M → **O**; consumer → S.\n3. Consumers 2 and 3 also get data from the O copy.\n\nIf the producer updates the line a million times, MESI does a million memory write-backs; MOESI does roughly none until eviction. That saves DRAM bandwidth for producer–consumer patterns.",
+    "link": {
+      "title": "MOESI protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/MOESI_protocol"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On an Intel server, you pad per-thread counters to 64 bytes each, yet `perf c2c` still shows contention between neighbouring threads' counters. Why might libraries like crossbeam pad to **128** bytes on x86-64?",
+    "options": [
+      {
+        "text": "x86-64 cache lines are 128 bytes",
+        "explanation": "x86-64 lines are 64 bytes. Apple Silicon (Arm) uses 128-byte lines; that's a different reason."
+      },
+      {
+        "text": "The L2 spatial prefetcher fetches lines in adjacent 128-byte-aligned pairs, so a neighbour's line keeps being pulled in alongside yours",
+        "explanation": "Correct. Since Sandy Bridge, Intel's spatial prefetcher completes 64-byte lines into 128-byte pairs. Two hot lines in the same pair interact, so 128-byte separation avoids it."
+      },
+      {
+        "text": "`alignas(64)` is ignored by compilers on x86",
+        "explanation": "Compilers honour `alignas(64)`; the alignment does take effect."
+      },
+      {
+        "text": "Padding must equal the L1 size per way",
+        "explanation": "Per-way size (4 KiB) has nothing to do with false-sharing granularity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Coherence granularity is still a 64-byte line on x86-64.\n2. But the **adjacent-line (spatial) prefetcher** tries to fetch the other half of each 128-byte aligned pair.\n3. So thread A's line can drag in thread B's neighbouring line, and B's writes then invalidate it: extra coherence traffic.\n4. Padding to 128 puts each counter in its own pair.\n5. crossbeam's `CachePadded` documents exactly this choice. It also uses 128 on aarch64 and powerpc64, and smaller values on some 32-bit targets.",
+    "link": {
+      "title": "CachePadded — crossbeam-utils docs",
+      "url": "https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "16 threads wait on a spinlock implemented as `while (atomic_exchange(&lock, 1)) {}`. Switching to test-and-test-and-set (spin on a plain load, then try the exchange only when the lock looks free) makes the system much faster under contention. Why?",
+    "options": [
+      {
+        "text": "Loads are atomic and exchanges are not",
+        "explanation": "Both are atomic for an aligned word; the difference is about coherence states, not atomicity."
+      },
+      {
+        "text": "Spinning on a load keeps the line in Shared state in every waiter's cache, so waiting generates no traffic; each exchange is a write that needs the line in Modified and invalidates everyone",
+        "explanation": "Correct. With exchange-spinning, 16 cores keep stealing the line in M, flooding the interconnect and slowing the lock holder too. With TTAS, waiters hit locally until the release invalidates them."
+      },
+      {
+        "text": "The exchange instruction disables the cache",
+        "explanation": "Atomic RMWs on x86 work within the cache using the line's exclusive ownership; they don't disable caching."
+      },
+      {
+        "text": "TTAS reduces the critical section length",
+        "explanation": "The critical section is unchanged; what changes is the coherence traffic while waiting."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count coherence traffic while one thread holds the lock:\n\n1. Naive: each waiter's `xchg` is a write → BusRdX/RFO → line moves to that core in M, invalidating all others. 15 waiters do this continuously: the line bounces nonstop.\n2. TTAS: waiters do plain loads → line in S everywhere → hits, no traffic.\n3. On release, the holder's write invalidates all S copies; waiters miss, see 0, and *then* try one exchange.\n4. There's still a burst at each release (\"thundering herd\"); queue locks like MCS fix that by having each waiter spin on its own line.",
+    "link": {
+      "title": "Cache coherence — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_coherence"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "`perf c2c` shows heavy HITM traffic on a line holding a single global `AtomicLong requests` that all 32 request-handling threads increment. Which changes would substantially reduce the contention? Select all that apply.",
+    "options": [
+      {
+        "text": "Pad `requests` to its own 64- or 128-byte line",
+        "explanation": "This is *true* sharing: one variable, many writers. Padding only helps when *different* variables share a line."
+      },
+      {
+        "text": "Use a striped counter such as Java's `LongAdder`, which spreads increments over per-thread padded cells and sums them on read",
+        "explanation": "Correct. Each thread mostly writes its own cell, so the line no longer bounces."
+      },
+      {
+        "text": "Keep a per-thread count and add it to the global counter every 1,000 requests",
+        "explanation": "Correct. Batching cuts writes to the shared line by 1,000×."
+      },
+      {
+        "text": "Switch from `AtomicLong.incrementAndGet()` to a `synchronized` block",
+        "explanation": "A lock adds its own shared, written lock word. The line still bounces, now with lock overhead on top."
+      },
+      {
+        "text": "Replace the counter with a per-thread array of counters, each padded to its own line, summed by the metrics reader",
+        "explanation": "Correct. This is the hand-rolled version of `LongAdder`."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "1. HITM = a load hit a line that another core holds Modified: classic sign of written sharing.\n2. Is it true or false sharing? One variable, many writers → **true sharing**. Padding can't help.\n3. The fix is to stop sharing writes:\n   - striped counters (`LongAdder`) ✔\n   - batching local counts ✔\n   - per-thread padded slots summed on read ✔\n4. A lock just moves the contention to the lock word. ✘",
+    "link": {
+      "title": "perf-c2c(1) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man1/perf-c2c.1.html"
+    }
+  }
+]

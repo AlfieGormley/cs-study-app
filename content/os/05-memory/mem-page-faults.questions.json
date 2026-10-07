@@ -1,0 +1,378 @@
+[
+  {
+    "id": "mem-page-faults-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On x86-64 Linux, an actual user-mode load instruction accesses virtual address 0x10, which has no mapping or VMA. What normally happens?",
+    "options": [
+      {
+        "text": "The kernel allocates a zeroed frame and the read returns 0",
+        "explanation": "Demand-zero allocation only happens for addresses inside an anonymous VMA. Outside every VMA the process has no right to that memory, so there is nothing to allocate."
+      },
+      {
+        "text": "The CPU raises a page fault, the kernel finds no VMA, and the process gets SIGSEGV",
+        "explanation": "Correct for this non-present canonical address. Not every invalid access starts with #PF: non-canonical addresses and other exceptions can follow different paths."
+      },
+      {
+        "text": "The MMU sends SIGSEGV directly without involving the kernel",
+        "explanation": "Hardware cannot send signals; signals are a kernel concept. The MMU raises exception 14 and the kernel's handler decides to deliver SIGSEGV."
+      },
+      {
+        "text": "The kernel reads the page in from swap",
+        "explanation": "Swap-in only happens when the PTE holds a swap entry for a page that was evicted from a valid VMA. An address that was never mapped has nothing in swap."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The load executes; the MMU walks the page tables and finds no present mapping for page 0.\n2. It raises **#PF**, putting `0x10` in CR2 and an error code (user-mode read, not present).\n3. Linux looks up the VMA containing `0x10`. The prompt states that no mapping covers it; low mappings are normally restricted but are not universally impossible.\n4. With no VMA, there is nothing lazy to do: the access is illegal, so the kernel sends **SIGSEGV**.\n\nKeep the split clear: *page fault* is the hardware event; *segmentation fault* is one possible kernel verdict on it.",
+    "link": {
+      "title": "Page fault — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_fault"
+    }
+  },
+  {
+    "id": "mem-page-faults-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A scanner maps and reads an entire ordinary 2 GiB file. On a second fresh mapping, all its pages remain resident and up to date in the page cache, with no concurrent eviction or modification. How do faults that populate the second mapping normally differ from cold-storage faults?",
+    "options": [
+      {
+        "text": "They are mostly major faults, because each run has its own address space",
+        "explanation": "A new address space does mean new faults, but the file's pages are still in the shared page cache from the first run, so no disk I/O is needed."
+      },
+      {
+        "text": "There are no faults at all, because the pages are already in RAM",
+        "explanation": "Being in RAM is not the same as being mapped. The new process's page tables start empty, so it still faults, but each fault just maps an existing page-cache page."
+      },
+      {
+        "text": "They are mostly minor faults, because the file pages are already in the page cache",
+        "explanation": "Correct under the stated resident-cache assumptions. The fault can map existing backing without reading the file data from storage."
+      },
+      {
+        "text": "They are copy-on-write faults",
+        "explanation": "COW faults are associated with private writes; the scanner only reads the file mapping."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A cold file mapping can require storage I/O to obtain its backing. Under the second-run assumptions, the file data is already resident, so faults that populate the new page tables can be minor. Readahead/fault-around can map multiple pages per fault. Ordinary read-based tools such as grep need not generate file-data page faults at all; their storage reads and anonymous buffer faults must be distinguished.",
+    "link": {
+      "title": "Concepts overview — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/mm/concepts.html"
+    }
+  },
+  {
+    "id": "mem-page-faults-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A program `mmap`s 32 MiB of anonymous memory and writes one byte at the start of every 4 KiB page. Transparent huge pages are disabled. About how many minor page faults does the loop cause? Assume 4 KiB base pages, a new successful unpopulated mapping, enough available memory and no locked-memory/prefault flags.",
+    "options": [
+      {
+        "text": "1, when the mmap region is first touched",
+        "explanation": "Linux faults in one page at a time for anonymous memory with 4 KiB pages. Each new page needs its own fault."
+      },
+      {
+        "text": "About 8,192",
+        "explanation": "Correct. 32 MiB / 4 KiB = 33,554,432 / 4,096 = 8,192 pages, and the first write to each takes one demand-zero fault."
+      },
+      {
+        "text": "About 32,768",
+        "explanation": "That divides 32 MiB by 1 KiB. Pages on x86-64 are 4 KiB."
+      },
+      {
+        "text": "0, because `mmap` allocated the frames already",
+        "explanation": "`mmap` only creates a VMA. Frames are allocated lazily on first touch, which is the whole point of demand paging."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `mmap` records a 32 MiB VMA; no PTEs are filled.\n2. Number of pages:\n\n```\n32 MiB / 4 KiB\n= 2^25 / 2^12\n= 2^13 = 8,192\n```\n\n3. Each first write faults; the kernel allocates and zeroes one frame and maps it. That is a **minor** fault, as no I/O is involved.\n4. So roughly **8,192** faults (plus a handful from the program's own startup). With THP enabled, each fault could map 2 MiB, giving about 16.",
+    "link": {
+      "title": "mmap(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/mmap.2.html"
+    }
+  },
+  {
+    "id": "mem-page-faults-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Memory access takes **200 ns**. Servicing a major page fault takes **10 ms**. If one access in **100,000** causes a major fault, what is the effective access time, approximately?",
+    "options": [
+      {
+        "text": "About 200 ns: one in 100,000 is negligible",
+        "explanation": "The probability is small but the cost is 50,000 times larger than a normal access, so the product is not negligible."
+      },
+      {
+        "text": "About 1,200 ns",
+        "explanation": "This uses a rate of 1 in 10,000 (adding 1,000 ns). Recheck the exponent: 1 / 100,000 = 10^-5."
+      },
+      {
+        "text": "About 10 µs",
+        "explanation": "That would require roughly one fault per thousand accesses. The fault cost has to be weighted by its probability."
+      },
+      {
+        "text": "About 300 ns",
+        "explanation": "Correct. 0.99999 × 200 + 0.00001 × 10,000,000 ≈ 200 + 100 = 300 ns, a 50% slowdown."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Convert units: 10 ms = **10,000,000 ns**.\n2. p = 1 / 100,000 = 10^-5.\n3. Apply the formula:\n\n```\nEAT = (1-p)*200 + p*10,000,000\n    = 199.998 + 100\n    ≈ 300 ns\n```\n\n4. A fault rate of 0.001% makes memory **50% slower**. To keep the slowdown below 10% (EAT < 220 ns) you would need p < 20 / 9,999,800 ≈ 2.00004 × 10^-6, approximately fewer than one fault per 500,000 accesses.",
+    "link": {
+      "title": "OSTEP: Beyond Physical Memory: Mechanisms (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-beyondphys.pdf"
+    }
+  },
+  {
+    "id": "mem-page-faults-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these page faults are normally **minor** (resolved without disk I/O)? Select all that apply.",
+    "options": [
+      {
+        "text": "A demand-zero write fault on a new unpopulated anonymous base page",
+        "explanation": "Correct. The kernel allocates and zeroes a frame in RAM. No storage is involved."
+      },
+      {
+        "text": "A child process's first write to a heap page shared with its parent after `fork`",
+        "explanation": "Correct. A COW fault copies 4 KiB from one RAM frame to another. It is a protection fault, not an I/O fault."
+      },
+      {
+        "text": "Touching a swapped-out page whose data must be read from SSD (not resident in swap cache or compressed cache)",
+        "explanation": "This stipulated SSD page-in requires I/O and is a major fault; a resident cached copy would be a different case."
+      },
+      {
+        "text": "Touching a page of an `mmap`ed shared library that another process is already using",
+        "explanation": "Correct. The library's pages are in the page cache because the other process faulted them in, so this process only needs its PTE filled."
+      },
+      {
+        "text": "Touching a page of an `mmap`ed 50 GiB file that nothing has read since boot",
+        "explanation": "Incorrect. The page is not in the page cache and must be read from storage: a major fault."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Ask one question of each fault: **is the data already somewhere in RAM?**\n\n| Fault | Data in RAM? | Kind |\n|---|---|---|\n| New malloc page | Nothing to read; zero a frame | Minor |\n| COW after fork | Yes, the shared frame | Minor |\n| Swapped-out page | No, on swap | Major |\n| Shared lib in use | Yes, page cache | Minor |\n| Uncached file | No, on disk | Major |\n\nFault type alone does not establish a fixed latency.",
+    "link": {
+      "title": "Page fault — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_fault"
+    }
+  },
+  {
+    "id": "mem-page-faults-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A process with **4 GiB** of private, resident heap forks. Afterwards the parent writes to 50 MiB worth of distinct pages and the child writes to a *different* 30 MiB worth of pages. Neither process exits. Roughly how much extra RAM do the two processes use compared with before the fork (ignoring page tables)? Assume ordinary 4 KiB COW backing, no pinned/special mappings, no new allocations or reclaim, and unchanged pages remain shared.",
+    "options": [
+      {
+        "text": "About 4 GiB, because fork copies the address space",
+        "explanation": "Linux does not copy pages at fork. It shares them read-only and copies only on write."
+      },
+      {
+        "text": "About 30 MiB, because only the child pays for copies",
+        "explanation": "COW is symmetric. The parent's PTEs are made read-only too, so the parent's writes also trigger copies."
+      },
+      {
+        "text": "About 80 MiB",
+        "explanation": "Correct. Each written page is copied once by whichever process writes it: 50 MiB + 30 MiB = 80 MiB of new frames. Everything else is still shared."
+      },
+      {
+        "text": "About 160 MiB, because each COW fault copies the page for both processes",
+        "explanation": "A COW fault gives a new copy only to the writer. The other process keeps the original frame."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. At fork, both page tables point at the same 4 GiB of frames, all marked read-only. Extra RAM: about zero (plus page tables).\n2. Parent writes 50 MiB of pages: each write faults, the kernel copies the page for the **parent** and the child keeps the original. +50 MiB.\n3. Child writes a *different* 30 MiB: same again in reverse. +30 MiB.\n4. Total extra ≈ **80 MiB**.\n\nNote the page tables themselves are copied at fork: 4 GiB of 4 KiB pages needs about 8 MiB of PTEs, which is real but small here.",
+    "link": {
+      "title": "Copy-on-write — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Copy-on-write"
+    }
+  },
+  {
+    "id": "mem-page-faults-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program does this, then exits normally:\n\n```c\nint fd = open(\"cfg.bin\", O_RDWR);\nchar *p = mmap(NULL, 4096,\n  PROT_READ | PROT_WRITE,\n  MAP_PRIVATE, fd, 0);\np[0] = 'X';\n```\n\nWhat is the first byte of `cfg.bin` on disk afterwards? Assume standard headers, successful open/mmap, a nonempty file, and no other writer.",
+    "options": [
+      {
+        "text": "Unchanged: the write went to a private copy-on-write copy of the page",
+        "explanation": "Correct. The write faults, the kernel copies the page-cache page into a private anonymous frame, and the write lands there. The copy is discarded at exit."
+      },
+      {
+        "text": "'X', written back when the process exits",
+        "explanation": "That is the behaviour of `MAP_SHARED`. A private mapping never writes back to the file."
+      },
+      {
+        "text": "'X', but only if the program had called `msync`",
+        "explanation": "`msync` flushes shared mappings. A private mapping's modified pages are anonymous copies with no link back to the file."
+      },
+      {
+        "text": "Undefined: the write raises SIGSEGV because the file is mapped private",
+        "explanation": "`PROT_WRITE` with `MAP_PRIVATE` is allowed; the file just never sees the writes. (Even an `O_RDONLY` fd works with `MAP_PRIVATE` and `PROT_WRITE`.)"
+      }
+    ],
+    "answer": 0,
+    "workedExample": "MAP_PRIVATE changes stay private and do not update the file. On this first write the page may still be non-present, so a write fault can load file contents and create private anonymous backing directly; it need not first install a read-only PTE and then take a second protection fault. The modified private page is discarded at exit, leaving the file unchanged.",
+    "link": {
+      "title": "mmap(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/mmap.2.html"
+    }
+  },
+  {
+    "id": "mem-page-faults-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program `mmap`s **1 GiB** of anonymous private memory and then *reads* every byte (it never writes). Roughly what happens to its resident set size (RSS)? Assume the common Linux shared-zero-page path, 4 KiB pages, no THP, no prefault/locking flags and sufficient resources.",
+    "options": [
+      {
+        "text": "It grows to about 1 GiB, since every page has been touched",
+        "explanation": "Touching by reading does not allocate private frames for anonymous memory. Each page is mapped to the shared zero page."
+      },
+      {
+        "text": "The reads cause SIGSEGV because the pages were never initialised",
+        "explanation": "Anonymous memory is defined to read as zero. Reading it is perfectly legal."
+      },
+      {
+        "text": "It grows to about 1 GiB of swap instead of RAM",
+        "explanation": "Nothing is written to swap here. Untouched or zero-page-mapped memory has no data that needs saving."
+      },
+      {
+        "text": "It stays tiny, because read faults map the kernel's shared zero page read-only",
+        "explanation": "Correct. Every page's PTE points at the same zero-filled frame, so almost no real memory is used. A write would later trigger a COW fault and allocate a real frame."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each first read of a page faults (not present).\n2. The VMA is anonymous and the access is a read, so the kernel maps the single global **zero page**, read-only, instead of allocating a frame.\n3. All 262,144 PTEs point at the same frame. RSS accounting does not charge the zero page as the process's own memory, so RSS stays small for data, while roughly 2 MiB of leaf page tables plus upper tables still consume kernel memory for this populated 1 GiB base-page mapping.\n4. A later write to any of those pages faults again (read-only PTE) and gets a private zeroed frame.\n\nThis is why reading a huge freshly allocated array is cheap in RAM but still costs a fault per page.",
+    "link": {
+      "title": "OSTEP: Complete Virtual Memory Systems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-complete.pdf"
+    }
+  },
+  {
+    "id": "mem-page-faults-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a simplified COW model, 10,000 writes each touch a different shared COW unit. Compare 4 KiB units with 2 MiB units, assuming every fault copies the full unit and no split/reuse path. What additional backing is copied? This is arithmetic, not a prediction of current Redis/Linux behavior.",
+    "options": [
+      {
+        "text": "About 39 MiB either way; page size does not change COW cost",
+        "explanation": "COW copies the whole page that was written. With huge pages a 1-byte write copies 2 MiB, not 4 KiB."
+      },
+      {
+        "text": "About 39 MiB with 4 KiB pages; about 19.5 GiB with 2 MiB pages",
+        "explanation": "Correct for the stipulated full-unit-copy model. Real THP behavior can split or reuse backing and need not incur this amount."
+      },
+      {
+        "text": "About 19.5 GiB with 4 KiB pages; about 39 MiB with 2 MiB pages",
+        "explanation": "This reverses the effect. Bigger pages mean more bytes copied per COW fault."
+      },
+      {
+        "text": "Nothing extra in either case, because the child only reads",
+        "explanation": "The child only reads, but the parent writes. Its writes hit read-only shared pages and must be copied so the child still sees the frozen snapshot."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Under the explicit full-unit-copy model, 10,000 × 4 KiB = 40,000 KiB = 39.0625 MiB. For 2 MiB units, 10,000 × 2 MiB = 20,000 MiB = 19.53125 GiB. Linux may split mappings or reuse exclusive backing, so these numbers do not follow merely from THP=always. Redis documents potential THP costs; actual amplification must be measured.",
+    "link": {
+      "title": "Diagnosing latency issues — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/"
+    }
+  },
+  {
+    "id": "mem-page-faults-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A log-analysis service `mmap`s a 1 GiB file read-only and scans it. While it runs, a rotation script truncates the file to 0 bytes. The service then touches a page near the end of its mapping. What does it see?",
+    "options": [
+      {
+        "text": "`read()`-style error EIO returned from the memory access",
+        "explanation": "Memory accesses have no return value. There is nowhere for an error code to go."
+      },
+      {
+        "text": "The old data, because the mapping holds a snapshot of the file",
+        "explanation": "A file mapping is a live view of the page cache, not a snapshot. Truncation removes the pages beyond the new end."
+      },
+      {
+        "text": "Zeros, because pages beyond end of file read as zero",
+        "explanation": "Only the tail of the last *partial* page past EOF reads as zero. Whole pages entirely beyond EOF are not backed by the file at all."
+      },
+      {
+        "text": "SIGBUS, which kills the process unless it is handled",
+        "explanation": "Correct. The fault handler finds the VMA but no file data for that offset, so it delivers SIGBUS. Robust mmap users handle SIGBUS or avoid mapping files others may truncate."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The VMA still covers 1 GiB, so the address passes the VMA check: this is not SIGSEGV.\n2. Truncation removed the page-cache pages and unmapped them, so the PTE is not present.\n3. On the fault, the kernel tries to find the file page at that offset. The offset is now beyond EOF, so there is nothing to map.\n4. The kernel delivers **SIGBUS**. The same happens on a disk read error under a mapping.\n\nThis is one of the main reasons database authors are wary of mmap: errors become signals, not return codes.",
+    "link": {
+      "title": "mmap(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/mmap.2.html"
+    }
+  },
+  {
+    "id": "mem-page-faults-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about swap on Linux are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Without swap, reclaim cannot normally preserve arbitrary live anonymous contents by writing them to a backing file",
+        "explanation": "Correct for contents that must be retained. Explicit discard/free, process exit and special zero/discardable-page cases can release anonymous backing without swap."
+      },
+      {
+        "text": "A clean page-cache page can be reclaimed without writing anything",
+        "explanation": "Correct. Its contents are identical to the file on disk, so the kernel simply drops it and rereads it if needed."
+      },
+      {
+        "text": "When an anonymous page is swapped out, its location in swap is recorded in the not-present PTE",
+        "explanation": "Correct. With the present bit clear the hardware ignores the other bits, so the kernel stores a swap entry (device and slot) there."
+      },
+      {
+        "text": "Setting `vm.swappiness = 0` guarantees no anonymous page is ever swapped",
+        "explanation": "Incorrect. Swappiness only biases reclaim between anonymous and file pages. With it at 0 the kernel strongly prefers dropping page cache but can still swap under severe pressure. Only `swapoff` removes swap."
+      },
+      {
+        "text": "zram always writes its compressed pages to an SSD",
+        "explanation": "False. zram is primarily a compressed RAM block device; optional configured writeback can use a backing device. zswap is a separate compressed cache in front of swap."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Preserving arbitrary live anonymous data during reclaim normally requires swap backing, while freed/discardable pages can be released without it. Swap entries can resolve through resident swap cache, zswap or the device, so not every swap-related fault reads disk. vm.swappiness is a reclaim-cost preference, not an off switch. zram stores compressed data in RAM and can optionally use configured writeback.",
+    "link": {
+      "title": "Documentation for /proc/sys/vm — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html"
+    }
+  },
+  {
+    "id": "mem-page-faults-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You trace a page fault on x86-64. The error code is **0x7** (bits P, W and U set). The faulting address lies in a VMA marked `rw-p` (private, writable heap). The process forked a child a moment ago. What kind of fault is this, and how will Linux resolve it? Assume an ordinary present, read-only 4 KiB COW page with no other protection mechanism or resource failure.",
+    "options": [
+      {
+        "text": "A demand-zero fault on a never-touched page; the kernel allocates a zeroed frame",
+        "explanation": "A never-touched page has no present PTE, so bit P would be 0 (error code 0x6). Here P = 1, meaning the page *is* present."
+      },
+      {
+        "text": "A genuine protection violation; the kernel sends SIGSEGV",
+        "explanation": "It would be, if the VMA forbade writes. But the VMA is `rw-p`, so the read-only PTE is the kernel's own doing, not a real violation."
+      },
+      {
+        "text": "A copy-on-write fault: the PTE was made read-only at fork, so the kernel copies the page (or reuses it if no longer shared) and makes it writable",
+        "explanation": "Correct. P = 1 and W = 1 means a write hit a present but read-only page. The VMA allows writes and is private, which is exactly the COW signature after fork."
+      },
+      {
+        "text": "A major fault; the kernel reads the page from swap",
+        "explanation": "A swapped-out page has a not-present PTE (P = 0). P = 1 tells you the page is in RAM."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Decode 0x7 = binary 111:\n\n```\nbit 0 P = 1  page present\nbit 1 W = 1  write access\nbit 2 U = 1  from user mode\n```\n\n2. So a user-mode write hit a **present, read-only** PTE.\n3. Check the VMA: `rw-p` means writes are allowed and the mapping is private.\n4. A writable VMA with a read-only PTE is the COW pattern. `fork` made the parent's private pages read-only in both processes.\n5. The kernel checks the page's sharing: if still shared, it copies 4 KiB to a new frame; if the child has already exited or copied it, it simply re-enables write. Then it retries the instruction.",
+    "link": {
+      "title": "Page fault — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_fault"
+    }
+  }
+]

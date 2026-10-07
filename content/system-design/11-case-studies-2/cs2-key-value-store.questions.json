@@ -1,0 +1,385 @@
+[
+  {
+    "id": "cs2-key-value-store-q1",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With N = 3 replicas, which (W, R) setting guarantees that every read quorum overlaps every write quorum, while still tolerating one replica being down for both reads and writes?",
+    "options": [
+      {
+        "text": "W = 1, R = 1",
+        "explanation": "Wrong. 1 + 1 = 2, which isn't greater than 3, so a read can hit a replica the write never reached and return stale data."
+      },
+      {
+        "text": "W = 3, R = 1",
+        "explanation": "Overlap holds (3 + 1 = 4 > 3), but any single replica failure blocks *all writes*, because W needs all three. It fails the 'tolerate one down' requirement."
+      },
+      {
+        "text": "W = 2, R = 2",
+        "explanation": "Correct. 2 + 2 = 4 > 3, so quorums overlap in at least one replica. And since each needs only 2 of 3, one replica can be down and both reads and writes still succeed."
+      },
+      {
+        "text": "W = 1, R = 3",
+        "explanation": "Overlap holds (1 + 3 = 4 > 3), but any single replica failure blocks *all reads*, and every read waits for the slowest replica."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "For a fixed home replica set,N=3 and one failed replica, requireR+W>3 andR,W<=2. Only(2,2) satisfies both. This establishes overlap, not linearizability. Configure driver consistency explicitly; defaults vary by driver and version. Sloppy quorums can break the fixed-set assumption.",
+    "link": {
+      "title": "Dynamo: Amazon's highly available key-value store (SOSP 2007)",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your 6-node ring gives each node a single token. Node C fails permanently. What problem do virtual nodes (many tokens per physical node) solve here?",
+    "options": [
+      {
+        "text": "Vnodes can spread failed-node ranges and recovery work across more peers instead of concentrating primary-range ownership on one successor.",
+        "explanation": "Correct. Vnodes turn 'one neighbour takes everything' into 'everyone takes a little'. That balances steady-state load and parallelises recovery."
+      },
+      {
+        "text": "Vnodes let the ring keep serving C's keys without any replicas",
+        "explanation": "Wrong. Vnodes are about *placement*, not redundancy. Availability for C's keys still comes from the other N - 1 replicas."
+      },
+      {
+        "text": "Vnodes eliminate the need for consistent hashing",
+        "explanation": "Wrong. Vnodes *are* a refinement of consistent hashing: more points per node on the same ring."
+      },
+      {
+        "text": "Vnodes make cross-key transactions possible",
+        "explanation": "Wrong. Token placement has nothing to do with transactional guarantees across keys."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "In a simplified balanced single-token primary-ownership ring, removing one of six nodes transfers its 1/6 primary range to one successor, doubling that primary share. Replicated copies and recovery sources complicate actual load. With vnodes, many token successors can belong to the same physical peer: sixteen ranges do not imply sixteen distinct physical successors among five survivors. An ideally balanced redistribution changes each survivor from 1/6 to 1/5, a20% increase, not a guaranteed distribution. The cited Cassandra 5.0 configuration uses 16 tokens.",
+    "link": {
+      "title": "Dynamo architecture (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a Dynamo-style store with vector clocks, a shopping basket has version `[A:2]`. During a partition, client 1 adds 'book' via node A, giving `[A:3]`, and client 2 adds 'pen' via node B, giving `[A:2, B:1]`. After the partition heals, what does a read return?",
+    "options": [
+      {
+        "text": "Only `[A:3]`, because it has the higher counter",
+        "explanation": "Wrong. Neither clock dominates. `[A:3]` has a higher A, but `[A:2, B:1]` has B:1 where the other has B:0. Discarding one would silently lose an update."
+      },
+      {
+        "text": "Only `[A:2, B:1]`, because it was written last",
+        "explanation": "Wrong. Vector clocks don't use wall-clock time. 'Last' is meaningless for concurrent writes, which is precisely why LWW loses data."
+      },
+      {
+        "text": "Both versions as siblings, with a merged context. The application merges them (for example, the union {book, pen}) and writes back with clock `[A:3, B:1]` or later",
+        "explanation": "Correct. Concurrent versions are both returned. The client's merge produces a version that descends from both, and the siblings collapse."
+      },
+      {
+        "text": "An error, because the key is corrupted",
+        "explanation": "Wrong. Concurrent versions are a normal, expected outcome in an always-writeable store. Detecting them is what vector clocks are for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the clocks entry by entry (missing = 0):\n\n| | A | B |\n|---|---|---|\n| v1 | 3 | 0 |\n| v2 | 2 | 1 |\n\n- Is v1 >= v2 in every entry? A: 3 >= 2 yes, B: 0 >= 1 **no**.\n- Is v2 >= v1 in every entry? A: 2 >= 3 **no**.\n\nSo they're **concurrent**, and the store returns both.\n\nThe client merges them (a basket union gives {book, pen}) and does `put(value, context=[A:3, B:1])`. The coordinating node increments its own entry, for example `[A:4, B:1]`, which dominates both siblings, so they're discarded.\n\nThe trade-off Amazon accepted: with union merges, a *removed* item can reappear if the removal was concurrent with another change.",
+    "link": {
+      "title": "Vector clock (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Vector_clock"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Cassandra node is down for 14 days, while a large batch of rows is deleted. `gc_grace_seconds` is the default 10 days, and the node is brought back without running repair first. What is the risk?",
+    "options": [
+      {
+        "text": "Deleted data can 'resurrect'. The other replicas compacted away their tombstones after 10 days, so the returning node's old values look like the newest data, and read repair or repair spreads them back",
+        "explanation": "If deletion tombstones have been safely purged on the other replicas before the stale node returns, old values can reappear. Purge is not automatic exactly at 10 days. Complete repair before grace expires and follow safe replacement/rebuild procedures for an overdue node."
+      },
+      {
+        "text": "None. Hinted handoff will deliver all the deletes",
+        "explanation": "Wrong. Hints are only kept for a limited window (3 hours by default in Cassandra), so after 14 days most of the deletes weren't hinted."
+      },
+      {
+        "text": "The node will refuse to start",
+        "explanation": "Wrong. Cassandra starts normally. That's what makes this failure dangerous: nothing alerts you, and deleted data simply reappears."
+      },
+      {
+        "text": "Reads become slower due to extra tombstones, but data stays correct",
+        "explanation": "Wrong. The tombstones are *gone* on the other replicas, which is the problem. Correctness, not just performance, is at stake."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nday 0   node X down; holds row r=v\nday 1   DELETE r on Y, Z (tombstone t)\nday 11  gc_grace passes; compaction on\n        Y, Z drops tombstone t (and v)\nday 14  X returns, still has r=v\n        read/repair: Y, Z have nothing;\n        X has v -> v is 'newest'\n        -> r reappears everywhere\n```\n\nThe safe practice:\n1. Run `nodetool repair` on every node more often than every gc_grace_seconds (for example, weekly when gc_grace is 10 days).\n2. If a node has been down longer than gc_grace, **don't** rejoin it as-is. Wipe it and bootstrap it as a replacement.",
+    "link": {
+      "title": "Compaction (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/index.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You store IoT sensor readings in Cassandra. Rows are written once, never updated, read mostly for the last 24 hours, and expire after 30 days via TTL. Which compaction strategy fits best?",
+    "options": [
+      {
+        "text": "Size-tiered (STCS)",
+        "explanation": "Not the best fit. STCS mixes old and new data into ever-larger SSTables, so expired rows linger inside big files that only compact rarely. It wastes disk and needs lots of headroom."
+      },
+      {
+        "text": "Leveled (LCS)",
+        "explanation": "Wrong for this workload. LCS is tuned for read-heavy *update* workloads. With write-once data it rewrites the same immutable rows across levels repeatedly, which is high write amplification for no benefit."
+      },
+      {
+        "text": "Time-window (TWCS)",
+        "explanation": "TWCS is a good candidate for mostly immutable, consistently expiring time-series data. Entire SSTables can be dropped only when fully expired and safe under tombstone/overlap rules; file count and read cost are not fixed."
+      },
+      {
+        "text": "No compaction at all",
+        "explanation": "Wrong. Without compaction, SSTable count grows without limit, read amplification explodes and expired data is never removed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "One-day TWCS windows group similarly aged immutable data, which can make whole-file expiry efficient. The active window can contain multiple SSTables; closed-window file counts and query fan-out depend on compaction state, partitions and late data. TTL expiry alone does not imply immediate deletion on day 31: grace and overlap safety checks still apply. Mixed TTLs and late writes can delay reclamation.",
+    "link": {
+      "title": "Compaction (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/index.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about keeping replicas in sync in a Dynamo-style store are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With a sloppy quorum, R + W > N no longer guarantees a read sees the latest write, because the W acknowledgements may have come from stand-in nodes outside the key's home replicas",
+        "explanation": "Correct. That's the trade-off of sloppy quorums. They improve write availability during failures, at the cost of the overlap guarantee until hints are handed off."
+      },
+      {
+        "text": "Merkle trees skip matching subtrees and localize differing key ranges, often reducing comparison traffic substantially.",
+        "explanation": "For an ideal balanced tree with one key per leaf, sparse differences can be localized with roughlyO(k log N) hash comparisons. Cassandra uses range trees: differing leaves can require streaming more data than the changed keys, and building trees scans data."
+      },
+      {
+        "text": "Read repair alone guarantees all replicas eventually converge",
+        "explanation": "Wrong. Read repair only fixes keys that are *read*. Cold keys that are never read can stay divergent for ever, which is why periodic anti-entropy (Merkle) repair is still needed."
+      },
+      {
+        "text": "Hinted handoff covers short outages: a stand-in stores writes for a down replica and delivers them when it returns",
+        "explanation": "Correct. Hints bridge transient failures. They're bounded in time (Cassandra's default hint window is 3 hours), beyond which repair has to take over."
+      },
+      {
+        "text": "Gossip guarantees every node learns of a failure within exactly one second",
+        "explanation": "Wrong. Gossip spreads information probabilistically in O(log N) rounds. Failure detection (for example phi accrual) is a suspicion level, not a deterministic deadline."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A balanced one-key-per-leaf tree over 1M keys has depth about 20, so ten sparse differences suggest order-of-hundreds of hash comparisons, not an exact 200-hash bound. Real repair trees group ranges and can stream unchanged data within differing ranges. Sloppy quorum sets may not overlap: writes acknowledged byA,D can be missed by reads from staleB,C before handoff.",
+    "link": {
+      "title": "Merkle tree (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Merkle_tree"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two services increment a counter in Cassandra with read-modify-write: read `views=100`, then write `views=101`. Both do it at the same moment, and the result is 101, not 102. Why, and what's the right fix?",
+    "options": [
+      {
+        "text": "The network dropped one write. Retry failed writes",
+        "explanation": "Wrong. Both writes succeeded. Last-write-wins kept the one with the higher timestamp, and both wrote the same value, 101. Retrying doesn't change the logic."
+      },
+      {
+        "text": "Clock skew. Sync NTP and the result will be 102",
+        "explanation": "Wrong. Clock skew can make the *wrong* write win, but even with perfect clocks, two writes of 101 give 101. The bug is read-modify-write under LWW, not skew."
+      },
+      {
+        "text": "Raise consistency to ALL for both the read and the write",
+        "explanation": "Wrong. Both clients can still read 100 at ALL before either writes. Stronger consistency on separate reads and writes doesn't make the read-modify-write atomic."
+      },
+      {
+        "text": "Cassandra resolves conflicting writes to a cell by last-write-wins on timestamp, so concurrent read-modify-writes overwrite each other. Use a native counter column (or a commutative design such as appending events), or a lightweight transaction (compare-and-set) if strict sequencing is needed",
+        "explanation": "Correct. LWW loses concurrent updates by design. Counters (increments that merge) or per-event rows that you sum avoid read-modify-write. LWT/Paxos gives compare-and-set at higher latency."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace it:\n\n```\nt0 S1 read views=100\nt0 S2 read views=100\nt1 S1 write 101 (ts=t1)\nt1 S2 write 101 (ts=t1+3us)\nLWW keeps the later ts: 101\n```\n\nFixes, by trade-off:\n\n| Approach | Cost |\n|---|---|\n| counter column (`views = views + 1`) | non-idempotent on retry |\n| one row per view, summed or rolled up | more storage, async totals |\n| LWT `UPDATE ... IF views=100` | several round trips (Paxos) |\n\nThe general lesson: on an LWW store, design data so concurrent writers touch **different cells**, or use operations that commute.",
+    "link": {
+      "title": "Dynamo architecture (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Cassandra node is down for 5 hours during a busy period, with the default `max_hint_window` of 3 hours. It then comes back. What state is its data in, and what should you do?",
+    "options": [
+      {
+        "text": "Fully up to date, because hinted handoff replays everything it missed",
+        "explanation": "Wrong. Coordinators stop storing hints for a node once it has been down longer than the hint window, so writes in the last 2 hours were never hinted."
+      },
+      {
+        "text": "It receives hints for writes from roughly its first 3 hours offline but misses the last 2 hours, so run repair on it",
+        "explanation": "Correct. Hints cover short outages only. Beyond the window, anti-entropy repair (Merkle-tree comparison) is what brings the replica back in sync."
+      },
+      {
+        "text": "It must be wiped and re-bootstrapped, because it was down longer than the hint window",
+        "explanation": "Too drastic. Wiping is the rule when a node has been down longer than `gc_grace_seconds` (10 days by default), because of tombstone resurrection. After 5 hours, repair is enough."
+      },
+      {
+        "text": "Reads at QUORUM will return stale data until it's repaired",
+        "explanation": "Quorum reads overlap completed quorum writes on the same fixed replica set. The prompt does not specify write consistency, so a quorum read is not automatically guaranteed current. Timestamps and partial/concurrent writes matter too."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With hints enabled and the documented 3h window, coordinators stop generating new hints after about 3h of downtime. Some earlier hints may also be unavailable after coordinator failures; hints are best-effort repair help. A5h outage therefore needs repair. Before rejoining a node whose stale data outlived tombstone grace, assess safe rebuild/replacement rather than blindly repairing old data into the cluster.",
+    "link": {
+      "title": "Dynamo architecture (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Cassandra is 'Dynamo-inspired', but it doesn't copy every Dynamo technique. Which statements are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "Amazon DynamoDB uses the same leaderless design as the 2007 Dynamo paper",
+        "explanation": "Wrong. DynamoDB is a different system: each partition is a replication group with a leader chosen by Multi-Paxos."
+      },
+      {
+        "text": "Dynamo resolves concurrent writes with vector clocks and returns siblings for the application to merge",
+        "explanation": "Correct. The shopping basket's union merge is the classic example."
+      },
+      {
+        "text": "In Cassandra, hints don't count towards the consistency level (except at `ANY`), so it doesn't use Dynamo's sloppy quorum",
+        "explanation": "Correct. A `QUORUM` write in Cassandra needs real home replicas. Hints only help a returning node catch up."
+      },
+      {
+        "text": "Cassandra resolves conflicts per cell by last-write-wins on timestamps",
+        "explanation": "Correct. No siblings: the highest timestamp wins, which is simple but can silently lose concurrent writes."
+      },
+      {
+        "text": "Cassandra uses vector clocks on every cell",
+        "explanation": "Wrong. It uses timestamps. Vector clocks are the Dynamo and Riak approach."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Compare the three systems feature by feature:\n\n| Feature | Dynamo | Cassandra | DynamoDB |\n|---|---|---|---|\n| leader | none | none | per partition |\n| conflicts | vector clocks | LWW | leader orders |\n| sloppy quorum | yes | no | n/a |\n| hinted handoff | yes | yes | n/a |\n\nThe practical consequence of Cassandra's choices: a `QUORUM` write can *fail* when two of three replicas are down (Dynamo would have accepted it on stand-ins), and two concurrent writes to one cell keep only the later timestamp.",
+    "link": {
+      "title": "Dynamo: Amazon's highly available key-value store (SOSP 2007)",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to store 200 TB of logical data with RF = 3. Each node has 4 TB of SSD, and you keep about 50% free for compaction and headroom. What's the minimum node count, before allowing for growth or losing a rack?",
+    "options": [
+      {
+        "text": "50 nodes",
+        "explanation": "Wrong. 200 / 4 ignores both replication and headroom."
+      },
+      {
+        "text": "150 nodes",
+        "explanation": "Wrong. 600 TB / 4 TB counts the full disk as usable, leaving no space for compaction, which can temporarily need much more space."
+      },
+      {
+        "text": "300 nodes",
+        "explanation": "Correct. 200 TB x 3 = 600 TB on disk. 50% of 4 TB is 2 TB usable per node. 600 / 2 = 300."
+      },
+      {
+        "text": "100 nodes",
+        "explanation": "Wrong. This forgets the replication factor: 200 / 2 = 100 stores only one copy of each key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "200TB x RF3=600TB. With 2TB usable per 4TB node, capacity-only minimum is 300 nodes before overhead, growth and failure margins. The 50% free-space assumption is chosen for this scenario, not a universal rule. Derive extra capacity from compaction behavior, disk balance and failure-domain size rather than assuming 350–400 nodes always suffice.",
+    "link": {
+      "title": "Compaction (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/index.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a last-write-wins store, coordinator X's clock runs 200 ms fast. A user sets `status=away` through X at real time 0 ms. 100 ms later, the user sets `status=online` through a correctly synced coordinator Y. Coordinators assign the timestamps. What does a later read return?",
+    "options": [
+      {
+        "text": "`online`, because it was written later",
+        "explanation": "Wrong. LWW compares *timestamps*, not real time. The later write carries the smaller timestamp."
+      },
+      {
+        "text": "Both values as siblings",
+        "explanation": "Wrong. LWW stores never keep siblings. That's the vector-clock approach."
+      },
+      {
+        "text": "Whichever replica answers first",
+        "explanation": "Wrong. After repair, every replica keeps the cell with the highest timestamp, so all agree, on the wrong value."
+      },
+      {
+        "text": "`away`. X stamped it 200 ms, and Y stamped `online` 100 ms, so the earlier write wins and the later one is silently lost",
+        "explanation": "Correct. Clock skew larger than the gap between two writes reverses their order under LWW."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The first write receives timestamp 200 while the later write receives 100, so LWW selectsaway once both are reconciled. Clock synchronization reduces risk without proving real-time ordering. Client timestamps help only with a correct monotonic scheme covering relevant writers; wall clocks can move backward and devices differ. Use an appropriate conditional/transactional design when ordering matters.",
+    "link": {
+      "title": "Vector clock (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Vector_clock"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "One key (a viral product's config) receives 200,000 reads a second on a 100-node cluster with RF = 3, and its three replicas are overloaded. Which measures actually relieve them? Select all that apply.",
+    "options": [
+      {
+        "text": "Write copies under sub-keys (`cfg#0` to `cfg#9`) and have readers pick one at random",
+        "explanation": "Subkeys can spread replica placement but may overlap on physical nodes. Update propagation and version selection need an explicit consistency policy; ten copies are not automatically atomically consistent."
+      },
+      {
+        "text": "Add 100 more nodes",
+        "explanation": "Wrong. A key lives on exactly RF nodes however big the cluster is. The new nodes won't take any of this key's traffic."
+      },
+      {
+        "text": "Increase `num_tokens` so the key is spread across more vnodes",
+        "explanation": "Wrong. Vnodes split the *ring* into more ranges, but a single key still hashes to one token and one set of RF replicas."
+      },
+      {
+        "text": "Cache the value in the application (or a cache tier) with a short TTL",
+        "explanation": "Correct. Most reads never reach the store. Even a 1 s TTL turns 200,000 reads a second into a handful per app instance."
+      },
+      {
+        "text": "Switch the table to leveled compaction",
+        "explanation": "Wrong. Compaction affects how many SSTables a read touches, not how many nodes share one key's load. A hot, unchanging key is probably served from memory anyway."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "RF3 limits one key to three replica owners. AtR=1 with balanced routing,200k logical reads/s imply about 67k replica reads/s each; atR=2, about 133k replica contacts/s each before retries. The lesson 23k/node number is an average workload estimate, not a measured capacity ceiling. Coalesced app caching reduces refreshes; subkeys may use up to 30 distinct owners but placement can overlap and updates need consistency handling.",
+    "link": {
+      "title": "Consistent hashing (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  }
+]

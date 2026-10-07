@@ -1,0 +1,368 @@
+[
+  {
+    "id": "rel-th-denormalisation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An `invoice` table stores the customer's shipping address at the time of sale. A reviewer says it is \"denormalised, because the address is already in `customer`\" and wants it removed. What is the right response?",
+    "options": [
+      {
+        "text": "Agree; the invoice should join to `customer` for the address",
+        "explanation": "Then old invoices would show the customer's new address after they move, rewriting history. The two addresses are different facts."
+      },
+      {
+        "text": "Keep it: the address on the invoice is a historical fact about that sale, not a copy of the current address, so storing it is correct normalised design",
+        "explanation": "Correct. `invoice_id → ship_address` is its own FD. It must not follow later changes to the customer, so it is not redundant."
+      },
+      {
+        "text": "Keep it, but add a trigger that updates it when the customer's address changes",
+        "explanation": "That turns a historical record into a cache, which is exactly the bug to avoid: invoices would silently change."
+      },
+      {
+        "text": "Agree, and store the address only in the invoice instead",
+        "explanation": "The customer's current address is a separate fact needed for future orders; it belongs on `customer` too."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask: should this value change when the source changes?\n2. Invoice shipping address: **no**. It records where that order went.\n3. So it depends on the invoice (`invoice_id → ship_address`), not on the customer's current state. It is a different fact, not a duplicate.\n4. A true denormalised copy would be something like `orders.customer_display_name`, meant to track the current name.",
+    "link": {
+      "title": "Denormalization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Denormalization"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A query joining `orders` to `customer` on orders.customer_id = customer.id is slow when fetching orders for a few customers. Assume customer.id is the primary key. A teammate proposes copying `customer.name` onto `orders` to avoid the join. In Postgres, what should you check first?",
+    "options": [
+      {
+        "text": "Whether `orders.customer_id` has an index, since Postgres does not create indexes on foreign-key columns automatically",
+        "explanation": "Correct to investigate. PostgreSQL does not automatically index the referencing column. An index may help this selective lookup or parent deletes; confirm with EXPLAIN rather than assuming it fixes every slow join."
+      },
+      {
+        "text": "Whether `customer.id` has an index",
+        "explanation": "A primary key always gets a unique index in Postgres, so this is already in place."
+      },
+      {
+        "text": "Whether the join should be rewritten as a subquery",
+        "explanation": "An equivalent subquery usually gets the same plan. The access path, not the syntax, is the likely issue."
+      },
+      {
+        "text": "Nothing; joins are always slow, so denormalising is the standard fix",
+        "explanation": "Joins on indexed keys are cheap. Denormalising should follow measurement, not precede it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Postgres creates an index for `PRIMARY KEY` and `UNIQUE`, but **not** for the referencing side of `REFERENCES`.\n2. Check with `EXPLAIN ANALYZE`: a sequential scan on `orders` for each customer is the giveaway.\n3. Fix: `CREATE INDEX ON orders (customer_id);`\n4. Only if it is still too slow after indexing and query fixes should you consider a copied column, with its update cost.",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You create `CREATE MATERIALIZED VIEW daily_sales AS SELECT ...` in Postgres at 09:00. New orders arrive all morning. What does `SELECT * FROM daily_sales` show at 11:00?",
+    "options": [
+      {
+        "text": "An error, because the view is stale",
+        "explanation": "Stale data is returned without warning; Postgres does not track staleness for you."
+      },
+      {
+        "text": "Live results, because a view always re-runs its query",
+        "explanation": "That describes an ordinary view. A *materialised* view stores the result instead of re-running the query."
+      },
+      {
+        "text": "Results updated incrementally after each new order",
+        "explanation": "Some databases offer this (Oracle fast refresh, SQL Server indexed views), but core Postgres does not."
+      },
+      {
+        "text": "The results as of 09:00, because a materialised view stores its result and changes only when you run `REFRESH MATERIALIZED VIEW`",
+        "explanation": "Correct. It is a snapshot. Core Postgres never refreshes it automatically or incrementally."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `CREATE MATERIALIZED VIEW` runs the query once and stores the rows.\n2. Later inserts into the base tables do not touch it.\n3. `REFRESH MATERIALIZED VIEW daily_sales` re-runs the entire query and replaces the contents.\n4. So at 11:00 you see the 09:00 data. Schedule refreshes (for example with `pg_cron`) at whatever staleness the report can tolerate.",
+    "link": {
+      "title": "Materialized views — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/rules-materializedviews.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run `REFRESH MATERIALIZED VIEW CONCURRENTLY daily_sales;` and Postgres rejects it. The view has an index on `(day)` only, and several products share each day. What is the fix?",
+    "options": [
+      {
+        "text": "Drop `CONCURRENTLY`; it is not supported for views with aggregates",
+        "explanation": "`CONCURRENTLY` works with aggregates. Dropping it would block readers during the refresh, which is what you wanted to avoid."
+      },
+      {
+        "text": "Create a unique index on the view, on plain columns that identify every row, such as `(day, product_id)`",
+        "explanation": "Correct. Concurrent refresh needs a `UNIQUE` index using only column names, with no `WHERE` clause, so it can match old and new rows and apply the differences."
+      },
+      {
+        "text": "Make the index on `(day)` unique",
+        "explanation": "Several products share a day, so `(day)` is not unique; creating that index would fail."
+      },
+      {
+        "text": "Add a partial unique index `WHERE day > now() - interval '30 days'`",
+        "explanation": "Partial and expression indexes do not qualify. The index must cover all rows."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Concurrent refresh builds the new result, then diffs it against the old one, inserting, updating and deleting rows while readers continue.\n2. To match rows it needs a key: at least one `UNIQUE` index on plain column names, with no `WHERE` clause.\n3. The view's natural key is (day, product_id):\n\n```sql\nCREATE UNIQUE INDEX\n  ON daily_sales (day, product_id);\n```\n\n4. Now `REFRESH ... CONCURRENTLY` succeeds. It allows SELECTs to continue. Relative speed depends on how much changed; also ensure the materialized view has already been populated.",
+    "link": {
+      "title": "REFRESH MATERIALIZED VIEW — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A trigger increments `post.comment_count` on each comment insert. When a post goes viral, comment inserts on that post slow dramatically, while inserts on other posts are fine. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The `comment` table's index is fragmented",
+        "explanation": "Index fragmentation would slow inserts on every post, not just one."
+      },
+      {
+        "text": "The trigger runs `COUNT(*)` on every insert",
+        "explanation": "The trigger shown in the lesson increments; it does not count. The slowdown is specific to one post's row."
+      },
+      {
+        "text": "Every insert updates the same `post` row, and each transaction holds that row's lock until commit, so the inserts queue behind each other",
+        "explanation": "Correct. A hot counter row serialises its writers. Shard the counter across N rows and sum on read, or buffer increments and apply them in batches."
+      },
+      {
+        "text": "Postgres limits each table to one trigger execution at a time",
+        "explanation": "Triggers run in each transaction concurrently. The bottleneck is the row lock, not the trigger mechanism."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `UPDATE post SET comment_count = comment_count + 1 WHERE id = 42` takes a row-level lock on post 42.\n2. The lock is held until the inserting transaction commits.\n3. Concurrent comment inserts on post 42 must wait for each other: throughput on that post drops to one transaction at a time.\n4. Sharded counter:\n\n```\npost_counter(post_id, shard, n)\nwrite: shard = random 0..15\nread:  SUM(n) WHERE post_id = 42\n```\n\n16 shards allow roughly 16 concurrent incrementers.",
+    "link": {
+      "title": "CREATE TRIGGER — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-createtrigger.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a chat app, `message` rows copy the sender's `display_name`. A user with 2,000,000 messages changes their display name, and the app updates all copies in one transaction. Which problem is most likely?",
+    "options": [
+      {
+        "text": "None; Postgres updates 2 million rows as cheaply as one",
+        "explanation": "Each updated row writes a new row version, index entries and WAL. Two million of them is a large, slow write."
+      },
+      {
+        "text": "The new name will be visible in some messages before others",
+        "explanation": "Inside one transaction the change is atomic; other sessions see all of it or none of it at commit."
+      },
+      {
+        "text": "The transaction will violate a foreign key",
+        "explanation": "Copying a name does not involve a foreign key; nothing references `display_name`."
+      },
+      {
+        "text": "A very long transaction that writes millions of row versions and a lot of WAL, holds locks on all those rows, causes replica lag, and leaves dead tuples for vacuum",
+        "explanation": "Correct. Fan-out on update is the price of copying a frequently changed value widely. Better: store `sender_id` and join, or treat old messages as historical snapshots that keep the old name."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rows touched: 2,000,000 messages, each a new row version in Postgres's MVCC.\n2. Each also writes WAL and, unless the update qualifies as a HOT update, new index entries.\n3. Locks on all 2 million rows are held until commit; concurrent edits to those messages block.\n4. Streaming replicas must replay all that WAL, so they lag.\n5. Lesson: denormalise values that are read a lot **and change rarely**. Display names change; `sender_id` does not, so join on it, or cache names outside the database.",
+    "link": {
+      "title": "Denormalization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Denormalization"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Why do data warehouses commonly use a star schema with denormalised dimension tables? Select all that apply.",
+    "options": [
+      {
+        "text": "Read-heavy analytical queries benefit from fewer joins, while controlled loading pipelines can maintain repeated dimension attributes",
+        "explanation": "Correct. A deliberate loading and reconciliation process manages the redundant dimension data; batch loading by itself does not guarantee consistency."
+      },
+      {
+        "text": "Queries join one large fact table to a few small dimensions, which is simple for analysts and efficient for columnar engines",
+        "explanation": "Correct. A flat dimension avoids chains of joins (product → category → department) on every query."
+      },
+      {
+        "text": "Star schemas are in BCNF, so they have no redundancy",
+        "explanation": "Dimension tables usually contain transitive dependencies (category → department), so they are not in 3NF, let alone BCNF. That is the deliberate trade."
+      },
+      {
+        "text": "Fact tables must not have foreign keys",
+        "explanation": "Fact tables are full of foreign keys to dimensions; that is what connects the star."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Compare a dimension in each style:\n\n```\nstar:\n dim_product(id, name,\n   category, department)\n\nsnowflake:\n dim_product(id, name, cat_id)\n dim_category(id, name, dept_id)\n dim_department(id, name)\n```\n\nThe star repeats \"Hardware\" for every product in that department. In a batch-loaded, read-heavy warehouse that redundancy is cheap, while saving two joins per query pays off on every report.",
+    "link": {
+      "title": "Star schema — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Star_schema"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An e-commerce site keeps a search index (Elasticsearch) of product data held in Postgres. Product writes must stay fast, and the search results may lag by a few seconds. Which way of keeping the copy in sync fits best?",
+    "options": [
+      {
+        "text": "Update Elasticsearch synchronously inside the same request, before committing the Postgres transaction",
+        "explanation": "This couples write latency to the search cluster, and if the commit fails after the index call, the two disagree anyway. It is not atomic across systems."
+      },
+      {
+        "text": "A nightly batch rebuild",
+        "explanation": "Seconds of lag are acceptable; a day is not."
+      },
+      {
+        "text": "Change data capture or a transactional outbox that streams committed changes to an indexer",
+        "explanation": "Correct. CDC or an outbox decouples remote indexing from the transaction. Meeting a seconds-level lag target still requires capacity, monitoring, retained events, retries, ordering and idempotent consumers; it is not an automatic latency or no-loss guarantee."
+      },
+      {
+        "text": "A Postgres trigger that calls Elasticsearch over HTTP",
+        "explanation": "A trigger making network calls runs inside the transaction: it slows every write, can fail it, and still cannot undo the external call on rollback."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Match the mechanism to the requirements:\n\n| Need | Implication |\n|---|---|\n| fast writes | no sync remote call |\n| lag of seconds OK | async is fine |\n| no lost updates | read committed log |\n\n1. CDC (for example Debezium reading Postgres's logical replication stream) or an outbox table written in the same transaction captures every committed change.\n2. A consumer applies them to Elasticsearch, retrying on failure.\n3. Add a periodic reconciliation to catch any drift.",
+    "link": {
+      "title": "Denormalization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Denormalization"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`post.comment_count` is maintained by an `AFTER INSERT` trigger only. Moderators delete spam comments directly in the database. Six months later, which symptom do you expect, and how do you find affected posts?",
+    "options": [
+      {
+        "text": "Counts are too low; find them with `WHERE comment_count < 0`",
+        "explanation": "Deletes do not decrement anything, so counts only ever go up. They will be too high, never negative."
+      },
+      {
+        "text": "Counts are too high; compare the counter with the real count, for example `WHERE p.comment_count <> (SELECT COUNT(*) FROM comment c WHERE c.post_id = p.id)`",
+        "explanation": "Correct. Every deleted comment leaves the counter one too high. A reconciliation query comparing the copy with its source finds the drift; then add an `AFTER DELETE` trigger and backfill."
+      },
+      {
+        "text": "Counts are correct, because Postgres runs `AFTER INSERT` triggers in reverse on delete",
+        "explanation": "There is no such reversal. Each event (`INSERT`, `UPDATE`, `DELETE`) needs its own trigger."
+      },
+      {
+        "text": "The deletes fail, because the trigger depends on the comments",
+        "explanation": "An insert trigger does not stop deletes. The deletes succeed and the counter silently drifts."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Inserts: +1. Deletes: nothing. So count = inserts ≥ real count.\n2. Reconcile:\n\n```sql\nSELECT p.id, p.comment_count,\n  (SELECT COUNT(*) FROM comment c\n   WHERE c.post_id = p.id) AS real\nFROM post p\nWHERE p.comment_count <> (\n  SELECT COUNT(*) FROM comment c\n  WHERE c.post_id = p.id);\n```\n\n3. Fix the cause (an `AFTER DELETE` trigger, and handle `UPDATE` of `post_id`), then backfill with an `UPDATE` from the real counts.\n4. Keep the reconciliation as a scheduled check, because manual fixes and restores cause drift too.",
+    "link": {
+      "title": "CREATE TRIGGER — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-createtrigger.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these are good candidates for denormalisation? Select all that apply.",
+    "options": [
+      {
+        "text": "A product page showing `average_rating`, read 5,000 times a second, with about 2 new reviews a second",
+        "explanation": "Correct. Reads outnumber writes by thousands to one, the value changes slowly, and slight staleness is harmless."
+      },
+      {
+        "text": "A bank account balance copied onto every transaction row for display",
+        "explanation": "Balances change constantly and a stale or drifted balance causes real harm. Compute it, or keep one authoritative balance row updated transactionally."
+      },
+      {
+        "text": "A monthly revenue report that scans 400 million order lines and is viewed each morning",
+        "explanation": "Correct. A summary table or materialised view refreshed overnight turns a huge scan into a small read, and next-morning freshness is all that is needed."
+      },
+      {
+        "text": "A user's current email address copied into every row of an audit log",
+        "explanation": "The email changes, and the copies would either need mass updates or go stale. Audit logs should store the user id plus whatever was true at the time, as a snapshot."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Score each by read/write ratio, how often the source changes, and the cost of staleness:\n\n| Case | Reads ≫ writes | Changes rarely | Stale OK |\n|---|---|---|---|\n| rating | yes | yes | yes |\n| balance | - | no | no |\n| report | yes | batch | yes |\n| email | - | no | no |\n\nDenormalise where all three line up.",
+    "link": {
+      "title": "Denormalization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Denormalization"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which of these can be implemented as a Postgres generated column on the `line(order_id, qty, price_paid, ...)` table?",
+    "options": [
+      {
+        "text": "`age_days = current_date - order_date`",
+        "explanation": "The expression must be immutable. `current_date` changes daily, so it is rejected (and a stored value would be wrong tomorrow anyway)."
+      },
+      {
+        "text": "`order_total = SUM(qty * price_paid)` over all lines of the same order",
+        "explanation": "Generated columns cannot use aggregates or look at other rows. Use a trigger-maintained column, or compute it in a view."
+      },
+      {
+        "text": "`amount = qty * price_paid`",
+        "explanation": "Correct. It uses only columns of the same row and an immutable expression, which is exactly what generated columns support."
+      },
+      {
+        "text": "`customer_name` looked up from the `customer` table",
+        "explanation": "Generated columns cannot query other tables. That is a copied column, which needs a trigger or application logic."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Rules for a generated column's expression:\n\n1. It can reference only columns **of the same row**.\n2. It must be **immutable** (same inputs, same output, forever).\n3. No subqueries, aggregates or other tables.\n\nSo only `qty * price_paid` qualifies:\n\n```sql\nALTER TABLE line ADD COLUMN amount\n  NUMERIC GENERATED ALWAYS AS\n  (qty * price_paid) STORED;\n```\n\nSame-row derived values are the safest denormalisation: no fan-out and no drift.",
+    "link": {
+      "title": "Generated columns — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-generated-columns.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The checkout page reads stock levels from a materialised view refreshed every 15 minutes, to avoid summing a large movements table. Customers sometimes buy items that are already out of stock. What is the best fix?",
+    "options": [
+      {
+        "text": "Refresh the view every minute",
+        "explanation": "This narrows the window but never closes it, and refreshing a large view every minute may be expensive. Two customers can still buy the last item between refreshes."
+      },
+      {
+        "text": "Keep a stock row per product that is decremented in the same transaction as the order, with a `CHECK (on_hand >= 0)` constraint",
+        "explanation": "Correct when on_hand is NOT NULL, every stock mutation follows this transaction protocol, and the application requires exactly one stock row to be updated before committing the order. The atomic decrement and CHECK prevent negative stock; a missing stock row must also fail the order."
+      },
+      {
+        "text": "Use `REFRESH ... CONCURRENTLY` so reads are not blocked",
+        "explanation": "Concurrency of the refresh is not the problem; staleness is. The data is still up to 15 minutes old."
+      },
+      {
+        "text": "Cache the view in Redis for faster reads",
+        "explanation": "That adds a second layer of staleness without fixing the first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The requirement is **no oversell**: a correctness rule, not a reporting need.\n2. A periodically refreshed copy is always potentially stale, so it can never enforce that rule.\n3. Require on_hand NOT NULL, a unique product_id, and maintain the value in the same transaction as the order:\n\n```sql\nUPDATE stock\n   SET on_hand = on_hand - 1\n WHERE product_id = 7;\n-- CHECK (on_hand >= 0) fails\n-- if none left: roll back order\n```\n\n4. Require exactly one updated row; zero affected rows means missing stock and must roll back the order. All inventory writes must preserve this protocol.\n5. Keep the materialised view for reports, where 15 minutes of staleness is fine.",
+    "link": {
+      "title": "Materialized views — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/rules-materializedviews.html"
+    }
+  }
+]

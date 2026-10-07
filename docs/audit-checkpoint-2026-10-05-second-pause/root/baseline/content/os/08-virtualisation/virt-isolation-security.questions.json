@@ -1,0 +1,169 @@
+[
+  {
+    "id": "virt-isolation-security-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can a bug in the Linux kernel let a process escape a standard (runc) container, when a bug in a guest kernel usually cannot escape a VM?",
+    "options": [
+      { "text": "Containers don't use namespaces, so they see the host directly", "explanation": "Containers do use namespaces. The issue is not visibility but that the namespaced process still runs on the host's kernel." },
+      { "text": "All containers on a host share the host kernel, so exploiting it compromises everything; a VM's guest kernel sits behind hardware virtualisation and a separate host kernel", "explanation": "Correct. The shared kernel is the container's security boundary, while a VM adds a second kernel plus VT-x/EPT between the attacker and the host." },
+      { "text": "Containers run as root on the host, VMs never do", "explanation": "Rootless containers and user namespaces exist, and VMMs can run as root. The difference is the number of kernels in the way, not the UID alone." },
+      { "text": "VM guest kernels are written in a memory-safe language", "explanation": "Guest kernels are usually ordinary Linux, written in C. What protects the host is the extra layer, not the language." }
+    ],
+    "answer": 1,
+    "workedExample": "1. A container is a host process with namespaces, cgroups and filters. Its syscalls go straight to the host kernel.\n2. If an allowed syscall path has a bug (for example Dirty Pipe), exploiting it gives the attacker control of *the* kernel, which also runs every other container.\n3. In a VM, the guest's syscalls go to the guest kernel. Exploiting that only gives control of the guest.\n4. To reach the host, the attacker must also break the hypervisor boundary (VM exits, virtio devices, EPT).\n5. So VMs have two boundaries where a container has one.",
+    "link": { "title": "gVisor security model — gVisor docs", "url": "https://gvisor.dev/docs/architecture_guide/security/" }
+  },
+  {
+    "id": "virt-isolation-security-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A containerised web server must listen on port 443 and needs no other privileges. With `--cap-drop=ALL`, which single capability should you add back?",
+    "options": [
+      { "text": "`CAP_SYS_ADMIN`", "explanation": "That grants mounts, namespaces and much more, earning its nickname \"the new root\". It is far too broad to bind a port." },
+      { "text": "`CAP_NET_ADMIN`", "explanation": "NET_ADMIN configures interfaces, routes and firewalls. Binding a low port does not need it." },
+      { "text": "`CAP_NET_BIND_SERVICE`", "explanation": "Correct. This capability exists specifically to allow binding ports below 1024." },
+      { "text": "`CAP_NET_RAW`", "explanation": "NET_RAW allows raw and packet sockets (used by ping and packet sniffers), not privileged TCP ports." }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ports below 1024 are privileged: binding one needs a capability.\n2. The specific capability is `CAP_NET_BIND_SERVICE`.\n3. So run with `--cap-drop=ALL --cap-add=NET_BIND_SERVICE`.\n4. An alternative is to listen on 8443 and map host port 443 to it, which needs no capability inside the container.",
+    "link": { "title": "capabilities(7) — Linux manual page", "url": "https://man7.org/linux/man-pages/man7/capabilities.7.html" }
+  },
+  {
+    "id": "virt-isolation-security-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does a seccomp-bpf filter decide?",
+    "options": [
+      { "text": "Which files a process may open, by path", "explanation": "Filters see only raw register values and cannot follow the pointer to a path string. Path policy is an LSM's job." },
+      { "text": "How much CPU and memory the process may use", "explanation": "That is cgroups. seccomp does not account for resources." },
+      { "text": "Which UIDs inside the container map to which host UIDs", "explanation": "That is user namespace ID mapping." },
+      { "text": "Whether each system call (by number, architecture and raw argument values) is allowed, fails with an errno, or kills the process", "explanation": "Correct. The kernel runs the BPF program on every syscall entry and acts on its return value." }
+    ],
+    "answer": 3,
+    "workedExample": "1. seccomp-bpf installs a classic BPF program in the kernel.\n2. On each syscall it receives `struct seccomp_data`: syscall number, architecture, instruction pointer and six argument registers.\n3. It returns an action such as ALLOW, ERRNO, KILL_PROCESS, TRAP, USER_NOTIF or LOG.\n4. It cannot dereference pointers, so it judges numbers, not path strings.",
+    "link": { "title": "Seccomp BPF — Linux kernel documentation", "url": "https://docs.kernel.org/userspace-api/seccomp_filter.html" }
+  },
+  {
+    "id": "virt-isolation-security-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Inside a container, `grep CapEff /proc/self/status` prints:\n\n```\nCapEff: 00000000a82425fb\n```\n\nDocker's default is `a80425fb`. Capability 21 is `CAP_SYS_ADMIN`. What has changed?",
+    "options": [
+      { "text": "Nothing: the masks are equal once you ignore the leading zeros", "explanation": "The leading zeros are padding, but the low 32 bits themselves differ: 0xa82425fb vs 0xa80425fb." },
+      { "text": "The container has gained `CAP_SYS_ADMIN` (bit 21, value 0x200000)", "explanation": "Correct. 0xa82425fb − 0xa80425fb = 0x200000 = 2^21, which is bit 21." },
+      { "text": "The container has lost `CAP_NET_RAW`", "explanation": "Losing a capability would clear a bit and make the mask smaller. This mask is larger." },
+      { "text": "The container is running with `--privileged`", "explanation": "Privileged mode grants all capabilities (a mask like `000001ffffffffff`), not just one extra bit." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Subtract: 0xa82425fb − 0xa80425fb = 0x00200000.\n2. 0x200000 = 2,097,152 = 2^21.\n3. So exactly one bit, bit 21, has been added.\n4. Capability 21 is `CAP_SYS_ADMIN`, so someone ran with `--cap-add=SYS_ADMIN`.\n5. That is a red flag: SYS_ADMIN allows mounts and many other powerful operations.",
+    "link": { "title": "capabilities(7) — Linux manual page", "url": "https://man7.org/linux/man-pages/man7/capabilities.7.html" }
+  },
+  {
+    "id": "virt-isolation-security-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team wants a seccomp rule meaning \"allow `openat()` only for paths under `/app/data`\". Why won't a seccomp-bpf filter do this reliably?",
+    "options": [
+      { "text": "seccomp filters can only kill processes, not allow selectively", "explanation": "Filters can return ALLOW, ERRNO, TRAP, LOG and more, and can test argument values. The limitation is elsewhere." },
+      { "text": "`openat` cannot be filtered because it is too frequent", "explanation": "Any syscall number can be filtered, and Docker's profile already handles common ones." },
+      { "text": "The path argument is a pointer into user memory: BPF filters see only the pointer value, and even a checked copy could be changed by another thread before the kernel uses it (TOCTOU)", "explanation": "Correct. Path-based rules belong in an LSM (AppArmor, SELinux) or a USER_NOTIF supervisor that handles the call carefully." },
+      { "text": "seccomp only works for 32-bit processes", "explanation": "seccomp works on all architectures. You must check the arch field precisely because several syscall ABIs exist." }
+    ],
+    "answer": 2,
+    "workedExample": "1. `openat(dirfd, pathname, flags)`: `pathname` is a user-space address.\n2. The filter sees `args[1]`, a 64-bit number such as `0x7ffd...`. Classic BPF cannot load memory at that address.\n3. Even if a supervisor read the string, a second thread could rewrite it between the check and the kernel's own copy: a time-of-check to time-of-use race.\n4. So use AppArmor/SELinux rules on paths and labels, which the kernel evaluates on the resolved object.",
+    "link": { "title": "Seccomp BPF — Linux kernel documentation", "url": "https://docs.kernel.org/userspace-api/seccomp_filter.html" }
+  },
+  {
+    "id": "virt-isolation-security-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A container runs with a user namespace mapping container UIDs 0–65535 to host UIDs 100000–165535. An attacker escapes the mount namespace and tries to read the host's `/etc/shadow` (owner root, mode 0640). What happens?",
+    "options": [
+      { "text": "It succeeds: the process is root inside the container, so it has full capabilities everywhere", "explanation": "Its capabilities apply only to resources owned by its user namespace. The host's files belong to the initial namespace." },
+      { "text": "Access is denied: to the host kernel the process is UID 100000, an ordinary user with no capabilities over the host's files", "explanation": "Correct. This is why user namespaces (rootless containers) make escapes far less damaging." },
+      { "text": "It succeeds only if seccomp is disabled", "explanation": "seccomp is a separate layer. Even with no filter, the file permission check uses the host UID 100000." },
+      { "text": "The kernel panics because the UID is out of range", "explanation": "UIDs up to 2^32 − 2 are valid; mapped ranges are routine." }
+    ],
+    "answer": 1,
+    "workedExample": "1. Container UID 0 maps to host UID 100000.\n2. The process's capabilities are scoped to its own user namespace.\n3. `/etc/shadow` is owned by host UID 0, in the initial user namespace, with mode 0640 (group shadow).\n4. To the host kernel the caller is UID 100000, neither owner nor group member and without `CAP_DAC_OVERRIDE` in the initial namespace.\n5. Result: `EACCES`.",
+    "link": { "title": "User namespaces — Kubernetes docs", "url": "https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/" }
+  },
+  {
+    "id": "virt-isolation-security-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these does `docker run --privileged` do? Select all that apply.",
+    "options": [
+      { "text": "Grants all capabilities, including `CAP_SYS_ADMIN`", "explanation": "Correct. Privileged mode gives the container every capability." },
+      { "text": "Disables the default seccomp profile", "explanation": "Correct. Privileged containers run seccomp-unconfined." },
+      { "text": "Disables the AppArmor/SELinux confinement and exposes host devices under `/dev`", "explanation": "Correct. That is how a privileged container can mount the host's disk." },
+      { "text": "Runs the container in a separate microVM for safety", "explanation": "No. It does the opposite, removing protections; the container still shares the host kernel." },
+      { "text": "Shares the host's PID namespace", "explanation": "That is `--pid=host`, a separate flag. `--privileged` alone keeps the container's own namespaces." }
+    ],
+    "answer": [0, 1, 2],
+    "workedExample": "1. `--privileged` turns off the hardening layers: capabilities, seccomp, LSM and the device cgroup.\n2. With all of `/dev` and `CAP_SYS_ADMIN`, `mount /dev/sda1 /mnt` gives the host's root file system.\n3. Namespaces such as PID and network are not shared unless you also pass `--pid=host` or `--net=host`.\n4. Nothing about it adds a VM boundary.\n5. Treat it as root on the host.",
+    "link": { "title": "Running containers — Docker docs", "url": "https://docs.docker.com/engine/containers/run/" }
+  },
+  {
+    "id": "virt-isolation-security-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kubernetes cluster runs pods with no `seccompProfile` set and the kubelet's `seccompDefault` left off. A new kernel bug is exploitable only through `unshare(CLONE_NEWUSER)` followed by a file-system-context syscall. Compared with the same image under plain `docker run`, the Kubernetes pods are:",
+    "options": [
+      { "text": "Equally protected, since both use runc", "explanation": "The runtime is the same, but the seccomp profile is not. Without RuntimeDefault, Kubernetes runs pods unconfined." },
+      { "text": "Better protected, because Kubernetes always applies stricter profiles", "explanation": "Historically Kubernetes defaulted to *Unconfined*, which is less strict than Docker's default." },
+      { "text": "Protected, because capabilities alone block `unshare`", "explanation": "Creating a user namespace is allowed for unprivileged users on many distros and then yields capabilities inside it. That is how CVE-2022-0185 worked." },
+      { "text": "More exposed: Docker's default profile blocks `unshare` without `CAP_SYS_ADMIN`, but these pods run seccomp-unconfined", "explanation": "Correct. This is exactly why CVE-2022-0185 was blocked in default Docker but not in default Kubernetes. Set RuntimeDefault." }
+    ],
+    "answer": 3,
+    "workedExample": "1. Docker applies its default seccomp profile, which blocks `unshare` (namespace creation) unless the container has `CAP_SYS_ADMIN`.\n2. Kubernetes uses the pod's `seccompProfile`; if unset and `seccompDefault` is off, the container is Unconfined.\n3. Unconfined, the attacker calls `unshare(CLONE_NEWUSER)`, becomes root with full capabilities in a new user namespace, and reaches the buggy code.\n4. Fix: `securityContext.seccompProfile.type: RuntimeDefault` on every pod, or turn on `seccompDefault`.",
+    "link": { "title": "Restrict a container's syscalls with seccomp — Kubernetes docs", "url": "https://kubernetes.io/docs/tutorials/security/seccomp/" }
+  },
+  {
+    "id": "virt-isolation-security-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A seccomp filter written for x86-64 denies syscall number 59 (`execve`) but never checks the `arch` field. How might a process bypass it?",
+    "options": [
+      { "text": "By calling `execve` through the 32-bit `int 0x80` ABI, where its number is 11, so the rule for 59 doesn't match", "explanation": "Correct. Syscall numbers are per ABI. Filters must check `arch` first and kill or deny unexpected architectures." },
+      { "text": "By renaming the binary it executes", "explanation": "Filters see syscall numbers, not file names. Renaming does nothing to the number." },
+      { "text": "By calling `execve` from a second thread", "explanation": "Filters are inherited by every thread created after installation (and can be synced across threads with TSYNC). A new thread is still filtered." },
+      { "text": "It cannot: syscall numbers are the same on every ABI", "explanation": "They are not. On i386, `execve` is 11 and number 59 is a different call." }
+    ],
+    "answer": 0,
+    "workedExample": "1. An x86-64 kernel normally also accepts i386 syscalls via `int 0x80` (and x32 calls if enabled).\n2. Each ABI has its own table: `execve` is 59 on x86-64 but 11 on i386.\n3. The filter receives `seccomp_data.arch` (`AUDIT_ARCH_X86_64` or `AUDIT_ARCH_I386`), but this one ignores it.\n4. A process making the i386 `execve` presents number 11, which doesn't match the rule for 59, so it is allowed.\n5. Fix: the filter's first instructions compare `arch` and reject anything unexpected. libseccomp does this for you.",
+    "link": { "title": "Seccomp BPF — Linux kernel documentation", "url": "https://docs.kernel.org/userspace-api/seccomp_filter.html" }
+  },
+  {
+    "id": "virt-isolation-security-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run untrusted customer code. Workload A is a CPU-bound numeric job; workload B is a small-file build tool making millions of `stat`/`open`/`read` calls. Under gVisor (`runsc`), which is most likely?",
+    "options": [
+      { "text": "Both slow down by about the same amount, since gVisor emulates the CPU", "explanation": "gVisor does not emulate instructions: application code runs natively on the CPU. Only syscalls are intercepted." },
+      { "text": "A runs near native speed; B slows noticeably, because every syscall is handled by the Sentry in user space instead of the native kernel path", "explanation": "Correct. gVisor's overhead is per syscall and per I/O operation, so syscall-heavy workloads pay most." },
+      { "text": "B speeds up because the Sentry caches files", "explanation": "The Sentry has its own VFS, but routing file operations through it (and a Gofer) usually adds cost; it doesn't beat the host kernel's dentry cache." },
+      { "text": "A slows down most, because gVisor limits CPU to one core", "explanation": "gVisor supports multi-threaded workloads on many cores; it has no such limit." }
+    ],
+    "answer": 1,
+    "workedExample": "1. In gVisor, application instructions run natively; only syscalls trap to the Sentry.\n2. Workload A makes few syscalls, so it runs at near-native speed.\n3. Workload B makes millions of syscalls. Each is intercepted (systrap or KVM platform), handled in Go, and may call the Gofer or the host.\n4. Per-call overhead times millions of calls is a visible slowdown.\n5. Lesson: measure syscall-heavy workloads before choosing gVisor; a microVM may suit them better.",
+    "link": { "title": "gVisor documentation", "url": "https://gvisor.dev/docs/" }
+  },
+  {
+    "id": "virt-isolation-security-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these explain why Firecracker suits AWS Lambda-style multi-tenant functions? Select all that apply.",
+    "options": [
+      { "text": "Each function gets its own guest kernel behind KVM, so a guest kernel exploit doesn't compromise the host kernel", "explanation": "Correct. This is the second boundary that shared-kernel containers lack." },
+      { "text": "A minimal device model (virtio-net, virtio-block, vsock, serial and a reset-only keyboard controller) leaves little emulated code to attack", "explanation": "Correct. Device emulation is a classic VM escape surface, and Firecracker keeps it tiny." },
+      { "text": "It boots in roughly 125 ms with only a few MiB of overhead, so per-tenant VMs are affordable", "explanation": "Correct. That speed and density make one microVM per tenant economically practical." },
+      { "text": "The jailer confines the VMM itself with chroot, namespaces, cgroups and seccomp, so escaping the guest lands in a restricted process", "explanation": "Correct. Defence in depth around the VMM." },
+      { "text": "It runs guests without hardware virtualisation, so it works on any server", "explanation": "Wrong. Firecracker requires KVM, which in turn needs VT-x or AMD-V (or the ARM equivalent)." }
+    ],
+    "answer": [0, 1, 2, 3],
+    "workedExample": "1. Isolation: separate guest kernel plus hardware virtualisation, the strongest boundary listed in the lesson.\n2. Small attack surface: no BIOS, PCI or USB emulation, just a handful of virtio devices.\n3. Economics: under 125 ms to boot and under 5 MiB of overhead means thousands of microVMs per host.\n4. Depth: the jailer wraps the Rust VMM process in container-style restrictions.\n5. Firecracker is built on KVM, so hardware virtualisation is a requirement, not something it avoids.",
+    "link": { "title": "Firecracker: Lightweight Virtualization for Serverless Applications — NSDI 2020", "url": "https://www.usenix.org/conference/nsdi20/presentation/agache" }
+  }
+]

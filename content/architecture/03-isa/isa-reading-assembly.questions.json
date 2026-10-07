@@ -1,0 +1,348 @@
+[
+  {
+    "id": "isa-reading-assembly-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`rax` holds `0xffffffffffffffff`. This x86-64 instruction runs:\n\n```\nmov  eax, 0x12345678\n```\n\nWhat is `rax` now?",
+    "options": [
+      {
+        "text": "`0xffffffff12345678`",
+        "explanation": "This assumes the upper half is preserved, which is what happens for 8- and 16-bit writes. A 32-bit write is different: it zeroes the upper 32 bits."
+      },
+      {
+        "text": "`0x0000000012345678`",
+        "explanation": "Correct. In 64-bit mode an ordinary write to EAX clears RAX’s upper half, leaving the specified zero-extended value."
+      },
+      {
+        "text": "`0x1234567812345678`",
+        "explanation": "Registers are not replicated. The upper 32 bits are simply cleared."
+      },
+      {
+        "text": "`0x12345678ffffffff`",
+        "explanation": "`eax` is the *low* 32 bits of `rax`, not the high 32 bits."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `eax` names bits 31–0 of `rax`.\n2. Rule: a write to a 32-bit register zero-extends to 64 bits.\n3. So bits 63–32 become 0 and bits 31–0 become 0x12345678.\n4. Contrast: `mov ax, 0x5678` would leave bits 63–16 untouched, giving `0xffffffffffff5678`.\n\nARM64 behaves the same way: writing `w0` clears the top half of `x0`.",
+    "link": {
+      "title": "X86-64 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86-64"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "GDB shows this AT&T-syntax instruction:\n\n```\nsubq  %rdi, %rax\n```\n\nWhat does it compute?",
+    "options": [
+      {
+        "text": "`rdi = rdi - rax`",
+        "explanation": "That reads it in Intel order (destination first). In AT&T syntax the destination is the *last* operand, `%rax`."
+      },
+      {
+        "text": "`rax = rdi - rax`",
+        "explanation": "The destination is right, but the subtraction is reversed. AT&T `sub src, dst` means dst = dst - src."
+      },
+      {
+        "text": "`rax = rax - rdi`",
+        "explanation": "Correct. AT&T is `op src, dst`, so this is `rax -= rdi`. In Intel syntax it would be written `sub rax, rdi`."
+      },
+      {
+        "text": "It compares `rdi` and `rax` without storing a result",
+        "explanation": "That would be `cmpq`. `subq` stores the difference (and also sets the flags)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Spot the dialect: `%` on registers and the `q` size suffix mean AT&T.\n2. AT&T order is source first, destination last.\n3. So the destination is `%rax`, the source is `%rdi`, and `sub` means destination minus source.\n4. Result: `rax = rax - rdi`. In Intel syntax: `sub rax, rdi`.",
+    "link": {
+      "title": "X86-64 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86-64"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What C condition does this x86-64 pair implement?\n\n```\ntest  rdi, rdi\nje    .Lnull\n```",
+    "options": [
+      {
+        "text": "`if (rdi == rdi) goto Lnull;`, so it always jumps",
+        "explanation": "`test` is a bitwise AND, not a comparison of the two operands for equality. ZF is set only when the AND result is zero."
+      },
+      {
+        "text": "`if (rdi != 0) goto Lnull;`",
+        "explanation": "That would be `jne`. `je` jumps when ZF is set, which happens when rdi is zero."
+      },
+      {
+        "text": "`if (rdi < 0) goto Lnull;`",
+        "explanation": "A sign check would use `js` (jump if sign) or `jl` after the test. `je` tests the zero flag."
+      },
+      {
+        "text": "`if (rdi == 0) goto Lnull;`",
+        "explanation": "Correct. `test rdi, rdi` computes rdi AND rdi (which is just rdi) and sets ZF if it is zero; `je` (jump if equal, i.e. ZF = 1) branches. It is the standard null-pointer or zero check."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `test a, b` computes `a & b`, sets the flags, discards the result.\n2. `rdi & rdi = rdi`, so ZF = 1 exactly when rdi is 0.\n3. `je` is the same as `jz`: jump if ZF = 1.\n4. So: if rdi is zero (for example a NULL pointer), jump to `.Lnull`.\n\nCompilers prefer `test rdi, rdi` over `cmp rdi, 0` because it encodes shorter and does the same job.",
+    "link": {
+      "title": "FLAGS register — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/FLAGS_register"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this function return for an input of 7?\n\n```\n# long times(long x)\ntimes:\n    lea   rax, [rdi + rdi*2]\n    shl   rax, 2\n    ret\n```",
+    "options": [
+      {
+        "text": "21",
+        "explanation": "That is only the `lea` step (7 + 7 × 2). The `shl rax, 2` then multiplies by 4."
+      },
+      {
+        "text": "28",
+        "explanation": "This applies the shift to the original x (7 × 4). The shift applies to rax, which already holds 3x."
+      },
+      {
+        "text": "56",
+        "explanation": "Shift left by 2 multiplies by 4, not by 8; `shl rax, 3` would multiply by 8."
+      },
+      {
+        "text": "84",
+        "explanation": "Correct. `lea` computes 7 + 14 = 21 (x × 3), then shifting left by 2 multiplies by 4: 21 × 4 = 84, i.e. x × 12."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nrdi = 7\nlea rax,[rdi+rdi*2]  rax = 7 + 14 = 21\nshl rax, 2           rax = 21 * 4 = 84\n```\n\nSo the function is `x * 12`. Compilers replace `imul` by small constants with `lea` and shifts when their cost model favors it. Recognising `lea` with a scale as 'multiply by 3, 5 or 9' is one of the most useful reading skills.",
+    "link": {
+      "title": "x86 and amd64 instruction reference — Félix Cloutier",
+      "url": "https://www.felixcloutier.com/x86/"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`edi = -1` and `esi = 1`. Is the branch taken?\n\n```\ncmp   edi, esi\nja    .Lbig\n```",
+    "options": [
+      {
+        "text": "No, because -1 is less than 1",
+        "explanation": "That is the *signed* reading, which `jg` would use. `ja` is an unsigned condition."
+      },
+      {
+        "text": "Yes, because `ja` compares unsigned, and -1 is 0xffffffff, which is larger than 1",
+        "explanation": "Correct. The register bits are 0xffffffff. `ja` (jump if above) treats both as unsigned: 4,294,967,295 > 1, so it jumps. In C this is what happens with `if ((unsigned)a > (unsigned)b)`."
+      },
+      {
+        "text": "No, because `ja` only works on 64-bit registers",
+        "explanation": "`ja` reads flags; it doesn't care what width the preceding `cmp` used."
+      },
+      {
+        "text": "It depends on the upper 32 bits of rdi",
+        "explanation": "`cmp edi, esi` is a 32-bit comparison; the upper bits of rdi and rsi play no part."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `cmp edi, esi` computes 0xffffffff - 0x00000001 and sets flags.\n2. As unsigned numbers: 4,294,967,295 - 1, no borrow, so CF = 0; result non-zero, so ZF = 0.\n3. `ja` jumps if CF = 0 and ZF = 0: taken.\n4. A signed `jg` would test SF, OF and ZF and see -1 < 1: not taken.\n\nThis is how a C signed/unsigned mix-up (`if (len > limit)` with an unsigned limit) becomes a security bug: a negative length looks enormous, or vice versa.",
+    "link": {
+      "title": "FLAGS register — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/FLAGS_register"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this ARM64 function compute? (`cneg Rd, Rn, cond` sets Rd = -Rn if the condition holds, else Rd = Rn.)\n\n```\n// int f(int x)\nf:\n    cmp   w0, #0\n    cneg  w0, w0, lt\n    ret\n```",
+    "options": [
+      {
+        "text": "`-x` for every input",
+        "explanation": "The negation is conditional: it happens only if the `lt` (signed less than) condition is true, that is, when x < 0."
+      },
+      {
+        "text": "`x < 0 ? 1 : 0`",
+        "explanation": "That would be `cset w0, lt`. `cneg` returns a negated copy of the register, not a 0/1 flag."
+      },
+      {
+        "text": "Absolute value for inputs other than INT_MIN; for INT_MIN the 32-bit result remains 0x80000000",
+        "explanation": "Correct. The instruction conditionally negates a 32-bit bit pattern. For ordinary inputs this gives the absolute value; INT_MIN has no positive counterpart representable as a signed 32-bit int."
+      },
+      {
+        "text": "`max(x, 0)`",
+        "explanation": "max(x, 0) would return 0 for negative x. Here negatives are negated to become positive, not clamped."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "CMP sets flags for x relative to zero; CNEG conditionally negates the 32-bit value. For −5, 5 and 0 the results are 5, 5 and 0. For INT_MIN the hardware result is 0x80000000, which still represents INT_MIN as signed 32-bit. This does not mean C abs(INT_MIN) is defined to wrap: that C expression has undefined behaviour when the result is unrepresentable.",
+    "link": {
+      "title": "AArch64 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/AArch64"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`rax` starts as `0xffffffffffffffff`. Which single instructions leave **all 64 bits** of `rax` equal to zero? Select all that apply.",
+    "options": [
+      {
+        "text": "`xor eax, eax`",
+        "explanation": "Correct. XOR clears EAX and its 32-bit write clears the upper half of RAX. The two-byte zero idiom is also recognized as independent of the old register value on many cores."
+      },
+      {
+        "text": "`mov al, 0`",
+        "explanation": "Writing an 8-bit register leaves bits 63–8 unchanged, giving 0xffffffffffffff00."
+      },
+      {
+        "text": "`mov eax, 0`",
+        "explanation": "Correct. Same 32-bit zero-extension rule; it's just a longer encoding (5 bytes) than `xor eax, eax`."
+      },
+      {
+        "text": "`mov ax, 0`",
+        "explanation": "16-bit writes also preserve the upper bits: the result is 0xffffffffffff0000."
+      },
+      {
+        "text": "`sub rax, rax`",
+        "explanation": "Correct. rax - rax = 0 in full 64 bits. It works, though `xor eax, eax` is the preferred idiom."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Apply the width rule to each:\n\n```\nxor eax,eax  32-bit write -> rax = 0\nmov al,0     8-bit  -> ...ffffff00\nmov eax,0    32-bit write -> rax = 0\nmov ax,0     16-bit -> ...ffff0000\nsub rax,rax  64-bit -> rax = 0\n```\n\n32- and 64-bit writes define every bit of rax; 8- and 16-bit writes merge into the old value.",
+    "link": {
+      "title": "X86-64 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86-64"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does `mystery(44)` return? (`rdi` holds the unsigned argument; the result is in `eax`.)\n\n```\nmystery:\n    xor   eax, eax\n.L1:\n    test  rdi, rdi\n    je    .L2\n    lea   rcx, [rdi - 1]\n    and   rdi, rcx\n    inc   eax\n    jmp   .L1\n.L2:\n    ret\n```",
+    "options": [
+      {
+        "text": "3, because it counts the 1 bits",
+        "explanation": "Correct. `x & (x - 1)` clears the lowest set bit, so the loop runs once per 1 bit. 44 = 0b101100 has three 1 bits."
+      },
+      {
+        "text": "44, because it returns its argument",
+        "explanation": "The return value is in eax, which counts loop iterations; rdi (the argument) is destroyed by the `and`."
+      },
+      {
+        "text": "6, because it counts the bits in the number",
+        "explanation": "44 is 6 bits long (0b101100), but the loop clears only *set* bits and stops at zero, so the zeros don't count."
+      },
+      {
+        "text": "2, because it finds the position of the lowest set bit",
+        "explanation": "The lowest set bit of 44 is indeed bit 2, but this loop doesn't stop at the first set bit; it keeps clearing bits until the value is 0."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace with x = 44 = 0b101100:\n\n```\nx        x-1      x&(x-1)  eax\n101100   101011   101000   1\n101000   100111   100000   2\n100000   011111   000000   3\n000000   -> test sets ZF, je\n```\n\nReturns 3. This is Kernighan's population count: each iteration removes the lowest 1 bit. (A compiler targeting a modern CPU might just emit `popcnt` instead.)",
+    "link": {
+      "title": "x86 and amd64 instruction reference — Félix Cloutier",
+      "url": "https://www.felixcloutier.com/x86/"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague 'optimises' the compiler's signed `x / 2` to a plain arithmetic shift after copying the argument:\n\n```\nhalf:              # int half(int x)\n    mov   eax, edi\n    sar   eax, 1\n    ret\n```\n\nWhat does `half(-7)` now return, and is that what C's `-7 / 2` gives?",
+    "options": [
+      {
+        "text": "-3; same as C",
+        "explanation": "C's `-7 / 2` is -3, but an arithmetic right shift doesn't give -3. Shifting rounds towards minus infinity."
+      },
+      {
+        "text": "-4; C gives -3, so the 'optimisation' is wrong for negative odd numbers",
+        "explanation": "Correct. `sar` computes floor(-7 / 2) = -4. C integer division truncates towards zero, giving -3. The compiler's `shr eax, 31; add eax, edi` adds 1 to negative inputs first so the shift rounds towards zero."
+      },
+      {
+        "text": "2147483644; `sar` is a logical shift that fills with zeros",
+        "explanation": "That's `shr` (logical). `sar` (arithmetic) copies the sign bit in, so negative numbers stay negative."
+      },
+      {
+        "text": "-3; and -4 only appears for even numbers",
+        "explanation": "Even numbers divide exactly, so both methods agree: -8 >> 1 = -4 = -8 / 2. The mismatch is for negative *odd* numbers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. -7 in 32-bit two's complement is 0xfffffff9.\n2. `sar` by 1 shifts right and copies the sign bit: 0xfffffffc = -4. That is floor(-3.5).\n3. C (since C99) truncates towards zero: -7 / 2 = -3.\n4. The compiler's version: bias = (unsigned)x >> 31 = 1 for negatives; -7 + 1 = -6; -6 >> 1 = -3. Correct.\n5. For positives the bias is 0, so nothing changes. (If x were `unsigned`, a plain `shr` would be right.) The shifts here describe x86 instructions; do not infer portable C17 semantics for right-shifting a negative signed integer.",
+    "link": {
+      "title": "x86 and amd64 instruction reference — Félix Cloutier",
+      "url": "https://www.felixcloutier.com/x86/"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A hand-written System V x86-64 function takes `(const int *table, unsigned idx)` and starts with:\n\n```\n    mov   eax, dword ptr [rdi + rsi*4]\n```\n\nIt passes every test, but crashes intermittently in production when called from a larger, optimised program. What is the most likely bug? Assume idx is within the array bounds and the table pointer is valid.",
+    "options": [
+      {
+        "text": "It should use `rdi*4` instead of `rsi*4`",
+        "explanation": "`rdi` holds the first argument (the pointer) and `rsi` the second (the index), so `rdi + rsi*4` is the right shape."
+      },
+      {
+        "text": "`dword ptr` should be `qword ptr` on a 64-bit machine",
+        "explanation": "The elements are `int` (4 bytes), so a dword load is correct. qword would read two elements."
+      },
+      {
+        "text": "The ABI only defines the low 32 bits of `rsi` for an `unsigned` argument; the upper 32 bits can hold garbage, so it must zero-extend first (for example `mov esi, esi`)",
+        "explanation": "Correct. For 32-bit arguments, the System V ABI leaves the upper half of the 64-bit register unspecified. In tests the caller happened to leave zeros there; in optimised code it may not, producing a wild address. Compilers emit `mov eax, esi` (or similar) before using such a value as a 64-bit index."
+      },
+      {
+        "text": "Using a scaled index is illegal with `unsigned` values",
+        "explanation": "Scaled addressing is purely arithmetic and doesn't know about C types. The issue is what's in the upper bits of the register."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The C prototype says `idx` is a 32-bit `unsigned`. The caller places it in `esi`.\n2. The ABI guarantees only bits 31–0. Bits 63–32 of `rsi` are whatever the caller last left there.\n3. `[rdi + rsi*4]` uses all 64 bits of `rsi`. If the top half is non-zero, the address is wildly wrong: a crash or a silent wrong read.\n4. Fix: `mov esi, esi` (a 32-bit write zero-extends) or `mov eax, esi` and index with `rax`.\n\nThe lesson's `mov eax, edi` idiom table entry ('zero-extend unsigned to 64 bits') is exactly this.",
+    "link": {
+      "title": "x86-64 psABI — GitLab",
+      "url": "https://gitlab.com/x86-psABIs/x86-64-ABI"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Look again at the inner loop of the illustrative `count_pos`:\n\n```\n.Lloop:\n    xor   edx, edx\n    cmp   qword ptr [rdi + rcx*8], 0\n    setg  dl\n    add   rax, rdx\n    inc   rcx\n    cmp   rcx, rsi\n    jne   .Lloop\n```\n\nWhich statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Moving `xor edx, edx` to between `cmp` and `setg` would give the same results",
+        "explanation": "It would break the code: `xor` overwrites the flags, so `setg` would test the flags from the xor (always 'equal'), not from the comparison."
+      },
+      {
+        "text": "The upper bits of rdx must be made zero before adding it; the shown xor does that before setg writes dl",
+        "explanation": "Correct. SETG writes only DL. Without establishing the other bits as zero, ADD RAX,RDX can include stale data. An alternative implementation could zero-extend DL after SETG."
+      },
+      {
+        "text": "Replacing `setg` with `seta` would count negative elements as positive",
+        "explanation": "Correct. `seta` is the unsigned 'above' condition; negative longs have the top bit set and look huge as unsigned numbers, so they would count too."
+      },
+      {
+        "text": "The loop contains no conditional branch for the `if (a[i] > 0)`",
+        "explanation": "Correct. The only conditional branch is the loop's `jne`. The `if` became `setg` plus `add`, which avoids branch mispredictions on random data."
+      },
+      {
+        "text": "The body runs once even if `n` is 0",
+        "explanation": "In the full function, a guard (`test rsi, rsi; jle .Ldone`) before the loop skips it when n <= 0."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Go through each claim:\n1. Order matters: `xor` sets ZF = 1 and clears SF/OF, so `setg` after it would see 'not greater' every time. False.\n2. `setcc` writes one byte. The zeroing makes rdx exactly 0 or 1. True.\n3. Signed vs unsigned condition codes: with `seta`, -2 (0xfff...fe) is 'above' 0. True.\n4. Only `jne` is conditional; the `if` is computed arithmetically. True.\n5. The function's entry guard handles n <= 0. False.\n\nAnswer: 2, 3 and 4.",
+    "link": {
+      "title": "Compiler Explorer",
+      "url": "https://godbolt.org/"
+    }
+  }
+]

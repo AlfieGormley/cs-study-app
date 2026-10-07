@@ -1,0 +1,377 @@
+[
+  {
+    "id": "pki-signatures-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A payments API and a merchant share an HMAC key to authenticate webhooks. The merchant later disputes a webhook in court, claiming the API forged it. Why can the API not prove it sent the message, and what would fix that?",
+    "options": [
+      {
+        "text": "HMAC-SHA256 is too weak to be admissible; HMAC-SHA512 would fix it",
+        "explanation": "Hash length is not the issue. Any HMAC, however strong, is computed with a key both sides hold, so it cannot single out one of them."
+      },
+      {
+        "text": "The API should encrypt the webhook body so only the merchant can read it",
+        "explanation": "Encryption gives confidentiality, not attribution. Signing is not encrypting, and encrypting is not signing."
+      },
+      {
+        "text": "Both sides hold the same key, so either could have made the tag; a signature with the API's private key would let a third party attribute it",
+        "explanation": "Correct. A MAC proves the message came from *someone with the key*. With a signature only the private-key holder can sign, so a judge with the public key can attribute it. This is non-repudiation."
+      },
+      {
+        "text": "HMACs cannot be verified by anyone, so the API should send the key with each message",
+        "explanation": "Sending the key would let anyone forge tags. The merchant can already verify the HMAC; the problem is that it can also *create* one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A MAC uses one shared secret. Whoever holds it can both create and verify tags.\n2. Here two parties hold it: the API and the merchant.\n3. A valid tag therefore proves \"the API or the merchant\", which is useless in a dispute between those two.\n4. A signature splits the key: only the private-key holder can sign, while everyone (including the judge) verifies with the public key.\n5. That property, being able to convince a third party, is non-repudiation. It is still only as good as key custody.",
+    "link": {
+      "title": "Digital signature — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Digital_signature"
+    }
+  },
+  {
+    "id": "pki-signatures-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Alice's toy RSA public key is `n = 3233, e = 17`. Bob receives a message whose hash is `h = 65` with signature `s = 588`. What does Bob compute to verify it?",
+    "options": [
+      {
+        "text": "`588^17 mod 3233`, and checks it equals 65",
+        "explanation": "Correct. Verification is `s^e mod n`. Here `588^17 mod 3233 = 65`, which matches the hash, so the signature is valid."
+      },
+      {
+        "text": "`588^2753 mod 3233`, and checks it equals 65",
+        "explanation": "2753 is the private exponent `d`. Bob does not have it; if he did, he could sign too."
+      },
+      {
+        "text": "`65^17 mod 3233`, and checks it equals 588",
+        "explanation": "That is computing a signature with the public exponent, which is the wrong direction. Verification raises the *signature*, not the hash, to `e`."
+      },
+      {
+        "text": "He decrypts the message with his own private key",
+        "explanation": "Bob's keys play no part in checking Alice's signature. Verification only needs the signer's public key."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "RSA signing and verification are inverse exponentiations:\n\n```\nsign:   s = h^d mod n   (private d)\nverify: h' = s^e mod n  (public e)\naccept if h' == h\n```\n\nWith the numbers:\n\n```\n588^17 mod 3233 = 65\n65 == hash(message)  -> valid\n```\n\nOnly someone with `d = 2753` could have produced 588, but anyone with `(n, e)` can check it.",
+    "link": {
+      "title": "RSA (cryptosystem) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/RSA_(cryptosystem)"
+    }
+  },
+  {
+    "id": "pki-signatures-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team signs every message in their internal queue with Ed25519 and concludes the payloads are now protected from anyone sniffing the network. What is wrong with that conclusion?",
+    "options": [
+      {
+        "text": "Nothing; Ed25519 signatures hide the payload",
+        "explanation": "A signature is computed over the message, which is still sent alongside it in the clear. Signatures provide no confidentiality."
+      },
+      {
+        "text": "Ed25519 signatures can be stripped, so they provide no integrity",
+        "explanation": "Stripping a signature is noticed if the receiver requires one. Integrity is exactly what signatures *do* give."
+      },
+      {
+        "text": "Ed25519 is only for TLS certificates and cannot sign arbitrary messages",
+        "explanation": "Ed25519 signs arbitrary byte strings; it is used for SSH keys, Git, packages and tokens as well as certificates."
+      },
+      {
+        "text": "Signatures give integrity and authenticity, not confidentiality; they still need encryption such as TLS",
+        "explanation": "Correct. Anyone on the network can read signed messages. If secrecy matters, they also need encryption, ideally a protocol like TLS that combines both correctly."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask what each primitive guarantees:\n\n| Primitive | Gives |\n|---|---|\n| Encryption | Confidentiality |\n| MAC | Integrity, origin (shared) |\n| Signature | Integrity, origin (public) |\n\nThe sniffer cannot *change* a signed message without detection, but can read every byte. To stop reading, encrypt as well.",
+    "link": {
+      "title": "Digital signature — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Digital_signature"
+    }
+  },
+  {
+    "id": "pki-signatures-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the textbook RSA key `n = 3233, e = 17`, an attacker has seen Alice's raw signatures `sig(2) = 1027` and `sig(3) = 1857`. Without the private key, what valid signature on the message `6` can the attacker produce?",
+    "options": [
+      {
+        "text": "`1027 + 1857 = 2884`",
+        "explanation": "RSA's structure is multiplicative, not additive. Adding signatures gives nothing meaningful."
+      },
+      {
+        "text": "`1027 × 1857 mod 3233 = 2902`",
+        "explanation": "Correct. `(2^d)(3^d) = 6^d mod n`, so multiplying two signatures gives a signature on the product. This is why real RSA pads the hash first."
+      },
+      {
+        "text": "None; forging needs `d`",
+        "explanation": "That is true of padded RSA, but textbook RSA's algebra lets an attacker combine existing signatures without ever knowing `d`."
+      },
+      {
+        "text": "`1857 − 1027 = 830`",
+        "explanation": "Subtraction does not correspond to any operation on messages under RSA."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Raw RSA signing is `sig(m) = m^d mod n`.\n2. Multiply two signatures:\n\n```\nsig(2)·sig(3) = 2^d · 3^d\n             = (2·3)^d\n             = sig(6)   (mod n)\n```\n\n3. Compute it: `1027 × 1857 = 1,907,139`; `1,907,139 mod 3233 = 2902`.\n4. Check: `2902^17 mod 3233 = 6`. Valid.\n\nPadding (PKCS#1 v1.5 or PSS) destroys this structure: the padded form of 6 is not the product of the padded forms of 2 and 3.",
+    "link": {
+      "title": "RSA (cryptosystem) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/RSA_(cryptosystem)"
+    }
+  },
+  {
+    "id": "pki-signatures-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A firmware vendor's ECDSA signer has a bug: it uses the same nonce `k` for every signature. An attacker downloads two signed firmware images. What can the attacker do?",
+    "options": [
+      {
+        "text": "Nothing useful; the nonce is secret and never appears in the signature",
+        "explanation": "The nonce is secret, but two signatures with the same `k` share the same `r` and give two linear equations in two unknowns (`k` and `d`)."
+      },
+      {
+        "text": "Only replay the two existing images on other devices",
+        "explanation": "Replay was possible anyway. The far bigger problem is that the key itself is exposed."
+      },
+      {
+        "text": "Recover `k`, then the private key `d`, and sign arbitrary firmware",
+        "explanation": "Correct. With equal `r`, `k = (h1 − h2)/(s1 − s2)` and then `d = (s·k − h)/r` (mod n). This is how fail0verflow recovered Sony's PS3 signing key in 2010."
+      },
+      {
+        "text": "Decrypt the firmware images",
+        "explanation": "Signatures do not encrypt anything; there is nothing to decrypt. The leak is the signing key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "ECDSA signature: `r = x(k·G)`, `s = k⁻¹(h + r·d) mod n`.\n\nSame `k` means same `r` for both:\n\n```\ns1·k = h1 + r·d\ns2·k = h2 + r·d\nsubtract:\n(s1 − s2)·k = h1 − h2\nk = (h1 − h2) / (s1 − s2)\nd = (s1·k − h1) / r\n```\n\nAll of `r, s1, s2, h1, h2` are public, so two lines of modular arithmetic give the private key. The fix is fresh, unbiased nonces, or deterministic nonces via RFC 6979 or Ed25519.",
+    "link": {
+      "title": "Elliptic Curve Digital Signature Algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm"
+    }
+  },
+  {
+    "id": "pki-signatures-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this code print?\n\n```python\nm = b\"hello\"\ne1 = ed_key.sign(m)\ne2 = ed_key.sign(m)\n# ECDSA P-256 with random k\nc1 = ec_key.sign(m, ecdsa_sha256)\nc2 = ec_key.sign(m, ecdsa_sha256)\nprint(e1 == e2, c1 == c2)\n```",
+    "options": [
+      {
+        "text": "`True True`",
+        "explanation": "Ed25519 is deterministic, but standard ECDSA uses a fresh random nonce per signature, so its signatures differ each time."
+      },
+      {
+        "text": "`False False`",
+        "explanation": "Ed25519 derives its nonce from a secret and the message, so signing the same message twice gives identical bytes."
+      },
+      {
+        "text": "`False True`",
+        "explanation": "This has the two schemes the wrong way round."
+      },
+      {
+        "text": "`True False`",
+        "explanation": "Correct. Ed25519 is deterministic by design. ECDSA with a random `k` produces a different `(r, s)` each time, yet both verify."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ed25519 computes its nonce as a hash of a secret key prefix and the message. Same key and message, same nonce, same signature: `e1 == e2`.\n2. ECDSA as used here picks a random `k` per call. Different `k` gives different `r` and `s`: `c1 != c2`.\n3. Both ECDSA signatures still verify; a signature scheme can have many valid signatures per message.\n\n(ECDSA with RFC 6979 deterministic nonces would print `True` for both, but that is not the default here.)",
+    "link": {
+      "title": "Ed25519 signing — pyca/cryptography docs",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/"
+    }
+  },
+  {
+    "id": "pki-signatures-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about hash-then-sign are true? Select all that apply.",
+    "options": [
+      {
+        "text": "If two documents have the same hash, a signature on one is a valid signature on the other",
+        "explanation": "Correct. The signature covers only the digest, so colliding documents share signatures. This is why collision resistance is essential."
+      },
+      {
+        "text": "Hashing first is mainly done for confidentiality",
+        "explanation": "The hash is not secret and the message is sent anyway. Hashing is for fixed size and speed, plus it feeds the padding scheme."
+      },
+      {
+        "text": "MD5 collisions were used in 2008 to create a rogue CA certificate",
+        "explanation": "Correct. Researchers obtained a CA-signed certificate whose MD5 hash collided with a CA certificate they controlled."
+      },
+      {
+        "text": "A longer message produces a longer signature",
+        "explanation": "The signature is over a fixed-size digest, so its length depends on the algorithm and key, not the message."
+      },
+      {
+        "text": "SHA-1 was retired from certificate signing, and a practical SHA-1 collision (SHAttered) was published in 2017",
+        "explanation": "Correct. The CA/Browser Forum phased out SHA-1, and the SHAttered collision confirmed the decision."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Go through each claim:\n\n1. Sign(hash(m)): equal hashes mean equal inputs to Sign, so the signature transfers. True.\n2. Hashing gives a fixed-size input and avoids slow public-key operations over large data. It hides nothing. False.\n3. The 2008 rogue CA attack used an MD5 chosen-prefix collision. True.\n4. Signature size is fixed: 64 bytes for Ed25519, 256 bytes for RSA-2048. False.\n5. SHA-1 was retired and SHAttered showed a real collision. True.",
+    "link": {
+      "title": "Digital signature — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Digital_signature"
+    }
+  },
+  {
+    "id": "pki-signatures-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service verifies JWTs signed with RS256 using a library call `verify(token, key=public_key_pem)`, letting the library read the algorithm from the token header. An attacker sends a token with `\"alg\": \"HS256\"` and a valid HMAC computed using the public key PEM as the secret. What happens, and what is the fix?",
+    "options": [
+      {
+        "text": "Rejected, because HMAC can't use a public key",
+        "explanation": "An HMAC accepts any byte string as a key, including the PEM text of a public key, which the attacker can download."
+      },
+      {
+        "text": "Accepted by a vulnerable library, because it trusts the header's algorithm; pin the expected algorithm to RS256",
+        "explanation": "Correct. The library switches to HMAC and uses the 'key' it was given (the public key) as the shared secret, which the attacker also knows. Never let the message choose how it is verified."
+      },
+      {
+        "text": "Accepted, and the fix is to use a 4096-bit RSA key",
+        "explanation": "Key size is irrelevant: RSA is never used in the forged path."
+      },
+      {
+        "text": "Rejected, because the payload is encrypted",
+        "explanation": "JWS tokens are signed, not encrypted. The payload is base64url, readable by anyone."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The library sees `alg: HS256` and computes `HMAC(key, header.payload)`.\n2. The `key` it was handed is the RSA public key PEM, which is public.\n3. The attacker computed the same HMAC with the same PEM, so the tags match.\n4. The token is accepted with whatever claims the attacker wrote.\n\nFix: `verify(token, key, algorithms=[\"RS256\"])`, or use a library that binds the algorithm to the key. The same mistake allowed `alg: none` tokens.",
+    "link": {
+      "title": "Critical vulnerabilities in JSON Web Token libraries — Auth0",
+      "url": "https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/"
+    }
+  },
+  {
+    "id": "pki-signatures-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You are choosing the RSA padding for a new protocol where RSA keys sign handshake transcripts, as TLS 1.3 does in CertificateVerify. Which choice matches TLS 1.3, and why?",
+    "options": [
+      {
+        "text": "PKCS#1 v1.5, because it is deterministic and therefore easier to test",
+        "explanation": "Determinism is not the deciding factor, and TLS 1.3 does not allow v1.5 for handshake signatures. v1.5 survives mainly in certificate signatures for compatibility."
+      },
+      {
+        "text": "OAEP, because it is the modern RSA padding",
+        "explanation": "OAEP is the padding for RSA *encryption*. Signatures use PSS."
+      },
+      {
+        "text": "Textbook RSA, since the transcript hash already randomises the input",
+        "explanation": "Textbook RSA is malleable and existentially forgeable regardless of how the input is chosen."
+      },
+      {
+        "text": "RSA-PSS, because its randomised padding has a security proof and TLS 1.3 requires it for handshake signatures",
+        "explanation": "Correct. TLS 1.3 requires RSASSA-PSS for CertificateVerify. PKCS#1 v1.5 is still permitted for signatures *in* certificates."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Separate the two RSA paddings: OAEP is for encryption, PSS for signatures. That rules out OAEP.\n2. Textbook RSA is out: it allows forgery from nothing and multiplication.\n3. PKCS#1 v1.5 signatures are deterministic and secure only if parsed strictly; lax parsers enabled Bleichenbacher's 2006 `e = 3` forgery.\n4. PSS adds a random salt and has a tight security proof.\n5. RFC 8446 requires RSA-PSS for TLS 1.3 handshake signatures, while still allowing v1.5 in certificates issued by CAs.",
+    "link": {
+      "title": "Probabilistic signature scheme — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Probabilistic_signature_scheme"
+    }
+  },
+  {
+    "id": "pki-signatures-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An embedded device signs telemetry with ECDSA P-256. Its random number generator is weak at boot. Which changes stop the nonce from leaking the private key? Select all that apply.",
+    "options": [
+      {
+        "text": "Derive the nonce deterministically from the key and message hash (RFC 6979)",
+        "explanation": "Correct. The nonce becomes unique per message and unpredictable without needing an RNG at signing time."
+      },
+      {
+        "text": "Switch to Ed25519, which derives its nonce deterministically",
+        "explanation": "Correct. Ed25519 never asks the RNG for a per-signature nonce, removing the failure mode entirely."
+      },
+      {
+        "text": "Use SHA-512 instead of SHA-256 for the message hash",
+        "explanation": "The nonce is a separate value from the message hash. A weak or repeated `k` leaks the key whatever hash is used."
+      },
+      {
+        "text": "Keep using random nonces but only sign a few messages a day",
+        "explanation": "Even a single repeated nonce leaks the key, and small biases are exploitable across a modest number of signatures. Signing less only delays it."
+      },
+      {
+        "text": "Encrypt the signatures before sending them",
+        "explanation": "This hides `(r, s)` from passive observers, but the receiver still sees them and any compromise of the channel exposes the key. It treats the symptom, not the cause."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. ECDSA's weak point is the per-signature nonce `k`. Repeated or biased `k` reveals `d` (directly, or by lattice attacks).\n2. Removing the RNG from signing fixes it:\n  - RFC 6979: `k = HMAC-DRBG(d, hash(m))`.\n  - Ed25519: nonce = hash of a secret prefix and `m`.\n3. The message hash function does not affect `k`.\n4. Rate-limiting does not help: two signatures with the same `k` suffice.\n5. Encrypting signatures is a workaround that leaves the bug in place.",
+    "link": {
+      "title": "RFC 6979: Deterministic Usage of DSA and ECDSA",
+      "url": "https://www.rfc-editor.org/rfc/rfc6979"
+    }
+  },
+  {
+    "id": "pki-signatures-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A SAML login handler verifies the XML signature on an `<Assertion>` element, then reads the user's identity using `doc.find(\"//Assertion/NameID\")`. An attacker inserts a second, unsigned `<Assertion>` before the signed one. What goes wrong?",
+    "options": [
+      {
+        "text": "Verification passes on the signed assertion, but the lookup returns the attacker's unsigned one, so the attacker logs in as anyone",
+        "explanation": "Correct. This is XML Signature Wrapping: verify one thing, act on another. The fix is to act only on the exact element (bytes) that was verified."
+      },
+      {
+        "text": "The XML parser rejects duplicate elements",
+        "explanation": "XML allows repeated elements; there is nothing for the parser to reject."
+      },
+      {
+        "text": "Nothing; the signature check fails because the document changed",
+        "explanation": "The signature covers only the referenced element. Adding a sibling elsewhere leaves that element, and its signature, intact."
+      },
+      {
+        "text": "The attacker can now recover the IdP's private key",
+        "explanation": "Nothing about the key leaks; the bug is in what the application reads after verification."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The signature references the signed assertion by ID, and verifying it succeeds.\n2. The lookup is a separate query over the whole document. It finds the *first* `<Assertion>`, which is the attacker's.\n3. So the security check and the business logic look at different data.\n4. Rule: after verifying, use only the verified data: hand the verified element on, or the canonical bytes that were checked. Never re-parse the document.",
+    "link": {
+      "title": "SAML Security Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/SAML_Security_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "pki-signatures-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company discovers its code-signing private key leaked in June, possibly as early as January. It signed thousands of releases over five years. What lets it keep trusting releases from before the leak?",
+    "options": [
+      {
+        "text": "Nothing; every signature from that key must be distrusted",
+        "explanation": "This is the default outcome without timestamps, but trusted timestamps can rescue older signatures."
+      },
+      {
+        "text": "Releases whose signatures were countersigned by a trusted timestamping authority before January",
+        "explanation": "Correct. A third-party timestamp proves the signature existed at that time, before the key could have been misused, so those signatures stay trustworthy."
+      },
+      {
+        "text": "Re-verify the old signatures with the public key",
+        "explanation": "They will verify perfectly. So would signatures the attacker creates now, with any date they like."
+      },
+      {
+        "text": "Switch to Ed25519, which makes past signatures safe",
+        "explanation": "Changing algorithm protects future signatures only. It says nothing about which past signatures were made by the company rather than an attacker."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Once a key leaks, an attacker can create valid signatures and can backdate any timestamp the signer controls.\n2. So any signature is suspect, unless an *independent* party vouched for when it existed.\n3. A timestamping authority (RFC 3161, as used by Authenticode) signs `hash(signature) + time` with its own key.\n4. Signatures timestamped before the earliest possible compromise (January) are still trusted. Later ones, and any without timestamps, must be treated as suspect.\n5. Revoke the certificate with a revocation date of January.",
+    "link": {
+      "title": "Trusted timestamping — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Trusted_timestamping"
+    }
+  }
+]

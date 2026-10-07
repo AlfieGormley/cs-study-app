@@ -1,0 +1,385 @@
+[
+  {
+    "id": "isa-calling-conventions-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On Linux x86-64 (System V ABI), a C function `long f(long a, long b, long c)` is called. Which register holds `c` when `f` starts?",
+    "options": [
+      {
+        "text": "`rcx`",
+        "explanation": "A common slip: the order is not alphabetical a-b-c-d. `rcx` is the **fourth** integer argument; it is also the first argument on Windows x64, which adds to the confusion."
+      },
+      {
+        "text": "`rdx`",
+        "explanation": "Correct. The integer argument order is `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`, so the third argument is in `rdx`."
+      },
+      {
+        "text": "`rsi`",
+        "explanation": "`rsi` holds the **second** argument, `b`."
+      },
+      {
+        "text": "On the stack at `[rsp + 8]`",
+        "explanation": "These three scalar long arguments fit in integer registers. Aggregate and other special argument classes can follow different rules."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Recall the System V integer argument sequence: `rdi, rsi, rdx, rcx, r8, r9`.\n2. Count: `a` is 1st (`rdi`), `b` is 2nd (`rsi`), `c` is 3rd (`rdx`).\n3. A mnemonic some people use: \"**D**iane's **S**ilk **D**ress **C**osts **8**9 dollars\" for di, si, dx, cx, r8, r9.",
+    "link": {
+      "title": "x86 calling conventions — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_calling_conventions"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On ARM64, where does `bl printf` put the return address?",
+    "options": [
+      {
+        "text": "It pushes it onto the stack, like x86 `call`",
+        "explanation": "BL writes the return address to X30 rather than pushing it to the stack. This does not promise that calling and executing an arbitrary function causes no memory traffic."
+      },
+      {
+        "text": "In `x29`, the frame pointer",
+        "explanation": "`x29` is the frame pointer by convention. The return address goes in the link register, which is a different register."
+      },
+      {
+        "text": "In `x30`, the link register",
+        "explanation": "Correct. `bl` (branch with link) writes the address of the next instruction into `x30` (also called `lr`) and branches. `ret` later branches to `x30`."
+      },
+      {
+        "text": "In `x0`, alongside the first argument",
+        "explanation": "`x0` carries the first argument and the return value. Putting the return address there would clobber the argument."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `bl` = **b**ranch with **l**ink. \"Link\" means: remember where to come back to.\n2. AAPCS64 names `x30` the link register (LR).\n3. So after `bl printf`, `x30` = address of the instruction after the `bl`.\n4. A consequence: a function that makes a nested call and later returns normally must preserve its original return address (usually with `stp x29, x30, [sp, #-16]!`).",
+    "link": {
+      "title": "Procedure Call Standard for the Arm 64-bit Architecture (AAPCS64)",
+      "url": "https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "A function on Linux x86-64 keeps a value in a register, calls `strlen`, then uses the value again. In which registers is the value **guaranteed** to survive the call? Select all that apply.",
+    "options": [
+      {
+        "text": "`rbx`",
+        "explanation": "Correct. `rbx` is callee-saved: `strlen` must restore it before returning if it uses it."
+      },
+      {
+        "text": "`rcx`",
+        "explanation": "`rcx` is caller-saved (it is the 4th argument register). `strlen` may overwrite it freely."
+      },
+      {
+        "text": "`r12`",
+        "explanation": "Correct. `r12`–`r15` are callee-saved in System V."
+      },
+      {
+        "text": "`rdi`",
+        "explanation": "`rdi` is the first argument register and is caller-saved. It holds the string pointer going in, but nothing promises it holds it coming out."
+      },
+      {
+        "text": "`r11`",
+        "explanation": "`r11` is caller-saved scratch. It is also clobbered by the `syscall` instruction, so it is the last place to keep something precious."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "1. List the System V callee-saved set: `rbx`, `rbp`, `r12`, `r13`, `r14`, `r15` (plus `rsp`).\n2. Everything else (`rax`, `rcx`, `rdx`, `rsi`, `rdi`, `r8`–`r11`) may be destroyed by the call.\n3. From the options, `rbx` and `r12` are callee-saved; `rcx`, `rdi` and `r11` are not.\n4. This is why `-O2` code puts loop counters that live across calls into `rbx` or `r12`–`r15` and pushes them in the prologue.",
+    "link": {
+      "title": "x86 calling conventions — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_calling_conventions"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Linux x86-64, where do the arguments arrive for this call?\n\n```\ndouble f(double x, int n, double y);\nf(1.5, 3, 2.5);\n```",
+    "options": [
+      {
+        "text": "`x` in `xmm0`, `n` in `edi`, `y` in `xmm1`",
+        "explanation": "Correct. Integer and floating-point arguments are counted separately: `n` is the first integer argument and `y` is the second floating-point argument."
+      },
+      {
+        "text": "`x` in `xmm0`, `n` in `esi`, `y` in `xmm2`",
+        "explanation": "This assumes every argument uses up a slot in both register classes, as Windows x64 does. System V counts each class independently."
+      },
+      {
+        "text": "`x` in `rdi`, `n` in `rsi`, `y` in `rdx`",
+        "explanation": "Doubles never go in general-purpose registers in System V when vector registers are available; they go in `xmm0`–`xmm7`."
+      },
+      {
+        "text": "All three on the stack, because the types are mixed",
+        "explanation": "These mixed scalar types use the respective register classes. Other types can require memory for reasons besides register exhaustion."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Walk the parameter list, keeping two counters: integer (next: `rdi`) and vector (next: `xmm0`).\n2. `double x`: vector class, gets `xmm0`. Vector counter moves to `xmm1`.\n3. `int n`: integer class, gets `edi` (the 32-bit view of `rdi`).\n4. `double y`: vector class, gets `xmm1`.\n\nOn Windows x64 the answer would differ: positions are shared, so `x` would be `xmm0`, `n` would be `edx` (slot 2), and `y` would be `xmm2` (slot 3).",
+    "link": {
+      "title": "System V x86-64 psABI — GitLab",
+      "url": "https://gitlab.com/x86-psABIs/x86-64-ABI"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Linux x86-64 function begins like this and later makes a `call`. Which value of `N` keeps the stack correctly aligned for that call?\n\n```\nf:\n    push  rbp\n    mov   rbp, rsp\n    sub   rsp, N\n``` Assume no other stack adjustments and an ordinary call requiring 16-byte alignment.",
+    "options": [
+      {
+        "text": "8",
+        "explanation": "On entry `rsp % 16 == 8`. After `push rbp` it is 0. Subtracting 8 would make it 8 again: misaligned at the call."
+      },
+      {
+        "text": "12",
+        "explanation": "Not even a multiple of 8, so `rsp` would end up misaligned for 8-byte stores too. The value must be a multiple of 16 here."
+      },
+      {
+        "text": "16",
+        "explanation": "Correct. After `push rbp`, `rsp` is a multiple of 16; subtracting any multiple of 16 keeps it that way, which is what the ABI demands just before `call`."
+      },
+      {
+        "text": "24",
+        "explanation": "24 = 16 + 8, so this leaves `rsp % 16 == 8` at the call. It would be right for a function with no `push`, not for this one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The rule: `rsp % 16 == 0` immediately before `call`.\n2. The caller's `call` pushed an 8-byte return address, so on entry to `f`, `rsp % 16 == 8`.\n3. `push rbp` subtracts 8: now `rsp % 16 == 0`.\n4. `sub rsp, N` must keep that: N must be a multiple of 16. Of the options, only 16 works.\n\nCompare a function that pushes nothing: it needs `sub rsp, 8` (or 24, 40, ...) to get aligned, which is why you see odd-looking `sub rsp, 8` or a dummy `push rax` in compiler output.",
+    "link": {
+      "title": "x86 calling conventions — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_calling_conventions"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Linux x86-64, this function returns a 24-byte struct:\n\n```\nstruct big { long a, b, c; };\nstruct big make(long x);\n```\n\nIn which register does `x` arrive?",
+    "options": [
+      {
+        "text": "`rdi`, as normal for the first argument",
+        "explanation": "For this 24-byte struct of three longs, RDI is used for the return-storage pointer. Other return types require their own ABI classification."
+      },
+      {
+        "text": "`rsi`, because `rdi` carries a hidden pointer to the caller's return buffer",
+        "explanation": "Correct. This struct is classified for memory return. RDI carries the hidden buffer address, RSI carries x, and RAX returns the buffer address. Floating-point arguments would retain their separate vector-register allocation."
+      },
+      {
+        "text": "`x8`, the indirect result register",
+        "explanation": "`x8` is the ARM64 (AAPCS64) mechanism. On ARM64, `x` would stay in `x0` because the hidden pointer has its own register."
+      },
+      {
+        "text": "`rax`, because `rdi` and `rsi` hold the struct's first fields",
+        "explanation": "`rax` is never an argument register in System V (apart from `al` holding an upper bound on vector-register use for variadic calls)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The struct of three 64-bit longs is 24 bytes and is classified MEMORY by System V AMD64. The hidden storage pointer occupies RDI, so x uses RSI. RAX returns that pointer. Under AAPCS64 this ordinary composite also uses an indirect result, but its pointer uses X8 and x remains in X0. Size alone is not a universal aggregate-return rule: AAPCS64 HFAs and other ABI-specific exceptions exist.",
+    "link": {
+      "title": "System V x86-64 psABI — GitLab",
+      "url": "https://gitlab.com/x86-psABIs/x86-64-ABI"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This ARM64 function was hand-written. What happens when it is called?\n\n```\nf:\n    bl    g\n    add   x0, x0, #1\n    ret\n``` Assume g returns normally with x30 still containing the address immediately after bl g, and ignore external interruption.",
+    "options": [
+      {
+        "text": "It works: `ret` returns to `f`'s caller",
+        "explanation": "`ret` branches to whatever is in `x30` *now*, and `bl g` replaced the original return address."
+      },
+      {
+        "text": "It crashes immediately at the `bl`",
+        "explanation": "The `bl` itself is fine: it calls `g` normally and `g` returns to the `add`."
+      },
+      {
+        "text": "After `g` returns, `ret` jumps back to the `add`, so it loops forever adding 1",
+        "explanation": "Correct. `bl g` set `x30` to the address of the `add`. Since `f` never saved its own return address, `ret` jumps to the `add` again, and again: an infinite loop."
+      },
+      {
+        "text": "`ret` pops a return address from the stack, which is garbage",
+        "explanation": "ARM64 `ret` does not use the stack at all; it reads `x30`. The stack pop behaviour belongs to x86 `ret`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. On entry, `x30` = return address into `f`'s caller.\n2. `bl g` overwrites `x30` with the address of `add x0, x0, #1`.\n3. `g` returns there. `x0` is incremented.\n4. `ret` branches to `x30`, which is still the `add`.\n5. So it adds 1 and returns to the `add` forever.\n\nThe fix is the standard non-leaf prologue and epilogue:\n```\nf:\n    stp   x29, x30, [sp, #-16]!\n    mov   x29, sp\n    bl    g\n    add   x0, x0, #1\n    ldp   x29, x30, [sp], #16\n    ret\n```",
+    "link": {
+      "title": "Procedure Call Standard for the Arm 64-bit Architecture (AAPCS64)",
+      "url": "https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A compiler turns `return g(x + 1);` at the end of `f` into a **tail call**. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`f` tears down its own frame and then jumps (`jmp`/`b`) to `g` instead of calling it",
+        "explanation": "Correct. The call becomes a jump after the epilogue, so `g` reuses `f`'s stack slot."
+      },
+      {
+        "text": "`g` returns directly to `f`'s caller",
+        "explanation": "Correct. The return address on the stack (x86) or in `x30` (ARM64) is still the one `f`'s caller set up."
+      },
+      {
+        "text": "f necessarily retains a physical stack frame that any debugger can walk while g is running",
+        "explanation": "False: a tail-call optimization removes that frame. Some debuggers can reconstruct a logical tail-call frame using suitable debug information, so absence from every backtrace is not guaranteed."
+      },
+      {
+        "text": "Tail calls let tail-recursive functions run in constant stack space",
+        "explanation": "Correct if the recursive calls are actually optimized and per-step stack requirements stay bounded. This avoids stack growth from the recursive call chain, not every possible source of stack exhaustion."
+      },
+      {
+        "text": "Tail calls are always possible, even if `f` passed `g` a pointer to one of its own locals",
+        "explanation": "If g needs f’s local object to remain alive, simply discarding its storage would be wrong. The optimizer must preserve the required lifetime; the mere presence of a pointer does not prove it will be used."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A valid tail call restores the outgoing function’s saved state and transfers control without adding a new return frame. The callee returns directly to the original caller. Applying this repeatedly to tail recursion avoids growth from that chain. A physical frame disappears, although debug metadata may let a debugger display a logical call. Required object lifetimes and ABI constraints can prevent the transformation.",
+    "link": {
+      "title": "Call stack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Call_stack"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On Linux x86-64, a function with nine `long` parameters starts with the classic prologue:\n\n```\nh:\n    push  rbp\n    mov   rbp, rsp\n```\n\nWhere is the **8th** argument?",
+    "options": [
+      {
+        "text": "`[rbp + 16]`",
+        "explanation": "That is the 7th argument: just above the return address."
+      },
+      {
+        "text": "`[rbp - 8]`",
+        "explanation": "Negative offsets from `rbp` are this function's own locals. Incoming stack arguments are in the caller's frame, at positive offsets."
+      },
+      {
+        "text": "`r10`, the next register after `r9`",
+        "explanation": "System V has only six integer argument registers. `r10` is a scratch register (and carries the 4th argument for Linux system calls, not for normal functions)."
+      },
+      {
+        "text": "`[rbp + 24]`",
+        "explanation": "Correct. `[rbp]` = saved `rbp`, `[rbp+8]` = return address, `[rbp+16]` = 7th, `[rbp+24]` = 8th, `[rbp+32]` = 9th."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Arguments 1–6 are in registers; 7, 8 and 9 go on the stack, with the 7th at the lowest address.\n2. Before the `call`, the stack looks like (low to high): 7th, 8th, 9th.\n3. `call` pushes the return address below the 7th.\n4. `push rbp` pushes the saved `rbp` below that, and `mov rbp, rsp` points `rbp` at it.\n\n```\nrbp+32  9th arg\nrbp+24  8th arg\nrbp+16  7th arg\nrbp+8   return address\nrbp+0   saved rbp\n```",
+    "link": {
+      "title": "Call stack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Call_stack"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A leaf function in a Linux **user-space** program stores a temporary at `[rsp - 16]` without moving `rsp`. Someone copies the same code into a Linux **kernel** module. What is the right assessment?",
+    "options": [
+      {
+        "text": "Safe in user space thanks to the 128-byte red zone; unsafe in the kernel, where interrupts push onto the current stack and the kernel is built with `-mno-red-zone`",
+        "explanation": "Correct. System V promises signal handlers won't clobber the 128 bytes below `rsp`. In the kernel, a hardware interrupt can arrive at any moment and write right below `rsp`."
+      },
+      {
+        "text": "Fine in both: memory below `rsp` is never touched by anyone else",
+        "explanation": "Below-`rsp` memory is free for anyone who pushes onto the stack. The user-space guarantee is a specific ABI promise, not a law of nature."
+      },
+      {
+        "text": "Unsafe in both, because signal handlers always run on the same stack just below `rsp`",
+        "explanation": "The kernel deliberately skips the red zone when it builds a signal frame on the user stack, precisely so this pattern is safe in user space."
+      },
+      {
+        "text": "Unsafe in user space, but fine in the kernel because the kernel cannot be interrupted",
+        "explanation": "The kernel can certainly be interrupted. That is exactly why it disables the red zone."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The red zone is a System V x86-64 ABI promise: the 128 bytes below `rsp` will not be modified by signal or interrupt handlers.\n2. Leaf functions exploit it to skip `sub rsp, N` / `add rsp, N`.\n3. In user space, the kernel honours this when delivering signals by placing the signal frame below the red zone.\n4. In kernel mode, an interrupt may push its frame onto the current kernel stack directly below `rsp`, destroying the value. Hence `-mno-red-zone`.\n\nWindows x64 has no red zone at all, so the same trick is also wrong there.",
+    "link": {
+      "title": "x86 calling conventions — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/X86_calling_conventions"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are porting a hand-written assembly routine from Linux x86-64 to **Windows x64**. Which changes are required? Select all that apply.",
+    "options": [
+      {
+        "text": "Read the first four integer arguments from `rcx`, `rdx`, `r8`, `r9` instead of `rdi`, `rsi`, `rdx`, `rcx`",
+        "explanation": "Correct. Windows x64 uses a different, shorter argument register list."
+      },
+      {
+        "text": "Before calling another function, reserve 32 bytes of shadow space on the stack",
+        "explanation": "Correct. The Windows caller must leave 32 bytes above the return address for the callee to spill its four register arguments."
+      },
+      {
+        "text": "Save and restore `rsi` and `rdi` if the routine uses them",
+        "explanation": "Correct. They are callee-saved on Windows, unlike System V, so trashing them breaks the caller."
+      },
+      {
+        "text": "Return integer results in `rcx` instead of `rax`",
+        "explanation": "Both conventions return integers in `rax`. Only the argument registers changed."
+      },
+      {
+        "text": "Flip the stack to grow upwards",
+        "explanation": "The stack grows downwards on x86-64 under every mainstream OS. The direction is set by `push`, `call` and `ret`, not by the ABI."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Arguments: System V uses `rdi rsi rdx rcx r8 r9`; Windows uses `rcx rdx r8 r9` and then the stack.\n2. Shadow space: Windows callers always reserve 32 bytes, even for functions with fewer arguments.\n3. Callee-saved set: Windows adds `rsi`, `rdi` and `xmm6`–`xmm15` to the registers you must preserve.\n4. Unchanged: return values in `rax`/`xmm0`, 16-byte alignment at calls, downward-growing stack.\n\nGetting even one of these wrong produces crashes that only appear when called from real Windows code, which is why tools like Wine need translation thunks.",
+    "link": {
+      "title": "x64 calling convention — Microsoft Learn",
+      "url": "https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The hand-written x86-64 `fact` from the lesson uses 16 bytes of stack per recursion level (return address plus saved `rbx`). With an 8 MiB stack limit and ignoring everything else on the stack, roughly how deep can it recurse before overflowing?",
+    "options": [
+      {
+        "text": "About 8,000 levels",
+        "explanation": "That treats 8 MiB as 8 × 1,000 × 16 bytes or similar. The real calculation gives a number about 65 times larger."
+      },
+      {
+        "text": "About 8.4 million levels",
+        "explanation": "That divides by 1 byte per level. Each level costs 16 bytes, not one."
+      },
+      {
+        "text": "Unlimited, because `fact` is a tail call",
+        "explanation": "`n * fact(n - 1)` multiplies *after* the call returns, so it is not a tail call; each level's frame must stay alive."
+      },
+      {
+        "text": "About 524,000 levels",
+        "explanation": "Correct. 8 MiB = 8 × 1,048,576 = 8,388,608 bytes; divided by 16 bytes per level gives 524,288 levels."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "In the stated simplified model, 8 MiB / 16 B = 524,288 levels. Actual available depth depends on other stack use, limits, guards and generated code. This hand-written instruction sequence would wrap products at machine width; C factorial overflows a signed 64-bit long above 20 and therefore has undefined behaviour. The depth exercise is not a valid large-input C factorial computation.",
+    "link": {
+      "title": "Call stack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Call_stack"
+    }
+  }
+]

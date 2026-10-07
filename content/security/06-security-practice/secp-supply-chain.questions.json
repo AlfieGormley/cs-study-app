@@ -1,0 +1,343 @@
+[
+  {
+    "id": "secp-supply-chain-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why are supply-chain attacks so attractive to attackers compared with attacking each target directly?",
+    "options": [
+      {
+        "text": "They only work against open-source software, which has no security team",
+        "explanation": "SolarWinds Orion was proprietary commercial software. Supply-chain attacks hit any shared component, open or closed."
+      },
+      {
+        "text": "One compromise of a widely used component delivers the payload to many victims, who install it themselves through a trusted channel",
+        "explanation": "Correct. The attacker can reach many consumers through their normal update path, often with a valid signature. SolarWinds initially estimated fewer than 18,000 customers might have installed affected versions; that was not a count of confirmed follow-on intrusions."
+      },
+      {
+        "text": "They are legal because the victim chose to install the software",
+        "explanation": "Installing a trojanised update is not consent to being hacked. These are serious crimes, and SolarWinds was attributed to a state intelligence service."
+      },
+      {
+        "text": "They never require any technical skill",
+        "explanation": "Some (typosquatting) are cheap, but SolarWinds and xz-utils were highly sophisticated, multi-year operations."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A direct attack must beat each target's own defences: firewalls, EDR, staff training.\n2. A supply-chain attack beats one supplier's defences once.\n3. Victims then fetch the payload themselves via a channel they trust (updates, package installs), often with a valid signature.\n4. So the cost per victim falls dramatically and detection is harder: the software looks exactly like a normal update.",
+    "link": {
+      "title": "Supply chain attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Supply_chain_attack"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is an SBOM?",
+    "options": [
+      {
+        "text": "A signed statement of which builder produced an artefact from which commit",
+        "explanation": "That is **provenance** (as in SLSA). An SBOM lists contents; provenance describes how the artefact was made."
+      },
+      {
+        "text": "A scanner that runs your code to find vulnerabilities",
+        "explanation": "That describes DAST. An SBOM is a document, not a tool that tests anything."
+      },
+      {
+        "text": "A machine-readable inventory of software components and associated metadata such as versions",
+        "explanation": "Correct. SPDX and CycloneDX are the common formats. Stored per release, an SBOM answers 'which of our products contain library X at version Y?'"
+      },
+      {
+        "text": "A list of the security bugs fixed in a release",
+        "explanation": "That is a security advisory or changelog. An SBOM lists components whether or not they are vulnerable."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "An SBOM records components, versions and often hashes/licenses within its declared scope. Stored per release and matched to deployment inventory, it helps locate candidate vulnerable dependencies. Its completeness and identifiers matter; advisory version ranges include backports and cannot be replaced by one universal Log4j cutoff.",
+    "link": {
+      "title": "CISA: Software Bill of Materials",
+      "url": "https://www.cisa.gov/sbom"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the SolarWinds attack, the trojanised Orion DLL carried a valid SolarWinds code-signing signature. What does this teach about code signing?",
+    "options": [
+      {
+        "text": "Signatures bind artifact bytes to a signing key; they do not independently prove safe content or the actual build process",
+        "explanation": "Correct. SUNSPOT injected the backdoor during SolarWinds' own build, so SolarWinds' own pipeline signed it. The signature was genuine; the content was not what SolarWinds intended."
+      },
+      {
+        "text": "SolarWinds' signing key must have been stolen and used by the attackers on their own machines",
+        "explanation": "There was no need: the attackers modified the build *inside* SolarWinds' environment, so the normal signing step signed the backdoored output."
+      },
+      {
+        "text": "Code signing is useless and should be abandoned",
+        "explanation": "Signing still stops many attacks (tampering in transit, fake download mirrors). It just cannot protect against compromise before the signing step."
+      },
+      {
+        "text": "The attackers broke the signature algorithm",
+        "explanation": "No cryptography was broken. The signature was computed legitimately over malicious content."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The pipeline was: source (clean) -> build (SUNSPOT swaps `InventoryManager.cs`) -> compile -> **sign** -> ship.\n2. Signing happened after the injection, so it faithfully vouched for the backdoored DLL.\n3. A signature answers: 'did this come from the holder of key K, unmodified since signing?' It does not answer: 'is this what the developers meant to ship?'\n4. Defences must therefore cover the build itself: isolated, ephemeral builders and provenance (SLSA Build L3).",
+    "link": {
+      "title": "SUNSPOT technical analysis — CrowdStrike",
+      "url": "https://www.crowdstrike.com/blog/sunspot-malware-technical-analysis/"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a clean CI environment, both package candidates below are compatible, no other constraints apply, and the public index remains enabled. pip uses --extra-index-url for an internal acme-billing2.3 while public PyPI offers99.0.0. Which candidate does this illustrate selecting?",
+    "options": [
+      {
+        "text": "pip installs 2.3, because extra indexes take priority over PyPI",
+        "explanation": "pip has no index priority. `--extra-index-url` adds another source of equal standing; it does not override PyPI."
+      },
+      {
+        "text": "pip fails with a conflict error because two indexes have the same package",
+        "explanation": "pip does not treat this as a conflict. It merges candidates from all indexes."
+      },
+      {
+        "text": "pip installs 99.0.0 from PyPI, because it picks the highest version across all indexes",
+        "explanation": "Correct under the stated compatibility/constraint assumptions. A malicious source distribution may execute build code during installation; a wheel need not execute package code until import/use. Exposure is limited by the job's actual privileges and secrets."
+      },
+      {
+        "text": "pip installs whichever index responds first",
+        "explanation": "Resolution is by version, not response time. The highest version wins."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. pip collects candidate files for `acme-billing` from PyPI and from the extra index.\n2. Candidates: 2.3 (internal) and 99.0.0 (public).\n3. With no version constraint, the resolver chooses the highest: 99.0.0.\n4. Fixes:\n   - Use a single `--index-url` pointing at a proxy that serves internal names only from the internal source.\n   - Pin versions with `--require-hashes`, so an unexpected file is rejected.\n   - Register placeholder names on the public registry.",
+    "link": {
+      "title": "pip: secure installs and hash-checking mode",
+      "url": "https://pip.pypa.io/en/stable/topics/secure-installs/"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a hypothetical incident, one team identifies candidate Log4j deployments rapidly while another must reconstruct its dependency inventory. Which capability most directly explains that advantage?",
+    "options": [
+      {
+        "text": "Company A ran more DAST scans against its websites",
+        "explanation": "DAST could detect *some* exposed endpoints, but it cannot enumerate internal batch jobs, queues and vendor appliances that also embedded Log4j."
+      },
+      {
+        "text": "Per-release SBOMs or SCA inventory mapped to deployments, enabling searches for relevant Log4j Core versions and advisory ranges",
+        "explanation": "Correct. The hard part was inventory: Log4j was usually transitive, inside fat JARs and third-party products. An existing inventory turns a hunt into a lookup."
+      },
+      {
+        "text": "Company A wrote its services in Python, so it was not affected",
+        "explanation": "The scenario says both companies found affected services. And a Python shop could still run Java components (Elasticsearch, Kafka tooling, vendor appliances)."
+      },
+      {
+        "text": "Company A had SLSA Build Level 3",
+        "explanation": "SLSA protects build integrity. Log4Shell was an honest bug in a legitimately built library, so provenance would not tell you where it was."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Inventory can locate dependencies hidden in archives and vendor products more directly than ad-hoc filesystem searches. Candidate matches still need completeness checks, backport-aware version analysis, deployment mapping and mitigation testing. No fixed hour/week outcome is guaranteed, and upgrading a production dependency is not necessarily trivial.",
+    "link": {
+      "title": "Apache Log4j security vulnerabilities",
+      "url": "https://logging.apache.org/log4j/2.x/security.html"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Andres Freund's report shows these timings for a failed SSH login to localhost on Debian unstable:\n\n```\nbefore:  real 0m0.299s\nafter:   real 0m0.807s\n```\n\nRoughly what slowdown tipped him off, and why does this matter as a lesson?",
+    "options": [
+      {
+        "text": "About 0.5 s (around 2.7×); detection relied on one engineer noticing a small performance anomaly, not on any security control",
+        "explanation": "Correct arithmetic:0.508seconds and about2.70times in Freund's reported test. The disclosure also described CPU and Valgrind anomalies; this does not establish that every possible security control had run or failed."
+      },
+      {
+        "text": "About 5 s; SSH logins became unusable, so many users reported it",
+        "explanation": "The times are in seconds with three decimals: 0.299 s and 0.807 s, so the difference is about half a second, easy to overlook."
+      },
+      {
+        "text": "About 0.05 s; it was caught by an automated performance regression test",
+        "explanation": "The difference is ten times larger than this, and it was not caught by automation but by a person investigating."
+      },
+      {
+        "text": "There was no slowdown; it was found by SAST on the xz repository",
+        "explanation": "The numbers show a clear slowdown, and the payload hid in binary test files and a tarball-only m4 script, which SAST of the git repo would not reveal."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The reported difference is 0.807−0.299=0.508seconds, and the ratio is about2.70. Freund investigated this alongside CPU/Valgrind symptoms and disclosed the backdoor on29March2024. These are observations from his setup, not universal performance or attribution claims. The first affected release was inFebruary, not a full two months before disclosure.",
+    "link": {
+      "title": "Andres Freund's xz-utils disclosure (oss-security)",
+      "url": "https://www.openwall.com/lists/oss-security/2024/03/29/4"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which features made the xz-utils backdoor hard to spot? Select all that apply.",
+    "options": [
+      {
+        "text": "The payload was stored in binary test files that reviewers would not read",
+        "explanation": "Correct. `bad-3-corrupt_lzma2.xz` and `good-large_compressed.lzma` looked like normal corrupt/valid test inputs for a compression library."
+      },
+      {
+        "text": "The trigger (`build-to-host.m4`) existed only in the release tarballs, not in the git repository",
+        "explanation": "Correct. Anyone reviewing git saw no trigger. Only builds from the hand-made tarball were affected."
+      },
+      {
+        "text": "It activated only in specific conditions, such as building a deb or rpm package on x86-64 Linux",
+        "explanation": "Correct. The activation logic targeted particular platform, packaging and environment conditions; simply having an affected version number did not imply identical exploitability on every build."
+      },
+      {
+        "text": "It was introduced by a stranger's one-off pull request on the day of the release",
+        "explanation": "Incorrect. It was introduced by 'Jia Tan', who had built trust over about two years with genuine patches and was a co-maintainer with release rights."
+      },
+      {
+        "text": "It exploited a memory-safety bug in OpenSSH",
+        "explanation": "Incorrect. OpenSSH was not buggy. Distribution patches linked sshd to libsystemd, which links liblzma, giving the backdoor a path into the process to hook RSA key verification."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Hiding the code: binary 'test' blobs (A).\n2. Hiding the trigger: tarball-only build script (B).\n3. Limiting exposure to analysis: narrow activation conditions, plus checks for debuggers and environment variables (C).\n4. The *social* layer: a trusted maintainer, not a drive-by contributor (so D is false).\n5. The path into sshd was a dependency chain, not an OpenSSH vulnerability (so E is false).",
+    "link": {
+      "title": "Timeline of the xz open source attack — Russ Cox",
+      "url": "https://research.swtch.com/xz-timeline"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does `pip install --require-hashes -r requirements.txt` protect against?",
+    "options": [
+      {
+        "text": "Every listed package being free of known vulnerabilities",
+        "explanation": "Hashes say nothing about vulnerabilities. A pinned, hash-matched package can still have a CVE; that is SCA's job."
+      },
+      {
+        "text": "Installing any artefact whose content differs from the one whose hash you recorded, such as a re-uploaded or tampered file",
+        "explanation": "Correct. pip computes the SHA-256 of each downloaded file and refuses a mismatch. Hash mode also requires every dependency to be pinned, so nothing unpinned sneaks in."
+      },
+      {
+        "text": "A malicious maintainer publishing a backdoor in the exact version you pinned",
+        "explanation": "If the backdoored file was the one you hashed (as with xz 5.6.1 for anyone who pinned it), the hash matches. Hashes freeze content; they don't judge it."
+      },
+      {
+        "text": "Typosquatting, by checking that package names are spelled correctly",
+        "explanation": "If you typed the typosquatted name into the file and hashed its file, pip would happily install it. Hashes don't check spelling."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Hash-checking mode requires explicitly covered dependencies and accepted artifact hashes. Unexpected downloaded content is rejected, while a malicious artifact whose hash was approved still passes. Source-build dependencies and build execution require their own controls; prefer reviewed wheels or separately controlled builds when relevant.",
+    "link": {
+      "title": "pip: secure installs and hash-checking mode",
+      "url": "https://pip.pypa.io/en/stable/topics/secure-installs/"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A company reaches **SLSA Build Level 3** for all its artefacts, with provenance verified at deploy time. Which of these attacks does that substantially mitigate? Select all that apply.",
+    "options": [
+      {
+        "text": "A SUNSPOT-style implant on a long-lived build server that modifies source files during compilation",
+        "explanation": "Correct as mitigation: isolation between runs and protected provenance generation reduce this attack surface. The builder/platform is still a trusted component; the level does not prove it cannot be compromised."
+      },
+      {
+        "text": "An attacker uploading a hand-built binary to the artefact registry using a stolen publish token",
+        "explanation": "Correct. The binary would lack valid provenance from the trusted builder, so verification at deploy time rejects it."
+      },
+      {
+        "text": "A trusted maintainer committing obfuscated malicious code to the main branch",
+        "explanation": "Incorrect. SLSA Build provenance will faithfully attest that the artefact was built from that commit. Stopping this needs source-side controls: review, two-person approval, the Source track."
+      },
+      {
+        "text": "A genuine bug like Log4Shell in a correctly built dependency",
+        "explanation": "Incorrect. Provenance proves where something came from, not that it is bug-free. SCA and SBOMs address known vulnerabilities."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. SLSA Build track protects the path from source to artefact.\n2. L2: signed provenance from a hosted builder, so artefacts built elsewhere (B) fail verification.\n3. L3: hardened, isolated builds, so tampering *during* the build (A) is much harder.\n4. Anything that is already wrong in the source (C) or is an honest bug (D) is built and attested correctly; the provenance is true, the code is still bad.\n5. Hence defence in depth: Build track + source review + SCA.",
+    "link": {
+      "title": "SLSA v1.2 specification",
+      "url": "https://slsa.dev/spec/v1.2/"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your deploy step verifies a Sigstore signature on each container image: it checks the signature is valid and logged in the transparency log. It does **not** check the signing identity. What attack still works?",
+    "options": [
+      {
+        "text": "None; a valid, logged signature proves the image is authentic",
+        "explanation": "Validity only proves *someone* signed it. Sigstore issues certificates to any OIDC identity, including an attacker's own GitHub account."
+      },
+      {
+        "text": "An attacker can forge signatures because Sigstore keys are short-lived",
+        "explanation": "Short-lived certificates reduce long-lived credential exposure; ephemeral signing keys must still be generated and protected correctly. Short certificate lifetime does not itself enable signature forgery."
+      },
+      {
+        "text": "The transparency log can be edited to remove evidence",
+        "explanation": "The log is append-only and Merkle-tree based, so tampering is detectable. That is not the gap here."
+      },
+      {
+        "text": "An attacker signs a malicious image with their own identity (for example a workflow in their own repository) and pushes it; it passes verification",
+        "explanation": "Correct. Verification must pin the expected identity and issuer, e.g. 'signed by the release workflow in github.com/acme/api on the main branch'. Otherwise you have checked a signature, not a signer."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Sigstore 'keyless' signing: the signer authenticates with OIDC, gets a short-lived certificate naming their identity, signs, and the event is logged.\n2. Anyone with an OIDC identity can do this, including the attacker.\n3. So 'is the signature valid?' is necessary but not sufficient.\n4. The policy must also say *who*: certificate identity = `https://github.com/acme/api/.github/workflows/release.yml@refs/heads/main`, issuer = GitHub's OIDC issuer.\n5. Echo of SolarWinds: a signature tells you who; you must decide whom you trust.",
+    "link": {
+      "title": "Sigstore documentation",
+      "url": "https://docs.sigstore.dev/"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A security lead proposes: 'Pin every dependency to its current version permanently, so no malicious update can ever reach us.' What is the strongest objection?",
+    "options": [
+      {
+        "text": "Pinning is impossible in Python",
+        "explanation": "Lockfiles and `--require-hashes` make exact pinning routine in Python."
+      },
+      {
+        "text": "Pinning makes builds non-reproducible",
+        "explanation": "The opposite: exact pins (with hashes) are what make dependency resolution reproducible."
+      },
+      {
+        "text": "Attackers can change the content of a pinned version on the registry",
+        "explanation": "Registry immutability rules vary. PyPI can add differently named distribution files to an existing version even though reusing an existing filename is restricted. Artifact hash pinning rejects unapproved files; plain version pinning is weaker."
+      },
+      {
+        "text": "Permanent pins freeze in every vulnerability disclosed later (a team pinned to Log4j 2.14.1 stays exposed to Log4Shell), so pins must be paired with deliberate, frequent, reviewed updates",
+        "explanation": "Correct. Pinning trades one risk (malicious new releases) for another (known-vulnerable old releases). The usual answer is pins plus automated update PRs, SCA alerts, and perhaps a short cooling-off delay for brand-new versions."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Pins and hashes control which artifact is selected, but do not repair vulnerabilities later found in that artifact. Review and test updates using advisory context. A waiting period may help screen unexpected releases but must not become a blanket delay for urgent security fixes. Comparative rates of malicious updates and ordinary vulnerabilities are not quantified here.",
+    "link": {
+      "title": "Supply chain attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Supply_chain_attack"
+    }
+  }
+]

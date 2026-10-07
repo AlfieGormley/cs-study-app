@@ -1,0 +1,374 @@
+[
+  {
+    "id": "ip-routing-basics-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A router has these routes:\n\n| Prefix | Next hop |\n|---|---|\n| 0.0.0.0/0 | A |\n| 172.16.0.0/12 | B |\n| 172.16.4.0/22 | C |\n| 172.16.5.0/25 | D |\n\nWhere does it send a packet for 172.16.5.9?",
+    "options": [
+      {
+        "text": "A, because the default route matches everything",
+        "explanation": "The default route does match, but it's the least specific (/0). It only wins when nothing longer matches."
+      },
+      {
+        "text": "B, because it was the first specific route in the table",
+        "explanation": "Table order doesn't matter. Longest-prefix match compares prefix lengths, not position."
+      },
+      {
+        "text": "C, because 172.16.5.9 is inside 172.16.4.0/22",
+        "explanation": "It is inside the /22 (172.16.4.0 to 172.16.7.255), but a longer match also exists."
+      },
+      {
+        "text": "D, because the /25 is the longest prefix that contains it",
+        "explanation": "Correct. 172.16.5.0/25 covers 172.16.5.0 to 172.16.5.127, so .9 is inside it, and /25 is longer than /22, /12 and /0."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Check each route:\n\n| Route | Range | Match? |\n|---|---|---|\n| /0 | everything | yes |\n| 172.16.0.0/12 | 172.16.0.0 to 172.31.255.255 | yes |\n| 172.16.4.0/22 | 172.16.4.0 to 172.16.7.255 | yes |\n| 172.16.5.0/25 | 172.16.5.0 to 172.16.5.127 | yes |\n\nAll four match. The longest prefix is **/25**, so the packet goes to **D**.",
+    "link": {
+      "title": "Longest prefix match — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Longest_prefix_match"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A packet from host A (10.0.0.5) to host B (10.9.0.7) crosses one router, R1. Without NAT, what is in the frame on the link between A and R1?",
+    "options": [
+      {
+        "text": "Source IP 10.0.0.5, destination IP 10.9.0.7, destination MAC of R1",
+        "explanation": "Correct. IP addresses are end to end, so the destination IP is B. But B isn't on A's link, so the frame is addressed to the next hop's MAC: R1's."
+      },
+      {
+        "text": "Source IP 10.0.0.5, destination IP of R1, destination MAC of R1",
+        "explanation": "The gateway's IP is never written into the packet. A uses it only to look up R1's MAC with ARP."
+      },
+      {
+        "text": "Source IP 10.0.0.5, destination IP 10.9.0.7, destination MAC of B",
+        "explanation": "A can't ARP for B's MAC, because B is on a different link. MAC addresses only have meaning on the local link."
+      },
+      {
+        "text": "Source IP of R1, destination IP 10.9.0.7, destination MAC of B",
+        "explanation": "R1 doesn't rewrite source IPs unless it's doing NAT, and this frame hasn't even reached R1 yet."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A checks its table: 10.9.0.7 isn't in its connected subnet, so it uses the default route via R1.\n2. A ARPs for R1's IP to get R1's MAC.\n3. A builds the frame: dst MAC = R1, src MAC = A.\n4. Inside it, the IP packet keeps src 10.0.0.5, dst 10.9.0.7.\n5. R1 will strip the frame, decrement TTL and build a new frame to B with B's MAC. The IPs stay the same throughout.",
+    "link": {
+      "title": "IP routing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/IP_routing"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A laptop's routing table holds only `192.168.1.0/24 dev wlan0` and `default via 192.168.1.1`. It sends a packet to 8.8.8.8 and its ARP cache is empty. Which IP address does it send an ARP request for?",
+    "options": [
+      {
+        "text": "8.8.8.8",
+        "explanation": "ARP only works on the local link. 8.8.8.8 is far away, so no host on the LAN would answer for it."
+      },
+      {
+        "text": "192.168.1.255",
+        "explanation": "That's the subnet's broadcast address. ARP requests are *sent* to the broadcast MAC, but they ask about a specific IP."
+      },
+      {
+        "text": "192.168.1.1",
+        "explanation": "Correct. Only the default route matches 8.8.8.8, and its next hop is 192.168.1.1. The laptop needs that router's MAC to build the frame."
+      },
+      {
+        "text": "None; the default route means it sends the frame to the broadcast MAC",
+        "explanation": "Unicast IP traffic is never broadcast at layer 2 just because it's off-link. The host resolves the gateway's MAC and unicasts to it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. LPM for 8.8.8.8: the /24 doesn't contain it; the /0 does.\n2. The default route's next hop is **192.168.1.1**.\n3. To deliver a frame to that next hop, the laptop needs its MAC, so it broadcasts \"who has 192.168.1.1?\".\n4. The router replies, the laptop caches the MAC and sends the packet (still addressed to 8.8.8.8 at the IP layer).",
+    "link": {
+      "title": "Default route — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Default_route"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Cisco-style router (default administrative distances) has:\n\n- a static route 10.1.0.0/16 via X\n- an OSPF route 10.1.0.0/16 via Y\n- an OSPF route 10.1.5.0/24 via Z\n\nWhere do packets for 10.1.5.5 and 10.1.9.9 go?",
+    "options": [
+      {
+        "text": "Both go to X, because static routes (distance 1) beat OSPF (110)",
+        "explanation": "Distance is only compared between routes for the *same* prefix. The /24 is a different, more specific prefix, so it wins for 10.1.5.5 whatever its source."
+      },
+      {
+        "text": "10.1.5.5 goes to Z; 10.1.9.9 goes to X",
+        "explanation": "Correct. LPM first: 10.1.5.5 matches the /24, so Z. For 10.1.9.9 only the two /16s match; static (1) beats OSPF (110), so X."
+      },
+      {
+        "text": "10.1.5.5 goes to Z; 10.1.9.9 goes to Y",
+        "explanation": "LPM is right for the first, but for the tied /16s the lower administrative distance wins, and static (1) is lower than OSPF (110)."
+      },
+      {
+        "text": "Both go to Y, because dynamic routes override static ones",
+        "explanation": "It's the opposite by default: static routes have a lower (more trusted) distance than any dynamic protocol."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the order: prefix length, then distance, then metric.\n\n**10.1.5.5**\n1. Matches /16 (X), /16 (Y) and /24 (Z).\n2. Longest is /24, so **Z**. Distance never comes into it.\n\n**10.1.9.9**\n1. Matches only the two /16s.\n2. Same prefix: compare distance. Static 1 < OSPF 110, so **X**. The OSPF /16 stays in the RIB as a backup but isn't installed in the FIB.",
+    "link": {
+      "title": "Administrative distance — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Administrative_distance"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An engineer adds `ip route 0.0.0.0 0.0.0.0 198.51.100.1 250` (a static default with distance 250) on a router that also learns a default route from OSPF (distance 110) via its primary link. What happens?",
+    "options": [
+      {
+        "text": "The static route is used immediately because static routes always beat dynamic ones",
+        "explanation": "Static routes beat OSPF only with their default distance of 1. Setting 250 makes this one less trusted than OSPF's 110."
+      },
+      {
+        "text": "Traffic is split evenly between both routes by ECMP",
+        "explanation": "ECMP needs routes that tie. Different administrative distances aren't a tie; only the lower one is installed."
+      },
+      {
+        "text": "The configuration is rejected because two default routes can't coexist",
+        "explanation": "Both can live in the RIB. Only the winner goes into the FIB."
+      },
+      {
+        "text": "The OSPF default is used; the static one takes over only if the OSPF route disappears",
+        "explanation": "Correct. This is a floating static route: its high distance keeps it out of the FIB until the preferred route is withdrawn, giving a simple backup path."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Both routes are for the same prefix, 0.0.0.0/0, so compare distance.\n2. OSPF 110 < static 250, so OSPF wins and goes into the FIB.\n3. If the primary link fails, OSPF withdraws its default. The static route is now the only candidate and is installed.\n4. When OSPF comes back, its lower distance wins again. That's a **floating static** backup.",
+    "link": {
+      "title": "Administrative distance — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Administrative_distance"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A plain IPv4 router (no NAT) forwards a packet. Which of these does it do? Select all that apply.",
+    "options": [
+      {
+        "text": "Decrement the TTL",
+        "explanation": "Correct. Every router decrements TTL and drops the packet with ICMP Time Exceeded if it reaches zero."
+      },
+      {
+        "text": "Recompute the IPv4 header checksum",
+        "explanation": "Correct. TTL is part of the header, so changing it invalidates the header checksum."
+      },
+      {
+        "text": "Rewrite the destination IP to the next hop's address",
+        "explanation": "The destination IP stays as the final host's address all the way. The next hop's address is used only to find its MAC."
+      },
+      {
+        "text": "Build a new frame with the next hop's MAC as destination",
+        "explanation": "Correct. Link-layer addressing is per hop, so each router writes a fresh frame for the outgoing link."
+      },
+      {
+        "text": "Recompute the TCP checksum",
+        "explanation": "TCP's checksum covers the TCP segment plus a pseudo-header of IPs, protocol and length. None of those change at a plain router, so it's untouched. (NAT does have to fix it.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Think about what changes at a hop:\n\n| Field | Changes? |\n|---|---|\n| TTL | yes, minus 1 |\n| IP header checksum | yes, covers TTL |\n| Src/dst IP | no |\n| MAC addresses | yes, new frame |\n| TCP checksum | no |\n\nThe TCP pseudo-header uses the IP addresses, which don't change, and not the TTL. So only TTL, the header checksum and the frame change.",
+    "link": {
+      "title": "RFC 1812: Requirements for IPv4 Routers",
+      "url": "https://www.rfc-editor.org/rfc/rfc1812"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `lookup` function, someone deletes the `0.0.0.0/0` entry from `table` and then calls `lookup(\"8.8.8.8\")`. What happens?\n\n```python\ndef lookup(addr):\n    a = ip.ip_address(addr)\n    hits = [(n.prefixlen, hop)\n            for n, hop in routes\n            if a in n]\n    return max(hits)[1]\n```",
+    "options": [
+      {
+        "text": "It returns `None`",
+        "explanation": "Nothing in the function returns None. `max` doesn't return a default for an empty list unless you pass `default=`."
+      },
+      {
+        "text": "It raises `ValueError` because `max()` gets an empty list",
+        "explanation": "Correct. 8.8.8.8 is in none of 10/8, 10.1/16 or 10.1.2/24, so `hits` is `[]` and `max([])` raises ValueError. A real router would drop the packet and send ICMP Destination Unreachable."
+      },
+      {
+        "text": "It returns `\"core\"`, the shortest remaining prefix",
+        "explanation": "LPM never falls back to an entry that doesn't contain the address. 8.8.8.8 isn't in 10.0.0.0/8."
+      },
+      {
+        "text": "It raises `IndexError` on `[1]`",
+        "explanation": "The error happens earlier: `max` fails before there's a tuple to index."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Remaining routes: 10.0.0.0/8, 10.1.0.0/16, 10.1.2.0/24.\n2. Is 8.8.8.8 in any of them? Its first octet is 8, not 10. No.\n3. `hits = []`.\n4. `max([])` raises `ValueError: max() arg is an empty sequence`.\n\nThe lesson: without a default route, some destinations have no match. Routers handle that by dropping the packet with ICMP *Destination Unreachable*.",
+    "link": {
+      "title": "Python ipaddress module",
+      "url": "https://docs.python.org/3/library/ipaddress.html"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A data-centre switch has four equal-cost uplinks to the spine. Why does it hash each packet's 5-tuple to choose an uplink instead of sending packets round-robin?",
+    "options": [
+      {
+        "text": "Hashing spreads load more evenly than round-robin",
+        "explanation": "Round-robin would actually spread packets *more* evenly. Hashing can leave links unbalanced when a few big flows collide."
+      },
+      {
+        "text": "Round-robin isn't allowed by the IP specification",
+        "explanation": "Nothing in IP forbids it. It's avoided for a transport-layer reason."
+      },
+      {
+        "text": "Keeping every packet of a flow on one path avoids reordering, which TCP would misread as loss",
+        "explanation": "Correct. Paths have different queues and latencies, so per-packet spraying reorders segments. TCP sees duplicate ACKs, retransmits and cuts its window."
+      },
+      {
+        "text": "Hashing lets the switch skip the routing table lookup",
+        "explanation": "The lookup still happens; it returns a set of next hops, and the hash picks one of them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Four paths, each with its own queue depth and delay.\n2. Round-robin: packet 1 on link A, packet 2 on link B... Packet 2 may arrive before packet 1.\n3. TCP sees out-of-order data, sends duplicate ACKs; three duplicates trigger fast retransmit and a congestion-window cut.\n4. Hash of (src IP, dst IP, src port, dst port, protocol) is constant for a flow, so the flow stays on one path and in order.\n5. Cost: big flows can collide on one link (elephant flows).",
+    "link": {
+      "title": "Equal-cost multi-path routing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A binary trie holds a full IPv4 Internet table of about a million prefixes. What is the worst-case number of trie steps (nodes visited) for one lookup?",
+    "options": [
+      {
+        "text": "About 20, because log₂(1,000,000) ≈ 20",
+        "explanation": "That's the depth of a balanced search tree over N keys. A trie's depth is set by the key length, not the number of keys."
+      },
+      {
+        "text": "About 1,000,000, one per prefix",
+        "explanation": "That's the linear-scan cost. The point of a trie is to avoid looking at every route."
+      },
+      {
+        "text": "1, because tries use hashing",
+        "explanation": "A plain binary trie walks one bit per step; there's no hashing. One-step lookup is what a TCAM gives you in hardware."
+      },
+      {
+        "text": "About 32, one per address bit, whatever the table size",
+        "explanation": "Correct. Each step consumes one bit of the destination, so the walk is at most 32 levels for IPv4 (128 for IPv6). Multibit tries cut this by taking several bits per step."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. In a binary trie, the node at depth d represents a d-bit prefix.\n2. The longest possible IPv4 prefix is /32, so the deepest node is at depth 32.\n3. A lookup walks from the root following the destination's bits, at most 32 steps, remembering the last node that held a route.\n4. N doesn't appear: the cost is **O(W)** with W = 32.\n5. Each step is a memory read, so routers use multibit or compressed tries (e.g. 8 bits per step: 4 reads) or TCAMs.",
+    "link": {
+      "title": "Trie — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Trie"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A software bug loads a router's TCAM with entries sorted **shortest prefix first**, including 0.0.0.0/0. The TCAM returns the first matching entry. What happens to traffic?",
+    "options": [
+      {
+        "text": "Nothing changes; TCAM always finds the longest match regardless of order",
+        "explanation": "A TCAM returns the *first* (lowest-index) match. It's the software's job to place longer prefixes earlier so that first equals longest."
+      },
+      {
+        "text": "Everything goes to the default route, because 0.0.0.0/0 is first and matches every address",
+        "explanation": "Correct. The /0 entry is all wildcards, so it matches every lookup. With it at the top, every more specific route is shadowed."
+      },
+      {
+        "text": "Lookups slow down to a linear scan",
+        "explanation": "A TCAM compares all entries in parallel whatever the order; the speed is the same. Only the *result* is wrong."
+      },
+      {
+        "text": "Packets with no specific route are dropped",
+        "explanation": "It's the reverse: the default matches first, so even destinations with specific routes go to the default next hop."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. TCAM entry for 0.0.0.0/0: 32 \"don't care\" bits. It matches anything.\n2. Every entry is compared in parallel; the priority encoder picks the lowest-index match.\n3. With shortest first, index 0 is the /0. It always matches, so it always wins.\n4. Result: every packet goes to the default next hop.\n5. Correct ordering puts /32s first and /0 last, so the first match is the longest.",
+    "link": {
+      "title": "Content-addressable memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Content-addressable_memory"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux server has eth0 (10.0.0.5/24, default route via 10.0.0.1) and eth1 (192.168.50.5/24, no routes beyond the connected one). A client at 192.168.60.20 connects to 192.168.50.5 through a router at 192.168.50.1. The SYN arrives on eth1, but the client's stateful firewall never sees a SYN-ACK. What's the likely cause and fix?",
+    "options": [
+      {
+        "text": "The SYN-ACK leaves via eth0 because the server routes by destination, so the reply takes a path the client's firewall doesn't recognise; add source-based policy routing so replies from 192.168.50.5 use 192.168.50.1",
+        "explanation": "Correct. 192.168.60.20 isn't in either connected subnet, so the default via eth0 matches. The reply goes out the other way (asymmetric routing). A rule like `ip rule from 192.168.50.5 table 100` with its own default via 192.168.50.1 fixes it."
+      },
+      {
+        "text": "ARP fails on eth1; add a static ARP entry for the client",
+        "explanation": "The client isn't on eth1's link, so the server never ARPs for it. The issue is which route the reply uses."
+      },
+      {
+        "text": "The server's TTL is too low; raise net.ipv4.ip_default_ttl",
+        "explanation": "The default TTL (64) is ample for a couple of hops. Nothing here suggests TTL expiry."
+      },
+      {
+        "text": "Linux can't reply from a different interface's address; bind the service to 10.0.0.5",
+        "explanation": "Linux will happily send a packet with source 192.168.50.5 out of eth0. That's precisely the problem, not a limitation."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The reply's destination is 192.168.60.20.\n2. LPM on the server: 10.0.0.0/24 no, 192.168.50.0/24 no, 0.0.0.0/0 yes, via 10.0.0.1 on **eth0**.\n3. The SYN came in via 192.168.50.1; the SYN-ACK goes out via 10.0.0.1. Asymmetric.\n4. The firewall in front of the client saw the SYN go out on one path and never sees the reply on that path, or the upstream drops it with uRPF.\n5. Fix: policy routing by source address:\n```\nip route add default \\\n  via 192.168.50.1 table 100\nip rule add from 192.168.50.5 \\\n  table 100\n```",
+    "link": {
+      "title": "ip-rule(8) manual page",
+      "url": "https://man7.org/linux/man-pages/man8/ip-rule.8.html"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the August 2014 \"512k\" incident and TCAM-based forwarding are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "The global IPv4 table grew past about 512,000 routes, the default TCAM allocation on some widely deployed Cisco platforms",
+        "explanation": "Correct. On 12 August 2014 the table crossed that size and routers with the default carve-up ran out of hardware FIB space."
+      },
+      {
+        "text": "Affected routers fell back to much slower software forwarding for routes that didn't fit",
+        "explanation": "Correct. Routes that couldn't be programmed in hardware were punted to the CPU, which can't keep up with line rate, causing loss and outages."
+      },
+      {
+        "text": "TCAMs are used because they are cheap and low-power compared with DRAM",
+        "explanation": "The reverse: TCAM is expensive and power-hungry. It's used because it gives a one-cycle parallel lookup."
+      },
+      {
+        "text": "Aggregating routes (announcing fewer, shorter prefixes) reduces FIB pressure for everyone",
+        "explanation": "Correct. Every extra more-specific prefix announced globally costs a FIB entry in every default-free router, which is why deaggregation is frowned on."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. TCAM has a fixed number of entries, split between IPv4, IPv6 and other uses by configuration.\n2. Some platforms defaulted to about 512k IPv4 entries.\n3. When the table passed that on 12 August 2014, extra routes couldn't be programmed in hardware.\n4. They fell to the CPU path: slow, so packets were dropped.\n5. TCAM is chosen for speed, not cost; aggregation keeps the global table smaller and helps everyone.",
+    "link": {
+      "title": "Routing table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Routing_table"
+    }
+  }
+]

@@ -1,0 +1,378 @@
+[
+  {
+    "id": "arch-stateless-web-tier-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What makes an application server **stateless**?",
+    "options": [
+      {
+        "text": "It never reads from or writes to a database.",
+        "explanation": "Wrong. Stateless servers read and write databases all the time. Statelessness is about not keeping client-specific state *locally* between requests."
+      },
+      {
+        "text": "It keeps no client-specific data in its own memory or local disk between requests, so any instance can serve any request.",
+        "explanation": "Correct. The state lives in shared backing services, which is what makes instances interchangeable and disposable."
+      },
+      {
+        "text": "It runs inside a container.",
+        "explanation": "Wrong. Containers make packaging easy, but a containerised app can still store sessions in memory and be stateful."
+      },
+      {
+        "text": "It uses HTTP, which is a stateless protocol.",
+        "explanation": "Wrong. HTTP being stateless at the protocol level says nothing about whether your server keeps sessions or files locally."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask: if this request went to a different instance, would it still work?\n2. If the session or uploaded file lives only on server A, the answer is no, so A is stateful.\n3. If the session is in Redis and files are in S3, any instance can serve it, so the server is stateless.\n4. Note that the *system* still has state. It has just been moved to a tier designed to hold it.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An e-commerce site stores shopping baskets in each app server's memory and uses sticky sessions. During a deploy, servers are restarted one at a time. What do users experience?",
+    "options": [
+      {
+        "text": "Nothing, because the load balancer copies sessions to the new server.",
+        "explanation": "Wrong. A load balancer routes traffic; it doesn't replicate in-memory application state between servers."
+      },
+      {
+        "text": "Users pinned to each restarted server lose their baskets and may be logged out.",
+        "explanation": "Correct. With in-memory sessions, the state dies with the process. Sticky routing then sends those users to a new server that has never seen them."
+      },
+      {
+        "text": "All users across all servers lose their baskets at once.",
+        "explanation": "Wrong. Only users pinned to the restarted server are affected each time, though over a full rolling deploy that ends up being everyone."
+      },
+      {
+        "text": "Users are unaffected because sticky sessions store the basket in the cookie.",
+        "explanation": "Wrong. Sticky sessions only store a routing hint in the cookie (which server to use), not the basket data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Where does the basket live? In server A's RAM.\n2. Deploy restarts A, so the RAM is wiped.\n3. Users stuck to A are now routed elsewhere with no session data.\n4. Over the whole rolling deploy, every server restarts, so eventually every user loses their basket once.\n5. Fix: store sessions in Redis (or a signed token) so restarts don't matter.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kubernetes HPA targets 60% average CPU. The Deployment currently has 4 pods averaging 90% CPU. Ignoring tolerances and limits, how many replicas will the HPA ask for?",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "Wrong. Adding just one pod would bring average CPU to about 72%, still above the 60% target."
+      },
+      {
+        "text": "6",
+        "explanation": "Correct. desired = ceil(4 × 90 / 60) = ceil(6.0) = 6. Spreading the same total load over 6 pods gives about 60% each."
+      },
+      {
+        "text": "8",
+        "explanation": "Wrong. That would just double the count. HPA scales in proportion to how far the metric is from the target, not by a fixed factor."
+      },
+      {
+        "text": "4, because HPA only reacts to memory by default.",
+        "explanation": "Wrong. CPU utilisation is the classic HPA metric, and it's configured here explicitly."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. HPA formula: `desired = ceil(current × currentMetric / targetMetric)`.\n2. Plug in: ceil(4 × 90 / 60) = ceil(360 / 60) = ceil(6) = 6.\n3. Sanity check: total CPU demand = 4 × 90% = 360% of one pod. Over 6 pods that's 60% each, which hits the target.\n4. In practice HPA also applies a tolerance (10% by default) and stabilisation windows to avoid flapping.",
+    "link": {
+      "title": "Kubernetes: Horizontal Pod Autoscaling",
+      "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API uses JWT access tokens valid for 24 hours. A user reports their laptop was stolen, and you need to cut off access immediately. What's the core problem, and what's the standard mitigation?",
+    "options": [
+      {
+        "text": "JWTs are encrypted, so they can't be read; nothing more is needed.",
+        "explanation": "Wrong. Most JWTs are signed, not encrypted, and the issue isn't secrecy anyway. A valid signed token is accepted by every server until it expires."
+      },
+      {
+        "text": "Rotate the signing key; this is the normal way to revoke one user.",
+        "explanation": "Wrong. Rotating the key invalidates every user's token at once. It's an emergency measure for key compromise, not per-user revocation."
+      },
+      {
+        "text": "Self-contained tokens can't be revoked before expiry without a server-side check; use short-lived access tokens (for example 15 minutes) with revocable refresh tokens, or a denylist for emergencies.",
+        "explanation": "Correct. Short access-token lifetimes bound the exposure window, and refresh tokens are checked server-side so they can be revoked instantly."
+      },
+      {
+        "text": "Delete the user's session from Redis.",
+        "explanation": "Wrong. A pure JWT design has no server-side session to delete; that's the trade-off you made to avoid the lookup."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Why JWTs scale: any server can verify the signature with no shared lookup.\n2. The cost: the server has no record to delete, so the token stays valid until `exp`.\n3. With a 24 h lifetime, a stolen token works for up to 24 h.\n4. Mitigation:\n   - Access token lifetime 15 min.\n   - Refresh token stored server-side, revoked on 'log out everywhere'.\n   - Worst case exposure is now about 15 minutes.\n5. For instant cut-off, keep a small denylist of revoked token IDs in Redis, accepting a lookup on each request.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these break the assumption that any app instance can serve any request? Select all that apply.",
+    "options": [
+      {
+        "text": "Saving user-uploaded avatars to the instance's local disk.",
+        "explanation": "Correct. Other instances can't see that disk, so a later request for the avatar fails unless it hits the same server."
+      },
+      {
+        "text": "Keeping a per-process cache of rarely changing config, reloaded every minute.",
+        "explanation": "Wrong. Every instance can rebuild this cache from the shared source, so losing it costs only a reload. It's not client-specific state."
+      },
+      {
+        "text": "Storing session data in an in-process hash map.",
+        "explanation": "Correct. Session data in one process's memory ties the user to that process."
+      },
+      {
+        "text": "Storing session data in a Redis cluster shared by all instances.",
+        "explanation": "Wrong. A shared store is exactly how you keep instances stateless; any instance can fetch the session."
+      },
+      {
+        "text": "Holding a WebSocket connection with an in-memory record of which chat rooms the user joined, with no way to rebuild it.",
+        "explanation": "Correct. If that instance dies, the subscription state is lost. Store subscriptions in a shared store or let the client re-subscribe on reconnect."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Test each item: *if this instance vanished, could another one serve the next request correctly?*\n2. Local disk avatar: no, file is gone. Breaks it.\n3. Config cache: yes, rebuildable from source. Fine.\n4. In-process sessions: no. Breaks it.\n5. Redis sessions: yes. Fine.\n6. WebSocket room membership held only in memory: no, unless rebuilt on reconnect. Breaks it.\n7. Answer: 0, 2 and 4.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A flash sale doubles traffic in 20 seconds. Your web tier autoscales on CPU and new VMs take about 3 minutes to boot and pass health checks. Error rates spike for 3 minutes, and then the database falls over as the new instances come online. What's the best set of changes?",
+    "options": [
+      {
+        "text": "Lower the CPU target from 60% to 30% and change nothing else.",
+        "explanation": "Wrong. A lower target adds headroom, which helps the first spike, but the 3-minute boot time is unchanged and the database connection storm is not addressed at all."
+      },
+      {
+        "text": "Pre-scale on a schedule before the sale, switch to faster-starting containers on warm nodes, put a connection pooler in front of the database, and shed or queue excess load.",
+        "explanation": "Correct. This handles all three problems: predictable demand (schedule), slow capacity (containers), the downstream bottleneck (pooling), and anything left over (load shedding)."
+      },
+      {
+        "text": "Turn on sticky sessions so each user stays on one server.",
+        "explanation": "Wrong. Sticky sessions don't add capacity or speed up scaling, and they make load distribution worse during a spike."
+      },
+      {
+        "text": "Remove autoscaling and permanently run 10× the normal capacity.",
+        "explanation": "Wrong. It's very expensive, and the database still faces 10× the connections. It treats the symptom rather than the bottlenecks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Separate the failures:\n   - 0–3 min: not enough capacity because scaling is slower than the spike.\n   - After 3 min: the DB falls over, because new instances each open a connection pool.\n2. Capacity timing: the sale is planned, so use scheduled scaling to have the instances ready beforehand. Containers on pre-provisioned nodes start in seconds, not minutes.\n3. DB: suppose each instance has a 20-connection pool and you go from 20 to 60 instances. That's 400 → 1,200 connections. A pooler like PgBouncer multiplexes them onto, say, 200 real connections.\n4. Residual overflow: return 429/503 quickly, or put orders into a queue, rather than letting latency grow without bound.\n5. Principle: autoscaling is a control loop with lag. Plan for the lag and for the next bottleneck down.",
+    "link": {
+      "title": "Kubernetes: Horizontal Pod Autoscaling",
+      "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "During every Kubernetes rolling deploy, a small number of clients get connection-reset errors, even though readiness probes are configured. Which explanation and fix is most likely right?",
+    "options": [
+      {
+        "text": "Pods exit immediately on SIGTERM while in-flight requests are running, and endpoint removal is still propagating; handle SIGTERM by draining in-flight requests (and optionally a short preStop delay) before exiting.",
+        "explanation": "Correct. Removing a pod from Service endpoints and sending SIGTERM happen at about the same time. If the process quits instantly, requests already routed to it are cut off. Graceful drain fixes this."
+      },
+      {
+        "text": "The liveness probe is too slow; make it run every second.",
+        "explanation": "Wrong. Liveness probes decide when to restart unhealthy pods. They have nothing to do with how a pod is shut down during a deploy."
+      },
+      {
+        "text": "Rolling deploys always drop some requests; switch to deleting all pods and recreating them.",
+        "explanation": "Wrong. Recreating everything causes a full outage. Rolling deploys can be lossless with proper graceful shutdown."
+      },
+      {
+        "text": "The Deployment has too many replicas; reduce it to one.",
+        "explanation": "Wrong. With one replica every deploy causes downtime. The replica count isn't the cause of reset connections."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. What happens when a pod is terminated:\n   - The API server marks it Terminating.\n   - In parallel, the endpoints controller removes it from Services, and kubelet sends SIGTERM.\n2. Load balancers and kube-proxy take a moment to see the endpoint change, so a few new requests may still arrive.\n3. If the app exits on SIGTERM straight away, those requests and any in-flight ones get reset.\n4. Fix:\n   - Add a `preStop` sleep of a few seconds so routing updates first.\n   - On SIGTERM, stop accepting new connections and finish in-flight ones.\n   - Keep `terminationGracePeriodSeconds` longer than your slowest request.\n5. Result: zero-error rolling deploys.",
+    "link": {
+      "title": "Kubernetes: Pods",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Kubernetes, what's the difference between a failing **readiness** probe and a failing **liveness** probe?",
+    "options": [
+      {
+        "text": "Readiness failure restarts the container; liveness failure removes it from the Service.",
+        "explanation": "Wrong. It's the other way round."
+      },
+      {
+        "text": "Both restart the container; liveness just checks more often.",
+        "explanation": "Wrong. Only a liveness failure triggers a restart. Readiness controls traffic."
+      },
+      {
+        "text": "Readiness failure only logs a warning; liveness failure deletes the Deployment.",
+        "explanation": "Wrong. Neither deletes the Deployment. Readiness takes the pod out of rotation; liveness restarts it."
+      },
+      {
+        "text": "Readiness failure stops the pod receiving Service traffic (without restarting it); liveness failure makes the kubelet restart the container.",
+        "explanation": "Correct. Readiness answers 'should traffic come here now?'; liveness answers 'is this process stuck and in need of a restart?'"
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Pod warming its cache at startup: not ready yet, but not broken. Readiness fails, so it gets no traffic. No restart.\n2. Pod deadlocked: liveness fails, so the kubelet restarts it.\n3. Common mistake: making liveness check the database. If the DB blips, every pod restarts at once and makes the outage worse.\n4. Rolling deploys wait for readiness before removing old pods.",
+    "link": {
+      "title": "Kubernetes: Liveness, readiness and startup probes",
+      "url": "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You scale a Node.js API from 10 to 60 pods for a sale. Each pod keeps a database pool of 25 connections, and the Postgres server is configured with `max_connections = 500`. What happens, and what's the fix?",
+    "options": [
+      {
+        "text": "Nothing: Postgres queues extra connections until one frees up.",
+        "explanation": "Wrong. Beyond `max_connections`, Postgres refuses new connections with an error rather than queueing them."
+      },
+      {
+        "text": "60 × 25 = 1,500 connections are requested, far above 500, so many pods fail to connect; put a pooler such as PgBouncer or RDS Proxy in front and shrink per-pod pools.",
+        "explanation": "Correct. The app tier scaled, but the database's connection limit didn't. A pooler multiplexes many client connections onto a small number of real ones."
+      },
+      {
+        "text": "Postgres automatically raises `max_connections` under load.",
+        "explanation": "Wrong. It's a static setting that needs a restart to change, and each connection is a backend process with real memory cost."
+      },
+      {
+        "text": "Only CPU on the pods matters; connections are free.",
+        "explanation": "Wrong. Each Postgres connection is a separate process using memory, so thousands of them hurt even below the limit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Before: 10 × 25 = 250 connections. Fine.\n2. After: 60 × 25 = 1,500 > 500. Connection errors.\n3. Each Postgres connection is a process using several MB, so 1,500 would hurt even if allowed.\n4. Fix: PgBouncer in transaction mode, perhaps 100 real connections shared by all pods; per-pod pools of 5–10.\n5. General lesson: scaling one tier moves the bottleneck to the next.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Deployment has 10 replicas with `maxSurge: 2` and `maxUnavailable: 0`. During a rolling update, what are the most and fewest pods that serve traffic at any moment?",
+    "options": [
+      {
+        "text": "At most 12 pods exist, and at least 10 are ready at all times.",
+        "explanation": "Correct. maxSurge allows 2 above the desired 10; maxUnavailable 0 means ready pods never drop below 10."
+      },
+      {
+        "text": "At most 10 pods exist, and at least 8 are ready.",
+        "explanation": "Wrong. That describes maxSurge 0 and maxUnavailable 2."
+      },
+      {
+        "text": "At most 20 pods exist, because all new pods start before any old one stops.",
+        "explanation": "Wrong. That would be a blue-green style switch. maxSurge caps extras at 2."
+      },
+      {
+        "text": "At most 12 pods exist, and the number of ready pods may drop to 0 briefly.",
+        "explanation": "Wrong. maxUnavailable 0 forbids dropping below the desired count of ready pods."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Desired = 10.\n2. maxSurge 2 → total ≤ 12.\n3. maxUnavailable 0 → ready ≥ 10.\n4. Cycle: start 2 new → wait for readiness → stop 2 old → repeat 5 times.\n5. Cost: needs room for 2 extra pods; benefit: no capacity dip during the deploy.\n6. Both versions run side by side, so they must both work with the current schema.",
+    "link": {
+      "title": "Kubernetes: Deployments",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your login service issues 15-minute JWT access tokens and 30-day refresh tokens. Which design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Keep refresh tokens in a server-side store so they can be revoked, and check it whenever a refresh is attempted.",
+        "explanation": "Correct. The revocation check happens only on refresh (every 15 minutes per user), not on every request, so it stays cheap."
+      },
+      {
+        "text": "Put the user's full profile and basket in the access token so no service needs to look anything up.",
+        "explanation": "Wrong. Tokens travel on every request; a bloated token costs bandwidth, may exceed header limits, and the data inside goes stale."
+      },
+      {
+        "text": "Rotate refresh tokens on each use and treat reuse of an old one as a sign of theft.",
+        "explanation": "Correct. Refresh token rotation with reuse detection lets you spot a stolen token and revoke the whole token family."
+      },
+      {
+        "text": "Let any app server verify access tokens with the public key, without calling the auth service.",
+        "explanation": "Correct. That's the point of signed tokens: verification is local, so the web tier stays stateless and fast."
+      },
+      {
+        "text": "Make access tokens valid for 30 days so users don't need refresh tokens.",
+        "explanation": "Wrong. A long-lived bearer token that can't be revoked is a 30-day window for anyone who steals it."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Access token: short-lived, small, verified locally with the public key.\n2. Refresh token: long-lived, stored server-side, revocable.\n3. Worst case after a theft report: up to 15 minutes of access.\n4. Rotation: each refresh returns a new refresh token; presenting an already-used one revokes the family.\n5. Cost: one store lookup per user per 15 minutes, versus one per request for server-side sessions.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Traffic drops for 2 minutes during a TV advert break and then returns. Your HPA has `behavior.scaleDown.stabilizationWindowSeconds: 0`, and after each break you see a burst of 5xx errors while pods come back. What's the most likely fix?",
+    "options": [
+      {
+        "text": "Increase the CPU target from 60% to 90% so fewer pods are needed.",
+        "explanation": "Wrong. Higher utilisation means less headroom, making spikes worse, and it doesn't stop the flapping."
+      },
+      {
+        "text": "Restore a scale-down stabilisation window (the default is 5 minutes) so the HPA keeps pods through short dips.",
+        "explanation": "Correct. The HPA uses the highest recommendation over the window before scaling down, so a 2-minute dip doesn't remove capacity you need again straight away."
+      },
+      {
+        "text": "Switch the HPA to scale on memory instead of CPU.",
+        "explanation": "Wrong. The problem is how quickly it scales down after a dip, not which metric it reads."
+      },
+      {
+        "text": "Use sticky sessions so returning users go back to their old pods.",
+        "explanation": "Wrong. Those pods were removed, and sticky sessions don't add capacity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Window 0: dip → scale down at once → traffic returns → pods start again (seconds to minutes) → errors meanwhile.\n2. Default 300 s window: the HPA scales down only to the highest replica count recommended in the last 5 minutes.\n3. A 2-minute dip never causes a scale-down.\n4. Scale-up stays fast (no window by default), so real growth is still handled.\n5. Trade-off: you pay for some idle pods for a few minutes.",
+    "link": {
+      "title": "Kubernetes: Horizontal Pod Autoscaling",
+      "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    }
+  }
+]

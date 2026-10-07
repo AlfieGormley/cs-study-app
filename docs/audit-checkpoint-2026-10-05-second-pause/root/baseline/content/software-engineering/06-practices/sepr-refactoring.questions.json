@@ -1,0 +1,344 @@
+[
+  {
+    "id": "sepr-refactoring-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague's pull request is titled \"Refactor billing module\". It renames three functions, extracts two helpers, and changes the rounding of totals from truncation to round-half-up because \"the old way was wrong\". What is the main problem?",
+    "options": [
+      {
+        "text": "Renaming functions is not a refactoring, so the title is misleading",
+        "explanation": "Rename is one of the most common refactorings. The renames are fine; the problem is the rounding change."
+      },
+      {
+        "text": "The rounding fix changes observable behaviour, so the PR mixes refactoring with a behaviour change",
+        "explanation": "Correct. Refactoring must preserve behaviour. Changing rounding alters outputs, so if a test or customer total changes you cannot tell whether the restructure or the fix caused it. Split it into two PRs."
+      },
+      {
+        "text": "Extracting helpers should always be done in a separate PR from renames",
+        "explanation": "Several behaviour-preserving moves can live together; they share the same safety property. It is behaviour changes that must be separated."
+      },
+      {
+        "text": "Refactoring should only be done in a dedicated, planned sprint",
+        "explanation": "Most refactoring is preparatory or opportunistic, done continuously alongside feature work. Planned refactoring is the exception."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask of each change: does any observable output differ?\n2. Renames and extractions: no. Same inputs give the same outputs.\n3. Rounding: yes. A total of 10.005 truncated to 10.00 now becomes 10.01.\n4. So the PR wears both of Beck's \"two hats\" at once.\n5. Fix: land the pure refactor first (tests unchanged and green), then a small, clearly titled PR for the rounding change, with tests updated to the new expected values.",
+    "link": {
+      "title": "Definition of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DefinitionOfRefactoring.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You must restructure a 600-line function in a legacy module with no tests. You are not sure what some branches are meant to do. What should you do first?",
+    "options": [
+      {
+        "text": "Rewrite the function cleanly from the specification, then delete the old one",
+        "explanation": "There may be no accurate specification, and the old code contains behaviour (including quirks callers rely on) that a rewrite will silently drop."
+      },
+      {
+        "text": "Fix the branches that look wrong, so the tests you write later describe correct behaviour",
+        "explanation": "Changing behaviour before you have a safety net is exactly how legacy refactors break production. Callers may depend on the 'wrong' behaviour."
+      },
+      {
+        "text": "Write characterisation tests that record what the function currently returns for a range of inputs",
+        "explanation": "Correct. Characterisation tests pin down current behaviour, bugs included, so any accidental change during refactoring shows up as a failing test."
+      },
+      {
+        "text": "Use the IDE's automated refactorings, which make tests unnecessary",
+        "explanation": "Automated refactorings are safer than hand edits, but they cannot see dynamic dispatch, reflection or string-based lookups, and they do not cover the manual steps you will also take."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Refactoring means behaviour stays the same, so you need a way to detect change.\n2. With no tests, write some. But you do not know what is *correct*, so assert what the code *does*.\n3. Call it with representative inputs, including edge cases (zero, empty, very large), and paste the actual outputs into assertions.\n4. Now refactor in small steps, running the tests after each.\n5. Only afterwards, as a separate visible change, fix any bugs the characterisation tests revealed.",
+    "link": {
+      "title": "Workflows of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/articles/workflowsOfRefactoring/"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Every time the business adds a new payment method, a developer has to edit `checkout.py`, `refunds.py`, `reports.py`, `emails.py` and `fraud.py`. Which code smell is this?",
+    "options": [
+      {
+        "text": "Divergent change",
+        "explanation": "Divergent change is the mirror image: one module edited for many unrelated reasons. Here it is one reason causing edits in many modules."
+      },
+      {
+        "text": "Feature envy",
+        "explanation": "Feature envy is a function that uses another object's data more than its own. It can contribute, but it does not describe one change scattering across files."
+      },
+      {
+        "text": "Long function",
+        "explanation": "Nothing here says any function is long; the problem is how knowledge of payment methods is spread out."
+      },
+      {
+        "text": "Shotgun surgery",
+        "explanation": "Correct. One logical change (a new payment method) forces small edits in many places. The fix is to gather payment-method knowledge into one place, often with polymorphism: one class per method."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Count reasons and places. Reasons to change: one (new payment method). Places edited: five.\n2. One reason, many places = **shotgun surgery**.\n3. Many reasons, one place = **divergent change**.\n4. A typical fix: a `PaymentMethod` interface with `charge`, `refund`, `describe` and `risk_score`, so adding a method means adding one class.",
+    "link": {
+      "title": "Code smell — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Code_smell"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Consider this function:\n\n```python\ndef ship_cost(w, country):\n    if country == \"GB\":\n        if w <= 2:\n            return 4\n        return 4 + (w - 2)\n    if w <= 2:\n        return 10\n    return 10 + 2 * (w - 2)\n```\n\nAfter an \"Extract Function\" refactoring, which version preserves behaviour?",
+    "options": [
+      {
+        "text": "```python\ndef tiered(w, base, per_kg):\n    extra = max(0, w - 2)\n    return base + per_kg * extra\n\ndef ship_cost(w, country):\n    if country == \"GB\":\n        return tiered(w, 4, 1)\n    return tiered(w, 10, 2)\n```",
+        "explanation": "Correct. For w <= 2, `max(0, w-2)` is 0, giving base. For w > 2 it gives base + per_kg*(w-2), matching both branches of the original."
+      },
+      {
+        "text": "```python\ndef tiered(w, base, per_kg):\n    return base + per_kg * w\n\ndef ship_cost(w, country):\n    if country == \"GB\":\n        return tiered(w, 4, 1)\n    return tiered(w, 10, 2)\n```",
+        "explanation": "This charges per kg from zero, not above 2 kg. A 1 kg GB parcel would cost 5 instead of 4, so behaviour has changed."
+      },
+      {
+        "text": "```python\ndef tiered(w, base, per_kg):\n    extra = max(0, w - 2)\n    return base + per_kg * extra\n\ndef ship_cost(w, country):\n    if country == \"GB\":\n        return tiered(w, 4, 2)\n    return tiered(w, 10, 1)\n```",
+        "explanation": "The per-kg rates are swapped between GB and elsewhere. A 5 kg GB parcel would cost 10 instead of 7."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Check a few cases against the original:\n\n```\ncase        orig   option A\nGB, 1kg     4      4+1*0 = 4\nGB, 5kg     4+3=7  4+1*3 = 7\nFR, 2kg     10     10+2*0 = 10\nFR, 4kg     10+4   10+2*2 = 14\n```\n\nOption A matches everywhere. The key insight is that `max(0, w - 2)` replaces the `if w <= 2` branch. Option B drops the 2 kg threshold, and option C swaps the rates. A characterisation test with these four cases would have caught both mistakes instantly.",
+    "link": {
+      "title": "Catalog of Refactorings — refactoring.com",
+      "url": "https://refactoring.com/catalog/"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your library exposes `fetch_user(id)`, used by 40 internal services owned by other teams. You want to rename it to `get_user(id)`. What is the safest approach?",
+    "options": [
+      {
+        "text": "Rename it in one commit and ask every team to update their code the same day",
+        "explanation": "Coordinating 40 deploys at once is unrealistic; any service that misses the window breaks."
+      },
+      {
+        "text": "Add `get_user`, make `fetch_user` delegate to it (marked deprecated), migrate callers over time, then delete `fetch_user` when usage reaches zero",
+        "explanation": "Correct. This is parallel change (expand, migrate, contract). Every intermediate state works, and each team migrates on its own schedule."
+      },
+      {
+        "text": "Leave the name as it is; public names can never be changed",
+        "explanation": "They can be changed safely, just not atomically. Parallel change exists for this case."
+      },
+      {
+        "text": "Copy the function body into `get_user` so both versions are independent",
+        "explanation": "Two copies will drift apart as bugs are fixed in one and not the other. The old name should delegate to the new one, not duplicate it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Expand**: add `get_user`. Make `fetch_user` a thin wrapper that calls it and emits a `DeprecationWarning` (and ideally a metric).\n2. **Migrate**: teams switch callers at their own pace. Watch the metric fall.\n3. **Contract**: when the metric reads zero for long enough, delete `fetch_user`.\n\nEach step is deployable alone, and there is never a moment when a caller is broken.",
+    "link": {
+      "title": "Parallel Change — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of the following are refactorings in the strict sense (they do not change observable behaviour)? Select all that apply.",
+    "options": [
+      {
+        "text": "Renaming a local variable from `d` to `days_overdue`",
+        "explanation": "Correct. Local names are invisible to callers; behaviour is unchanged."
+      },
+      {
+        "text": "Extracting a loop body into a well-named private function",
+        "explanation": "Correct. The same computation runs in the same order; only the structure differs."
+      },
+      {
+        "text": "Replacing a linear search with a dictionary lookup that returns the same results",
+        "explanation": "Correct, as long as results (including which item wins on duplicates) are identical. Performance is not usually counted as observable behaviour for refactoring purposes, though in a real-time system it might be."
+      },
+      {
+        "text": "Changing a function so it raises `ValueError` instead of returning `None` for bad input",
+        "explanation": "Callers see a different result (an exception instead of a value), so this is a behaviour change, even if it is an improvement."
+      },
+      {
+        "text": "Renaming a JSON field in an API response from `ts` to `timestamp`",
+        "explanation": "Clients parse that field name. It is part of the contract, so renaming it changes observable behaviour and needs parallel change."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each: could any caller, client or test (other than one checking internals) observe a difference?\n\n1. Local rename: no.\n2. Extract private function: no.\n3. Faster lookup with identical results: no functional difference. Watch duplicate-key handling, which is the classic way this goes wrong.\n4. Exception instead of `None`: yes, callers that checked for `None` now crash.\n5. JSON field rename: yes, every client parsing `ts` breaks.\n\nSo A, B and C are refactorings; D and E are behaviour changes and should be made deliberately.",
+    "link": {
+      "title": "Definition of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DefinitionOfRefactoring.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A function `report(start_date, end_date, ...)` and eight others all take `start_date, end_date` as consecutive parameters, and several of them repeat the check `if start_date > end_date: raise ...`. Which refactoring best addresses this?",
+    "options": [
+      {
+        "text": "Inline Function, to remove the duplicate checks",
+        "explanation": "Inlining spreads code out further; it would make the duplication worse."
+      },
+      {
+        "text": "Replace Conditional with Polymorphism",
+        "explanation": "There is no type-based branching here. The smell is two values that always travel together."
+      },
+      {
+        "text": "Introduce Parameter Object: a `DateRange` that validates itself on construction",
+        "explanation": "Correct. The pair is a data clump. Bundling it into an object gives the concept a name, puts the validation in one place and shortens nine signatures."
+      },
+      {
+        "text": "Rename the parameters to `start` and `end` for brevity",
+        "explanation": "Shorter names do not address either the clump or the duplicated validation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Spot the smell: the same two parameters appear together in nine signatures. That is a **data clump**.\n2. The duplicated validation is a sign that the pair forms a concept with its own rules.\n3. Introduce a `DateRange(start, end)` whose constructor raises if `start > end`.\n4. Change the nine functions to take a `DateRange`. The checks disappear from them because an invalid range can no longer exist.\n5. Bonus: behaviour like `days()` or `contains(d)` now has an obvious home.",
+    "link": {
+      "title": "Catalog of Refactorings — refactoring.com",
+      "url": "https://refactoring.com/catalog/"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to replace an in-house ORM used in about 300 places across a monolith with SQLAlchemy. The team deploys from `main` several times a day. Which plan best fits?",
+    "options": [
+      {
+        "text": "Create a long-lived `sqlalchemy-migration` branch, convert all 300 call sites, then merge when complete",
+        "explanation": "Months of divergence from a busy `main` guarantees a painful merge, and nothing is validated in production until the very end."
+      },
+      {
+        "text": "Introduce a repository interface in front of the old ORM, move callers to it, add a SQLAlchemy implementation behind a flag, switch over gradually, then delete the old ORM",
+        "explanation": "Correct. This is branch by abstraction: all work merges to `main` continuously, both implementations coexist behind one interface, and you can flip back if the new one misbehaves."
+      },
+      {
+        "text": "Use a strangler fig facade in front of the monolith's HTTP routes",
+        "explanation": "Strangler fig works at the system boundary, routing requests between old and new systems. The ORM is an internal component used throughout one codebase, so an internal abstraction is the better fit."
+      },
+      {
+        "text": "Freeze feature work for a quarter so the migration can be done without conflicts",
+        "explanation": "Freezing the business for a refactor is rarely acceptable and still carries big-bang risk at the end."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Constraint: trunk-based development with frequent deploys. A long branch fights this.\n2. The component is internal and widely used, so you want a seam inside the code.\n3. Branch by abstraction:\n   - Add `UserRepository` (etc.) with the operations callers need.\n   - Implement it with the old ORM first. Move callers over in small PRs.\n   - Add a SQLAlchemy implementation. Toggle per repository with a flag.\n   - Compare results in staging, then flip in production one area at a time.\n   - Remove the old implementation when nothing uses it.\n4. Every step ships, and rollback is a flag flip.",
+    "link": {
+      "title": "Branch By Abstraction — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/BranchByAbstraction.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team is replacing a 15-year-old monolithic insurance system with new services using the strangler fig pattern. Which practices help the migration succeed? Select all that apply.",
+    "options": [
+      {
+        "text": "Put a routing facade in front of the legacy system so individual routes can be moved to the new services",
+        "explanation": "Correct. The facade is the heart of the pattern: clients do not need to know which system serves a route."
+      },
+      {
+        "text": "Migrate one slice of functionality at a time and switch off its legacy path once the new one is proven",
+        "explanation": "Correct. Incremental slices deliver value early and limit the blast radius of each mistake."
+      },
+      {
+        "text": "Stop all changes to the legacy system until the new one fully replaces it",
+        "explanation": "A multi-year freeze is rarely possible; the business keeps needing changes. The pattern tolerates the old system still changing, because only migrated slices leave it."
+      },
+      {
+        "text": "Compare outputs of old and new implementations on real traffic (shadowing) before cutting over a route",
+        "explanation": "Correct. Shadow traffic surfaces the hidden behaviour that legacy systems are full of, before customers see a difference."
+      },
+      {
+        "text": "Rebuild the whole system in parallel, then switch all traffic over in one weekend",
+        "explanation": "That is a big-bang rewrite, the approach the strangler fig exists to avoid."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. The pattern's core idea: the new system grows around the old one, route by route.\n2. That needs a facade (A) and incremental slices (B).\n3. Legacy code encodes years of undocumented rules. Shadowing (D) sends the same request to both and compares answers, so differences are found before cut-over.\n4. C is unrealistic and unnecessary. E is the big-bang rewrite: no value until the end, and every hidden behaviour becomes a launch-weekend incident.",
+    "link": {
+      "title": "Strangler Fig Application — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to rename a column `users.fullname` to `users.display_name` in a Postgres database behind a web app that runs several instances and is deployed with rolling updates (old and new versions run at the same time). Which sequence is safe?",
+    "options": [
+      {
+        "text": "Run `ALTER TABLE users RENAME COLUMN fullname TO display_name`, then deploy the new code",
+        "explanation": "During the rolling deploy, old instances still query `fullname`, which no longer exists, so they fail until they are replaced."
+      },
+      {
+        "text": "Deploy code that uses `display_name`, then rename the column",
+        "explanation": "The new code fails until the rename runs; with any gap between the two, requests error."
+      },
+      {
+        "text": "Add `display_name`; deploy code that writes both and reads `fullname`; backfill; deploy code that reads `display_name`; deploy code that stops writing `fullname`; drop `fullname`",
+        "explanation": "Correct. This is expand and contract for schemas. At every step, every running version of the code finds the columns it expects."
+      },
+      {
+        "text": "Rename the column inside a transaction so no request ever sees it missing",
+        "explanation": "The transaction makes the rename atomic for the database, but old application instances still query the old name after it commits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Rolling deploys mean two code versions run at once, so each schema state must work for both.\n\n```\nstep                   old   new\nadd display_name       ok    -\nwrite both, read old   ok    ok\nbackfill               ok    ok\nread display_name      ok    ok\nstop writing fullname  -     ok\ndrop fullname          -     ok\n```\n\nEach row is a separate deploy or migration. Renaming in one step (A or B) always leaves a window where one version queries a column that does not exist.",
+    "link": {
+      "title": "Parallel Change — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which of these modules is the best candidate for a planned refactoring effort?",
+    "options": [
+      {
+        "text": "A 2,000-line parser written in 2016 that nobody has needed to change in three years, with no open bugs",
+        "explanation": "Ugly but stable code costs you nothing while nobody touches it. Refactoring it carries risk with little payoff."
+      },
+      {
+        "text": "A 400-line pricing module changed in 60% of last quarter's pull requests, where most of those PRs needed review fixes for regressions",
+        "explanation": "Correct. High change frequency plus frequent mistakes means the module's structure is taxing almost every piece of work. Improvements here pay back quickly."
+      },
+      {
+        "text": "A well-tested utility module that uses an older naming convention than the rest of the codebase",
+        "explanation": "Cosmetic inconsistency is cheap to live with. It might be worth a rename while passing through, but not a planned effort."
+      },
+      {
+        "text": "A deprecated module scheduled for deletion next month",
+        "explanation": "Effort spent on code about to be deleted is wasted."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Refactoring pays off when the code is changed often; the benefit is cheaper future changes.\n2. Rank by (how often it changes) × (how painful each change is).\n3. The parser: low × high = low. The utility: low pain. The deprecated module: no future.\n4. The pricing module: very high change rate and high pain (regressions). That is where the time goes.\n5. This is the same reasoning as \"hotspot\" analysis in the technical debt lesson.",
+    "link": {
+      "title": "Workflows of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/articles/workflowsOfRefactoring/"
+    }
+  }
+]

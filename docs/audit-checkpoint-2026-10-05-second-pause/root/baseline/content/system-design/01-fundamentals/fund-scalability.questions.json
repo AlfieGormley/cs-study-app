@@ -1,0 +1,373 @@
+[
+  {
+    "id": "fund-scalability-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A web app stores logged-in users' sessions in each server's memory. You scale from 1 to 4 servers behind a round-robin load balancer. What happens?",
+    "options": [
+      {
+        "text": "Users get randomly logged out as requests land on servers that don't hold their session",
+        "explanation": "Correct. In-memory sessions make the app secretly stateful. With round-robin, ~75% of a user's requests hit a server without their session. Fix: move sessions to a shared store (Redis, database) or use signed tokens."
+      },
+      {
+        "text": "Everything works; sessions are copied automatically",
+        "explanation": "Incorrect. Nothing copies in-process memory between servers. Each server only knows the sessions it created itself."
+      },
+      {
+        "text": "The app becomes 4× faster for each user",
+        "explanation": "Incorrect. More servers increases total throughput capacity, not single-request speed, and here it introduces a correctness bug."
+      },
+      {
+        "text": "The load balancer refuses to start",
+        "explanation": "Incorrect. The load balancer has no idea where sessions are stored; it'll happily distribute requests and expose the bug."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. User logs in; request hits server 1, which stores the session in its memory.\n2. Next request: round-robin sends it to server 2. Server 2 has no session, so the user appears logged out.\n3. With 4 servers, each request has a 3/4 chance of missing.\n\nFixes, best first:\n\n- Store sessions in Redis or the database (stateless app tier).\n- Use self-contained signed tokens (e.g. JWT), accepting harder revocation.\n- Sticky sessions at the load balancer, a stop-gap: sessions are lost when a server dies, and load balances unevenly.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "fund-scalability-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which are genuine **advantages of vertical scaling** over horizontal scaling? Select all that apply.",
+    "options": [
+      {
+        "text": "No need to partition data or deal with cross-node consistency",
+        "explanation": "Correct. One bigger machine avoids distributed data entirely: no sharding, no replication lag between partitions, no network partitions between nodes."
+      },
+      {
+        "text": "Usually requires no application changes",
+        "explanation": "Correct. Moving a database to a larger instance type doesn't change how the application talks to it."
+      },
+      {
+        "text": "Eliminates single points of failure",
+        "explanation": "Incorrect. The opposite: a single big machine *is* a single point of failure. You still need a replica or standby for availability."
+      },
+      {
+        "text": "Cost scales linearly forever",
+        "explanation": "Incorrect. There's a hard ceiling (eventually no bigger machine exists), top-end hardware costs disproportionately more, and you pay for the big machine's full size even at quiet times."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "List what each approach gives you:\n\n| | Vertical | Horizontal |\n|---|---|---|\n| Code changes | Few | Often many |\n| Distributed data | No | Yes |\n| Ceiling | Hard limit | Very high |\n| SPOF | Yes | No |\n| Cost at the top | Steep | ~Linear |\n\nSo the true advantages of vertical are simplicity: no distribution, no code changes. Its weaknesses are the ceiling, cost at the top end and the single point of failure.",
+    "link": {
+      "title": "Scalability (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Scalability"
+    }
+  },
+  {
+    "id": "fund-scalability-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A batch job takes 100 minutes on one worker. Profiling shows 10 minutes is a serial step (merging results on one node) and the rest parallelises perfectly. Using Amdahl's law, how long does it take with 10 workers, and what's the best achievable with unlimited workers?",
+    "options": [
+      {
+        "text": "10 minutes with 10 workers; approaching 0 with unlimited",
+        "explanation": "Incorrect. This assumes the whole job parallelises. The 10-minute serial step runs at the same speed regardless of worker count."
+      },
+      {
+        "text": "28 minutes with 10 workers; 19 minutes with unlimited",
+        "explanation": "Incorrect. The arithmetic doesn't follow Amdahl's law. The unlimited-worker limit is simply the serial portion, 10 minutes."
+      },
+      {
+        "text": "55 minutes with 10 workers; 50 minutes with unlimited",
+        "explanation": "Incorrect. This halves the job rather than dividing the parallel part by the worker count."
+      },
+      {
+        "text": "19 minutes with 10 workers; 10 minutes with unlimited",
+        "explanation": "Correct. Serial 10 min + parallel 90/10 = 9 min → 19 min (5.3× speed-up). With infinite workers the parallel part → 0, leaving the 10-minute serial step: at most 10× speed-up."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "p = 0.9 (parallel fraction), 1 − p = 0.1 (serial).\n\n**10 workers:**\n```\ntime = serial + parallel / N\n     = 10 + 90 / 10\n     = 19 min\nS(10) = 100 / 19 ≈ 5.3x\n```\n\nCheck with the formula: `1 / (0.1 + 0.9/10) = 1 / 0.19 ≈ 5.26`.\n\n**Unlimited workers:**\n```\ntime -> 10 + 0 = 10 min\nS_max = 1 / (1 - p) = 1 / 0.1 = 10x\n```\n\nLesson: to go faster, shrink the serial merge (e.g. tree-shaped merging), not add workers.",
+    "link": {
+      "title": "Amdahl's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API handles 1,200 requests/s. Each request holds a database connection for an average of 25 ms. Using Little's law, how many connections are in use on average?",
+    "options": [
+      {
+        "text": "300",
+        "explanation": "Incorrect. This is off by 10×, probably from using 0.25 s instead of 0.025 s. Always convert milliseconds to seconds carefully."
+      },
+      {
+        "text": "48",
+        "explanation": "Incorrect. 1,200 / 25 = 48 divides instead of multiplying, and mixes seconds with milliseconds."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. L = λ × W = 1,200 × 0.025 s = 30 connections in use on average. Size the pool with headroom above this, e.g. 40–50."
+      },
+      {
+        "text": "30,000",
+        "explanation": "Incorrect. This multiplies by 25 without converting ms to seconds. The units must match: requests per *second* × *seconds*."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Little's law: `L = λ × W`.\n\n```\nλ = 1,200 req/s\nW = 25 ms = 0.025 s\nL = 1,200 x 0.025 = 30\n```\n\nSo on average 30 connections are busy. Add headroom for bursts and variance (say 40–50). If you run 6 app instances, that's ~8 connections each.\n\nSanity check on units: (requests/s) × s = requests, i.e. a count of things in flight.",
+    "link": {
+      "title": "Little's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add app servers to a service that writes every request to a single Postgres primary. Throughput rises from 1 to 4 servers, then flattens from 4 to 16. What's the most likely explanation?",
+    "options": [
+      {
+        "text": "The single write primary is now the serial bottleneck, so more app servers can't help",
+        "explanation": "Correct. This is Amdahl's law in practice: once the shared primary is saturated, it's the serial component. Options include batching writes, scaling the primary up, removing unnecessary writes, or partitioning the data."
+      },
+      {
+        "text": "The load balancer has a maximum of 4 backends",
+        "explanation": "Incorrect. Production load balancers handle hundreds or thousands of backends. If this were the cause, the extra servers simply wouldn't receive traffic, which you'd see immediately."
+      },
+      {
+        "text": "The app servers need more RAM",
+        "explanation": "Incorrect. If each app server were the bottleneck, adding more would keep increasing throughput. The flat curve shows the limit is something they all share."
+      },
+      {
+        "text": "Horizontal scaling never works for web apps",
+        "explanation": "Incorrect. It worked well from 1 to 4 servers. The plateau is caused by a specific shared bottleneck, not by horizontal scaling in general."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Read the curve:\n\n```\nservers: 1    2    4    8    16\nreq/s:   1k   2k   4k   4.2k 4.3k\n```\n\nLinear growth then a plateau means a **shared** resource saturated at ~4k req/s. Each request needs one write on the primary, so the primary caps throughput at ~4k writes/s however many app servers sit in front.\n\nDiagnose: primary CPU, I/O or lock waits near 100% at the plateau.\nFix: reduce writes per request, batch, scale the primary vertically, or shard writes across several primaries.",
+    "link": {
+      "title": "Amdahl's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service runs at 2,000 req/s, 50 ms per request, with a 150-thread pool per instance across 2 instances. A downstream dependency degrades, and request time rises to 400 ms. What happens, according to Little's law?",
+    "options": [
+      {
+        "text": "Nothing; the thread pools have plenty of spare capacity",
+        "explanation": "Incorrect. That was true at 50 ms (100 threads needed out of 300). At 400 ms the required concurrency jumps 8×."
+      },
+      {
+        "text": "The service autoscales out of trouble immediately",
+        "explanation": "Incorrect. Autoscaling takes minutes, and extra instances add more load to the already-degraded dependency. Timeouts, circuit breakers and bulkheads are the proper defence."
+      },
+      {
+        "text": "Throughput drops to 1,000 req/s but latency stays at 400 ms",
+        "explanation": "Incorrect. Maximum throughput with 300 threads at 400 ms is 750 req/s, and the excess queues, so latency rises well beyond 400 ms."
+      },
+      {
+        "text": "The service needs 800 concurrent threads but has 300, so requests queue, latency spirals and the service effectively fails",
+        "explanation": "Correct. L = 2,000 × 0.4 = 800. With only 300 threads, throughput is capped at 300/0.4 = 750 req/s; the remaining load queues up and times out. A slow dependency has exhausted the caller's thread pool."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "**Before:**\n```\nL = 2000 x 0.050 = 100 threads in use\ncapacity = 2 x 150 = 300 threads\n```\nComfortable.\n\n**After degradation:**\n```\nL needed = 2000 x 0.400 = 800 threads\n```\n\n**Max throughput** with 300 threads at 400 ms each:\n```\nλ_max = L / W = 300 / 0.4 = 750 req/s\n```\n\n2,000 arrive, 750 can be served. 1,250 req/s pile into the queue, so waiting time grows every second until clients time out (and possibly retry, making it worse).\n\nDefences: aggressive timeouts on the dependency, a circuit breaker to fail fast, a separate bulkhead pool for that dependency, and load shedding.",
+    "link": {
+      "title": "Little's Law (Marc Brooker)",
+      "url": "https://brooker.co.za/blog/2018/06/20/littles-law.html"
+    }
+  },
+  {
+    "id": "fund-scalability-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A rate limiter allows 100 requests/min per user, implemented as an in-memory counter in each app instance. You scale from 1 to 10 instances behind a round-robin load balancer. What's the effective limit per user now, and the right fix?",
+    "options": [
+      {
+        "text": "Still 100/min; each instance enforces it",
+        "explanation": "Incorrect. Each instance only sees ~1/10 of a user's requests, so each counter allows 100 before blocking: about 1,000/min in total."
+      },
+      {
+        "text": "About 10/min; the limit is split between instances",
+        "explanation": "Incorrect. The counters don't coordinate, so nothing divides the limit. Each instance independently allows 100."
+      },
+      {
+        "text": "About 1,000/min; move the counter to a shared store such as Redis (e.g. atomic INCR with expiry)",
+        "explanation": "Correct. Hidden per-instance state multiplies the limit by the instance count. A shared atomic counter restores a single global limit; alternatively, route each user consistently to one instance, at the cost of uneven load."
+      },
+      {
+        "text": "Unlimited; in-memory counters reset on every request",
+        "explanation": "Incorrect. Counters persist for the life of the process; they just aren't shared across instances."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Round-robin spreads a user's requests evenly: each instance sees ~1/10.\n2. Each instance's counter permits 100/min before blocking.\n3. Total allowed ≈ 10 × 100 = **1,000/min**.\n\nFix with a shared counter:\n\n```\nkey = rl:{user}:{minute}\nn = INCR key\nif n == 1: EXPIRE key 60\nif n > 100: reject\n```\n\nRedis performs `INCR` atomically, so all 10 instances share one count. (In production, set the expiry in the same atomic step, e.g. a Lua script, so a crash between the two commands can't leave a key that never expires.) Cost: one extra ~0.5 ms network hop per request, and a dependency on Redis (decide whether to fail open or closed if it's down).",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "fund-scalability-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A cluster's throughput is 10k req/s with 4 nodes, 18k with 8, and **15k with 16**. Every node broadcasts cache invalidations to every other node on each write. What best explains the curve?",
+    "options": [
+      {
+        "text": "Amdahl's law: a serial component caps throughput",
+        "explanation": "Incorrect. Pure contention makes throughput flatten towards a ceiling. It never makes throughput *fall* when you add nodes."
+      },
+      {
+        "text": "Coherence overhead, as the Universal Scalability Law predicts: all-to-all invalidation traffic grows roughly with N², so adding nodes eventually reduces throughput",
+        "explanation": "Correct. With 16 nodes there are 120 node pairs, against 28 with 8 nodes. Coordination work grows faster than capacity, so the curve goes retrograde."
+      },
+      {
+        "text": "The load balancer is the bottleneck at 18k req/s",
+        "explanation": "Incorrect. A saturated load balancer would cap throughput at a flat line, not make it drop as backends are added."
+      },
+      {
+        "text": "The new nodes are faulty",
+        "explanation": "Incorrect. Possible, but the scenario names a mechanism (all-to-all broadcasts) whose cost grows with the square of the node count. That's the systematic explanation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the coordination paths:\n\n```\npairs = N x (N - 1) / 2\nN = 4  ->   6\nN = 8  ->  28\nN = 16 -> 120\n```\n\nDoubling from 8 to 16 nodes doubles capacity but more than quadruples pairwise chatter. Once that overhead outgrows the extra capacity, throughput falls.\n\nFixes: partition the cache so each key has one owner, use short TTLs instead of broadcasts, or send invalidations through a shared log that nodes consume.",
+    "link": {
+      "title": "Neil J. Gunther and the Universal Scalability Law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Neil_J._Gunther"
+    }
+  },
+  {
+    "id": "fund-scalability-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You want app instances that can be killed and replaced at any moment (autoscaling, spot instances). Which designs make an instance **stateful** in a way that breaks this? Select all that apply.",
+    "options": [
+      {
+        "text": "Uploaded files are written to local disk and processed later by the same instance",
+        "explanation": "Correct. If the instance is terminated, the file is lost. Write uploads to object storage (e.g. S3) instead."
+      },
+      {
+        "text": "Pending emails are held in an in-memory queue inside the process",
+        "explanation": "Correct. A crash or scale-in silently drops every queued email. Use a durable external queue."
+      },
+      {
+        "text": "Configuration is read from environment variables at startup",
+        "explanation": "Incorrect. Every instance gets the same config from outside, so instances stay interchangeable. This is the Twelve-Factor recommendation."
+      },
+      {
+        "text": "Requests carry a signed token that any instance can verify with a shared public key",
+        "explanation": "Incorrect. Self-contained tokens are what let the app tier stay stateless: no instance needs to remember the session."
+      },
+      {
+        "text": "Each instance holds long-lived WebSocket connections for its users",
+        "explanation": "Correct. Connections are state: killing the instance drops them, and messages for those users must be routed to whichever instance holds the connection. Such servers need draining and a routing layer."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "For each design ask: *if this instance vanished right now, would anything be lost or misrouted?*\n\n| Design | Lost on kill? |\n|---|---|\n| Local uploads | Files |\n| In-memory email queue | Emails |\n| Env-var config | Nothing |\n| Signed tokens | Nothing |\n| WebSockets | Connections |\n\nThe fix in each stateful case is to push state down into a dedicated store (object storage, a durable queue) or, for connections, accept a stateful tier and give it graceful draining.",
+    "link": {
+      "title": "The Twelve-Factor App: Disposability",
+      "url": "https://12factor.net/disposability"
+    }
+  },
+  {
+    "id": "fund-scalability-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your only Postgres server (16 vCPUs) peaks at 70% CPU, mostly from reads. Traffic is expected to double over 18 months. The team is four engineers. What is the most sensible plan?",
+    "options": [
+      {
+        "text": "Shard the database across 8 nodes now, before it becomes urgent",
+        "explanation": "Incorrect. Sharding is a large, hard-to-reverse change that adds cross-shard queries and operational load. Nothing here requires it: the load is mostly reads and well within what one larger machine can do."
+      },
+      {
+        "text": "Do nothing; 70% CPU leaves enough headroom for 2x growth",
+        "explanation": "Incorrect. Doubling 70% gives 140%: the server would be saturated well before 18 months, deep into the queueing cliff."
+      },
+      {
+        "text": "Rewrite the system as microservices with a database each",
+        "explanation": "Incorrect. That's an organisational and architectural overhaul aimed at a problem a bigger machine and a few replicas solve."
+      },
+      {
+        "text": "Scale up to a larger instance and add a cache and read replicas for the read load; plan sharding only if writes outgrow one machine",
+        "explanation": "Correct. Vertical scaling plus read scaling handles 2x growth with minimal code change. It keeps the team's effort on the product and defers sharding until writes, not reads, require it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Project the load:\n\n```\nnow:   70% of 16 vCPU ≈ 11 vCPU\n2x:    ≈ 22 vCPU -> over capacity\n32 vCPU: 22 / 32 ≈ 69% (as today)\n64 vCPU: 22 / 64 ≈ 35%\n```\n\nA larger instance alone buys time, and because the load is read-heavy, a cache and read replicas take most of it off the primary. Sharding solves *write* scaling, at a high cost in complexity. Use the cheapest technique that matches the bottleneck.",
+    "link": {
+      "title": "Read replicas (Amazon RDS)",
+      "url": "https://aws.amazon.com/rds/features/read-replicas/"
+    }
+  },
+  {
+    "id": "fund-scalability-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A data pipeline is 95% parallelisable and 5% serial. The business wants it **8x** faster. Using Amdahl's law, what is the minimum number of workers, and could it ever reach 25x?",
+    "options": [
+      {
+        "text": "8 workers; yes, with about 25 workers",
+        "explanation": "Incorrect. 8 workers give only 1 / (0.05 + 0.95/8) ≈ 5.9x, because the serial 5% doesn't speed up. And 25x is above the 20x ceiling."
+      },
+      {
+        "text": "13 workers; no, the ceiling is 20x",
+        "explanation": "Correct. S(13) = 1 / (0.05 + 0.95/13) ≈ 8.1x, while S(12) ≈ 7.7x. As N grows without limit, S → 1 / 0.05 = 20x, so 25x is impossible without shrinking the serial part."
+      },
+      {
+        "text": "160 workers; yes, with about 500 workers",
+        "explanation": "Incorrect. 160 workers would give about 17.9x, far more than needed for 8x, and no number of workers can exceed 20x."
+      },
+      {
+        "text": "It can't reach 8x at all",
+        "explanation": "Incorrect. The ceiling is 20x, so 8x is reachable with a modest number of workers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Solve Amdahl for N:\n\n```\n8 = 1 / (0.05 + 0.95 / N)\n0.05 + 0.95 / N = 0.125\n0.95 / N = 0.075\nN = 12.67 -> 13 workers\n```\n\nCheck: `1 / (0.05 + 0.95/13) ≈ 8.12`.\n\nCeiling: `1 / (1 - 0.95) = 20x`. To reach 25x you must cut the serial share below 4% (`1/25 = 0.04`), for example by parallelising the merge step.",
+    "link": {
+      "title": "Amdahl's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A product catalogue gets about 100 reads for every write, and its single database is struggling under the **read** load. What is the usual first step?",
+    "options": [
+      {
+        "text": "Add a cache in front of the database and read replicas behind it",
+        "explanation": "Correct. The tier table matches read-heavy data with caching and read replicas. Most reads become cache hits, and the rest spread over replicas, while writes stay on one simple primary."
+      },
+      {
+        "text": "Shard the database by product ID",
+        "explanation": "Incorrect. Sharding spreads writes and data, but it's complex and the problem here is reads, which have cheaper fixes."
+      },
+      {
+        "text": "Put the database behind a CDN",
+        "explanation": "Incorrect. CDNs serve static or cacheable HTTP content at the edge. They don't sit in front of a database's query interface."
+      },
+      {
+        "text": "Add more stateless app servers",
+        "explanation": "Incorrect. The app servers aren't the bottleneck; more of them would just send more queries to the struggling database."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Match the technique to the bottleneck:\n\n| Bottleneck | Technique |\n|---|---|\n| Static content | CDN |\n| Stateless app CPU | More app servers |\n| Read-heavy data | Cache + replicas |\n| Write-heavy data | Sharding |\n\nAt 100:1, a cache with a 90% hit rate removes 90% of database reads in one step. Replicas then absorb the misses. Sharding is reserved for when writes or data size outgrow one primary.",
+    "link": {
+      "title": "Read replicas (Amazon RDS)",
+      "url": "https://aws.amazon.com/rds/features/read-replicas/"
+    }
+  }
+]

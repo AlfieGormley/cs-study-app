@@ -1,0 +1,378 @@
+[
+  {
+    "id": "crypto-macs-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume a protected random key and correctly implemented HMAC-SHA256 verification. A message tag matches. What security property does this support?",
+    "options": [
+      {
+        "text": "The message is confidential: nobody else could read it",
+        "explanation": "A MAC provides no confidentiality. The message may have crossed the network in plain text."
+      },
+      {
+        "text": "The message wasn't altered and was produced by someone holding the key",
+        "explanation": "Correct under the stated cryptographic assumptions. The tag supports authenticity to a key holder and integrity of the covered bytes; it is not an absolute guarantee against forgery or replay."
+      },
+      {
+        "text": "The message is fresh and hasn't been seen before",
+        "explanation": "A captured message and tag can be replayed while the key and message interpretation remain accepted, unless the protocol enforces freshness."
+      },
+      {
+        "text": "A specific named person sent it, provably to a third party",
+        "explanation": "Both sides share the key, so either could have made the tag. Proving authorship to a third party needs a digital signature."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Under the stated assumptions, a matching tag supports integrity of the covered bytes and authenticity to some key holder. It is a computational assurance, not logical proof or freshness. Encryption adds confidentiality; enforced sequence/timestamp/nonce policy can address replay. Signatures separate signing and verification authority but attribution requires trustworthy key binding and custody.",
+    "link": {
+      "title": "Message authentication code — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Message_authentication_code"
+    }
+  },
+  {
+    "id": "crypto-macs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bank and customer app share an HMAC key. Can the valid tag alone distinguish whether the app or the bank generated a payment instruction?",
+    "options": [
+      {
+        "text": "Yes, because the tag can't be forged without the key",
+        "explanation": "True against outsiders, but the bank also has the key. It could have produced the same tag itself."
+      },
+      {
+        "text": "Yes, if the tag uses SHA-256 rather than MD5",
+        "explanation": "The hash choice doesn't matter. The issue is that two parties share the key."
+      },
+      {
+        "text": "No, because MACs can be forged by anyone who sees one valid tag",
+        "explanation": "HMAC is not forgeable from seen tags. The problem is the symmetric key, not a forgery attack."
+      },
+      {
+        "text": "No: both hold the same key and can generate valid tags",
+        "explanation": "Correct. A signature can separate signing authority from verification authority, but does not by itself prove which human acted or determine a legal outcome."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Both app and bank can compute the same valid tag, so it cannot distinguish them. With an asymmetric signature, verifiers can check without gaining signing authority. Trust in key binding, key custody and other evidence is still needed for attribution. Legal conclusions are outside this lesson.",
+    "link": {
+      "title": "Message authentication code — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Message_authentication_code"
+    }
+  },
+  {
+    "id": "crypto-macs-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which Python call should you use to check a received HMAC tag against the one you computed?",
+    "options": [
+      {
+        "text": "`received == expected`",
+        "explanation": "Ordinary string equality has no constant-time guarantee. Its exact comparison strategy and observable leakage depend on the implementation."
+      },
+      {
+        "text": "`hmac.compare_digest(expected, received)`",
+        "explanation": "Correct for valid same-type tags: this API avoids content-dependent short-circuit comparison. Other request processing and type/length differences can still affect timing."
+      },
+      {
+        "text": "`hashlib.sha256(received) == hashlib.sha256(expected)`",
+        "explanation": "This compares two hash objects, not their digests, so it's always `False`. Comparing their digests instead would work, but `compare_digest` is the direct, documented tool."
+      },
+      {
+        "text": "`received in expected`",
+        "explanation": "A substring check would accept a truncated or empty tag. It's both wrong and insecure."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ordinary equality has no constant-time guarantee. compare_digest avoids content-dependent short-circuiting for appropriate inputs; validate the tag format and length, then compare consistently. This is not proof that the complete login or webhook endpoint has no timing leakage.",
+    "link": {
+      "title": "hmac — Python documentation",
+      "url": "https://docs.python.org/3/library/hmac.html"
+    }
+  },
+  {
+    "id": "crypto-macs-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your webhook receiver checks an HMAC over the request body correctly. An attacker records yesterday's `refund issued` event and sends it again today. The tag is valid. What is the best defence?",
+    "options": [
+      {
+        "text": "Use a longer HMAC key",
+        "explanation": "The tag is genuine: the server signed exactly this body. A longer key doesn't stop the attacker resending it."
+      },
+      {
+        "text": "Encrypt the webhook body",
+        "explanation": "Encryption hides the content but the replayed ciphertext would still decrypt and verify."
+      },
+      {
+        "text": "Include a timestamp (and event ID) in the signed data, reject old timestamps, and ignore event IDs already processed",
+        "explanation": "Correct. Freshness must be inside the MAC, or the attacker can change it. Stripe signs `timestamp.body` and recommends a tolerance window; event IDs make handlers idempotent."
+      },
+      {
+        "text": "Switch from HMAC-SHA256 to HMAC-SHA512",
+        "explanation": "A stronger hash doesn't help against replay; the message was never forged."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A MAC proves \"a key holder produced these bytes\". It says nothing about *when*.\n2. Replay sends the exact same bytes and tag, so verification succeeds.\n3. Add freshness to the signed data: `tag = HMAC(k, timestamp || '.' || body)`.\n4. Reject timestamps outside a window (say 5 minutes), so old captures die quickly.\n5. Within the window, record processed event IDs and skip duplicates. This also handles legitimate retries.",
+    "link": {
+      "title": "Stripe: webhook signatures and replay handling",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  },
+  {
+    "id": "crypto-macs-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport hmac, hashlib\nk = b\"k\"\nf = hashlib.sha256\nt1 = hmac.new(k, b\"a\", f).hexdigest()\nt2 = hmac.new(k, b\"a\", f).hexdigest()\nt3 = hmac.new(b\"K\", b\"a\",\n              f).hexdigest()\nprint(t1 == t2, t1 == t3, len(t1))\n```",
+    "options": [
+      {
+        "text": "`True False 64`",
+        "explanation": "Correct. HMAC is deterministic for the same key and message; changing the key changes the tag; HMAC-SHA256 hex output is 64 characters."
+      },
+      {
+        "text": "`False False 64`",
+        "explanation": "HMAC has no randomness, so the same key and message always give the same tag."
+      },
+      {
+        "text": "`True True 64`",
+        "explanation": "Keys are case-sensitive bytes: `b\"k\"` and `b\"K\"` differ, so the tags are completely different."
+      },
+      {
+        "text": "`True False 32`",
+        "explanation": "32 is the digest length in bytes; `hexdigest` doubles it to 64 characters."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `t1` and `t2`: same key, same message, no randomness: equal. `True`.\n2. `t3` uses key `b\"K\"` (0x4B) instead of `b\"k\"` (0x6B). Different key, completely different tag. `False`.\n3. HMAC-SHA256 outputs 32 bytes; hex encoding gives 64 characters.\n\nOutput: `True False 64`.",
+    "link": {
+      "title": "hmac — Python documentation",
+      "url": "https://docs.python.org/3/library/hmac.html"
+    }
+  },
+  {
+    "id": "crypto-macs-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an idealised timing oracle, each additional matching hex character is distinguishable and the secret 32-character tag remains fixed. Ignoring repetitions and noise, roughly how many candidate choices does a position-by-position search use, versus the full tag space?",
+    "options": [
+      {
+        "text": "About 16^32 = 2^128, the same as brute force",
+        "explanation": "That's the brute-force figure. The early exit lets the attacker solve each character separately."
+      },
+      {
+        "text": "About 32, one per character",
+        "explanation": "Each position has 16 possible hex values, so the attacker must test up to 16 per position, not one."
+      },
+      {
+        "text": "About 32 × 16 = 512 (each repeated to average out noise), versus 2^128 by brute force",
+        "explanation": "Correct. Timing turns one huge search into 32 small ones of 16 values each."
+      },
+      {
+        "text": "About 16^2 = 256",
+        "explanation": "The attacker searches each of 32 positions in turn, so it's 32 × 16, not just one pair of characters."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The full tag space has 16^32 = 2^128 possibilities. In the stipulated prefix oracle, up to 16 candidate choices at each of 32 positions gives roughly 512 choices. Real measurements can require many repetitions or may not expose this signal at all. This arithmetic is not a network timing-attack benchmark.",
+    "link": {
+      "title": "hmac — Python documentation",
+      "url": "https://docs.python.org/3/library/hmac.html"
+    }
+  },
+  {
+    "id": "crypto-macs-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're writing a GitHub webhook handler. Which practices are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Compute HMAC-SHA256 over the raw request body bytes, before parsing JSON",
+        "explanation": "Correct. The tag covers the exact bytes sent. Parsing first risks acting on unverified input and changing the bytes."
+      },
+      {
+        "text": "Parse the JSON, re-serialise it, then compute the HMAC over that",
+        "explanation": "Re-serialising can reorder keys or change whitespace and escapes, so the bytes no longer match the signature even for genuine events."
+      },
+      {
+        "text": "Compare the computed and received signatures with `hmac.compare_digest`",
+        "explanation": "Correct. compare_digest avoids content-dependent early termination in the comparison; it does not prove the complete endpoint has no timing side channel."
+      },
+      {
+        "text": "Store the webhook secret in a secrets manager, not in source code",
+        "explanation": "Correct. Anyone with the secret can forge webhooks, so treat it like a password or API key."
+      },
+      {
+        "text": "On failure, log the expected signature to help debugging",
+        "explanation": "Logging the expected tag hands a valid signature for that body to anyone with log access. Log that verification failed, not the secret material."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each item against two goals: verify exactly what was signed, and don't leak secrets.\n\n1. Raw bytes before parsing: matches what GitHub signed. **Correct.**\n2. Re-serialised JSON: different bytes, false failures, and you've parsed untrusted input. **Wrong.**\n3. `compare_digest`: avoids content-dependent early exit in that comparison. **Correct.**\n4. Secret in a secrets manager: limits who can forge. **Correct.**\n5. Logging the expected tag: leaks a valid signature. **Wrong.**",
+    "link": {
+      "title": "Validating webhook deliveries — GitHub Docs",
+      "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+    }
+  },
+  {
+    "id": "crypto-macs-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An auth service issues HS256 JWTs (HMAC-SHA256). Twelve other microservices need to verify these tokens, so all twelve are given the HMAC secret. What is the main risk?",
+    "options": [
+      {
+        "text": "HS256 tokens can be decrypted by anyone, exposing their claims",
+        "explanation": "An HS256 JWS carries base64url-encoded readable claims; it is signed, not encrypted. JWTs can also use JWE encryption, so this is not true of every JWT form."
+      },
+      {
+        "text": "SHA-256 is too weak for JWTs",
+        "explanation": "SHA-256 is fine. The problem is architectural: who holds the key."
+      },
+      {
+        "text": "A compromised service holding the shared key can create tags for arbitrary JWT claims accepted under that key",
+        "explanation": "Correct. With a MAC, verifying and creating use the same key. Use an asymmetric algorithm (RS256, ES256, EdDSA) so services verify with a public key only."
+      },
+      {
+        "text": "Tokens will expire too quickly",
+        "explanation": "Expiry is set by the `exp` claim, unrelated to HMAC key distribution."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. HMAC is symmetric: `verify` means recomputing the tag, which requires the key.\n2. So every verifier can also *sign*. Thirteen services now hold the power to issue admin tokens.\n3. The attack surface is the weakest of those thirteen.\n4. With a signature scheme, only the auth service holds the private key; the others get the public key, which can verify but not sign.\n5. Rule of thumb: HMAC when the signer and verifier are the same party; signatures when many parties verify.",
+    "link": {
+      "title": "Message authentication code — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Message_authentication_code"
+    }
+  },
+  {
+    "id": "crypto-macs-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume suitable random independent keys, fresh unpredictable CBC IVs, unambiguous encoding and required replay controls. Which encryption/MAC composition best protects ciphertext and IV integrity before decryption?",
+    "options": [
+      {
+        "text": "`ct = CBC(k1, pt)`, then `tag = HMAC(k2, iv || ct)`; on receipt, verify the tag before decrypting",
+        "explanation": "Correct. Encrypt-then-MAC with separate keys, covering the IV, and verifying first so tampered data is never decrypted."
+      },
+      {
+        "text": "`tag = HMAC(k, pt)`, then encrypt `pt || tag` with CBC under the same key `k`",
+        "explanation": "This is MAC-then-encrypt with one key. The receiver must decrypt and check padding before the MAC, which is what padding-oracle and Lucky Thirteen attacks exploit."
+      },
+      {
+        "text": "`ct = CBC(k1, pt)` and `tag = HMAC(k2, pt)`, send both",
+        "explanation": "Encrypt-and-MAC: the tag over plaintext is deterministic, so it reveals when two messages are equal, and decryption still happens before verification."
+      },
+      {
+        "text": "`ct = CBC(k1, pt)`, `tag = HMAC(k2, ct)` but leave the IV out of the MAC",
+        "explanation": "The IV affects the first plaintext block. Leaving it unauthenticated lets an attacker flip bits in block 1 without detection."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Encrypt with a suitable fresh unpredictable CBC IV and key k1. Authenticate the IV, ciphertext and relevant context using independent k2 and an unambiguous encoding. Reject invalid tags before decryption. Replay and key-management requirements remain separate. Prefer a maintained AEAD implementation when available.",
+    "link": {
+      "title": "Authenticated encryption — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Authenticated_encryption"
+    }
+  },
+  {
+    "id": "crypto-macs-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An API signs requests as `SHA256(secret || params)`. An attacker sees one request and its tag but not the secret. To append `&admin=true` with a valid tag via length extension, which of these do they **not** need?",
+    "options": [
+      {
+        "text": "The original tag",
+        "explanation": "They do need it: it becomes the starting internal state for continued hashing."
+      },
+      {
+        "text": "The original params",
+        "explanation": "They need these to build the forged message `params || padding || extra`, which the server will recompute over."
+      },
+      {
+        "text": "The secret's length (or a few guesses at it)",
+        "explanation": "They need it to compute SHA-256's padding correctly. Trying each plausible length is cheap."
+      },
+      {
+        "text": "The secret itself",
+        "explanation": "Correct. That's what makes length extension devastating: the attacker never learns the secret, yet produces a valid tag."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. SHA-256 processes `secret || params || pad1` and outputs its internal state `T`.\n2. The attacker sets their own SHA-256 state to `T`.\n3. They continue hashing `extra = &admin=true` with final padding computed for total length `len(secret) + len(params) + len(pad1) + len(extra)`.\n4. Inputs needed: `T`, `params`, and `len(secret)` (guessable).\n5. They send `params || pad1 || extra` and the new tag. The server computes `SHA256(secret || that)` and gets the same value.\n\nHMAC's outer hash stops step 2 from giving a valid final tag.",
+    "link": {
+      "title": "Flickr API signature forgery (Duong and Rizzo, 2009)",
+      "url": "https://vnhacker.blogspot.com/2009/09/flickrs-api-signature-forgery.html"
+    }
+  },
+  {
+    "id": "crypto-macs-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A link uses a 32-bit truncated HMAC tag. Assume a fixed valid context with no expiry, independent random tag guesses with replacement, and 1,000 verification attempts per second. What is the expected waiting time for success?",
+    "options": [
+      {
+        "text": "Never: HMAC-SHA256 is unforgeable",
+        "explanation": "HMAC's security is bounded by the tag length you keep. With 32 bits, a random guess succeeds with probability 2^-32."
+      },
+      {
+        "text": "About 50 days",
+        "explanation": "Correct. Each guess succeeds with probability 2^-32, so the expected number of tries is 2^32 ≈ 4.3 billion. At 1,000 per second that's about 4.3 million seconds ≈ 50 days."
+      },
+      {
+        "text": "About 4 seconds",
+        "explanation": "This divides by a billion rather than a thousand. 2^32 tries at 1,000 per second takes far longer."
+      },
+      {
+        "text": "About 5,000 years",
+        "explanation": "That would apply to roughly a 47-bit tag at this rate. 32 bits is much weaker."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each independent guess succeeds with probability 2^-32, so mean waiting time is 2^32 attempts. At 1,000/s this is about 49.7 days; the 50% success time is shorter, about 34.5 days. This assumes the same accepted context and no expiry or rate limit. Choose tag length and lifetime from the forgery budget; a random server-side token also requires sufficient entropy and request limits.",
+    "link": {
+      "title": "HMAC — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/HMAC"
+    }
+  },
+  {
+    "id": "crypto-macs-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A design review lists candidate ways to authenticate messages between two services that share a random 32-byte key `k`. Which are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "HMAC-SHA256 with key `k`",
+        "explanation": "Correct. HMAC is the standard construction; its nested design defeats length extension and it has a security proof."
+      },
+      {
+        "text": "`SHA256(k || msg)`",
+        "explanation": "Vulnerable to length extension: anyone who sees one tag can compute tags for extended messages without `k`."
+      },
+      {
+        "text": "Keyed BLAKE2b (`hashlib.blake2b(msg, key=k)`)",
+        "explanation": "Correct. BLAKE2 has no length-extension weakness and was designed with a key parameter for exactly this use."
+      },
+      {
+        "text": "KMAC256 with key `k`",
+        "explanation": "Correct. KMAC is NIST's standard keyed mode of SHA-3 (SP 800-185)."
+      },
+      {
+        "text": "Sending `SHA256(msg)` alongside the message",
+        "explanation": "No key is involved, so an attacker who changes the message simply recomputes the hash."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "HMAC-SHA256, keyed BLAKE2b and KMAC256 are specified keyed constructions. SHA256(k || msg) admits length extension, and SHA256(msg) has no authentication key. Needing a key and resisting extension are necessary considerations here, not a general proof that any other candidate MAC is sound.",
+    "link": {
+      "title": "Message authentication code — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Message_authentication_code"
+    }
+  }
+]

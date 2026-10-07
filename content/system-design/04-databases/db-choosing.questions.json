@@ -1,0 +1,373 @@
+[
+  {
+    "id": "db-choosing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A new B2B invoicing product expects 5,000 customers, about 200 GB of data after three years, a few hundred writes per second at peak, and needs atomic updates across invoices, payments and ledger entries. What's the most sensible default?",
+    "options": [
+      {
+        "text": "Cassandra, so it can scale later",
+        "explanation": "Wrong as a default. Conventional Cassandra data models do not provide the familiar general multi-table relational transaction model needed here; distributed operations add complexity without a measured need."
+      },
+      {
+        "text": "A managed relational database such as Postgres on RDS or Cloud SQL",
+        "explanation": "Correct. Managed PostgreSQL is a reasonable starting point for multi-table transactions and relational constraints. Actual capacity depends on schema, queries, indexes, hardware and service configuration."
+      },
+      {
+        "text": "MongoDB, because invoices are documents",
+        "explanation": "MongoDB supports multi-document transactions, so it is not incapable. However, document shape alone does not outweigh this workload’s relational invariants and lack of a document-specific requirement."
+      },
+      {
+        "text": "Redis, for speed",
+        "explanation": "Wrong. Redis is primarily in-memory with weaker durability guarantees by default; it's a poor system of record for financial data and isn't needed for this load."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Prioritize atomic changes across invoice, payment and ledger rows.\n2. PostgreSQL supports transactions and relational constraints appropriate for those requirements.\n3. A managed service reduces routine backup, patching and failover work.\n4. Benchmark the actual schema and peak workload before sizing; no universal writes-per-second capacity or percentage is asserted.\n5. Revisit the design when measured resource or latency constraints justify it.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "db-choosing-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An app writes a product to Postgres and then, in the same request handler, indexes it in Elasticsearch. Occasionally products exist in Postgres but never appear in search. What's the root cause and the robust fix?",
+    "options": [
+      {
+        "text": "Elasticsearch is eventually consistent; wait longer",
+        "explanation": "Wrong as a complete explanation. Refresh introduces a configurable delay, but a failed second write can leave a permanently missing index document."
+      },
+      {
+        "text": "Wrap both writes in a Postgres transaction",
+        "explanation": "Wrong. A Postgres transaction can't include an Elasticsearch write; if the Elasticsearch call succeeds and the commit then fails (or vice versa), they still diverge."
+      },
+      {
+        "text": "Dual writes aren't atomic: if the process crashes or the second call fails after the first succeeds, the stores diverge. Derive the index from Postgres's change stream (CDC, e.g. Debezium → Kafka) or a transactional outbox",
+        "explanation": "Correct. Commit the business change and its durable handoff atomically, then retry downstream delivery. Eventual indexing depends on retention, ordering/idempotency, monitoring and recovery of rejected events."
+      },
+      {
+        "text": "Retry the Elasticsearch write three times",
+        "explanation": "Wrong as a complete fix. Retries reduce the failure rate, but a crash between the two writes still loses the index update, and retries can reorder updates."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Request: `INSERT product` → commit → `PUT /products/_doc/42`.\n2. Failure points: the process crashes after commit, the network times out, Elasticsearch rejects the request. Any of these leaves Postgres with the product and Elasticsearch without it.\n3. There's no transaction spanning both systems, so dual writes can't be made atomic.\n4. **Outbox**: in the same Postgres transaction, insert a row into `outbox(event)`. A relay publishes outbox rows to Kafka; a consumer indexes them. Atomic because it's one database transaction.\n5. **CDC**: Debezium reads the Postgres WAL and publishes row changes; same effect with no app change.\n6. Bonus: rebuild the index from a database snapshot plus retained changes, or replay the full history only if it has actually been retained.",
+    "link": {
+      "title": "Martin Fowler: Polyglot Persistence",
+      "url": "https://martinfowler.com/bliki/PolyglotPersistence.html"
+    }
+  },
+  {
+    "id": "db-choosing-q3",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A ride-hailing service is choosing storage. Which pairings of data to store are well matched? Select all that apply.",
+    "options": [
+      {
+        "text": "Current driver locations (updated every 4 s, only latest matters, queried by radius) → Redis with geospatial commands",
+        "explanation": "Correct. High-frequency overwrites of small values with radius queries suit an in-memory store with `GEOADD`/`GEOSEARCH`. Losing a few seconds of positions on failure is acceptable."
+      },
+      {
+        "text": "Payments and trip billing → an eventually consistent store with last-write-wins",
+        "explanation": "Wrong. LWW can silently drop writes; financial records need ACID transactions and durability, i.e. a relational or distributed SQL database."
+      },
+      {
+        "text": "Trip history per rider (write once, read newest first by rider) → a wide-column or key-value store with rider id as partition key and time as sort key",
+        "explanation": "Correct for a known keyed access pattern, subject to per-key throughput, partition size and retention limits. No design scales one hot rider or unbounded partition without additional measures."
+      },
+      {
+        "text": "Analytics over two years of trips (aggregates by city and hour) → the same OLTP Postgres primary",
+        "explanation": "Poor default when heavy analytical scans compete with production transactions. A separate analytical system can isolate that load; its exact speedup must be benchmarked, not assumed."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Match each workload's pattern to a store:\n\n| Data | Pattern | Fit |\n|---|---|---|\n| Locations | overwrite, geo radius, ephemeral | Redis geo |\n| Payments | atomic, durable, invariants | Postgres |\n| Trip history | append, by rider, by time | Cassandra / DynamoDB |\n| Analytics | scans + aggregates | Columnar warehouse |\n\nOptions 1 and 3 match. Option 2 puts money in a store that can lose writes; option 4 puts OLAP on the OLTP primary.\nA universal warehouse speedup is absent because no matched workload benchmark is supplied; losing recent driver positions must also be an explicitly accepted product tradeoff.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "db-choosing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team proposes moving from Postgres to a distributed SQL database because 'we'll need to scale'. The database is 300 GB, CPU peaks at 25%, and p99 query latency is fine. What's the best response?",
+    "options": [
+      {
+        "text": "Agree; migrating early is always cheaper",
+        "explanation": "Wrong. Migrating early is cheaper only if you're sure you'll need it. Here there's no evidence of need, and distributed SQL adds latency (consensus on writes), cost and new failure modes."
+      },
+      {
+        "text": "Shard Postgres manually instead",
+        "explanation": "Wrong. Sharding is even more invasive and also unjustified by the current numbers."
+      },
+      {
+        "text": "Switch to DynamoDB to avoid scaling worries",
+        "explanation": "Wrong. It would mean redesigning the data model around known access patterns and giving up ad-hoc SQL, without a demonstrated scaling problem."
+      },
+      {
+        "text": "Decline for now: set measurable triggers (e.g. CPU > 60% at peak after tuning, data > 2 TB, write rate approaching tested limits), and revisit when they approach",
+        "explanation": "Correct. There is no demonstrated bottleneck. Trigger numbers are illustrative, not PostgreSQL limits, and CPU percentage alone does not establish linear growth headroom."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Headroom: CPU at 25% suggests CPU headroom, but locks, I/O, memory and nonlinear queueing can bottleneck earlier; measure with realistic load tests.\n2. Size: 300 GB, well within one node; instances with 1+ TB RAM exist.\n3. Cost of moving: rewrite schema assumptions, retest every query, accept write latency from consensus (often a few ms more per commit), learn new operations.\n4. Benefit today: none measurable.\n5. Action: capacity-plan with growth projections, set triggers, and prepare cheaper steps first (read replicas, caching, partitioning large tables, archiving old data).",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "db-choosing-q5",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a polyglot architecture with Postgres (orders), Redis (cache) and Elasticsearch (search), which statement reflects good practice?",
+    "options": [
+      {
+        "text": "Postgres is the system of record for orders; Redis and Elasticsearch hold derived data that can be rebuilt from it",
+        "explanation": "Correct. Naming one source of truth per fact means derived stores can lag or be wiped and rebuilt without data loss."
+      },
+      {
+        "text": "Each store is equally authoritative; reconcile differences nightly",
+        "explanation": "Wrong. If every store is authoritative, a disagreement has no correct answer. Nightly reconciliation then has to guess."
+      },
+      {
+        "text": "Write new orders to Redis first for speed, then persist them to Postgres later",
+        "explanation": "Wrong as a default. Treating the cache as the first write target makes it a source of truth with weaker durability; a crash can lose orders."
+      },
+      {
+        "text": "Elasticsearch should be the source of truth because it can query everything",
+        "explanation": "Wrong. Search engines are optimised for search, not transactional writes; they lack multi-document transactions and have near-real-time visibility."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. For each fact, ask: if two stores disagree, which one is right?\n2. Orders: Postgres. It has transactions, constraints and durable backups.\n3. Redis cache: a copy for speed. Wiping it costs only latency.\n4. Elasticsearch: a copy for search, fed from Postgres via CDC. Wiping it means a reindex, not data loss.\n5. Test: can you rebuild each derived store from scratch? If not, it has become a source of truth by accident.",
+    "link": {
+      "title": "Martin Fowler: Polyglot Persistence",
+      "url": "https://martinfowler.com/bliki/PolyglotPersistence.html"
+    }
+  },
+  {
+    "id": "db-choosing-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A global messaging product requires users in Sydney, Frankfurt and Virginia to acknowledge writes within 20 ms, continue accepting writes in every region during inter-region partitions, and immediately expose one final, strict order for the same conversation with no later reordering. Which assessment is correct?",
+    "options": [
+      {
+        "text": "One Postgres primary in Virginia with read replicas in each region",
+        "explanation": "Wrong. Sydney → Virginia is ~200 ms round trip, so writes can't meet 20 ms, and a partition would stop non-Virginia writes entirely."
+      },
+      {
+        "text": "The requirements conflict: choose provisional local writes with eventual ordering, or authoritative conversation ordering with latency and partition-availability tradeoffs.",
+        "explanation": "Correct. Isolated regions cannot coordinate one immediately final order. Homing a conversation restricts where it can commit during a partition; merging independently accepted writes can require later reordering."
+      },
+      {
+        "text": "A globally serializable database (e.g. Spanner) with a single leader per row",
+        "explanation": "Close but it fails one requirement. Spanner gives strong ordering, but writes need a cross-region quorum (tens to hundreds of ms), and during a partition the minority region can't commit."
+      },
+      {
+        "text": "Redis in each region with no replication",
+        "explanation": "Wrong. Without replication, users in other regions would never see the messages, and Redis alone is a weak system of record."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A 20 ms acknowledgement cannot depend on coordination among these distant regions.\n2. During a partition, both regions may accept concurrent writes to the same conversation.\n3. Assigning local timestamps and a deterministic tie-breaker can eventually converge, but cannot promise that an already displayed order will never change.\n4. A single authoritative sequencer supplies a final order, but other regions must reach it or defer commits.\n5. Clarify which requirement may be relaxed; a database product does not remove this conflict.",
+    "link": {
+      "title": "DeCandia et al.: Dynamo, Amazon's highly available key-value store",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "db-choosing-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A start-up uses DynamoDB on-demand. Traffic is steady at 3,000 writes/s and 12,000 strongly consistent reads/s of 1 KB items, 24/7. Finance asks if there's a cheaper way. What's the best first move?",
+    "options": [
+      {
+        "text": "Compare current regional provisioned and reserved-capacity pricing against on-demand for the measured steady workload before changing modes.",
+        "explanation": "Correct. Predictable utilization can favor provisioned capacity, but actual savings depend on prices, utilization, commitments, storage, indexes and growth. No fixed savings ratio is assumed."
+      },
+      {
+        "text": "Migrate to self-hosted Cassandra immediately",
+        "explanation": "Wrong as a first move. It might save on the bill but adds major engineering and on-call cost; the cheaper DynamoDB billing mode should be evaluated first."
+      },
+      {
+        "text": "Switch to eventually consistent reads everywhere without checking requirements",
+        "explanation": "Half right. Eventually consistent reads cost half as much, but changing semantics without checking which reads need consistency risks bugs. It's a good second step after checking."
+      },
+      {
+        "text": "Add more GSIs to spread the load",
+        "explanation": "Wrong as a cost reduction. GSIs add storage and consume capacity when base-table changes affect their indexed entries; not every base-table write changes every GSI."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Standard one-KiB writes require 3,000 write units/s; strong one-KiB reads require 12,000 read units/s.\n2. Daily demand is 259.2 million writes and 1.0368 billion reads.\n3. Compare that request bill with provisioned unit-hours at current regional rates, allowing headroom and any applicable commitment discounts.\n4. A fixed savings multiplier is absent because current pricing and utilization must be evaluated for this deployment.\n5. Change read consistency or caching only where product requirements permit it; include index costs.",
+    "link": {
+      "title": "DynamoDB: Capacity modes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/capacity-mode.html"
+    }
+  },
+  {
+    "id": "db-choosing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An order service uses a transactional outbox: each order transaction also inserts an `order_placed` event into an `outbox` table, and a relay publishes outbox rows to Kafka. After the relay crashes and restarts, some customers get two confirmation emails. What's the right fix?",
+    "options": [
+      {
+        "text": "Make the relay delete each outbox row before publishing it",
+        "explanation": "Wrong. If the relay crashes after deleting but before publishing, the event is lost for good. That trades duplicates for silent loss."
+      },
+      {
+        "text": "Abandon the outbox and send the email inside the order transaction",
+        "explanation": "Wrong. An email can't be rolled back. If the transaction later aborts, the customer is told about an order that doesn't exist; if it's retried, they get duplicates anyway."
+      },
+      {
+        "text": "Switch Kafka to synchronous replication",
+        "explanation": "Wrong. Kafka's replication affects durability of messages in Kafka, not whether the relay sends a message twice."
+      },
+      {
+        "text": "Keep at-least-once delivery and use a durable email workflow with a stable provider-supported idempotency key, bounded retries and reconciliation.",
+        "explanation": "Correct. A local processed-event marker alone cannot atomically cover an external send: recording first can lose an email, while sending first can duplicate it. Provider deduplication must cover the retry window; unresolved outcomes need reconciliation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A relay may publish and crash before marking its outbox row sent, so the event is delivered again.\n2. Persist an email job uniquely keyed by event id; retries use the same payload and provider idempotency key.\n3. If a send succeeds but its response is lost, retry only within the provider’s documented deduplication window. For example, Resend retains keys for 24 hours.\n4. Record successful responses durably. Reconcile ambiguous outcomes before the window expires instead of blindly resending afterwards.\n5. A database INSERT followed by a send is not an exactly-once transaction. Without a suitable provider contract, state the duplicate-versus-loss tradeoff explicitly.",
+    "link": {
+      "title": "Resend: Idempotency keys",
+      "url": "https://resend.com/docs/dashboard/emails/idempotency-keys"
+    }
+  },
+  {
+    "id": "db-choosing-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these are good reasons to move beyond a single relational primary (to sharding or a distributed database)? Select all that apply.",
+    "options": [
+      {
+        "text": "Write throughput is approaching what the largest available instance can sustain, even after query and schema tuning",
+        "explanation": "Correct. Writes can't be offloaded to replicas, so once one node can't absorb them, you have to split the write load."
+      },
+      {
+        "text": "Restoring the database from backup takes far longer than the recovery-time objective, and it can't be made faster on one node",
+        "explanation": "Correct. Very large single databases take a long time to back up, restore and rebuild replicas. Splitting the data shrinks each piece's recovery time."
+      },
+      {
+        "text": "Read latency is high because the most frequent query does a sequential scan",
+        "explanation": "Wrong. That's a missing index or a bad query. Fixing it is far cheaper than distributing the database, which wouldn't fix the scan anyway."
+      },
+      {
+        "text": "The dataset will soon exceed the storage or working-set memory one machine can provide, and archiving or partitioning old data won't keep up",
+        "explanation": "Correct. When the data or its hot working set truly outgrows one machine, distribution is the remaining option."
+      },
+      {
+        "text": "A large tech company published a blog post saying it moved to a distributed database",
+        "explanation": "Wrong. Their scale and constraints aren't yours. Decide from your own measurements."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Sort each signal into \"a real limit of one node\" or \"a fixable problem\".\n\n| Signal | Kind |\n|---|---|\n| Writes near node limit | Real limit |\n| Restore time > RTO | Real limit |\n| Seq scan on hot query | Fixable |\n| Data > one machine | Real limit |\n| Someone else did it | Not a signal |\n\n1. Read problems are usually solved by indexes, replicas and caches.\n2. Write volume, total data size and recovery time are the classic triggers for distribution.\n3. Before acting, try the cheaper steps: tuning, a bigger instance, partitioning large tables, archiving old data.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "db-choosing-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A three-person team is building a device registry for an IoT product. Every access is `get device by id` or `update device by id`; there are no joins or ad-hoc queries. Traffic is near zero most of the day but spikes to 30,000 requests per second when a firmware rollout starts. The backend runs on AWS Lambda. Which store fits best?",
+    "options": [
+      {
+        "text": "A self-managed Cassandra cluster sized for the peak",
+        "explanation": "Wrong. It would handle the load, but a three-person team would operate a cluster that sits mostly idle, paying for peak capacity all day."
+      },
+      {
+        "text": "DynamoDB in on-demand mode, with the device id as partition key",
+        "explanation": "Correct fit for known key-based access and a small team, provided key distribution, request sizes, warm throughput, previous peak, table/account limits and optional maximum throughput support the rollout spike. On-demand is not unlimited capacity."
+      },
+      {
+        "text": "A Postgres primary with read replicas",
+        "explanation": "Workable, but a weaker fit. It's sized for the peak or it struggles during rollouts, and thousands of concurrent Lambda instances each opening connections need a pooler such as RDS Proxy. Nothing here needs SQL's flexibility."
+      },
+      {
+        "text": "Redis as the only store",
+        "explanation": "Wrong. Redis would be fast, but as the sole system of record for device state its durability depends on persistence settings, and you'd still provision a server for the peak."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Access patterns: get by id, update by id. Fully known, single-key.\n2. Load shape: idle, then 30,000 requests/s for a while. Very spiky.\n3. Team: three people, so operational burden matters a lot.\n4. Runtime: Lambda, which favours connectionless HTTP APIs.\n5. DynamoDB on-demand matches every point:\n   - `GetItem` / `UpdateItem` by partition key.\n   - Pay per request; verify warm throughput, previous-peak scaling behavior and quotas before the spike.\n   - Watch for one very hot device id, which still hits the per-partition limits.\n6. This is the other side of \"start with Postgres\": when access patterns are simple and known, a managed key-value store can be the simpler choice.",
+    "link": {
+      "title": "DynamoDB: Capacity modes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/capacity-mode.html"
+    }
+  },
+  {
+    "id": "db-choosing-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A fleet of 2 million sensors each sends a 100-byte reading every 10 seconds. Data is kept for 90 days, and queries are \"readings for sensor X between two times\". Which estimate and choice is right?",
+    "options": [
+      {
+        "text": "About 200,000 writes/s and roughly 150 TB over 90 days before compression; a horizontally scalable store partitioned by (sensor, time bucket) with TTL, such as Cassandra/ScyllaDB or a clustered time-series database",
+        "explanation": "Correct arithmetic and a reasonable candidate architecture for this large keyed workload. Benchmark ingestion, retention and queries rather than inferring an absolute single-node limit from event count alone."
+      },
+      {
+        "text": "About 20,000 writes/s and 15 TB; one Postgres primary handles it easily",
+        "explanation": "Wrong. 2 million ÷ 10 s is 200,000 writes/s, not 20,000, and the 90-day volume is about ten times larger than stated."
+      },
+      {
+        "text": "About 200,000 writes/s, but a single Redis node can hold it all in memory",
+        "explanation": "Wrong. Even heavily compressed, tens of terabytes don't fit in one machine's RAM, and Redis would be a fragile system of record for it."
+      },
+      {
+        "text": "About 2 million writes/s; only a custom storage engine can cope",
+        "explanation": "Wrong. Each sensor writes once every 10 seconds, so the rate is 2 million ÷ 10 = 200,000 per second, which existing distributed stores handle routinely."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Write rate: 2,000,000 ÷ 10 s = **200,000 writes/s**.\n2. Bytes per second: 200,000 × 100 B = 20 MB/s.\n3. Per day: 20 MB/s × 86,400 s ≈ 1.7 TB.\n4. 90 days: ≈ 155 TB raw, before compression and replication (×3 replicas → ~465 TB of disk, minus compression).\n5. Pattern: append-only, read by sensor and time range, expire after 90 days.\n6. Fit: partition by `(sensor_id, day)`, cluster by timestamp, TTL 90 days (Cassandra/ScyllaDB), or a time-series database with compression and retention.\n7. Evaluate distributed storage or a suitably documented managed time-series service against measured requirements. TimescaleDB 2.13 was the last version supporting its multi-node feature; do not propose that sunset feature as a current deployment path.",
+    "link": {
+      "title": "Apache Cassandra: Data modeling",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/index.html"
+    }
+  },
+  {
+    "id": "db-choosing-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team must choose between Amazon Aurora PostgreSQL and a self-hosted Postgres cluster on EC2 for a moderately loaded product. The self-hosted option's monthly bill is 35% lower. Nobody on the team has run Postgres failover, backups or major-version upgrades in production. What's the most important consideration?",
+    "options": [
+      {
+        "text": "Pick self-hosted, because a 35% lower bill always wins",
+        "explanation": "Wrong. The bill isn't the whole cost. Someone has to build, test and be on call for failover, backups, point-in-time recovery and upgrades."
+      },
+      {
+        "text": "Pick Aurora only if the product needs more than 1 TB",
+        "explanation": "Wrong. Data size isn't the deciding factor here; both options handle moderate sizes. The question is who operates the database."
+      },
+      {
+        "text": "Count operational cost: engineer time for HA, backups, patching and on-call, plus the risk of getting them wrong, usually outweighs a modest infrastructure saving for a team without that expertise",
+        "explanation": "Correct. \"The database you can run well beats the theoretically better one you can't.\" A managed service trades money for engineering time and a lower risk of data loss."
+      },
+      {
+        "text": "Neither: use DynamoDB, which is cheapest",
+        "explanation": "Wrong. Changing data model and engine to save money ignores the product's need for relational features, and isn't automatically cheaper."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. List the hidden costs of self-hosting:\n   - High availability: replication, failover tooling (e.g. Patroni), testing it.\n   - Backups and point-in-time recovery, and regular restore drills.\n   - Patching and major-version upgrades.\n   - Monitoring and 24/7 on-call.\n2. Estimate: even a fraction of one engineer's time is typically worth more than a modest infrastructure saving.\n3. Risk: a botched failover or untested backup can mean data loss, which no bill saving covers.\n4. Revisit when scale makes the managed premium large, or the team gains the expertise.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  }
+]

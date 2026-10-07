@@ -1,0 +1,378 @@
+[
+  {
+    "id": "fund-tradeoffs-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which piece of data most clearly needs **strong** consistency?",
+    "options": [
+      {
+        "text": "The number of likes on a post",
+        "explanation": "Incorrect. If a like count is a few seconds behind, nobody is harmed. Counts are a classic case for eventual consistency."
+      },
+      {
+        "text": "The remaining quantity of a limited-edition item at checkout",
+        "explanation": "Correct. If two buyers both read 'one left' from stale replicas and both succeed, you oversell. Decrementing inventory needs a transactional or conditional write against a single source of truth."
+      },
+      {
+        "text": "A personalised 'recommended for you' list",
+        "explanation": "Incorrect. Recommendations can be minutes or hours stale without any user noticing. Strong consistency would add cost for no benefit."
+      },
+      {
+        "text": "The view count on a video",
+        "explanation": "Incorrect. View counts are often approximate and aggregated asynchronously (YouTube's counts famously lag). Eventual consistency is fine."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask: *what goes wrong if a reader sees a stale value?*\n\n| Data | Harm from staleness |\n|---|---|\n| Like count | Number slightly off |\n| Recommendations | Slightly less relevant |\n| Inventory at checkout | Oversold item, refunds, angry customer |\n| View count | Number slightly off |\n\nFor this ordinary shopping example, inventory has the clearest immediate correctness requirement; count and recommendation freshness can also matter under other business rules. Implement it with e.g. `UPDATE stock SET qty = qty - 1 WHERE id = ? AND qty > 0` and check the affected row count.",
+    "link": {
+      "title": "Eventually Consistent (Werner Vogels)",
+      "url": "https://www.allthingsdistributed.com/2008/12/eventually_consistent.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team sets Postgres `synchronous_commit = off` to speed up writes. What's the risk?",
+    "options": [
+      {
+        "text": "A crash can lose the most recently acknowledged transactions (a fraction of a second's worth)",
+        "explanation": "Correct. Commits are acknowledged before the WAL is flushed to disk. If the server crashes, transactions in that window (up to about 3× `wal_writer_delay`, ~600 ms by default) are lost even though clients were told they succeeded."
+      },
+      {
+        "text": "The database may become corrupted after a crash",
+        "explanation": "Incorrect. Postgres docs are explicit: asynchronous commit doesn't risk corruption. The WAL is still written in order; only the most recent commits may be missing."
+      },
+      {
+        "text": "Reads will return stale data",
+        "explanation": "Incorrect. This setting affects when commits are acknowledged relative to disk flushing, not what readers on the same server see."
+      },
+      {
+        "text": "Writes will be rejected when the disk is busy",
+        "explanation": "Incorrect. The opposite: writes are acknowledged sooner because they don't wait on the disk flush."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline of one commit:\n\n```\non:  write WAL -> fsync -> ack\noff: write WAL -> ack\n     ... fsync later\n```\n\nWith `off`, if the machine crashes between the ack and the background flush, that transaction disappears. The window is bounded (about 3 × `wal_writer_delay`; default 200 ms → ~600 ms).\n\nWhen it's acceptable: click logs, metrics, session touches. When it isn't: payments, orders. Postgres lets you set it per transaction, so you can use `off` only where losing a moment's data is tolerable.",
+    "link": {
+      "title": "Asynchronous commit (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/wal-async-commit.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An outage costs your business £10,000 per hour. You're at 99.9% availability. An upgrade to 99.99% would cost an extra £150,000 per year. Purely on downtime cost, is it worth it?",
+    "options": [
+      {
+        "text": "Yes; it saves about £79,000 a year, so it more than pays for itself",
+        "explanation": "Incorrect. The saving is about £79k (7.9 hours × £10k), but the upgrade costs £150k. Saving less than you spend is a net loss."
+      },
+      {
+        "text": "No; the saving is only about £8,800",
+        "explanation": "Incorrect. £8.8k is the *remaining* downtime cost at 99.99%, not the saving. The saving is the difference between the two levels."
+      },
+      {
+        "text": "Yes; 99.99% is industry standard",
+        "explanation": "Incorrect. There's no universal standard; availability targets should be justified by the cost of downtime versus the cost of achieving them."
+      },
+      {
+        "text": "No; it saves about £79,000 a year against a cost of £150,000",
+        "explanation": "Correct. 99.9% allows 8.77 h/year (£87.7k); 99.99% allows 0.88 h (£8.8k). Saving ≈ £79k < £150k. It's only worth it if downtime has costs beyond direct revenue, such as reputation, contractual penalties or regulation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nhours/year = 8,766\n\n99.9%:  0.001  x 8,766 = 8.77 h\n        8.77 x £10k   = £87,700\n\n99.99%: 0.0001 x 8,766 = 0.88 h\n        0.88 x £10k   = £8,800\n\nsaving = £87,700 - £8,800 ≈ £78,900\ncost   = £150,000\nnet    = -£71,100 per year\n```\n\nSo on direct cost alone, no. Before deciding, ask about indirect costs: SLA penalties, customer churn, brand damage, regulatory exposure. Also check whether cheaper MTTR improvements could get you part of the way.",
+    "link": {
+      "title": "Embracing Risk (Google SRE book)",
+      "url": "https://sre.google/sre-book/embracing-risk/"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka producer for payment events uses `acks=1`. The topic has replication factor 3. What failure can lose an acknowledged event, and what's the fix?",
+    "options": [
+      {
+        "text": "Nothing can lose it; replication factor 3 guarantees three copies",
+        "explanation": "Incorrect. Replication factor says how many replicas exist eventually. With `acks=1`, the producer is acknowledged as soon as the leader writes it, before followers have copied it."
+      },
+      {
+        "text": "A consumer crash; fix by increasing the number of partitions",
+        "explanation": "Incorrect. Consumer crashes don't delete data from Kafka; the consumer resumes from its committed offset. Partition count affects parallelism, not durability."
+      },
+      {
+        "text": "The leader crashes after acknowledging but before followers replicate; fix with `acks=all` and `min.insync.replicas=2`",
+        "explanation": "Correct. A follower that hadn't yet copied the event becomes leader, and the event is gone. `acks=all` waits for all in-sync replicas, and `min.insync.replicas=2` ensures at least two copies exist before the ack, at the cost of slightly higher latency."
+      },
+      {
+        "text": "A network partition between producer and broker; fix with `acks=0`",
+        "explanation": "Incorrect. `acks=0` is less durable: the producer doesn't wait for any acknowledgement, so it can't even know a write failed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Sequence with `acks=1`:\n\n1. Producer sends event E to the leader (broker 1).\n2. Broker 1 appends E and acks.\n3. Broker 1 crashes before brokers 2 and 3 fetch E.\n4. Broker 2 becomes leader without E. **E is lost**, though the producer believes it succeeded.\n\nWith `acks=all` + `min.insync.replicas=2`:\n\n- The leader acks only after E is on at least 2 in-sync replicas.\n- Losing any one broker still leaves a copy.\n- Cost: extra in-cluster replication round trip (~1–2 ms across zones), and if fewer than 2 replicas are in sync, writes are rejected (choosing consistency over availability).\n\nNote: since Kafka 3.0 the producer defaults to `acks=all`, so `acks=1` here is an explicit choice someone made for speed. `min.insync.replicas` still defaults to 1 and must be raised on the topic.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A 6-person start-up needs full-text product search. Which considerations favour using a **managed** search service rather than running a self-managed Elasticsearch cluster? Select all that apply.",
+    "options": [
+      {
+        "text": "No one on the team has operated a search cluster before",
+        "explanation": "Correct. Running Elasticsearch well (shard sizing, JVM heap, upgrades, snapshots, recovering a red cluster) is specialist work. A managed service shifts much of that operational burden to the provider."
+      },
+      {
+        "text": "Search is a supporting feature, not the product's core differentiator",
+        "explanation": "Correct. Undifferentiated heavy lifting is the classic case for buying. Engineering time is better spent on what makes the product unique."
+      },
+      {
+        "text": "They need to launch in two months",
+        "explanation": "Correct. Managed services shorten time to market: provisioning takes minutes rather than weeks of cluster setup, hardening and runbooks."
+      },
+      {
+        "text": "They'll index 50 PB and query it at 1 M QPS from day one",
+        "explanation": "Incorrect. Extreme scale is the condition where vendor pricing can become untenable and building your own starts to make sense. It's also wildly implausible for a 6-person start-up."
+      },
+      {
+        "text": "Managed services never have outages",
+        "explanation": "Incorrect. Managed services fail too; they have SLAs (e.g. 99.9%) not guarantees. The benefit is shifting operational work, not eliminating failure."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Run the build-vs-buy checklist:\n\n| Factor | This team | Favours |\n|---|---|---|\n| Expertise | None in search | Buy |\n| Differentiator? | No | Buy |\n| Time pressure | 2 months | Buy |\n| Scale | Moderate (realistically) | Buy |\n\nOptions D and E are wrong: D describes the case for *building*, and E is a false belief. Even after buying, you still own the integration, index design and a fallback plan for when the service is degraded.",
+    "link": {
+      "title": "AWS Well-Architected Framework",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team wants to split their monolith into 12 microservices \"to improve performance\". The monolith serves 800 req/s with p99 of 120 ms, and one team of 7 owns all of it. What's the most accurate assessment?",
+    "options": [
+      {
+        "text": "Poor fit: microservices mainly buy independent deployment for many teams; here they'd add network hops, distributed failures and operational load without addressing performance",
+        "explanation": "Correct. With one team, the organisational benefit is minimal. A request crossing 5 services sequentially adds several ms plus tail-latency amplification, and every service adds deploy, monitoring and on-call surface. Profile the monolith to find the actual bottleneck first."
+      },
+      {
+        "text": "Good idea: microservices are faster because each is smaller",
+        "explanation": "Incorrect. Smaller code doesn't make requests faster. Replacing in-process calls (nanoseconds) with network calls (~0.5 ms+ each, plus serialisation) usually makes latency worse."
+      },
+      {
+        "text": "Good idea, as long as all services share one database",
+        "explanation": "Incorrect. A shared database couples the services' schemas and deployments, giving you the costs of distribution without the independence benefit (a 'distributed monolith')."
+      },
+      {
+        "text": "Poor fit: microservices can't handle more than 800 req/s",
+        "explanation": "Incorrect. Microservices can handle huge throughput. The objection is about cost and complexity versus benefit, not capacity."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Quantify the latency effect. Suppose a request currently makes 5 in-process calls and would instead make 5 sequential network calls:\n\n```\nper hop: ~0.5 ms RTT + ~0.5 ms serde\n         ≈ 1 ms\n5 hops:  ≈ 5 ms added to p50\n```\n\nAt the tail, it's worse: if each service has a 1% chance of a 50 ms hiccup, P(at least one in 5) = 1 − 0.99^5 ≈ 4.9%, so these hiccups now land well inside the slowest 5% of requests and push up p99.\n\nWhat microservices *do* buy: independent deploys and scaling per team. With one team of 7, that's little benefit. Better first steps: profile, fix slow queries, add caching, and modularise the monolith internally.",
+    "link": {
+      "title": "Microservice Trade-Offs (Martin Fowler)",
+      "url": "https://martinfowler.com/articles/microservice-trade-offs.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You must pick a primary key scheme and the public REST API shape for a new platform, and also choose the cache TTL for product pages. Using the 'one-way vs two-way door' idea, how should effort be distributed?",
+    "options": [
+      {
+        "text": "Spend equal effort on all three; every decision matters",
+        "explanation": "Incorrect. Equal effort wastes time on cheap, reversible decisions and under-invests in expensive ones. Effort should scale with the cost of reversal."
+      },
+      {
+        "text": "Spend most effort on the cache TTL because it directly affects user-facing latency",
+        "explanation": "Incorrect. A TTL is a config value you can change in minutes and observe the effect immediately. It's the textbook two-way door."
+      },
+      {
+        "text": "Defer all three until after launch so real data can guide them",
+        "explanation": "Incorrect. You can't launch without a key scheme or an API. Deferring is only sensible for decisions that don't block launch and are cheap to make later."
+      },
+      {
+        "text": "Spend most effort on the key scheme and API, which are hard to reverse; choose a sensible TTL quickly and tune it from metrics",
+        "explanation": "Correct. Changing primary keys means migrating every row and every reference; changing a public API breaks clients you don't control and requires versioning and long deprecation. Both are one-way doors. The TTL is a two-way door: pick a reasonable default (e.g. 60 s), measure hit rate and staleness complaints, adjust."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Estimate the cost of reversing each decision later:\n\n| Decision | To reverse | Door |\n|---|---|---|\n| Primary keys | Migrate all data + foreign keys + external refs | One-way |\n| Public API | Version, migrate clients, deprecate over months | One-way |\n| Cache TTL | Edit config, redeploy | Two-way |\n\nSo invest design time where reversal is expensive. For keys: e.g. choose non-sequential IDs that don't leak volume and that work when sharded. For the API: resource naming, pagination and versioning. For TTL: ship a default and iterate.",
+    "link": {
+      "title": "MonolithFirst (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Redis instance used as a job store has AOF persistence with `appendfsync everysec`. The server loses power. What loss window is normally associated with this setting, assuming healthy storage and normal background flushing?",
+    "options": [
+      {
+        "text": "No data is lost, because every write is in the append-only file",
+        "explanation": "Incorrect. Writes reach the AOF via the OS page cache. With `everysec`, they are only forced to disk about once a second, so the unflushed tail is lost on power failure."
+      },
+      {
+        "text": "Everything since the last RDB snapshot is lost",
+        "explanation": "Incorrect. That's the risk with RDB-only persistence. With AOF on, recovery replays the log up to its last flushed point."
+      },
+      {
+        "text": "Roughly the last second of writes is lost",
+        "explanation": "Correct. `everysec` fsyncs about once a second, which is the usual compromise: near-`no` speed with roughly a second of exposure in normal operation. Delayed flushes, disk stalls and persistence settings mean this is not a strict worst-case bound."
+      },
+      {
+        "text": "The AOF is corrupted and the whole dataset is lost",
+        "explanation": "Incorrect. A truncated final command can occur, but Redis can load a truncated AOF (dropping the incomplete tail) or repair it with `redis-check-aof`. You lose the tail, not the dataset."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Map the knob to the lesson's durability table:\n\n| `appendfsync` | Flushed | Exposure |\n|---|---|---|\n| `always` | Every write | ~None |\n| `everysec` | ~1/s | ~1 s |\n| `no` | When OS decides | OS- and workload-dependent; no Redis one-second bound |\n\nFor a job store, ask: can the producer re-enqueue lost jobs, or are jobs idempotent? If not, use `always` (and accept the latency) or a store designed for durable queues.",
+    "link": {
+      "title": "Redis persistence (Redis docs)",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your cloud bill shows cross-zone data transfer costing more than compute. Services run in 3 zones. Which changes would **reduce** cross-zone traffic? Select all that apply.",
+    "options": [
+      {
+        "text": "Zone-aware routing, so callers prefer an instance of the next service in their own zone",
+        "explanation": "Correct. With random routing across 3 zones, about two thirds of calls cross a zone boundary. Preferring the local zone removes most of them while keeping other zones as fallback."
+      },
+      {
+        "text": "Compressing large request and response payloads between services",
+        "explanation": "Correct. Transfer is billed per GB, so fewer bytes means a smaller bill, for a little CPU."
+      },
+      {
+        "text": "Letting Kafka consumers fetch from a replica in their own zone instead of always from the leader",
+        "explanation": "Correct. Kafka supports follower fetching (rack-aware replica selection). Consumers in other zones no longer pull every byte across zones from the leader."
+      },
+      {
+        "text": "Splitting each service into several smaller services spread across all zones",
+        "explanation": "Incorrect. More services means more network hops, each of which may cross zones. This usually increases transfer costs."
+      },
+      {
+        "text": "Adding a synchronous replica of every database in each zone",
+        "explanation": "Incorrect. Each write is now copied to the other zones, adding cross-zone traffic. It may be worth it for durability, but it doesn't cut the bill."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Estimate the effect of random routing:\n\n```\nP(callee in another zone) = 2/3\n1 TB/day of calls -> ~0.67 TB\n  crosses zones\nzone-aware: residual crossing depends\n  on placement, failures and fallback\n  traffic\n```\n\nThe trade-off: zone-aware routing can unbalance load if zones have different capacity, so it needs a fallback when the local zone is busy. Write the decision down in the four-part template, including what would change your mind (e.g. an uneven zone outage).",
+    "link": {
+      "title": "KIP-392: Allow consumers to fetch from closest replica (Apache Kafka)",
+      "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-392%3A+Allow+consumers+to+fetch+from+closest+replica"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A database's log disk takes **2 ms** per fsync. Each commit must be durable before it's acknowledged. Roughly how many commits per second can one log handle **without** group commit, and with batches of 50 commits per fsync?",
+    "options": [
+      {
+        "text": "500/s without; 25,000/s with",
+        "explanation": "Correct. One fsync per commit: 1 / 0.002 s = 500/s. Fifty commits per fsync: 500 × 50 = 25,000/s, at the cost of each commit waiting for the next batch flush."
+      },
+      {
+        "text": "2,000/s without; 4,000/s with",
+        "explanation": "Incorrect. 2 ms means 500 fsyncs per second, not 2,000. And batching multiplies by the batch size, not by 2."
+      },
+      {
+        "text": "500/s in both cases, because the disk speed is unchanged",
+        "explanation": "Incorrect. The disk does the same number of fsyncs, but each now makes 50 commits durable at once. That's the whole point of group commit."
+      },
+      {
+        "text": "Unlimited with group commit, because fsync is skipped",
+        "explanation": "Incorrect. Group commit still fsyncs; it just shares each one between many commits. Disabling synchronous commit acknowledges before the required WAL flush; it does not eliminate background flushing."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nno batching:\n  1 / 0.002 s = 500 commits/s\ngroup commit (50 per fsync):\n  500 x 50 = 25,000 commits/s\nextra wait per commit:\n  depends on batch trigger, queueing\n  and flush completion; 2 ms is the\n  assumed fsync duration, not a bound\n  on batch wait\n```\n\nThis is the latency-versus-throughput trade-off in miniature, and why durable systems like Kafka and Postgres can still sustain high write rates.",
+    "link": {
+      "title": "WAL configuration (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/wal-configuration.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You ingest 200 TB of logs a month into a managed service charging £0.50/GB, about £1.2 M a year. Self-hosting is estimated at £300k/year of infrastructure plus 4 engineers at £120k each. What is the soundest conclusion?",
+    "options": [
+      {
+        "text": "Self-hosting saves £1.2 M a year, so do it immediately",
+        "explanation": "Incorrect. That ignores the self-hosting costs entirely. The saving is the difference between the two totals."
+      },
+      {
+        "text": "Self-hosting looks about £420k a year cheaper; it's worth considering if the team can run it reliably and you've included migration, on-call and the opportunity cost of those engineers",
+        "explanation": "Correct. £300k + 4 × £120k = £780k versus £1.2 M. At this scale vendor pricing is becoming the problem, which is when building makes sense, but the estimate must include hidden costs and the risk of running it badly."
+      },
+      {
+        "text": "Always buy; building infrastructure is never justified",
+        "explanation": "Incorrect. The lesson's build-vs-buy table says scale can tip the balance; Dropbox's Magic Pocket is a real example."
+      },
+      {
+        "text": "The managed service is cheaper once engineer salaries are counted",
+        "explanation": "Incorrect. Even with salaries, self-hosting (£780k) comes out below the managed bill (£1.2 M) on these numbers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nmanaged:\n  200 TB = 200,000 GB / month\n  x £0.50 = £100k / month\n  x 12 = £1.2M / year\nself-hosted:\n  infra      £300k\n  4 x £120k  £480k\n  total      £780k\nsaving ≈ £420k / year\n```\n\nThen apply the template: gain (£420k), give up (engineering focus, vendor features, someone else's on-call), why acceptable (logging is high volume, well understood), what would change our mind (a big vendor discount, or losing the engineers who run it). Negotiating with the vendor using these numbers is often the first move.",
+    "link": {
+      "title": "Scaling to exabytes and beyond: Magic Pocket (Dropbox)",
+      "url": "https://dropbox.tech/infrastructure/magic-pocket-infrastructure"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Kafka producer sending many small messages raises `linger.ms` from 5 to 50. What is the main trade-off?",
+    "options": [
+      {
+        "text": "Messages become less durable",
+        "explanation": "Incorrect. Durability is governed by `acks` and replication, not by how long the producer waits to fill a batch."
+      },
+      {
+        "text": "Consumers must poll less often",
+        "explanation": "Incorrect. `linger.ms` is a producer setting; it doesn't change how consumers poll."
+      },
+      {
+        "text": "Throughput falls because the producer waits",
+        "explanation": "Incorrect. Waiting can improve throughput by filling batches, but the benefit depends on traffic, batch size and the existing bottleneck."
+      },
+      {
+        "text": "Larger batches mean higher throughput and less overhead, but the batching timer can wait up to 50 ms in total (45 ms more than the old setting), unless the batch fills sooner",
+        "explanation": "Correct. Batching amortises per-request overhead (and compresses better), raising throughput at the cost of per-message latency."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Assume one partition receives 1,000 messages/s, batches never fill before the timer, and no backpressure:\n\n```\nlinger 5 ms:  ~200 batches/s,\n              ~5 msgs each\nlinger 50 ms: ~20 batches/s,\n              ~50 msgs each\n```\n\nTen times fewer requests, better compression, and up to ~45 ms more latency per message. Good for log shipping; bad for a latency-sensitive request path.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  }
+]

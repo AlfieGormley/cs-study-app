@@ -1,0 +1,378 @@
+[
+  {
+    "id": "comp-vms-jit-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Calc's VM runs `PUSH 2, PUSH 3, PUSH 4, MUL, SUB, RET`. What does it return?",
+    "options": [
+      {
+        "text": "-10",
+        "explanation": "Correct. After the pushes the stack is [2, 3, 4]. `MUL` pops 4 and 3 and pushes 12: [2, 12]. `SUB` pops b = 12 and a = 2 and pushes 2 − 12 = −10."
+      },
+      {
+        "text": "10",
+        "explanation": "This computes 12 − 2. The VM pops `b` first (the top) and then `a`, and pushes `a - b`, so the deeper value is the left operand."
+      },
+      {
+        "text": "-2",
+        "explanation": "That would need `SUB` to run on 2 and 4 or similar. `MUL` runs first, on the two values on top of the stack (3 and 4), leaving [2, 12]."
+      },
+      {
+        "text": "4",
+        "explanation": "`RET` returns the top of the stack after all the arithmetic, not the last value pushed."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nPUSH 2   [2]\nPUSH 3   [2, 3]\nPUSH 4   [2, 3, 4]\nMUL      [2, 12]     3 * 4\nSUB      [-10]       2 - 12\nRET      -> -10\n```\n\nThis is the bytecode for `2 - 3 * 4`. Operand order matters: `run_vm` pops `b` then `a`, so for `SUB` the value pushed first is the left operand.",
+    "link": {
+      "title": "A Virtual Machine — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-virtual-machine.html"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which change can reduce execution overhead when moving from the shown Python tree-walker to its bytecode VM?",
+    "options": [
+      {
+        "text": "The VM runs on the GPU",
+        "explanation": "Both run as ordinary CPython code on the CPU."
+      },
+      {
+        "text": "The VM does no work for `let`",
+        "explanation": "It still executes `STORE` and `LOAD` for every binding; the difference is how cheaply."
+      },
+      {
+        "text": "The program was compiled once into a flat instruction list with names resolved to slot numbers, so each step is a simple loop iteration instead of a recursive call, a node-type match and a dictionary copy",
+        "explanation": "Correct. The tree-walker recurses per node, re-matches each node's type and builds a new dict for every `let`. The VM indexes a list and a slot array in a loop."
+      },
+      {
+        "text": "The VM caches the result after the first run",
+        "explanation": "`run_vm` recomputes everything on every call; there is no result cache."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The tree-walker recursively matches AST nodes, looks up names and copies an environment for each let. The VM iterates through instructions and uses numbered slots. These changes can reduce overhead, but no reproducible original benchmark artifact is available, so a speed ratio is not supplied.",
+    "link": {
+      "title": "A Virtual Machine — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-virtual-machine.html"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Suppose a measurement finds a positive compile cost C and a positive per-run saving S for Calc's toy jit. When is using it worthwhile?",
+    "options": [
+      {
+        "text": "Always: faster code is always better",
+        "explanation": "If the program runs once, you pay the full compile cost and gain almost nothing."
+      },
+      {
+        "text": "Never, because compiling at runtime is always slower than interpreting",
+        "explanation": "Under the question's assumption, each compiled run is cheaper; with enough runs the compile cost is repaid."
+      },
+      {
+        "text": "When the same program will run enough times that the per-run saving outweighs the one-off compile cost",
+        "explanation": "Correct. This is the central trade-off of every JIT, and why real runtimes only compile code that profiling shows is hot."
+      },
+      {
+        "text": "Only when the program contains `let`",
+        "explanation": "The trade-off depends on how often the code runs, not which constructs it uses."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compiling has a fixed cost C.\n2. Each run saves (interpreted time − compiled time) = S.\n3. Break-even after C / S runs.\n4. Below that, interpret; above it, compile.\n\nRuntimes such as V8 and HotSpot estimate this with call and loop counters: a function is only handed to an optimising compiler after it has proved itself hot.",
+    "link": {
+      "title": "Maglev: V8's Fastest Optimizing JIT — V8 blog",
+      "url": "https://v8.dev/blog/maglev"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`compile_bc` turns `let a = 3 in let b = a * a in b - a` into `PUSH 3, STORE 0, LOAD 0, LOAD 0, MUL, STORE 1, LOAD 1, LOAD 0, SUB, RET`. Just before `SUB` executes, what are the stack and the slots?",
+    "options": [
+      {
+        "text": "Stack `[9, 3]`, slots `[3, 9]`",
+        "explanation": "Correct. `a` is in slot 0 and `b` in slot 1. `LOAD 1` pushes `b` = 9 and `LOAD 0` pushes `a` = 3, so `SUB` computes 9 − 3 = 6."
+      },
+      {
+        "text": "Stack `[3, 9]`, slots `[3, 9]`",
+        "explanation": "The loads happen in source order, `b` then `a`, so 9 is deeper in the stack and 3 is on top."
+      },
+      {
+        "text": "Stack `[9, 3]`, slots `[9, 3]`",
+        "explanation": "Slots are numbered in the order the `let`s are checked: `a` gets 0, `b` gets 1."
+      },
+      {
+        "text": "Stack `[3, 3, 9]`, slots `[3, 9]`",
+        "explanation": "`MUL` consumed both copies of `a`, and `STORE 1` popped the product, so the stack was empty before the final two loads."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nPUSH 3    [3]        [0, 0]\nSTORE 0   []         [3, 0]\nLOAD 0    [3]\nLOAD 0    [3, 3]\nMUL       [9]\nSTORE 1   []         [3, 9]\nLOAD 1    [9]\nLOAD 0    [9, 3]     <- before SUB\nSUB       [6]\nRET       -> 6\n```\n\n`nslots` is 2, so the VM allocates `[0, 0]` up front.",
+    "link": {
+      "title": "A Virtual Machine — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-virtual-machine.html"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a CPython 3.14 build with adaptive specialization active, you call `def g(a, b): return a + b` 1,000 times with ints, then 1,000 times with strings, and run `dis.dis(g, adaptive=True)`. What instruction do you see for the `+`?",
+    "options": [
+      {
+        "text": "`BINARY_OP_ADD_INT`, because the first specialisation is permanent",
+        "explanation": "Specialisations are guarded. When the guard (both operands are `int`) keeps failing, the instruction de-specialises."
+      },
+      {
+        "text": "`BINARY_OP_ADD_UNICODE`",
+        "explanation": "Correct. The int-specialised instruction's guard failed on strings, it fell back to the generic form, and after more executions it re-specialised for the type now being seen."
+      },
+      {
+        "text": "`BINARY_OP` only; specialisation is disabled once a function sees two types",
+        "explanation": "CPython keeps adapting; it backs off for a while after failures, but here it re-specialised for strings."
+      },
+      {
+        "text": "A machine-code `add` instruction",
+        "explanation": "The specialising interpreter rewrites *bytecode*; it does not generate machine code. (The separate, experimental JIT does.)"
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. First calls: generic `BINARY_OP 0 (+)` with a counter.\n2. After warming up on ints: rewritten in place to `BINARY_OP_ADD_INT`, guarded by \"both are exact ints\".\n3. String calls: the guard fails, the instruction runs the generic path, and the miss counter triggers de-specialisation.\n4. After warming up again: `BINARY_OP_ADD_UNICODE`.\n\nThis is PEP 659's speculation and deoptimisation, done inside the interpreter at the level of single instructions.",
+    "link": {
+      "title": "PEP 659: Specializing Adaptive Interpreter",
+      "url": "https://peps.python.org/pep-0659/"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do C bytecode interpreters often replace one big `switch` with *computed goto* (a jump at the end of every handler)?",
+    "options": [
+      {
+        "text": "It lets the C compiler skip type checking",
+        "explanation": "Dispatch style has nothing to do with type checking; the handlers do the same work either way."
+      },
+      {
+        "text": "It makes bytecode smaller",
+        "explanation": "The bytecode format is unchanged; only the interpreter's dispatch code differs."
+      },
+      {
+        "text": "It avoids the need for a stack",
+        "explanation": "Computed goto changes how the next handler is chosen, not the VM's data model."
+      },
+      {
+        "text": "Each handler gets its own indirect jump, so the CPU's branch predictor can learn opcode sequences, which can outperform a shared dispatch jump on suitable predictors",
+        "explanation": "Correct. A switch may compile to a shared indirect branch; actual code generation and predictor behavior vary. Separate jumps let the predictor learn that, say, `LOAD` is often followed by `MUL`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `switch (op)` may compile to a bounds check plus one indirect jump through a table, shared by every opcode.\n2. Predictors can use branch addresses and history. Distinct handler sites may expose useful context; exact miss costs are processor-dependent.\n3. With computed goto, each handler ends with `goto *table[next_op]`, a different jump per handler.\n4. Real programs have strong patterns between consecutive opcodes, so per-handler jumps can improve prediction.\n\nCPython uses computed gotos when built with GCC or Clang; Python 3.14 also offers a tail-calling interpreter built with Clang 19+.",
+    "link": {
+      "title": "A Virtual Machine — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-virtual-machine.html"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A JavaScript function `len(p)` reads `p.x` and `p.y`. Half the points are created as `{x: 1, y: 2}` and half as `{y: 2, x: 1}`. Which statements are true in V8? Select all that apply.",
+    "options": [
+      {
+        "text": "The two kinds of object get different hidden classes (shapes), because properties were added in a different order",
+        "explanation": "Correct. Shapes are built by transitions as properties are added, so `x` then `y` and `y` then `x` lead to different shapes with different offsets."
+      },
+      {
+        "text": "The `p.x` inline cache becomes polymorphic, checking more than one shape",
+        "explanation": "Correct. The site has now seen two shapes; it can cache both, but each access must test which one it has."
+      },
+      {
+        "text": "V8 sorts property names, so both objects share a shape",
+        "explanation": "V8 does not reorder named properties; insertion order determines the shape."
+      },
+      {
+        "text": "Consistent construction through the same shape-transition path can keep the site monomorphic",
+        "explanation": "Correct. One shape means one comparison and one fixed offset per access."
+      },
+      {
+        "text": "Inline caches only matter in the interpreter; optimised code ignores shapes",
+        "explanation": "The optimising compiler uses the shapes recorded in the inline caches to speculate, emitting a shape check and a direct load."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. `{x, y}`: empty shape → add `x` (offset 0) → add `y` (offset 1). Shape S1.\n2. `{y, x}`: empty → add `y` (offset 0) → add `x` (offset 1). Shape S2.\n3. `p.x` is at offset 0 in S1 but offset 1 in S2. The site's inline cache must hold both: polymorphic.\n4. Enough shape variation can trigger megamorphic handling; thresholds and fallback caches are implementation/version-dependent.\n\nThe fix is to construct objects consistently, for example with one constructor function or class.",
+    "link": {
+      "title": "JavaScript engine fundamentals: Shapes and Inline Caches — Mathias Bynens",
+      "url": "https://mathiasbynens.be/notes/shapes-ics"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A function takes 5 µs per call in the interpreter and 0.5 µs once JIT-compiled. Compiling it costs 900 µs. After how many calls does compiling it first break even?",
+    "options": [
+      {
+        "text": "About 20",
+        "explanation": "20 calls save 20 × 4.5 = 90 µs, a tenth of the compile cost."
+      },
+      {
+        "text": "About 180",
+        "explanation": "This divides 900 by 5, ignoring that compiled calls still cost 0.5 µs each. The saving per call is 4.5 µs."
+      },
+      {
+        "text": "About 1,800",
+        "explanation": "This divides by 0.5 µs, the compiled time, rather than by the time saved per call."
+      },
+      {
+        "text": "About 200",
+        "explanation": "Correct. Each compiled call saves 5 − 0.5 = 4.5 µs, and 900 / 4.5 = 200 calls repay the compilation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Interpreting n calls: 5n µs.\n2. Compiling then running n calls: 900 + 0.5n µs.\n3. Break even when 5n = 900 + 0.5n, so 4.5n = 900, n = 200.\n\nBelow 200 calls the interpreter is cheaper overall. This is why runtimes wait for evidence of hotness, and why tiered systems put a cheap baseline compiler (Sparkplug, C1) in front of the expensive one: a smaller C lowers the break-even point.",
+    "link": {
+      "title": "HotSpot Glossary of Terms — OpenJDK",
+      "url": "https://openjdk.org/groups/hotspot/docs/HotSpotGlossary.html"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "TurboFan has optimised a hot `function add(a, b) { return a + b; }` for small integers. Then `add(\"a\", \"b\")` is called. What happens?",
+    "options": [
+      {
+        "text": "The optimised code produces a wrong answer, because it assumes integers",
+        "explanation": "Speculative code always guards its assumptions; it never silently computes with the wrong types."
+      },
+      {
+        "text": "A guard fails, V8 deoptimises: it rebuilds the interpreter frame from the optimised state, finishes the call in Ignition, and may later re-optimise with the new type feedback",
+        "explanation": "Correct. Deoptimisation lets the optimiser emit code only for the observed case, with an escape hatch for everything else."
+      },
+      {
+        "text": "V8 throws a `TypeError`",
+        "explanation": "Adding two strings is perfectly valid JavaScript; the result is `\"ab\"`."
+      },
+      {
+        "text": "The function is permanently banned from optimisation",
+        "explanation": "One deopt does not ban a function. Repeated deopts can make V8 stop optimising it, but here it can re-optimise with string feedback."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Profiling saw only small integers, so TurboFan emitted: check a is a small int, check b is a small int, machine `add`, check for overflow.\n2. With strings, the first check fails.\n3. The deoptimiser maps machine registers and stack slots back to the interpreter's virtual registers, and resumes execution in Ignition at the matching bytecode.\n4. Ignition computes `\"ab\"` correctly and updates the type feedback.\n5. If the function stays hot, it may be optimised again, now handling strings too.",
+    "link": {
+      "title": "Maglev: V8's Fastest Optimizing JIT — V8 blog",
+      "url": "https://v8.dev/blog/maglev"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Java program's `main` contains a single loop that runs 10 billion iterations, with no method calls inside. Call counters never trigger compilation of `main`. How does HotSpot still run the loop as optimised machine code?",
+    "options": [
+      {
+        "text": "It doesn't: `main` stays interpreted for the whole run",
+        "explanation": "That would make such programs absurdly slow. HotSpot counts loop back-edges as well as calls."
+      },
+      {
+        "text": "It restarts the program once `main` has been compiled",
+        "explanation": "Restarting would repeat side effects such as I/O. The switch happens inside the running frame."
+      },
+      {
+        "text": "On-stack replacement: back-edge counters trigger compilation of `main`, and the running interpreter frame is transferred into the compiled code mid-loop",
+        "explanation": "Correct. OSR compiles a version with an entry point at the loop header, maps the live locals across, and jumps in. V8 does the same."
+      },
+      {
+        "text": "`javac` already compiled the loop to machine code",
+        "explanation": "`javac` emits JVM bytecode, not machine code; native code in this assumed HotSpot execution path comes from runtime compilation; separate AOT tools also exist."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The interpreter increments a counter on every backward branch (loop iteration).\n2. When it crosses a threshold, HotSpot compiles `main` with a special OSR entry at the loop header.\n3. Once compiled OSR code is ready, at an eligible back edge, the interpreter's locals (loop variable, accumulators) are copied into the compiled frame's layout.\n4. Execution jumps into the compiled loop with deoptimization still possible.\n\nWithout OSR, long-running loops in rarely-called functions would never benefit from the JIT.",
+    "link": {
+      "title": "HotSpot Glossary of Terms — OpenJDK",
+      "url": "https://openjdk.org/groups/hotspot/docs/HotSpotGlossary.html"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about tracing JITs and CPython's JIT work are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A tracing JIT records the path actually taken through a hot loop, including through called functions, and compiles that path with guards",
+        "explanation": "Correct. PyPy and LuaJIT work this way; a guard exits the trace when execution diverges from the recorded path."
+      },
+      {
+        "text": "PyPy is a meta-tracing JIT: it traces its interpreter, written in RPython, running the user's program",
+        "explanation": "Correct. That is why the PyPy team could reuse a meta-tracing JIT framework instead of hand-writing a Python-specific optimizing JIT; the JIT is generated from the interpreter."
+      },
+      {
+        "text": "CPython 3.13's experimental JIT uses copy-and-patch, stitching together precompiled machine-code templates",
+        "explanation": "Correct. PEP 744 chose copy-and-patch because it is simple to build and maintain, and needs no runtime compiler like LLVM."
+      },
+      {
+        "text": "CPython 3.14's JIT is enabled by default and makes all programs about 2× faster",
+        "explanation": "It ships off by default in the macOS and Windows binaries (`PYTHON_JIT=1` enables it), and the docs report effects from about 10% slower to 20% faster."
+      },
+      {
+        "text": "Tracing JITs cannot handle loops",
+        "explanation": "Loops are exactly what traces are built around; a trace usually *is* one loop iteration."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each:\n\n1. **Traces.** Yes: a linear recording of one hot path, with guards at every branch.\n2. **Meta-tracing.** Yes: RPython generates the JIT from the interpreter.\n3. **Copy-and-patch.** Yes: templates compiled ahead of time with Clang, patched with addresses and constants at runtime.\n4. **Default-on 2×?** No: experimental, off by default, and roughly −10% to +20%.\n5. **Loops?** No: loops are their speciality.",
+    "link": {
+      "title": "PEP 744: JIT Compilation",
+      "url": "https://peps.python.org/pep-0744/"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Calc's toy JIT names each `let` variable after its slot (`s0`, `s1`). Suppose it used the source names instead, emitting `(x := 1, (x := 2, x)[1] + x)[1]` for `let x = 1 in (let x = 2 in x) + x`. What would that return, and why?",
+    "options": [
+      {
+        "text": "3, the same as `evaluate`",
+        "explanation": "`evaluate` returns 3, but the walrus version gives 4: Python's `:=` overwrites the single local `x`."
+      },
+      {
+        "text": "4, because the inner `x := 2` overwrites the outer `x`, so the final `+ x` reads 2 instead of 1",
+        "explanation": "Correct. Python has one `x` per function, not one per `let`. The checker gives the two bindings different slots, so `s0` and `s1` never clash and the result is correctly 3."
+      },
+      {
+        "text": "A `SyntaxError`, because `:=` cannot appear twice",
+        "explanation": "Multiple assignment expressions in one expression are legal; the generated code runs."
+      },
+      {
+        "text": "2, because only the inner binding is evaluated",
+        "explanation": "Both bindings are evaluated; the issue is that they share storage."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `x := 1`: the lambda's local `x` is 1.\n2. Inner tuple: `x := 2` sets the *same* local to 2; the inner value is 2.\n3. `+ x` now reads 2, not 1. Total: 2 + 2 = 4.\n4. Calc semantics (and `evaluate`): inner `x` is a different binding, so the answer is 2 + 1 = 3.\n\nUsing the checker's slots (`s0` for the outer, `s1` for the inner) gives `(s0 := 1, (s1 := 2, s1)[1] + s0)[1]` = 3. When a compiler targets another language, it must translate *scoping*, not just syntax.",
+    "link": {
+      "title": "A Virtual Machine — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-virtual-machine.html"
+    }
+  }
+]

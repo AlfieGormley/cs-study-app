@@ -1,0 +1,373 @@
+[
+  {
+    "id": "conc-structured-rust-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the central rule of **structured concurrency**?",
+    "options": [
+      {
+        "text": "Only one task may run at a time",
+        "explanation": "That describes a single-threaded event loop's execution, not structured concurrency. Tasks in a structured scope run concurrently."
+      },
+      {
+        "text": "Tasks must communicate only through channels",
+        "explanation": "That is CSP. Structured concurrency is about task lifetimes, and works with channels, shared memory or anything else."
+      },
+      {
+        "text": "A task may not outlive the scope that started it: the scope waits for its children, and failures and cancellation propagate through it",
+        "explanation": "Correct. Task lifetimes follow the block structure of the code, like function calls do."
+      },
+      {
+        "text": "Every task must be given a timeout",
+        "explanation": "Timeouts fit naturally into structured scopes, but they are not the defining rule."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare what happens when a function returns:\n\n| | Unstructured | Structured |\n|---|---|---|\n| Children | May still run | All finished |\n| Child error | Maybe lost | Raised in parent |\n| Cancel parent | Children unaware | Children cancelled |\n\nThis table describes a fail-fast nursery policy. Structured lifetime alone does not prescribe every failure or cancellation policy; supervisory scopes can differ.",
+    "link": {
+      "title": "Notes on structured concurrency — Nathaniel J. Smith",
+      "url": "https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Does this Rust code compile?\n\n```rust\nuse std::rc::Rc;\nuse std::thread;\n\nlet a = Rc::new(5);\nlet b = Rc::clone(&a);\nthread::spawn(move || {\n    println!(\"{b}\");\n});\n```",
+    "options": [
+      {
+        "text": "Yes; `move` transfers `b` to the new thread, so there is no sharing",
+        "explanation": "`b` moves, but it still shares a non-atomic reference count with `a`, which stays on the main thread. That is why `Rc` is not `Send`."
+      },
+      {
+        "text": "No: `Rc<i32>` is not `Send`, so it cannot be moved into a spawned thread",
+        "explanation": "Correct. `thread::spawn` requires a `Send` closure, and a closure capturing an `Rc` is not `Send`. Use `Arc` instead."
+      },
+      {
+        "text": "No, because closures cannot capture variables in Rust",
+        "explanation": "Closures capture freely. The problem is the *type* of the captured value."
+      },
+      {
+        "text": "Yes, but it is a data race at run time",
+        "explanation": "Safe Rust does not compile programs with data races. The compiler rejects this before it can run."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `thread::spawn` has the bound `F: FnOnce() -> T + Send + 'static`.\n2. Capture modes matter: this move closure captures b by value, so that captured type must be Send.\n3. It captures `b: Rc<i32>`. `Rc` is explicitly `!Send`.\n4. Error E0277: `` `Rc<i32>` cannot be sent between threads safely``.\n5. Why it matters: `a` and `b` share one refcount. If both threads cloned or dropped at once, non-atomic increments could be lost and the value freed while in use.\n6. Fix: `Arc::new(5)` and `Arc::clone(&a)`.",
+    "link": {
+      "title": "Extensible Concurrency with Send and Sync — The Rust Programming Language",
+      "url": "https://doc.rust-lang.org/book/ch16-04-extensible-concurrency-sync-and-send.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Rust, what does it mean for a type `T` to be `Sync`?",
+    "options": [
+      {
+        "text": "Values of `T` can only be used while holding a lock",
+        "explanation": "`Sync` types need no lock to share; a `Mutex<T>` is one way to *make* something `Sync`."
+      },
+      {
+        "text": "`T` has a `sync()` method that flushes it to memory",
+        "explanation": "`Sync` is a marker trait with no methods. It only tells the compiler what is safe."
+      },
+      {
+        "text": "`T` can be moved to another thread",
+        "explanation": "That is `Send`. `Sync` is about sharing a reference, not moving the value."
+      },
+      {
+        "text": "A shared reference `&T` can be safely used from several threads at once; formally, `&T` is `Send`",
+        "explanation": "Correct. `i32` is `Sync`; `RefCell<i32>` is not, because its run-time borrow flag is not synchronised."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "| Trait | Question it answers |\n|---|---|\n| `Send` | Can I move a `T` to another thread? |\n| `Sync` | Can several threads hold `&T` at once? |\n\nThe link: sharing `&T` across threads means sending copies of `&T` to them, so `T: Sync` is defined as `&T: Send`.",
+    "link": {
+      "title": "Send and Sync — The Rustonomicon",
+      "url": "https://doc.rust-lang.org/nomicon/send-and-sync.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume imports are present, main is run with asyncio.run(main()), and the loop remains responsive. What does this print, and after roughly how long?\n\n```python\nasync def ok(n):\n    await asyncio.sleep(n)\n    print(\"ok\", n)\n\nasync def fail():\n    await asyncio.sleep(0.2)\n    raise KeyError(\"k\")\n\nasync def main():\n  try:\n    async with asyncio.TaskGroup() as g:\n      g.create_task(ok(0.1))\n      g.create_task(ok(1))\n      g.create_task(fail())\n  except* KeyError:\n    print(\"handled\")\n```",
+    "options": [
+      {
+        "text": "`ok 0.1`, `ok 1`, `handled`, after about 1 second",
+        "explanation": "This is how the tasks would behave if a failure did not affect siblings. TaskGroup cancels the remaining tasks as soon as one fails."
+      },
+      {
+        "text": "`handled` only, after about 0.2 seconds",
+        "explanation": "`ok(0.1)` finished at 0.1 s, before anything failed, so it had already printed."
+      },
+      {
+        "text": "`ok 0.1`, `handled`, after about 0.2 seconds",
+        "explanation": "Correct. At 0.2 s `fail` raises, the group cancels `ok(1)`, and the KeyError surfaces in an ExceptionGroup caught by `except*`."
+      },
+      {
+        "text": "`ok 0.1`, then an uncaught `ExceptionGroup`, because `except*` cannot catch a `KeyError`",
+        "explanation": "`except* KeyError` matches KeyErrors inside an exception group. That is what it is for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Timeline:\n\n| t (s) | Event |\n|---|---|\n| 0.1 | `ok(0.1)` prints `ok 0.1` |\n| 0.2 | `fail` raises KeyError |\n| 0.2 | Group cancels `ok(1)` |\n| 0.2 | Group raises ExceptionGroup |\n\n`except* KeyError` catches it and prints `handled`. Total ≈ 0.2 s; `ok 1` never prints.",
+    "link": {
+      "title": "Coroutines and Tasks: Task Groups — Python docs",
+      "url": "https://docs.python.org/3/library/asyncio-task.html#task-groups"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Same tasks, but with `gather` and no TaskGroup:\n\n```python\nasync def main():\n    try:\n        await asyncio.gather(\n            ok(0.1), ok(1), fail())\n    except KeyError:\n        print(\"handled\")\n    await asyncio.sleep(1.5)\n```\n\nWhen main is run on a responsive loop, what is printed?",
+    "options": [
+      {
+        "text": "`ok 0.1`, `handled`, `ok 1`",
+        "explanation": "Correct. `gather` propagates the first exception at 0.2 s but does not cancel the other awaitables, so `ok(1)` keeps running and prints at 1 s."
+      },
+      {
+        "text": "`ok 0.1`, `handled`",
+        "explanation": "This assumes `gather` cancels siblings on failure, as TaskGroup does. By default it does not."
+      },
+      {
+        "text": "`ok 0.1`, `ok 1`, `handled`",
+        "explanation": "`gather` does not wait for the other awaitables before raising; the exception reaches `main` at 0.2 s."
+      },
+      {
+        "text": "Nothing; `except KeyError` cannot catch errors from inside `gather`",
+        "explanation": "With `return_exceptions=False` (the default), `gather` re-raises the first exception as-is, so a plain `except KeyError` works."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. 0.1 s: `ok 0.1`.\n2. 0.2 s: `fail` raises; `gather` immediately raises KeyError in `main`: `handled`.\n3. `ok(1)` was not cancelled. It continues after the gather await has raised; the caller in this snippet has not retained its own handle.\n4. `main` sleeps on, so the loop is still running at 1 s: `ok 1`.\n\nIf `main` had returned instead, `asyncio.run` would cancel the orphan at shutdown. Either way the work outlived the code that asked for it, which is what structured concurrency forbids.",
+    "link": {
+      "title": "Coroutines and Tasks — Python asyncio docs",
+      "url": "https://docs.python.org/3/library/asyncio-task.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these Rust snippets compile? Assume the usual imports. Select all that apply.",
+    "options": [
+      {
+        "text": "```rust\nlet c = Arc::new(Mutex::new(0));\nlet c2 = Arc::clone(&c);\nthread::spawn(move || {\n    *c2.lock().unwrap() += 1;\n});\n```",
+        "explanation": "Compiles. `Mutex<i32>` is `Send + Sync`, so `Arc<Mutex<i32>>` is `Send`."
+      },
+      {
+        "text": "```rust\nlet c = Arc::new(RefCell::new(0));\nlet c2 = Arc::clone(&c);\nthread::spawn(move || {\n    *c2.borrow_mut() += 1;\n});\n```",
+        "explanation": "Does not compile. `Arc<T>` is `Send` only if `T: Sync`, and `RefCell` is never `Sync`."
+      },
+      {
+        "text": "```rust\nlet v = vec![1, 2, 3];\nthread::scope(|s| {\n    s.spawn(|| println!(\"{v:?}\"));\n    s.spawn(|| println!(\"{v:?}\"));\n});\n```",
+        "explanation": "Compiles. Scoped threads may borrow locals, and two shared borrows of `v` are allowed."
+      },
+      {
+        "text": "```rust\nlet v = vec![1, 2, 3];\nthread::spawn(|| {\n    println!(\"{v:?}\");\n});\n```",
+        "explanation": "Does not compile (E0373). `thread::spawn` needs `'static`, but the closure borrows `v`, which the new thread could outlive. Add `move` or use a scope."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Check each against the two kinds of rule:\n\n1. **Types** (`Send`/`Sync`): `Arc<Mutex<i32>>` is `Send`; `Arc<RefCell<i32>>` is not, because `Arc` shares its contents and `RefCell` is not `Sync`.\n2. **Lifetimes**: `thread::spawn` demands `'static` captures; `thread::scope` joins its threads before returning, so borrows of `v` are fine.\n\nSo A and C compile; B fails on Sync, D fails on lifetime.",
+    "link": {
+      "title": "std::thread::scope — Rust docs",
+      "url": "https://doc.rust-lang.org/std/thread/fn.scope.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This fails with E0499 (\"cannot borrow `count` as mutable more than once\"):\n\n```rust\nlet mut count = 0;\nthread::scope(|s| {\n    s.spawn(|| count += 1);\n    s.spawn(|| count += 1);\n});\nprintln!(\"{count}\");\n```\n\nWhich change makes it compile **and** print 2?",
+    "options": [
+      {
+        "text": "Change both closures to `move || count += 1`",
+        "explanation": "It compiles, because `i32` is `Copy`: each closure gets its own copy. But the original is never changed, so it prints 0."
+      },
+      {
+        "text": "Use `let count = Rc::new(Cell::new(0));` and `count.set(count.get() + 1)`",
+        "explanation": "`Cell` is not `Sync` (and `Rc` is not `Send` either), so the compiler rejects sharing it with the spawned threads."
+      },
+      {
+        "text": "Use `let count = AtomicI32::new(0);` and `count.fetch_add(1, Ordering::Relaxed)` in each closure, then print `count.into_inner()`",
+        "explanation": "Correct. Atomics are `Sync`, so both threads can share `&count`; each `fetch_add` is one indivisible step, so the total is 2."
+      },
+      {
+        "text": "Add `unsafe { }` around each `count += 1`",
+        "explanation": "`unsafe` does not switch off the borrow checker; the E0499 error remains. And a real unsynchronised write would be a data race."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Two closures each want `&mut count`: forbidden (aliasing XOR mutation).\n2. Fix by needing only `&count`, which is allowed many times, and doing the mutation through a `Sync` type:\n\n```rust\nlet count = AtomicI32::new(0);\nthread::scope(|s| {\n  s.spawn(|| count.fetch_add(\n    1, Ordering::Relaxed));\n  s.spawn(|| count.fetch_add(\n    1, Ordering::Relaxed));\n});\nprintln!(\"{}\", count.into_inner());\n```\n\n3. The scope joins both threads first, so the result is 2. `Relaxed` is enough: only the counter itself matters, and the join provides the ordering. A `Mutex<i32>` also works.",
+    "link": {
+      "title": "std::thread::scope — Rust docs",
+      "url": "https://doc.rust-lang.org/std/thread/fn.scope.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`tokio::spawn(bump(m.clone()))` fails with \"future cannot be sent between threads safely\":\n\n```rust\nasync fn bump(m: Arc<Mutex<u32>>) {\n    let mut g = m.lock().unwrap();\n    *g += 1;\n    save().await;\n}\n```\n\n`Mutex` is `std::sync::Mutex`. Why, and what is a correct fix?",
+    "options": [
+      {
+        "text": "`Arc` is not `Send`; use `Rc` instead",
+        "explanation": "Backwards: `Arc` is the thread-safe one, and `Rc` would make things worse."
+      },
+      {
+        "text": "Async functions can never use a `Mutex`; remove it",
+        "explanation": "A std Mutex can suit short non-awaiting critical sections; long contention can still block an executor worker."
+      },
+      {
+        "text": "`save()` returns a value that is not `Send`; make it return `()`",
+        "explanation": "The error is about what is held *across* the await. Here that is the guard `g`."
+      },
+      {
+        "text": "The `MutexGuard`, which is not `Send`, is alive across `.await`, so the future is not `Send`; drop it first by putting the lock in its own block",
+        "explanation": "Correct. Tokio may resume the future on another worker thread, and the guard must unlock on the thread that locked it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. An async fn compiles to a state machine that stores every local alive at each `.await`.\n2. At `save().await`, `g: MutexGuard<u32>` is still alive, so it is stored in the future.\n3. `MutexGuard` is `!Send`, so the future is `!Send`, and `tokio::spawn` requires `Send`.\n4. Fix:\n\n```rust\n{\n    let mut g = m.lock().unwrap();\n    *g += 1;\n} // guard dropped\nsave().await;\n```\n\n5. If you genuinely must hold a lock across an await, use `tokio::sync::Mutex`, whose guard is designed for it.",
+    "link": {
+      "title": "Extensible Concurrency with Send and Sync — The Rust Programming Language",
+      "url": "https://doc.rust-lang.org/book/ch16-04-extensible-concurrency-sync-and-send.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two threads share `a` and `b`, both `Arc<Mutex<i32>>`. Thread 1 locks `a` then `b`; thread 2 locks `b` then `a`. What does the Rust compiler do?",
+    "options": [
+      {
+        "text": "Rejects the program, because lock ordering is checked by the borrow checker",
+        "explanation": "The borrow checker enforces borrowing and lifetime constraints, not about the order threads acquire locks at run time."
+      },
+      {
+        "text": "Compiles it; the program can deadlock at run time",
+        "explanation": "Correct. Rust's guarantee is freedom from data races, not from deadlock. Use a consistent lock order or a single lock."
+      },
+      {
+        "text": "Compiles it, and the standard `Mutex` detects the cycle and returns an error",
+        "explanation": "`std::sync::Mutex` has no deadlock detection. Both threads simply block forever."
+      },
+      {
+        "text": "Compiles it, but `lock()` panics with a poison error",
+        "explanation": "Poisoning happens when a thread panics while holding a lock. Nobody panics here; they just wait."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each lock is properly used: data is only reached through guards. No data race exists, so the type system is satisfied.\n2. At run time: T1 holds `a`, waits for `b`; T2 holds `b`, waits for `a`. A waiting cycle: deadlock.\n3. Nothing in Rust's types encodes lock order. Some crates add it (lock hierarchies checked at compile time), but std does not.\n4. Fixes: always lock in one global order, use one mutex for both values, or use `try_lock` with back-off.",
+    "link": {
+      "title": "Mutex — Rust standard library",
+      "url": "https://doc.rust-lang.org/std/sync/struct.Mutex.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague adds a field to a struct that is moved into worker threads:\n\n```rust\nstruct Session {\n    id: u64,\n    cache: Rc<Vec<u8>>, // new\n}\n```\n\nThey never wrote `impl Send for Session`, but code that did `thread::spawn(move || run(sess))` used to compile and now does not. Why?",
+    "options": [
+      {
+        "text": "`Send` is an auto trait: the compiler derived it for `Session` while every field was `Send`, and stops when a `!Send` field (`Rc`) is added",
+        "explanation": "Correct. Auto traits are implemented structurally. The error names the field: `Rc<Vec<u8>>` cannot be sent between threads safely."
+      },
+      {
+        "text": "Structs with more than one field are never `Send`",
+        "explanation": "The number of fields is irrelevant. Only whether each field's type is `Send` matters."
+      },
+      {
+        "text": "`Vec<u8>` is not `Send`",
+        "explanation": "`Vec<u8>` is `Send`. It is the `Rc` wrapper that is not."
+      },
+      {
+        "text": "The compiler requires `#[derive(Send)]` on any struct used with threads",
+        "explanation": "`Send` cannot be derived that way; it is automatic. You only write it by hand, with `unsafe impl`, for types the compiler cannot verify."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Before: fields `u64` (Send). So `Session: Send` automatically.\n2. After: adds `Rc<Vec<u8>>` (`!Send`). Auto-trait rule: automatic structural Send requires its fields to satisfy the trait; explicit unsafe implementations are a separate mechanism. So `Session: !Send`.\n3. The `move` closure captures `sess`, so the closure is `!Send` and `thread::spawn` rejects it.\n4. Fix: `Arc<Vec<u8>>`.\n\nThis is the payoff: a change deep in a type is caught at every place that sends it across threads, with no annotation needed.",
+    "link": {
+      "title": "Send and Sync — The Rustonomicon",
+      "url": "https://doc.rust-lang.org/nomicon/send-and-sync.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which bugs can still happen in a multi-threaded program written entirely in safe Rust, assuming sound dependencies and compiler? Select all that apply.",
+    "options": [
+      {
+        "text": "Two threads deadlock by taking two mutexes in opposite orders",
+        "explanation": "Correct. Deadlock is outside what the type system checks."
+      },
+      {
+        "text": "Two threads push to the same `Vec` simultaneously without a lock, corrupting it",
+        "explanation": "This needs two `&mut Vec` at once or a shared `Vec` mutated through `&`, both rejected at compile time. This is exactly the data race Rust rules out."
+      },
+      {
+        "text": "A withdrawal reads a balance under one `lock()`, releases it, then writes under a second `lock()`, so two withdrawals overdraw the account",
+        "explanation": "Correct. Each access is synchronised, so there is no data race, but the check-then-act sequence is not atomic: a logic race."
+      },
+      {
+        "text": "Memory is never freed because two `Arc`s point to each other",
+        "explanation": "Correct. Reference cycles leak, and leaking is safe in Rust. Break cycles with `Weak`."
+      },
+      {
+        "text": "A thread reads a half-written (torn) non-atomic `u64` that another thread is writing",
+        "explanation": "A torn read requires an unsynchronised concurrent write, which is a data race and so impossible in safe Rust."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Sort the options by whether they need a **data race** (two unsynchronised accesses, one a write):\n\n| Bug | Data race? | Safe Rust? |\n|---|---|---|\n| Deadlock | No | Possible |\n| Unlocked `Vec` push | Yes | Rejected |\n| Split check/act | No | Possible |\n| `Arc` cycle | No | Possible |\n| Torn `u64` | Yes | Rejected |\n\nRust's promise is precise: safe interfaces prevent data-race UB under sound implementation assumptions; unsafe abstractions must uphold their contracts. Higher-level correctness is still on you.",
+    "link": {
+      "title": "Extensible Concurrency with Send and Sync — The Rust Programming Language",
+      "url": "https://doc.rust-lang.org/book/ch16-04-extensible-concurrency-sync-and-send.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Java request handler runs `findUser()` and `fetchOrder()` concurrently. `findUser()` fails after 50 ms; `fetchOrder()` would take 2 s. Compare an `ExecutorService` version that calls `user.get()` then `order.get()` with a `StructuredTaskScope.open()` version that forks both and calls `join()`. Assume the executor is externally owned (not closed by this handler), no explicit sibling cancellation, responsive scheduling, and fetchOrder responds promptly to interruption. Which is right?",
+    "options": [
+      {
+        "text": "Both return after about 2 s, because Java always waits for every thread",
+        "explanation": "The executor version returns at 50 ms, when `user.get()` throws. The scope version also ends early. Under these explicit assumptions neither waits 2 s."
+      },
+      {
+        "text": "The executor version returns at about 50 ms but leaves `fetchOrder` running for 2 s with nobody using its result; the scope version cancels `fetchOrder` and returns at about 50 ms",
+        "explanation": "Correct. With the default joiner, one subtask's failure cancels the scope, interrupting its siblings, and `join` throws. No thread outlives the `try` block."
+      },
+      {
+        "text": "The scope version waits the full 2 s so that `fetchOrder` can finish cleanly before reporting the error",
+        "explanation": "The default policy cancels the remaining subtasks as soon as one fails, then waits for their actual termination before scope exit; ignoring interruption can make that wait long."
+      },
+      {
+        "text": "The executor version cancels `fetchOrder` automatically when `user.get()` throws",
+        "explanation": "A `Future` knows nothing of its siblings. Unless the code explicitly calls `order.cancel(true)`, `fetchOrder` keeps running: unwanted work outliving this handler."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "**Executor version**\n\n1. Submit both. At 50 ms `user.get()` throws.\n2. `handle` exits with the error. `order` is never touched.\n3. `fetchOrder` runs on until 2 s, wasting a thread and maybe a DB connection.\n\n**Scope version**\n\n1. `fork` both. At 50 ms `findUser` fails.\n2. The scope is cancelled: `fetchOrder`'s thread is interrupted.\n3. `join()` throws; `close()` (end of `try`) waits until all subtasks have finished.\n4. `handle` exits near 50 ms only if cancellation and cleanup complete promptly, with no child left running.\n\nThis is the same guarantee as Python's TaskGroup, in Java's preview API.",
+    "link": {
+      "title": "JEP 543: Structured Concurrency — OpenJDK",
+      "url": "https://openjdk.org/jeps/543"
+    }
+  }
+]

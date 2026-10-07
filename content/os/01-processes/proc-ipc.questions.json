@@ -1,0 +1,378 @@
+[
+  {
+    "id": "proc-ipc-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After `int fd[2]; pipe(fd);`, which descriptor does the writer use?",
+    "options": [
+      {
+        "text": "`fd[0]`",
+        "explanation": "`fd[0]` is the read end. It matches stdin being fd 0."
+      },
+      {
+        "text": "`fd[1]`",
+        "explanation": "Correct. `fd[1]` is the write end, like stdout being fd 1. Data written there comes out of `fd[0]`."
+      },
+      {
+        "text": "Either; pipes are bidirectional",
+        "explanation": "A pipe goes one way only. For two-way traffic you need two pipes or a socket pair."
+      },
+      {
+        "text": "Neither; you must call `open` on the pipe first",
+        "explanation": "`pipe` returns two descriptors that are already open. Only a named FIFO needs `open`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Remember: **0 reads, 1 writes**, the same as stdin and stdout.\n\n```\nwrite(fd[1]) -> [buf] -> read(fd[0])\n```\n\nA shell sets up `a | b` by `dup2`ing `fd[1]` onto `a`'s stdout and `fd[0]` onto `b`'s stdin.",
+    "link": {
+      "title": "pipe(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A process has installed handlers for many signals. Which pair can still never be caught, blocked or ignored?",
+    "options": [
+      {
+        "text": "`SIGTERM` and `SIGINT`",
+        "explanation": "Both can be caught. Graceful shutdown handlers depend on catching `SIGTERM`."
+      },
+      {
+        "text": "`SIGSEGV` and `SIGPIPE`",
+        "explanation": "Both can be handled or (for `SIGPIPE`) ignored. Servers routinely ignore `SIGPIPE`."
+      },
+      {
+        "text": "`SIGKILL` and `SIGSTOP`",
+        "explanation": "Applications cannot install handlers, block or ignore these signals. Permission checks, init exceptions and uninterruptible waits mean this is not a promise that every kill or stop request takes immediate effect."
+      },
+      {
+        "text": "`SIGCHLD` and `SIGHUP`",
+        "explanation": "Both can be caught. Daemons often treat `SIGHUP` as \"reload config\"."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "SIGKILL and SIGSTOP cannot be caught, blocked or ignored by normal application signal handling. They provide forced termination or stopping without application cleanup, but a caller still needs permission and kernel/init/wait rules affect delivery and timing.",
+    "link": {
+      "title": "signal(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/signal.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two processes exchange large video frames many times a second. Which mechanism avoids copying each frame through the kernel?",
+    "options": [
+      {
+        "text": "A pipe",
+        "explanation": "Each frame would be copied from the writer into the kernel buffer, then out again to the reader."
+      },
+      {
+        "text": "A Unix domain socket",
+        "explanation": "Sockets copy data through kernel buffers just as pipes do, though they can pass an fd to a shared buffer."
+      },
+      {
+        "text": "Shared memory",
+        "explanation": "Correct. Both processes map the same physical pages. Writing a frame is ordinary stores, and the reader sees it without any copy."
+      },
+      {
+        "text": "Signals",
+        "explanation": "Signals carry a number, not data. They can say \"frame ready\" but can't carry the frame."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Conventional pipe/socket read-write transfers normally copy payload through kernel buffers. Shared mappings let sender and receiver access the same storage, with an explicit ownership/publication protocol. Synchronisation or notification may make syscalls, and page faults or zero-copy alternatives change costs; the benefit here is avoiding the normal intermediate payload copies.",
+    "link": {
+      "title": "shm_overview(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/shm_overview.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A process does two writes to a pipe: `write(fd, \"HELLO\", 5)` then `write(fd, \"WORLD\", 5)`. The reader calls `read(fd, buf, 100)` once, after both writes. What can it get?",
+    "options": [
+      {
+        "text": "Always exactly `HELLO`, because each write is one message",
+        "explanation": "Pipes are byte streams with no message boundaries. Nothing records where one write ended."
+      },
+      {
+        "text": "`HELLOWORLD` in one read",
+        "explanation": "Correct. Both writes are in the buffer, and `read` returns whatever is available, up to 100 bytes."
+      },
+      {
+        "text": "An error, because the reader asked for more than was written",
+        "explanation": "`read` returning fewer bytes than requested is normal, not an error."
+      },
+      {
+        "text": "`WORLD`, because the buffer is last in, first out",
+        "explanation": "Pipes are first in, first out. Bytes come out in the order they were written."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. After both writes the kernel buffer holds the 10 bytes `HELLOWORLD`.\n2. `read(fd, buf, 100)` returns whatever is available, up to 100: here 10 bytes.\n3. The boundary between the two writes is gone.\n\nIf message boundaries matter, frame the data (a length prefix, or newline-terminated lines), or use something that keeps boundaries, such as a message queue or a `SOCK_SEQPACKET` socket.",
+    "link": {
+      "title": "pipe(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The parent writes three lines to the child, closes `fd[1]` and calls `waitpid`. The child prints all three lines and then hangs for ever. What's the bug?\n\n```c\npipe(fd);\nif (fork() == 0) {\n  char b[64]; ssize_t n;\n  while ((n = read(fd[0],\n           b, 64)) > 0)\n    write(1, b, n);\n  _exit(0);\n}\nclose(fd[0]);\n/* write 3 lines, close */\n```",
+    "options": [
+      {
+        "text": "The parent should have closed `fd[0]` later",
+        "explanation": "The parent closing its read end is correct. The hang is on the child's side."
+      },
+      {
+        "text": "The child never closed its own copy of `fd[1]`, so a write end is still open and `read` never returns 0",
+        "explanation": "Correct. EOF needs *every* write end closed. The child inherited one and still holds it, so it waits for data from itself."
+      },
+      {
+        "text": "The buffer of 64 bytes is too small",
+        "explanation": "A small buffer only means more loop iterations. It can't cause a hang."
+      },
+      {
+        "text": "`waitpid` blocks the pipe",
+        "explanation": "`waitpid` waits for the child to exit and has no effect on the pipe."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the open write ends after `fork`:\n\n```\nparent fd[1]: open -> closed later\nchild  fd[1]: open (never closed!)\n```\n\n1. The child reads the three lines.\n2. The buffer is empty, but one write end (its own) is still open, so `read` blocks instead of returning 0.\n3. The parent waits for the child, and the child waits for EOF: a hang.\n\nFix: `close(fd[1]);` as the child's first line.",
+    "link": {
+      "title": "pipe(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In bash, `yes | head -n 1` prints `y` and finishes at once, and `${PIPESTATUS[0]}` is 141. What happened to `yes`?",
+    "options": [
+      {
+        "text": "It exited normally with status 141",
+        "explanation": "Bash status alone is ambiguous because a program can explicitly return 141. In this standard yes/head pipeline with default signal handling, the broken pipe explains SIGPIPE termination."
+      },
+      {
+        "text": "`head` sent it `SIGTERM`",
+        "explanation": "`head` doesn't signal anyone. It just exits, closing the read end."
+      },
+      {
+        "text": "It was killed by `SIGPIPE` after writing to a pipe with no readers",
+        "explanation": "Correct. 141 − 128 = 13, which is `SIGPIPE`. Once `head` exited, `yes`'s next write had nowhere to go."
+      },
+      {
+        "text": "The pipe filled up and `yes` was killed by the OOM killer",
+        "explanation": "A full pipe just blocks the writer; it uses no extra memory. The OOM killer sends `SIGKILL` (137)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `head -n 1` reads a line, prints `y` and exits, closing the only read end.\n2. `yes` keeps writing. A write to a pipe with no readers raises `SIGPIPE`.\n3. The default action is to terminate, so `yes` dies.\n4. Shells report a signal death as 128 + N: 128 + 13 = 141.\n\nThis is the behaviour you want for pipelines: producers stop automatically when the consumer has finished.",
+    "link": {
+      "title": "pipe(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A blocking Linux pipe is confirmed with F_GETPIPE_SZ to have 65,536-byte capacity and starts empty. A reader keeps its end open but never reads. A writer repeatedly writes 4,096 bytes successfully. How many writes fill it before the next blocks?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "One write occupies only 4,096 bytes of the explicitly supplied 65,536-byte capacity."
+      },
+      {
+        "text": "16",
+        "explanation": "Correct. 65,536 / 4,096 = 16 writes fill the buffer, so the 17th blocks."
+      },
+      {
+        "text": "64",
+        "explanation": "That would mean 1 KiB per write. Each write here is 4 KiB."
+      },
+      {
+        "text": "None ever block; the kernel grows the buffer",
+        "explanation": "The pipe is bounded. A full pipe blocks the writer, which is how back-pressure works."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\ncapacity = 64 KiB = 65,536 bytes\nwrite    = 4,096 bytes\n65,536 / 4,096 = 16 writes\n```\n\nThe 17th `write` blocks until the reader drains some space (or fails with `EAGAIN` if the fd is non-blocking). A bounded buffer is what makes a fast producer slow down to a slow consumer's speed. `fcntl(fd, F_SETPIPE_SZ, n)` can resize it, up to `/proc/sys/fs/pipe-max-size`.",
+    "link": {
+      "title": "pipe(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these is it safe to do inside a signal handler? Select all that apply.",
+    "options": [
+      {
+        "text": "Call `write(2, \"bye\\n\", 4)`",
+        "explanation": "Correct. `write` is on the async-signal-safe list, because it's a plain syscall with no hidden user-space state."
+      },
+      {
+        "text": "Call `printf(\"got %d\\n\", sig)`",
+        "explanation": "Not safe. `printf` uses stdio buffers and locks. If the handler interrupted another `printf`, they can be corrupted or deadlock."
+      },
+      {
+        "text": "Set a `volatile sig_atomic_t` flag",
+        "explanation": "Correct. That's the standard pattern: the handler sets a flag and the main loop acts on it."
+      },
+      {
+        "text": "Call `malloc` to build a message",
+        "explanation": "Not safe. If the signal arrived during `malloc`, the allocator's state is half-updated or its lock is held."
+      },
+      {
+        "text": "Call `_exit(1)`",
+        "explanation": "Correct. `_exit` is async-signal-safe. (Plain `exit` isn't, because it runs `atexit` handlers and flushes stdio.)"
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Use the documented async-signal-safe list; being a library wrapper or syscall alone is not the criterion. write and _exit are listed, while printf and malloc are not. A volatile sig_atomic_t flag supports communication with the interrupted execution, but is not general thread synchronisation. Preserve errno if the handler changes it. signalfd is an alternative when the selected signals are blocked in the appropriate threads.",
+    "link": {
+      "title": "signal-safety(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/signal-safety.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A parent forks 3 children. Its `SIGCHLD` handler does `reaped++; waitpid(-1, NULL, WNOHANG);`. All three children exit within microseconds of each other. What can `reaped` be once things settle?",
+    "options": [
+      {
+        "text": "Always 3",
+        "explanation": "This assumes one handler call per child. Standard signals don't queue, so several exits can merge into one delivery."
+      },
+      {
+        "text": "Anywhere from 1 to 3, and some children may stay zombies",
+        "explanation": "Correct. Pending `SIGCHLD`s coalesce into one bit. Each handler run reaps only one child, so unreaped children stay zombies."
+      },
+      {
+        "text": "Always 1",
+        "explanation": "Coalescing can happen, but it isn't guaranteed. If the exits are spread out enough, the handler can run two or three times."
+      },
+      {
+        "text": "0, because `SIGCHLD` is ignored by default",
+        "explanation": "Ignored by default, yes, but this process installed a handler, so the handler runs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Child 1 exits: `SIGCHLD` becomes pending.\n2. Children 2 and 3 exit before the handler runs: it's *already* pending, so nothing is added.\n3. The handler runs once: `reaped = 1`, one child is reaped, and two are left as zombies.\n\nWith different timing you get 2 or 3. The fix is to loop:\n\n```c\nwhile (waitpid(-1, NULL,\n       WNOHANG) > 0)\n    reaped++;\n```",
+    "link": {
+      "title": "wait(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/wait.2.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Twenty worker processes share one pipe to a logging process. Workers A and B write records with a single `write` each. A's records are 200 bytes; B's are 10 KiB. What can the logger see?",
+    "options": [
+      {
+        "text": "Neither A's nor B's records are ever interleaved",
+        "explanation": "Only writes of up to `PIPE_BUF` (4,096 bytes on Linux) are guaranteed atomic. 10 KiB is over the limit."
+      },
+      {
+        "text": "A's writes are not interleaved with other writers' bytes, though reads can split them; B's writes may be interleaved",
+        "explanation": "Correct. 200 ≤ 4,096, so each of A's writes lands in one piece. B's 10 KiB writes can be split and mixed with other data."
+      },
+      {
+        "text": "Both may be interleaved, because pipes give no atomicity at all",
+        "explanation": "POSIX guarantees atomicity for writes of up to `PIPE_BUF` bytes. That guarantee is what makes shared log pipes work."
+      },
+      {
+        "text": "B's records are rejected with `EINVAL`",
+        "explanation": "Large writes are allowed. They just lose the atomicity guarantee."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `PIPE_BUF` on Linux is 4,096 bytes.\n2. A: 200 ≤ 4,096, so each write is atomic and is never interleaved.\n3. B: 10,240 > 4,096, so the kernel may copy it in pieces as space frees up, and other writers' data can land in between.\n\nFixes for B: keep records under 4 KiB, give each worker its own pipe, or use a `SOCK_DGRAM` or `SOCK_SEQPACKET` Unix socket, which delivers each message whole.",
+    "link": {
+      "title": "pipe(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A privileged daemon accepts TCP connections and wants to hand each connected socket to a long-running sandboxed worker process. What should it use?",
+    "options": [
+      {
+        "text": "Write the fd number into shared memory",
+        "explanation": "File descriptor numbers are indexes into each process's own fd table. Number 7 in the daemon means nothing in the worker."
+      },
+      {
+        "text": "Send the fd over a Unix domain socket with `sendmsg` and `SCM_RIGHTS`",
+        "explanation": "Correct. The kernel installs a new descriptor in the receiver that refers to the same open socket."
+      },
+      {
+        "text": "Send the fd through a pipe with `write`",
+        "explanation": "That would only send the integer, which, as with shared memory, means nothing in another process."
+      },
+      {
+        "text": "Signal the worker with `SIGUSR1` so it opens the connection itself",
+        "explanation": "A signal carries no data, and the worker can't take over a TCP connection that's already been accepted."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. An fd is a per-process index into a table of open files. Copying the integer doesn't copy the access.\n2. Only the kernel can add an entry to another process's fd table.\n3. Unix domain sockets offer exactly that: attach the fd to a message as `SCM_RIGHTS` ancillary data.\n4. The worker's `recvmsg` returns a new fd (perhaps a different number) for the same connection.\n\nThe other ways to share an fd are inheriting it across `fork`, or `pidfd_getfd` on newer kernels, but neither suits an already-running, unrelated worker as cleanly.",
+    "link": {
+      "title": "unix(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/unix.7.html"
+    }
+  },
+  {
+    "id": "proc-ipc-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Two processes share a counter in a POSIX shared memory region from `shm_open` + `mmap(MAP_SHARED)`. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "If both do `p[0]++` with no synchronisation, updates can be lost",
+        "explanation": "Correct. `++` is a load, an add and a store. Two processes can both load 5 and both store 6, just as two threads can."
+      },
+      {
+        "text": "The kernel serialises writes to shared pages, so no locking is needed",
+        "explanation": "The kernel isn't involved in loads and stores to mapped memory at all. That's why it's fast, and why it can't help here."
+      },
+      {
+        "text": "If a process crashes without calling `shm_unlink`, the object stays in `/dev/shm`",
+        "explanation": "Correct. The name persists until unlinked or reboot, which can leak memory."
+      },
+      {
+        "text": "A pointer stored in the region may be invalid in the other process",
+        "explanation": "Correct. The region can be mapped at different virtual addresses, so store offsets from the base instead."
+      },
+      {
+        "text": "For large transfers it is slower than a pipe because of page faults",
+        "explanation": "Shared memory can avoid payload copies, but later page faults, cache coherence and synchronisation still matter. The claim that it is necessarily slower is unsupported."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Unsynchronised increments can lose updates. Use a process-shared mutex/semaphore, or atomics whose implementation supports cross-process use. A named shared-memory object persists until unlinked (or its backing environment is removed); mappings may have different virtual addresses, so use validated offsets. Shared memory can avoid kernel payload copies, but it does not guarantee zero later faults or universally better performance.",
+    "link": {
+      "title": "shm_overview(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/shm_overview.7.html"
+    }
+  }
+]

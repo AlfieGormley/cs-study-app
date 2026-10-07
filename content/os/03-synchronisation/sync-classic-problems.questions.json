@@ -1,0 +1,344 @@
+[
+  {
+    "id": "sync-classic-problems-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A semaphore-based bounded buffer has N = 5, so it starts with `empty = 5`, `full = 0`. Producers complete 3 `put`s and then a consumer completes 1 `get`. What are `empty` and `full` now?",
+    "options": [
+      {
+        "text": "empty = 2, full = 3",
+        "explanation": "This counts the puts but forgets the get, which frees a slot (`empty` +1) and removes an item (`full` -1)."
+      },
+      {
+        "text": "empty = 4, full = 1",
+        "explanation": "This treats the get as undoing more than one put. Each operation moves exactly one unit between the two counts."
+      },
+      {
+        "text": "empty = 3, full = 2",
+        "explanation": "Correct. Each put moves one unit from `empty` to `full`; each get moves one back. 5-3+1 = 3 and 0+3-1 = 2."
+      },
+      {
+        "text": "empty = 5, full = 0",
+        "explanation": "The semaphores are not reset after each operation; they track the buffer's occupancy continuously."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nstart     empty=5 full=0\nput       empty=4 full=1\nput       empty=3 full=2\nput       empty=2 full=3\nget       empty=3 full=2\n```\n\nInvariant: `empty + full = N` = 5 whenever no thread is mid-operation. Two items are in the buffer and three slots are free.",
+    "link": {
+      "title": "Producer–consumer problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A log-shipping service reads 50,000 lines/s from a file and a single consumer thread uploads 20,000 lines/s. The developer uses an **unbounded** `queue.Queue()` between them. What happens over time?",
+    "options": [
+      {
+        "text": "The producer slows down automatically to 20,000 lines/s",
+        "explanation": "Only a bounded queue does that: `put` blocks when full. An unbounded queue never blocks the producer."
+      },
+      {
+        "text": "The queue grows by about 30,000 lines per second until the process runs out of memory",
+        "explanation": "Correct. With no bound there is no back-pressure, so the excess accumulates. Use `queue.Queue(maxsize=...)` so `put` blocks and the producer is throttled to the consumer's pace."
+      },
+      {
+        "text": "The consumer speeds up to match the producer",
+        "explanation": "The consumer's speed is set by the upload, not by how full the queue is."
+      },
+      {
+        "text": "Lines are silently dropped once the queue reaches its default limit",
+        "explanation": "`queue.Queue()` with no `maxsize` (or `maxsize <= 0`) is unbounded; it does not drop anything. It just grows."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "If these rates persist, the backlog grows by 30000 lines/s: 108 million lines in an hour. At an illustrative 200 bytes per line, payload alone is 21.6 GB before object/queue overhead. Memory pressure may cause allocation failures, termination or reduced throughput; a kill is not inevitable. A bounded queue applies back-pressure, with bounded queued item count rather than a universal byte limit.",
+    "link": {
+      "title": "queue — Python documentation",
+      "url": "https://docs.python.org/3/library/queue.html"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the naive dining philosophers solution, each philosopher picks up the left fork, then the right fork. How can the system get stuck?",
+    "options": [
+      {
+        "text": "Two philosophers can hold the same fork at once",
+        "explanation": "Each fork is a semaphore initialised to 1, so mutual exclusion on forks holds. The problem is waiting, not sharing."
+      },
+      {
+        "text": "A philosopher can eat with only one fork",
+        "explanation": "The code waits for both forks before calling `eat()`, so that cannot happen."
+      },
+      {
+        "text": "Philosophers think for too long",
+        "explanation": "Thinking time affects throughput, not correctness. The hang comes from how forks are acquired."
+      },
+      {
+        "text": "All five pick up their left fork simultaneously; each then waits forever for a right fork held by a neighbour",
+        "explanation": "Correct. Every philosopher holds one fork and waits for another in a cycle. No one can proceed. This is a deadlock."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. P0 takes f0, P1 takes f1, ... P4 takes f4.\n2. P0 now waits for f1 (held by P1), P1 for f2, ... P4 for f0 (held by P0).\n3. Each is waiting for the next around the table: a cycle.\n4. No philosopher will release a fork until it has eaten, so the cycle never breaks.\n\nThe fix needs to break the cycle, for example by making one philosopher pick up forks in the opposite order.",
+    "link": {
+      "title": "Dining philosophers problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dining_philosophers_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer reorders the producer to take the mutex first:\n\n```c\nsem_wait(&mutex);\nsem_wait(&empty);\nbuf[in] = x; in = (in+1) % N;\nsem_post(&mutex);\nsem_post(&full);\n```\n\nThe consumer is unchanged (`wait(full)` then `wait(mutex)`). What happens when the buffer is full and a producer runs?",
+    "options": [
+      {
+        "text": "The producer holds `mutex` and sleeps on `empty`; the consumer that would free a slot blocks on `mutex`; nothing progresses",
+        "explanation": "Correct. The producer waits for a slot while holding the lock the consumer needs to create one. Classic hold-and-wait deadlock."
+      },
+      {
+        "text": "The producer overwrites the oldest item",
+        "explanation": "`wait(empty)` blocks when the buffer is full, so the write is never reached."
+      },
+      {
+        "text": "It works, just more slowly",
+        "explanation": "It is not slower; it hangs. When the buffer is non-full it behaves normally, which is why this bug can survive testing."
+      },
+      {
+        "text": "The consumer reads garbage because the mutex is held",
+        "explanation": "The consumer cannot read anything: it is blocked on the mutex."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nempty=0 full=N mutex=1\nP: wait(mutex) -> mutex=0\nP: wait(empty) -> blocks (0)\nC: wait(full)  -> full=N-1\nC: wait(mutex) -> blocks (0)\n```\n\nP waits for C to post `empty`; C waits for P to post `mutex`. Rule of thumb: **wait on the counting semaphore first, take the mutex last, and hold it only around the buffer access.**",
+    "link": {
+      "title": "OSTEP: Semaphores (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the readers-preference solution from the lesson: reader R1 is reading, writer W has called `write_lock()` and is blocked. Reader R2 now calls `read_lock()`. What happens to R2?",
+    "options": [
+      {
+        "text": "R2 blocks behind W, because W arrived first",
+        "explanation": "That is writer-preference or fair behaviour. In the readers-preference solution, R2 never touches `rw` because it is not the first reader."
+      },
+      {
+        "text": "R2 enters immediately and reads alongside R1, while W keeps waiting",
+        "explanation": "Correct. `readers` goes from 1 to 2, which is not the first-reader case, so R2 skips `wait(rw)`. W must wait until `readers` drops to 0."
+      },
+      {
+        "text": "R2 and W both enter",
+        "explanation": "W needs exclusive access; it cannot run while any reader holds the group's `rw` permit."
+      },
+      {
+        "text": "R2 deadlocks",
+        "explanation": "R2 only takes `mutex` briefly to bump the counter, then releases it. Nothing it waits on is held by W."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. R1 entered: `readers = 1`, took `rw` for the reader group.\n2. W: `wait(rw)` blocks (held by the group).\n3. R2: `wait(mutex)`, `++readers` → 2. Not 1, so no `wait(rw)`. `post(mutex)`. R2 reads.\n4. W only gets `rw` when the *last* reader leaves. If R3, R4... keep arriving before `readers` hits 0, W starves.\n\nThis is the defining weakness of readers-preference locks.",
+    "link": {
+      "title": "Readers–writers problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Readers%E2%80%93writers_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Philosophers 0 to 3 pick up fork *i* then fork *i+1*. Philosopher 4 needs forks 4 and 0 and instead picks up **fork 0 first**. Why does this prevent the all-left-forks deadlock?",
+    "options": [
+      {
+        "text": "It means philosopher 4 never eats",
+        "explanation": "Philosopher 4 still eats whenever forks 0 and 4 are free. The change is to the order, not whether they eat."
+      },
+      {
+        "text": "It gives philosopher 4 priority over the others",
+        "explanation": "There is no priority mechanism. Philosopher 4 competes for fork 0 like philosopher 0 does."
+      },
+      {
+        "text": "All acquire lower-numbered forks before higher ones, so wait edges increase in fork number and cannot form a cycle",
+        "explanation": "Correct. This is resource ordering. Philosophers 0 and 4 both try fork 0 first, so at most one of them holds a fork while the other holds none, and the circular chain is broken."
+      },
+      {
+        "text": "It halves the number of forks needed",
+        "explanation": "Every philosopher still needs two forks to eat. Only the acquisition order changes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Try to recreate the deadlock:\n\n1. P0 to P3 each grab their lower fork: f0, f1, f2, f3.\n2. P4 tries its lower fork f0 first, but P0 has it, so P4 blocks **holding nothing**.\n3. f4 is free. P3 holds f3 and wants f4: it gets it and eats.\n4. P3 releases f3 and f4; P2 can now get f3 and eat, and so on.\n\nIf every thread acquires locks in one global order, a cycle of waiting threads is impossible. This is the standard rule for multi-lock code (for example, locking two bank accounts in ID order).",
+    "link": {
+      "title": "Dining philosophers problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dining_philosophers_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these prevent deadlock in the five dining philosophers? Select all that apply.",
+    "options": [
+      {
+        "text": "A counting semaphore initialised to 4 that a philosopher must pass before picking up any fork",
+        "explanation": "Correct. With at most four at the table competing for five forks, the pigeonhole principle guarantees at least one can get both."
+      },
+      {
+        "text": "Making every philosopher pick up the right fork first instead of the left",
+        "explanation": "That is still symmetric. If all five grab their right fork at once, the same cycle forms in the other direction."
+      },
+      {
+        "text": "A single waiter mutex: a philosopher picks up both forks only while holding it, and only if both are free",
+        "explanation": "Correct. Fork allocation becomes all-or-nothing, so no one ever holds one fork while waiting for another. It limits concurrency through a single lock, but it cannot deadlock."
+      },
+      {
+        "text": "Having the highest-numbered philosopher pick up forks in the opposite order from the others",
+        "explanation": "Correct. This is resource ordering, which breaks the cycle."
+      },
+      {
+        "text": "Making philosophers think for a random time before each attempt",
+        "explanation": "Randomness makes the bad interleaving less likely but not impossible. It is not a guarantee."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "A deadlock here needs every philosopher holding one fork and waiting for another in a cycle. Check whether each option makes that state impossible:\n\n1. **Limit to 4**: a cycle needs all 5 holding a fork. Impossible.\n2. **All right-first**: all 5 can hold their right fork. Still possible.\n3. **Waiter**: no one ever holds just one fork. Impossible.\n4. **One reversed**: no cycle in the lock order. Impossible.\n5. **Random delays**: merely unlikely.\n\nNote that A, C and D prevent deadlock but do not on their own guarantee that nobody starves.",
+    "link": {
+      "title": "Dining philosophers problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dining_philosophers_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the lesson's sleeping barber code with N = 3 waiting chairs, the barber is cutting a customer's hair and all three waiting chairs are empty. Five new customers arrive at once. How many leave without a haircut? Assume the barber does not finish the current haircut while the five arrivals check for seats.",
+    "options": [
+      {
+        "text": "0",
+        "explanation": "Only three waiting chairs exist. Once `free_seats` is 0, further customers return immediately."
+      },
+      {
+        "text": "1",
+        "explanation": "This assumes the barber's chair also counts as a waiting chair. The customer in the chair already freed their seat when called; the five newcomers only have the three waiting chairs."
+      },
+      {
+        "text": "3",
+        "explanation": "That is how many *stay*. Three sit down; the other two leave."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. The first three take `free_seats` from 3 to 0 and wait. The fourth and fifth find `free_seats == 0` and leave."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The barber already did `free_seats += 1` when he called the current customer, so `free_seats == 3`.\n2. Customers acquire `seats` one at a time:\n\n```\nc1: 3 -> 2, release customer_ready\nc2: 2 -> 1\nc3: 1 -> 0\nc4: free_seats == 0 -> leave\nc5: free_seats == 0 -> leave\n```\n\n3. `customer_ready` is now 3, so the barber will serve three more without sleeping.\n\nBecause the counter is protected by `seats`, two customers cannot both take the last chair.",
+    "link": {
+      "title": "Sleeping barber problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sleeping_barber_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A configuration object is read 5,000 times per second (each read takes 2 ms) and updated once a minute. Using a readers-preference lock, updates are sometimes delayed for many seconds. Which changes address this? Select all that apply.",
+    "options": [
+      {
+        "text": "Switch to a writer-preference or fair read-write lock, so new readers queue behind a waiting writer",
+        "explanation": "Correct. Once the writer is waiting, newly arriving readers block, so the current readers drain and the writer gets in."
+      },
+      {
+        "text": "Add more reader threads so reads finish faster",
+        "explanation": "More concurrent readers make it even less likely that the reader count ever reaches zero, worsening the starvation."
+      },
+      {
+        "text": "Publish an immutable configuration by atomic pointer swap, with an explicit lifetime/reclamation protocol for readers",
+        "explanation": "This can avoid waiting for readers before publishing a new version. The old object must remain alive while readers use it; reclamation or bounded-memory requirements can still require waiting."
+      },
+      {
+        "text": "Use a fair turnstile semaphore that both readers and writers pass through in arrival order",
+        "explanation": "Correct. A waiting writer holds the turnstile, so readers arriving after it wait their turn."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "At a sustained rate of 5000 reads/s and mean duration 0.002 s, Little's law gives mean concurrency 10. That mean alone does not determine how often the count reaches zero. A fair or writer-preference policy limits reader bypass; immutable publication can remove that acquisition bottleneck if old versions are reclaimed safely. Adding threads alone supplies no starvation fix.",
+    "link": {
+      "title": "Readers–writers problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Readers%E2%80%93writers_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Treat the trace as an illustrative interleaving; a literal plain-C implementation has a data race and undefined behavior. In the readers-preference code, a developer \"optimises\" `read_unlock` by dropping the mutex:\n\n```c\nvoid read_unlock(void) {\n    if (--readers == 0)\n        sem_post(&rw);\n}\n```\n\nTwo readers R1 and R2 finish at the same moment with `readers == 2`. What can go wrong?",
+    "options": [
+      {
+        "text": "Nothing; decrementing an int is atomic",
+        "explanation": "`--readers` is a load, subtract and store, exactly like `counter++` in lesson 1. Two threads can interleave it."
+      },
+      {
+        "text": "Both threads may read 2 and store 1, so `readers` stays at 1 forever, `rw` is never posted, and writers starve permanently",
+        "explanation": "Correct. A lost decrement leaves the count stuck above zero. No future reader will ever be 'last', so writers wait forever."
+      },
+      {
+        "text": "The writer enters while readers are still reading",
+        "explanation": "With a lost update the count is too *high*, not too low, so the writer is locked out rather than let in early. (Other interleavings with `read_lock` could cause worse.)"
+      },
+      {
+        "text": "The program deadlocks immediately in `sem_post`",
+        "explanation": "`sem_post` never blocks. The failure is silent: the post simply never happens."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nR1: load readers (2)\nR2: load readers (2)\nR1: 2-1=1, store 1; 1 != 0\nR2: 2-1=1, store 1; 1 != 0\n```\n\nBoth readers have left, but `readers == 1`. The `rw` semaphore was never posted, so writers block forever, and subsequent readers see 'not first' and skip `wait(rw)` (they still read, but writers are stuck).\n\nThe mutex in `read_lock` and `read_unlock` exists precisely to make the counter update and the first/last test atomic.",
+    "link": {
+      "title": "The Little Book of Semaphores — Allen B. Downey",
+      "url": "https://greenteapress.com/wp/semaphores/"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Treat the trace as an illustrative interleaving; a literal plain-C implementation has a data race and undefined behavior. A bounded buffer with N = 10 has **two producers** and one consumer. The developer argues: \"`empty` already stops producers overfilling the buffer, so the `mutex` is unnecessary.\" With the buffer empty, both producers call `put` at once. What can go wrong without the mutex?",
+    "options": [
+      {
+        "text": "Nothing; `empty` admits both, and they write to different slots",
+        "explanation": "They only write to different slots if each sees a different value of `in`. Without the mutex both can read the same `in`."
+      },
+      {
+        "text": "Both block, because `empty` only admits one at a time",
+        "explanation": "`empty` is 10, so it admits up to ten producers at once. It counts free slots; it does not provide mutual exclusion."
+      },
+      {
+        "text": "The consumer reads a slot before it is written",
+        "explanation": "The consumer waits on `full`, which is only posted after a write. The problem is between the two producers."
+      },
+      {
+        "text": "Both read the same value of `in`, write to the same slot (one item is lost), and `full` is posted twice, so the consumer later reads a stale or empty slot",
+        "explanation": "Correct. The counting semaphores track how many slots are free; they do not make `buf[in] = x; in++` atomic. That needs the mutex."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "An illustrative failure has both producers read in=0, both overwrite buf[0], both set in=1 and both post full. The count advertises two items but only one slot was filled. Plain C racing accesses are undefined behavior, not limited to this trace. This implementation needs serialized index/slot updates; other carefully designed multi-producer algorithms can use atomics instead of a mutex.",
+    "link": {
+      "title": "OSTEP: Semaphores (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf"
+    }
+  }
+]

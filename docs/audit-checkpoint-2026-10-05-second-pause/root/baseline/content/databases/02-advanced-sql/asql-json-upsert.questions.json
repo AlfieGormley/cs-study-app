@@ -1,0 +1,348 @@
+[
+  {
+    "id": "asql-json-upsert-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`stock` contains `(1, 10)` and `(4, 3)` as `(product_id, qty)`, with `product_id` the primary key. What does it contain after this?\n\n```sql\nINSERT INTO stock (product_id, qty)\nVALUES (1, 5), (2, 7)\nON CONFLICT (product_id)\nDO UPDATE SET\n  qty = stock.qty + excluded.qty;\n```",
+    "options": [
+      {
+        "text": "(1, 15), (2, 7), (4, 3)",
+        "explanation": "Correct. Product 1 conflicts, so its qty becomes 10 + 5 = 15. Product 2 has no conflict and is inserted. Product 4 is untouched."
+      },
+      {
+        "text": "(1, 5), (2, 7), (4, 3)",
+        "explanation": "That would be an overwrite (`SET qty = excluded.qty`). Here the update adds the existing value, `stock.qty`, to the proposed one."
+      },
+      {
+        "text": "(1, 15), (2, 7)",
+        "explanation": "Rows not mentioned in the INSERT are never deleted. Product 4 stays."
+      },
+      {
+        "text": "An error: duplicate key value violates unique constraint",
+        "explanation": "That's what a plain INSERT would do. ON CONFLICT turns the duplicate into an update."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Row (1, 5): product 1 exists, so DO UPDATE runs. `stock.qty` is the existing 10, `excluded.qty` is the proposed 5. New qty: 15.\n2. Row (2, 7): no conflict, so it is inserted as is.\n3. Product 4 isn't in the statement, so it stays (4, 3).\n4. Result: (1, 15), (2, 7), (4, 3). Both SQLite (3.24+) and Postgres (9.5+) behave identically here.",
+    "link": {
+      "title": "INSERT (ON CONFLICT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-insert.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In PostgreSQL, `payload` is `jsonb` and one row holds `{\"type\":\"cart\",\"qty\":2}`. What type does `payload ->> 'qty'` return?",
+    "options": [
+      {
+        "text": "integer",
+        "explanation": "That's SQLite's behaviour, where `->>` returns a native SQL value. In Postgres, `->>` always returns text."
+      },
+      {
+        "text": "jsonb",
+        "explanation": "`->` returns jsonb. The double arrow `->>` converts the value to text."
+      },
+      {
+        "text": "text",
+        "explanation": "Correct. `->>` returns `text`, so `'2'`. Cast it, e.g. `(payload ->> 'qty')::int`, before numeric comparisons."
+      },
+      {
+        "text": "numeric",
+        "explanation": "Postgres doesn't infer a SQL type from the JSON value for `->>`; it returns text regardless."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Postgres has two extraction operators:\n   - `->` returns `jsonb` (here, the JSON number `2`).\n   - `->>` returns `text` (here, `'2'`).\n2. `pg_typeof(payload ->> 'qty')` confirms `text`.\n3. SQLite differs: `->>` returns an INTEGER for a JSON number, which is why queries ported from SQLite can fail or misbehave in Postgres.",
+    "link": {
+      "title": "JSON functions and operators — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-json.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does Postgres offer both `json` and `jsonb`, and which should a new table normally use?",
+    "options": [
+      {
+        "text": "`json` is newer and faster; use `json`",
+        "explanation": "`json` came first (9.2) and re-parses the text on every operation. `jsonb` (9.4) was added to fix that."
+      },
+      {
+        "text": "They're identical; `jsonb` is just an alias",
+        "explanation": "They differ: `jsonb` removes duplicate keys (last one wins), doesn't keep key order, and supports more operators and GIN indexes."
+      },
+      {
+        "text": "`jsonb` is only for arrays, `json` for objects",
+        "explanation": "Both types hold any JSON value: objects, arrays, strings, numbers, booleans or null."
+      },
+      {
+        "text": "`jsonb` stores a parsed binary form that supports GIN indexing and operators like `@>`; use `jsonb` unless you must keep the exact input text",
+        "explanation": "Correct. `json` preserves whitespace, key order and duplicate keys, which is rarely needed. `jsonb` is faster to query and indexable."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Compare what each preserves and enables:\n\n| | json | jsonb |\n|---|---|---|\n| Exact text kept | yes | no |\n| Duplicate keys | kept | last wins |\n| Parse on read | every time | no |\n| GIN index, `@>`, `?` | no | yes |\n\nSo `'{\"b\":2,\"a\":1,\"a\":3}'::jsonb` becomes `{\"a\": 3, \"b\": 2}`. Choose `json` only if you must store the payload byte-for-byte, e.g. for signature verification.",
+    "link": {
+      "title": "JSON types — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/datatype-json.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In PostgreSQL, events have `qty` values 2 and 1. What does this return?\n\n```sql\nSELECT id FROM events\nWHERE payload ->> 'qty' >= '10';\n```",
+    "options": [
+      {
+        "text": "No rows, because neither 2 nor 1 is at least 10",
+        "explanation": "That would be true for a numeric comparison. Both sides are text, so this is a string comparison."
+      },
+      {
+        "text": "The event with qty 2",
+        "explanation": "Correct. Text compares character by character: '2' > '1', so '2' >= '10' is true. '1' < '10' because it's a prefix, so qty 1 doesn't match."
+      },
+      {
+        "text": "Both events",
+        "explanation": "'1' versus '10': '1' is a prefix of '10', and a shorter prefix sorts first, so '1' < '10'."
+      },
+      {
+        "text": "An error: operator does not exist: text >= integer",
+        "explanation": "That error happens with an unquoted `10`. With `'10'` both sides are text, so the query runs and quietly compares strings."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `payload ->> 'qty'` is text: '2' and '1'.\n2. `'10'` is a text literal, so the comparison is text vs text.\n3. '2' vs '10': compare the first characters, '2' > '1', so '2' > '10'. Match.\n4. '1' vs '10': equal first character, then '1' runs out; a prefix sorts first, so '1' < '10'. No match.\n5. Fix: `(payload ->> 'qty')::int >= 10`, which matches nothing. This silent string comparison is far more dangerous than the error you'd get without the quotes.",
+    "link": {
+      "title": "JSON functions and operators — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/functions-json.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "SQLite `stock` holds `(4, 3, 'warehouse')` as `(product_id, qty, note)`. What is the row after this?\n\n```sql\nINSERT OR REPLACE INTO stock\n  (product_id, qty)\nVALUES (4, 8);\n```",
+    "options": [
+      {
+        "text": "(4, 8, NULL)",
+        "explanation": "Correct. REPLACE deletes the conflicting row and inserts the new one. The new row didn't specify `note`, so it gets the default, NULL."
+      },
+      {
+        "text": "(4, 8, 'warehouse')",
+        "explanation": "That's what `ON CONFLICT (product_id) DO UPDATE SET qty = excluded.qty` would produce. REPLACE deletes the old row instead of updating it."
+      },
+      {
+        "text": "(4, 3, 'warehouse')",
+        "explanation": "That's `INSERT OR IGNORE` (or `ON CONFLICT DO NOTHING`). REPLACE does replace the row."
+      },
+      {
+        "text": "An error: UNIQUE constraint failed",
+        "explanation": "The `OR REPLACE` conflict clause resolves the uniqueness conflict, so there's no error."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The insert conflicts on product 4.\n2. The REPLACE strategy **deletes** the existing row (4, 3, 'warehouse').\n3. It then inserts (4, 8) with every unspecified column at its default: `note` is NULL.\n4. Side effects of the delete: foreign-key cascades can remove child rows, and delete triggers can fire (if recursive triggers are on).\n5. To change only qty, use `ON CONFLICT (product_id) DO UPDATE SET qty = excluded.qty`.",
+    "link": {
+      "title": "ON CONFLICT clause (REPLACE) — SQLite docs",
+      "url": "https://www.sqlite.org/lang_conflict.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In PostgreSQL, a nightly job upserts a batch that happens to contain product 5 twice. What happens?\n\n```sql\nINSERT INTO stock (product_id, qty)\nVALUES (5, 1), (5, 2)\nON CONFLICT (product_id)\nDO UPDATE SET\n  qty = stock.qty + excluded.qty;\n```",
+    "options": [
+      {
+        "text": "Row 5 ends with qty 3",
+        "explanation": "That's SQLite's result, applying the rows in order. Postgres refuses to touch the same row twice in one statement."
+      },
+      {
+        "text": "Row 5 ends with qty 2, the last value wins",
+        "explanation": "Postgres doesn't silently pick one; the statement fails."
+      },
+      {
+        "text": "The statement fails with `ON CONFLICT DO UPDATE command cannot affect row a second time`",
+        "explanation": "Correct. Postgres won't update a row the same command already inserted or updated, because the result would depend on processing order. De-duplicate the batch first."
+      },
+      {
+        "text": "Row 5 ends with qty 1, the second row is ignored",
+        "explanation": "Ignoring the duplicate is what `DO NOTHING` does: the first row is inserted and the second is skipped. With `DO UPDATE`, it errors."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Row (5, 1) is inserted (no conflict yet).\n2. Row (5, 2) conflicts with the row the *same command* just inserted.\n3. Postgres raises an error, and its hint is to ensure no duplicate keys in the proposed rows. The whole statement rolls back.\n4. Fix by aggregating first:\n\n```sql\nINSERT INTO stock (product_id, qty)\nSELECT product_id, SUM(qty)\nFROM batch\nGROUP BY product_id\nON CONFLICT (product_id)\nDO UPDATE SET qty =\n  stock.qty + excluded.qty;\n```\n\nSQLite would instead give qty 3, processing one row at a time.",
+    "link": {
+      "title": "INSERT (ON CONFLICT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-insert.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In Postgres, which of these filters can a default GIN index on the `jsonb` column `payload` accelerate?",
+    "options": [
+      {
+        "text": "`WHERE payload @> '{\"type\":\"cart\"}'`",
+        "explanation": "Correct. Containment is the main use of a GIN index on jsonb."
+      },
+      {
+        "text": "`WHERE payload ? 'tags'`",
+        "explanation": "Correct. Top-level key existence (`?`, `?|`, `?&`) is supported by the default `jsonb_ops` operator class."
+      },
+      {
+        "text": "`WHERE payload ->> 'type' = 'cart'`",
+        "explanation": "GIN doesn't index the result of `->>`. Use an expression index on `(payload ->> 'type')`, or rewrite it as `@>`."
+      },
+      {
+        "text": "`WHERE (payload ->> 'qty')::int > 1`",
+        "explanation": "A range comparison on an extracted value needs a B-tree expression index on `((payload ->> 'qty')::int)`; GIN can't help."
+      },
+      {
+        "text": "`WHERE payload @> '{\"device\":{\"os\":\"iOS\"}}'`",
+        "explanation": "Correct. Containment works on nested documents too: this matches events 1 and 3."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. A GIN index on jsonb indexes the keys and values inside each document.\n2. The default operator class supports `@>`, `?`, `?|`, `?&` (and JSON path `@?`, `@@`).\n3. `->>` produces a text value outside the index's vocabulary, so equality on it needs an expression index:\n\n```sql\nCREATE INDEX ON events\n  ((payload ->> 'type'));\n```\n\n4. Ranges on extracted numbers need a B-tree expression index with the same cast.\n5. Tip: `payload ->> 'type' = 'cart'` can often be rewritten as `payload @> '{\"type\":\"cart\"}'` to use the GIN index.",
+    "link": {
+      "title": "JSON types — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/datatype-json.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`stock` holds `(4, 3)`. What does this return, and what is product 4's qty afterwards?\n\n```sql\nINSERT INTO stock (product_id, qty)\nVALUES (4, 2), (6, 9)\nON CONFLICT (product_id)\nDO UPDATE SET qty = excluded.qty\nWHERE excluded.qty > stock.qty\nRETURNING product_id, qty;\n```",
+    "options": [
+      {
+        "text": "Returns (4, 2) and (6, 9); product 4 now has qty 2",
+        "explanation": "The WHERE on DO UPDATE is false for product 4 (2 > 3 fails), so no update happens and no row is returned for it."
+      },
+      {
+        "text": "Returns (4, 3) and (6, 9); product 4 still has qty 3",
+        "explanation": "RETURNING only reports rows that were actually inserted or updated. A skipped conflict produces no output."
+      },
+      {
+        "text": "An error, because the WHERE clause rejected a conflicting row",
+        "explanation": "A false WHERE on DO UPDATE just skips the update, like DO NOTHING for that row."
+      },
+      {
+        "text": "Returns only (6, 9); product 4 still has qty 3",
+        "explanation": "Correct. Product 6 is inserted and returned. Product 4 conflicts, but the update's WHERE rejects it, so it isn't changed or returned."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. (4, 2) conflicts. DO UPDATE's WHERE: `excluded.qty > stock.qty` = 2 > 3 = false. No update.\n2. (6, 9): no conflict, inserted.\n3. RETURNING emits only rows the statement inserted or updated: (6, 9).\n4. Product 4 keeps qty 3.\n\nThis \"only if newer\" pattern (often `WHERE excluded.updated_at > t.updated_at`) makes replayed or out-of-order sync messages harmless.",
+    "link": {
+      "title": "UPSERT — SQLite docs",
+      "url": "https://www.sqlite.org/lang_upsert.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two Postgres sessions run \"if no stock row exists for product 9, insert one\" at the same moment, using a SELECT followed by an INSERT. What usually goes wrong, and what is the fix?",
+    "options": [
+      {
+        "text": "Both SELECTs see no row, both INSERT, and the second fails with a duplicate-key error (or, without a unique constraint, you get two rows); use `INSERT ... ON CONFLICT`",
+        "explanation": "Correct. Check-then-insert is a race. ON CONFLICT relies on the unique index to make the check and the write atomic."
+      },
+      {
+        "text": "Postgres serialises the two SELECTs automatically, so nothing goes wrong",
+        "explanation": "Under the default READ COMMITTED isolation, both SELECTs can run before either INSERT commits. Nothing serialises them."
+      },
+      {
+        "text": "Use MERGE instead, which can never hit a unique violation",
+        "explanation": "Postgres's docs warn that MERGE can still fail with a unique violation when another session inserts the same key concurrently. ON CONFLICT is the concurrency-safe upsert."
+      },
+      {
+        "text": "Wrap both statements in a transaction; that alone prevents the race",
+        "explanation": "A READ COMMITTED transaction doesn't lock rows that don't exist yet. Both transactions still see no row and both insert."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nT1: SELECT -> none\nT2: SELECT -> none\nT1: INSERT (9, ...)   ok\nT2: INSERT (9, ...)   waits on T1,\n    then duplicate key error\n```\n\n1. Neither SELECT can see the other session's uncommitted row.\n2. With a unique constraint, T2 errors; without one, you silently get duplicates.\n3. `INSERT ... ON CONFLICT (product_id) DO UPDATE/NOTHING` uses the unique index: if T1's row appears, T2 waits for it to commit, then takes the conflict path.\n4. Alternatives like SERIALIZABLE isolation with retries also work but cost more.",
+    "link": {
+      "title": "INSERT (ON CONFLICT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-insert.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Postgres 17, `stock` holds `(1, 15)`. What does this MERGE do?\n\n```sql\nMERGE INTO stock s\nUSING (VALUES (1, -15), (3, 4))\n  AS v(pid, delta)\nON s.product_id = v.pid\nWHEN MATCHED\n  AND s.qty + v.delta <= 0\n  THEN DELETE\nWHEN MATCHED THEN\n  UPDATE SET qty = s.qty + v.delta\nWHEN NOT MATCHED THEN\n  INSERT (product_id, qty)\n  VALUES (v.pid, v.delta);\n```",
+    "options": [
+      {
+        "text": "Updates product 1 to qty 0 and inserts product 3",
+        "explanation": "WHEN clauses are tried in order, and the first that matches wins. The DELETE clause matches first, since 15 - 15 = 0 <= 0."
+      },
+      {
+        "text": "Deletes product 1 and inserts (3, 4)",
+        "explanation": "Correct. Product 1 matches and its new qty would be 0, so the first WHEN MATCHED (DELETE) fires. Product 3 has no match, so it's inserted."
+      },
+      {
+        "text": "Deletes product 1 and ignores product 3",
+        "explanation": "Product 3 has no matching row, so the WHEN NOT MATCHED clause inserts it."
+      },
+      {
+        "text": "Fails, because MERGE can't both delete and insert in one statement",
+        "explanation": "MERGE can perform different actions for different source rows in one statement."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Source row (1, -15) matches stock row 1.\n   - First clause: `WHEN MATCHED AND 15 + (-15) <= 0`: true, so DELETE.\n   - Later clauses are not considered for this row.\n2. Source row (3, 4) has no match: WHEN NOT MATCHED inserts (3, 4).\n3. With `RETURNING merge_action(), s.*` (Postgres 17+) you'd see `DELETE | 1 | 15` and `INSERT | 3 | 4`.\n\nSQLite has no MERGE; you'd write an upsert plus a separate DELETE.",
+    "link": {
+      "title": "MERGE — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-merge.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A `users` table stores `prefs` as `jsonb`. Every row has a `country` key, dashboards filter and group by it constantly, and it should reference a `countries` table. Which are good reasons to move `country` into a real column?",
+    "options": [
+      {
+        "text": "A column can have a foreign key to `countries` and a NOT NULL constraint",
+        "explanation": "Correct. Constraints can't be declared on keys inside a JSON document."
+      },
+      {
+        "text": "The planner keeps statistics on columns, so selectivity estimates for `country = 'GB'` are far better",
+        "explanation": "Correct. For an expression like `prefs ->> 'country'`, Postgres has no statistics unless you create an expression index or extended statistics, so it falls back to default guesses."
+      },
+      {
+        "text": "A plain B-tree index on a column is smaller and simpler than a GIN index on the whole document",
+        "explanation": "Correct. A GIN index indexes every key and value in each document; a B-tree on one column indexes just the value you query."
+      },
+      {
+        "text": "JSON keys can't be read inside a GROUP BY",
+        "explanation": "You can group by `prefs ->> 'country'`; it's just slower and loses the type and constraint benefits."
+      },
+      {
+        "text": "jsonb can't store strings longer than 255 characters",
+        "explanation": "There's no such limit; a single jsonb value can be hundreds of megabytes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Use this rule of thumb: stable, always-present, frequently queried fields belong in columns. JSON is for genuinely variable attributes.\n\n1. Integrity: FKs and NOT NULL need columns.\n2. Planning: column statistics drive good join and filter estimates.\n3. Indexing: a targeted B-tree is cheaper than a GIN index over everything.\n4. Grouping on a JSON key works, so that's not a reason.\n5. Size limits aren't the issue.\n\nA migration path: add a generated column, `country text GENERATED ALWAYS AS (prefs ->> 'country') STORED`, then index it, or move the data fully and drop the key.",
+    "link": {
+      "title": "JSON types — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/datatype-json.html"
+    }
+  }
+]

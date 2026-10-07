@@ -1,0 +1,348 @@
+[
+  {
+    "id": "pki-e2ee-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A chat app uses only hop-by-hop TLS between phones and its server, with no inner end-to-end encryption. Who can read Alice's message to Bob?",
+    "options": [
+      {
+        "text": "Only Alice and Bob",
+        "explanation": "That would be end-to-end encryption. With TLS alone, the server decrypts each message when it arrives."
+      },
+      {
+        "text": "Nobody, because TLS 1.3 has forward secrecy",
+        "explanation": "Forward secrecy protects recorded network traffic against a later key theft. It does not stop the server reading what it decrypts."
+      },
+      {
+        "text": "Alice, Bob, and anyone who controls or compromises the server",
+        "explanation": "Correct. TLS protects each hop. The server holds plaintext between hops, so an insider, attacker or court order can reach it."
+      },
+      {
+        "text": "Only the network provider",
+        "explanation": "The network provider sees only TLS ciphertext; it is the server that sees plaintext."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Alice → server: TLS session 1. The server decrypts.\n2. Server stores the message (plaintext, or encrypted with keys it holds).\n3. Server → Bob: TLS session 2.\n4. So the server sees every message. \"Encrypted in transit and at rest\" is not E2EE.\n5. E2EE: Alice encrypts with a key only Bob's device holds, and the server relays opaque bytes.",
+    "link": {
+      "title": "End-to-end encryption — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/End-to-end_encryption"
+    }
+  },
+  {
+    "id": "pki-e2ee-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the lesson's original X3DH example, Bob is offline but has uploaded prekeys. How can Alice start an encrypted conversation now?",
+    "options": [
+      {
+        "text": "She fetches Bob's prekey bundle (identity key, signed prekey, a one-time prekey) from the server and runs X3DH against it",
+        "explanation": "Correct. Bob's uploaded prekeys stand in for his half of the handshake, so Alice can compute the shared secret and send immediately."
+      },
+      {
+        "text": "She can't; both phones must be online for Diffie–Hellman",
+        "explanation": "Interactive DH needs both online, but Signal avoids that by having Bob publish his half in advance."
+      },
+      {
+        "text": "The server generates a session key and gives it to both",
+        "explanation": "Then the server would know the key, which defeats end-to-end encryption."
+      },
+      {
+        "text": "She encrypts with Bob's password",
+        "explanation": "Signal never uses passwords for message keys; and the server would be able to guess them."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Earlier, Bob uploaded: IK_B (identity), SPK_B (signed with IK_B), many OPK_B.\n2. Alice downloads IK_B, SPK_B and one OPK_B. The server deletes that OPK.\n3. She verifies SPK_B's signature with IK_B.\n4. She makes an ephemeral EK_A and computes DH1..DH4, then SK.\n5. Her first message carries IK_A, EK_A and the prekey IDs, so Bob can compute SK when he comes online.",
+    "link": {
+      "title": "The X3DH Key Agreement Protocol — Signal",
+      "url": "https://signal.org/docs/specifications/x3dh/"
+    }
+  },
+  {
+    "id": "pki-e2ee-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a pairwise messaging design, messages are authenticated with shared-key MACs rather than publicly verifiable signatures. What property does this support?",
+    "options": [
+      {
+        "text": "Non-repudiation: Alice cannot deny sending a message",
+        "explanation": "That is what signatures give. MACs give the opposite, because either party could have created the tag."
+      },
+      {
+        "text": "Confidentiality of the message",
+        "explanation": "Confidentiality comes from encryption; MACs and signatures only provide integrity and authenticity."
+      },
+      {
+        "text": "Faster delivery over the network",
+        "explanation": "MACs are cheaper than signatures to compute, but the property chosen deliberately here is deniability."
+      },
+      {
+        "text": "Cryptographic deniability: the shared-key tag alone is not transferable proof that Alice created the message, since Bob could compute it too",
+        "explanation": "Correct. Both parties hold the MAC key, so a transcript does not prove authorship to anyone else."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Assuming authenticated, uncompromised pairwise keys, Bob can authenticate a received message because he knows he did not create its tag. A third party cannot distinguish which key holder computed that tag from the tag alone. This does not determine legal admissibility or eliminate external evidence; signatures also require trustworthy key attribution to establish a human author.",
+    "link": {
+      "title": "Signal Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Signal_Protocol"
+    }
+  },
+  {
+    "id": "pki-e2ee-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In X3DH, `DH2 = DH(EK_A, IK_B)`. What would break if Alice left DH2 out (keeping DH1, DH3, DH4)?",
+    "options": [
+      {
+        "text": "Forward secrecy, because DH2 is the only ephemeral term",
+        "explanation": "DH3 and DH4 also use the ephemeral EK_A, so forward secrecy would remain."
+      },
+      {
+        "text": "Bob's authentication would rest only on his prekeys: anyone who obtained the private halves of SPK_B and an OPK could act as Bob without ever having his identity key",
+        "explanation": "Correct. DH2 is the only term that needs Bob's long-term identity private key, tying the shared secret to Bob himself rather than only to keys he signed."
+      },
+      {
+        "text": "Alice's authentication",
+        "explanation": "Alice is authenticated by DH1, which uses IK_A. Dropping DH2 does not affect that."
+      },
+      {
+        "text": "Nothing; DH2 is redundant",
+        "explanation": "Each DH term has a role. DH2 binds Bob's identity key directly into the secret."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "DH1 and DH3 require Bob's signed-prekey private half; DH4 requires the optional one-time-prekey private half; DH2 additionally requires Bob's identity private half. Omitting DH2 lets an attacker with the used prekey private keys derive the secret without the identity private key. The server distributes public prekeys, not their private halves.",
+    "link": {
+      "title": "The X3DH Key Agreement Protocol — Signal",
+      "url": "https://signal.org/docs/specifications/x3dh/"
+    }
+  },
+  {
+    "id": "pki-e2ee-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's symmetric ratchet `step()` (message key = HMAC(ck, 0x01), next chain key = HMAC(ck, 0x02)), an attacker steals Alice's sending chain key after she has sent messages 0–4 in the current chain, and before message 5. Which messages in this chain can the attacker decrypt?",
+    "options": [
+      {
+        "text": "Messages 0–4 only",
+        "explanation": "Earlier keys came from earlier chain keys, which HMAC's one-wayness hides. The stolen key points forward, not backward."
+      },
+      {
+        "text": "All messages in the chain, 0 onwards",
+        "explanation": "That would require running HMAC backwards. The symmetric ratchet is designed so past keys cannot be recovered."
+      },
+      {
+        "text": "Message 5 and later in this chain, until a DH ratchet step replaces the chain",
+        "explanation": "Correct. From the current chain key the attacker can compute every future message key in this chain, but not past ones; the next DH ratchet step creates a new chain the attacker cannot derive."
+      },
+      {
+        "text": "None, because message keys are deleted after use",
+        "explanation": "Deletion protects *past* message keys. The future ones can still be derived from the stolen chain key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "With ck5 alone, an attacker derives mk5, ck6 and later keys in that chain, but cannot invert the KDF to recover erased earlier keys. A new chain derived from uncompromised root/DH state is outside this chain-key-only exposure. Theft of the whole device state is a stronger scenario and requires fresh unknown ratchet contributions before recovery.",
+    "link": {
+      "title": "The Double Ratchet Algorithm — Signal",
+      "url": "https://signal.org/docs/specifications/doubleratchet/"
+    }
+  },
+  {
+    "id": "pki-e2ee-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the Double Ratchet are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The symmetric ratchet provides forward secrecy for individual messages",
+        "explanation": "Correct. Every message key comes from a one-way KDF step, and old chain keys are deleted."
+      },
+      {
+        "text": "The DH ratchet provides post-compromise security, because fresh DH outputs the attacker cannot compute are mixed into the root key",
+        "explanation": "Correct when the attacker loses secret-state access and enough fresh DH contributions unknown to them reach the peers. Recovery timing depends on compromise scope and message delivery."
+      },
+      {
+        "text": "Post-compromise security holds even if the attacker remains active and intercepts every new ratchet key exchange in real time",
+        "explanation": "An attacker who keeps control of the device, or who can actively impersonate both parties with the stolen keys, can follow every ratchet step. Healing assumes the attacker has lost access."
+      },
+      {
+        "text": "Each message header carries the sender's current ratchet public key",
+        "explanation": "Correct. Along with message numbers, so the receiver knows when to do a DH ratchet step and how to handle out-of-order messages."
+      },
+      {
+        "text": "Messages must arrive in order, or they cannot be decrypted",
+        "explanation": "Receivers derive and store skipped message keys (up to a limit), so out-of-order messages still decrypt."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Symmetric ratchet: one-way KDF chain, keys deleted after use. Forward secrecy. True.\n2. DH ratchet: new key pairs, new DH outputs into the root KDF. Healing. True.\n3. Healing needs the attacker to stop seeing new secrets. A persistent implant on the phone sees everything. False.\n4. The header includes the ratchet public key, `N` and `PN`. True.\n5. Skipped-key storage handles reordering. False.",
+    "link": {
+      "title": "The Double Ratchet Algorithm — Signal",
+      "url": "https://signal.org/docs/specifications/doubleratchet/"
+    }
+  },
+  {
+    "id": "pki-e2ee-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "WhatsApp's server is ordered to secretly intercept Alice's messages to Bob. Which attack on E2EE is the server best placed to attempt, and what is designed to detect it?",
+    "options": [
+      {
+        "text": "Giving Alice a public identity key it controls instead of Bob's, then relaying; detected by safety-number comparison and, at scale, key transparency logs",
+        "explanation": "Correct. The server is the key directory, so key substitution is its natural attack. Fingerprint comparison or auditable key logs reveal the switch."
+      },
+      {
+        "text": "Brute-forcing the AES keys; detected by rate limiting",
+        "explanation": "Brute-forcing 256-bit keys is infeasible. The server has a much easier route."
+      },
+      {
+        "text": "Reading message keys from the ratchet headers; detected by sealed sender",
+        "explanation": "Headers carry public ratchet keys, not message keys. Sealed sender hides the sender's identity, which is unrelated."
+      },
+      {
+        "text": "Downgrading TLS; detected by HSTS",
+        "explanation": "Even with TLS broken, the server would see only E2EE ciphertext. The attack must target the E2EE keys."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. E2EE content is opaque to the server, but the server tells Alice which key is Bob's.\n2. Attack: hand Alice key M (server's), and Bob key M' for Alice. Decrypt, read, re-encrypt, forward.\n3. Detection:\n  - Safety numbers: Alice and Bob see different fingerprints if they compare.\n  - Key-change notifications.\n  - Key transparency: the server must publish one consistent key per user in an append-only log, which clients and auditors check, so showing different keys to different people becomes detectable.",
+    "link": {
+      "title": "Deploying key transparency at WhatsApp — Meta Engineering",
+      "url": "https://engineering.fb.com/2023/04/13/security/whatsapp-key-transparency/"
+    }
+  },
+  {
+    "id": "pki-e2ee-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A group of 1,000 members uses Sender Keys. One member's phone was compromised last week and the malware has now been removed. Compared with pairwise Double Ratchet sessions, what is the weakness?",
+    "options": [
+      {
+        "text": "Sender Keys have no forward secrecy at all",
+        "explanation": "Sender chains are KDF chains, so they do have forward secrecy: past message keys cannot be derived."
+      },
+      {
+        "text": "The attacker may still be able to derive future messages from stolen sender chain keys until members distribute new sender keys, so recovery is weaker and slower",
+        "explanation": "Correct. Sender Keys have no per-message DH ratchet; healing requires rotating sender keys (for example, when membership changes)."
+      },
+      {
+        "text": "Messages must be encrypted 1,000 times",
+        "explanation": "That is the cost Sender Keys *avoid*. Each message is encrypted once and fanned out by the server."
+      },
+      {
+        "text": "The server can read the group messages",
+        "explanation": "Sender keys are distributed over pairwise E2EE sessions, so the server never sees them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A stolen set of sender chain keys lets an attacker compute future keys in those chains; the one-way property protects the erased past, not the future. Recovery requires distributing fresh sender secrets through channels whose security has themselves recovered. Pairwise ratchets and MLS offer different recovery mechanisms, with guarantees conditional on fresh unknown contributions and delivered updates. MLS path length is logarithmic in a favourable populated tree, not a universal bound on all update costs.",
+    "link": {
+      "title": "RFC 9420: The Messaging Layer Security (MLS) Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9420"
+    }
+  },
+  {
+    "id": "pki-e2ee-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An MLS group has 4,096 members arranged in a TreeKEM binary tree. Roughly how many tree nodes does a member update when refreshing their own key, compared with re-keying pairwise to everyone?",
+    "options": [
+      {
+        "text": "One, because the group shares a single key",
+        "explanation": "There is one group secret per epoch, but changing it securely needs new keys along the updater's path so that each subtree can decrypt."
+      },
+      {
+        "text": "About 64, the square root of the group size",
+        "explanation": "TreeKEM's cost is logarithmic, not square-root."
+      },
+      {
+        "text": "4,096 in both cases",
+        "explanation": "That is the pairwise cost. The point of the tree is to avoid it."
+      },
+      {
+        "text": "About 12 path nodes versus 4,095 pairwise messages",
+        "explanation": "Correct. A balanced binary tree with 4,096 leaves has depth log2(4096) = 12, so an update replaces the keys on the path to the root."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Leaves are members; each internal node has a key pair known to the members below it.\n2. To update, a member picks new secrets for their leaf and every ancestor up to the root.\n3. For each node on the path, they encrypt its new secret to the sibling subtree's node key. One ciphertext covers a whole subtree.\n4. Path length:\n\n```\nlog2(4096) = 12\n```\n\n5. Pairwise re-keying would need a message to each of the 4,095 others. (Real trees can be unbalanced or have blank nodes, so costs vary, but stay logarithmic in the good case.)",
+    "link": {
+      "title": "RFC 9420: The Messaging Layer Security (MLS) Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9420"
+    }
+  },
+  {
+    "id": "pki-e2ee-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Assume correct Signal E2EE with authenticated identities, uncompromised cryptographic algorithms and properly erased old message keys. Which threats can still expose communications? Select all that apply.",
+    "options": [
+      {
+        "text": "Spyware on their phone reading messages after decryption",
+        "explanation": "Correct. E2EE protects messages in transit and on the server; the endpoint sees plaintext."
+      },
+      {
+        "text": "The Signal server reading message contents",
+        "explanation": "Messages are end-to-end encrypted; the server holds no keys that decrypt them."
+      },
+      {
+        "text": "Network observers learning when, and roughly to whom, they send messages through timing and traffic analysis",
+        "explanation": "Correct. E2EE hides content, not metadata. Sealed sender hides the sender from Signal's server, but traffic patterns are still visible on the network."
+      },
+      {
+        "text": "The recipient screenshotting the conversation",
+        "explanation": "Correct. Once delivered, the recipient controls the plaintext; disappearing messages can't stop a screenshot or a second camera."
+      },
+      {
+        "text": "An attacker who records ciphertext today and steals the phone's current keys next month decrypting today's messages",
+        "explanation": "Forward secrecy prevents this: today's message keys are deleted and cannot be recomputed from next month's state."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Endpoint spyware can read plaintext; a recipient can retain it; sufficiently placed observers may correlate timing and traffic. A ciphertext-only relay cannot directly decrypt correctly protected content. Current ratchet-state theft does not recover erased past keys under the stated assumptions, but stored chat history, backups and retained skipped-message keys require separate analysis.",
+    "link": {
+      "title": "Technology preview: Sealed sender for Signal",
+      "url": "https://signal.org/blog/sealed-sender/"
+    }
+  },
+  {
+    "id": "pki-e2ee-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why did Signal add a post-quantum KEM to its initial key agreement (PQXDH) in 2023, years before a large quantum computer exists, while keeping classical X25519 alongside it?",
+    "options": [
+      {
+        "text": "Harvest-now-decrypt-later: ciphertext recorded today could be decrypted once quantum computers exist, so key agreement must be quantum-resistant now; the hybrid keeps classical security if the new KEM turns out weak",
+        "explanation": "Correct. Confidentiality must last as long as the messages matter. Mixing both secrets into the KDF means an attacker must break both."
+      },
+      {
+        "text": "Because quantum computers already break X25519",
+        "explanation": "No quantum computer today can break X25519. The concern is the future."
+      },
+      {
+        "text": "To replace signatures on prekeys with quantum-safe ones",
+        "explanation": "PQXDH does not make classical prekey authentication quantum-resistant. A sufficiently capable active quantum attacker would require resistant authentication; this is distinct from recorded-traffic confidentiality."
+      },
+      {
+        "text": "Because ML-KEM is faster than X25519",
+        "explanation": "ML-KEM is fast, but its keys and ciphertexts are much larger. Speed was not the motive."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A passive adversary can store encrypted traffic indefinitely.\n2. Shor's algorithm on a large quantum computer would solve elliptic-curve discrete logs, revealing X3DH secrets from recorded public keys.\n3. So key agreement needs quantum resistance *before* such machines exist.\n4. New PQ schemes have had less scrutiny; one NIST candidate (SIKE) was broken classically in 2022.\n5. Hybrid: `SK = KDF(DH1..DH4 || KEM_ss)`. Secure if either X25519 or the KEM holds.",
+    "link": {
+      "title": "Quantum Resistance and the Signal Protocol — Signal blog",
+      "url": "https://signal.org/blog/pqxdh/"
+    }
+  }
+]

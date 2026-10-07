@@ -1,0 +1,348 @@
+[
+  {
+    "id": "app-dns-wire-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How is the name `mail.example.org` encoded in a DNS question?",
+    "options": [
+      {
+        "text": "`mail.example.org\\0` as ASCII with dots",
+        "explanation": "DNS does not send dotted strings; dots are replaced by length bytes before each label."
+      },
+      {
+        "text": "`10 mail.example.org`, a single length then the text",
+        "explanation": "There is one length per label, not one for the whole name. A single label is limited to 63 bytes."
+      },
+      {
+        "text": "`04 mail 07 example 03 org 00`",
+        "explanation": "Correct. Each label is preceded by its length, and the name ends with a zero-length root label."
+      },
+      {
+        "text": "`mail 04 example 07 org 03 00`, lengths after each label",
+        "explanation": "The length must come first so the parser knows how many bytes to read."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Split on dots: `mail`, `example`, `org`.\n2. Prefix each with its length: 4, 7, 3.\n3. End with `00` (the root).\n\n```\n04 6d 61 69 6c\n07 65 78 61 6d 70 6c 65\n03 6f 72 67\n00\n```\n\nTotal 5 + 8 + 4 + 1 = 18 bytes.",
+    "link": {
+      "title": "RFC 1035: Domain Names, Implementation and Specification — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc1035"
+    }
+  },
+  {
+    "id": "app-dns-wire-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A DNS response header has flags `0x8183`. What does it say?",
+    "options": [
+      {
+        "text": "A response with recursion available, RCODE 3: NXDOMAIN (the name does not exist)",
+        "explanation": "Correct. `0x8183` = QR 1, RD 1, RA 1, RCODE 3."
+      },
+      {
+        "text": "A successful recursive answer",
+        "explanation": "The low 4 bits are the RCODE. Here they are 3, not 0, so it is not a success."
+      },
+      {
+        "text": "A query with the truncation bit set",
+        "explanation": "The top bit (QR) is 1, so this is a response; and TC is bit 9 (0x0200), which is clear."
+      },
+      {
+        "text": "A SERVFAIL caused by DNSSEC validation failure",
+        "explanation": "SERVFAIL is RCODE 2. RCODE 3 is NXDOMAIN."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Write `0x8183` in binary and split it:\n\n```\n1 0000 0 0 1  1 000 0011\nQR Op  AA TC RD RA Z  RCODE\n```\n\n- QR = 1: response.\n- RD = 1, RA = 1: recursion requested and available.\n- RCODE = 0011 = 3: **NXDOMAIN**.",
+    "link": {
+      "title": "RFC 1035: Domain Names, Implementation and Specification — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc1035"
+    }
+  },
+  {
+    "id": "app-dns-wire-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An answer record's NAME field is the two bytes `c0 0c`. What does it mean?",
+    "options": [
+      {
+        "text": "A label of length 192",
+        "explanation": "Labels are at most 63 bytes, so a first byte with top bits `11` can't be a length. It marks a compression pointer."
+      },
+      {
+        "text": "The root name `.`",
+        "explanation": "The root is a single `00` byte."
+      },
+      {
+        "text": "A reference to the 12th record in the answer section",
+        "explanation": "Pointers are byte offsets into the message, not record numbers."
+      },
+      {
+        "text": "The name found at byte offset 12 of the message, normally the question's name",
+        "explanation": "Correct. Top bits `11` mark a pointer; the remaining 14 bits (0x000C = 12) are an offset from the start of the message. The question name starts right after the 12-byte header."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `c0` = `11000000`. Top two bits `11` → pointer.\n2. Offset = `0xc00c & 0x3fff` = `0x000c` = 12.\n3. Bytes 0 to 11 are the header, so offset 12 is the first byte of the question name.\n4. The record's name is therefore the same as the question, e.g. `example.com`, in 2 bytes instead of 13.",
+    "link": {
+      "title": "RFC 1035: Domain Names, Implementation and Specification — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc1035"
+    }
+  },
+  {
+    "id": "app-dns-wire-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A resolver asks for the `TXT` records of a domain with many SPF and verification strings. It sends no EDNS OPT record. The full answer would be 1,900 bytes. Assume the required answer RRset itself cannot fit 512 bytes, a conforming server, TCP connectivity and a resolver configured to retry truncation over TCP. What happens?",
+    "options": [
+      {
+        "text": "The server sends 1,900 bytes over UDP, fragmented by IP",
+        "explanation": "Without EDNS the client has not advertised a buffer bigger than 512 bytes, so the server must not exceed it."
+      },
+      {
+        "text": "The server sends what fits in 512 bytes with TC set, and the resolver retries over TCP",
+        "explanation": "Correct. TC signals truncation; the client repeats the query over TCP, where messages can be up to 65,535 bytes (2-byte length prefix)."
+      },
+      {
+        "text": "The server returns SERVFAIL",
+        "explanation": "Size is not a server failure; truncation plus TCP fallback is the designed mechanism."
+      },
+      {
+        "text": "The server silently drops records until it fits, with no indication",
+        "explanation": "That would make answers silently incomplete. The TC bit exists precisely to tell the client."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. No OPT record → classic DNS → 512-byte UDP limit.\n2. 1,900 > 512, so the server sets TC=1 and sends a partial (often empty) answer.\n3. The resolver opens TCP to port 53 and resends with a 2-byte length prefix.\n4. The full 1,900-byte answer arrives over TCP.\n\nWith EDNS advertising 1,232, it would still not fit, so TCP fallback happens either way. This is why blocking TCP 53 on firewalls breaks DNS.",
+    "link": {
+      "title": "DNS Flag Day 2020",
+      "url": "https://www.dnsflagday.net/2020/"
+    }
+  },
+  {
+    "id": "app-dns-wire-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An old resolver always sends queries from UDP port 53 and picks random 16-bit IDs. An off-path attacker can send 200 forged responses before each real answer arrives. Assume independent uniform IDs, 200 distinct timely guesses per attempt, all other checked fields known, and forged data accepted if the ID matches. Roughly how many attempts does a Kaminsky-style attack need for a 50% chance of success?",
+    "options": [
+      {
+        "text": "About 1",
+        "explanation": "Each attempt covers only 200 of 65,536 IDs, about 0.3%."
+      },
+      {
+        "text": "About 65,536",
+        "explanation": "For one distinct guess per independent attempt, 50% success needs about 45,426 attempts, not 65,536. Here 200 guesses per attempt reduce that number substantially."
+      },
+      {
+        "text": "About 230",
+        "explanation": "Correct. p = 200 / 65,536 ≈ 0.0031 per attempt. Solving 1 − (1 − p)^n = 0.5 gives n ≈ ln 2 / p ≈ 227."
+      },
+      {
+        "text": "Impossible, because a cached name can only be attacked once per TTL",
+        "explanation": "That was the pre-2008 belief. Kaminsky's trick queries fresh random subdomains each time, so there is no TTL to wait for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "p = 200 / 65,536. The exact threshold is ceil(log(0.5) / log(1−p)) = 227 independent attempts, approximately 230. Fresh query names avoid waiting for a particular cached positive answer in this simplified vulnerable-resolver model. This does not establish wall-clock duration or effectiveness against modern caching/validation. With P independent uniformly selected ports also unknown, p becomes 200 / (65,536P).",
+    "link": {
+      "title": "An illustrated guide to the Kaminsky DNS vulnerability — Unixwiz.net",
+      "url": "http://unixwiz.net/techtips/iguide-kaminsky-dns-vuln.html"
+    }
+  },
+  {
+    "id": "app-dns-wire-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Consider poisoning an unsigned answer in a recursive resolver through forged replies to its UDP authoritative-server queries. Which checks can make the stated off-path attack harder? Assume case-preserving servers for the case-randomisation option. Select all that apply.",
+    "options": [
+      {
+        "text": "Randomising the UDP source port of each query",
+        "explanation": "Correct. If P ports are chosen independently and uniformly, they add log2(P) bits to the guessing model. Predictability, NAT and the actual pool can reduce that benefit."
+      },
+      {
+        "text": "Randomising the letter case of query names (0x20 encoding)",
+        "explanation": "Correct under the stated compatibility assumption, when the resolver checks the echoed case. Not every authoritative server preserves question case."
+      },
+      {
+        "text": "Ignoring out-of-bailiwick records in responses",
+        "explanation": "Correct. A response to a query in `bank.example` cannot plant records for unrelated zones."
+      },
+      {
+        "text": "Using DoH between laptop and resolver",
+        "explanation": "DoH protects the stub-to-resolver hop. Poisoning targets the resolver's queries to authoritative servers, which DoH does not cover."
+      },
+      {
+        "text": "Lowering every record's TTL to 5 seconds",
+        "explanation": "Short TTLs mean more queries, giving the attacker *more* chances, and Kaminsky's method doesn't depend on TTL anyway."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "A forged response must pass query matching and the resolver’s cache-admission rules. Independent random ports and checked case patterns increase the guessing space; bailiwick rules restrict admissible data. DoH only between the stub and recursive resolver does not protect this authoritative-query hop. Lower TTLs are not an authentication measure. DNSSEC provides a signed-data chain; authenticated transports provide different endpoint/hop integrity guarantees.",
+    "link": {
+      "title": "DNS spoofing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/DNS_spoofing"
+    }
+  },
+  {
+    "id": "app-dns-wire-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your company moves `example.com` to a new DNS provider that re-signs the zone with a new KSK. You forget to update the DS record at the `.com` registry. Assume only the new key remains, the stale DS is the sole supported authenticated DS, checking is enabled (CD=0), no local exception applies, and old validated cached data is exhausted. What happens to fresh signed answers from that zone?",
+    "options": [
+      {
+        "text": "Nothing changes; the new signatures are valid",
+        "explanation": "The signatures are valid under the new key, but the chain of trust links `.com` to the *old* key via DS. The new key cannot be authenticated."
+      },
+      {
+        "text": "NXDOMAIN for every name",
+        "explanation": "NXDOMAIN means the name doesn't exist. A validation failure produces SERVFAIL."
+      },
+      {
+        "text": "Answers arrive but without the AD bit",
+        "explanation": "That would happen if the zone became unsigned *and* the DS were removed (an insecure delegation). A DS that points to a missing key makes the zone bogus, not insecure."
+      },
+      {
+        "text": "SERVFAIL when those answers cannot be authenticated through the stale DS",
+        "explanation": "Correct. The validator cannot match the new DNSKEY to the parent's DS, treats the zone as bogus and refuses to return answers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The authenticated parent DS binds the old child DNSKEY; under the assumptions, no remaining key matches it. The validator therefore classifies the fresh signed data as bogus and normally returns SERVFAIL with checking enabled. Non-validating clients or CD requests can behave differently. A real rollover must coordinate DNSKEYs, signatures and parent DS with overlap/cache timing; replacing the DS before its new key is available can also cause an outage. Follow a documented rollover method rather than treating one ordering rule as sufficient.",
+    "link": {
+      "title": "RFC 4033: DNS Security Introduction and Requirements — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc4033"
+    }
+  },
+  {
+    "id": "app-dns-wire-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A conventional static NSEC chain in example.com has adjacent names alpha.example.com and delta.example.com. Which signed interval covers the exact absent name charlie.example.com, and what information does following such a chain expose? A complete NXDOMAIN proof may additionally need wildcard denial.",
+    "options": [
+      {
+        "text": "alpha.example.com NSEC delta.example.com; it exposes adjacent names in the conventional chain",
+        "explanation": "Correct. Charlie sorts strictly between alpha and delta. A validated NSEC RRset covers that gap; additional proof can be required to exclude a wildcard answer."
+      },
+      {
+        "text": "`charlie NSEC delta`; it reveals nothing else",
+        "explanation": "In the stated static chain, charlie is absent and is not an existing chain owner. The relevant signed interval is bounded by alpha and delta."
+      },
+      {
+        "text": "`delta NSEC kilo`; it proves everything before kilo is absent",
+        "explanation": "That record covers the gap between delta and kilo. `charlie` sorts before delta."
+      },
+      {
+        "text": "No record; DNSSEC cannot prove non-existence",
+        "explanation": "Authenticated denial of existence is exactly what NSEC and NSEC3 are for."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "In the specified canonical interval, alpha<charlie<delta. The authenticated NSEC link covers the exact-name gap, while complete denial checks also account for wildcard applicability and delegation context. Following a conventional static NSEC chain exposes its represented names. NSEC3 replaces cleartext ordering with hashed names, which still permits offline dictionary guesses; it does not promise secrecy.",
+    "link": {
+      "title": "Domain Name System Security Extensions — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions"
+    }
+  },
+  {
+    "id": "app-dns-wire-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A user switches their browser to DNS over HTTPS with a public resolver. Assume ordinary DoH over correctly authenticated HTTPS, no TLS-intercepting trusted proxy, and queries actually sent to that resolver with no plaintext fallback. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The local Wi-Fi cannot directly read or undetectably modify the protected DNS message contents in transit",
+        "explanation": "Authenticated HTTPS protects message confidentiality and integrity on that transport. The network can still block traffic or analyse exposed addresses, sizes and timing."
+      },
+      {
+        "text": "The public resolver can see the DNS names submitted to it",
+        "explanation": "Correct. DoH encrypts the transport; the resolver decrypts and processes the queries. Trust has moved, not disappeared."
+      },
+      {
+        "text": "Answers are now guaranteed authentic even if the resolver is malicious",
+        "explanation": "DoH authenticates the resolver, not the data. A lying resolver can still return forged records; DNSSEC validation addresses data authenticity."
+      },
+      {
+        "text": "The ISP can no longer tell which sites they visit at all",
+        "explanation": "Destination IPs remain visible, and so does TLS SNI unless Encrypted Client Hello is used."
+      },
+      {
+        "text": "Corporate DNS-based filtering on that network may be bypassed",
+        "explanation": "Correct. The browser no longer asks the network's resolver, so DNS policies there don't apply. This is why enterprises can disable DoH by policy."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "DoH provides confidentiality and integrity for the authenticated client-resolver transport. The selected resolver sees submitted queries and can still return false data unless independently checked; local DNSSEC validation can authenticate covered signed RRsets. On-path addresses and traffic patterns remain observable, and SNI can remain visible without ECH. Using another resolver may bypass policies enforced only by the network’s default DNS service.",
+    "link": {
+      "title": "RFC 8484: DNS Queries over HTTPS (DoH) — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc8484"
+    }
+  },
+  {
+    "id": "app-dns-wire-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why did DNS Flag Day 2020 recommend an EDNS UDP buffer size of 1,232 bytes rather than, say, 4,096?",
+    "options": [
+      {
+        "text": "1,232 is the largest message DNSSEC signatures allow",
+        "explanation": "DNSSEC answers can be much larger; the limit concerns transport, not signatures."
+      },
+      {
+        "text": "To reduce fragmentation risk: 1,232 + 40 bytes of basic IPv6 header + 8 bytes of UDP equals the 1,280-byte IPv6 minimum",
+        "explanation": "Correct. Fragments are often dropped by firewalls and can be spoofed for poisoning. Keeping UDP answers unfragmented and falling back to TCP for larger ones is more reliable."
+      },
+      {
+        "text": "Because the DNS header's length field is limited to 1,232",
+        "explanation": "The DNS header has no length field. Over TCP the 2-byte prefix allows up to 65,535 bytes."
+      },
+      {
+        "text": "To reduce amplification from 4,096 to 1,232, making DDoS impossible",
+        "explanation": "It does reduce amplification somewhat, but that is a side benefit; the stated aim was avoiding fragmentation, and amplification is not made impossible."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With a basic 40-byte IPv6 header and 8-byte UDP header, 1,280 − 40 − 8 = 1,232 bytes remain for DNS. Extension headers, encapsulation and IPv4 path constraints can require a different budget, so this is not a never-fragment guarantee. Larger required answers can use truncation and TCP fallback. Forged noninitial fragments can evade checks placed in the initial fragment, but successful injection also depends on reassembly identifiers, checksums, timing and cache rules.",
+    "link": {
+      "title": "DNS Flag Day 2020",
+      "url": "https://www.dnsflagday.net/2020/"
+    }
+  },
+  {
+    "id": "app-dns-wire-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the `build_query` function from the lesson, how many bytes is the query for `api.service.io`?",
+    "options": [
+      {
+        "text": "28",
+        "explanation": "The encoded name occupies 16 bytes. Header 12 plus name 16 plus type/class 4 gives 32; 28 omits four required bytes."
+      },
+      {
+        "text": "30",
+        "explanation": "This counts the name as its dotted string length (14). On the wire it is 16 bytes with length bytes and the root."
+      },
+      {
+        "text": "44",
+        "explanation": "The header is 12 bytes, not 24. There are six 16-bit fields."
+      },
+      {
+        "text": "32",
+        "explanation": "Correct. Header 12 + name 16 (`03 api 07 service 02 io 00`) + QTYPE and QCLASS 4 = 32."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nheader            12\n03 api             4\n07 service         8\n02 io              3\n00                 1\nQTYPE + QCLASS     4\n                  --\n                  32\n```\n\nCheck against the lesson: `example.com` gave 12 + 13 + 4 = 29.",
+    "link": {
+      "title": "RFC 1035: Domain Names, Implementation and Specification — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc1035"
+    }
+  }
+]

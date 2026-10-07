@@ -1,0 +1,378 @@
+[
+  {
+    "id": "syn-bandlimited-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What feature of a naive sawtooth (`2*p - 1`) is the root cause of its aliasing?",
+    "options": [
+      {
+        "text": "Its linear ramp",
+        "explanation": "A straight ramp on its own is smooth; it's the reset at the end of each ramp that causes trouble."
+      },
+      {
+        "text": "Its instantaneous jump from +1 to −1, which contains energy at all frequencies",
+        "explanation": "Correct. A discontinuity needs infinitely many harmonics. Sampling it directly folds everything above Nyquist back down."
+      },
+      {
+        "text": "Its amplitude of ±1",
+        "explanation": "Scaling the wave changes the level of the aliases, not whether they exist."
+      },
+      {
+        "text": "Using floating point instead of integers",
+        "explanation": "An integer implementation of the same naive wave aliases identically. It's a sampling problem, not a number-format one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Lesson 3: sharp features need many high harmonics; a jump needs all of them (1/n forever).\n2. Anything above fs/2 cannot be represented, so it folds back (module 1).\n3. The ramp is harmless; correct the jump (BLEP) or never create it (additive, wavetables) and the aliasing goes.",
+    "link": {
+      "title": "Martin Finke, PolyBLEP Oscillator",
+      "url": "https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A naive saw plays at 2,500 Hz with fs = 48 kHz. Where does its 19th harmonic end up, and roughly how loud is it relative to the fundamental?",
+    "options": [
+      {
+        "text": "47,500 Hz at −25.6 dB",
+        "explanation": "47.5 kHz can't exist at a 48 kHz sample rate; it must fold below 24 kHz."
+      },
+      {
+        "text": "It is simply removed because it is above Nyquist",
+        "explanation": "Nothing removes it: a naive oscillator samples the ideal wave, so the harmonic folds back instead of disappearing."
+      },
+      {
+        "text": "500 Hz at about −25.6 dB",
+        "explanation": "Correct. 19 × 2500 = 47,500; |47,500 − 48,000| = 500 Hz. Level 1/19 → 20·log10(1/19) ≈ −25.6 dB."
+      },
+      {
+        "text": "23,500 Hz at about −25.6 dB",
+        "explanation": "That would be reflecting around Nyquist from 24,500 Hz. Use |f − k·fs|: 47,500 is close to 48,000, so it lands near 0."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nf   = 19 * 2500 = 47500 Hz\nfold: nearest multiple of fs = 48000\n      |47500 - 48000| = 500 Hz\nlevel = 1/19 -> -25.6 dB\n```\n\nA 500 Hz tone under a 2.5 kHz note is not a multiple of it, so it sounds like a clashing low whistle.",
+    "link": {
+      "title": "Stilson and Smith, Alias-Free Digital Synthesis (PDF)",
+      "url": "https://ccrma.stanford.edu/~stilti/papers/blit.pdf"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why are aliased components from a naive oscillator so much more objectionable than the same amount of extra brightness?",
+    "options": [
+      {
+        "text": "They are louder than the fundamental",
+        "explanation": "Usually they are well below it (around −26 to −32 dB in the lesson's example). Level isn't the main issue."
+      },
+      {
+        "text": "They only occur in square waves",
+        "explanation": "Saws alias equally; triangles less; sines not at all."
+      },
+      {
+        "text": "They are inharmonic and move in the wrong direction when the pitch changes",
+        "explanation": "Correct. Folded components aren't multiples of the fundamental, so they clash, and on a pitch sweep some fall while the note rises."
+      },
+      {
+        "text": "They increase the DC offset",
+        "explanation": "Aliasing produces tones at folded frequencies, not a DC shift."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Real harmonics: k·f0, all rise together with pitch.\n\nAliases: |k·f0 − m·fs|. When k·f0 is just below m·fs, raising f0 *lowers* the alias.\n\nSo a sweep up produces whistles sweeping down ('birdies'). That motion and inharmonicity make even −30 dB aliases obvious.",
+    "link": {
+      "title": "Martin Finke, PolyBLEP Oscillator",
+      "url": "https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You build mipmapped saw tables at fs = 48 kHz with no aliasing allowed. One table serves notes up to 3.5 kHz. What is the highest harmonic it may contain?",
+    "options": [
+      {
+        "text": "6",
+        "explanation": "Correct. Harmonic h of a 3.5 kHz note is at 3500·h, which must stay below 24 kHz: 24,000 / 3,500 ≈ 6.86, so h ≤ 6 (the 6th is at 21 kHz; the 7th would be 24.5 kHz)."
+      },
+      {
+        "text": "13",
+        "explanation": "That uses fs (48 kHz) instead of fs/2: 48,000 / 3,500 ≈ 13.7. Harmonics up to 45.5 kHz would alias badly."
+      },
+      {
+        "text": "24",
+        "explanation": "24 kHz is exactly Nyquist for a 1 kHz top note; strictly below Nyquist would allow only 23 harmonics there."
+      },
+      {
+        "text": "As many as you like; tables are band-limited automatically",
+        "explanation": "Tables only become band-limited if you build them that way, with additive synthesis limited by the table's highest note."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Rule: harmonics < (fs/2) / (highest note's f0).\n\n```\n24000 / 3500 = 6.86 -> 6\nh6 = 21000 Hz  ok\nh7 = 24500 Hz  above Nyquist\n```\n\nLower notes in the same table lose a little brightness because they could have used more harmonics. That's the mipmap trade-off.",
+    "link": {
+      "title": "Martin Finke, PolyBLEP Oscillator",
+      "url": "https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A naive saw at 2,000 Hz (fs = 48 kHz) is bent up to 2,010 Hz. Its 20th harmonic folds back. What happens to that alias?",
+    "options": [
+      {
+        "text": "It rises by 10 Hz",
+        "explanation": "That treats the alias like the fundamental. The 20th harmonic moves 20 times as far, and the folding reverses its direction."
+      },
+      {
+        "text": "It falls by 200 Hz, from 8,000 to 7,800 Hz",
+        "explanation": "Correct. 20 × 2000 = 40,000 → 48,000 − 40,000 = 8,000 Hz. 20 × 2010 = 40,200 → 7,800 Hz. The note goes up while the alias goes down."
+      },
+      {
+        "text": "It rises by 200 Hz, from 8,000 to 8,200 Hz",
+        "explanation": "The harmonic rises by 200 Hz, but because it's folded around 48 kHz, its alias falls."
+      },
+      {
+        "text": "It stays at 8,000 Hz",
+        "explanation": "Every component moves when the pitch changes; only the direction differs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nbefore: 20 * 2000 = 40000\n        |40000 - 48000| = 8000 Hz\nafter:  20 * 2010 = 40200\n        |40200 - 48000| = 7800 Hz\n```\n\nHarmonic +200 Hz, alias −200 Hz. This counter-motion is why pitch sweeps on naive oscillators sound so wrong.",
+    "link": {
+      "title": "Stilson and Smith, Alias-Free Digital Synthesis (PDF)",
+      "url": "https://ccrma.stanford.edu/~stilti/papers/blit.pdf"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `poly_blep` and PolyBLEP saw (`y = 2*p - 1 - poly_blep(p, dt)`), what is the output when `p = 0.05` and `dt = 0.1`?\n\n```\nif t < dt:\n    t = t / dt\n    return t + t - t*t - 1.0\n```",
+    "options": [
+      {
+        "text": "−0.9",
+        "explanation": "That's the naive value 2·0.05 − 1. You still need to subtract the correction."
+      },
+      {
+        "text": "−1.15",
+        "explanation": "That adds the correction instead of subtracting it. The saw's jump is downward, so its correction is subtracted."
+      },
+      {
+        "text": "−0.25",
+        "explanation": "That's the correction term alone, not the output sample."
+      },
+      {
+        "text": "−0.65",
+        "explanation": "Correct. Naive −0.9; t/dt = 0.5; blep = 0.5 + 0.5 − 0.25 − 1 = −0.25; −0.9 − (−0.25) = −0.65."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Naive: 2·0.05 − 1 = **−0.9**.\n2. p < dt, so we're just after the jump. t = 0.05/0.1 = 0.5.\n3. blep = 0.5 + 0.5 − 0.25 − 1 = **−0.25**.\n4. Output = −0.9 − (−0.25) = **−0.65**.\n\nThe sample is pulled up towards the midpoint of the jump, smoothing the step over about two samples. (Symmetrically, at p = 0.95 the output is 0.65 instead of 0.9.)",
+    "link": {
+      "title": "Martin Finke, PolyBLEP Oscillator",
+      "url": "https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about band-limiting methods are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "minBLEP adds a precomputed band-limited step correction at each discontinuity",
+        "explanation": "Correct. Brandt's method stores the difference between a minimum-phase band-limited step and an ideal step."
+      },
+      {
+        "text": "PolyBLEP removes all aliasing perfectly",
+        "explanation": "It greatly reduces aliasing (about 25 dB in the lesson's test) but doesn't remove it entirely, and it slightly dulls the top octave."
+      },
+      {
+        "text": "Additive synthesis is exactly band-limited if you only sum harmonics below Nyquist",
+        "explanation": "Correct. Each sine is a single frequency, so nothing exists to alias."
+      },
+      {
+        "text": "Mipmapped wavetables trade memory for low per-sample CPU and work for arbitrary waveforms",
+        "explanation": "Correct. Tables are built offline; playback is a lookup and interpolation."
+      },
+      {
+        "text": "Oversampling needs no filter, because the aliases fold above the audible range",
+        "explanation": "After oversampling you must low-pass filter before decimating; otherwise the content folds right back down."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each method's mechanism:\n\n| Method | Exact? | Cost |\n|---|---|---|\n| Additive | yes | CPU |\n| Mipmaps | near | memory |\n| minBLEP | near | small table |\n| PolyBLEP | reduced | tiny |\n| Oversampling | reduced | CPU + filter |\n\nOversampling without a decimation filter just recreates the aliasing at the lower rate.",
+    "link": {
+      "title": "Brandt, Hard Sync Without Aliasing (PDF)",
+      "url": "https://www.cs.cmu.edu/~eli/papers/icmc01-hardsync.pdf"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You consider additive saws for an 8-voice synth at 48 kHz whose lowest note is 55 Hz. In the worst case (all voices on the lowest note), roughly how many sine evaluations per output sample does that need?",
+    "options": [
+      {
+        "text": "About 3,500",
+        "explanation": "Correct. 24,000 / 55 ≈ 436 harmonics per voice, × 8 voices ≈ 3,488 sines per sample, i.e. over 167 million per second."
+      },
+      {
+        "text": "About 440",
+        "explanation": "That's one voice. Polyphony multiplies the cost."
+      },
+      {
+        "text": "About 7,000",
+        "explanation": "That uses fs = 48 kHz as the limit instead of fs/2 = 24 kHz."
+      },
+      {
+        "text": "8, one per voice",
+        "explanation": "That would be a sine oscillator per voice; a saw needs every harmonic below Nyquist."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nharmonics/voice = floor(24000 / 55)\n                = 436\ntotal = 436 * 8 = 3488 per sample\nper second = 3488 * 48000\n           ≈ 1.67e8 sines\n```\n\nThat's why additive is rarely used for plain saws on small hardware, and why tables or PolyBLEP are preferred.",
+    "link": {
+      "title": "Martin Finke, PolyBLEP Oscillator",
+      "url": "https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which code correctly band-limits a pulse wave of width `w` (high for `p < w`) using PolyBLEP?",
+    "options": [
+      {
+        "text": "`y -= poly_blep(p, dt); y += poly_blep((p - w) % 1, dt)`",
+        "explanation": "The signs are reversed. At p = 0 the wave jumps *up* (−1 to +1), so that correction is added; at p = w it jumps *down*, so that one is subtracted."
+      },
+      {
+        "text": "`y -= poly_blep(p, dt)` only",
+        "explanation": "That's the saw correction. A pulse has two jumps per cycle, at 0 and at w."
+      },
+      {
+        "text": "`y += poly_blep(p, dt); y -= poly_blep((p - w) % 1, dt)`",
+        "explanation": "Correct. Rising edge at phase 0 (add), falling edge at phase w (subtract), with the second BLEP evaluated on the phase relative to w. The lesson measured −55.4 dB worst low alias for w = 0.3 with this."
+      },
+      {
+        "text": "`y += poly_blep(p, dt) + poly_blep(w, dt)`",
+        "explanation": "The second edge's correction depends on how far the *current* phase is from w, not on w alone; this would add a constant."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Find the jumps: at p = 0 (from −1 to +1, rising) and p = w (from +1 to −1, falling).\n2. The saw's single jump is falling and uses `-=`. So falling → subtract, rising → add.\n3. Each BLEP needs the phase measured from its own jump: `p` for the first, `(p − w) mod 1` for the second.\n\n```\ny = 1 if p < w else -1\ny += blep(p, dt)\ny -= blep((p - w) % 1, dt)\n```",
+    "link": {
+      "title": "Martin Finke, PolyBLEP Oscillator",
+      "url": "https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After switching your saw from naive to PolyBLEP, a tester says high notes sound slightly duller, though the metallic whistles are gone. What's the best explanation and response?",
+    "options": [
+      {
+        "text": "PolyBLEP's two-sample correction attenuates the highest harmonics (the lesson saw −1.9 dB at 12.45 kHz and −7.6 dB near 23.7 kHz for a 1245 Hz saw); accept it, or use oversampling or a longer BLEP if it matters",
+        "explanation": "Correct. Short corrections act partly like a gentle low-pass near Nyquist. It's the expected trade-off, and better methods cost more."
+      },
+      {
+        "text": "The PolyBLEP has a sign error that halves the output",
+        "explanation": "A sign error would *increase* aliasing and distortion, not produce a clean, slightly duller tone."
+      },
+      {
+        "text": "Band-limiting removes all harmonics above 10 kHz by design",
+        "explanation": "Band-limiting targets components above Nyquist, not 10 kHz. The droop is a side-effect, concentrated in the top octave."
+      },
+      {
+        "text": "Duller means more aliasing",
+        "explanation": "Aliasing adds inharmonic content, which sounds harsher, not duller."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Whistles gone: aliasing reduced (−29.8 → −55.4 dB in the lesson).\n2. Duller top: the measured harmonic levels below their ideal 1/n values:\n\n| Harmonic | Freq | Droop |\n|---|---|---|\n| 10 | 12.45 kHz | −1.9 dB |\n| 19 | 23.7 kHz | −7.6 dB |\n\n3. Options: accept it (common), add a gentle high-shelf, oversample 2×, or use minBLEP/longer kernels for more accuracy at more cost.",
+    "link": {
+      "title": "Martin Finke, PolyBLEP Oscillator",
+      "url": "https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At fs = 48 kHz you decide aliases are acceptable if they land at or above 20 kHz (beyond most listeners' hearing). For a mipmap table whose highest note is 2 kHz, what's the highest harmonic you can now keep?",
+    "options": [
+      {
+        "text": "12",
+        "explanation": "12 reaches Nyquist exactly at 2 kHz; the strict below-Nyquist limit is 11. The relaxed rule permits more."
+      },
+      {
+        "text": "14",
+        "explanation": "Correct. A harmonic at h Hz (between 24 and 48 kHz) folds to 48,000 − h. Requiring 48,000 − h ≥ 20,000 gives h ≤ 28,000 Hz; 28,000 / 2,000 = 14."
+      },
+      {
+        "text": "10",
+        "explanation": "That limits harmonics to 20 kHz itself, which is stricter than needed."
+      },
+      {
+        "text": "24",
+        "explanation": "Harmonic 24 reaches 48 kHz and can alias to DC at the top note and low frequencies nearby. DC itself is not an audible tone, but is undesirable."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nfold: h -> 48000 - h  (24k < h < 48k)\nneed: 48000 - h >= 20000\n      h <= 28000 Hz\ntop note 2000 Hz:\n      28000 / 2000 = 14 harmonics\n```\n\nYou gain three extra (relative to a strict 11-harmonic table) harmonics' brightness for the lowest notes in that table, and the aliases that do occur sit at 20–24 kHz. It is a deliberate engineering trade-off; check it suits your output chain (some listeners and equipment may still respond up there).",
+    "link": {
+      "title": "Stilson and Smith, Alias-Free Digital Synthesis (PDF)",
+      "url": "https://ccrma.stanford.edu/~stilti/papers/blit.pdf"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which methods reduce aliasing during oscillator generation or before final downsampling, rather than merely attenuating output afterwards? Select all that apply.",
+    "options": [
+      {
+        "text": "Switch to mipmapped band-limited wavetables",
+        "explanation": "Correct. Each table contains only harmonics that stay below Nyquist for its note range."
+      },
+      {
+        "text": "Put a 10 kHz low-pass filter after the oscillator",
+        "explanation": "A post-filter can remove aliases above 10 kHz, but cannot separate aliases below its cutoff from wanted sound. It is not prevention during generation."
+      },
+      {
+        "text": "Add PolyBLEP corrections at both the rising and falling edges",
+        "explanation": "Correct. This band-limits both jumps; the lesson measured about 25 dB less low-frequency aliasing."
+      },
+      {
+        "text": "Turn the oscillator's output level down",
+        "explanation": "Aliases scale with the signal; their level relative to the note doesn't change."
+      },
+      {
+        "text": "Run the naive oscillator 4× oversampled, low-pass filter, then decimate",
+        "explanation": "Correct. Most folded energy lands above the original band and is removed by the decimation filter."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Key idea: aliasing happens **at the moment of sampling**. Once a component has folded to 690 Hz, it *is* a 690 Hz component.\n\nSo the fix must act before or during generation:\n\n- correct the jumps (PolyBLEP/minBLEP),\n- never create the high harmonics (tables, additive),\n- or generate at a higher rate and filter before reducing the rate (oversampling).\n\nFiltering or gain changes afterwards can't separate aliases from the real tone.",
+    "link": {
+      "title": "Brandt, Hard Sync Without Aliasing (PDF)",
+      "url": "https://www.cs.cmu.edu/~eli/papers/icmc01-hardsync.pdf"
+    }
+  }
+]

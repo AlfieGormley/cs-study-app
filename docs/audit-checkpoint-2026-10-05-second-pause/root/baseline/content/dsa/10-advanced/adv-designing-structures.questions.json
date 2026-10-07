@@ -1,0 +1,348 @@
+[
+  {
+    "id": "adv-designing-structures-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An LRU cache uses a hash map from key to node plus a linked list ordered by recency. Why must the list be **doubly** linked for `get` to be O(1)?",
+    "options": [
+      {
+        "text": "So the list can be traversed from either end when searching for a key",
+        "explanation": "Searching is the map's job, not the list's. The list is never searched; the map hands you the node directly."
+      },
+      {
+        "text": "Because unlinking a node needs its predecessor, and only a `prev` pointer finds it in O(1)",
+        "explanation": "Correct. Moving a node to the front means unlinking it first, which updates the predecessor's `next`. With a singly linked list, finding the predecessor is an O(n) walk from the head."
+      },
+      {
+        "text": "Because a doubly linked list uses less memory per node",
+        "explanation": "It uses more: one extra pointer per node. The extra memory is the price paid for O(1) unlinking."
+      },
+      {
+        "text": "So the most recently used item can be found at the tail",
+        "explanation": "Either end can be designated MRU in any linked list; that is a convention, not a reason for the second pointer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `get(k)`: the map gives you node `n` in O(1).\n2. You must now move `n` to the front. Step one is unlinking it:\n```\nn.prev.next = n.next\nn.next.prev = n.prev\n```\n3. Both lines need `n.prev`. In a singly linked list you would have to walk from the head until `p.next is n`: O(n).\n4. Storing `prev` in every node turns that walk into a pointer read, so the whole `get` is O(1).",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the hand-written LRU cache, each node stores its `key` as well as its `val`. When is the key in the node actually used?",
+    "options": [
+      {
+        "text": "When `get` looks a key up",
+        "explanation": "`get` looks the key up in the hash map, which already has the key; the node's copy is not needed there."
+      },
+      {
+        "text": "When updating an existing key's value in `put`",
+        "explanation": "An update reaches the node through the map using the key passed in, so the stored key is not needed."
+      },
+      {
+        "text": "When evicting: the tail node is all you have, and you need its key to delete it from the map",
+        "explanation": "Correct. Eviction starts from the list (`self.tail.prev`), not from a key. Without the key stored in the node you could not remove the matching map entry, and the map and list would drift apart."
+      },
+      {
+        "text": "Never; it is only there for debugging",
+        "explanation": "Remove it and eviction cannot clean up the map, so evicted keys would still be found by `get`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk through each operation and ask where it starts:\n\n| Operation | Starts from | Needs node.key? |\n|---|---|---|\n| get | key (map) | no |\n| put update | key (map) | no |\n| put evict | tail (list) | yes |\n\nEviction is the only path that begins at the list. It must do `del self.map[lru.key]`, so the key has to live in the node.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the O(1) `RandomizedSet`, how does `remove(x)` delete from the middle of the array without an O(n) shift?",
+    "options": [
+      {
+        "text": "It marks the slot as deleted and skips such slots in `get_random`",
+        "explanation": "Tombstones keep removal O(1) but break `get_random`: you would have to retry on deleted slots, and the array would grow without bound."
+      },
+      {
+        "text": "It sorts the array and binary searches for `x`",
+        "explanation": "Sorting is O(n log n), and binary search is O(log n); neither gives O(1) and the map already knows the index."
+      },
+      {
+        "text": "It uses `list.remove(x)`, which is O(1) in Python",
+        "explanation": "`list.remove` scans for the value and shifts every later element left: O(n)."
+      },
+      {
+        "text": "It copies the last element into `x`'s slot, updates that element's index in the map, and pops the end",
+        "explanation": "Correct. Only the end of the array changes size, and popping the end of a dynamic array is O(1). The cost is that array order is not preserved, which a set does not need."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Example: `items = [10, 20, 30, 40]`, remove 20.\n1. `i = pos[20] = 1`, `last = 40`.\n2. `items[1] = 40` gives `[10, 40, 30, 40]`.\n3. `pos[40] = 1`.\n4. `items.pop()` gives `[10, 40, 30]`.\n5. `del pos[20]`.\n\nEvery step is O(1). Nothing after index 1 moved.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `LRUCache` with capacity 2, what do the `get` calls return?\n\n```\nc = LRUCache(2)\nc.put(1, 1); c.put(2, 2)\nc.get(1)\nc.put(3, 3)\nc.get(2)\nc.put(4, 4)\nc.get(1); c.get(3); c.get(4)\n```",
+    "options": [
+      {
+        "text": "1, 2, 1, 3, 4",
+        "explanation": "This ignores eviction altogether; with capacity 2 the cache can never hold four keys."
+      },
+      {
+        "text": "1, -1, -1, 3, 4",
+        "explanation": "Correct. `get(1)` makes 1 most recent, so `put(3)` evicts 2. Then 1 is the least recent when `put(4)` arrives, so 1 is evicted too."
+      },
+      {
+        "text": "1, -1, 1, -1, 4",
+        "explanation": "This has `put(4)` evicting 3 instead of 1. After `put(3)` the order is `[3, 1]`, and the miss on 2 does not refresh 1, so 1 is the least recent."
+      },
+      {
+        "text": "1, 2, -1, 3, 4",
+        "explanation": "This evicts 1 on `put(3)`, which is FIFO behaviour. LRU evicts 2, because `get(1)` made 1 more recent than 2."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "List MRU (left) to LRU (right):\n```\nput 1    [1]\nput 2    [2, 1]\nget 1 -> 1     [1, 2]\nput 3    full, evict 2\n         [3, 1]\nget 2 -> -1    (miss, no change)\nput 4    full, evict 1\n         [4, 3]\nget 1 -> -1\nget 3 -> 3     [3, 4]\nget 4 -> 4     [4, 3]\n```\nA miss does not change the order, so after `put(3)` key 1 stays at the LRU end and is the next victim.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `LFUCache` (ties broken by least recent), capacity 2:\n\n```\nc = LFUCache(2)\nc.put(1, 1); c.put(2, 2)\nc.get(1)\nc.put(3, 3)\nc.get(3)\nc.put(4, 4)\n```\n\nWhich key does `put(4, 4)` evict?",
+    "options": [
+      {
+        "text": "Key 3, because it was inserted most recently",
+        "explanation": "LFU does not evict by insertion time first; it compares counts. And among equal counts it evicts the *least* recently used, not the most."
+      },
+      {
+        "text": "Key 4, because a new key has the lowest count",
+        "explanation": "The new key is added after eviction, so it is never a candidate for its own eviction."
+      },
+      {
+        "text": "Key 1",
+        "explanation": "Correct. Keys 1 and 3 both have count 2. Key 1 reached count 2 before key 3 did, so it is the oldest in bucket 2 and is evicted."
+      },
+      {
+        "text": "Key 2",
+        "explanation": "Key 2 was already evicted by `put(3, 3)`; it is not in the cache when `put(4, 4)` runs."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Track counts and buckets (oldest first):\n```\nput 1      {1:1}       b1=[1]\nput 2      {1:1,2:1}   b1=[1,2]\nget 1      {1:2,2:1}   b1=[2] b2=[1]\nput 3      full, min_f=1 -> evict 2\n           {1:2,3:1}   b1=[3] b2=[1]\nget 3      {1:2,3:2}   b2=[1,3]\n           b1 empty, min_f -> 2\nput 4      full, min_f=2 -> evict\n           oldest of b2 = 1\n```\nThen 4 is inserted with count 1 and `min_f` resets to 1.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A `RandomizedSet` holds `items = [10, 20, 30, 40]` with `pos = {10: 0, 20: 1, 30: 2, 40: 3}`. After `remove(10)` then `remove(20)`, what are `items` and `pos`?",
+    "options": [
+      {
+        "text": "`items = [30, 40]`, `pos = {30: 0, 40: 1}`",
+        "explanation": "This is what deleting and shifting left would produce. The swap-with-last strategy never shifts, so order is not preserved."
+      },
+      {
+        "text": "`items = [40, 30]`, `pos = {40: 3, 30: 1}`",
+        "explanation": "The array is right but `pos[40]` is stale. The code updates the moved element's index (`pos[last] = i`) precisely so a later `remove(40)` does not read past the end."
+      },
+      {
+        "text": "`items = [40, 30]`, `pos = {40: 0, 30: 1}`",
+        "explanation": "Correct. Removing 10 pulls 40 into index 0; removing 20 pulls 30 into index 1. Each moved value's index is updated."
+      },
+      {
+        "text": "`items = [40, 20, 30]`, `pos = {40: 0, 20: 1, 30: 2}`",
+        "explanation": "This stops after the first removal. The second `remove(20)` also runs and pulls 30 forward."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `remove(10)`: `i = 0`, `last = 40`. Copy: `[40, 20, 30, 40]`, set `pos[40] = 0`, pop: `[40, 20, 30]`, delete `pos[10]`.\n2. `remove(20)`: `i = 1`, `last = 30`. Copy: `[40, 30, 30]`, set `pos[30] = 1`, pop: `[40, 30]`, delete `pos[20]`.\n3. Final: `items = [40, 30]`, `pos = {40: 0, 30: 1}`.\n\nCheck the invariant: for every value v, `items[pos[v]] == v`. Here `items[0] = 40` and `items[1] = 30`.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these changes to the lesson's `LRUCache` would make it return **wrong results** (not merely run slower)? Select all that apply.",
+    "options": [
+      {
+        "text": "On eviction, unlinking the tail node but forgetting `del self.map[lru.key]`",
+        "explanation": "Correct, this breaks it. `get` on the evicted key still finds its orphaned node and returns a stale value, and the map grows past capacity, so after the first eviction the `==` check never fires again and the cache grows without bound."
+      },
+      {
+        "text": "In `put`, updating an existing key's value without moving its node to the front",
+        "explanation": "Correct, this breaks it. A write counts as a use in LRU. Leaving the node in place means a just-written key can be evicted next, the wrong victim."
+      },
+      {
+        "text": "Replacing the sentinel nodes with `None` checks for the head and tail, done carefully",
+        "explanation": "Not a correctness change. Sentinels only remove special cases; careful `None` handling gives the same behaviour with more code."
+      },
+      {
+        "text": "In `put`, checking `len(self.map) == self.cap` and evicting before checking whether the key already exists",
+        "explanation": "Correct, this breaks it. Updating an existing key in a full cache should not evict anything, but this order evicts the LRU item unnecessarily whenever it is a different key."
+      },
+      {
+        "text": "Using a singly linked list and finding each node's predecessor by walking from the head",
+        "explanation": "This is slower (O(n) per access) but still correct, so it is not in the answer."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Ask of each change: does the map still match the list, and is the list still in recency order?\n1. Missing `del map[...]`: map has a key the list doesn't. Broken.\n2. No move on update: list order is no longer recency order. Broken.\n3. `None` checks instead of sentinels: same states, different code. Fine.\n4. Evict-before-lookup: cache with `{A, B}`, cap 2, B least recent, `put(A, new)` evicts B for no reason. Broken.\n5. Singly linked list: same states, O(n) cost. Fine but slow.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the LFU `_bump` method, when bucket `f` empties and `min_f == f`, the code sets `min_f = f + 1` without searching. Why is that always correct?",
+    "options": [
+      {
+        "text": "Because buckets are stored in a sorted structure, so the next one is found in O(1)",
+        "explanation": "The buckets are in a plain dict with no ordering; nothing is searched or sorted."
+      },
+      {
+        "text": "Because the key being bumped has just been placed in bucket `f + 1`, so that bucket is non-empty and no smaller one is",
+        "explanation": "Correct. Bucket `f` was the smallest non-empty bucket and is now empty, and the bumped key now has count `f + 1`, so `f + 1` is the new minimum."
+      },
+      {
+        "text": "Because counts are capped, so `f + 1` is always the largest bucket",
+        "explanation": "There is no cap on counts in this design, and the question is about the minimum, not the maximum."
+      },
+      {
+        "text": "It is not always correct; a full scan is needed occasionally",
+        "explanation": "No scan is ever needed. The only other place `min_f` changes is an insert, which sets it to 1."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Before the bump: no key has a count below `f` (that is what `min_f == f` means).\n1. The bumped key leaves bucket `f`, which is now empty.\n2. So no key has count `f` or below.\n3. The bumped key now has count `f + 1`, so bucket `f + 1` is non-empty.\n4. Therefore the minimum is exactly `f + 1`.\n\nThe other case: a new key arrives with count 1, the smallest possible, so `min_f = 1`. These two rules cover every change, which is why LFU needs no heap.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague reorders the end of `remove` to:\n\n```\nself.items[i] = last\ndel self.pos[x]\nself.pos[last] = i\nself.items.pop()\n```\n\nStarting from an empty set, they run `insert(5)`, `remove(5)`, `insert(5)`. What does the second `insert(5)` return?",
+    "options": [
+      {
+        "text": "`True`, and the set contains 5",
+        "explanation": "This would be right with the original order. With the new order, the map still claims 5 is present after the removal."
+      },
+      {
+        "text": "It raises `KeyError` inside `remove`",
+        "explanation": "`del self.pos[x]` runs while 5 is still in the map, so no `KeyError` occurs."
+      },
+      {
+        "text": "`False`, even though `items` is empty",
+        "explanation": "Correct. When `x` is the last element, `last == x`, so `pos[last] = i` re-creates the entry just deleted. The map says 5 is present, the array is empty, and `insert(5)` refuses."
+      },
+      {
+        "text": "It raises `IndexError` because `items` is empty",
+        "explanation": "`insert` never indexes the array; it only checks the map and appends."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace `remove(5)` with `items = [5]`, `pos = {5: 0}`:\n```\ni = 0, last = 5\nitems[0] = 5      [5]\ndel pos[5]        {}\npos[5] = 0        {5: 0}   (re-added!)\nitems.pop()       []\n```\nNow `insert(5)` sees `5 in self.pos` and returns `False`. A later `get_random` would also crash on an empty list while the map is non-empty.\n\nThe original order (`pos[last] = i` first, then `del pos[x]`) handles `last == x` because the delete runs last.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You extend `RandomizedSet` to allow duplicates by mapping each value to a set of indices. After `insert(1)`, `insert(1)`, `insert(2)`, `insert(3)`, then `remove(3)`, what is the probability that `get_random()` returns 1?",
+    "options": [
+      {
+        "text": "1/2, because there are two distinct values left",
+        "explanation": "That would be sampling distinct values. The multiset design samples array slots, so a value's chance is proportional to its count."
+      },
+      {
+        "text": "2/3",
+        "explanation": "Correct. After the removal the array is `[1, 1, 2]`. Each slot is equally likely, and two of the three slots hold 1."
+      },
+      {
+        "text": "1/3, because each value is equally likely",
+        "explanation": "Each *slot*, not each value, is equally likely; 1 occupies two slots."
+      },
+      {
+        "text": "2/4, because four items were inserted",
+        "explanation": "The removal of 3 shrank the array to three slots, so the denominator is 3."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Inserts give `items = [1, 1, 2, 3]`, `pos = {1: {0, 1}, 2: {2}, 3: {3}}`.\n2. `remove(3)`: take index 3 from `pos[3]`; 3 is also the last element, so the swap is a no-op; pop. `items = [1, 1, 2]`.\n3. `get_random` picks a slot uniformly: P(1) = 2/3, P(2) = 1/3.\n\nThis count-weighted behaviour is usually what a multiset sampler is meant to do.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are putting an in-process LRU cache in front of a service handling many concurrent requests. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Every `get` mutates the linked list, so readers need exclusive access too, not just writers",
+        "explanation": "Correct. A hit moves the node to the front, which is a write to shared pointers. Two unsynchronised `get`s can corrupt the list."
+      },
+      {
+        "text": "A read-write lock lets `get` calls run in parallel safely, because they only read",
+        "explanation": "This is the trap: in LRU, `get` is not read-only. Holding only a read lock while relinking nodes is a data race."
+      },
+      {
+        "text": "The O(1) bounds are average-case, because they rest on hash map operations",
+        "explanation": "Correct. With many colliding keys a hash map degrades, so the structure is O(1) on average, not in the worst case."
+      },
+      {
+        "text": "Swapping LRU for a heap-based LFU would keep every operation O(1)",
+        "explanation": "A heap update costs O(log n). O(1) LFU needs the frequency-bucket design."
+      },
+      {
+        "text": "`OrderedDict` and Java's `LinkedHashMap` implement the same hash-map-plus-linked-list idea",
+        "explanation": "Correct. Both pair a hash table with a doubly linked list of entries, which is why they can do LRU in a few lines."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Look at `get`: it calls `_unlink` and `_push_front`, four pointer writes. So a hit is a write.\n2. Hence a read-write lock gives no parallelism for hits; you need a mutex (or sharding, or an approximation like sampled or CLOCK-style eviction, which is what Redis and Caffeine do).\n3. All the O(1) claims inherit the hash map's average-case guarantee.\n4. A heap keyed on count needs a sift on every access: O(log n).\n5. `OrderedDict.move_to_end` and `LinkedHashMap(accessOrder=true)` are the library versions of the lesson's code.",
+    "link": {
+      "title": "LinkedHashMap — Java SE 21 API docs",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/LinkedHashMap.html"
+    }
+  }
+]

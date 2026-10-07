@@ -1,0 +1,348 @@
+[
+  {
+    "id": "dl-fundamentals-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two threads run this code, with `t1` calling `transfer(a, b)` and `t2` calling `transfer(b, a)`:\n\n```python\ndef transfer(src, dst):\n    with src.lock:\n        with dst.lock:\n            move_money(src, dst)\n```\n\nThe scheduler runs: t1 locks `a`; t2 locks `b`; t1 tries to lock `b`; t2 tries to lock `a`. What happens?",
+    "options": [
+      {
+        "text": "Both threads block forever: a deadlock",
+        "explanation": "Correct. t1 holds a and waits for b; t2 holds b and waits for a. Each waits for the other to release, which never happens because each release is at the end of a `with` block that cannot be reached."
+      },
+      {
+        "text": "t1 wins because it started first, and t2 proceeds after it",
+        "explanation": "Starting first gives no priority. t1 is blocked on b, which t2 holds; t1 cannot finish, so it never releases a for t2. Order of arrival does not break the cycle."
+      },
+      {
+        "text": "Python raises a `DeadlockError` in one of the threads",
+        "explanation": "Python's `threading.Lock` has no deadlock detection. A plain `acquire()` with no timeout waits forever; nothing is raised."
+      },
+      {
+        "text": "The GIL serialises the threads, so the deadlock cannot happen",
+        "explanation": "The GIL protects interpreter internals, not your locks. A thread blocked in `acquire()` releases the GIL, and the other thread runs and blocks too. The interleaving described is entirely possible."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Write down what each thread holds and wants after the four steps:\n\n| Thread | Holds | Wants |\n|---|---|---|\n| t1 | a | b |\n| t2 | b | a |\n\n2. t1 can only release `a` by leaving the outer `with`, which needs the inner `with` (lock `b`) to finish first.\n3. Likewise t2 can only release `b` after it gets `a`.\n4. Each is waiting on the other: a cycle t1 → t2 → t1. With single-instance locks, a cycle is a deadlock.\n5. Nothing in Python will notice: both threads sleep in `acquire()` forever and CPU use drops to zero.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A system requires each thread to request **every** lock it will ever need in one atomic call before it starts work, and it is granted all of them or none. Which Coffman condition does this rule remove?",
+    "options": [
+      {
+        "text": "Mutual exclusion",
+        "explanation": "Each lock is still held by one thread at a time; the rule does not make resources shareable."
+      },
+      {
+        "text": "No preemption",
+        "explanation": "Nothing is taken away from a holder by force. The rule changes how locks are requested, not whether they can be revoked."
+      },
+      {
+        "text": "Hold and wait",
+        "explanation": "Correct. A thread never holds some locks while waiting for others: it waits while holding nothing, then gets everything at once."
+      },
+      {
+        "text": "Circular wait only, because the locks are taken in a fixed order",
+        "explanation": "The rule says nothing about order. It removes circular wait indirectly, but the condition it directly breaks is hold and wait: no thread is ever holding while waiting."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Recall the four conditions: mutual exclusion, hold and wait, no preemption, circular wait.\n2. Ask, for each, whether the rule changes it:\n   - Locks are still exclusive: mutual exclusion holds.\n   - Locks are never forcibly removed: no preemption holds.\n   - A waiting thread holds *nothing*, because it gets all its locks in one go or none: hold and wait is gone.\n3. Since all four are necessary, breaking hold and wait is enough to make deadlock impossible.\n4. The cost: threads must know all their locks up front and hold them longer than needed, which hurts concurrency.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An on-call engineer finds a Java service has stopped responding. CPU use is near 0%, there are no errors in the log, and a thread dump shows 40 request threads all `BLOCKED` waiting to enter `synchronized` blocks. What is the most likely diagnosis?",
+    "options": [
+      {
+        "text": "A livelock",
+        "explanation": "Livelock involves repeated state changes without useful progress, but retries can include sleeping/backoff. High CPU is common, not required. Inspect the wait graph."
+      },
+      {
+        "text": "The garbage collector is running a long pause",
+        "explanation": "A GC pause and lock contention require different evidence. CPU level alone does not rule GC in or out; the monitor ownership and wait relationships are the relevant clues here."
+      },
+      {
+        "text": "A deadlock (or a thread holding a lock while stuck)",
+        "explanation": "Correct. Blocked threads sleep without using CPU. Many threads blocked on monitors with no progress points at a lock cycle, or at a lock holder stuck forever. The dump will show who holds each monitor."
+      },
+      {
+        "text": "Starvation of low-priority threads",
+        "explanation": "Starvation means some threads make no progress while others do. Here nothing is progressing at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Near-zero CPU and blocked stacks suggest persistent waiting, not proof of a cycle. Inspect a thread dump and determine who holds each needed resource. Java tools can report supported monitor/ownable-synchronizer cycles among platform threads. If no cycle is found, investigate slow holders, I/O and lost wakeups. Spinning deadlocks can instead use high CPU.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can deadlock? Select all that apply.",
+    "options": [
+      {
+        "text": "A single thread calls `acquire()` twice on the same `threading.Lock`",
+        "explanation": "Correct. `Lock` is not reentrant: the second `acquire()` waits for the lock to be released, but the only thread that could release it is the one waiting. That is self-deadlock."
+      },
+      {
+        "text": "A single thread calls `acquire()` twice on the same `threading.RLock`",
+        "explanation": "An `RLock` is reentrant: it records its owner and a count, so the owner can acquire it again. It must release it twice, but it does not block."
+      },
+      {
+        "text": "Tasks on a `ThreadPoolExecutor(max_workers=2)` each submit a sub-task to the same pool and wait for its result",
+        "explanation": "Correct. If both workers are running outer tasks that wait on sub-tasks, the sub-tasks sit in the queue with no free worker to run them. The workers are the scarce resource."
+      },
+      {
+        "text": "Four threads read a shared dictionary that is never modified, with no locks",
+        "explanation": "Reading immutable data needs no exclusion, so mutual exclusion does not hold and nothing waits. No deadlock is possible."
+      },
+      {
+        "text": "A parent writes a large input to a child's stdin before reading any of its stdout",
+        "explanation": "Correct. Once the child's stdout pipe buffer fills, the child blocks writing and stops reading stdin. The parent then blocks writing to the full stdin pipe. Each waits for the other."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each case for a wait cycle.\n\n1. `Lock` twice: thread T waits for the lock, held by T. A cycle of length one. Deadlock.\n2. `RLock` twice: the lock sees T is the owner and increments a counter. No wait. Safe.\n3. Pool of 2: both workers wait on futures; the futures wait for a worker. Cycle: workers → queued tasks → workers. Deadlock (once both workers are busy with outer tasks).\n4. Immutable reads: nobody waits for anything. Safe.\n5. Pipes: parent waits for space in the stdin pipe (needs the child to read); child waits for space in the stdout pipe (needs the parent to read). Deadlock. Python's `Popen.communicate()` avoids it by reading and writing concurrently.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A resource-allocation graph has:\n\n```\nR: 2 instances, held by T1 and T3\nS: 1 instance,  held by T2\n\nT1 requests S\nT2 requests R\nT3 is running, requests nothing\n```\n\nIs the system deadlocked?",
+    "options": [
+      {
+        "text": "Yes: T1 → S → T2 → R → T1 is a cycle",
+        "explanation": "A cycle is enough for deadlock only when every resource has one instance. R has two, and the holder of the other one is not waiting."
+      },
+      {
+        "text": "No: T3 will release its instance of R, T2 can then finish and release S, and T1 proceeds",
+        "explanation": "Correct. T3 is not blocked, so it finishes and frees one instance of R. T2 takes it, finishes and releases S; T1 gets S. Everyone completes."
+      },
+      {
+        "text": "Yes, but only T1 and T2 are deadlocked, not T3",
+        "explanation": "T1 and T2 are only waiting, not deadlocked. Their wait is broken as soon as T3 releases its instance of R."
+      },
+      {
+        "text": "It cannot be determined without knowing thread priorities",
+        "explanation": "Priorities affect who runs first, not whether a wait cycle can be broken. The graph alone tells us there is a way out."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Find the cycle: T1 → S (request), S → T2 (held), T2 → R (request), R → T1 (one instance held by T1). So a cycle exists.\n2. But R has **two** instances. The second is held by T3.\n3. Is T3 waiting? No. So T3 will run to completion and release its R.\n4. Simulate:\n\n```\nT3 finishes      R free: 1\nT2 gets R, ends  S free, R free: 1\nT1 gets S, ends  all free\n```\n\n5. Every thread finishes, so there is no deadlock. With multi-instance resources, a cycle means deadlock is *possible*, and you must simulate (as the detection algorithm in lesson 4 does) to know.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "All locks below are ordinary single-instance mutexes:\n\n```\nT1 holds A, waits for B\nT2 holds B, waits for C\nT3 holds C, waits for D\nD is free\n```\n\nWhat happens next?",
+    "options": [
+      {
+        "text": "All three threads are deadlocked",
+        "explanation": "There is a chain of waiting, but no cycle: the chain ends at D, which is free. A chain that ends in a free resource unwinds."
+      },
+      {
+        "text": "T1 and T2 are deadlocked; T3 can proceed",
+        "explanation": "T2 is not in a cycle. Once T3 finishes and releases C, T2 can continue."
+      },
+      {
+        "text": "Nothing is deadlocked: T3 gets D and finishes, then T2, then T1",
+        "explanation": "Correct. T3 acquires the free D, finishes and releases C and D. T2 then gets C, finishes, releases B; T1 then gets B."
+      },
+      {
+        "text": "It deadlocks only if T3 later requests A",
+        "explanation": "That would close the cycle and cause deadlock, but it describes a different system. As given, there is no cycle."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Draw the edges: T1 → B → T2 → C → T3 → D. D has no holder.\n2. Look for a cycle: following arrows from T1 leads to D and stops. No cycle.\n3. With single-instance resources, no cycle means no deadlock.\n4. Unwind it from the end of the chain:\n\n```\nT3 gets D, finishes, frees C, D\nT2 gets C, finishes, frees B, C\nT1 gets B, finishes\n```\n\n5. If T3 had been waiting for A instead of D, the chain would loop back to T1 and all three would be deadlocked.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two PostgreSQL sessions, using default settings, interleave:\n\n```sql\n-- S1\nUPDATE t SET v=1 WHERE id=1;\n-- S2\nUPDATE t SET v=2 WHERE id=2;\n-- S1\nUPDATE t SET v=1 WHERE id=2;\n-- S2\nUPDATE t SET v=2 WHERE id=1;\n```\n\nBoth are inside open transactions. What happens?",
+    "options": [
+      {
+        "text": "Both sessions hang until an administrator kills one",
+        "explanation": "PostgreSQL detects deadlocks itself. Waiting forever is what would happen with plain application mutexes, not with database row locks."
+      },
+      {
+        "text": "S2's second UPDATE fails immediately with a serialisation error",
+        "explanation": "PostgreSQL doesn't check for deadlock the instant a session blocks; it waits for `deadlock_timeout` first. And the error is a deadlock error (40P01), not a serialisation failure."
+      },
+      {
+        "text": "PostgreSQL silently merges the updates so both commit",
+        "explanation": "Each UPDATE needs a row lock held until commit. The database cannot merge two transactions' locks; one of them must give way."
+      },
+      {
+        "text": "After about a second, PostgreSQL aborts one transaction with `deadlock detected`; the other proceeds",
+        "explanation": "Correct. A blocked session waits `deadlock_timeout` (1 s by default), then runs the deadlock check, finds the cycle and aborts one transaction. The docs say which one is aborted is hard to predict."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. S1 locks row 1, S2 locks row 2.\n2. S1 wants row 2 (held by S2) and blocks. S2 wants row 1 (held by S1) and blocks. Cycle.\n3. PostgreSQL doesn't check for deadlock on every wait because the check is relatively expensive. Each blocked backend sets a timer for `deadlock_timeout` (default `1s`).\n4. When the timer fires, the backend checks the wait-for graph, finds the cycle and aborts a transaction with `ERROR: deadlock detected` (SQLSTATE `40P01`).\n5. The surviving transaction gets its row lock and continues. The application must handle the error; a safe bounded retry restarts the whole logical transaction.",
+    "link": {
+      "title": "PostgreSQL docs: Explicit Locking",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this program do?\n\n```python\nfrom concurrent.futures import (\n    ThreadPoolExecutor)\n\nfrom threading import Barrier\n\npool = ThreadPoolExecutor(max_workers=2)\nready = Barrier(2)\n\ndef inner(x):\n    return x * 2\n\ndef outer(x):\n    ready.wait()\n    f = pool.submit(inner, x)\n    return f.result()\n\na = pool.submit(outer, 1)\nb = pool.submit(outer, 2)\nprint(a.result() + b.result())\n```",
+    "options": [
+      {
+        "text": "Prints 6",
+        "explanation": "That would be the answer if a third worker were free to run the `inner` tasks. Both workers are busy running `outer`."
+      },
+      {
+        "text": "Hangs: both workers wait for inner jobs with no free worker",
+        "explanation": "Correct. Both workers pick up an `outer` task and block in `f.result()`. The two `inner` tasks wait in the queue for a free worker, which never comes."
+      },
+      {
+        "text": "Raises `RuntimeError` because you cannot submit from inside a pool",
+        "explanation": "Submitting from a worker is allowed. The problem is waiting on the result while occupying a worker."
+      },
+      {
+        "text": "Prints 6, because `f.result()` runs `inner` inline on the calling thread",
+        "explanation": "`Future.result()` only waits; it never runs the task itself. (Some frameworks have work-stealing pools that do help in this case, but `ThreadPoolExecutor` doesn't.)"
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The barrier ensures both workers enter outer before either submits inner work. Both then submit children and wait for results, still occupying the only two workers. No worker is free to execute either child. Separate executors or a nonblocking composition avoids this dependency cycle; extra capacity only helps if nesting and concurrency remain bounded.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the Coffman conditions are true? Select all that apply.",
+    "options": [
+      {
+        "text": "All four must hold simultaneously for a deadlock to exist",
+        "explanation": "Correct. They are necessary conditions. If any one fails, a deadlock cannot exist."
+      },
+      {
+        "text": "If every resource has a single instance, the four conditions together guarantee a deadlock",
+        "explanation": "Correct. With single-instance resources, circular wait means each thread in the cycle waits for a resource that only the next thread can release, and with no preemption nothing breaks the cycle."
+      },
+      {
+        "text": "A cycle in a resource-allocation graph always means deadlock",
+        "explanation": "Only with single-instance resources. With several instances, a thread outside the cycle may release an instance and break it."
+      },
+      {
+        "text": "Mutual exclusion on its own is enough to cause deadlock",
+        "explanation": "Nearly every program with locks has mutual exclusion and never deadlocks. You also need hold and wait, no preemption and a circular wait."
+      },
+      {
+        "text": "Policies determine which conditions can arise, while actual holding and waiting edges depend on the execution",
+        "explanation": "Correct. For example, a policy may permit hold-and-wait, but a particular execution may contain no such wait. A cycle is likewise a property of the current dependency state."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Coffman et al. (1971) gave four *necessary* conditions. Necessary means \"deadlock implies all four\"; so option A is true.\n2. Sufficiency: for single-instance resources, a cycle in the graph is a deadlock, so B is true.\n3. For multi-instance resources, the cycle can be broken by a holder outside it (see the RAG example in the lesson), so C is false.\n4. D is false: mutual exclusion is everywhere, deadlocks are not.\n5. E is a useful way to think about it. Prevention techniques mostly change the rules (the first three) or impose an order that makes the run-time cycle impossible (the fourth).",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A shutdown routine does this:\n\n```python\ndef shutdown():\n    with state_lock:\n        state.closing = True\n        worker.join()\n\ndef worker_loop():\n    while True:\n        job = q.get()\n        if job is None:\n            with state_lock:\n                log_final(state)\n            return\n        run(job)\n```\n\nShutdown puts `None` on `q` before calling `shutdown()`. Assume shutdown acquires state_lock before the worker handles the sentinel. Why does this execution hang?",
+    "options": [
+      {
+        "text": "`q.get()` blocks forever because `None` is not a valid queue item",
+        "explanation": "`queue.Queue` accepts any object, including `None`; using `None` as a sentinel is a common pattern."
+      },
+      {
+        "text": "`state_lock` is not reentrant, so `shutdown` deadlocks with itself",
+        "explanation": "`shutdown` takes `state_lock` only once. The second acquisition is by a different thread, the worker."
+      },
+      {
+        "text": "The main thread holds `state_lock` while waiting for the worker to exit, and the worker needs `state_lock` to exit",
+        "explanation": "Correct. `join()` waits for the worker; the worker waits for `state_lock`, held by the thread calling `join()`. The thread's exit is the second 'resource' in the cycle."
+      },
+      {
+        "text": "Only one lock is involved, so it can't be a deadlock; the worker is just slow",
+        "explanation": "A deadlock needs a cycle of waits, not two locks. Here one edge is a lock and the other is a `join()`. Neither side can ever proceed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. List the waits:\n   - Main holds `state_lock` and blocks in `worker.join()`, waiting for the worker to finish.\n   - Worker reads the sentinel and blocks in `with state_lock`, waiting for main to release it.\n2. Cycle: main → (worker's exit) → worker → (`state_lock`) → main.\n3. Waiting on a thread's exit behaves like requesting a resource the thread will \"release\" when it finishes.\n4. Fix: release the lock before joining:\n\n```python\ndef shutdown():\n    with state_lock:\n        state.closing = True\n    worker.join()\n```\n\n5. General rule: never block on anything (join, a future, a queue, I/O) while holding a lock that the thing you're waiting for might need.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux Python parent sends 10 MB to cat through stdin=PIPE and stdout=PIPE, writing all input before reading output. Assume the combined finite pipe and cat buffers hold less than 10 MB, with no other readers or failures. What happens?",
+    "options": [
+      {
+        "text": "It works: the kernel buffers the full 10 MB in the pipe",
+        "explanation": "The question assumes total buffering below the payload size. Linux pipe capacity varies with page size, limits and tuning; do not hard-code 64 KiB."
+      },
+      {
+        "text": "It works, but slowly, because `cat` writes in small chunks",
+        "explanation": "The issue is not speed. Nobody reads `cat`'s stdout until the write finishes, so `cat` eventually stops reading."
+      },
+      {
+        "text": "It raises `BrokenPipeError` when the buffer fills",
+        "explanation": "`BrokenPipeError` happens when the reader has *closed* its end. Here `cat` is alive and still has the pipe open; it is just not reading."
+      },
+      {
+        "text": "It hangs once the pipes and `cat`'s own buffer are full, long before 10 MB is sent",
+        "explanation": "Correct. `cat` copies stdin to stdout. Once the stdout pipe fills, `cat` blocks writing and stops reading stdin; that pipe fills and the parent's `write` blocks. Each waits for the other."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The parent fills stdin while cat copies to stdout. Once stdout buffering fills, cat stops reading; stdin then fills and the parent stops writing. Neither reaches the read/release the other needs. communicate(data) coordinates input and output, avoiding this ordinary pipe cycle. Actual capacity and the byte count at which blocking occurs are platform-dependent.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  }
+]

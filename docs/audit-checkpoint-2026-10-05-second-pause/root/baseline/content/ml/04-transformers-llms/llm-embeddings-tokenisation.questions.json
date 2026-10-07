@@ -1,0 +1,374 @@
+[
+  {
+    "id": "llm-embeddings-tokenisation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do almost all modern language models use **subword** tokens rather than whole words or single characters?",
+    "options": [
+      {
+        "text": "Subwords are the only units a GPU can process",
+        "explanation": "GPUs process numbers, not linguistic units. Any tokenisation produces integer IDs; the choice is about vocabulary size and sequence length, not hardware."
+      },
+      {
+        "text": "Subwords match the morphemes linguists identify, so the model understands grammar",
+        "explanation": "BPE merges are chosen by frequency, not linguistics. Some pieces look like morphemes (`est`, `ing`) but many do not (`st` `raw` `berry`)."
+      },
+      {
+        "text": "They keep the vocabulary a fixed, manageable size while still encoding any word, and keep sequences much shorter than characters would",
+        "explanation": "Correct. Common words become one token, rare words are spelled from pieces, so there is no out-of-vocabulary problem and sequences stay reasonably short."
+      },
+      {
+        "text": "Word-level vocabularies cannot be stored in an embedding table",
+        "explanation": "They can, but the table would need millions of rows and would still fail on any word not seen in training. The issue is size and coverage, not impossibility."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Characters: tiny vocabulary, but sequences 4–6x longer than subwords. Attention cost grows with the square of length.\n2. Words: short sequences, but millions of types (names, typos, inflections) and unseen words have no ID.\n3. Subwords: frequent strings get their own token, anything else falls back to smaller pieces, down to single bytes.\n4. So subwords give a fixed vocabulary of tens of thousands, full coverage and moderate sequence length.",
+    "link": {
+      "title": "Summary of the tokenizers — Hugging Face",
+      "url": "https://huggingface.co/docs/transformers/tokenizer_summary"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "GPT-2's tokeniser has exactly 50,257 tokens. Where does that number come from?",
+    "options": [
+      {
+        "text": "256 byte tokens + 50,000 learned merges + 1 `<|endoftext|>` special token",
+        "explanation": "Correct. Byte-level BPE starts from all 256 byte values, each merge adds one token, and there is one special end-of-text token."
+      },
+      {
+        "text": "50,000 learned merges plus 257 punctuation marks",
+        "explanation": "There are not 257 special punctuation tokens. Punctuation is covered by the byte base vocabulary."
+      },
+      {
+        "text": "50,257 is the number of distinct English words in the training data",
+        "explanation": "Confuses BPE with a word-level vocabulary. The vocabulary size is chosen by deciding how many merges to run."
+      },
+      {
+        "text": "It is the largest prime below 2^16, chosen for hashing",
+        "explanation": "50,257 is not prime-driven and token IDs are not hashed. The size is simply bytes + merges + specials."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Byte-level BPE needs a base symbol for every possible byte: 256.\n2. Training runs a chosen number of merges, here 50,000; each merge creates one new token.\n3. Add special tokens; GPT-2 has one, `<|endoftext|>`.\n4. 256 + 50,000 + 1 = 50,257.",
+    "link": {
+      "title": "Language Models are Unsupervised Multitask Learners (GPT-2 paper)",
+      "url": "https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An embedding table `E` has shape `V × d`. What does the model do with token ID `i`?",
+    "options": [
+      {
+        "text": "Multiplies `i` by every column of `E` and sums the results",
+        "explanation": "The ID is a label, not a quantity. Multiplying by it would make token 50,000 'bigger' than token 5, which is meaningless."
+      },
+      {
+        "text": "Hashes `i` into `d` buckets",
+        "explanation": "That describes the hashing trick used in some classical models, not a learned embedding table."
+      },
+      {
+        "text": "Looks up a fixed, pre-computed vector that never changes during training",
+        "explanation": "The table is a learned parameter, updated by backpropagation like any other weight. Only in frozen setups is it fixed."
+      },
+      {
+        "text": "Takes row `i` of `E` as the token's vector, which is the same as multiplying a one-hot vector by `E`",
+        "explanation": "Correct. A one-hot vector with a 1 in position `i` times `E` selects row `i`; implementations just index the row because it is far cheaper."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Write token `i` as a one-hot vector of length `V`.\n2. `onehot @ E` keeps only row `i` (every other row is multiplied by 0).\n3. So the lookup is `E[i]`, a vector of length `d`.\n4. Gradients flow only into the rows that were used in a batch.",
+    "link": {
+      "title": "Word embedding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Word_embedding"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You train BPE on word counts `hug` ×10, `pug` ×5, `pun` ×12, `bun` ×4, `hugs` ×5, starting from characters. What are the first **two** merges?",
+    "options": [
+      {
+        "text": "`p u`, then `u n`",
+        "explanation": "`p u` appears in pug (5) and pun (12) = 17, which loses to `u g` at 20. Count every word containing the pair, weighted by frequency."
+      },
+      {
+        "text": "`u g`, then `u n`",
+        "explanation": "Correct. `u g` = 10 + 5 + 5 = 20 is the most frequent first pair; after merging it, `u n` = 12 + 4 = 16 is the top pair."
+      },
+      {
+        "text": "`u g`, then `h ug`",
+        "explanation": "`h ug` = 10 + 5 = 15 is the third merge. After merge 1, `u n` (16) is still more frequent."
+      },
+      {
+        "text": "`h u`, then `u g`",
+        "explanation": "`h u` = 15 is smaller than `u g` = 20. Remember `u g` occurs in hug, pug and hugs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Initial pair counts (weighted):\n\n```\nh u : hug 10 + hugs 5 = 15\nu g : 10 + pug 5 + 5  = 20\np u : pug 5 + pun 12  = 17\nu n : pun 12 + bun 4  = 16\ng s : hugs 5          = 5\nb u : bun 4           = 4\n```\n\nMerge 1 is `u g` → `ug`. Words become `h ug`, `p ug`, `p u n`, `b u n`, `h ug s`.\n\nRecount: `h ug` 15, `p ug` 5, `p u` 12, `u n` 16, `b u` 4, `ug s` 5. Merge 2 is `u n` → `un`.",
+    "link": {
+      "title": "Summary of the tokenizers — Hugging Face",
+      "url": "https://huggingface.co/docs/transformers/tokenizer_summary"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A model has a vocabulary of 32,000 tokens and width `d = 4096`. Its input embedding and output layer are **not** tied. How many parameters do those two matrices hold together?",
+    "options": [
+      {
+        "text": "131,072,000",
+        "explanation": "That is one matrix (32,000 × 4,096). Untied means the output layer has its own separate copy."
+      },
+      {
+        "text": "4,128,000",
+        "explanation": "Adds instead of multiplying (32,000 + 4,096 ≈ 36,096) or similar arithmetic slip. A matrix has rows × columns entries."
+      },
+      {
+        "text": "262,144,000",
+        "explanation": "Correct. Each matrix is 32,000 × 4,096 = 131,072,000, and untied means there are two of them."
+      },
+      {
+        "text": "524,288,000",
+        "explanation": "That counts four matrices. Only the input table and the output projection scale with the vocabulary."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Input table: `V × d` = 32,000 × 4,096 = 131,072,000.\n2. Output layer maps a `d`-vector to `V` logits: another 4,096 × 32,000 = 131,072,000.\n3. Untied → both exist: 262,144,000.\n4. This is Llama 2 7B's configuration, so about 3.9% of its 6.74 billion parameters are in these two matrices. Tying would save 131 million.",
+    "link": {
+      "title": "Llama 2: Open Foundation and Fine-Tuned Chat Models",
+      "url": "https://arxiv.org/abs/2307.09288"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "GPT-2's tokeniser splits `strawberry` into `st` `raw` `berry`. Why does this make \"how many r's are in strawberry?\" harder for a model than it looks?",
+    "options": [
+      {
+        "text": "The model never saw the word strawberry in training",
+        "explanation": "It almost certainly did. The issue is how the word reaches the model, not whether it is rare."
+      },
+      {
+        "text": "The model receives three opaque token IDs, not ten letters; it must have learned the spelling of each token indirectly",
+        "explanation": "Correct. Characters are not part of the input. The model can only count letters if it has learned which letters each token contains."
+      },
+      {
+        "text": "Tokenisers delete repeated letters to save space",
+        "explanation": "BPE is lossless: decoding the tokens gives back exactly `strawberry`. Nothing is deleted."
+      },
+      {
+        "text": "The letter r is a special token reserved for control signals",
+        "explanation": "No such reservation exists. `r` is an ordinary byte or character in the base vocabulary."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The model's input is three integers, e.g. 301, 1831, 8396.\n2. Each becomes an embedding vector; nothing in that vector is literally a list of characters.\n3. To count r's, the model must recall that `raw` has one r and `berry` has two, knowledge it may only have learned imperfectly.\n4. Splitting the word into separate letters (\"s t r a w ...\") in the prompt gives one token per letter and usually helps.",
+    "link": {
+      "title": "minbpe — Andrej Karpathy",
+      "url": "https://github.com/karpathy/minbpe"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about **byte-level BPE** are true? Select all that apply.",
+    "options": [
+      {
+        "text": "No input string can be out of vocabulary, because every string is a sequence of bytes and all 256 bytes are base tokens",
+        "explanation": "Correct. Unseen emoji or scripts fall back to their UTF-8 bytes."
+      },
+      {
+        "text": "A single Unicode character can be split across more than one token",
+        "explanation": "Correct. Characters outside ASCII take 2–4 bytes in UTF-8, and if those bytes were not merged, they appear as separate tokens. Decoding one such token alone gives an invalid partial character."
+      },
+      {
+        "text": "It guarantees every language uses the same number of tokens per word",
+        "explanation": "No. Merges are learned from the training corpus, so well-represented languages get long merged tokens and others fall back to many short ones."
+      },
+      {
+        "text": "Decoding the token sequence reproduces the original text exactly",
+        "explanation": "Correct. Merges are reversible concatenations of bytes, so encoding is lossless."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. The base vocabulary is all 256 byte values, so coverage is total (A true).\n2. `こんにちは` in GPT-2 becomes 6 tokens for 5 characters, and two of them are partial bytes of one character (B true).\n3. Merges reflect corpus frequencies; English got many long merges, so other languages need more tokens (C false).\n4. Each token is a byte string; concatenating them gives the original bytes (D true).",
+    "link": {
+      "title": "Summary of the tokenizers — Hugging Face",
+      "url": "https://huggingface.co/docs/transformers/tokenizer_summary"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two embedding vectors are `a = [1, 2, 2]` and `b = [2, 0, 1]`. What is their cosine similarity, to two decimal places?",
+    "options": [
+      {
+        "text": "4.00",
+        "explanation": "That is the raw dot product. Cosine divides by both vector lengths, so it always lies in [-1, 1]."
+      },
+      {
+        "text": "0.27",
+        "explanation": "Likely divided by 3 × 5 (squared norm of b instead of its norm). The denominator uses ‖b‖ = √5, not 5."
+      },
+      {
+        "text": "0.80",
+        "explanation": "Arithmetic slip; recheck the dot product: 1·2 + 2·0 + 2·1 = 4."
+      },
+      {
+        "text": "0.60",
+        "explanation": "Correct. Dot product 4, norms 3 and √5 ≈ 2.236, so 4 / 6.708 ≈ 0.596."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\na·b  = 1*2 + 2*0 + 2*1 = 4\n|a|  = sqrt(1 + 4 + 4)  = 3\n|b|  = sqrt(4 + 0 + 1)  = 2.236\ncos  = 4 / (3 * 2.236)  = 0.596\n```\n\nA value of about 0.6 means the vectors point in broadly similar directions. Cosine ignores length, which often reflects word frequency rather than meaning.",
+    "link": {
+      "title": "Word embedding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Word_embedding"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your app sends the prompt `\"The capital of France is \"` (note the trailing space) to a GPT-style model and the completions are oddly worse than without the space. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The model is penalised for whitespace by its loss function",
+        "explanation": "Training uses ordinary next-token cross-entropy; there is no whitespace penalty."
+      },
+      {
+        "text": "In training text the space is almost always attached to the next word (`␣Paris`), so a prompt ending in a bare space token is unusual and pushes the model towards less likely continuations",
+        "explanation": "Correct. The natural tokenisation is `...is` + `␣Paris`. Ending with a lone space forces the model to continue with a token that has no leading space, a rare pattern."
+      },
+      {
+        "text": "Trailing spaces exceed the context window",
+        "explanation": "One extra token is nowhere near any context limit."
+      },
+      {
+        "text": "The tokeniser strips the space, so the prompt is identical",
+        "explanation": "Byte-level BPE is lossless; the space becomes its own token. That is precisely the problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. GPT-2-style tokenisers attach a leading space to words: ` Paris` is one token.\n2. With the trailing space, the prompt ends with a standalone space token.\n3. The best next token is now `Paris` without a space, which rarely follows a space token in training data.\n4. Fix: strip trailing whitespace from prompts, or let the model produce the space as part of its first token. This is sometimes called a token-boundary artefact.",
+    "link": {
+      "title": "minbpe — Andrej Karpathy",
+      "url": "https://github.com/karpathy/minbpe"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are designing a tokeniser for a model with `d = 4096` and tied embeddings, and consider growing the vocabulary from 50,000 to 100,000 tokens. Which effects should you expect? Select all that apply.",
+    "options": [
+      {
+        "text": "The embedding table grows by 204,800,000 parameters",
+        "explanation": "Correct. 50,000 extra rows × 4,096 columns = 204,800,000. Tied, so the output layer shares them."
+      },
+      {
+        "text": "Typical sequences get shorter, so more text fits in the same context window and attention costs less per document",
+        "explanation": "Correct. More merges mean longer average tokens, so fewer tokens per document."
+      },
+      {
+        "text": "Each individual token gets more training examples, so rare tokens are better learned",
+        "explanation": "The reverse: the same corpus is spread over more token types, so the rarest tokens are seen less often and are learned worse."
+      },
+      {
+        "text": "The softmax over the output vocabulary at every step becomes more expensive",
+        "explanation": "Correct. Computing logits for 100,000 tokens costs twice as much as for 50,000, at every generated token."
+      },
+      {
+        "text": "Out-of-vocabulary errors disappear, which they did not with 50,000",
+        "explanation": "A byte-level tokeniser already has no out-of-vocabulary inputs at any size. A larger vocabulary changes efficiency, not coverage."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Parameters: extra rows × d = 50,000 × 4,096 = 204,800,000 (≈ 0.2 B).\n2. Sequence length: more merges → longer tokens → fewer per document. Good for context and attention cost.\n3. Output cost: the final projection is `d × V`, so per-token logit cost doubles.\n4. Data per token: a fixed corpus is spread over more types, so rare tokens get fewer updates (and glitch-token risk rises).\n5. Coverage was already total with byte-level BPE.",
+    "link": {
+      "title": "Summary of the tokenizers — Hugging Face",
+      "url": "https://huggingface.co/docs/transformers/tokenizer_summary"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A prompt containing an unusual token makes a model produce garbled, unrelated output, while the same idea phrased differently works. The token was common on one website scraped for the **tokeniser's** training set, but that website was filtered out of the **model's** training set. What explains this?",
+    "options": [
+      {
+        "text": "The token's embedding row was almost never updated during model training, so it is close to its random initialisation and pushes the model into untrained territory",
+        "explanation": "Correct. This is the glitch-token mechanism: the tokeniser created the token, but the model rarely or never saw it, so its embedding carries no learned meaning."
+      },
+      {
+        "text": "The token is longer than the model's maximum token length",
+        "explanation": "There is no per-token length limit at inference; each token is one ID regardless of how many bytes it covers."
+      },
+      {
+        "text": "Tokenisers deliberately reserve such tokens as jailbreak triggers",
+        "explanation": "No tokeniser does this intentionally. The behaviour is an accident of mismatched training data."
+      },
+      {
+        "text": "The embedding table overflows when it sees a rare ID",
+        "explanation": "Any ID below `V` is a valid row lookup. Nothing overflows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A row of `E` changes only when its token appears in a training batch.\n2. If the token is (nearly) absent from model training data, its row stays near random.\n3. A random vector fed into the network is unlike anything the layers learned to handle, so outputs become erratic.\n4. ` SolidGoldMagikarp` in GPT-2/GPT-3-era vocabularies is the best-known example. Fixes: train the tokeniser on the same data distribution, or prune never-seen tokens.",
+    "link": {
+      "title": "Word embedding — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Word_embedding"
+    }
+  },
+  {
+    "id": "llm-embeddings-tokenisation-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Roughly how many tokens would 3,000 words of ordinary English prose be with a GPT-style tokeniser?",
+    "options": [
+      {
+        "text": "About 750",
+        "explanation": "Inverts the ratio: a token is about three-quarters of a word, so there are *more* tokens than words."
+      },
+      {
+        "text": "About 15,000",
+        "explanation": "That is close to the character count (≈ 5 characters per word including spaces). Tokens are about four characters, not one."
+      },
+      {
+        "text": "Exactly 3,000",
+        "explanation": "Subword tokenisers split many words, and punctuation is usually separate, so the token count exceeds the word count."
+      },
+      {
+        "text": "About 4,000",
+        "explanation": "Correct. At roughly 0.75 words per token, 3,000 / 0.75 ≈ 4,000 tokens."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rule of thumb: 1 token ≈ 4 characters ≈ 0.75 English words.\n2. 3,000 words / 0.75 ≈ 4,000 tokens.\n3. Cross-check via characters: 3,000 × ~5.5 ≈ 16,500 characters / 4 ≈ 4,100 tokens.\n4. This is approximate; code, numbers or other languages can need many more. Use the real tokeniser for billing or context-limit decisions.",
+    "link": {
+      "title": "Summary of the tokenizers — Hugging Face",
+      "url": "https://huggingface.co/docs/transformers/tokenizer_summary"
+    }
+  }
+]

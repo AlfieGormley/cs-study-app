@@ -31,6 +31,13 @@ Wide diagrams scroll within their panel; Expand provides a larger view with zoom
 Run `node --test scripts/test-renderer.mjs scripts/test-diagrams.mjs` to check example escaping, source preservation and safe
 rendering inside quiz choices, diagram topology and all generated diagram definitions. See `CONTENT_SPEC.md` for diagram and sequential-flow authoring.
 
+## Live app
+
+**https://alfiegormley.github.io/cs-study-app/** is hosted on GitHub Pages from the `main` branch.
+
+To publish changes: `node scripts/build.mjs`, then commit (including `data/` and `assets.js`) and `git push`.
+Pages redeploys in a minute or two, and installed copies update the next time they're opened online.
+
 ## Put it on your iPhone
 
 1. Host the folder somewhere served over HTTPS (GitHub Pages works: Settings → Pages → deploy from branch).

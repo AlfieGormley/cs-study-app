@@ -29,6 +29,10 @@ test('noninteractive content never gains dictionary buttons', () => {
   assert.match(render(source), /data-term="redis"/);
 });
 
+test('subject terms win inside their subject; short aliases never leak to other subjects', async () => {
+  const { exactTerm: find } = await import('../glossary.js');
+  for (const e of glossary.filter((x) => x.subject)) assert.equal(find(e.term, e.subject)?.id, e.id);
+});
 test('short aliases are scoped to their subject; acronyms match exact case', async () => {
   const { isScoped, aliasKey } = await import('../glossary-rules.js');
   const t = { subject: 'synth' };

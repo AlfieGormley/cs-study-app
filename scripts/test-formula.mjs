@@ -35,3 +35,8 @@ test('glossary terms link once per section', () => {
   const html = render('## A\n\nRedis and Redis.\n\nRedis again.\n\n## B\n\nRedis.');
   assert.equal((html.match(/data-term="redis"/g) || []).length, 2);
 });
+
+test('ordered lists resume their numbering after a block', () => {
+  assert.match(render('4. four\n5. five'), /<ol start="4">/);
+  assert.doesNotMatch(render('1. one\n2. two'), /start=/);
+});

@@ -11,7 +11,7 @@ import { compileCatalogue } from './diagram-compiler.mjs';
 import { checkVerification, lessonHash, readGlossary } from './verification.mjs';
 import { checkFormula } from '../formula.js';
 import { glossary as coreGlossary } from '../glossary-data.js';
-import { aliasKey, isScoped } from '../glossary-rules.js';
+import { aliasKey } from '../glossary-rules.js';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const contentDir = path.join(root, 'content');
@@ -193,17 +193,19 @@ for (const subjectName of dirs(contentDir)) {
 index.subjects.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
 // Glossary: core terms (glossary-data.js) plus every module's verified glossary.json.
-// Ids and aliases must be unique app-wide, or a word could open the wrong definition. Modules are visited in
-// curriculum order, so when two modules define the same word the earlier one keeps it: a later entry whose
-// id or term is taken is skipped, and a clashing alias is dropped from the later entry. Both are reported.
+// Ids are unique app-wide. Aliases are unique within a subject and must not repeat a core term (see
+// glossary-rules.js for how lookups work across subjects). Modules are visited in curriculum order, so when two
+// modules in one subject define the same word the earlier one keeps it: a later entry whose id or term is taken is
+// skipped, and a clashing alias is dropped from the later entry. Both are reported.
 const glossaryTerms = [];
 const glossaryClashes = [];
 {
   const ids = new Map(coreGlossary.map((e) => [e.id, 'glossary-data.js']));
-  // Same namespaces as glossary.js: app-wide aliases, plus per-subject ones for short aliases (glossary-rules.js).
-  const nameKey = (t, a) => (isScoped(t, a) ? t.subject + ':' : '') + aliasKey(a);
-  const names = new Map(coreGlossary.flatMap((e) => [e.term, ...e.aliases].map((a) => [aliasKey(a), `${e.id} (glossary-data.js)`])));
-  const taken = (t, a) => names.get(nameKey(t, a)) ?? (isScoped(t, a) ? names.get(aliasKey(a)) : undefined);
+  // Same namespaces as glossary.js: core aliases everywhere, module aliases per subject.
+  const nameKey = (t, a) => t.subject + ':' + aliasKey(a);
+  const coreNames = new Map(coreGlossary.flatMap((e) => [e.term, ...e.aliases].map((a) => [aliasKey(a), `${e.id} (glossary-data.js)`])));
+  const names = new Map();
+  const taken = (t, a) => coreNames.get(aliasKey(a)) ?? names.get(nameKey(t, a));
   const order = new Map(index.subjects.flatMap((sub, si) => sub.modules.map((m, mi) => [`${sub.id}/${m.id}`, si * 1000 + mi])));
   moduleTerms.sort((a, b) => (order.get(a.key) ?? 1e9) - (order.get(b.key) ?? 1e9));
   for (const { t: raw, file, category, subjectId } of moduleTerms) {

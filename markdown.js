@@ -32,15 +32,16 @@ function renderList(lines, options) {
   // lines: [{indent, ordered, text}]
   let html = '';
   const stack = []; // {indent, tag}
-  const open = (indent, ordered) => {
+  // An ordered list that resumes after a formula block or code keeps its numbering ("4." starts at 4).
+  const open = (indent, ordered, start = 1) => {
     const tag = ordered ? 'ol' : 'ul';
     stack.push({ indent, tag });
-    html += `<${tag}><li>`;
+    html += `<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}><li>`;
   };
   for (const item of lines) {
     const top = stack[stack.length - 1];
-    if (!top) open(item.indent, item.ordered);
-    else if (item.indent > top.indent) open(item.indent, item.ordered);
+    if (!top) open(item.indent, item.ordered, item.start);
+    else if (item.indent > top.indent) open(item.indent, item.ordered, item.start);
     else {
       while (stack.length > 1 && item.indent < stack[stack.length - 1].indent) {
         html += `</li></${stack.pop().tag}>`;
@@ -144,7 +145,7 @@ export function render(md, options = {}) {
       while (i < lines.length) {
         const m = lines[i].match(LIST_RE);
         if (m) {
-          items.push({ indent: m[1].replace(/\t/g, '  ').length, ordered: /\d/.test(m[2]), text: m[3] });
+          items.push({ indent: m[1].replace(/\t/g, '  ').length, ordered: /\d/.test(m[2]), start: parseInt(m[2], 10) || 1, text: m[3] });
           i++;
         } else if (/^\s{2,}\S/.test(lines[i]) && items.length) {
           items[items.length - 1].text += ' ' + lines[i].trim(); // continuation line

@@ -7,35 +7,38 @@ export const glossary = [...core, ...moduleTerms];
 const esc = (text) => String(text).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const regexEscape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const byId = new Map();
-const global = new Map();          // alias key -> { entry }
-const bySubject = new Map();       // subject id -> Map(alias key -> { entry })
+const coreMap = new Map();         // alias key -> { entry, alias }: core terms, every subject
+const bySubject = new Map();       // subject id -> Map(alias key -> { entry, alias })
+const fallback = new Map();        // longer module aliases, first in curriculum order, for other subjects
 for (const entry of glossary) {
   if (!/^[a-z0-9-]+$/.test(entry.id) || byId.has(entry.id) || !entry.term || !entry.definition || !entry.category) throw new Error('Invalid glossary entry: ' + entry.id);
   if (entry.source && !/^https:\/\//.test(entry.source)) throw new Error('Invalid glossary source: ' + entry.id);
   byId.set(entry.id, entry);
   for (const alias of [entry.term, ...entry.aliases]) {
-    const map = isScoped(entry, alias) ? (bySubject.get(entry.subject) ?? bySubject.set(entry.subject, new Map()).get(entry.subject)) : global;
     const key = aliasKey(alias);
+    const map = entry.subject ? (bySubject.get(entry.subject) ?? bySubject.set(entry.subject, new Map()).get(entry.subject)) : coreMap;
     if (map.has(key) && map.get(key).entry.id !== entry.id) throw new Error('Ambiguous glossary alias: ' + alias);
     map.set(key, { entry, alias });
+    if (entry.subject && !isScoped(entry, alias) && !fallback.has(key)) fallback.set(key, { entry, alias });
   }
 }
-// One matcher per subject: every app-wide alias plus that subject's scoped ones, longest first.
+const lookups = (subject) => [bySubject.get(subject), coreMap, fallback].filter(Boolean);
+// One matcher per subject, longest alias first.
 const patterns = new Map();
 const patternFor = (subject = '') => {
   if (!patterns.has(subject)) {
-    const words = [...new Set([...global.values(), ...(bySubject.get(subject)?.values() ?? [])].map((m) => m.alias.toLowerCase()))];
+    const words = [...new Set(lookups(subject).flatMap((m) => [...m.values()].map((v) => v.alias.toLowerCase())))];
     patterns.set(subject, new RegExp(`(?<![\\p{L}\\p{N}_])(?:${words.sort((a,b)=>b.length-a.length).map(regexEscape).join('|')})(?![\\p{L}\\p{N}_])`, 'giu'));
   }
   return patterns.get(subject);
 };
 export const getTerm = (id) => byId.get(id);
 export function exactTerm(text, subject = '') {
-  const scoped = bySubject.get(subject);
-  for (const key of ['=' + text, text.toLowerCase()]) {
-    const match = scoped?.get(key) ?? global.get(key);
-    if (match) return match.entry;
-  }
+  for (const map of lookups(subject))
+    for (const key of ['=' + text, text.toLowerCase()]) {
+      const match = map.get(key);
+      if (match) return match.entry;
+    }
   return null;
 }
 const termButton = (entry, label) => `<button type="button" class="technical-term" data-term="${entry.id}" aria-haspopup="dialog" aria-expanded="false" aria-controls="term-popover" aria-label="Define ${esc(entry.term)}">${label}</button>`;

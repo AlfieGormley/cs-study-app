@@ -37,11 +37,17 @@ Read first, and follow exactly:
   handful.
 - `node scripts/glossary-coverage.mjs <module-dir>` is the minimum list. Everything it prints must end up either
   defined or listed as skipped, with the reason.
-- Before adding a term, check whether it already exists in `glossary-data.js` or in another module's
-  `glossary.json`:
-  `grep -ril '"<term>"' content/*/*/glossary.json glossary-data.js`
-  If it does, don't duplicate it; it links everywhere already. If another module is writing the same term at the
-  same moment, that's fine: the build keeps the earlier module's entry.
+- **How lookups work** (`glossary-rules.js`):
+  - Inside a subject, that subject's terms win, then the core terms in `glossary-data.js`.
+  - Only **multi-word or hyphenated** aliases from other subjects act as a fallback. Single words, acronyms and
+    short aliases never cross subjects.
+- So, before adding a term:
+  - Check your **own subject's** earlier modules and `glossary-data.js`
+    (`grep -ril '"<term>"' content/<subject>/*/glossary.json glossary-data.js`), and reuse what is there.
+  - Define your own entry for any single word or acronym you need, even if another subject has one.
+  - Ids must be unique app-wide, so add a short prefix if an id is taken.
+  - If an earlier module in your subject is writing the same term at the same moment, that's fine: the build keeps
+    the earlier module's entry.
 - Source specific facts in definitions from primary or authoritative sources.
 
 ## Finish

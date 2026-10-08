@@ -217,7 +217,14 @@ const glossaryClashes = [];
     if (t.aliases !== undefined && !(Array.isArray(t.aliases) && t.aliases.every((a) => typeof a === 'string' && a.trim()))) err(file, `glossary term ${at}: aliases must be an array of strings`);
     if (t.source !== undefined && !/^https:\/\/\S+$/.test(t.source)) err(file, `glossary term ${at}: source must be an https URL`);
     if (typeof t.term !== 'string') continue;
-    if (ids.has(t.id)) { glossaryClashes.push(`${rel}: skipped ${t.id} (id already used in ${ids.get(t.id)})`); continue; }
+    // Ids are global (they appear in the page markup). A different subject reusing an id keeps its own entry under
+    // a subject-prefixed id; a duplicate inside one subject is skipped in favour of the earlier module.
+    if (ids.has(t.id)) {
+      const owner = ids.get(t.id);
+      const sameSubject = owner.startsWith(`content/${rel.split('/')[1]}/`);
+      if (sameSubject || ids.has(`${t.subject}--${t.id}`)) { glossaryClashes.push(`${rel}: skipped ${t.id} (id already used in ${owner})`); continue; }
+      t.id = `${t.subject}--${t.id}`;
+    }
     if (taken(t, t.term)) { glossaryClashes.push(`${rel}: skipped ${t.id} ("${t.term}" is already ${taken(t, t.term)})`); continue; }
     ids.set(t.id, rel);
     const aliases = [];

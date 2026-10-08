@@ -45,7 +45,7 @@ Read first, and follow exactly:
   - Check your **own subject's** earlier modules and `glossary-data.js`
     (`grep -ril '"<term>"' content/<subject>/*/glossary.json glossary-data.js`), and reuse what is there.
   - Define your own entry for any single word or acronym you need, even if another subject has one.
-  - Ids must be unique app-wide, so add a short prefix if an id is taken.
+  - Ids only need to be unique within your subject: the build renames a clash with another subject automatically.
   - If an earlier module in your subject is writing the same term at the same moment, that's fine: the build keeps
     the earlier module's entry.
 - Source specific facts in definitions from primary or authoritative sources.

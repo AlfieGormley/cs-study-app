@@ -113,6 +113,13 @@ Single words link only inside their own subject. Even so:
 - **Accurate and sourced.** No invented figures. Hedge anything approximate ("about", "typically").
 - British English.
 
+## Check what actually links
+
+`node scripts/glossary-links.mjs content/<subject>/<module>` lists every word that links and the definition it
+opens, with the owning module. Lines marked `!` are single words defined in another module. Skim them for wrong
+senses: an alias like "from", "size" or "follower" in one module can capture ordinary words in every lesson of
+the subject.
+
 ## Clashes between modules
 
 Ids must be unique app-wide; aliases must be unique within their scope (see above).

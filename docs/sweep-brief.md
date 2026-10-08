@@ -50,6 +50,10 @@ Read first, and follow exactly:
     the earlier module's entry.
 - Source specific facts in definitions from primary or authoritative sources.
 
+- `node scripts/glossary-links.mjs <module-dir>` lists every word that will link and the definition it opens. Skim
+  it, especially the lines marked `!` (`--suspect` shows only those), and fix any word that opens the wrong sense,
+  by narrowing the alias or rewording the lesson.
+
 ## Finish
 
 - `node scripts/build.mjs --check <module-dir>` must pass apart from the verification errors ("changed after it

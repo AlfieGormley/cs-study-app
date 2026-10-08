@@ -34,6 +34,9 @@ The author's report is in your task. Check its low-confidence items first.
 3. **Glossary**: check every definition against a primary or authoritative source (fetched, not remembered).
    Aliases must not capture ordinary English words or a different meaning used elsewhere in the app. Fix in place.
 
+4. **Wrong-sense links**: run `node scripts/glossary-links.mjs <module-dir> --suspect` and check that each
+   flagged word means the same thing here as in its definition. Fix wrong ones by narrowing aliases or rewording.
+
 ## Record and stamp
 
 Update `<module-dir>/verification.json` and keep everything already in it:

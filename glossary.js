@@ -1,5 +1,7 @@
-import { glossary } from './glossary-data.js';
-export { glossary };
+import { glossary as core } from './glossary-data.js';
+import moduleTerms from './glossary-terms.js';
+// Core terms plus the verified per-module terms the build collects from content/**/glossary.json.
+export const glossary = [...core, ...moduleTerms];
 
 const esc = (text) => String(text).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const regexEscape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -25,14 +27,16 @@ const termButton = (entry, label) => `<button type="button" class="technical-ter
 
 // Called only on escaped, known-tag inline HTML from our Markdown renderer.
 // Protected tags keep URLs, existing controls and executable examples intact.
-export function linkTerms(html, { interactive = true, terms = true } = {}) {
+// With a `seen` set, each term is linked only the first time it appears.
+export function linkTerms(html, { interactive = true, terms = true, seen = null } = {}) {
   if (!interactive || !terms) return html;
+  const first = (entry) => !seen || (!seen.has(entry.id) && seen.add(entry.id));
   let protectedDepth = 0;
   const parts = html.split(/(<[^>]*>)/g);
   return parts.map((part, index) => {
     if (!protectedDepth && part === '<code>' && parts[index+2] === '</code>') {
       const entry = exactTerm(parts[index+1]);
-      if (entry) {
+      if (entry && first(entry)) {
         const label = `<code>${parts[index+1]}</code>`;
         parts[index+1] = ''; parts[index+2] = '';
         return termButton(entry, label);
@@ -46,7 +50,7 @@ export function linkTerms(html, { interactive = true, terms = true } = {}) {
     if (protectedDepth) return part;
     return part.replace(pattern, (match) => {
       const entry = exactTerm(match);
-      return entry ? termButton(entry, match) : match;
+      return entry && first(entry) ? termButton(entry, match) : match;
     });
   }).join('');
 }

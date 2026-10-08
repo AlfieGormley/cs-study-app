@@ -170,12 +170,16 @@ Other authors work at the same time. Put any temporary files in your own folder
 
 ## Technical terms
 
-The renderer automatically links known terms in prose, including exact term names
-in inline code. Add definitions to `glossary-data.js` using a unique stable ID, term,
-category, short plain-language definition and explicit aliases. An example and an
-HTTPS documentation URL are optional. No special lesson markup is required.
+Follow `.claude/skills/glossary-terms/SKILL.md`. Every module has a `glossary.json` with an entry for every
+acronym, bolded term, unit and piece of jargon a beginner might not know. **Too many is better than too few.**
+The renderer links each known term (and its aliases) the first time it appears in each section, including exact
+term names in inline code. No lesson markup is needed. Short uppercase acronyms are case-sensitive, longer phrases
+take priority, and matching respects word boundaries. Existing links, fenced code, diagram labels and quiz answer
+buttons are not annotated. Don't add terms to `glossary-data.js`; it is the frozen core list.
 
-Prefer unambiguous aliases: short uppercase acronyms are case-sensitive, longer
-phrases take priority, and matching respects word boundaries. Do not add ordinary
-words such as “tries” as aliases for specialised terms. Existing links, fenced code,
-diagram labels and quiz answer buttons are not annotated.
+## Formulas
+
+Follow `.claude/skills/writing-formulas/SKILL.md`. Every equation goes in a fenced `formula` block: equation lines,
+a `where` line, a `symbol: meaning` line for **every** symbol, unit and function used, then `In words: ...`. The
+build rejects undefined symbols and missing "In words" lines. Equation lines obey the 44/40 character limits;
+definitions wrap freely.

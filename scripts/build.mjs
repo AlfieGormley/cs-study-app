@@ -8,7 +8,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { plainText } from '../markdown.js';
 import { compileCatalogue } from './diagram-compiler.mjs';
-import { checkVerification, lessonHash } from './verification.mjs';
+import { checkVerification, lessonHash, readGlossary } from './verification.mjs';
+import { checkFormula } from '../formula.js';
+import { glossary as coreGlossary } from '../glossary-data.js';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const contentDir = path.join(root, 'content');
@@ -46,7 +48,11 @@ function parseLesson(file) {
 }
 
 // Lines inside fenced code blocks; diagrams must fit a phone screen.
-const codeLines = (text) => [...String(text ?? '').matchAll(/```[^\n]*\n([\s\S]*?)```/g)].flatMap((m) => m[1].split('\n'));
+// In formula blocks only the equation lines count; the "where" definitions are prose and wrap.
+const fences = (text) => [...String(text ?? '').matchAll(/```([^\n]*)\n([\s\S]*?)```/g)].map((m) => ({ lang: m[1].trim().toLowerCase(), body: m[2] }));
+const codeLines = (text) => fences(text).flatMap(({ lang, body }) =>
+  (lang === 'formula' ? body.split(/^\s*where:?\s*$/im)[0] : body).split('\n'));
+const formulaProblems = (text) => fences(text).filter((f) => f.lang === 'formula').flatMap((f) => checkFormula(f.body));
 const tooWide = (text, max) => codeLines(text).filter((l) => [...l].length > max);
 
 const isUrl = (u) => typeof u === 'string' && /^https?:\/\/\S+$/.test(u);
@@ -74,6 +80,7 @@ function validateQuestion(q, file, ids) {
     err(file, `${at}: multi answer must be a non-empty array of indices`);
   if (!q.workedExample) err(file, `${at}: missing workedExample`);
   const texts = [q.prompt, q.workedExample, ...(q.options ?? []).flatMap((o) => [o?.text, o?.explanation])];
+  for (const problem of texts.flatMap(formulaProblems)) err(file, `${at}: ${problem}`);
   const wide = texts.flatMap((t) => tooWide(t, 40));
   if (wide.length) err(file, `${at}: ${wide.length} code line(s) wider than 40 chars, e.g. "${wide[0]}"`);
   if (!q.link?.title || !isUrl(q.link?.url)) err(file, `${at}: link needs title and http(s) url`);
@@ -90,6 +97,7 @@ const verificationLegacy = fs.existsSync(legacyFile) ? readJson(legacyFile) ?? {
 let legacyCount = 0;
 
 const index = { subjects: [] };
+const moduleTerms = []; // glossary terms from content/<subject>/<module>/glossary.json
 const outputs = {}; // relative path -> object
 
 for (const subjectName of dirs(contentDir)) {
@@ -135,6 +143,7 @@ for (const subjectName of dirs(contentDir)) {
       if (!LEVELS.includes(meta.level)) err(mdFile, `bad level "${meta.level}"`);
       if (!meta.minutes) err(mdFile, 'missing minutes');
       if (!meta.summary) err(mdFile, 'missing summary');
+      for (const problem of formulaProblems(body)) err(mdFile, problem);
       const wideL = tooWide(body, 44);
       if (wideL.length) err(mdFile, `${wideL.length} code line(s) wider than 44 chars, e.g. "${wideL[0]}"`);
       if (!/^## Key takeaways/m.test(body)) err(mdFile, 'missing "## Key takeaways"');
@@ -169,6 +178,11 @@ for (const subjectName of dirs(contentDir)) {
       for (const problem of checkVerification(modulePath, mod)) err(modulePath, problem);
     }
 
+    try {
+      for (const t of readGlossary(modulePath)) moduleTerms.push({ t, file: path.join(modulePath, 'glossary.json'), category: subject.title, key: `${subject.id}/${mod.id}` });
+    } catch (e) {
+      err(path.join(modulePath, 'glossary.json'), `invalid JSON (${e.message})`);
+    }
     subjectEntry.modules.push(entry);
     outputs[`data/${subject.id}/${mod.id}.json`] = full;
   }
@@ -176,6 +190,40 @@ for (const subjectName of dirs(contentDir)) {
   if (subjectEntry.modules.length) index.subjects.push(subjectEntry); // hide subjects with no content yet
 }
 index.subjects.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+// Glossary: core terms (glossary-data.js) plus every module's verified glossary.json.
+// Ids and aliases must be unique app-wide, or a word could open the wrong definition. Modules are visited in
+// curriculum order, so when two modules define the same word the earlier one keeps it: a later entry whose
+// id or term is taken is skipped, and a clashing alias is dropped from the later entry. Both are reported.
+const glossaryTerms = [];
+const glossaryClashes = [];
+{
+  const ids = new Map(coreGlossary.map((e) => [e.id, 'glossary-data.js']));
+  const names = new Map(coreGlossary.flatMap((e) => [e.term, ...e.aliases].map((a) => [a.toLowerCase(), `${e.id} (glossary-data.js)`])));
+  const order = new Map(index.subjects.flatMap((sub, si) => sub.modules.map((m, mi) => [`${sub.id}/${m.id}`, si * 1000 + mi])));
+  moduleTerms.sort((a, b) => (order.get(a.key) ?? 1e9) - (order.get(b.key) ?? 1e9));
+  for (const { t, file, category } of moduleTerms) {
+    const at = t?.id ?? '(no id)';
+    const rel = path.relative(root, file);
+    if (!t || !/^[a-z0-9-]+$/.test(t.id ?? '')) { err(file, `glossary term ${at}: id must be lowercase-kebab-case`); continue; }
+    for (const k of ['term', 'definition']) if (typeof t[k] !== 'string' || !t[k].trim()) err(file, `glossary term ${at}: missing ${k}`);
+    if (t.aliases !== undefined && !(Array.isArray(t.aliases) && t.aliases.every((a) => typeof a === 'string' && a.trim()))) err(file, `glossary term ${at}: aliases must be an array of strings`);
+    if (t.source !== undefined && !/^https:\/\/\S+$/.test(t.source)) err(file, `glossary term ${at}: source must be an https URL`);
+    if (typeof t.term !== 'string') continue;
+    if (ids.has(t.id)) { glossaryClashes.push(`${rel}: skipped ${t.id} (id already used in ${ids.get(t.id)})`); continue; }
+    if (names.has(t.term.toLowerCase())) { glossaryClashes.push(`${rel}: skipped ${t.id} ("${t.term}" is already ${names.get(t.term.toLowerCase())})`); continue; }
+    ids.set(t.id, rel);
+    const aliases = [];
+    for (const a of [t.term, ...(t.aliases ?? [])]) {
+      const key = String(a).toLowerCase();
+      if (names.has(key)) { if (names.get(key) !== `${t.id} (${rel})`) glossaryClashes.push(`${rel}: dropped alias "${a}" of ${t.id} (already ${names.get(key)})`); continue; }
+      names.set(key, `${t.id} (${rel})`);
+      if (a !== t.term) aliases.push(a);
+    }
+    glossaryTerms.push({ id: t.id, term: t.term, category: t.category || category, definition: t.definition,
+      aliases, ...(t.example ? { example: t.example } : {}), ...(t.source ? { source: t.source } : {}) });
+  }
+}
 
 if (onlyPath) {
   const prefix = path.relative(root, path.resolve(onlyPath));
@@ -199,6 +247,9 @@ if (!diagramOverrides) process.exit(1);
 const { catalogue: diagramCatalogue, report: diagramReport } = compileCatalogue(outputs, diagramOverrides);
 console.log(`✓ diagrams: ${diagramReport.unique} definitions, ${diagramReport.occurrences} appearances`);
 if (checkOnly) process.exit(0);
+fs.writeFileSync(path.join(root, 'glossary-terms.js'), '// Generated by scripts/build.mjs from content/**/glossary.json. Do not edit.\nexport default ' + JSON.stringify(glossaryTerms) + ';\n');
+console.log(`✓ glossary: ${coreGlossary.length} core + ${glossaryTerms.length} module terms`);
+if (glossaryClashes.length) console.log(`! glossary: ${glossaryClashes.length} duplicate(s) resolved in favour of the earlier module${process.argv.includes('--clashes') ? ':\n  ' + glossaryClashes.join('\n  ') : ' (run with --clashes to list)'}`);
 fs.writeFileSync(path.join(root, 'diagram-catalog.js'), '// Generated by scripts/build.mjs. Do not edit.\nexport default ' + JSON.stringify(diagramCatalogue) + ';\n');
 fs.writeFileSync(path.join(root, 'docs/diagram-migration.json'), JSON.stringify(diagramReport, null, 2) + '\n');
 
@@ -228,7 +279,7 @@ for (const [rel, obj] of Object.entries(outputs)) {
 }
 
 // App shell + data files for the service worker to precache.
-const shell = ['./', 'index.html', 'styles.css', 'app.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
+const shell = ['./', 'index.html', 'styles.css', 'app.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 for (const f of shell.slice(1)) {
   const p = path.join(root, f);

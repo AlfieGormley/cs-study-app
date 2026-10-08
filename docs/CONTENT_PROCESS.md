@@ -25,6 +25,9 @@ anything that couldn't be checked is either removed, hedged in the text, or reco
 - Every module is written by its own sub-agent, briefed with `docs/new-module.md`, the subject brief and
   `CONTENT_SPEC.md`.
 - Authors must:
+  - follow the two writing skills: `.claude/skills/writing-formulas/SKILL.md` (every symbol in every formula
+    explained) and `.claude/skills/glossary-terms/SKILL.md` (a glossary entry for every term a beginner might not
+    know; too many is better than too few)
   - source every specific number, formula, standard or product fact from a primary or authoritative source
   - run every code snippet and confirm stated outputs
   - verify every link
@@ -44,6 +47,7 @@ anything that couldn't be checked is either removed, hedged in the text, or reco
   - recomputes all maths
   - runs all code
   - checks every answer key and distractor
+  - checks every formula block (definitions, units, "In words") and every glossary definition and alias
   - checks that every link loads and supports its claim
 - The verifier fixes problems in place:
   - corrects errors
@@ -70,7 +74,9 @@ The verifier writes `content/<subject>/<module>/verification.json` and then runs
                       "reason": "why it isn't high" }],
   "gaps":    ["topics thin or missing vs the scope"],
   "lessons": { "<lesson id>": { "confidence": "high|medium|low",
-                                "hash": "<written by stamp>" } }
+                                "hash": "<written by stamp>" } },
+  "glossary": { "<term id>": { "confidence": "high|medium|low",
+                               "hash": "<written by stamp>" } }
 }
 ```
 
@@ -81,13 +87,17 @@ The verifier writes `content/<subject>/<module>/verification.json` and then runs
 - `low`: important claims couldn't be verified. Fix the lesson before it ships if you can; otherwise tell the user
   explicitly.
 
-Only stamp after a genuine verification pass. Stamping records the lesson files' hashes; any later edit
-invalidates them.
+`glossary` lists every term in the module's `glossary.json` (omit it, or leave it empty, when the module has none).
+
+Only stamp after a genuine verification pass. Stamping records the hashes of the lesson files and of each glossary
+term; any later edit invalidates them.
 
 ## 5. Integrate and check
 
 Run all of these before reporting:
 - `node scripts/build.mjs`: the whole project must pass, including the verification checks.
+- `node scripts/lint-formulas.mjs content/<subject>/<module>`: every hit converted or justified.
+- `node scripts/glossary-coverage.mjs content/<subject>/<module>`: every candidate covered or justified.
 - `node scripts/check-links.mjs content/<subject>`: 0 failing. Re-check rate-limited URLs slowly by hand.
 - `node scripts/test-*.mjs`: all pass.
 - Render the new pages at iPhone size (390 px) and check there are no errors, no horizontal overflow and no stray
@@ -96,7 +106,7 @@ Run all of these before reporting:
 ## 6. Report back to the user
 
 Always include:
-- A per-module table: lessons, questions, claims checked, errors corrected.
+- A per-module table: lessons, questions, formula blocks, glossary terms, claims checked, errors corrected.
 - The significant corrections, especially any that would have mattered in practice.
 - **Gaps**: topics from the scope covered thinly or not at all.
 - **Low-confidence areas**, with their confidence score and reason, plus anything time-sensitive the user should
@@ -123,7 +133,8 @@ that lesson, record it under "Skipped lessons" in `docs/RESUME.md`, and tell the
 - a module has no `verification.json`;
 - the record is incomplete or `verifier.independent` isn't `true`;
 - a lesson isn't covered by the record;
-- a lesson's files changed after it was stamped.
+- a lesson's files or a glossary term changed after it was stamped;
+- a formula block leaves a symbol undefined or has no "In words:" line.
 
 Modules written before this procedure existed are listed in `content/verification-legacy.json`:
 - The list is **frozen**. Never add entries to it.

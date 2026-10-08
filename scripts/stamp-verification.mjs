@@ -4,7 +4,7 @@
 //   node scripts/stamp-verification.mjs content/<subject>/<module-dir>
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkVerification, lessonHash } from './verification.mjs';
+import { checkVerification, lessonHash, readGlossary, termHash } from './verification.mjs';
 
 const dir = process.argv[2];
 if (!dir) {
@@ -21,5 +21,7 @@ if (problems.length) {
 const file = path.join(modulePath, 'verification.json');
 const v = JSON.parse(fs.readFileSync(file, 'utf8'));
 for (const id of mod.lessons) v.lessons[id].hash = lessonHash(modulePath, id);
+const terms = readGlossary(modulePath);
+for (const t of terms) v.glossary[t.id].hash = termHash(t);
 fs.writeFileSync(file, JSON.stringify(v, null, 2) + '\n');
-console.log(`✓ stamped ${mod.lessons.length} lesson(s) in ${path.relative(process.cwd(), file)}`);
+console.log(`✓ stamped ${mod.lessons.length} lesson(s) and ${terms.length} glossary term(s) in ${path.relative(process.cwd(), file)}`);

@@ -17,6 +17,14 @@ export function lessonHash(modulePath, lessonId) {
   return h.digest('hex').slice(0, 16);
 }
 
+// Glossary terms live in <module>/glossary.json and are verified one by one, so removing a
+// duplicate term never invalidates the others.
+export const readGlossary = (modulePath) => {
+  const p = path.join(modulePath, 'glossary.json');
+  return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : [];
+};
+export const termHash = (entry) => crypto.createHash('sha256').update(JSON.stringify(entry)).digest('hex').slice(0, 16);
+
 const isDate = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
 const isCount = (n) => Number.isInteger(n) && n >= 0;
 
@@ -62,5 +70,18 @@ export function checkVerification(modulePath, mod, { ignoreHashes = false } = {}
       p.push(`lesson ${id} changed after it was verified: re-verify it, then run node scripts/stamp-verification.mjs ${path.relative(process.cwd(), modulePath)}`);
   }
   for (const id of Object.keys(lessons)) if (!mod.lessons.includes(id)) p.push(`verification.json lists unknown lesson ${id}`);
+
+  let terms = [];
+  try { terms = readGlossary(modulePath); } catch (e) { return [...p, `glossary.json is invalid JSON (${e.message})`]; }
+  const records = v.glossary ?? {};
+  for (const t of terms) {
+    const rec = records[t?.id];
+    if (!rec) { p.push(`glossary term ${t?.id} has no verification entry (new or unverified term)`); continue; }
+    if (!CONFIDENCE.includes(rec.confidence)) p.push(`glossary term ${t.id}: confidence must be one of ${CONFIDENCE.join('/')}`);
+    if (!ignoreHashes && rec.hash !== termHash(t))
+      p.push(`glossary term ${t.id} changed after it was verified: re-verify it, then run node scripts/stamp-verification.mjs ${path.relative(process.cwd(), modulePath)}`);
+  }
+  const termIds = new Set(terms.map((t) => t?.id));
+  for (const id of Object.keys(records)) if (!termIds.has(id)) p.push(`verification.json lists unknown glossary term ${id}`);
   return p;
 }

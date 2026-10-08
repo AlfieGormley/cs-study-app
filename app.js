@@ -22,6 +22,7 @@ const shuffle = (a) => {
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const chevron = '<svg class="chev" width="10" height="16" viewBox="0 0 10 16" aria-hidden="true"><path d="M2 2l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const cross = '<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>';
 const tick = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const bookmarkIcon = (on) => `<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v17l-6-4.5L6 21z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
 const badge = (level) => `<span class="badge ${esc(level)}">${esc(level)}</span>`;
@@ -358,6 +359,17 @@ async function quizView(id) {
   const multi = q.type === 'multi';
   const answers = new Set(multi ? q.answer : [q.answer]);
   const letters = 'ABCDEF';
+  const correctLetters = [...answers].sort().map((i) => letters[i]);
+  const listLetters = (xs) => xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}` : xs[0];
+  const verdict = (right) => {
+    const which = correctLetters.length > 1 ? `The correct answers are <b>${listLetters(correctLetters)}</b>.` : `The correct answer is <b>${correctLetters[0]}</b>.`;
+    const answerText = !multi ? `<div class="verdict-answer prose">${md(q.options[q.answer].text, { interactive: false })}</div>` : '';
+    return `<div role="status" tabindex="-1" class="verdict ${right ? 'good' : 'bad'}">
+      <span class="verdict-icon">${right ? tick : cross}</span>
+      <div><div class="verdict-title">${right ? 'Correct' : 'Not quite'}</div>
+      <div class="verdict-detail">${right ? (multi ? `You found all of them: ${listLetters(correctLetters)}.` : `${correctLetters[0]} is right.`) : which}</div>
+      ${right ? '' : answerText}</div></div>`;
+  };
 
   const draw = () => {
     const { picked, checked } = ses;
@@ -372,7 +384,7 @@ async function quizView(id) {
       <div class="row-meta" style="margin:0 0 10px">${badge(q.level)}<span class="meta">${esc(lesson.title)}</span></div>
       <div class="quiz-prompt prose">${md(q.prompt)}</div>
       ${multi ? '<div class="quiz-hint">Select all that apply.</div>' : ''}
-      ${checked ? `<div role="status" tabindex="-1" class="verdict ${right ? 'good' : 'bad'}">${right ? 'Correct!' : multi ? 'Not quite. Compare your picks with the correct answers below.' : 'Not quite. See why below.'}</div>` : ''}
+      ${checked ? verdict(right) : ''}
       <div class="options">
         ${q.options.map((o, i) => {
           const isAns = answers.has(i);
@@ -380,16 +392,21 @@ async function quizView(id) {
           let cls = '';
           let tag = '';
           if (checked) {
-            if (isAns) { cls = 'correct'; tag = sel ? 'Your answer · Correct' : 'Correct answer'; }
-            else if (sel) { cls = 'wrong'; tag = 'Your answer · Incorrect'; }
-            else { cls = 'dim'; tag = 'Incorrect'; }
+            if (isAns) { cls = 'correct'; tag = sel ? 'Correct answer · you picked this' : multi ? 'Correct answer · you missed this' : 'Correct answer'; }
+            else if (sel) { cls = 'wrong'; tag = 'Your answer · incorrect'; }
+            else cls = 'dim';
           } else if (sel) cls = 'selected';
-          return `<div class="answer-card ${cls}"><button class="option ${multi ? 'multi' : ''} ${cls}" data-i="${i}" aria-pressed="${sel}" ${checked ? 'disabled' : ''}>
-            <span class="key">${checked && isAns ? tick : letters[i]}</span>
-            <span class="opt-body">
-              <span class="opt-text prose">${md(o.text, { interactive: false })}</span>
-            </span></button>
-            ${checked ? `<div class="opt-why prose"><span class="opt-tag">${tag}</span>${md(o.explanation)}</div>` : ''}</div>`;
+          const key = checked && isAns ? tick : checked && sel ? cross : letters[i];
+          const option = `<button class="option ${multi ? 'multi' : ''} ${cls}" data-i="${i}" aria-pressed="${sel}" ${checked ? 'disabled' : ''}>
+            <span class="key">${key}</span>
+            <span class="opt-body"><span class="opt-text prose">${md(o.text, { interactive: false })}</span></span></button>`;
+          if (!checked) return `<div class="answer-card">${option}</div>`;
+          // Options nobody needs to look at again stay collapsed, so the right answer stands out.
+          if (cls === 'dim') return `<details class="answer-card dim">
+            <summary>${option.replace(/<\/?button[^>]*>/g, '').replace('class="key"', `class="key" aria-label="Option ${letters[i]}"`)}<span class="why-toggle">Why not</span></summary>
+            <div class="opt-why prose">${md(o.explanation)}</div></details>`;
+          return `<div class="answer-card ${cls}"><div class="opt-ribbon">${isAns ? tick : cross}<span>${tag}</span></div>${option}
+            <div class="opt-why prose">${md(o.explanation)}</div></div>`;
         }).join('')}
       </div>
       ${checked ? `

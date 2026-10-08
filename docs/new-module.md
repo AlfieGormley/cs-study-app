@@ -23,6 +23,16 @@ Depth and quantity:
   Every option explanation names the specific misconception.
 - Lessons in a module go basic → advanced.
 
+Formulas and glossary (mandatory, enforced by the build):
+- Read and follow `.claude/skills/writing-formulas/SKILL.md`. Every equation, relation or calculation that uses a
+  symbol goes in a ```formula block that defines **every** symbol, unit and function, plus an "In words:" line.
+  Assume the reader knows no symbol. Run `node scripts/lint-formulas.mjs content/<subject>/<module-dir>` and
+  resolve every hit.
+- Read and follow `.claude/skills/glossary-terms/SKILL.md`. Write `glossary.json` for the module with an entry for
+  every acronym, bolded term, unit, named component/protocol/algorithm and piece of jargon a beginner could pause
+  on. **Too many is better than too few.** Run `node scripts/glossary-coverage.mjs content/<subject>/<module-dir>`
+  as the minimum list.
+
 Accuracy: be correct above all. Check facts you're unsure of. Trace any code you write by hand and make sure
 stated outputs and complexities are right.
 
@@ -36,4 +46,5 @@ create or stamp it yourself.
 Your reply must list:
 - the lesson ids and the question count;
 - any topics in scope you left thin or out, and why;
-- every claim you weren't fully confident in, so the verifier can check those first.
+- every claim you weren't fully confident in, so the verifier can check those first;
+- the number of formula blocks and glossary terms written, and any lint hits you left in place with the reason.

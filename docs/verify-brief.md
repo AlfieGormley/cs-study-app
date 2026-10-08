@@ -20,21 +20,31 @@ For every lesson `.md` and `.questions.json` in your module:
    - Is the answer key right?
    - Is any other option also defensibly correct?
    - Do the explanations and worked examples agree with the lesson?
-4. **Check the links**: each one must load (`node scripts/check-links.mjs content/<subject>/<module-dir>`) and must
+4. **Check formulas and the glossary** (`.claude/skills/writing-formulas/SKILL.md`,
+   `.claude/skills/glossary-terms/SKILL.md`):
+   - Every equation is in a ```formula block; each symbol's definition, unit and typical value is correct; the
+     "In words:" line says what the maths says. Recompute every worked number.
+   - `node scripts/lint-formulas.mjs content/<subject>/<module-dir>`: any remaining hit must be a genuine Rule 6
+     exception. Convert the rest.
+   - Every `glossary.json` definition is accurate against a source; aliases don't capture ordinary words or a
+     different meaning. Add missing terms you notice: too many is better than too few
+     (`node scripts/glossary-coverage.mjs` gives the minimum list).
+   - Record every glossary term in `verification.json` under `"glossary": { "<id>": { "confidence": "high" } }`.
+5. **Check the links**: each one must load (`node scripts/check-links.mjs content/<subject>/<module-dir>`) and must
    actually support the claim it's attached to.
-5. **Fix problems in place**:
+6. **Fix problems in place**:
    - Correct errors.
    - Soften or remove claims you can't verify.
    - Rewrite misleading explanations.
    - Keep question ids unchanged. If a question can't be fixed, rewrite it to test the same idea correctly.
    - Don't shorten lessons unnecessarily.
-6. Write the verification record `content/<subject>/<module-dir>/verification.json` exactly as specified in
+7. Write the verification record `content/<subject>/<module-dir>/verification.json` exactly as specified in
    `docs/CONTENT_PROCESS.md` section 4:
-   - a confidence score for every lesson (high/medium/low);
+   - a confidence score for every lesson and every glossary term (high/medium/low);
    - every low-confidence claim, with its lesson, confidence and reason;
    - the gaps, corrections, sources and counts.
    Then stamp it: `node scripts/stamp-verification.mjs content/<subject>/<module-dir>`.
-7. Run `node scripts/build.mjs --check content/<subject>/<module-dir>` until it passes, verification included.
+8. Run `node scripts/build.mjs --check content/<subject>/<module-dir>` until it passes, verification included.
 
 Report back:
 

@@ -23,6 +23,13 @@ The build enforces this. Don't get round it:
 
 If a safety check stops a writer, skip that lesson and record it; don't retry it.
 
+## Writing skills (mandatory for all content)
+
+- `.claude/skills/writing-formulas/SKILL.md`: every equation goes in a `formula` block that defines every
+  symbol, unit and function, with an "In words" line. Assume the reader knows no symbol.
+- `.claude/skills/glossary-terms/SKILL.md`: each module's `glossary.json` gets an entry for every term a
+  beginner might not know. Too many is better than too few.
+
 ## Other references
 
 - Content format: `CONTENT_SPEC.md`

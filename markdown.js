@@ -1,5 +1,6 @@
 import { linkTerms } from './glossary.js';
 import { findDiagram, renderDiagram } from './diagrams.js';
+import { renderFormula } from './formula.js';
 // Small Markdown renderer for the subset described in CONTENT_SPEC.md.
 // Content is authored by us, but we still escape everything and only emit known tags.
 
@@ -69,6 +70,8 @@ export function renderExample(source, language = '', { interactive = true } = {}
 
 export function render(md, options = {}) {
   if (!md) return '';
+  // Link each glossary term once per section so prose stays readable.
+  if (!options.seen) options = { ...options, seen: new Set() };
   const lines = md.replace(/\r\n?/g, '\n').split('\n');
   let out = '';
   let i = 0;
@@ -88,7 +91,9 @@ export function render(md, options = {}) {
       i++;
       while (i < lines.length && !/^\s*```/.test(lines[i])) body.push(lines[i++]);
       i++;
-      out += renderExample(body.join('\n'), language, options);
+      out += language === 'formula'
+        ? renderFormula(body.join('\n'), (t) => inline(t, options))
+        : renderExample(body.join('\n'), language, options);
       continue;
     }
 
@@ -96,6 +101,7 @@ export function render(md, options = {}) {
     if (h) {
       flush();
       const level = Math.min(h[1].length, 4);
+      if (level === 2) options.seen.clear();
       out += `<h${level}>${inline(h[2], options)}</h${level}>`;
       i++;
       continue;

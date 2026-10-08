@@ -22,7 +22,7 @@ The central design question is **when to do the merging**: when a post is writte
 
 **Non-functional**
 
-- **Read-heavy**: perhaps 100 timeline reads per post written.
+- **Read-heavy**: with the numbers below, about 6 timeline loads per post written, and each load shows dozens of posts, so far more posts are read than written.
 - **Fast reads**: home timeline p99 under ~200 ms.
 - **Eventually consistent**: a new post can take a few seconds to reach followers. But **read-your-own-writes**: an author must see their own post immediately.
 - **Highly available**: a stale feed is better than an error.
@@ -33,32 +33,85 @@ Out of scope: search, DMs, trends, ads (we'll mention where ranking plugs them i
 
 Assume **300 million DAU**, **500 million posts/day** (a hypothetical workload), and each user loads their home timeline **10 times/day**.
 
-```
-Post writes:  500M / 10^5 s  ≈ 5,000/s
-              (peak x3)      ≈ 15,000/s
-Feed reads:   3B / 10^5 s    ≈ 30,000/s
-              (peak x3)      ≈ 90,000/s
+Feed reads per day are users times loads each: 300M × 10 = 3B. Then convert to per second and apply an assumed peak factor of 3:
+
+```formula
+posts = 500M / 10^5 s ≈ 5,000/s
+peak posts = 5,000/s × 3 = 15,000/s
+reads = 3B / 10^5 s ≈ 30,000/s
+peak reads = 30,000/s × 3 = 90,000/s
+where
+posts, reads: average posts written and home-timeline loads per second
+peak posts, peak reads: the same at the busiest time
+M: million (10^6)
+B: billion (10^9)
+10^5: 100,000, the seconds in a day (86,400) rounded up
+s: seconds; /s means per second
+≈: approximately equal to (rounded)
+In words: half a billion posts a day is about 5,000 a second, and three billion timeline loads a day is about 30,000 a second, both tripled at peak.
 ```
 
 Now the number that drives the design. If a post reaches an assumed average of **200 eligible followers** and we push each post into every follower's timeline:
 
-```
-Fan-out writes: 500M x 200 = 100B/day
-              ≈ 1M timeline inserts/s
+```formula
+inserts = posts × f
+inserts = 500M × 200 = 100B/day
+rate = 100B / 10^5 s ≈ 1M/s
+nodes = 1M/s / 100k/s = 10
+where
+inserts: timeline inserts per day, one for each follower of each post
+posts: posts written per day, 500 million
+f: the average number of eligible followers per post, an assumed 200
+rate: timeline inserts per second
+nodes: Redis nodes needed at full use, if one node handles an assumed 100,000 appends per second
+M: million
+B: billion
+k: thousand
+day: one day; /day means per day
+10^5: 100,000, the seconds in a day rounded
+s: seconds; /s means per second
+≈: approximately equal to
+In words: every post is copied into 200 timelines, so 500 million posts a day become 100 billion inserts a day, about a million a second, which would keep ten fully busy nodes occupied.
 ```
 
 That's a lot, but it's simple, parallel work: appending an 8-byte ID to a list in Redis. At an explicitly assumed 100k appends/s per node, 1M/s would consume ten nodes at full utilization before peaks or headroom. This is arithmetic, not a Redis benchmark. Timeline cache size, storing the latest **800** post IDs per active user (an assumed cache cap), at an assumed 16-byte raw payload per entry (post ID + author ID), excluding Redis object/allocator overhead:
 
-```
-300M x 800 x 16 B  ≈ 3.8 TB
-x3 replicas        ≈ 11.5 TB of RAM
+```formula
+cache = users × entries × size
+cache = 300M × 800 × 16 B ≈ 3.8 TB
+total = 3.8 TB × 3 ≈ 11.5 TB
+where
+cache: raw timeline-cache memory, before Redis overhead
+users: active users with a cached timeline, 300 million
+entries: post IDs kept per timeline, the assumed cap of 800
+size: bytes per entry, an assumed 16 (post ID + author ID)
+total: memory with 3 copies of every timeline (3 replicas)
+M: million
+B: bytes
+TB: terabyte, 10^12 bytes
+≈: approximately equal to (rounded)
+In words: 300 million timelines of 800 16-byte entries is about 3.8 TB, or about 11.5 TB of RAM when stored three times.
 ```
 
 Big, but a large Redis cluster can hold it, and we only keep timelines for *active* users.
 
 > [!note] Content gap: historical Twitter deployment figures
 > The linked presentation page identifies the speaker and topic but did not provide a readable transcript verifying the exact historical request rates, delivery times and compute savings. Those deployment figures are omitted; the calculations in this lesson use explicitly hypothetical inputs.
-Post storage: 500M × ~1 KB (text plus metadata; media lives in object storage) ≈ 500 GB/day, ~180 TB/year.
+
+Post storage, at about 1 KB per post (text plus metadata; media lives in object storage):
+
+```formula
+daily = 500M × 1 KB = 500 GB
+yearly = 500 GB × 365 ≈ 180 TB
+where
+daily, yearly: new post data per day and per year
+M: million
+KB: kilobyte, 1,000 bytes
+GB: gigabyte, 10^9 bytes
+TB: terabyte, 10^12 bytes
+≈: approximately equal to (rounded)
+In words: half a billion 1 KB posts is 500 GB a day, about 180 TB a year.
+```
 
 ## Step 3: API
 
@@ -75,7 +128,7 @@ POST   /v1/users/{id}/follow
 DELETE /v1/users/{id}/follow
 ```
 
-Use **cursor pagination** (`cursor = last post ID seen`), not offsets. New posts arrive at the top constantly, so "page 2" by offset would shift and show duplicates. Snowflake-style post IDs are roughly time-ordered (not a causal clock), so "older than this ID" is a natural cursor.
+Use **cursor pagination** (the cursor is the ID of the last post the client has seen), not offsets. New posts arrive at the top constantly, so "page 2" by offset would shift and show duplicates. Snowflake-style post IDs are roughly time-ordered (not a causal clock), so "older than this ID" is a natural cursor.
 
 ## Step 4: Data model
 
@@ -137,7 +190,7 @@ Timelines store **IDs, not post bodies**. A post shown to a million followers is
 When a post is created, insert its ID into every follower's precomputed timeline.
 
 - **Reads are trivial**: one Redis list read plus hydration. Fast and predictable.
-- **Writes are amplified**: one post becomes N writes, where N is the follower count.
+- **Writes are amplified**: one post becomes one write per follower.
 - **Wasted work**: you update timelines of followers who won't log in today.
 - **Lag for big accounts**: fan-out to millions of followers takes time.
 
@@ -146,7 +199,7 @@ When a post is created, insert its ID into every follower's precomputed timeline
 Store posts only in the author's user timeline. At read time, fetch recent posts from everyone the reader follows and merge them.
 
 - **Writes are trivial**: one insert.
-- **Reads are expensive**: a user following 1,000 accounts needs 1,000 lookups (or a scatter-gather across shards) and a k-way merge, on *every* timeline load. At 90,000 reads/s, that's up to 90 million lookups per second.
+- **Reads are expensive**: a user following 1,000 accounts needs 1,000 lookups (or a scatter-gather across shards) and a k-way merge (combining 1,000 sorted lists into one), on *every* timeline load. At 90,000 reads/s, that's up to 90,000 × 1,000 = 90 million lookups per second.
 - **Latency is unpredictable**: the slowest of 1,000 lookups sets the response time.
 
 ### Which to choose?
@@ -157,8 +210,16 @@ Reads outnumber writes heavily, and most accounts have modest follower counts, s
 
 Pure push breaks for accounts with enormous followings. An account with **50 million followers** turns one post into 50 million Redis inserts:
 
-```
-50M inserts / 1M inserts/s ≈ 50 s
+```formula
+t = followers / rate
+t = 50M / 1M/s = 50 s
+where
+t: time to finish fanning out one post, in seconds (s)
+followers: timelines to insert into, 50 million
+rate: the fan-out fleet's total insert rate, 1 million per second
+M: million
+/s: per second
+In words: even with the whole fleet working on nothing else, one celebrity post takes about 50 seconds to reach every follower.
 ```
 
 ...and that's if the entire fan-out fleet does nothing else. Several celebrities posting at once (a sports final, an election) would back up everyone's feeds for minutes. Slow fan-out also caused ordering bugs: a reply from a follower who received the post early could be fanned out *before* the original reached followers further down the list.
@@ -198,14 +259,14 @@ The principle: **fan-out decides what *might* be shown; hydration decides what *
 
 The timeline cache is a Redis cluster sharded by `user_id`. Replayed fan-out events need idempotent inserts; LPUSH alone can add duplicates and asynchronous arrival order is not necessarily post order:
 
-- Each timeline is a capped list (`LPUSH` then `LTRIM 0 799`) or a sorted set scored by an exactly representable timestamp, with the full post ID encoded as a fixed-width member for tie-breaking. Redis scores are doubles, so do not put arbitrary 64-bit Snowflake IDs directly into the score.
+- Each timeline is a capped list (`LPUSH` then `LTRIM 0 799`) or a sorted set scored by an exactly representable timestamp, with the full post ID encoded as a fixed-width member for tie-breaking. Redis scores are double-precision floats, so do not put arbitrary 64-bit Snowflake IDs directly into the score.
 - Replicate for availability. Losing a shard isn't data loss, since timelines can be rebuilt from the posts store and social graph, but rebuilding millions at once would hammer the databases, so keep replicas.
 - **Cache miss** (new or returning user): build from a captured boundary while buffering or replaying concurrent fan-out, then merge/deduplicate before switching to live updates. A blind rebuild can overwrite concurrent inserts.
 - **Hydration** is a second cache layer: `post_id → post` in Memcached or Redis. A timeline of 50 posts becomes one multi-get. Hot posts (a viral tweet in millions of timelines) are served from cache; add a small in-process cache for the very hottest.
 - **Deletions**: fanning out a delete to 50M timelines is expensive. Instead, mark the post deleted and let hydration drop it. The dead ID ages out of the capped list naturally.
 - **Read-your-own-writes**: the post service synchronously inserts the author's new post into their own timeline (or the client inserts it optimistically), so they never wonder whether their post worked.
 - **Scrolling past the cap**: the list holds only 800 IDs. A user who scrolls beyond it gets older pages built by pull (or from a slower, disk-backed store). Few users ever scroll that far, which is why the cap works.
-- **Cursor stability**: because the cursor is a post ID ("older than X"), new posts ahead of that immutable order do not cause offset shifts. Late-arriving older IDs can still be missed; ranked feeds need a ranking/snapshot cursor rather than only a post ID.
+- **Cursor stability**: because the cursor is a post ID ("older than X"), new posts ahead of that immutable order do not cause offset shifts. Late-arriving older IDs can still be missed; ranked feeds need a cursor that points into a saved copy of the ranking rather than only a post ID.
 
 ## Deep dive 5: Ranking
 
@@ -238,11 +299,29 @@ Other bottlenecks:
 
 At 3 billion DAU and 5 billion posts/day:
 
-- Fan-out becomes ~10M inserts/s, and timeline RAM grows to ~38 TB before replication. **Lower the celebrity threshold** so more posts are pulled, and fan out only to recently active followers.
+- Fan-out becomes ~10M inserts/s, and timeline RAM grows to ~38 TB before replication (sums below). **Lower the celebrity threshold** so more posts are pulled, and fan out only to recently active followers.
 - **Multi-region**: keep timeline caches in the user's home region. Replicate posts globally (asynchronously) so hydration is local.
 - **Tiered timelines**: keep only the most recent ~200 IDs in RAM and older pages on SSD-backed stores.
 - **Ranking cost dominates**: precompute candidate pools offline, use cheaper first-stage models, and run heavy models on GPUs only for the top few hundred candidates.
 - **Graceful degradation**: under extreme load, serve the chronological cached timeline without ranking rather than failing.
+
+```formula
+rate = 5 bn × 200 / 10^5 s = 10M/s
+cache = 3 bn × 800 × 16 B ≈ 38 TB
+where
+rate: timeline inserts per second
+cache: raw timeline memory before replication
+bn: billion (10^9): 5 billion posts a day, 3 billion users
+M: million
+200: assumed followers per post
+800: post IDs kept per timeline
+B: bytes
+10^5: 100,000, the seconds in a day rounded
+s: seconds; /s means per second
+TB: terabyte, 10^12 bytes
+≈: approximately equal to
+In words: ten times the posts and users means ten times the inserts, about 10 million a second, and ten times the cache, about 38 TB.
+```
 
 ## Key takeaways
 

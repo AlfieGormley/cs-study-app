@@ -121,7 +121,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "The server stores, per key: `(request hash, status, response)`.\n\n1. Retry arrives with K.\n2. Lookup finds K → stored hash = hash(amount=5000,...).\n3. Incoming hash = hash(amount=7000,...) → **mismatch**.\n4. Return an error (Stripe uses an `idempotency_error`; the IETF draft suggests `422`).\n\nThis is why implementations store a hash of the request body, not just the key.",
+    "workedExample": "The server stores, per key: `(request hash, status, response)`.\n\n1. Retry arrives with K.\n2. Lookup finds K → stored hash = `hash(amount=5000, ...)`.\n3. Incoming hash = `hash(amount=7000, ...)` → **mismatch**.\n4. Return an error (Stripe uses an `idempotency_error`; the IETF draft suggests `422`).\n\nThis is why implementations store a hash of the request body, not just the key.",
     "link": {
       "title": "Stripe API: Idempotent requests",
       "url": "https://docs.stripe.com/api/idempotent_requests"
@@ -161,11 +161,11 @@
     "id": "api-idempotency-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "A client uses exponential backoff with base 100 ms, a cap of 10 s, and **full jitter** (`sleep = random(0, min(cap, base × 2^attempt))`). What's the maximum possible wait before attempt 5 (i.e. after the 4th failure, attempt = 4), and what's the expected wait?",
+    "prompt": "A client uses exponential backoff with base 100 ms, a cap of 10 s, and **full jitter**:\n\n```formula\nT_max = min(cap, base × 2^a)\nT_sleep = random(0, T_max)\nwhere\nT_max: the longest the client may wait before the next attempt\ncap: the largest wait ever allowed, here 10 s\nbase: the starting wait, here 100 ms\na: the number of failures so far\nmin: the smaller of the two values\nrandom: a value picked uniformly at random between the two limits\nT_sleep: the wait actually used\nIn words: double the base once per failure, never exceed the cap, then wait a random time up to that.\n```\n\nWhat's the maximum possible wait before attempt 5 (i.e. after the 4th failure, a = 4), and what's the expected wait?",
     "options": [
       {
         "text": "Max 1.6 s, expected 0.8 s",
-        "explanation": "Correct. base × 2⁴ = 100 ms × 16 = 1,600 ms, below the 10 s cap. Full jitter samples uniformly from 0 to 1.6 s, so the mean is 0.8 s."
+        "explanation": "Correct. 100 ms × 2⁴ = 100 ms × 16 = 1,600 ms, below the 10 s cap. Full jitter samples uniformly from 0 to 1.6 s, so the mean is 0.8 s."
       },
       {
         "text": "Max 1.6 s, expected 1.6 s",
@@ -173,15 +173,15 @@
       },
       {
         "text": "Max 10 s, expected 5 s",
-        "explanation": "The 10 s cap only applies once base × 2^attempt exceeds it, which happens at attempt 7 (12.8 s). At attempt 4 we're well below it."
+        "explanation": "The 10 s cap only applies once the doubled wait exceeds it, which first happens at a = 7 (100 ms × 128 = 12.8 s). At a = 4 we're well below it."
       },
       {
         "text": "Max 0.8 s, expected 0.4 s",
-        "explanation": "This uses 2³ rather than 2⁴. With attempt = 4, the multiplier is 16, not 8."
+        "explanation": "This uses 2³ rather than 2⁴. After 4 failures the multiplier is 2⁴ = 16, not 8."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Exponential term: 100 ms × 2⁴ = 100 × 16 = **1,600 ms**.\n2. Apply the cap: min(10,000, 1,600) = 1,600 ms.\n3. Full jitter: uniform on [0, 1,600] ms.\n4. Expected value of a uniform [0, M] is M/2 = **800 ms**.\n\nWhy jitter? If 10,000 clients failed together, without jitter they'd all retry at exactly t + 1.6 s. With full jitter they spread evenly over 1.6 s: about 6,250 per second instead of 10,000 in a single instant.",
+    "workedExample": "```formula\nT_max = min(cap, base × 2^a)\nT_max = min(10,000 ms, 100 ms × 2^4)\nT_max = min(10,000 ms, 1,600 ms)\nT_max = 1,600 ms\nE[T_sleep] = T_max / 2 = 800 ms\nwhere\nT_max: the longest possible wait after a failures\ncap: the cap, 10 s = 10,000 ms\nbase: the base wait, 100 ms\na: the number of failures so far, here 4\nmin: the smaller of the two values\nE[T_sleep]: the expected (average) wait; for a value spread evenly between 0 and T_max it is half of T_max\nms: milliseconds, thousandths of a second\nIn words: the doubled wait (1.6 s) is still below the cap, so the wait is random between 0 and **1,600 ms**, averaging **800 ms**.\n```\n\nWhy jitter? If 10,000 clients failed together, without jitter they'd all retry exactly 1.6 s after the failure. With full jitter they spread evenly over 1.6 s: about 6,250 per second instead of 10,000 in a single instant.",
     "link": {
       "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Multiply attempts through the layers:\n\n```\napp      x3 -> gateway\ngateway  x3 -> Orders\nOrders   x3 -> Payments\n```\n\nPayments sees 3 × 3 × 3 = **27** calls per user action. At 1,000 actions/s that's 27,000 requests/s of pure retry traffic during an outage, which can stop it recovering.\n\nFixes:\n- Retry at **one** layer (usually the one closest to the failing call).\n- Use a **retry budget** (e.g. retries ≤ 10% of requests).\n- Add a **circuit breaker** so Orders stops calling Payments when it's clearly down.",
+    "workedExample": "Multiply attempts through the layers:\n\n```\napp      x3 -> gateway\ngateway  x3 -> Orders\nOrders   x3 -> Payments\n```\n\n```formula\nA = a^L\nA = 3^3 = 3 × 3 × 3 = 27\nwhere\nA: the most calls Payments sees for one user action\na: the total attempts each layer allows, here 3\nL: the number of retrying layers in the chain, here 3\nIn words: each layer repeats everything below it, so the attempts multiply: **27** calls per user action.\n```\n\nAt 1,000 actions/s that's 27,000 requests/s during an outage, almost all of it retry traffic, which can stop Payments recovering.\n\nFixes:\n- Retry at **one** layer (usually the one closest to the failing call).\n- Use a **retry budget** (e.g. retries ≤ 10% of requests).\n- Add a **circuit breaker** so Orders stops calling Payments when it's clearly down.",
     "link": {
       "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "**Policy A** (no budget), sustained outage, every attempt fails:\n\n```\noriginals   1,000/s\nretries   3 x 1,000/s\ntotal       4,000/s  (4x)\n```\n\n**Policy B** (10% budget):\n\n```\noriginals   1,000/s\nretries       100/s  (cap)\ntotal       1,100/s  (1.1x)\n```\n\nA quadruples the load on a service that's already failing, which can stop it ever recovering. B still retries during brief blips, when few requests fail and the budget has plenty of room, but stops amplifying a real outage.",
+    "workedExample": "**Policy A** (no budget), sustained outage, every attempt fails:\n\n```formula\nR_A = R_0 × (1 + m)\nR_A = 1,000/s × (1 + 3) = 4,000/s\nwhere\nR_A: the total attempt rate the dependency sees under policy A\nR_0: the rate of original requests, 1,000 per second\nm: the maximum retries per request, here 3\ns: seconds; /s means per second\nIn words: every failed request is sent once and then retried 3 times, so the load is 4 times normal.\n```\n\n**Policy B** (10% budget):\n\n```formula\nR_B = R_0 + β × R_0\nR_B = 1,000/s + 0.1 × 1,000/s = 1,100/s\nwhere\nR_B: the total attempt rate under policy B\nR_0: the rate of original requests, 1,000 per second\nβ: beta, the retry budget as a fraction of normal traffic, here 0.1 (10%)\ns: seconds; /s means per second\nIn words: retries can add at most 10% on top of the originals, so the load is 1.1 times normal.\n```\n\nA quadruples the load on a service that's already failing, which can stop it ever recovering. B still retries during brief blips, when few requests fail and the budget has plenty of room, but stops amplifying a real outage.",
     "link": {
       "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -326,7 +326,7 @@
         "explanation": "The *total* is the same, but the *peak* isn't. A database copes with a steady rate far better than with everything arriving in the same instant."
       },
       {
-        "text": "A: about 5,000/s for two seconds; B: all 10,000 at t = 2 s",
+        "text": "A: about 5,000/s for two seconds; B: all 10,000 exactly 2 s later",
         "explanation": "This is the right pair of outcomes attached to the wrong policies. The fixed wait is what synchronises clients."
       },
       {
@@ -334,12 +334,12 @@
         "explanation": "A few early retries are cheap. Spreading arrivals across the window is exactly what keeps the peak low."
       },
       {
-        "text": "A: all 10,000 retries arrive together at t = 2 s; B: roughly 5,000/s spread across the 2 s window",
+        "text": "A: all 10,000 retries arrive together 2 s after the blip; B: roughly 5,000/s spread across the 2 s window",
         "explanation": "Correct. Without jitter the clients stay in lockstep, a thundering herd on every retry round. Full jitter spreads 10,000 retries over 2 s, about 5 per millisecond."
       }
     ],
     "answer": 3,
-    "workedExample": "**Policy A** (no jitter): every client computes the same wait.\n\n```\nt=0.0  10,000 fail\nt=2.0  10,000 retry at once\nt=6.0  10,000 retry at once\n```\n\nThe herd stays synchronised for every round.\n\n**Policy B** (full jitter): waits are uniform on [0, 2 s].\n\n- Rate = 10,000 ÷ 2 s = **5,000/s**, about **5 per ms**.\n- Next round, the window doubles to 4 s, so remaining failures spread out even further.\n\nAWS's analysis found full jitter cuts both total work and completion time compared with no jitter.",
+    "workedExample": "**Policy A** (no jitter): every client computes the same wait.\n\n```\nt=0.0  10,000 fail\nt=2.0  10,000 retry at once\nt=6.0  10,000 retry at once\n```\n\nThe herd stays synchronised for every round.\n\n**Policy B** (full jitter): waits are uniform on [0, 2 s].\n\n```formula\nR = N / W\nR = 10,000 / 2 s = 5,000/s\nR = 5,000/s ÷ 1,000 = 5/ms\nwhere\nR: the average retry arrival rate at the database\nN: the number of clients retrying, 10,000\nW: the width of the jitter window, 2 s\ns: seconds; /s means per second\nms: milliseconds; /ms means per millisecond (a second has 1,000)\nIn words: 10,000 retries spread evenly over 2 seconds arrive at about **5,000 per second**, roughly **5 per millisecond**.\n```\n\n- Next round, the window doubles to 4 s, so remaining failures spread out even further.\n\nAWS's analysis found full jitter cuts both total work and completion time compared with no jitter.",
     "link": {
       "title": "AWS Architecture Blog: Exponential backoff and jitter",
       "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"

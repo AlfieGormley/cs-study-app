@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. A synchronous request needs **every** dependency to answer, so the dependencies are in series.\n2. For independent components in series, multiply availabilities: `0.999³`.\n3. `0.999 × 0.999 = 0.998001`, then `× 0.999 = 0.997003`.\n4. So the request is ≈ **99.70%** available, or 0.3% unavailable.\n5. In hours: a year has 8,760 hours. `8,760 × 0.003 ≈ 26 hours` of downtime, versus `8,760 × 0.001 ≈ 8.8 hours` for one service.\n\nThis is one reason to move non-essential work (for example, post-order analytics) off the synchronous path and onto a queue.",
+    "workedExample": "1. A synchronous request needs **every** dependency to answer, so all three must be up at the same moment.\n2. For independent components that are all required, multiply their availabilities:\n\n```formula\nA = A_1 × A_2 × A_3\nA = 0.999 × 0.999 × 0.999\nA = 0.998001 × 0.999 = 0.997003\nA ≈ 99.70%\nwhere\nA: the availability of the whole request: the fraction of time all three dependencies are up together\nA_1: the availability of Payments, here 0.999 (99.9%)\nA_2: the availability of Inventory, here 0.999\nA_3: the availability of Fraud, here 0.999\n≈: approximately equal to (rounded)\n%: per cent; 0.997 is 99.7%\nIn words: needing all three services means multiplying their availabilities, which gives about 99.7%.\n```\n\n3. So the request is unavailable about 0.3% of the time. Turn that into hours using the 8,760 hours in a year:\n\n```formula\nD = (1 − A) × 8760 h\nD_3 = 0.003 × 8760 h ≈ 26 h\nD_1 = 0.001 × 8760 h ≈ 8.8 h\nwhere\nD: expected downtime per year, in hours (h)\nA: an availability, as a fraction between 0 and 1\nD_3: yearly downtime of the three-service chain (about 99.7% available)\nD_1: yearly downtime of one 99.9% service\nh: hours\n≈: approximately equal to\nIn words: the chain is down about 26 hours a year, roughly three times the 8.8 hours of a single service.\n```\n\nThis assumes the three services fail independently. It is one reason to move non-essential work (for example, post-order analytics) off the synchronous path and onto a queue.",
     "link": {
       "title": "Queue-Based Load Leveling pattern (Azure)",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
@@ -79,11 +79,11 @@
       },
       {
         "text": "About 2 minutes",
-        "explanation": "Correct. Backlog = (1,500 − 300) × 20 = 24,000 jobs. Net drain rate = 300 − 100 = 200 per second. 24,000 ÷ 200 = 120 seconds."
+        "explanation": "Correct. The backlog is (1,500 − 300) × 20 = 24,000 jobs, the net drain rate is 300 − 100 = 200 per second, and 24,000 ÷ 200 = 120 seconds."
       }
     ],
     "answer": 3,
-    "workedExample": "1. **Capacity**: 4 workers × 75 = 300 jobs per second.\n2. **Growth during the burst**: arrivals exceed capacity by 1,500 − 300 = 1,200 per second.\n3. **Backlog at the end of the burst**: 1,200 × 20 s = 24,000 jobs.\n4. **Net drain rate afterwards**: capacity minus new arrivals = 300 − 100 = 200 per second.\n5. **Time to clear**: 24,000 ÷ 200 = 120 s = **2 minutes**.\n\nUnder FIFO, the last job in the burst waits roughly 24,000 / 300 = 80 seconds. The queue becomes empty after 120 seconds because later arrivals join behind that job. If that is acceptable for your product, 4 workers is enough; without a queue you would need 1,500 ÷ 75 = 20 workers to avoid dropping work during the burst.",
+    "workedExample": "Work out the capacity, the backlog the burst leaves behind, then how fast spare capacity clears it:\n\n```formula\nμ = 4 × 75/s = 300/s\nB = (λ_burst − μ) × T\nB = (1500/s − 300/s) × 20 s\nB = 1200/s × 20 s = 24000 jobs\nT_clear = B / (μ − λ_after)\nT_clear = 24000 jobs / (300/s − 100/s)\nT_clear = 24000 jobs / 200/s = 120 s\nwhere\nμ: mu, the total processing capacity: 4 workers × 75 jobs per second each\nB: the backlog: jobs waiting in the queue when the burst ends\nλ_burst: lambda, the arrival rate during the burst, 1,500 jobs per second\nT: how long the burst lasts, 20 seconds\nT_clear: the time after the burst ends until the queue is empty, in seconds (s)\nλ_after: lambda, the arrival rate after the burst, 100 jobs per second\njobs: video-upload jobs\ns: seconds; \"/s\" means per second\nIn words: the burst leaves 24,000 jobs; only 200 a second of capacity is spare once new arrivals are served, so clearing takes 120 seconds, which is 2 minutes.\n```\n\nUnder FIFO, the last job in the burst waits roughly 24,000 ÷ 300 = 80 seconds. The queue becomes empty only after 120 seconds because later arrivals join behind that job. If that is acceptable for your product, 4 workers is enough; without a queue you would need 1,500 ÷ 75 = 20 workers to avoid dropping work during the burst.",
     "link": {
       "title": "Queue-Based Load Leveling pattern (Azure)",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
@@ -135,11 +135,11 @@
     "options": [
       {
         "text": "About 0.017 seconds",
-        "explanation": "Wrong. This is λ ÷ L (250 ÷ 15,000), which inverts the formula. Little's Law is L = λW, so W = L ÷ λ."
+        "explanation": "Wrong. This divides the arrival rate by the depth (250 ÷ 15,000), which turns Little's Law upside down. The average wait is the depth divided by the arrival rate."
       },
       {
         "text": "About 60 seconds",
-        "explanation": "Correct. By Little's Law, W = L ÷ λ = 15,000 ÷ 250 = 60 seconds. In a stable system, depth divided by throughput gives average time in the queue."
+        "explanation": "Correct. By Little's Law, the average wait is the depth divided by the arrival rate: 15,000 ÷ 250 = 60 seconds. In a stable system, depth divided by throughput gives average time in the queue."
       },
       {
         "text": "About 15 seconds",
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Little's Law: **L = λ × W**, where L is the average number in the system, λ is the arrival rate and W is the average time spent in it.\n2. Rearrange for W: `W = L ÷ λ`.\n3. Plug in: `W = 15,000 ÷ 250 = 60 s`.\n4. Sanity check: if each second 250 messages join the back of a 15,000-message line and 250 leave the front, a new message must wait for 15,000 ÷ 250 = 60 seconds' worth of departures.\n\nThis is why mature teams alarm on **age of oldest message** (SQS exposes `ApproximateAgeOfOldestMessage`) as well as depth: it is a useful backlog signal, but it is not average user delay: the SQS metric excludes some repeatedly received poison messages and resets age when messages move to a DLQ.",
+    "workedExample": "1. Little's Law links depth, arrival rate and wait in a stable queue. Rearrange it for the wait and substitute:\n\n```formula\nL = λ × W\nW = L / λ\nW = 15000 msg / 250/s\nW = 60 s\nwhere\nL: the average number of messages waiting, here 15,000\nλ: lambda, the average arrival rate, here 250 messages per second\nW: the average time a message waits before processing starts, in seconds (s)\nmsg: messages\ns: seconds; \"/s\" means per second\nIn words: depth divided by arrival rate gives the average wait: 15,000 messages at 250 a second is 60 seconds.\n```\n\n2. Sanity check: if each second 250 messages join the back of a 15,000-message line and 250 leave the front, a new message must wait for 15,000 ÷ 250 = 60 seconds' worth of departures.\n\nThis is why mature teams alarm on **age of oldest message** (SQS exposes `ApproximateAgeOfOldestMessage`) as well as depth: it is a useful backlog signal, but it is not average user delay: the SQS metric excludes some repeatedly received poison messages and resets age when messages move to a DLQ.",
     "link": {
       "title": "Little's law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Little%27s_law"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. **Daily arrivals**\n   - Day: 180/s × 36,000 s = 6,480,000\n   - Night: 20/s × 50,400 s = 1,008,000\n   - Total: **7,488,000**, an average of 7,488,000 ÷ 86,400 ≈ **86.7/s**\n2. **Daily capacity**: 80/s × 86,400 s = **6,912,000**.\n3. **Carry-over**: 7,488,000 − 6,912,000 = **576,000 messages per day**.\n4. Check it against the symptoms: during the day the queue grows at 180 − 80 = 100/s (3.6 million in 10 hours). Overnight it drains at 80 − 20 = 60/s (3.02 million in 14 hours). It never catches up, exactly as observed.\n5. **Fix**: provision above 86.7/s. For illustration, 120/s provides 33.3/s of daily average headroom; whether it recovers from a particular incident within one night depends on the extra backlog, and alarm on oldest-message age, not just depth.\n\nWithout the fix, SQS's default 4-day retention (maximum 14 days) means old jobs would eventually be silently deleted.",
+    "workedExample": "1. Count a day's arrivals, the day's capacity and the difference. A 10-hour working day is 36,000 s and the other 14 hours are 50,400 s:\n\n```formula\nN_in = 180/s × 36000 s + 20/s × 50400 s\nN_in = 6480000 + 1008000 = 7488000\nλ_avg = 7488000 / 86400 s ≈ 86.7/s\nN_out = 80/s × 86400 s = 6912000\nN_carry = N_in − N_out = 576000\nwhere\nN_in: messages arriving in one day\nλ_avg: lambda, the average arrival rate over the whole day, in messages per second\nN_out: messages the workers can process in one day at 80 per second\nN_carry: messages left over at the end of each day\ns: seconds; \"/s\" means per second; a day has 86,400 s\n≈: approximately equal to\nIn words: about 7.49 million messages arrive a day but only about 6.91 million can be processed, so 576,000 carry over every day.\n```\n\n2. Check it against the symptoms: during the day the queue grows at 180 − 80 = 100 per second (3.6 million in 10 hours). Overnight it drains at 80 − 20 = 60 per second (3.02 million in 14 hours). It never catches up, exactly as observed.\n3. **Fix**: provision above 86.7 per second. For illustration, 120 per second gives 33.3 per second of daily average capacity headroom; whether it recovers from a particular incident within one night depends on the extra backlog, and alarm on oldest-message age, not just depth.\n\nWithout the fix, SQS's default 4-day retention (maximum 14 days) means old jobs would eventually be silently deleted.",
     "link": {
       "title": "Avoiding insurmountable queue backlogs (Amazon Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/avoiding-insurmountable-queue-backlogs/"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. **Identify the mismatch**: the work takes minutes, but the existing request path has timeouts shorter than the job duration.\n2. **Split acceptance from completion**: `POST /reports` validates the request, atomically records a job (`status = PENDING`) and an outbox entry for `{jobId}`, then returns `202 Accepted` with `Location: /reports/{jobId}`.\n3. **Process asynchronously**: a relay publishes committed outbox entries; workers pull from the queue, build the file, upload it to object storage and set `status = DONE`.\n4. **Deliver the result**: the client polls `GET /reports/{jobId}` (with a `Retry-After` hint) or registers a webhook.\n5. **Failure behaviour**: after durable acceptance, the job survives client disconnects; a retry uses the same idempotency key. Worker crashes can trigger redelivery within retention limits, so processing and completion updates must tolerate duplicates.\n\nWebhooks themselves are covered in the API design module.",
+    "workedExample": "1. **Identify the mismatch**: the work takes minutes, but the existing request path has timeouts shorter than the job duration.\n2. **Split acceptance from completion**: `POST /reports` validates the request, atomically records a job (`status = PENDING`) and an outbox entry for `{jobId}`, then returns `202 Accepted` with `Location: /reports/{jobId}`.\n3. **Process asynchronously**: an outbox relay publishes committed outbox entries; workers pull from the queue, build the file, upload it to object storage and set `status = DONE`.\n4. **Deliver the result**: the client polls `GET /reports/{jobId}` (with a `Retry-After` hint) or registers a webhook.\n5. **Failure behaviour**: after durable acceptance, the job survives client disconnects; a retry uses the same idempotency key. Worker crashes can trigger redelivery within retention limits, so processing and completion updates must tolerate duplicates.\n\nWebhooks themselves are covered in the API design module.",
     "link": {
       "title": "Queue-Based Load Leveling pattern (Azure)",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The page is slow if **at least one** of the 10 calls is slow.\n2. Easier to compute the opposite: all 10 fast.\n   - `P(one fast) = 0.99`\n   - `P(all fast) = 0.99¹⁰ ≈ 0.904`\n3. `P(at least one slow) = 1 − 0.904 ≈ 0.096`, about **10%**.\n4. So 1-in-100 slowness per service becomes 1-in-10 slowness per page.\n\nWays out:\n- Move calls whose results are not needed for the response onto a queue.\n- Set tight timeouts and render without non-essential parts.\n- Send a hedged (duplicate) request when a call is slower than its p95, as described in Google's *The Tail at Scale*.",
+    "workedExample": "1. The page is slow if **at least one** of the 10 calls is slow.\n2. It is easier to compute the opposite (all 10 fast) and subtract from 1:\n\n```formula\nP_fast = (1 − p)^k = 0.99^10\nP_fast ≈ 0.904\nP_slow = 1 − P_fast ≈ 0.096\nwhere\nP_fast: the probability that all calls are fast\nP_slow: the probability that at least one call is slow, so the page is slow; 0.096 is 9.6%\np: the probability that one call is slow, here 0.01 (1%)\nk: the number of independent calls the page waits for, here 10\n^: to the power of; 0.99^10 is 0.99 multiplied by itself 10 times\n≈: approximately equal to\nIn words: each call is fast 99% of the time, but all ten are fast only about 90% of the time, so roughly 1 page load in 10 is slow.\n```\n\n3. So 1-in-100 slowness per service becomes about 1-in-10 slowness per page.\n\nWays out:\n- Move calls whose results are not needed for the response onto a queue.\n- Set tight timeouts and render without non-essential parts.\n- Send a hedged (duplicate) request when a call is slower than its p95, as described in Google's *The Tail at Scale*.",
     "link": {
       "title": "The Tail at Scale (Google Research)",
       "url": "https://research.google/pubs/the-tail-at-scale/"
@@ -360,7 +360,7 @@
         "explanation": "Wrong. This sacrifices the benefits of async (checkout now waits for email) just to fix observability. Context propagation solves the tracing gap without changing the architecture."
       },
       {
-        "text": "Increase the tracing sample rate to 100%",
+        "text": "Record 100% of traces instead of a sample",
         "explanation": "Wrong. Sampling decides how many traces are recorded, not whether spans in different processes are linked. Two unconnected traces sampled at 100% are still unconnected."
       },
       {

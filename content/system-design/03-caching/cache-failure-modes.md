@@ -2,11 +2,23 @@
 id: cache-failure-modes
 title: Cache failure modes
 level: advanced
-minutes: 15
+minutes: 17
 summary: Stampedes, hot keys, penetration, avalanches and cold starts — how caches take systems down, and the coalescing, early-expiry, Bloom-filter and warming techniques that stop them.
 ---
 
-A cache that works well becomes load-bearing. The database is sized for the miss rate, not the full traffic. So when the cache misbehaves, the failure is rarely gentle: a 99% hit ratio dropping to 0% means **100× the database load**, instantly.
+A cache that works well becomes load-bearing. The database is sized for the miss rate, not the full traffic. So when the cache misbehaves, the failure is rarely gentle. The database's load scales with the miss ratio, so a change in hit ratio multiplies its load by:
+
+```formula
+x = (1 − h_new) / (1 − h_old)
+x = (1 − 0) / (1 − 0.99) = 100
+where
+x: how many times the database's read load grows
+h_old: the hit ratio before the failure, here 0.99 (99%)
+h_new: the hit ratio after it, here 0 (an empty or unreachable cache)
+In words: database load grows by the ratio of the new miss ratio to the old one.
+```
+
+So a 99% hit ratio dropping to 0% means **100× the database load**, instantly.
 
 This lesson covers the five classic ways it goes wrong and what large systems do about each.
 
@@ -23,10 +35,24 @@ This lesson covers the five classic ways it goes wrong and what large systems do
 A popular key, say the homepage feed, gets 5,000 requests a second and takes 200 ms to rebuild. It expires.
 
 ```
- t=0     key expires
- t=0-200ms  5000/s * 0.2s = 1000
-            requests miss, all rebuild
- t=200ms first rebuild finishes
+ 0 ms       key expires
+ 0-200 ms   every request misses
+            and starts a rebuild
+ 200 ms     first rebuild finishes
+```
+
+How many requests pile in before the first rebuild finishes? Every request that arrives during the rebuild misses:
+
+```formula
+n = r × t_rebuild
+n = 5,000 /s × 0.2 s = 1,000
+where
+n: the number of requests that miss and start their own rebuild
+r: the request rate for the key, in requests per second (/s)
+t_rebuild: the time one rebuild takes, in seconds (s); 200 ms = 0.2 s
+s: seconds
+ms: milliseconds; 1 ms = 0.001 s
+In words: the number of duplicate rebuilds is the request rate multiplied by how long one rebuild takes.
 ```
 
 About 1,000 requests all run the same expensive query at once. The database slows down, so each rebuild takes longer, so more requests pile up. This feedback loop is what turns a stampede into an outage.
@@ -77,7 +103,38 @@ Store the value with a **soft** expiry inside it and a longer **hard** TTL on th
 
 ### Fix C: probabilistic early expiration (XFetch)
 
-Instead of everyone noticing expiry at the same instant, each request independently decides to refresh **a little early**, with a probability that rises as expiry approaches. From Vattani, Chierichetti and Lowenstein (VLDB 2015):
+Instead of everyone noticing expiry at the same instant, each request independently decides to refresh **a little early**, with a probability that rises as expiry approaches. From Vattani, Chierichetti and Lowenstein (VLDB 2015), each request refreshes when:
+
+```formula
+t + δ × β × (−ln(U)) ≥ t_exp
+where
+t: the current time, in seconds (s)
+δ: delta, how long one rebuild of this value takes, in seconds; measured when the value was last computed
+β: beta, a tuning knob with no unit; 1 is the paper's default, above 1 refreshes earlier, below 1 later
+ln: the natural logarithm (logarithm to base e ≈ 2.718)
+U: a random number drawn uniformly between 0 and 1, fresh for every request
+t_exp: the time at which the cached value expires, in seconds
+≥: is greater than or equal to
+s: seconds
+In words: each request pretends the clock is a random amount later than it really is, and refreshes if that pretend time is past expiry. The random amount averages δ × β, so slow-to-rebuild values refresh earlier.
+```
+
+Because −ln(U) follows an exponential distribution with mean 1, the chance that a single request refreshes early, with some time Δ still left before expiry, works out as:
+
+```formula
+P = e^(−Δ / (δ × β))
+P = e^(−2 / (0.5 × 1)) = e^(−4) ≈ 0.018
+where
+P: the probability that one request triggers an early refresh
+e: Euler's number, about 2.718, the base of the natural logarithm
+Δ: the time left before expiry, in seconds (s), here 2 s
+δ: the rebuild time, here 0.5 s
+β: the tuning knob, here 1
+≈: approximately equal to
+In words: far from expiry the chance is tiny; it rises towards 1 as the time left shrinks towards zero.
+```
+
+So with a 0.5 s rebuild, each request 2 s before expiry has about a 1.8% chance of refreshing. In code (using 1 − random() so the logarithm never sees zero):
 
 ```python
 import math, random, time
@@ -98,8 +155,20 @@ Sometimes a single key gets an enormous share of traffic: a celebrity's profile,
 
 Fixes:
 
-- **Local (in-process) cache** in front of Redis with a 1–5 s TTL. With 100 app servers, with per-server coalescing and no early eviction, Redis sees roughly 100 fills per TTL period for that key, rather than 300,000 a second.
-- **Key replication / splitting**: store copies as `score:match9#0` to `score:match9#9` and have readers pick a random suffix. Load spreads over up to 10 nodes; writers update all copies.
+- **Local (in-process) cache** in front of Redis with a 1–5 s TTL. With 100 app servers, with per-server coalescing and no early eviction, Redis sees roughly 100 fills per TTL period for that key, rather than 300,000 a second:
+
+```formula
+R_redis ≈ S / TTL
+R_redis ≈ 100 / 1 s = 100 /s
+where
+R_redis: the reads per second that reach Redis for the hot key
+S: the number of app servers, each with its own local cache, here 100
+TTL: the local cache's time to live, here 1 second (s)
+s: seconds
+≈: approximately equal to; assumes each server refills once per TTL and nothing is evicted early
+In words: each server goes back to Redis only once per TTL, so Redis load depends on the number of servers, not on the read rate.
+```
+- **Key replication / splitting**: store copies as `score:match9#0` to `score:match9#9` and have readers pick a random suffix. Load spreads over up to 10 nodes; writers update all copies. If the 10 copies really do land on 10 different nodes, each gets about a tenth of the reads: 300,000 reads a second becomes about 30,000 a second per node.
 - **Read replicas** for the shard holding the hot key.
 - **Detect them**: Redis has `redis-cli --hotkeys` (with LFU policy) and per-key monitoring in managed services. You can't fix what you can't see.
 
@@ -135,7 +204,38 @@ A **Bloom filter** is a compact bit array that answers "is this key possibly in 
  cache --> DB
 ```
 
-Sizing: about **9.6 bits per element** for a 1% false-positive rate. 100 million ids ≈ 120 MB. A random invalid id is rejected 99% of the time without any database work.
+Sizing comes from the standard Bloom filter analysis. With the best number of hash functions, the bits needed per stored id depend only on the false-positive rate you accept:
+
+```formula
+b = −ln(p) / (ln 2)^2
+b = −ln(0.01) / (ln 2)^2
+b ≈ 4.605 / 0.4805 ≈ 9.6 bits
+where
+bits: binary digits; each is one 0-or-1 cell of the filter
+b: the bits of filter needed per stored element
+p: the false-positive rate, the chance that an id not in the set is wrongly answered "maybe"; here 0.01 (1%)
+ln: the natural logarithm (logarithm to base e ≈ 2.718)
+≈: approximately equal to
+In words: about 9.6 bits per id buys a 1% false-positive rate; each tenfold cut in false positives costs about another 4.8 bits.
+```
+
+So **9.6 bits per element** for a 1% false-positive rate, and the whole filter is:
+
+```formula
+M = n × b / 8
+M = 100,000,000 × 9.6 / 8
+M = 120,000,000 B ≈ 120 MB
+where
+M: the filter's memory, in bytes (B)
+n: the number of ids stored, here 100 million
+b: the bits per element, here 9.6
+8: bits per byte
+B: bytes
+MB: megabytes; 1 MB = 1,000,000 B
+In words: 100 million ids at 9.6 bits each is 960 million bits, which is 120 MB.
+```
+
+A random invalid id is rejected 99% of the time without any database work. The formula assumes a well-chosen number of hash functions (about 7 for 1%) and that every valid id has been added.
 
 Caveats: standard Bloom filters can't delete entries (use a counting filter or Cuckoo filter, or rebuild periodically), and new ids must be included before they become visible, or a negative result must fall back to the source while coverage is uncertain. A stale filter can otherwise reject a valid new id.
 
@@ -149,12 +249,26 @@ An avalanche is a mass miss: many keys at once, rather than one hot key.
 
 Fix: **TTL jitter**.
 
+```formula
+TTL = T_0 + J
+0 ≤ J ≤ T_0 / 10
+where
+TTL: the time to live actually given to this key, in seconds (s)
+T_0: the base TTL, here 3,600 s (one hour)
+J: the jitter, a random whole number of seconds chosen separately, and uniformly, for each key when it is written
+≤: is less than or equal to; the jitter is somewhere between 0 and a tenth of the base TTL
+s: seconds
+In words: give each key its base TTL plus a random extra of up to 10%, so keys written together expire at different times.
+```
+
+In Python:
+
 ```python
 jitter = random.randint(0, base_ttl // 10)
 ttl = base_ttl + jitter
 ```
 
-A 10% spread over an hour turns one cliff into a gentle slope over six minutes.
+With a one-hour base TTL the TTL jitter is up to 360 s, so the expiries spread over six minutes. A 10% spread over an hour turns one cliff into a gentle slope. One million keys expiring over 360 s is about 1,000,000 / 360 ≈ 2,800 expiries a second instead of a million at once, and only keys that are read again cause a reload.
 
 **Cause 2: the cache tier fails.** A Redis cluster goes down, or a network partition cuts it off. All traffic falls to the database.
 
@@ -173,10 +287,25 @@ A new cache cluster, a restart without persistence, or a new region all start **
 Warming strategies:
 
 1. **Gradual traffic shift**: route 1%, then 5%, 25%, 100% of traffic to the new cache over minutes, so it fills while the database copes.
-2. **Pre-warm from data**: load the top N keys (from access logs or the old cluster's `--hotkeys`) before taking traffic.
+2. **Pre-warm from data**: load the most-requested keys, say the top 100,000 (from access logs or the old cluster's `--hotkeys`) before taking traffic.
 3. **Warm from a peer**: Facebook's **cold cluster warm-up** let a new cluster's clients read misses from a warm cluster's cache instead of the database, bringing cold clusters to full capacity in a few hours instead of a few days. To avoid copying a value that had just been invalidated, deletes in the cold cluster carried a two-second *hold-off* that made later `add`s fail; a failed `add` told the client to read the database instead.
 4. **Persistence**: Redis RDB/AOF restores a node warm after restart.
 5. **Shadow traffic**: mirror reads to the new cache before it serves users.
+
+How big can each traffic step be? At each step, the new cache sends the database its share of the traffic times its current miss ratio (traffic not yet moved is still served as before):
+
+```formula
+R_db = s × (1 − h) × R
+R_db = 0.05 × (1 − 0.6) × R = 0.02 × R
+where
+R_db: the read load the new cache passes to the database, in reads per second
+s: the share of traffic routed to the new cache, here 0.05 (5%)
+h: the new cache's current hit ratio, here 0.6 (60%)
+R: the full production read rate, in reads per second
+In words: send only as much traffic to a cold cache as the database can absorb in misses; step up as the hit ratio climbs.
+```
+
+With a database sized for 2% of full traffic, 5% of traffic just fits once the new cache reaches a 60% hit ratio. In practice, leave headroom rather than stepping exactly at capacity.
 
 > [!warning] Deploys can flush caches
 > Changing the cache key format (say, adding a field to the serialised object and bumping `v2` to `v3` in every key) makes every existing entry unreachable. That is a full flush on deploy. Roll it out gradually or run both versions side by side.

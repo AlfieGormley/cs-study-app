@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Estimate exhaustion: if recommendations get 10 calls/s and each hangs 30 s, at steady state `10 × 30 = 300` threads are needed, more than the whole pool.\n2. With a shared pool, all 200 threads end up stuck on recommendations; pricing and reviews calls queue and time out.\n3. With bulkheads, e.g. pricing 80, reviews 80, recommendations 40:\n   - Recommendations' 40 fill up; further calls are rejected immediately (fallback: hide the panel).\n   - Pricing and reviews are unaffected.\n4. Add a short timeout (say 300 ms) and a circuit breaker on recommendations as well, and the expected concurrency drops, although bursts can still fill it.",
+    "workedExample": "1. Estimate exhaustion with Little's law:\n\n```formula\nL = λ × W\nL = 10 calls/s × 30 s = 300\nwhere\nL: the threads busy at once (calls in flight) in steady state\nλ: lambda, the call rate to recommendations, here 10 calls per second (calls/s)\nW: how long each call holds a thread, here 30 seconds (s)\ncalls/s: calls per second\ns: seconds\nIn words: 10 new hanging calls a second, each holding a thread for 30 s, need 300 threads, more than the whole 200-thread pool.\n```\n\n2. With a shared pool, all 200 threads end up stuck on recommendations; pricing and reviews calls queue and time out.\n3. With bulkheads, e.g. pricing 80, reviews 80, recommendations 40:\n   - Recommendations' 40 fill up; further calls are rejected immediately (fallback: hide the panel).\n   - Pricing and reviews are unaffected.\n4. Add a short timeout (say 300 ms) and a circuit breaker on recommendations as well, and the expected concurrency drops, although bursts can still fill it.",
     "link": {
       "title": "Bulkhead pattern (Azure Architecture Center)",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
@@ -75,7 +75,7 @@
       },
       {
         "text": "100 ms and 200 ms",
-        "explanation": "Correct. Time in system = S / (1 − ρ). At ρ = 0.9: 10 / 0.1 = 100 ms. At ρ = 0.95: 10 / 0.05 = 200 ms. A 5-point rise in utilisation doubles latency."
+        "explanation": "Correct. Mean time in system = service time ÷ (1 − utilisation). At 90%: 10 / 0.1 = 100 ms. At 95%: 10 / 0.05 = 200 ms. A 5-point rise in utilisation doubles latency."
       },
       {
         "text": "90 ms and 95 ms",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "M/M/1 mean time in system: `W = S / (1 − ρ)`.\n\n| ρ | 1 − ρ | W |\n|---|---|---|\n| 0.50 | 0.50 | 20 ms |\n| 0.80 | 0.20 | 50 ms |\n| 0.90 | 0.10 | 100 ms |\n| 0.95 | 0.05 | 200 ms |\n| 0.99 | 0.01 | 1000 ms |\n\nLesson: if clients time out at 150 ms, a server at 95% has a mean of 200 ms. M/M/1 time in system is exponential, so the share slower than 150 ms is `e^(−150/200) ≈ 47%`: nearly half of requests time out even though the server is \"only\" 5% short of full. At 90% it's `e^(−1.5) ≈ 22%`. That's why load shedding aims to keep the server below the knee of this curve.",
+    "workedExample": "M/M/1 mean time in system:\n\n```formula\nW = S / (1 − ρ)\nW = 10 ms / (1 − 0.9) = 100 ms\nW = 10 ms / (1 − 0.95) = 200 ms\nwhere\nW: the mean time in system (waiting plus service), in milliseconds (ms)\nS: the mean service time, here 10 ms\nρ: rho, the utilisation, the fraction of time the server is busy (0.9 = 90%)\n1 − ρ: the idle fraction\nms: milliseconds\nIn words: latency is the service time divided by the idle fraction, so halving the idle time from 10% to 5% doubles the mean latency.\n```\n\nThe same formula across a range of utilisations:\n\n| ρ | 1 − ρ | W |\n|---|---|---|\n| 0.50 | 0.50 | 20 ms |\n| 0.80 | 0.20 | 50 ms |\n| 0.90 | 0.10 | 100 ms |\n| 0.95 | 0.05 | 200 ms |\n| 0.99 | 0.01 | 1000 ms |\n\nLesson: if clients time out at 150 ms, a server at 95% has a mean of 200 ms. M/M/1 time in system is exponential, so the share slower than a timeout is:\n\n```formula\nF = e^(−t / W)\nF = e^(−150 / 200) = e^(−0.75) ≈ 0.47\nF = e^(−150 / 100) = e^(−1.5) ≈ 0.22\nwhere\nF: the fraction of requests slower than the timeout\nt: the client timeout, here 150 ms\nW: the mean time in system: 200 ms at 95% busy, 100 ms at 90%\ne: Euler's number, about 2.718\n^: \"to the power of\"\n≈: approximately equal to (rounded)\nIn words: at 95% busy about 47% of requests outlast a 150 ms timeout; at 90% busy about 22% do.\n```\n\nNearly half of requests time out even though the server is \"only\" 5% short of full. That's why load shedding aims to keep the server below the knee of this curve.",
     "link": {
       "title": "Using load shedding to avoid overload (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
@@ -127,11 +127,11 @@
     "id": "rel-overload-protection-q5",
     "level": "advanced",
     "type": "single",
-    "prompt": "Clients use Google's adaptive throttling: they reject locally with probability `max(0, (requests − K × accepts) / (requests + 1))` with `K = 2`. Over the last 2 minutes the application attempted 1,000 requests (including any locally throttled attempts) and the backend accepted 300. Roughly what fraction of new requests will the client reject locally?",
+    "prompt": "Clients use Google's adaptive throttling: they reject locally with this probability, using K = 2:\n\n```formula\nP_rej = max(0, (R − K × A) / (R + 1))\nwhere\nP_rej: the chance a new request is rejected locally, from 0 to 1\nmax: the larger of the two values\nR: requests the application attempted in the last 2 minutes, including locally throttled ones\nA: accepts, requests the backend accepted in that time\nK: a tuning multiplier, here 2\nIn words: the client starts dropping requests itself once attempts exceed K times what the backend accepts.\n```\n\nOver the last 2 minutes the application attempted 1,000 requests (including any locally throttled attempts) and the backend accepted 300. Roughly what fraction of new requests will the client reject locally?",
     "options": [
       {
         "text": "0%, because the backend accepted some requests",
-        "explanation": "Throttling begins once requests exceed K × accepts, not only when accepts reach zero. Here 1,000 > 600, so the formula is positive."
+        "explanation": "Throttling begins once requests exceed twice the accepts (K = 2), not only when accepts reach zero. Here 1,000 > 600, so the formula is positive."
       },
       {
         "text": "70%, matching the backend's rejection rate",
@@ -143,11 +143,11 @@
       },
       {
         "text": "About 60%",
-        "explanation": "60% is K × accepts / requests (600/1,000), the fraction the formula allows *through*, not the fraction it rejects."
+        "explanation": "60% is twice the accepts divided by requests (600/1,000), the fraction the formula allows *through*, not the fraction it rejects."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Plug in: `requests = 1000`, `accepts = 300`, `K = 2`.\n2. Numerator: `1000 − 2 × 300 = 400`.\n3. Denominator: `1000 + 1 = 1001`.\n4. Probability ≈ `0.40`, so 40% are rejected client-side; 60% are sent.\n5. Of those sent, the backend will still reject some, but it no longer pays to receive and reject the 40%.\n\nWhy K = 2? It lets twice as many requests through as are being accepted, so if the backend recovers, accepts rise and throttling eases quickly. Lower K is more aggressive; higher K is more lenient.",
+    "workedExample": "```formula\nP_rej = max(0, (R − K × A) / (R + 1))\nP_rej = (1000 − 2 × 300) / (1000 + 1)\nP_rej = 400 / 1001 ≈ 0.40\nwhere\nP_rej: the chance the client rejects a new request locally\nmax: the larger of the two values\nR: requests attempted, here 1,000\nA: requests the backend accepted, here 300\nK: the multiplier, here 2\n≈: approximately equal to (rounded)\nIn words: 1,000 attempts against 300 accepts leaves 400 more than the 600 the client allows itself, so about 40% of new requests are dropped client-side and 60% are sent.\n```\n\nOf those sent, the backend will still reject some, but it no longer pays to receive and reject the 40%.\n\nWhy K = 2? It lets twice as many requests through as are being accepted, so if the backend recovers, accepts rise and throttling eases quickly. Lower K is more aggressive; higher K is more lenient.",
     "link": {
       "title": "Handling overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"
@@ -207,7 +207,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Rates: suppose the API receives 20k events/s and the slowed DB absorbs 5k/s. The queue grows at 15k/s.\n2. At ~1 KB/event that's 15 MB/s, so 40 GB fills in about 45 minutes, then the process dies with everything in it.\n3. Backpressure options:\n   - **Bounded queue** (e.g. 100k events). When full, the API returns `429` with `Retry-After`; clients back off.\n   - **Durable log** (Kafka): producers write to disk-backed partitions, consumers pull at their own pace, and consumer lag is alerted on. Capacity is bounded by disk and retention, and durability depends on replication, acknowledgement and failure assumptions; producers still need backpressure before capacity or retention is exceeded.\n4. Either way the overload becomes visible and controllable, rather than a silent build-up ending in a crash.",
+    "workedExample": "1. Rates: suppose the API receives 20k events/s and the slowed DB absorbs 5k/s. The queue grows at 15k/s.\n2. How long until memory runs out:\n\n```formula\nT = C / ((r_in − r_out) × s)\nT = 40 GB / (15,000 /s × 1 KB)\nT = 40 GB / 15 MB/s ≈ 2,700 s ≈ 45 min\nwhere\nT: the time until the queue fills memory, in seconds (s) or minutes (min)\nC: the memory the queue can use, here 40 gigabytes (GB)\nr_in: events arriving per second, here 20,000\nr_out: events the slowed database absorbs per second, here 5,000\ns: the size of one event, about 1 kilobyte (KB)\n/s: per second\nMB/s: megabytes per second\nGB: gigabytes; 1 GB ≈ 1,000 MB\nMB: megabytes; 1 MB ≈ 1,000 KB\nKB: kilobytes; 1 KB ≈ 1,000 bytes\nmin: minutes\n≈: approximately equal to (rounded)\nIn words: the queue gains 15,000 events (about 15 MB) every second, so 40 GB is full in about three-quarters of an hour, then the process dies with everything in it.\n```\n\n3. Backpressure options:\n   - **Bounded queue** (e.g. 100k events). When full, the API returns `429` with `Retry-After`; clients back off.\n   - **Durable log** (Kafka): producers write to disk-backed partitions, consumers pull at their own pace, and consumer lag is alerted on. Capacity is bounded by disk and retention, and durability depends on replication, acknowledgement and failure assumptions; producers still need backpressure before capacity or retention is exceeded.\n4. Either way the overload becomes visible and controllable, rather than a silent build-up ending in a crash.",
     "link": {
       "title": "Handling overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"
@@ -237,7 +237,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Use **Little's law**: `in-flight = rate × latency`.\n\n```\nhealthy: 200 × 0.05 s =     10\ndegraded: 200 × 5 s   =  1,000\n```\n\n1. Healthy: 10 threads busy, so 20 is double the need, a sensible margin.\n2. Degraded: 1,000 would be needed, but only 20 exist.\n3. Throughput through the pool: `20 / 5 s = 4 calls/s`.\n4. Everything else is rejected quickly; show list prices or hide the panel.\n\nA 200 ms timeout still implies up to 200 × 0.2 = 40 concurrent calls if all time out, exceeding 20 threads. The bulkhead remains necessary; a breaker can reduce new attempts after it trips.",
+    "workedExample": "Use **Little's law**, then the pool's maximum throughput:\n\n```formula\nL = λ × W\nL = 200 /s × 0.05 s = 10\nL = 200 /s × 5 s = 1,000\nX = N / W = 20 / 5 s = 4 /s\nwhere\nL: calls in flight at once\nλ: lambda, the call rate, here 200 per second (/s)\nW: time per call: 50 ms = 0.05 s healthy, 5 s degraded\nX: the most calls per second the pool can complete\nN: the threads in the pool, here 20\ns: seconds; /s: per second\nIn words: healthy, 10 calls are in flight; degraded, 1,000 would be. A 20-thread pool with 5-second calls finishes at most 4 a second.\n```\n\n1. Healthy: 10 threads busy, so 20 is double the need, a sensible margin.\n2. Degraded: 1,000 would be needed, but only 20 exist.\n3. Throughput through the pool: `20 / 5 s = 4 calls/s`.\n4. Everything else is rejected quickly; show list prices or hide the panel.\n\nA 200 ms timeout still implies up to 200 × 0.2 = 40 concurrent calls if all time out, exceeding 20 threads. The bulkhead remains necessary; a breaker can reduce new attempts after it trips.",
     "link": {
       "title": "Bulkhead pattern (Azure Architecture Center)",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
@@ -251,15 +251,15 @@
     "options": [
       {
         "text": "Mean 25 ms, p99 about 50 ms",
-        "explanation": "25 ms is `S / ρ`, not `S / (1 − ρ)`. Queueing delay depends on the idle fraction, 1 − ρ = 0.2."
+        "explanation": "25 ms is the service time divided by the utilisation (20 / 0.8). The correct formula divides by the idle fraction, 1 − 0.8 = 0.2."
       },
       {
         "text": "Mean 100 ms, p99 about 200 ms",
-        "explanation": "The mean is right, but an exponential distribution has a long tail: p99 is ln(100) ≈ 4.6 times the mean, not 2."
+        "explanation": "The mean is right, but an exponential distribution has a long tail: p99 is about 4.6 times the mean (the natural logarithm of 100), not 2."
       },
       {
         "text": "Mean 100 ms, p99 about 460 ms",
-        "explanation": "Correct. Mean W = 20 / (1 − 0.8) = 100 ms. For an exponential distribution, p99 = W × ln(100) ≈ 4.6 × 100 ≈ 460 ms."
+        "explanation": "Correct. Mean = 20 / (1 − 0.8) = 100 ms. For an exponential distribution, p99 is about 4.6 × the mean ≈ 460 ms."
       },
       {
         "text": "Mean 20 ms, p99 about 92 ms",
@@ -267,7 +267,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Mean time in system: `W = S / (1 − ρ) = 20 / 0.2 = 100 ms`.\n2. M/M/1 time in system is exponential with mean W, so:\n\n```\nP(T > t) = e^(−t / W)\np99: e^(−t/W) = 0.01\nt = W × ln(100) ≈ 4.6 W\n  ≈ 460 ms\n```\n\n3. Compare with the 20 ms service time: the p99 is 23× slower at 80% busy.\n\nM/M/c pooling and different arrival/service distributions change this curve; real servers must be measured. If your SLO is on p99, the headroom you need is larger than the mean suggests.",
+    "workedExample": "1. Mean time in system, then the p99 for an exponential distribution:\n\n```formula\nW = S / (1 − ρ)\nW = 20 ms / (1 − 0.8) = 100 ms\ne^(−t / W) = 0.01\nt = W × ln(100)\nt ≈ 100 ms × 4.6 ≈ 460 ms\nwhere\nW: the mean time in system, in milliseconds (ms)\nS: the mean service time, here 20 ms\nρ: rho, the utilisation, here 0.8 (80%)\nt: the p99 time: only 1% (0.01) of requests take longer\ne: Euler's number, about 2.718; e^(−t / W) is the fraction of requests slower than t\nln: the natural logarithm, the inverse of e^; ln(100) ≈ 4.6\n≈: approximately equal to (rounded)\nms: milliseconds\nIn words: the mean is 100 ms, and because the exponential tail is long, the slowest 1% take more than about 460 ms.\n```\n\n2. Solving the third line for t gives the fourth: take the natural log of both sides.\n3. Compare with the 20 ms service time: the p99 is 23× slower at 80% busy.\n\nM/M/c pooling and different arrival/service distributions change this curve; real servers must be measured. If your SLO is on p99, the headroom you need is larger than the mean suggests.",
     "link": {
       "title": "M/M/1 queue (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/M/M/1_queue"

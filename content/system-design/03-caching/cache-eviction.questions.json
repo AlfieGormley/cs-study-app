@@ -97,11 +97,11 @@
     "options": [
       {
         "text": "A sorted array of keys by last-access time",
-        "explanation": "Wrong. In an array ordered by recency rather than by key, locating an arbitrary key may require O(n), and moving entries also costs O(n)."
+        "explanation": "Wrong. In an array ordered by recency rather than by key, locating an arbitrary key may require O(n) work, growing in step with n, the number of keys in the cache, and moving entries also costs O(n)."
       },
       {
         "text": "A min-heap keyed by last-access time",
-        "explanation": "A heap finds the minimum in O(1) but updating a key's position on every access costs O(log n)."
+        "explanation": "A heap finds the minimum in O(1) (constant time), but updating a key's position on every access costs O(log n), which grows with the logarithm of n, the number of keys in the cache."
       },
       {
         "text": "A hash map from key to node, plus a doubly linked list ordered by recency",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. `get(k)` must find k fast → hash map, O(1).\n2. It must then mark k most recent → unlink its node and insert at head. With `prev`/`next` pointers this is O(1).\n3. `put` on a full cache evicts the tail node, O(1), and deletes its key from the map, O(1).\n4. A singly linked list would fail step 2, because unlinking needs the previous node.\n5. Python's `OrderedDict` and Java's `LinkedHashMap(accessOrder=true)` are exactly this structure.\nHash-table operations are expected/amortized O(1), not an unconditional worst-case guarantee for all keys or hash functions.",
+    "workedExample": "O(1) (\"order one\") means constant time: the work does not grow with the number of keys in the cache.\n\n1. `get(k)` must find key k fast → hash map, O(1).\n2. It must then mark k most recent → unlink its node and insert at head. With `prev`/`next` pointers this is O(1).\n3. `put` on a full cache evicts the tail node, O(1), and deletes its key from the map, O(1).\n4. A singly linked list would fail step 2, because unlinking needs the previous node.\n5. Python's `OrderedDict` and Java's `LinkedHashMap(accessOrder=true)` are exactly this structure.\nHash-table operations are expected/amortized O(1), not an unconditional worst-case guarantee for all keys or hash functions.",
     "link": {
       "title": "Cache replacement policies — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
@@ -151,7 +151,7 @@
       1,
       3
     ],
-    "workedExample": "1. Exact LRU costs two pointers per key plus list updates on every read. With 100 million keys that is ~1.6 GB of pointers alone.\n2. Redis instead stores a 24-bit clock or LFU counter in each object and **samples**: pick 5 random keys, put the oldest in a 16-entry pool, evict the pool's best.\n3. LFU: an 8-bit Morris-style counter. With `lfu-log-factor 10`, around a million hits saturate the counter at 255.\n4. Decay: elapsed decay periods are applied lazily when the key is accessed or considered; a background decrement of every idle key is not required, so formerly hot keys become evictable.\n5. Expiry is both lazy (on access) and active (periodic sampling).",
+    "workedExample": "1. Exact LRU costs two pointers per key plus list updates on every read. With 100 million keys:\n\n```formula\nM = n × 2 × p\nM = 100,000,000 × 2 × 8 B = 1.6 GB\nwhere\nM: memory for the list pointers, in bytes (B)\nn: the number of keys, 100 million\n2: two pointers (previous and next) per key\np: one pointer's size, 8 B on a 64-bit machine\nB: bytes\nGB: gigabytes; 1 GB = 1,000,000,000 B\nIn words: 16 bytes of pointers per key comes to about 1.6 GB for 100 million keys, before storing any data.\n```\n2. Redis instead stores a 24-bit clock or LFU counter in each object and **samples**: pick 5 random keys, put the oldest in a 16-entry pool, evict the pool's best.\n3. LFU: an 8-bit Morris-style counter. With `lfu-log-factor 10`, around a million hits saturate the counter at 255.\n4. Decay: elapsed decay periods are applied lazily when the key is accessed or considered; a background decrement of every idle key is not required, so formerly hot keys become evictable.\n5. Expiry is both lazy (on access) and active (periodic sampling).",
     "link": {
       "title": "Key eviction — Redis docs",
       "url": "https://redis.io/docs/latest/develop/reference/eviction/"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Decay rule: for every `lfu-decay-time` minutes (1 here) since the last decrement, subtract 1 from the counter.\n2. Idle time: 3 hours = 180 minutes.\n3. Effective counter:\n\n```\n200 - 180 = 20\n```\n\n4. Compare: `promo:blackfriday` ≈ 20 vs `promo:xmas` ≈ 29 after one minute of decay.\n5. Sampled eviction picks the lower counter, so Black Friday is more likely to be selected if both are considered; random sampling does not guarantee a particular victim.\n\nWithout decay, last month's hit would squat in the cache forever. Setting `lfu-decay-time 0` disables decay, which is rarely what a cache wants.",
+    "workedExample": "1. Decay rule: for every `lfu-decay-time` minutes (1 here) since the last decrement, subtract 1 from the counter.\n2. Idle time: 3 hours = 180 minutes.\n3. Effective counter:\n\n```formula\nC_new = max(C − ⌊t_idle / D⌋, 0)\nC_new = max(200 − ⌊180 / 1⌋, 0)\nC_new = 200 − 180 = 20\nwhere\nC_new: the counter after decay\nC: the stored counter, 200\nmax: the larger of its two inputs (never below 0)\n⌊ ⌋: floor, rounding down to a whole number\nt_idle: minutes since last access, here 180\nD: lfu-decay-time, here 1 minute\nIn words: one point is lost per idle minute, so three idle hours take Black Friday's 200 down to 20.\n```\n\n4. Compare: `promo:blackfriday` ≈ 20 vs `promo:xmas` ≈ 29 after one minute of decay.\n5. Sampled eviction picks the lower counter, so Black Friday is more likely to be selected if both are considered; random sampling does not guarantee a particular victim.\n\nWithout decay, last month's hit would squat in the cache forever. Setting `lfu-decay-time 0` disables decay, which is rarely what a cache wants.",
     "link": {
       "title": "Key eviction — Redis docs",
       "url": "https://redis.io/docs/latest/develop/reference/eviction/"

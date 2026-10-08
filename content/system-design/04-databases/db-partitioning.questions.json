@@ -49,11 +49,11 @@
       },
       {
         "text": "About 80%",
-        "explanation": "Correct. A key stays put only if `h mod 4 = h mod 5`, which happens for 4 out of every 20 consecutive hash values: 20%. So about 80% of keys move, and a cold replacement placement can cause many misses; the request fraction depends on key popularity."
+        "explanation": "Correct. A key stays put only if its hash leaves the same remainder when divided by 4 and by 5, which happens for 4 out of every 20 consecutive hash values: 20%. So about 80% of keys move, and a cold replacement placement can cause many misses; the request fraction depends on key popularity."
       }
     ],
     "answer": 3,
-    "workedExample": "1. `h mod 4` and `h mod 5` together repeat every lcm(4, 5) = 20 values.\n2. Count h in 0–19 where they're equal: h = 0, 1, 2, 3 (both give h). That's 4 values.\n3. 4/20 = 20% stay; 80% move.\n4. For a cold cache with uniformly popular keys, about 80% of requests initially miss; skew and migration/warming change this: a classic cause of outages during scaling.\n5. Consistent hashing moves only about 1/5 = 20% of keys (just the new node's share), and with virtual nodes those come evenly from all four old nodes.",
+    "workedExample": "1. A key with hash value h moves unless its old and new node numbers match:\n```formula\nold = h mod 4\nnew = h mod 5\nwhere\nold: the node the key used to live on (0–3)\nnew: the node it maps to after growth (0–4)\nh: the key's hash value, a whole number\nmod: modulo, the remainder after whole-number division (7 mod 4 = 3)\nIn words: each key's node is the remainder of its hash; adding a node changes the divisor, so most remainders change.\n```\n2. The pair of remainders repeats every 20 values (the lowest common multiple of 4 and 5). Count h in 0–19 where they're equal: h = 0, 1, 2, 3 (both give h). That's 4 values.\n3. The fraction that stays:\n```formula\nF_stay = 4 / 20 = 1 / (N + 1)\nF_stay = 1 / (4 + 1) = 0.2\nF_move = 1 − 0.2 = 0.8\nwhere\nF_stay: the fraction of keys that stay on the same node\nF_move: the fraction that move\nN: the number of nodes before growth, here 4\nIn words: going from 4 to 5 nodes with modulo placement keeps only 1 key in 5 in place; 80% move.\n```\n4. For a cold cache with uniformly popular keys, about 80% of requests initially miss; skew and migration/warming change this: a classic cause of outages during scaling.\n5. Consistent hashing moves only about one key in five, 20% (just the new node's share), and with virtual nodes those come evenly from all four old nodes.",
     "link": {
       "title": "Wikipedia: Consistent hashing",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
@@ -101,7 +101,7 @@
       },
       {
         "text": "Roughly 80 ms or worse, because the scatter-gather waits on the slowest of 20 shards, and the chance of at least one shard being slow is high",
-        "explanation": "Correct. With 20 shards, P(all under their p99) = 0.99²⁰ ≈ 82%, so about 18% of queries hit at least one 80 ms shard. The overall p99 is at or beyond the per-shard p99."
+        "explanation": "Correct. With 20 shards, the chance that all 20 respond faster than their own p99 is 0.99 multiplied by itself 20 times, about 82%, so about 18% of queries hit at least one 80 ms shard. The overall p99 is at or beyond the per-shard p99."
       },
       {
         "text": "About 100 ms, i.e. 20 × 5 ms",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Local index → the category could be on any shard → query all 20 in parallel, merge results.\n2. Latency = max of 20 shard latencies.\n3. P(a given shard is under its p99) = 0.99. P(all 20 are) = 0.99²⁰ ≈ 0.818.\n4. So ~18% of requests include at least one shard at or beyond 80 ms. The combined p99 is therefore at least the per-shard p99; its exact value cannot be derived from only p50 and p99.\n5. Mitigations: a global index partitioned by `category` (one shard per query, but async index updates), hedged requests to replicas, or a search engine built for this access pattern.",
+    "workedExample": "1. Local index → the category could be on any shard → query all 20 in parallel, merge results.\n2. Latency = max of 20 shard latencies.\n3. Probability that every shard is fast:\n```formula\nP_all = q^N\nP_all = 0.99^20 ≈ 0.818\nP_slow = 1 − P_all ≈ 0.18\nwhere\nP_all: the probability that all N shards answer faster than their p99\nq: the probability one shard answers faster than its p99, 0.99 by definition of p99\nN: the number of shards queried, here 20\nP_slow: the probability that at least one shard is at or beyond its p99\n≈: approximately equal to\nIn words: with 20 independent shards, about 1 query in 5 waits for at least one shard's worst-1% latency.\n```\n4. So ~18% of requests include at least one shard at or beyond 80 ms. The combined p99 is therefore at least the per-shard p99; its exact value cannot be derived from only p50 and p99.\n5. Mitigations: a global index partitioned by `category` (one shard per query, but async index updates), hedged requests to replicas, or a search engine built for this access pattern.",
     "link": {
       "title": "MongoDB: Sharding",
       "url": "https://www.mongodb.com/docs/manual/sharding/"
@@ -176,7 +176,7 @@
       0,
       3
     ],
-    "workedExample": "1. A standard one-KiB write consumes one write unit; physical partitions have finite throughput.\n2. Salting creates independently routable logical keys, but validate their physical distribution.\n3. If 50 salts receive uniform traffic, each gets 800 writes/s on average; allow headroom and verify the actual service behavior.\n4. Combining 100 events into a single one-KiB summary would reduce 40,000 events/s to 400 one-unit writes/s only if discarding that detail is acceptable.\n5. A 100-KiB item costs about 100 standard write units, and API batching does not reduce the per-item bill. Logical item collections without LSIs may also be split internally; distinguish logical keys from physical partitions.",
+    "workedExample": "1. A standard one-KiB write consumes one write unit; physical partitions have finite throughput.\n2. Salting creates independently routable logical keys, but validate their physical distribution.\n3. If 50 salts receive uniform traffic, each gets 800 writes/s on average; allow headroom and verify the actual service behavior.\n```formula\nR_salt = R / S\nR_salt = 40,000/s / 50 = 800/s\nwhere\nR_salt: the average write rate per salted key, in writes per second (/s)\nR: the total write rate, 40,000 one-KiB writes per second\nS: the number of salt values, here 50\ns: seconds\nIn words: splitting one hot key into 50 salted keys divides its write rate by 50, if traffic is spread evenly.\n```\n4. Combining 100 events into a single one-KiB summary would reduce 40,000 events/s to 400 one-unit writes/s only if discarding that detail is acceptable.\n5. A 100-KiB item costs about 100 standard write units, and API batching does not reduce the per-item bill. Logical item collections without LSIs may also be split internally; distinguish logical keys from physical partitions.",
     "link": {
       "title": "DynamoDB: Designing partition keys to distribute your workload",
       "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
@@ -304,7 +304,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Redis Cluster: `slot = CRC16(key) mod 16384`; each node owns a set of slots.\n2. `user:42:cart` and `user:42:profile` are different strings, so they almost certainly land in different slots, possibly on different nodes.\n3. Multi-key commands, `MULTI`/`EXEC` and Lua scripts need all keys in one slot, hence `CROSSSLOT`.\n4. Hash tags:\n```\n{user:42}:cart     -> CRC16(\"user:42\")\n{user:42}:profile  -> CRC16(\"user:42\")\n```\n   Same slot, so `MGET` works.\n5. Caution: don't put a popular constant in the tag (`{global}:...`), or every key piles into one slot and one node becomes a hot spot.",
+    "workedExample": "1. Redis Cluster places every key in a slot, and each node owns a set of slots:\n```formula\nslot = CRC16(key) mod 16384\nwhere\nslot: the hash slot the key belongs to, 0–16383\nCRC16: a 16-bit checksum function that turns the key's bytes into a number from 0 to 65535\nkey: the key string, or only the part inside {braces} if it has a hash tag\nmod: modulo, the remainder after whole-number division\n16384: the fixed number of slots in a Redis Cluster\nIn words: checksum the key and take the remainder by 16,384; keys with the same hash tag get the same slot.\n```\n2. `user:42:cart` and `user:42:profile` are different strings, so they almost certainly land in different slots, possibly on different nodes.\n3. Multi-key commands, `MULTI`/`EXEC` and Lua scripts need all keys in one slot, hence `CROSSSLOT`.\n4. Hash tags:\n```\n{user:42}:cart     -> CRC16(\"user:42\")\n{user:42}:profile  -> CRC16(\"user:42\")\n```\n   Same slot, so `MGET` works.\n5. Caution: don't put a popular constant in the tag (`{global}:...`), or every key piles into one slot and one node becomes a hot spot.",
     "link": {
       "title": "Redis Cluster specification",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
@@ -334,7 +334,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Diagnose: skew from one *key* (a tenant), not bad hashing.\n2. Any formula `f(tenant_id)` puts all of that tenant on one shard.\n3. Directory-based sharding:\n```\ntenant_id -> shard\n  1..n    -> shards 1-16\n  BIG     -> shard 17 (dedicated)\n```\n4. Moving BIG: backfill, CDC, verify, cut over (as in the resharding steps).\n5. If BIG later needs several machines, shard its data by a second key such as `account_id`, keeping its queries mostly single-shard.\n6. Systems like Citus and Vitess support this pattern of isolating large tenants.",
+    "workedExample": "1. Diagnose: skew from one *key* (a tenant), not bad hashing.\n2. Any fixed placement formula puts all of that tenant on one shard:\n```formula\nshard = f(tenant_id)\nwhere\nshard: the shard that stores a tenant's data\nf: any placement function, e.g. hash modulo the shard count\ntenant_id: the tenant's id\nIn words: one tenant id always gives one shard, so a giant tenant can never be spread out by changing the formula alone.\n```\n3. Directory-based sharding:\n```\ntenant_id -> shard\n  1..n    -> shards 1-16\n  BIG     -> shard 17 (dedicated)\n```\n4. Moving BIG: backfill, CDC, verify, cut over (as in the resharding steps).\n5. If BIG later needs several machines, shard its data by a second key such as `account_id`, keeping its queries mostly single-shard.\n6. Systems like Citus and Vitess support this pattern of isolating large tenants.",
     "link": {
       "title": "Citus: Choosing a distribution column",
       "url": "https://docs.citusdata.com/en/stable/sharding/data_modeling.html"
@@ -372,7 +372,7 @@
       1,
       4
     ],
-    "workedExample": "1. Elasticsearch: `shard = hash(_routing) mod number_of_primary_shards`. That's why the count can't change freely: it would move every document.\n2. 5 primaries → at most 5 nodes doing primary indexing.\n3. Replicas add search capacity and redundancy, not indexing capacity.\n4. Too many shards: overhead per shard plus search fan-out. Aim for shards in the tens of GB.\n5. Growth options:\n   - Split API (×2, ×5, ...) on a read-only index.\n   - Reindex into a new index.\n   - Time-based indexes with rollover, each sized for its time.",
+    "workedExample": "1. Elasticsearch routes each document to a primary shard, in simplified form:\n```formula\nshard = hash(routing) mod P\nwhere\nshard: the primary shard that stores the document\nhash: Elasticsearch's hash function (Murmur3)\nrouting: the routing value, the document id by default\nmod: modulo, the remainder after whole-number division\nP: the number of primary shards\nIn words: the document's shard is fixed by its hash and the primary count, so changing the count would move most documents.\n```\nThat's why the count can't change freely. (The real formula also uses a routing-shards setting so the split API can multiply the count cleanly.)\n2. 5 primaries → at most 5 nodes doing primary indexing.\n3. Replicas add search capacity and redundancy, not indexing capacity.\n4. Too many shards: overhead per shard plus search fan-out. Aim for shards in the tens of GB.\n5. Growth options:\n   - Split API (×2, ×5, ...) on a read-only index.\n   - Reindex into a new index.\n   - Time-based indexes with rollover, each sized for its time.",
     "link": {
       "title": "Elasticsearch: Split index API",
       "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-split-index.html"

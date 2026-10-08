@@ -54,7 +54,24 @@ The weakness: map output is materialized on local disk and reducer output is wri
 - **Narrow vs wide transformations**: map and filter do not themselves redistribute rows; reading input can still use the network. Grouping and joins often need a shuffle, but existing partitioning, broadcasting or storage-partition joins can avoid it. Inspect the physical plan.
 
 > [!warning] Data skew kills batch jobs
-> If 30% of rows share one key (say `country = 'US'`, or a null), one task in a shuffle gets 30% of the data while hundreds of others finish in seconds. The job takes as long as that one task. Fixes include salting the hot key, broadcasting the small side of a join, and Spark's adaptive query execution, which splits skewed partitions.
+> If 30% of rows share one key (say `country = 'US'`, or a null), one task in a shuffle gets 30% of the data while hundreds of others finish in seconds. The job takes as long as that one task:
+
+```formula
+T_stage ≈ max(t_1, t_2, ..., t_n)
+where
+T_stage: how long the shuffle stage takes, in seconds (s)
+t_1: how long task 1 takes, in s
+t_2: how long task 2 takes, in s
+...: and so on, one time per task
+t_n: how long the last task takes
+n: the number of tasks in the stage, e.g. 200
+max: the largest of the values listed
+≈: approximately equal to (ignoring scheduling overhead)
+s: seconds
+In words: a stage finishes only when its slowest task does, so one overloaded task sets the pace for everyone.
+```
+
+With 200 tasks and evenly spread data, each would handle 0.5% of the rows; the skewed task handles 30%, about 60 times as much, so the stage takes roughly 60 times longer than it should. Fixes include salting the hot key, broadcasting the small side of a join, and Spark's adaptive query execution, which splits skewed partitions.
 
 ## Stream processing
 
@@ -159,7 +176,7 @@ A common layering is **bronze** (raw), **silver** (cleaned, deduplicated, confor
 - MapReduce made large-scale batch processing reliable through simple map/shuffle/reduce stages, data locality and re-execution of deterministic tasks over immutable input.
 - Spark pipelines and caches data in memory, optimises a DAG of transformations and recovers lost partitions via lineage; shuffles and skew dominate cost.
 - Stateful event-time processing uses windows, progress policies and recovery mechanisms. End-to-end correctness also depends on source and sink semantics; not every stream job needs windows or state.
-- Lambda runs batch and speed layers in parallel, with batch periodically overwriting the speed layer's recent results, at the cost of duplicated logic. Kappa uses one streaming path and replays the retained log into a new output to recompute.
+- The Lambda architecture runs batch and speed layers in parallel, with batch periodically overwriting the speed layer's recent results, at the cost of duplicated logic. Kappa uses one streaming path and replays the retained log into a new output to recompute.
 - Warehouses hold structured columnar data for SQL; lakes hold raw files cheaply; lakehouse table formats add ACID and schemas on top of the lake.
 
 ## Further reading

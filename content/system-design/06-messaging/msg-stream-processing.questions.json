@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Requirements: (a) fixed 1-hour buckets aligned to the clock, (b) each event in exactly one bucket.\n2. Tumbling: size = 1 h, no overlap → (a) ✓ (b) ✓.\n3. Hopping: overlap → (b) ✗.\n4. Session: gap-based → (a) ✗.\n5. Also choose **event time** so a request made at 09:59:58 but processed at 10:00:03 is billed in the 09:00 hour.",
+    "workedExample": "1. Requirements: (a) fixed 1-hour buckets aligned to the clock, (b) each event in exactly one bucket.\n2. Tumbling: 1-hour size, no overlap → (a) ✓ (b) ✓.\n3. Hopping: overlap → (b) ✗.\n4. Session: gap-based → (a) ✗.\n5. Also choose **event time** so a request made at 09:59:58 but processed at 10:00:03 is billed in the 09:00 hour.",
     "link": {
       "title": "Windows (Apache Flink)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
@@ -75,7 +75,7 @@
       },
       {
         "text": "It is added to the 10:04–10:05 window, which has not fired yet",
-        "explanation": "Correct. Watermark ≈ 10:05:07 − 10 s = 10:04:57; Flink subtracts one additional millisecond. The 10:04–10:05 window fires only when the watermark reaches its end, 10:05:00, so it is still open and the event is included."
+        "explanation": "Correct. The watermark is about 10:05:07 − 10 s = 10:04:57; Flink subtracts one additional millisecond. The 10:04–10:05 window fires only when the watermark reaches its end, 10:05:00, so it is still open and the event is included."
       },
       {
         "text": "The 10:04–10:05 window has fired, so the event creates a duplicate window",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. **Watermark** = max event time − bound = 10:05:07 − 0:00:10 = **10:04:56.999** including Flink's additional 1 ms subtraction.\n2. **Target window** for 10:04:58 = [10:04:00, 10:05:00).\n3. **Has it fired?** It fires when watermark ≥ 10:05:00 (strictly, ≥ 10:04:59.999). 10:04:57 < 10:05:00 → not yet.\n4. **Is the event late?** An event behind the watermark is late in event-time progress, but whether this window accepts it depends on its end, trigger and allowed-lateness cleanup time. 10:04:58 > 10:04:57 → on time.\n5. So it joins the open window. The window will fire after an event at 10:05:10 or later has been seen and the corresponding periodic watermark has been emitted.",
+    "workedExample": "1. **Watermark**: the newest event time minus the bound, minus the extra millisecond Flink subtracts:\n\n```formula\nW = t_max − δ − 1 ms\nW = 10:05:07 − 10 s − 1 ms\nW = 10:04:56.999\nwhere\nW: the watermark: the event time up to which Flink assumes it has seen everything\nt_max: the largest event time seen so far, 10:05:07\nδ: delta, the out-of-orderness bound, 10 seconds (s)\nms: milliseconds\ns: seconds\nIn words: Flink assumes nothing older than about 10:04:57 is still to come.\n```\n\n2. **Target window** for 10:04:58: the window from 10:04:00 up to (but not including) 10:05:00.\n3. **Has it fired?** The window fires once the watermark reaches its last millisecond, 10:04:59.999. The watermark is only about 10:04:57, so not yet.\n4. **Is the event late?** An event behind the watermark is late in event-time progress, but whether this window accepts it depends on its end, trigger and allowed-lateness cleanup time. 10:04:58 is after the watermark of about 10:04:57, so it is on time.\n5. So it joins the open window. The window will fire after an event at 10:05:10 or later has been seen and the corresponding periodic watermark has been emitted.",
     "link": {
       "title": "Timely stream processing (Apache Flink)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```\npartition wm:  P0 10:31  P1 10:31\n               ...       P11 09:58\noperator wm = min(...) = 09:58\n```\n\n1. Each source split (partition) generates its own watermark from the events it sees.\n2. Downstream operators take the **minimum**, because they can only claim completeness up to the least advanced input.\n3. P11's last event put its watermark at 09:58, and with no new events it never advances.\n4. Windows ending after 09:58 never fire.\n5. Fix: `WatermarkStrategy...withIdleness(Duration.ofMinutes(1))`. After a minute without events, P11 is marked idle and excluded from the minimum until data returns.\n6. Alerting idea: monitor the watermark lag (`currentInputWatermark` vs wall clock) per operator.",
+    "workedExample": "```formula\nW_op = min(W_0, W_1, …, W_11)\nW_op = min(10:31, 10:31, …, 09:58)\nW_op = 09:58\nwhere\nW_op: the watermark of the operator that reads all 12 partitions\nW_0: the watermark of partition 0, here 10:31\nW_1: the watermark of partition 1, here 10:31\nW_11: the watermark of partition 11, stuck at 09:58\n…: and so on for the partitions in between\nmin: the smallest of the values\nIn words: the operator can only be as far along as its slowest input, so one stuck partition holds everything at 09:58.\n```\n\n1. Each source split (partition) generates its own watermark from the events it sees.\n2. Downstream operators take the **minimum**, because they can only claim completeness up to the least advanced input.\n3. P11's last event put its watermark at 09:58, and with no new events it never advances.\n4. Windows ending after 09:58 never fire.\n5. Fix: `WatermarkStrategy...withIdleness(Duration.ofMinutes(1))`. After a minute without events, P11 is marked idle and excluded from the minimum until data returns.\n6. Alerting idea: monitor the watermark lag (`currentInputWatermark` vs wall clock) per operator.",
     "link": {
       "title": "Timely stream processing (Apache Flink)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
@@ -139,7 +139,7 @@
       },
       {
         "text": "A session result is emitted only once the watermark passes the last event time plus the gap",
-        "explanation": "Correct. In event time, a session is complete when no event can extend it: watermark ≥ last event + 30 minutes. That is when it fires (subject to allowed lateness)."
+        "explanation": "Correct. In event time, a session is complete when no event can extend it: once the watermark reaches the last event's time plus 30 minutes. That is when it fires (subject to allowed lateness)."
       },
       {
         "text": "Each event belongs to several overlapping sessions for the same user",
@@ -151,7 +151,7 @@
       2,
       3
     ],
-    "workedExample": "Model one user's events: 10:00, 10:10, 10:35, then 11:30.\n\n1. 10:00 → 10:10 (gap 10 m) → 10:35 (gap 25 m): all within 30 minutes, so they form **session A**, spanning 10:00–10:35.\n2. 11:30 is 55 minutes after 10:35 → a new **session B**.\n3. Session A fires when the watermark passes 10:35 + 30 m = **11:05**, under the watermark's completeness assumption; later accepted data may still merge/refine sessions.\n4. Now suppose the events were 10:00 and 10:40 (two sessions, since the gap is 40 m) and a late 10:20 arrives. It is within 30 minutes of both → the sessions **merge** into one.\n5. Different users' sessions are entirely independent, so their boundaries need not line up; coincident activity can still produce equal boundaries.",
+    "workedExample": "Model one user's events: 10:00, 10:10, 10:35, then 11:30.\n\n1. 10:00 → 10:10 (gap 10 m) → 10:35 (gap 25 m): all within 30 minutes, so they form **session A**, spanning 10:00–10:35.\n2. 11:30 is 55 minutes after 10:35 → a new **session B**.\n3. Session A fires when the watermark passes its last event time plus the gap:\n\n```formula\nT_fire = t_last + g\nT_fire = 10:35 + 30 min = 11:05\nwhere\nT_fire: the event time the watermark must pass before the session fires\nt_last: the time of the session's last event, 10:35\ng: the session gap, 30 minutes\nmin: minutes\nIn words: no event can extend session A once the watermark is 30 minutes past its last event, so it fires at 11:05.\n```\n\n   This holds under the watermark's completeness assumption; later accepted data may still merge/refine sessions.\n4. Now suppose the events were 10:00 and 10:40 (two sessions, since the gap is 40 m) and a late 10:20 arrives. It is within 30 minutes of both → the sessions **merge** into one.\n5. Different users' sessions are entirely independent, so their boundaries need not line up; coincident activity can still produce equal boundaries.",
     "link": {
       "title": "Windows (Apache Flink)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Windows open at 10:00, 10:05, 10:10, …, each lasting 60 minutes.\n2. An event at 10:32 belongs to windows starting 09:35, 09:40, …, 10:30: that is **12** windows.\n3. Multiplier = size ÷ slide = 60 ÷ 5 = **12**.\n4. For distinct users, each window keeps a set (or a HyperLogLog sketch). 12 exact sets of 2 million user IDs at 8 bytes each ≈ 12 × 16 MB = 192 MB per key group; HLL memory depends on precision and implementation. The exact-set arithmetic counts raw IDs only, excluding hash-table and object overhead.\n5. Optimisations: compute per 5-minute **panes** (tumbling) and merge 12 panes on output; or use sketches that merge cheaply.",
+    "workedExample": "1. Windows open at 10:00, 10:05, 10:10, …, each lasting 60 minutes.\n2. An event at 10:32 belongs to windows starting 09:35, 09:40, …, 10:30: that is **12** windows.\n3. The multiplier is the size divided by the slide:\n\n```formula\nm = S / H = 60 min / 5 min = 12\nwhere\nm: the number of windows each event belongs to\nS: the window size, 60 minutes\nH: the slide (hop) between window starts, 5 minutes\nmin: minutes\nIn words: with a new 60-minute window every 5 minutes, 12 windows are open at once, so each event is added 12 times.\n```\n\n4. For distinct users, each window keeps a set (or a HyperLogLog sketch). With exact sets:\n\n```formula\nM = m × u × b\nM = 12 × 2000000 × 8 B ≈ 192 MB\nwhere\nM: memory for the exact sets of one key group\nm: open windows, 12\nu: distinct user IDs per window, 2 million\nb: bytes per user ID, 8\nB: bytes\nMB: megabytes, millions of bytes\n≈: approximately equal to\nIn words: 12 windows each holding 2 million 8-byte IDs need about 192 MB.\n```\n\n   That is per key group; HLL memory depends on precision and implementation. The exact-set arithmetic counts raw IDs only, excluding hash-table and object overhead.\n5. Optimisations: compute per 5-minute **panes** (tumbling) and merge 12 panes on output; or use sketches that merge cheaply.",
     "link": {
       "title": "Windows (Apache Flink)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Restore rate: 40 GB in 12 minutes ≈ 55 MB/s, limited by fetching and writing to RocksDB.\n2. Without standbys, the new owner starts from empty (or a stale local copy) and replays the compacted changelog.\n3. With `num.standby.replicas=1`, a second instance has been applying the changelog all along. Its actual lag must be monitored and may grow under load.\n4. On failover, the assignor prefers the instance with the standby → it catches up its remaining changelog and resumes.\n5. Cost: double the state storage and some extra network to replicate the changelog.\n\n(Flink's equivalent concern is checkpoint restore time; local recovery and incremental checkpoints address it.)",
+    "workedExample": "1. Restore rate:\n\n```formula\nr = D / T\nr = 40000 MB / 720 s ≈ 55 MB/s\nwhere\nr: the restore rate, in megabytes per second (MB/s)\nD: the size of the state store, 40 gigabytes (GB), which is 40,000 megabytes (MB)\nT: the restore time, 12 minutes, which is 720 seconds (s)\nMB: megabytes, millions of bytes\ns: seconds; \"MB/s\" means megabytes per second\n≈: approximately equal to\nIn words: rebuilding 40 GB in 12 minutes means reading and writing about 55 MB every second.\n```\n\n   It is limited by fetching the changelog and writing to RocksDB.\n2. Without standbys, the new owner starts from empty (or a stale local copy) and replays the compacted changelog.\n3. With `num.standby.replicas=1`, a second instance has been applying the changelog all along. Its actual lag must be monitored and may grow under load.\n4. On failover, the assignor prefers the instance with the standby → it catches up its remaining changelog and resumes.\n5. Cost: double the state storage and some extra network to replicate the changelog.\n\n(Flink's equivalent concern is checkpoint restore time; local recovery and incremental checkpoints address it.)",
     "link": {
       "title": "Kafka Streams documentation",
       "url": "https://kafka.apache.org/documentation/streams/"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Calls needed: 50,000 per second against a 20 ms dependency. By Little's Law that is 50,000 × 0.02 = **1,000** requests in flight at all times.\n2. The job is now coupled to the customer service's latency and availability.\n3. Stream–table join:\n   - The customer service (or CDC from its database) publishes changes to a compacted `customers` topic.\n   - The processor materialises it into local state, keyed by `customerId`.\n   - Orders, keyed by `customerId`, look up the tier locally, with latency determined by store and workload.\n4. Co-partitioning: both topics must be keyed the same way (and, in Kafka Streams, have the same partition count) so each task holds the customers its orders need.",
+    "workedExample": "1. Calls needed: 50,000 per second against a 20 ms dependency. Little's Law gives the number in flight:\n\n```formula\nL = λ × W\nL = 50000/s × 0.02 s = 1000\nwhere\nL: the average number of API calls in flight at once\nλ: lambda, calls started per second, 50,000\nW: the time each call takes, 20 milliseconds, which is 0.02 seconds (s)\ns: seconds; \"/s\" means per second\nIn words: 50,000 calls a second that each last 20 ms means about 1,000 are always in flight.\n```\n\n2. The job is now coupled to the customer service's latency and availability.\n3. Stream–table join:\n   - The customer service (or CDC from its database) publishes changes to a compacted `customers` topic.\n   - The processor materialises it into local state, keyed by `customerId`.\n   - Orders, keyed by `customerId`, look up the tier locally, with latency determined by store and workload.\n4. Co-partitioning: both topics must be keyed the same way (and, in Kafka Streams, have the same partition count) so each task holds the customers its orders need.",
     "link": {
       "title": "Kafka Streams documentation",
       "url": "https://kafka.apache.org/documentation/streams/"
@@ -327,7 +327,7 @@
       },
       {
         "text": "A 5-second bound, dropping late events",
-        "explanation": "Wrong. The dashboard is fast, but the 0.5% of offline payments would be missing from finance's totals for good."
+        "explanation": "Wrong. The dashboard is fast, but the roughly 1% of payments that arrive more than 5 seconds late would be missing from finance's totals for good."
       },
       {
         "text": "A 5-second bound with 10 minutes of allowed lateness, emitting updated results to an upsert sink keyed by window and key",
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Original live run: the payment joined whichever rate was materialised when processed; without temporal semantics that need not be the rate valid at its event time.\n2. Replay (today): the compacted table holds only **today's** rate, so the same payment gets a different rate.\n3. Lesson rule: results that must mean something real, and be reproducible on replay, need **event time**, and that applies to joins too.\n4. Temporal join (Flink SQL):\n\n```sql\nSELECT p.id, p.eur * r.rate\nFROM payments AS p\nJOIN fx FOR SYSTEM_TIME AS OF\n  p.ts AS r\n  ON p.cur = r.cur;\n```\n\n5. The rates stream must keep **history** (not just compacted latest values), so the versioned table can answer \"what was the rate at time t?\".",
+    "workedExample": "1. Original live run: the payment joined whichever rate was materialised when processed; without temporal semantics that need not be the rate valid at its event time.\n2. Replay (today): the compacted table holds only **today's** rate, so the same payment gets a different rate.\n3. Lesson rule: results that must mean something real, and be reproducible on replay, need **event time**, and that applies to joins too.\n4. Temporal join (Flink SQL):\n\n```sql\nSELECT p.id, p.eur * r.rate\nFROM payments AS p\nJOIN fx FOR SYSTEM_TIME AS OF\n  p.ts AS r\n  ON p.cur = r.cur;\n```\n\n5. The rates stream must keep **history** (not just compacted latest values), so the versioned table can answer \"what was the rate at a given time?\".",
     "link": {
       "title": "Joins (Apache Flink SQL docs)",
       "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/sql/queries/joins/"

@@ -33,6 +33,20 @@ GET /users/a ... /t    -> up to 20
 GET /posts/1/comments  -> 20 more
 ```
 
+Counting them shows where the number comes from:
+
+```formula
+R = 1 + P + A + K
+R = 1 + 20 + 20 + 20
+R = 61
+where
+R: the total number of HTTP requests the screen needs
+P: requests for the posts themselves, one per post, here 20
+A: requests for authors, at most one per post (fewer if two posts share an author), here up to 20
+K: requests for the comments, one per post, here 20
+In words: one request fetches the list, then every post costs up to three more, so 20 posts need up to 61 requests.
+```
+
 That's up to 61 requests, not necessarily 61 sequential round trips. On a 4G link at 100 ms RTT, even with HTTP/2 multiplexing it's several dependent waves. And each response contains fields the screen doesn't need.
 
 - **Under-fetching**: one call doesn't return enough, so you make more.
@@ -69,7 +83,20 @@ author resolver: called 20 times
 Total: 1 + N = 21 queries
 ```
 
-Add comments and it's 1 + 20 + 20. Nest one more level and it multiplies.
+The general count, for a list of N parents where each nested field gets its own resolver call per parent:
+
+```formula
+Q_naive = 1 + L × N
+Q_naive = 1 + 1 × 20 = 21
+Q_naive = 1 + 2 × 20 = 41
+where
+Q_naive: the number of database queries one GraphQL request makes with naïve resolvers
+N: the number of parent items the list query returns, here 20 posts
+L: the number of nested fields resolved separately for each parent: 1 for author only, 2 for author and comments
+In words: one query fetches the list, then every nested field adds one query per item, so the total grows in step with the list length.
+```
+
+So adding comments takes it from 21 to 41 queries. Nest one more level and it multiplies, because each of those children has its own children.
 
 The standard fix is **batching with a DataLoader**. Within one tick of the event loop, the loader collects every `author` id requested, then issues a single query:
 
@@ -78,7 +105,18 @@ SELECT * FROM users
 WHERE id IN (a, b, c, ..., t)
 ```
 
-With one database batch per relationship level in this example, it is 1 + 1 + 1 = 3 queries. Parameter limits, batch-size caps and per-parent pagination can require additional work as N grows. DataLoader also caches per request, so the same author appearing on five posts is fetched once.
+With one database batch per nested field, the count no longer depends on N:
+
+```formula
+Q_batched = 1 + L
+Q_batched = 1 + 2 = 3
+where
+Q_batched: the number of database queries with batching
+L: the number of nested fields batched, here 2 (author and comments)
+In words: one query for the list plus one batched query per nested field, however many posts the list returns.
+```
+
+So the example drops from 41 queries to 3. Parameter limits, batch-size caps and per-parent pagination can require additional work as N grows. DataLoader also caches per request, so the same author appearing on five posts is fetched once.
 
 > [!warning] GraphQL's operational costs
 > - **Caching**: if operations use `POST /graphql`, ordinary URL-based CDN caching cannot distinguish request bodies. GraphQL queries may also use GET; mutation operations must not execute through GET. Teams use *persisted queries* (send a hash; allow `GET`) to recover some of this.
@@ -114,6 +152,20 @@ The numbers (`= 1`, `= 2`) are **field tags**. They, not field names, go on the 
 
 Protocol Buffers encode a field key (tag number plus wire type) as a varint, followed by the encoded value. Small field keys occupy one byte; larger field numbers need more. Integers use *varints*, where small numbers take fewer bytes.
 
+A varint byte carries 7 bits of the number (the eighth bit says "more bytes follow"), so the biggest value that fits in k bytes is:
+
+```formula
+V_max = 2^{7 × k} − 1
+V_max = 2^7 − 1 = 127 for k = 1
+V_max = 2^14 − 1 = 16,383 for k = 2
+where
+V_max: the largest whole number a varint of that length can hold
+k: the number of bytes the varint uses
+In words: each extra byte adds 7 bits, so the range grows by a factor of 128 per byte: up to 127 fits in one byte, up to 16,383 in two.
+```
+
+This applies to non-negative integers. Negative `int32` and `int64` values always take 10 bytes, which is why protobuf offers `sint32` and `sint64` for fields that are often negative.
+
 Take `{"sku": "VAN-1", "qty": 150}`:
 
 | Encoding | Bytes |
@@ -121,7 +173,38 @@ Take `{"sku": "VAN-1", "qty": 150}`:
 | JSON (no spaces) | 25 |
 | Protobuf | 10 |
 
-Protobuf: `sku` is 1 tag byte + 1 length byte + 5 characters = 7. `qty` is 1 tag byte + 2 varint bytes (150 > 127) = 3. That's 10 bytes against 25, a 60% saving, before any compression. Parsing cost depends on the message, implementation and workload; the size calculation alone proves no universal CPU speed-up.
+JSON spells out every name, quote and brace. Protobuf sends only a one-byte key, a length for strings, and the value:
+
+```formula
+B_sku = B_key + B_len + B_val
+B_sku = 1 + 1 + 5 = 7 bytes
+B_qty = B_key + B_val = 1 + 2 = 3 bytes
+B_pb = 7 + 3 = 10 bytes
+where
+B_sku: the size of the sku field on the wire
+B_qty: the size of the qty field on the wire
+B_key: the field key (tag number plus wire type), 1 byte for tags 1 to 15
+B_len: the length prefix that string fields carry, 1 byte for strings shorter than 128 bytes; integer fields have none
+B_val: the value: 5 bytes for the text VAN-1; 2 bytes for 150 as a varint, because 150 is bigger than 127
+B_pb: the size of the whole protobuf message
+bytes: a byte is 8 bits, the unit of message size
+In words: the string field costs key + length + text and the integer costs key + varint, giving 10 bytes in total.
+```
+
+The saving against the 25-byte JSON is:
+
+```formula
+S = (B_json − B_pb) / B_json × 100 %
+S = (25 − 10) / 25 × 100 % = 60 %
+where
+S: the size saving, as a percentage of the JSON size
+B_json: the size of the JSON text without spaces, 25 bytes
+B_pb: the size of the protobuf message, 10 bytes
+%: per cent, parts per hundred
+In words: protobuf sends 15 fewer bytes than JSON's 25, which is 60% less.
+```
+
+That 60% is before any compression, and only for this message: long string values shrink much less, because the text itself dominates. Parsing cost depends on the message, implementation and workload; the size calculation alone proves no universal CPU speed-up.
 
 > [!note] Benchmark gap
 > No comparable JSON/Protobuf parsing benchmark is supplied. Fixed speed-up claims are omitted; the 60% size saving is only for the specific uncompressed message above.

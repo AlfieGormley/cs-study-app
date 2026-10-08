@@ -181,7 +181,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Trade-off:\n\n| Lease | Detection on real crash | False expiry risk |\n|---|---|---|\n| 2 s | ~2 s | high |\n| 30 s | ~30 s | low |\n\nA 2 s lease with renewal every ~0.7 s fails if any renewal path stalls for over ~1.3 s: a GC pause, a busy etcd, a slow disk fsync. Each false failover may lose unreplicated writes and restart connections, so many teams settle around 10–15 s.",
+    "workedExample": "Trade-off:\n\n| Lease | Detection on real crash | False expiry risk |\n|---|---|---|\n| 2 s | ~2 s | high |\n| 30 s | ~30 s | low |\n\nA 2 s lease renewed every ~0.7 s has little slack:\n\n```formula\nS = T_lease − T_renew\nS = 2 s − 0.7 s = 1.3 s\nwhere\nS: the slack, how long a renewal can be delayed before the lease lapses, in seconds (s)\nT_lease: the lease duration; here 2 s\nT_renew: the time between renewals; here about 0.7 s (a third of the lease)\ns: second\nIn words: after a successful renewal, the next one is due 0.7 s later, and if it is late by more than the remaining 1.3 s the lease expires.\n```\n\nSo the lease fails if any renewal path stalls for over ~1.3 s: a GC pause, a busy etcd, a slow disk fsync. Each false failover may lose unreplicated writes and restart connections, so many teams settle around 10–15 s.",
     "link": {
       "title": "Leader election in distributed systems (AWS)",
       "url": "https://aws.amazon.com/builders-library/leader-election-in-distributed-systems/"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Timeline on a common scale:\n\n```\nt=0.0  client sends (start here)\nt=0.3  service grants; expires 10.3\nt=0.6  client gets reply\n```\n\n- Count from 0.0: client stops at 10.0 (minus margin), before 10.3. Safe side.\n- Count from 0.6: client acts until 10.6, after expiry. Unsafe.\n\nThis narrows the danger window but doesn't remove it: a pause can still strike between \"lease still valid\" and the write. That's what fencing tokens are for.",
+    "workedExample": "Timeline on a common scale:\n\n```\nt=0.0  client sends (start here)\nt=0.3  service grants; expires 10.3\nt=0.6  client gets reply\n```\n\n```formula\nt_stop = t_send + T_lease − m\nt_stop = 0.0 s + 10 s − m\nwhere\nt_stop: when the client must stop acting as holder, on its monotonic clock\nt_send: the client's monotonic clock just before sending; 0.0 s\nT_lease: the lease duration; 10 seconds (s)\nm: a small safety margin for clock rate differences\ns: second\nIn words: counting from the send means the client's deadline always falls before the service's, which starts counting later.\n```\n\n- Count from 0.0: client stops at 10.0 (minus margin), before 10.3. Safe side.\n- Count from 0.6: client acts until 10.6, after expiry. Unsafe.\n\nThis narrows the danger window but doesn't remove it: a pause can still strike between \"lease still valid\" and the write. That's what fencing tokens are for.",
     "link": {
       "title": "How to do distributed locking (Kleppmann)",
       "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. t=0: A sets lock = \"a7f\". TTL 30 s.\n2. t=30: key expires. B sets lock = \"c19\".\n3. t=40: A resumes and runs `DEL lock:report`, deleting **B's** lock.\n4. C acquires: B and C now both run.\n\nSafe release, atomically in Lua:\n\n```\nif get(key) == my_token:\n    del(key)\n```\n\nWrapping it in a Lua script makes the compare and delete a single step. A still overran its lease (that's inherent), but it no longer breaks the next holder's lock.",
+    "workedExample": "1. At 0 s: A sets lock = \"a7f\". TTL 30 s.\n2. At 30 s: the key expires. B sets lock = \"c19\".\n3. At 40 s: A resumes and runs `DEL lock:report`, deleting **B's** lock.\n4. C acquires: B and C now both run.\n\nSafe release, atomically in Lua:\n\n```\nif get(key) == my_token:\n    del(key)\n```\n\nWrapping it in a Lua script makes the compare and delete a single step. A still overran its lease (that's inherent), but it no longer breaks the next holder's lock.",
     "link": {
       "title": "Distributed locks with Redis (Redis docs)",
       "url": "https://redis.io/docs/latest/develop/use/patterns/distributed-locks/"

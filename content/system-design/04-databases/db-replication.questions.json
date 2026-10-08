@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Replica lags: R1 = 0.5 s, R2 = 8 s, R3 = 1 s. The comment was written 3 s ago.\n2. Refresh 1 → R1 (has it). Refresh 2 → R2 (8 s behind, doesn't). Refresh 3 → R3 (has it).\n3. The user's view moved backwards in time: a monotonic reads violation.\n4. Fix: `replica = replicas[hash(user_id) % 3]`. The user always reads from one replica, whose state only advances.\n5. If that replica fails, reassign, accepting a possible one-off jump backwards.",
+    "workedExample": "1. Replica lags: R1 = 0.5 s, R2 = 8 s, R3 = 1 s. The comment was written 3 s ago.\n2. Refresh 1 → R1 (has it). Refresh 2 → R2 (8 s behind, doesn't). Refresh 3 → R3 (has it).\n3. The user's view moved backwards in time: a monotonic reads violation.\n4. Fix: pick the replica from a hash of the user id, so the same user always gets the same one:\n```formula\ni = hash(user_id) mod 3\nwhere\ni: the index of the replica this user reads from: 0, 1 or 2\nhash: a hash function that turns the id into a large number; the same id always gives the same number\nuser_id: the user's id\nmod: modulo, the remainder after whole-number division\n3: the number of replicas\nIn words: hash the user id and take the remainder by the replica count, so each user is pinned to one replica.\n```\nAs code, using a hash that gives the same result on every app server: `replica = replicas[hash(user_id) % 3]`. The user always reads from one replica, whose state only advances.\n5. If that replica fails, reassign, accepting a possible one-off jump backwards.",
     "link": {
       "title": "Wikipedia: Eventual consistency",
       "url": "https://en.wikipedia.org/wiki/Eventual_consistency"
@@ -101,7 +101,7 @@
       },
       {
         "text": "The new primary reused auto-increment ids from the lost 2 seconds of writes, so new rows got ids that Redis still associated with the old, lost rows",
-        "explanation": "Correct. The lost writes had consumed ids N+1…N+k. The new primary didn't know, so it handed out those ids again. Anything outside the database (caches, other systems) that referenced the old ids now points at different data."
+        "explanation": "Correct. The lost writes had consumed the ids just after the last one the replica knew about (1001–1010 in the worked example). The new primary didn't know, so it handed out those ids again. Anything outside the database (caches, other systems) that referenced the old ids now points at different data."
       },
       {
         "text": "Split brain: both primaries accepted writes",
@@ -191,7 +191,7 @@
     "id": "db-replication-q7",
     "level": "advanced",
     "type": "single",
-    "prompt": "In a leaderless Cassandra-style cluster with n = 3, a client writes with w = 2. One replica, C, was down and missed the write. It comes back. Which mechanisms bring C up to date? ",
+    "prompt": "In a leaderless Cassandra-style cluster each key is stored on n = 3 replicas, and a client writes with w = 2 (the write succeeds once 2 replicas acknowledge it). One replica, C, was down and missed the write. It comes back. Which mechanisms bring C up to date? ",
     "options": [
       {
         "text": "C replays the leader's write-ahead log",
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Write goes to A, B and C. A and B ack, satisfying w = 2. C is down.\n2. **Hinted handoff**: the coordinator stores a hint for C and replays it when C returns (Cassandra keeps hints for 3 hours by default).\n3. **Read repair**: a later read at r = 2 that contacts C sees an older timestamp than A's, returns A's value and writes it back to C.\n4. **Anti-entropy**: `nodetool repair` compares Merkle trees of token ranges between replicas and streams only the differing ranges.\n5. Why repair matters: tombstones (deletion markers) are purged after `gc_grace_seconds`. If C missed a delete and isn't repaired before then, the old value can come back to life.",
+    "workedExample": "1. Write goes to A, B and C. A and B ack, satisfying w = 2. C is down.\n```formula\nw + r > n\n2 + 2 > 3\nwhere\nn: the number of replicas per key, here 3\nw: the write quorum, acknowledgements a write needs, here 2\nr: the read quorum, replicas a read asks, here 2\nIn words: reading 2 of 3 always includes at least one replica that took the write, so reads stay correct while C is stale, but C still has to be repaired.\n```\n2. **Hinted handoff**: the coordinator stores a hint for C and replays it when C returns (Cassandra keeps hints for 3 hours by default).\n3. **Read repair**: a later read at r = 2 that contacts C sees an older timestamp than A's, returns A's value and writes it back to C.\n4. **Anti-entropy**: `nodetool repair` compares Merkle trees of token ranges between replicas and streams only the differing ranges.\n5. Why repair matters: tombstones (deletion markers) are purged after `gc_grace_seconds`. If C missed a delete and isn't repaired before then, the old value can come back to life.",
     "link": {
       "title": "DeCandia et al.: Dynamo, Amazon's highly available key-value store",
       "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
@@ -251,7 +251,7 @@
     "id": "db-replication-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A leaderless store has n = 5 replicas per key. You want every read to overlap the latest successful write, **and** you want both reads and writes to keep succeeding with any two replicas down. Which (w, r) should you choose?",
+    "prompt": "A leaderless store has n = 5 replicas per key. A write succeeds when w replicas acknowledge it, and a read asks r replicas and returns the newest value. You want every read to overlap the latest successful write, **and** you want both reads and writes to keep succeeding with any two replicas down. Which (w, r) should you choose?",
     "options": [
       {
         "text": "w = 5, r = 1",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Overlap condition: w + r > n, i.e. w + r ≥ 6.\n2. Availability with f failures: need w ≤ n − f and r ≤ n − f. With f = 2: w ≤ 3 and r ≤ 3.\n3. Combine: w + r ≥ 6 with both ≤ 3 forces w = 3, r = 3.\n\n| w, r | Overlap? | Survives 2 down? |\n|---|---|---|\n| 5, 1 | Yes | Writes no |\n| 3, 3 | Yes | Yes |\n| 2, 3 | No | Yes |\n| 4, 2 | Yes | Writes no |\n\n4. General rule: a majority for both (w = r = ⌊n/2⌋ + 1) tolerates ⌊(n−1)/2⌋ failures.\n5. Caveat from the consensus module: even with overlap, sloppy quorums and concurrent writes mean quorums aren't linearizable by themselves.",
+    "workedExample": "1. Overlap and availability conditions:\n```formula\nw + r > n\nw ≤ n − f\nr ≤ n − f\nwhere\nn: the number of replicas per key, here 5\nw: the write quorum, acknowledgements a write needs\nr: the read quorum, replicas a read asks\nf: the number of replicas that may be down, here 2\n≤: less than or equal to\nIn words: reads and writes must overlap, and each quorum must still be reachable with f replicas down.\n```\n2. Substitute n = 5 and f = 2:\n```formula\nw + r ≥ 6\nw ≤ 5 − 2 = 3\nr ≤ 5 − 2 = 3\nwhere\nw: the write quorum\nr: the read quorum\n≥: greater than or equal to (with whole numbers, > 5 means ≥ 6)\n≤: less than or equal to\nIn words: the two quorums must add up to at least 6, but neither may exceed 3.\n```\n3. Combine: w + r ≥ 6 with both ≤ 3 forces w = 3, r = 3.\n\n| w, r | Overlap? | Survives 2 down? |\n|---|---|---|\n| 5, 1 | Yes | Writes no |\n| 3, 3 | Yes | Yes |\n| 2, 3 | No | Yes |\n| 4, 2 | Yes | Writes no |\n\n4. General rule: a majority for both reads and writes tolerates the most failures:\n```formula\nw = r = ⌊n / 2⌋ + 1\nf_max = ⌊(n − 1) / 2⌋\nw = r = ⌊5 / 2⌋ + 1 = 3\nf_max = ⌊4 / 2⌋ = 2\nwhere\nw: the write quorum\nr: the read quorum\nn: the number of replicas per key\n⌊ ⌋: floor: round down to a whole number\nf_max: the most replicas that can be down while both reads and writes still succeed\nIn words: with 5 replicas, majority quorums of 3 survive any 2 failures.\n```\n5. Caveat from the consensus module: even with overlap, sloppy quorums and concurrent writes mean quorums aren't linearizable by themselves.",
     "link": {
       "title": "Wikipedia: Quorum (distributed computing)",
       "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"
@@ -309,7 +309,7 @@
       1,
       2
     ],
-    "workedExample": "Quorum arithmetic, n = 6, w = 4, r = 3:\n\n| Failure | Copies left | Write? | Read? |\n|---|---|---|---|\n| None | 6 | Yes | Yes |\n| 1 AZ | 4 | Yes | Yes |\n| 1 AZ + 1 | 3 | No | Yes |\n| 2 AZs | 2 | No | No |\n\n1. Overlap: w + r = 7 > 6. True.\n2. Waiting for 4 of 6 can avoid waiting for the two slowest storage acknowledgements per write, a big tail-latency win.\n3. The design goal: survive \"AZ + 1\" without losing data, because failures in different AZs can overlap during a repair.\nThis arithmetic addresses storage copies only; database compute availability and recovery paths also matter.",
+    "workedExample": "Quorum arithmetic, n = 6, w = 4, r = 3:\n\n| Failure | Copies left | Write? | Read? |\n|---|---|---|---|\n| None | 6 | Yes | Yes |\n| 1 AZ | 4 | Yes | Yes |\n| 1 AZ + 1 | 3 | No | Yes |\n| 2 AZs | 2 | No | No |\n\n1. Overlap:\n```formula\nw + r > n\n4 + 3 = 7 > 6\nwhere\nn: the number of storage copies, 6\nw: the write quorum, 4 copies\nr: the read (recovery) quorum, 3 copies\nIn words: any 3 copies must include at least one of the 4 that took a write, because 3 + 4 is more than the 6 that exist.\n```\nTrue.\n2. Waiting for 4 of 6 can avoid waiting for the two slowest storage acknowledgements per write, a big tail-latency win.\n3. The design goal: survive \"AZ + 1\" without losing data, because failures in different AZs can overlap during a repair.\nThis arithmetic addresses storage copies only; database compute availability and recovery paths also matter.",
     "link": {
       "title": "Amazon Aurora: Storage and reliability",
       "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.StorageReliability.html"

@@ -2,11 +2,11 @@
 id: snd-aliasing
 title: Nyquist and aliasing
 level: intermediate
-minutes: 15
+minutes: 19
 summary: The sampling theorem and the Nyquist frequency, how to calculate where an alias lands, why sharp synth waveforms alias, and what anti-aliasing and reconstruction filters do.
 ---
 
-Sampling has a hard limit. Above a certain frequency, a sampled signal stops meaning what you think it means: a 30 kHz tone and an 18 kHz tone can produce *exactly the same samples*. This is **aliasing**, and it's the most important limitation in digital synthesis.
+Sampling has a hard limit. Above a certain frequency, a sampled signal stops meaning what you think it means: a 30 kHz tone and an 18 kHz tone can produce *exactly the same samples*. This is **digital aliasing**, usually just called aliasing, and it's the most important limitation in digital synthesis.
 
 For a synth builder it's not an abstract worry. The classic analogue waveforms (sawtooth, square, pulse) have harmonics that go on for ever. Generate them naively in software and some of those harmonics fold back into the audible range as clangy, out-of-tune tones. This lesson explains why, and how to predict exactly where they'll land.
 
@@ -16,7 +16,22 @@ The **Nyquist–Shannon sampling theorem** says:
 
 > A signal containing no frequencies at or above B can be perfectly reconstructed from its samples if the sample rate fs is greater than 2B.
 
-Turned around, a given sample rate can represent frequencies only up to **fs/2**, the **Nyquist frequency**:
+As a condition, and turned around into the highest frequency a given sample rate can carry:
+
+```formula
+fs > 2 × B
+f_N = fs / 2
+f_N = 48000 / 2 = 24000 Hz
+where
+fs: the sample rate, in samples per second (hertz, Hz)
+B: the bandwidth: every frequency in the signal is below B, in hertz (Hz)
+>: "is greater than": strictly more, not equal
+f_N: the Nyquist frequency, half the sample rate, in hertz (Hz)
+Hz: hertz, cycles per second
+In words: you need more than two samples per cycle of the highest frequency present, so a sample rate can represent frequencies only below half of itself. At 48 kHz that limit is 24 kHz.
+```
+
+That limit, **fs/2**, is the **Nyquist frequency**:
 
 | Sample rate | Nyquist frequency |
 |---|---|
@@ -45,11 +60,11 @@ print(np.allclose(hi, -lo))
 True
 ```
 
-The 30 kHz samples equal the 18 kHz samples with the sign flipped (a phase inversion). Once sampled, nothing can tell them apart. A DAC will output 18 kHz. The 30 kHz tone has taken on an **alias**.
+The 30 kHz samples equal the 18 kHz samples with the sign flipped (a phase inversion). Once sampled, nothing can tell them apart. A DAC will output 18 kHz. The 30 kHz tone has taken on an **alias frequency**, or alias.
 
 ## Calculating the alias frequency
 
-Picture the frequency axis folded back and forth like a paper fan, with creases at every multiple of fs/2:
+Picture the frequency axis folded back and forth like a paper fan, with creases at every multiple of the Nyquist frequency (fs/2 in the drawing, where fs is the sample rate):
 
 ```diagram
  0      fs/2      fs      3fs/2
@@ -59,10 +74,30 @@ Picture the frequency axis folded back and forth like a paper fan, with creases 
                   48k ----> 72k
 ```
 
-Any frequency maps to the point directly below it on the first segment, 0 to fs/2. As a procedure:
+Any frequency maps to the point directly below it on the first segment, from 0 up to the Nyquist frequency. As a procedure:
 
-1. Reduce f modulo fs, giving a value from 0 up to fs.
-2. If the result is above fs/2, subtract it from fs.
+1. Divide the frequency by the sample rate and keep the remainder (this is "modulo"), giving a value from 0 up to the sample rate.
+2. If the result is above the Nyquist frequency, subtract it from the sample rate.
+
+As a formula:
+
+```formula
+r = f mod fs
+f_a = min(r, fs − r)
+r = 30000 mod 48000 = 30000
+f_a = min(30000, 18000) = 18000 Hz
+where
+f: the true frequency being sampled, in hertz (Hz); here 30 kHz
+fs: the sample rate, in hertz (Hz); here 48 kHz
+mod: "modulo": the remainder after removing as many whole multiples of fs as possible (50,000 mod 48,000 is 2,000)
+r: the frequency after wrapping into the range 0 up to fs
+min: the smaller of the two values
+f_a: the alias, the frequency that actually appears after sampling, between 0 and fs/2, in hertz (Hz)
+Hz: hertz, cycles per second
+In words: wrap the frequency into one sample-rate's width, then, if it lands in the top half, reflect it down off the Nyquist frequency. 30 kHz sampled at 48 kHz appears at 18 kHz.
+```
+
+The formula holds for any frequency, sine by sine. A complex sound is a sum of sines, so apply it to each component separately.
 
 ```python
 def alias(f, fs):
@@ -96,11 +131,41 @@ Notice the behaviour as an input sweeps upwards: the alias rises to 24 kHz, then
 
 ## Why sharp waveforms alias
 
-A sine has one frequency. A sawtooth at f has harmonics at every multiple k·f, with amplitudes 1/k. A square has the odd harmonics, also falling as 1/k. A falling rate of 1/k is slow: the 20th harmonic is still only 26 dB below the fundamental.
+A sine has one frequency. A sawtooth has harmonics at every whole-number multiple of its frequency, and their amplitudes fall slowly:
+
+```formula
+f_k = k × f_0
+a_k = 1 / k
+L_k = 20 × log_10(1 / k)
+L_20 = 20 × log_10(1 / 20) ≈ −26 dB
+where
+f_k: the frequency of harmonic number k, in hertz (Hz)
+k: the harmonic number, a whole number 1, 2, 3, …; k = 1 is the fundamental
+f_0: the fundamental frequency of the note, in hertz (Hz)
+a_k: the amplitude of harmonic k, relative to the fundamental
+L_k: the level of harmonic k relative to the fundamental, in decibels (dB)
+L_20: that level for the 20th harmonic
+log_10: the base-10 logarithm; 20 × log_10 of an amplitude ratio gives decibels (lesson 5)
+dB: decibels
+≈: approximately equal to (rounded)
+In words: harmonic k is k times the frequency and has 1/k of the amplitude, so even the 20th harmonic is only about 26 dB quieter than the fundamental.
+```
+
+A square has only the odd harmonics (1st, 3rd, 5th, …), whose amplitudes also fall as one over the harmonic number. That fall-off is slow, so a lot of energy sits in very high harmonics.
 
 The cause is the waveform's **sharp edge**. A discontinuity (an instant jump) needs infinitely many harmonics to describe, and a waveform with a jump has harmonics that fall off at 1/k (6 dB per octave). A triangle wave has corners but no jumps, and its harmonics fall as 1/k² (12 dB per octave), so it aliases far less.
 
-A **naive** sawtooth, generated directly from the phase accumulator (`saw = 2*phase − 1`), samples the ideal infinite-bandwidth sawtooth. Every harmonic above Nyquist folds back. Take a high note, 1760 Hz (A6), at 48 kHz:
+A **naive sawtooth** is generated directly from the phase accumulator (lesson 1) by rescaling the phase:
+
+```formula
+s = 2 × p − 1
+where
+s: the sawtooth output sample, from −1 to +1
+p: the oscillator phase, in cycles, from 0 up to 1 (it wraps back to 0 every cycle)
+In words: stretch the phase from 0..1 to −1..+1. The output ramps up and then jumps straight back down when the phase wraps.
+```
+
+That jump makes it a sample of the ideal infinite-bandwidth sawtooth. Every harmonic above Nyquist folds back. Take a high note, 1760 Hz (A6), at 48 kHz:
 
 - Harmonics up to k = 13 (22,880 Hz) are below 24 kHz and fine.
 - Harmonics 14 and up fold back, and they **aren't at multiples of 1760 Hz**.
@@ -141,7 +206,7 @@ Harmonic 27 lands at **480 Hz**, below the note's own fundamental, only about 29
 
 There are two situations.
 
-**1. Sampling a real analogue signal (an ADC).** Here an **anti-aliasing filter** removes content above Nyquist *before* it can fold. Every audio interface input has one. In a modern delta-sigma ADC, the converter samples many times faster than fs, so a simple analogue low-pass in front is enough, and a steep digital filter does the rest before the rate is reduced to fs.
+**1. Sampling a real analogue signal (an ADC).** Here an **anti-aliasing filter** removes content above Nyquist *before* it can fold. Every audio interface input has one. In a modern delta-sigma ADC, the converter samples many times faster than the final sample rate, so a simple analogue low-pass in front is enough, and a steep digital filter does the rest before the rate is reduced to the final rate.
 
 **2. Generating a signal digitally (an oscillator).** There's no analogue signal to filter: the samples are computed directly. So the oscillator itself must only generate content below Nyquist. Established techniques, at a conceptual level:
 
@@ -156,24 +221,40 @@ The roadmap suggests comparing a naive waveform with a library's band-limited ve
 
 ## Reconstruction: the DAC side
 
-A DAC is given one number per sample period. A crude converter holds each value until the next (a **zero-order hold**), producing a staircase. That staircase contains the wanted signal plus **images**: copies of the spectrum mirrored around fs, 2fs, and so on. A 1 kHz tone at 48 kHz produces images at 47 and 49 kHz, 95 and 97 kHz, and so on.
+A DAC is given one number per sample period. A crude converter holds each value until the next (a **zero-order hold**), producing a staircase. That staircase contains the wanted signal plus **images** (**image frequencies**): copies of the spectrum mirrored around every multiple of the sample rate.
+
+```formula
+f_img = m × fs ± f
+f_img = 1 × 48 − 1 = 47 kHz
+f_img = 1 × 48 + 1 = 49 kHz
+where
+f_img: the frequency of an image component, in kilohertz (kHz) here
+m: a whole number 1, 2, 3, …, picking which multiple of the sample rate the image sits around
+fs: the sample rate; here 48 kHz
+f: the frequency of the wanted tone; here 1 kHz
+±: plus or minus: each multiple gives two images, one below it and one above
+kHz: kilohertz, thousands of cycles per second
+In words: a 1 kHz tone played at 48 kHz also produces images at 47 and 49 kHz, then 95 and 97 kHz, and so on.
+```
+
+Images are not aliases. An alias is a wrong frequency *inside* the audio band, created when sampling; images sit *above* Nyquist, created when converting back to analogue, and a filter can remove them.
 
 A **reconstruction filter** (anti-imaging filter) removes the images, leaving the smooth wave the theorem promises. Most modern audio converters are **delta-sigma** designs that internally oversample and do much of this filtering digitally, so their external analogue filtering can be simple. Follow the converter or codec datasheet's recommended output circuit.
 
 ```flow
 Analogue in
 Anti-aliasing low-pass filter
-ADC samples at fs
-Digital processing below fs/2
+ADC samples at the sample rate
+Digital processing below Nyquist
 DAC outputs samples
 Reconstruction low-pass filter
 Analogue out
 ```
 
 ## Key takeaways
-- Sample rate fs can represent frequencies strictly below the Nyquist frequency fs/2, and does so exactly.
-- A frequency above fs/2 aliases: reduce it mod fs, then if it exceeds fs/2, subtract from fs.
-- Waveforms with jumps (saw, square, pulse) have harmonics falling only as 1/k, so naive versions alias badly at high pitches, producing inharmonic tones.
+- A sample rate can represent frequencies strictly below the Nyquist frequency, half the sample rate, and does so exactly.
+- A frequency above the Nyquist frequency aliases: take its remainder after dividing by the sample rate, then, if that is above half the sample rate, subtract it from the sample rate.
+- Waveforms with jumps (saw, square, pulse) have harmonics whose amplitude falls only in proportion to one over the harmonic number, so naive versions alias badly at high pitches, producing inharmonic tones.
 - Aliasing must be prevented where high frequencies are created: band-limited oscillators, oversampling around nonlinear stages. Post-filtering can't fix it.
 - Anti-aliasing filters protect ADC inputs; reconstruction filters remove images from DAC outputs.
 

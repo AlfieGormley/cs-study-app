@@ -15,7 +15,7 @@ This lesson is about the wires: how a MIDI byte physically gets from the Digitak
 
 MIDI uses a 5-pin DIN connector with its pins spread over 180°. The MIDI electrical specification (updated in 2014 as document CA-033) fixes the details:
 
-- Devices have **female** sockets labelled MIDI IN, MIDI OUT and (optionally) MIDI THRU. Cables are male-to-male.
+- Devices have **female sockets** labelled MIDI IN, MIDI OUT and (optionally) MIDI THRU. Cables are male-to-male.
 - Only **three pins** are used: **pin 4** (current source), **pin 5** (current sink, the data line) and **pin 2** (shield). Pins 1 and 3 are left unconnected.
 - The cable is shielded twisted pair, at most **15 m (50 ft)**, with the shield connected to pin 2 at both ends.
 - **Pin 2 is grounded at the transmitter only.** At a MIDI IN, pin 2 must have no DC path to the receiver's ground.
@@ -79,9 +79,43 @@ How it works:
 3. That output goes to your UART's RX pin. Current on gives a low (0), current off gives a high (1): the same polarity the sender's UART produced.
 4. D1, wired across the LED in the reverse direction, stops a reversed or faulty connection from putting a damaging reverse voltage on the LED.
 
-Requirements from the spec: the receiver must need **less than 5 mA** to turn on, and rise and fall times should be under **2 µs** (one MIDI bit lasts 32 µs). The spec names the Sharp PC900V and HP 6N138 as acceptable and notes that other high-speed optocouplers may be. Its only recommended RD value is **280 Ω for the PC900V with VRX = 5 V**. Both named parts have open-collector outputs (the 6N138's output pin is the bare collector of its output transistor), which is why the pull-up RD is needed. The 6N138's datasheet characterises it at a 4.5 V supply, so for a 3.3 V receiver, pick an optocoupler whose datasheet supports a 3.3 V output supply and choose RD from that datasheet. Pull the output up to **your MCU's supply (3.3 V)**, never to 5 V on a pin that isn't 5 V tolerant.
+Requirements from the spec: the receiver must need **less than 5 mA** to turn on, and rise and fall times should be under **2 µs**. To see why 2 µs is comfortable, compare it with the length of one bit:
 
-Optional additions in CA-033: ferrite beads on the signal pins, and a **0.1 µF capacitor** from MIDI IN pin 2 (or the jack shield) to ground. At audio frequencies the capacitor is a high impedance (26.5 kΩ at 60 Hz), so it doesn't create a ground loop; at radio frequencies it is close to a short (0.16 Ω at 10 MHz), improving RF shielding.
+```formula
+t_bit = 1 / R
+t_bit = 1 / (31250 bit/s)
+t_bit = 0.000032 s = 32 µs
+where
+t_bit: the time one bit lasts on the wire, in seconds (s)
+R: the DIN MIDI bit rate, 31,250 bits per second (bit/s)
+bit: one binary digit
+s: seconds
+µs: microseconds, millionths of a second
+In words: each MIDI bit lasts 32 µs, so a 2 µs edge uses up only about a sixteenth of it.
+```
+
+The spec names the Sharp PC900V and HP 6N138 as acceptable and notes that other high-speed optocouplers may be. Its only recommended RD value is **280 Ω for the PC900V with a 5 V pull-up supply (VRX)**. Both named parts have open-collector outputs (the 6N138's output pin is the bare collector of its output transistor), which is why the pull-up RD is needed. The 6N138's datasheet characterises it at a 4.5 V supply, so for a 3.3 V receiver, pick an optocoupler whose datasheet supports a 3.3 V output supply and choose RD from that datasheet. Pull the output up to **your MCU's supply (3.3 V)**, never to 5 V on a pin that isn't 5 V tolerant.
+
+Optional additions in CA-033: ferrite beads on the signal pins, and a **0.1 µF capacitor** from MIDI IN pin 2 (or the jack shield) to ground. A capacitor's opposition to AC (its reactance) falls as frequency rises:
+
+```formula
+X_C = 1 / (2 × π × f × C)
+X_C = 1 / (2 × π × 60 Hz × 0.0000001 F)
+X_C ≈ 26500 Ω = 26.5 kΩ
+where
+X_C: the capacitor's reactance, its opposition to alternating current, in ohms (Ω)
+π: pi, about 3.14159
+f: the frequency of the signal or interference, in hertz (Hz); 60 Hz here, a mains frequency
+C: the capacitance, in farads (F); 0.1 µF = 0.0000001 F
+Hz: hertz, cycles per second
+F: farad, the unit of capacitance
+Ω: ohm, the unit of resistance and reactance
+kΩ: kilohm, 1,000 ohms
+≈: approximately equal to (rounded)
+In words: at mains frequencies the 0.1 µF capacitor looks like tens of thousands of ohms, nearly an open circuit.
+```
+
+Repeat it at a radio frequency of 10 MHz (10,000,000 Hz) and the reactance is about 0.16 Ω, close to a short circuit. So the capacitor doesn't create a ground loop at audio frequencies but does give radio-frequency (RF) interference an easy path to ground, improving RF shielding.
 
 ## The reference MIDI OUT circuit, 3.3 V version
 
@@ -92,7 +126,29 @@ The original 1983 output used +5 V and two 220 Ω resistors. Most current microc
 | +5 V ± 10% | 220 Ω 5% 0.25 W | 220 Ω 5% 0.25 W |
 | +3.3 V ± 5% | 33 Ω 5% **0.5 W** | 10 Ω 5% 0.25 W |
 
-Pin 2 is grounded at the transmitter. You can check the loop current with Ohm's law, treating the receiver as its 220 Ω RB plus an LED forward voltage drop:
+Pin 2 is grounded at the transmitter. You can check the loop current with Ohm's law, treating the receiver as its 220 Ω RB plus an LED forward voltage drop. All three resistors are in series around the loop, so their resistances add, and the voltage left to push current through them is the supply minus what the LED drops:
+
+```formula
+I = (V_TX − V_F) / (R_A + R_C + R_B)
+I = (3.3 V − 1.4 V) / (33 + 10 + 220) Ω
+I = 1.9 V / 263 Ω
+I ≈ 0.00722 A = 7.22 mA
+where
+I: the loop current, in amperes (A); about 5 mA is the design target
+V_TX: the transmitter's supply voltage (VTX), in volts (V); 3.3 V here
+V_F: the forward voltage dropped across the optocoupler's LED while it conducts, in volts; typically about 1.4 V to 1.9 V
+R_A: the transmitter's resistor from the supply to pin 4, in ohms (Ω); 33 Ω here
+R_C: the transmitter's resistor from the UART TX pin to pin 5, in ohms; 10 Ω here
+R_B: the receiver's series resistor, 220 Ω
+V: volt, the unit of voltage
+Ω: ohm, the unit of resistance
+A: ampere, the unit of current
+mA: milliampere, a thousandth of an ampere
+≈: approximately equal to (rounded)
+In words: the voltage left after the LED's drop, divided by all the resistance in the loop, gives about 7 mA with the 3.3 V resistor values.
+```
+
+This ignores the small voltage left across the UART's TX output when it pulls low and the cable's own resistance, which is why the spec quotes ranges rather than one exact figure. The same calculation for all four cases in the spec:
 
 ```python
 def loop_ma(vtx, ra, rc, vf, rb=220):
@@ -121,7 +177,27 @@ print(round(loop_ma(3.3, 220, 220, 1.4), 2))
 
 These match the spec's own figures: 5 mA for the original design, about 7.2 mA typical and 4.47 mA worst case for the 3.3 V design. The last line shows why you mustn't run the 5 V resistor values from 3.3 V: under 3 mA may not reliably switch every receiver.
 
-Why is RA rated 0.5 W? If a cable fault shorts pin 4 to ground, RA sits directly across the supply. The spec's worst case is 3.465 V across 31.35 Ω: about **111 mA and 0.38 W**. The spec also assumes the buffer driving RC in 3.3 V designs is open-collector or open-drain, and warns not to exceed the driving buffer's short-circuit current rating.
+Why is RA rated 0.5 W? If a cable fault shorts pin 4 to ground, RA sits directly across the supply. The spec's worst case is the supply 5% high (3.465 V) and the resistor 5% low (31.35 Ω). Ohm's law gives the current, and the power the resistor must turn into heat follows from the voltage across it:
+
+```formula
+I = V / R
+I = 3.465 V / 31.35 Ω ≈ 0.111 A
+P = V^2 / R
+P = (3.465 V)^2 / 31.35 Ω
+P = 12.006 V^2 / 31.35 Ω ≈ 0.383 W
+where
+I: the fault current through RA, in amperes (A)
+V: the voltage across RA, which during the short is the whole supply, in volts (V); 3.465 V worst case
+R: RA's resistance, in ohms (Ω); 33 Ω nominal, 31.35 Ω at −5% tolerance
+P: the power dissipated in RA as heat, in watts (W)
+A: ampere, the unit of current
+Ω: ohm, the unit of resistance
+W: watt, the unit of power
+≈: approximately equal to (rounded)
+In words: shorted straight across the supply, the small resistor carries about 111 mA and heats by about 0.38 W, which would overload a 0.25 W part.
+```
+
+So the result is about **111 mA and 0.38 W**, comfortably within a 0.5 W rating. The spec also assumes the buffer driving RC in 3.3 V designs is open-collector or open-drain, and warns not to exceed the driving buffer's short-circuit current rating.
 
 > [!tip] Use the published circuit
 > Copy CA-033's figures (or your board vendor's documented MIDI circuit) exactly, and note where each value came from. If you use a MIDI breakout or shield, check its schematic against CA-033 for the voltage your board runs at.
@@ -150,9 +226,24 @@ If you put a TRS MIDI jack on your synth, use Type A, label it clearly, and neve
 
 USB MIDI carries the same MIDI messages over USB, defined by the USB-IF's **Device Class Definition for MIDI Devices** (release 1.0, 1999). Key facts from that document:
 
-- MIDI is a subclass of the USB **Audio** class. A device that follows it is **class compliant**: operating systems that include a USB MIDI class driver can use it without a vendor driver.
+- MIDI is a subclass of the USB **Audio** class. A device that follows it is **class-compliant**: operating systems that include a USB MIDI class driver can use it without a vendor driver.
 - Data travels in fixed **32-bit USB-MIDI Event Packets**: a header byte with a 4-bit **cable number** (up to 16 virtual MIDI cables per endpoint) and a 4-bit **Code Index Number** (the message type), then three MIDI bytes, zero-padded.
 - Each packet normally holds one complete message, status byte included, so running status isn't used. (The spec also has a single-byte mode, CIN 0xF, for passing an unparsed byte stream, but that is a special case.)
+
+The header byte puts the cable number in its top nibble and the Code Index Number in its bottom nibble:
+
+```formula
+H = (n_cable << 4) | CIN
+H = (0 << 4) | 0x9 = 0x09
+where
+H: the packet's header byte, in hexadecimal
+n_cable: the virtual cable number, 0 to 15
+CIN: the Code Index Number, 0x0 to 0xF; for channel messages it equals the status byte's top nibble (0x9 for Note On, 0xB for Control Change)
+<<: shift left by the given number of bits; a shift of 4 multiplies by 16, moving the cable number into the top nibble
+|: bitwise OR, combining the two nibbles
+0x: prefix meaning hexadecimal (base 16)
+In words: the header is the cable number times 16 plus the message's code index; cable 0 with a Note On gives 0x09.
+```
 
 ```
 Note On, cable 0, ch 1, key 60, vel 100:

@@ -10,7 +10,7 @@ Queues delete messages once they are consumed. Kafka takes a different view: a t
 
 ## The log and offsets
 
-A log is an ordered sequence of records. Each record gets a sequential **offset** when it is appended.
+A log is an ordered sequence of records. Each record gets a sequential number, its **Kafka offset** (usually just called its offset), when it is appended.
 
 ```
 partition 0
@@ -39,13 +39,29 @@ topic: orders (3 partitions)
 
 The producer chooses a partition for every record:
 
-- **With a key**: The default Java client uses `toPositive(murmur2(serializedKey)) % numPartitions` when it respects keys. Equal serialized keys share a partition while partition count and partitioning configuration stay fixed; other clients or custom partitioners can differ.
-- **Without a key**: the producer's built-in *sticky* behaviour fills a batch for one partition, then moves to another, which gives good batching.
+- **With a key**: the producer hashes the key and uses the remainder after dividing by the partition count (the formula below). Equal serialized keys share a partition while partition count and partitioning configuration stay fixed; other clients or custom partitioners can differ.
+- **Without a key**: the producer's built-in sticky partitioner fills a batch for one partition, then moves to another, which gives good batching.
+
+For keyed records, the choice is modular arithmetic: turn the key into a large number with a hash function, then take the remainder after dividing by the number of partitions:
+
+```formula
+p = h(k) mod N
+p = 19 mod 8 = 3
+where
+p: the partition the record goes to, numbered from 0 to N − 1
+h: the hash function: it turns the key's bytes into a large positive whole number; the default Java client uses murmur2
+k: the record's key, for example an account ID
+mod: modulo: the remainder after whole-number division; 19 mod 8 = 3 because 19 = 2 × 8 + 3
+N: the number of partitions in the topic, here 8
+In words: the same key always hashes to the same number, so while the partition count stays the same, every record with that key lands on the same partition.
+```
+
+Here 19 stands for whatever hash the key produces. In code, the default Java client writes this as `toPositive(murmur2(serializedKey)) % numPartitions`, where `%` is the modulo operator.
 
 Ordering is guaranteed **only within a partition**. A stable key mapping gives an append order for that key; producer retries and concurrent processing must still preserve the intended business order. There is no ordering between partitions.
 
 > [!warning] Changing partition count breaks key placement
-> Adding partitions changes `hash % numPartitions`, so new records for an existing key may land on a different partition from its older records. Ordering per key is broken across the change. Plan partition counts up front (over-provision moderately) for keyed topics.
+> Adding partitions changes N in the formula above, so new records for an existing key may land on a different partition from its older records. A key hashing to 19 goes to partition 3 with 8 partitions (19 mod 8), but to partition 7 with 12 (19 mod 12). Ordering per key is broken across the change. Plan partition counts up front (over-provision moderately) for keyed topics.
 
 ## Consumer groups
 
@@ -74,15 +90,15 @@ Rebalancing has been redesigned twice, and which protocol you run makes a big di
 | Classic, cooperative | Only moved partitions pause |
 | New (KIP-848) | Broker-driven, incremental |
 
-- **Eager** (the original): every consumer revokes all its partitions, then the group reassigns from scratch. A rolling deploy of 30 instances means 30 stop-the-world pauses.
-- **Cooperative** (`CooperativeStickyAssignor`): consumers keep the partitions they are allowed to keep; only those that move are paused.
+- **Eager rebalancing** (the original): every consumer revokes all its partitions, then the group reassigns from scratch. A rolling deploy of 30 instances means 30 stop-the-world pauses.
+- **Cooperative rebalancing** (`CooperativeStickyAssignor`): consumers keep the partitions they are allowed to keep; only those that move are paused.
 - **The new consumer group protocol** (KIP-848) is generally available from **Kafka 4.0**. The broker's group coordinator computes the assignment and hands out changes to each consumer independently, with no group-wide synchronisation barrier. Brokers enable it by default; clients opt in with `group.protocol=consumer`.
 
 **Static membership** (`group.instance.id`) adds one more trick: a consumer that restarts with the same ID within the session timeout can retain its assignment without an otherwise unnecessary rebalance when the rest of the group and subscriptions remain stable.
 
 ### Committing offsets
 
-Consumers record progress by **committing offsets** to an internal topic, `__consumer_offsets`. A committed offset means "the next record I want is N".
+Consumers record progress by **committing offsets** to an internal topic, `__consumer_offsets`. A committed offset of 1,043 means "the next record I want is offset 1,043".
 
 - Commit **after** processing for at-least-once. A crash causes reprocessing from the last commit.
 - Commit **before** processing for at-most-once. A crash skips records.
@@ -103,7 +119,7 @@ Each partition is stored as a series of **segment files** (1 GiB by default). Ol
 | `compact` | At least the latest record for each key |
 | `compact,delete` | Latest per key, but also age-limited |
 
-**Log compaction** turns a topic into a durable table of "latest value per key".
+**Log compaction** turns a topic into a durable table of "latest value per key". In the sketch below, k1, k2 and k3 are record keys, a to d are their values, and `k2=null` is a record for k2 with no value:
 
 ```
 before: k1=a k2=b k1=c k3=d k2=null
@@ -134,7 +150,19 @@ Durability comes from combining three settings:
 | `min.insync.replicas` | 2 |
 | producer `acks` | `all` |
 
-With `acks=all`, the leader acknowledges only when all **current** ISR members have the record. `min.insync.replicas=2` makes the leader **refuse writes** (with `NotEnoughReplicas`) if the ISR shrinks below 2. Together they guarantee an acknowledged write is on at least two brokers. With all three replicas initially healthy and controller quorum available, it tolerates one replica failure without losing acknowledged data and can resume writes after detection/election. Transient write errors or pauses are still possible.
+With `acks=all`, the leader acknowledges only when all **current** ISR members have the record. `min.insync.replicas` sets a floor on how many replicas that must be. The leader checks it before accepting each `acks=all` write:
+
+```formula
+|ISR| ≥ m
+where
+|ISR|: the number of replicas currently in the in-sync replica set, counting the leader itself
+ISR: the in-sync replica set
+m: the topic's min.insync.replicas setting (broker default 1; 2 is the usual safe choice)
+≥: is greater than or equal to
+In words: an acks=all write is accepted only while at least m replicas are in sync; otherwise the leader refuses it.
+```
+
+So `min.insync.replicas=2` makes the leader **refuse writes** (with `NotEnoughReplicas`) if the ISR shrinks below 2: with 3 replicas, one follower can drop out (|ISR| = 2) and writes continue, but if both drop out (|ISR| = 1) writes are refused. Together they guarantee an acknowledged write is on at least two brokers. With all three replicas initially healthy and controller quorum available, it tolerates one replica failure without losing acknowledged data and can resume writes after detection/election. Transient write errors or pauses are still possible.
 
 Since **Kafka 3.0** the producer defaults are already safe: `acks=all` and `enable.idempotence=true`. But the broker default for `min.insync.replicas` is still **1**. If both followers fall behind and drop out of the ISR, the ISR is just the leader, and `acks=all` is satisfied by the leader alone. A write acknowledged in that state is guaranteed on only one broker; follower copies may or may not exist, and Kafka replication acknowledgement is not a per-write fsync guarantee. Set `min.insync.replicas=2` explicitly on topics that matter.
 
@@ -167,11 +195,22 @@ So the full guarantee is: **per partition, per producer, in send order, with ide
 
 ## Choosing the number of partitions
 
-Partitions bound consumer parallelism, so size for the slowest consumer:
+Partitions bound consumer parallelism, so size for the slowest consumer. Measure one consumer's processing rate, then divide the target throughput by it:
 
-1. Target throughput: say 60 MB/s.
-2. Measure one consumer's processing rate: say 5 MB/s.
-3. Partitions needed ≥ 60 ÷ 5 = 12. Add headroom for growth: 24.
+```formula
+P ≥ T / c
+P ≥ 60 MB/s / 5 MB/s = 12
+where
+P: the number of partitions
+≥: is at least
+T: the target throughput of the topic, here 60 megabytes per second (MB/s)
+c: the measured processing rate of one consumer, here 5 MB/s
+MB: megabytes
+s: seconds; "MB/s" means megabytes per second
+In words: each partition is read by one consumer in a group, so you need at least as many partitions as consumers it takes to keep up: here 12.
+```
+
+Then add headroom for growth, for example doubling to 24, because adding partitions later remaps keys.
 
 Too many partitions cost broker memory, open files, longer leader elections and slower rebalances. A universal partition-count recommendation is absent because reliable limits depend on Kafka version, controller/broker resources and workload; test failover and rebalance behavior at the planned scale.
 

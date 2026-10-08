@@ -50,7 +50,33 @@ Many synths map CC 74 to filter cutoff and CC 71 to resonance, following those "
 
 ### 14-bit controllers
 
-128 steps are coarse for something like filter cutoff: you can hear each step as a zipper. The specification pairs controllers so that **CC 0–31 are MSBs and CC 32–63 are the matching LSBs** (CC 1's LSB is CC 33, CC 7's is CC 39). Together they give 14 bits: 16,384 steps.
+128 steps are coarse for something like filter cutoff: you can hear each step as a zipper. The specification pairs controllers so that **CC 0–31 are MSBs and CC 32–63 are the matching LSBs**. The LSB's controller number is always 32 more than the MSB's:
+
+```formula
+c_LSB = c_MSB + 32
+c_LSB = 1 + 32 = 33
+where
+c_MSB: the controller number that carries the coarse (most significant) 7 bits, 0 to 31; here CC 1, the modulation wheel
+c_LSB: the controller number that carries the fine (least significant) 7 bits, 32 to 63
+In words: the fine half of any of the first 32 controllers lives 32 numbers higher, so CC 1 pairs with CC 33 and CC 7 with CC 39.
+```
+
+Together the two 7-bit halves give 14 bits, and the combined value is the MSB scaled up by 128 plus the LSB:
+
+```formula
+v = MSB × 128 + LSB
+v = 64 × 128 + 32
+v = 8224
+v_max = 127 × 128 + 127 = 16383
+where
+v: the combined 14-bit controller value, 0 to 16,383 (16,384 steps)
+MSB: the most significant byte's value, 0 to 127 (the coarse part)
+LSB: the least significant byte's value, 0 to 127 (the fine part)
+v_max: the largest possible combined value
+In words: the coarse byte counts in steps of 128 and the fine byte fills in between, giving 128 × 128 = 16,384 steps instead of 128.
+```
+
+Multiplying by 128 is the same as shifting left by 7 bits, which is how firmware usually writes it: `(msb << 7) | lsb`.
 
 Rules worth implementing exactly:
 
@@ -58,7 +84,7 @@ Rules worth implementing exactly:
 - After both have been sent, a fine change may send just the LSB.
 - **When an MSB arrives, the receiver should reset its LSB to zero.**
 
-So `B0 01 40` then `B0 21 20` means modulation = (64 << 7) | 32 = 8,224.
+So `B0 01 40` then `B0 21 20` means modulation is 8,224: MSB 0x40 (64) and LSB 0x20 (32), exactly the worked example above.
 
 ### RPN: setting pitch-bend range
 
@@ -87,6 +113,28 @@ For more than 128 patches, the specification has the sender transmit Bank Select
 - **Centre (no bend): `00 40` = 0x2000 = 8,192.**
 - Maximum: `7F 7F` = 16,383.
 
+To send a bend value you split it into two 7-bit halves; to receive one you join them again. The splitting uses a mask and a shift:
+
+```formula
+LSB = v & 0x7F
+MSB = (v >> 7) & 0x7F
+v = (MSB << 7) | LSB
+LSB = 8192 & 0x7F = 0x00
+MSB = (8192 >> 7) & 0x7F = 0x40
+where
+v: the 14-bit bend value, 0 to 16,383; centre 8,192
+LSB: the first data byte sent, holding the low 7 bits
+MSB: the second data byte sent, holding the high 7 bits
+&: bitwise AND, keeping only bits set in both values; AND with 0x7F (binary 0111 1111) keeps the low 7 bits
+>>: shift right by the given number of bits (dividing by 128 for a shift of 7, discarding the remainder)
+<<: shift left by the given number of bits (multiplying by 128 for a shift of 7)
+|: bitwise OR, combining the bits of both values
+0x: prefix meaning hexadecimal (base 16); 0x7F is 127 and 0x40 is 64
+In words: the low seven bits go in the first byte and the next seven bits in the second; joining them back gives the original value.
+```
+
+The same in Python:
+
 ```python
 def bend_bytes(value):
     # value 0..16383, centre 8192
@@ -112,7 +160,37 @@ print(bend_value(0x00, 0x40))
 8192
 ```
 
-How far is "full bend"? The receiver decides, or it is set via RPN 0. A ±2 semitone range is a common default. Mapping the raw value to semitones:
+How far is "full bend"? The receiver decides, or it is set via RPN 0. A ±2 semitone range is a common default. To turn the raw value into a pitch offset, measure how far it is from centre as a fraction of half the range, then scale by the bend range:
+
+```formula
+s = (v − 8192) / 8192 × r
+s = (12288 − 8192) / 8192 × 2
+s = 4096 / 8192 × 2 = 1
+where
+s: the pitch offset in semitones; negative bends down, positive bends up
+v: the received 14-bit bend value, 0 to 16,383
+8192: the centre value, meaning no bend
+r: the bend range in semitones, set by the receiver or by RPN 0; 2 here (±2 semitones)
+In words: a value halfway between centre and the top bends up by half the range, here one semitone.
+```
+
+To apply the offset, scale the note's frequency by the same semitone factor as the key-to-frequency formula in lesson 1:
+
+```formula
+f_bent = f × 2^{s / 12}
+f_bent = 440 Hz × 2^{1 / 12}
+f_bent ≈ 466.16 Hz
+where
+f_bent: the frequency actually played with the bend applied, in hertz (Hz)
+f: the frequency of the held note without bend, in hertz; here 440 Hz (key 69)
+s: the bend offset in semitones from the formula above; here +1
+Hz: hertz, cycles per second
+2^{…}: 2 raised to the power in braces; a power of 1/12 is one semitone up
+≈: approximately equal to (rounded)
+In words: bending A 440 up one semitone gives the B♭ just above it, about 466 Hz.
+```
+
+Mapping the raw value to semitones in Python:
 
 ```python
 def bend_semitones(value, rng=2):
@@ -180,7 +258,25 @@ Real-time messages are single status bytes with no data. They may appear **anywh
 
 `F9` and `FD` are undefined and should be ignored.
 
-**Timing Clock is sent 24 times per quarter note** (24 PPQN, pulses per quarter note). A receiver measures the gap between clocks to find the tempo:
+**Timing Clock is sent 24 times per quarter note** (24 PPQN, pulses per quarter note). A receiver measures the gap between clocks to find the tempo. Going the other way, the expected gap at a given tempo is one minute divided by the number of clocks in that minute:
+
+```formula
+t_clk = 60 s / (BPM × PPQN)
+t_clk = 60 s / (120 × 24)
+t_clk = 60 s / 2880
+t_clk ≈ 0.020833 s ≈ 20.833 ms
+where
+t_clk: the time between consecutive Timing Clock (F8) bytes, in seconds (s) or milliseconds (ms)
+BPM: tempo in beats (quarter notes) per minute; 120 here
+PPQN: pulses per quarter note, fixed at 24 for MIDI clock
+60 s: the number of seconds in a minute
+s: seconds
+ms: milliseconds, thousandths of a second
+≈: approximately equal to (rounded)
+In words: at 120 BPM there are 2,880 clocks a minute, so one arrives roughly every 20.8 ms.
+```
+
+Faster tempos give shorter gaps: at 60 BPM the gap is about 41.7 ms. A receiver can turn the formula round (the tempo in BPM is 60 seconds divided by 24 times the measured gap) to estimate tempo; in practice it averages several gaps, because individual clocks jitter. The same calculation in Python:
 
 ```python
 def clock_interval_ms(bpm, ppqn=24):

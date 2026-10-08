@@ -41,7 +41,7 @@
       },
       {
         "text": "About 9,300 runs/s on average, but size for top-of-hour spikes that can be tens to hundreds of times higher in the first seconds of each hour",
-        "explanation": "Correct. 100e6 / (3 x 3,600) = 9,259/s. Because humans write `0 * * * *` and `0 0 * * *`, firings cluster at :00. Design for that burst, or spread it with jitter."
+        "explanation": "Correct. 100 million / (3 × 3,600 s) = 9,259 runs a second. Because humans write `0 * * * *` and `0 0 * * *`, firings cluster at :00. Design for that burst, or spread it with jitter."
       },
       {
         "text": "About 28,000 runs/s, because each job runs three times an hour",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "100M / 10,800 seconds =9,259.26 runs/s on average. If 2M runs coincide at an hour boundary, the one-second burst is 216 times that exact average, or 200,000/s over 10 seconds. Read-ahead spreads preparation, not the required start time. Tenant-approved jitter changes when runs are due; queue buffering delays execution and therefore needs an explicit lateness budget.",
+    "workedExample": "The average rate is the number of schedules divided by the gap between each schedule's runs:\n\n```formula\nr = J / p\nr = 100,000,000 / 10,800 s\nr ≈ 9,259 runs/s\nwhere\nr: average runs started per second\nJ: recurring schedules; here 100 million\np: gap between one schedule's runs, in seconds (s); 3 hours = 3 × 3,600 s = 10,800 s\ns: seconds\nruns: job executions\n≈: approximately equal to\nIn words: 100 million schedules that each run every 3 hours start about 9,300 runs a second on average.\n```\n\nNow compare a top-of-hour burst with that average:\n\n```formula\nm = B / r = 2,000,000 / 9,259 ≈ 216\nq = B / w = 2,000,000 / 10 s\nq = 200,000 runs/s\nwhere\nm: how many times the average a one-second burst is\nB: runs due at the same hour boundary; here 2 million\nr: average runs per second; 9,259\nq: start rate needed if the burst is spread over w seconds\nw: the spreading window, in seconds (s); here 10\ns: seconds\nruns: job executions\n≈: approximately equal to\nIn words: 2 million runs at once is over 200 times an average second; even spread over 10 seconds it needs 200,000 starts a second.\n```\n\nRead-ahead spreads preparation, not the required start time. Tenant-approved jitter changes when runs are due; queue buffering delays execution and therefore needs an explicit lateness budget.",
     "link": {
       "title": "Executing cron scripts reliably at scale (Slack Engineering)",
       "url": "https://slack.engineering/executing-cron-scripts-reliably-at-scale/"
@@ -170,7 +170,7 @@
       },
       {
         "text": "A single Redis sorted set scored by due time, holding all jobs",
-        "explanation": "Wrong at this scale. 50 k/s x up to a year of delay is about 1.6 trillion entries, far more than RAM. And a single sorted set is a hot key with asynchronous-replication loss risk on failover."
+        "explanation": "Wrong at this scale. 50 k/s × up to a year of delay is about 1.6 trillion entries, far more than RAM. And a single sorted set is a hot key with asynchronous-replication loss risk on failover."
       },
       {
         "text": "A tiered design: store far-future jobs in the sharded job store (indexed by due time, or in time buckets). A mover promotes jobs due within the next few minutes into an in-memory timing wheel or a short-delay queue, which fires them precisely",
@@ -182,7 +182,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "50,000 arrivals/s is 4.32B jobs/day. If every job waited 365 days, pending inventory could reach 1.5768T; shorter delay distributions reduce it. At steady 50,000 due/s, a5-minute window holds 15M jobs, or 1.5GB assuming 100 bytes/entry before overhead. Rebuild pending near-term work from durable state after failure; advancing schedules alone is insufficient if the timer was lost.",
+    "workedExample": "Work out how much is waiting at once in each tier. Everything here is \"arrival rate × time spent waiting\" (Little's law).\n\n```formula\nD = 50,000/s × 86,400 s = 4,320,000,000\nP = 4,320,000,000 × 365 ≈ 1.58 × 10^12\nN = 50,000/s × 300 s = 15,000,000\nS = 15,000,000 × 100 B = 1.5 GB\nwhere\nD: new delayed jobs per day (4.32 billion)\nP: worst-case pending jobs if every job waited a full year of 365 days (about 1.6 trillion)\nN: jobs due within a 5-minute (300 s) near-term window, at a steady 50,000 due per second\nS: memory for that window at an assumed 100 bytes per entry, before overhead\ns: seconds; a day has 86,400 s\nB: bytes\nGB: gigabytes, 1,000,000,000 bytes\n10^12: one trillion (a 1 followed by 12 zeros)\n≈: approximately equal to\nIn words: a year of waiting jobs could reach about 1.6 trillion, far beyond memory, but the next 5 minutes hold only about 15 million jobs, about 1.5 GB.\n```\n\nShorter delay distributions reduce the year-long figure. Rebuild pending near-term work from durable state after failure; advancing schedules alone is insufficient if the timer was lost.",
     "link": {
       "title": "Amazon SQS delay queues (AWS docs)",
       "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-delay-queues.html"
@@ -242,7 +242,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Three days=259,200 seconds; SQS message delay is at most 900 seconds. Persist the reminder and promote it with a recoverable outbox near its due time. Clamp a standard-queue message delay to an integer in[0,900] and handle already overdue work. FIFO queues do not support per-message timers; use their queue-level delay or a scheduler appropriate to the timing requirement.",
+    "workedExample": "Convert three days to seconds:\n\n```formula\nt = 3 days × 86,400 s/day\nt = 259,200 s\nwhere\nt: the requested delay, in seconds (s)\ns: seconds\nday: one day, 24 × 60 × 60 = 86,400 s\ndays: days\nIn words: three days is 259,200 seconds, far more than SQS's 900-second (15-minute) maximum delay.\n```\n\nPersist the reminder and promote it with a recoverable outbox near its due time. Clamp a standard-queue message delay to a whole number of seconds between 0 and 900, and handle already overdue work. FIFO queues do not support per-message timers; use their queue-level delay or a scheduler appropriate to the timing requirement.",
     "link": {
       "title": "Amazon SQS visibility timeout (AWS docs)",
       "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
@@ -280,7 +280,7 @@
       2,
       4
     ],
-    "workedExample": "At:05 while A still runs, Allow can start B, Forbid defers creation, and Replace replaces A. When A finishes at:08, Forbid may create the missed occurrence depending on the start deadline and controller timing. Policies apply only to Jobs from the same CronJob and do not make external effects exactly-once.",
+    "workedExample": "At :05 while A still runs, Allow can start B, Forbid defers creation, and Replace replaces A. When A finishes at :08, Forbid may create the missed occurrence depending on the start deadline and controller timing. Policies apply only to Jobs from the same CronJob and do not make external effects exactly-once.",
     "link": {
       "title": "CronJob (Kubernetes docs)",
       "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
@@ -310,7 +310,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "First, check the spreading:\n\n```\n2,000,000 jobs / 300 s\n  = ~6,700 runs/s\n```\n\ninstead of 2 M in one second. Either method achieves that.\n\nNow follow one job over two hours:\n\n| Method | 09:xx | 10:xx | Gap |\n|---|---|---|---|\n| hash | 09:03:17 | 10:03:17 | 60 min |\n| random | 09:00:20 | 10:04:50 | 64.5 min |\n\nWith random jitter, a job can run twice in 55 minutes or wait 65, which surprises anyone using 'hourly' for rate limits or billing. A stable hash is predictable for each tenant and still smooth for the fleet.",
+    "workedExample": "First, check the spreading. The 5-minute window is 300 seconds:\n\n```formula\nq = J / w\nq = 2,000,000 jobs / 300 s\nq ≈ 6,700 runs/s\nwhere\nq: runs started per second once spread out\nJ: hourly jobs that opted in; here 2 million\nw: the jitter window, in seconds (s); 5 minutes = 300 s\ns: seconds\njobs: scheduled jobs\nruns: job executions\n≈: approximately equal to\nIn words: spreading 2 million jobs evenly over 300 seconds gives about 6,700 runs a second instead of 2 million in one second.\n```\n\nEither method achieves that. In the hash version, `%` is the remainder after dividing, so `hash(job_id) % 300` is always a whole number from 0 to 299 and is the same every hour for the same job.\n\nNow follow one job over two hours:\n\n| Method | 09:xx | 10:xx | Gap |\n|---|---|---|---|\n| hash | 09:03:17 | 10:03:17 | 60 min |\n| random | 09:00:20 | 10:04:50 | 64.5 min |\n\nWith random jitter, a job can run twice in 55 minutes or wait 65, which surprises anyone using 'hourly' for rate limits or billing. A stable hash is predictable for each tenant and still smooth for the fleet.",
     "link": {
       "title": "Executing cron scripts reliably at scale (Slack Engineering)",
       "url": "https://slack.engineering/executing-cron-scripts-reliably-at-scale/"
@@ -340,7 +340,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Why fixed 30 s retries hurt:\n\n```\n100,000 runs fail within seconds\n-> 100,000 retries at t+30 s\n-> 100,000 retries at t+60 s ...\n```\n\nThe endpoint sees a wall of 100,000 requests every 30 s. When it recovers, the next wall knocks it over again.\n\nWith 'full jitter', each retry waits `random(0, min(cap, base x 2^attempt))`:\n\n| Attempt | Window |\n|---|---|\n| 1 | 0–2 s |\n| 4 | 0–16 s |\n| 8 | 0–256 s |\n| 10+ | 0–600 s (cap) |\n\nBy the time the endpoint recovers, the retries are spread over minutes, so it sees a few hundred a second rather than a wall. After, say, 12 attempts, park the run in the DLQ and alert the tenant.",
+    "workedExample": "Why fixed 30 s retries hurt:\n\n```\n100,000 runs fail within seconds\n-> 100,000 retries at t+30 s\n-> 100,000 retries at t+60 s ...\n```\n\nThe endpoint sees a wall of 100,000 requests every 30 s. When it recovers, the next wall knocks it over again.\n\nWith 'full jitter', each retry waits a random time between zero and an exponentially growing ceiling. Assume a 1 s base delay and a 600 s cap:\n\n```formula\nd = random(0, min(c, b × 2^a))\nd_1 = random(0, min(600, 1 × 2^1))\nd_1 = random(0, 2) s\nwhere\nd: the wait before this retry, in seconds (s)\nd_1: the wait before attempt 1\nrandom(x, y): a number chosen uniformly at random between x and y, so retries spread evenly\nmin(x, y): the smaller of x and y\nc: the cap, the longest wait allowed; here 600 s (10 minutes)\nb: the base delay; the question does not give one, so assume 1 s (this matches the 0–2 s window for attempt 1 in the table below)\na: the attempt number (1, 2, 3, ...)\n2^a: 2 multiplied by itself a times, so the ceiling doubles every attempt\ns: seconds\nIn words: each retry waits a random time up to a ceiling that doubles each attempt, until the ceiling hits the cap.\n```\n\n| Attempt | Window |\n|---|---|\n| 1 | 0–2 s |\n| 4 | 0–16 s |\n| 8 | 0–256 s |\n| 10+ | 0–600 s (cap) |\n\nAt attempt 10 the uncapped ceiling would be 1,024 s, so the 600 s cap applies. By the time the endpoint recovers, the retries are spread over minutes, so it sees a few hundred a second rather than a wall. After, say, 12 attempts, park the run in the DLQ and alert the tenant.",
     "link": {
       "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
       "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"
@@ -378,7 +378,7 @@
       2,
       4
     ],
-    "workedExample": "A1M-job FIFO backlog at 50,000/min implies 20 minutes before the following job. Fair scheduling gives other tenants opportunities earlier, subject to weights, worker capacity and job duration. It does not guarantee starts within seconds; the large backlog may take longer than 20 minutes when others receive a share. Worker isolation still leaves shared databases and downstream services to protect.",
+    "workedExample": "How long the last job behind the backlog waits is the backlog divided by the drain rate:\n\n```formula\nT = Q / r\nT = 1,000,000 jobs / 50,000 per min\nT = 20 min\nwhere\nT: delay before the next tenant's job reaches the front, in minutes (min)\nQ: jobs ahead of it in the FIFO queue; here 1 million\nr: the rate workers drain the queue; here 50,000 jobs per minute\njobs: scheduled job runs\nmin: minutes\nIn words: draining a million jobs at 50,000 a minute takes 20 minutes, so everyone else's midnight jobs start 20 minutes late.\n```\n\nFair scheduling gives other tenants opportunities earlier, subject to weights, worker capacity and job duration. It does not guarantee starts within seconds; the large backlog may take longer than 20 minutes when others receive a share. Worker isolation still leaves shared databases and downstream services to protect.",
     "link": {
       "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
       "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"

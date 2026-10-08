@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Work it through:\n\n1. Rev 10: `a b c` at indices 0, 1, 2.\n2. Commit Alice `insert(1,'X')`, giving rev 11: `a X b c` at 0, 1, 2, 3.\n3. Bob's `delete(2)` was meant for `c`. Transform rule for delete-vs-insert: if `insert.pos <= delete.pos`, then `delete.pos += len(insert)`.\n4. 1 <= 2, so it becomes **`delete(3)`**, committed as rev 12: `a X b`.\n5. Bob's client receives Alice's op and transforms it against his own pending `delete(2)`. The insert at 1 is before the delete at 2, so it's unchanged: `insert(1,'X')` on `ab` gives `aXb`.\n\nBoth replicas show `aXb`. That's convergence plus intention preservation.",
+    "workedExample": "Work it through:\n\n1. Rev 10: `a b c` at indices 0, 1, 2.\n2. Commit Alice `insert(1,'X')`, giving rev 11: `a X b c` at 0, 1, 2, 3.\n\nBob's `delete(2)` was meant for `c`. The transform rule for a delete against an earlier-committed insert:\n\n```formula\np' = p + n,  if i ≤ p\np' = p,      if i > p\np' = 2 + 1 = 3\nwhere\np: the position (0-based index) Bob's delete targets; here 2\np': the transformed position to use on the new document\ni: the position where Alice's insert went; here 1\nn: the number of characters Alice inserted; here 1\n≤: is less than or equal to\n>: is greater than\nIn words: if someone inserted text at or before your target, your target moves right by the length of their insert.\n```\n\nHere 1 ≤ 2, so it becomes **`delete(3)`**, committed as rev 12: `a X b`.\n\nOn the other side, Bob's client receives Alice's op and transforms it against his own pending `delete(2)`. The insert at 1 is before the delete at 2, so it's unchanged: `insert(1,'X')` on `ab` gives `aXb`.\n\nBoth replicas show `aXb`. That's convergence plus intention preservation.",
     "link": {
       "title": "Operational transformation (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Operational_transformation"
@@ -121,7 +121,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Append the edit, revision, ownership epoch and operation-deduplication record atomically under the selected durability contract; acknowledge only after commit. If the owner crashes before commit, retry; if it crashes after commit but before ack, deduplicate and acknowledge the existing edit. Local echo remains immediate. Group-commit and saved-indicator latency must be measured rather than assumed to be 5ms or 50–100ms.",
+    "workedExample": "Append the edit, revision, ownership epoch and operation-deduplication record atomically under the selected durability contract; acknowledge only after commit. If the owner crashes before commit, retry; if it crashes after commit but before ack, deduplicate and acknowledge the existing edit. Local echo remains immediate. Group-commit and saved-indicator latency must be measured rather than assumed to be 5 ms or 50–100 ms.",
     "link": {
       "title": "Operational transformation (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Operational_transformation"
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "If replay costs an assumed 10 microseconds per operation,4M operations take 40 seconds;500 take 5ms, excluding snapshot fetch/parse. Publish snapshots durably and monitor snapshot lag. To reconstruct revisionR, load a snapshot at or beforeR and retain all necessary intervening operations. Hourly snapshots alone cannot reproduce every intermediate edit. Restoring creates a new authorized change under the current concurrency protocol.",
+    "workedExample": "Load time is roughly the number of operations replayed times the cost of each. Assume 10 microseconds (µs, millionths of a second) per operation:\n\n```formula\nt = n × c\nt = 4,000,000 × 10 µs = 40 s\nt = 500 × 10 µs = 5,000 µs = 5 ms\nwhere\nt: time to rebuild the document by replay\nn: operations replayed; 4 million with no snapshot, at most about 500 after a recent snapshot\nc: replay cost per operation; an assumed 10 µs\nµs: microseconds, millionths of a second\nms: milliseconds, thousandths of a second\ns: seconds\nIn words: replaying 4 million ops takes 40 seconds, but replaying only the 500 since the last snapshot takes 5 milliseconds.\n```\n\nThis excludes snapshot fetch and parse time. Publish snapshots durably and monitor snapshot lag. To reconstruct an old revision, load a snapshot at or before it and retain all necessary intervening operations. Hourly snapshots alone cannot reproduce every intermediate edit. Restoring creates a new authorised change under the current concurrency protocol.",
     "link": {
       "title": "How Figma's multiplayer technology works (Figma blog)",
       "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"
@@ -293,7 +293,7 @@
     "options": [
       {
         "text": "About 400,000 a second. Presence is negligible next to ops",
-        "explanation": "Wrong. This forgets the fan-out of 2 recipients and the 10 updates per user. 200,000 x 10 x 2 is ten times larger."
+        "explanation": "Wrong. This forgets the fan-out of 2 recipients and the 10 updates per user. 200,000 × 10 × 2 is ten times larger."
       },
       {
         "text": "About 4 M a second, more than the ~2 M op messages, so presence must be cheap: ephemeral, throttled, coalesced and kept out of the op log",
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Multiply it out:\n\n```\n200,000 users x 10 updates/s\n  = 2,000,000 updates/s\nx 2 recipients each\n  = 4,000,000 messages/s\n```\n\nCompare ops: 1 M ops/s in, about 2 M/s fanned out. Presence is **twice** the op fan-out.\n\nWithout throttling, raw mouse and caret events at ~60 a second would be 24 M/s. Hence the rules:\n\n- throttle (10/s) and coalesce (send only the latest position)\n- ephemeral pub/sub, no durable writes\n- heartbeat TTL (~30 s) to drop ghosts",
+    "workedExample": "Multiply it out: users sending presence, times updates each sends per second, times recipients for each update.\n\n```formula\nP = U × r × k\nP = 200,000 × 10/s × 2\nP = 4,000,000 messages/s\nwhere\nP: presence messages the fan-out tier delivers per second\nU: users actively typing at peak; 200,000\nr: presence updates per user per second; throttled to 10\nk: other collaborators who receive each update; about 2\ns: seconds\nmessages: delivered presence messages\nIn words: 200,000 users sending 10 cursor updates a second to 2 others each is 4 million messages a second.\n```\n\nCompare ops: 1 M ops/s in, about 2 M/s fanned out. Presence is **twice** the op fan-out.\n\nWithout throttling, raw mouse and caret events at ~60 a second would be 200,000 × 60 × 2 = 24 M/s. Hence the rules:\n\n- throttle (10/s) and coalesce (send only the latest position)\n- ephemeral pub/sub, no durable writes\n- heartbeat TTL (~30 s) to drop ghosts",
     "link": {
       "title": "How Figma's multiplayer technology works (Figma blog)",
       "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"

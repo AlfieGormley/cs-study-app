@@ -26,6 +26,8 @@ There are usually several timeouts on one call:
 
 The AWS Builders' Library recommends picking a timeout from the dependency's **latency distribution**: choose an acceptable false-timeout rate (say 0.1%) and set the timeout at the matching percentile (p99.9), plus some padding.
 
+A percentile is read from measured latencies: **p99.9** is the latency that 99.9% of calls beat, so only 0.1% of healthy calls take longer. If a dependency's p99.9 is 140 ms, a timeout of about 150 ms falsely times out roughly 0.1% of calls that would have succeeded. Very rare outliers (a 2-second GC pause at p99.99) are deliberately left to time out.
+
 - Too short: you time out healthy-but-slightly-slow requests, retry them and *add* load.
 - Too long: callers wait on doomed requests and exhaust their resources.
 
@@ -35,6 +37,20 @@ A user-facing request with a 2-second budget calls A, which calls B, which calls
 
 The fix is to propagate a **deadline**, not a timeout. gRPC supports this when the language/runtime propagates the incoming context to outgoing calls. The remaining budget travels with the request; handlers must observe cancellation and stop their own work, because the deadline does not forcibly roll back or terminate every side effect.
 
+Each hop works out how much time is left from the one absolute deadline it received:
+
+```formula
+t_left = D − t_now
+t_left = 2000 ms − 300 ms = 1700 ms
+t_left = 2000 ms − 900 ms = 1100 ms
+where
+t_left: the time remaining before the user gives up, in milliseconds (ms)
+D: the absolute deadline, measured from the moment T the request arrived; here T + 2000 ms
+t_now: the current time on the same scale, e.g. 300 ms after T when A calls B
+ms: milliseconds; 1000 ms = 1 second
+In words: the remaining budget is the deadline minus the time already spent, so every hop down the chain gets less, never a fresh 2 seconds.
+```
+
 ```
 User deadline: T+2000ms
   A starts T+0     remaining 2000
@@ -42,6 +58,8 @@ User deadline: T+2000ms
   B → C at T+900   remaining 1100
   C: if remaining < its p50, fail fast
 ```
+
+Here p50 is the median latency of C's work: if less time remains than C usually needs, it is better to fail at once than start work nobody will wait for. Absolute deadlines assume the hosts' clocks roughly agree; gRPC avoids most clock skew by sending the remaining *duration* and converting it to a local deadline at each hop.
 
 ## Retries: when they help and when they hurt
 
@@ -80,15 +98,31 @@ The server coordinates concurrent requests and stores the key with the result. S
 
 Retrying immediately after a failure hits the dependency again while it's still struggling. **Exponential backoff** waits longer after each failure:
 
+```formula
+w = min(c, b × 2^a)
+w = min(10 s, 100 ms × 2^4)
+w = min(10 s, 1600 ms) = 1.6 s
+where
+w: the wait (sleep) before the next attempt, in milliseconds (ms) or seconds (s)
+min: the smaller of the two values
+c: the cap, the longest wait ever allowed, here 10 s
+b: the base delay, here 100 ms
+a: the retry number, counting from 0, here 4
+2^a: 2 to the power a, which doubles with each failure (1, 2, 4, 8, 16...)
+ms: milliseconds; 1000 ms = 1 s
+s: seconds
+In words: each failure doubles the wait, starting from the base, until the wait reaches the cap and stays there.
 ```
-sleep = min(cap, base * 2^attempt)
 
-base=100ms, cap=10s:
-  attempt 0: 100ms
-  attempt 1: 200ms
-  attempt 2: 400ms
-  attempt 3: 800ms
-  attempt 4: 1.6s ...
+With base 100 ms and cap 10 s the waits go:
+
+```
+attempt 0: 100ms
+attempt 1: 200ms
+attempt 2: 400ms
+attempt 3: 800ms
+attempt 4: 1.6s ...
+attempt 7: 10s (capped; 12.8s > cap)
 ```
 
 Backoff gives the dependency time to recover and spreads load over time. But on its own it has a nasty property.
@@ -106,24 +140,64 @@ No jitter:          Full jitter:
   spikes              spread out
 ```
 
-**Jitter** adds randomness so retries spread out. Marc Brooker's analysis on the AWS Architecture Blog compared variants:
+**Jitter** adds randomness so retries spread out. Marc Brooker's analysis on the AWS Architecture Blog compared variants. **Full jitter**, the recommended default, picks a wait uniformly at random anywhere between zero and the exponential-backoff value:
 
+```formula
+w = random(0, min(c, b × 2^a))
+w = random(0, min(10 s, 100 ms × 2^2))
+w = random(0, 400 ms)
+where
+w: the wait before the next attempt, in milliseconds (ms)
+random(x, y): a number chosen uniformly at random between x and y, so every value in the range is equally likely
+min: the smaller of the two values
+c: the cap, the longest wait allowed, here 10 s
+b: the base delay, here 100 ms
+a: the retry number, counting from 0, here 2
+2^a: 2 to the power a
+ms: milliseconds; 1000 ms = 1 s
+s: seconds
+In words: before its third retry (a = 2) a client waits somewhere between 0 and 400 ms, so 1,000 clients spread their retries across that whole window instead of all retrying at exactly 400 ms.
 ```
-// Full jitter (recommended default)
-sleep = random(0, min(cap, base * 2^n))
 
-// Equal jitter
-t = min(cap, base * 2^n)
-sleep = t/2 + random(0, t/2)
+The two other variants keep a floor under the wait:
 
-// Decorrelated jitter
-sleep = min(cap,
-            random(base, prev_sleep * 3))
+```formula
+t = min(c, b × 2^a)
+w_eq = t/2 + random(0, t/2)
+w_dec = min(c, random(b, 3 × w_prev))
+where
+t: the plain exponential-backoff wait, in milliseconds (ms)
+w_eq: the wait under equal jitter: half of t fixed, plus a random amount up to the other half
+w_dec: the wait under decorrelated jitter
+w_prev: the previous wait this client used (starting at b)
+random(x, y): a number chosen uniformly at random between x and y
+min: the smaller of the two values
+c: the cap, the longest wait allowed
+b: the base delay
+a: the retry number, counting from 0
+2^a: 2 to the power a
+In words: equal jitter always waits at least half the backoff; decorrelated jitter grows each wait randomly from the last one, up to three times it, without passing the cap.
 ```
+
+For example, with t = 400 ms, equal jitter waits between 200 and 400 ms.
 
 In his simulations, full jitter used the fewest calls; decorrelated jitter finished slightly sooner but did more work; equal jitter was the loser, doing slightly more work than full jitter and taking much longer. Equal jitter's one attraction is that it guarantees a minimum wait. All three are vastly better than no jitter.
 
-The AWS SDKs use full jitter: in standard retry mode the delay is `random(0, 1) × min(cap, base × 2^retry)`, with a 20-second cap.
+The AWS SDKs use full jitter. In standard retry mode (as documented for the SDKs' updated 2026 retry behaviour, opt-in at first) the delay is written as a random fraction of the backoff, which is the same thing:
+
+```formula
+w = r × min(c, b × 2^a)
+where
+w: the wait before the next attempt, in seconds (s)
+r: a random fraction between 0 and 1, chosen uniformly
+min: the smaller of the two values
+c: the cap, 20 s in the SDKs' standard mode
+b: the base delay; in the SDKs' 2026 retry behaviour, 50 ms for transient errors and 1,000 ms for throttling errors
+a: the retry number, counting from 0
+2^a: 2 to the power a
+s: seconds
+In words: wait a random fraction of the exponential backoff, which never exceeds 20 seconds.
+```
 
 > [!tip] Jitter everything periodic
 > The same synchronisation problem hits cron jobs, cache expiry and health checks. Add jitter to TTLs and scheduled tasks too, or every client refreshes on the hour.
@@ -144,9 +218,36 @@ If the database is completely down, one user request produces:
 - 3 × 3 = 9 at the service
 - 3 × 3 × 3 = **27** at the database
 
-In general, `attempts^layers`, where *layers* counts the hops that retry. With 5 layers of 3 attempts that's 243×. The database, which was perhaps just overloaded, now receives 27 times its normal traffic and has no chance to recover. This is a **retry storm**.
+Each retrying layer multiplies the attempts of the layer above it:
 
-Partial failure amplifies too, just less dramatically. With a single retrying layer and an independent, unchanged failure probability `p` per attempt, the expected attempts per request with up to 3 tries is `1 + p + p²`:
+```formula
+M = n^L
+M = 3^3 = 3 × 3 × 3 = 27
+M = 3^5 = 243
+where
+M: the attempts reaching the bottom dependency for one user request (the amplification factor)
+n: the maximum attempts each layer makes (1 try + retries), here 3
+L: the number of layers (hops) that retry, here 3 (or 5)
+^: "to the power of"
+In words: three retrying layers of three attempts turn one request into 27 at the database; five layers turn it into 243.
+```
+
+This is the worst case, when every attempt fails. The database, which was perhaps just overloaded, now receives 27 times its normal traffic and has no chance to recover. This is a **retry storm**.
+
+Partial failure amplifies too, just less dramatically. Take a single retrying layer making up to 3 tries. The first try always happens; the second happens only if the first fails; the third only if the first two fail:
+
+```formula
+E = 1 + p + p^2
+E = 1 + 0.5 + 0.5^2
+E = 1 + 0.5 + 0.25 = 1.75
+where
+E: the expected (average) number of attempts per request
+p: the probability that any one attempt fails, from 0 to 1, assumed independent and unchanged between attempts; here 0.5 (50%)
+p^2: p squared, the chance the first two attempts both fail
+In words: when half of attempts fail, each request makes 1.75 attempts on average, so the dependency sees 75% extra load.
+```
+
+The same formula gives the rest of the table:
 
 | Failure rate p | Attempts per request |
 |---|---|
@@ -165,7 +266,18 @@ The extra load arrives exactly as the dependency gets worse, which is a positive
 
 ## Retry budgets and token buckets
 
-A **retry budget** limits retries to a proportion of requests, e.g. "retries may be at most 10% of original calls to this dependency". When things are healthy, the occasional failure gets retried. When everything is failing, retries are capped at +10% load instead of +200%.
+A **retry budget** limits retries to a proportion of requests, e.g. "retries may be at most 10% of original calls to this dependency". When things are healthy, the occasional failure gets retried. When everything is failing, the cap decides the load:
+
+```formula
+L_max = N × (1 + β)
+L_max = 1000 × (1 + 0.1) = 1100 calls/s
+where
+L_max: the most calls per second the dependency can receive, including retries
+N: the original (first-try) calls per second, here 1,000
+β: the retry budget, the most retries allowed as a fraction of original calls, here 10% = 0.1
+calls/s: calls per second
+In words: with a 10% budget, total load can never exceed 1.1 times normal, compared with 3 times normal (+200%) when every request may make 3 attempts.
+```
 
 The AWS SDKs implement a version with a **token bucket** (the "retry quota"):
 
@@ -192,7 +304,7 @@ Google's SRE book describes a similar pair of limits: a per-request cap (a reque
 
 ## Putting it together
 
-```
+```python
 def call(req, deadline):
   for attempt in range(MAX_ATTEMPTS):
     remaining = deadline - now()
@@ -204,7 +316,7 @@ def call(req, deadline):
       if not retryable(e): raise
       if attempt + 1 == MAX_ATTEMPTS: break
       if not budget.try_acquire(): raise
-      delay = random(0,
+      delay = random.uniform(0,
         min(CAP, BASE * 2**attempt))
       left = deadline - now()
       if left <= 0: raise Timeout
@@ -217,7 +329,7 @@ def call(req, deadline):
 - Every remote call needs a timeout; pick it from the dependency's latency percentiles and propagate deadlines across hops.
 - Retry only transient failures on idempotent operations; use idempotency keys for writes.
 - Exponential backoff spaces retries out; jitter (full jitter is a good default) stops clients synchronising into waves.
-- Retries amplify multiplicatively across layers (`attempts^layers`), so retry at one layer only.
+- Retries amplify multiplicatively across layers (3 attempts at each of 3 layers is 27 calls), so retry at one layer only.
 - Retry budgets and token buckets cap retry load during sustained failure, reducing retry amplification; separate capacity controls remain necessary because even bounded extra load can overload a dependency.
 
 ## Further reading

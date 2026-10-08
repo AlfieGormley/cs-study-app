@@ -13,7 +13,7 @@ Most linked-list problems, in interviews and in real code, reduce to a few patte
 3. **Merging**: weave two sorted lists together.
 4. **Dummy heads**: a throwaway node in front so the real head is never a special case.
 
-The iterative patterns below use linear time and **O(1) extra space**; recursive reversal is an explicit exception. Unless detecting a cycle, assume finite acyclic lists. That last part is the point: anyone can solve these problems by copying the list into an array first, but then you've spent O(n) memory.
+For a list of n nodes, the iterative patterns below use linear time, O(n), and **O(1) extra space** (a fixed handful of pointer variables, however long the list); recursive reversal is an explicit exception. Unless detecting a cycle, assume finite acyclic lists. That last part is the point: anyone can solve these problems by copying the list into an array first, but then you've spent O(n) memory.
 
 Throughout, we use:
 
@@ -50,7 +50,7 @@ iter 3  None<-1<-2<-3
 return 3:  3->2->1
 ```
 
-Each node is visited once: O(n) time, O(1) space.
+Each of the n nodes is visited once: O(n) time, O(1) space.
 
 ### Recursive reversal
 
@@ -64,7 +64,7 @@ def reverse_rec(head):
     return new_head
 ```
 
-It's elegant, but it uses **O(n) stack space**, one frame per node. In Python the default recursion limit is 1,000, so a 10,000-node list raises `RecursionError`. Prefer the loop.
+It's elegant, but on an n-node list it uses **O(n) stack space**, one frame per node. In Python the default recursion limit is 1,000, so a 10,000-node list raises `RecursionError`. Prefer the loop.
 
 ## Fast and slow pointers
 
@@ -97,7 +97,7 @@ For an even-length list such as `1..6`, this returns **4**, the second of the tw
 
 A bug or a malicious input can make a list loop back on itself. Walking it with `while cur:` then never ends. How do you detect a cycle?
 
-The obvious answer is a set of visited nodes: O(n) time but **O(n) memory**. **Floyd's algorithm** (the "tortoise and hare") does it in O(1) memory.
+The obvious answer is a set of visited nodes: for a list of n nodes that is O(n) time but **O(n) memory**. **Floyd's algorithm** (the "tortoise and hare") does it in O(1) memory.
 
 If there's no cycle, `fast` falls off the end. If there is, both pointers end up circling the loop, and `fast` gains one node per step on `slow`, so it must eventually land exactly on it. It can't jump over `slow`: if `fast` is one behind, the next step brings them together.
 
@@ -135,22 +135,53 @@ def cycle_start(head):
     return p
 ```
 
-Why does that work? Let:
+Why does that work? Name three distances. By convention they use Greek letters: **μ** (mu) and **λ** (lambda).
 
-- **μ** = number of steps from the head to the cycle's start,
-- **λ** = the cycle's length,
-- **k** = how far into the cycle the pointers meet.
+- **μ** = number of steps from the head to the cycle's start (the length of the "tail" before the loop),
+- **λ** = the cycle's length, in nodes,
+- **k** = how far into the cycle, counting from its start, the pointers meet.
 
-At the first positive-time meeting, slow has walked t = μ + k + jλ steps for some completed laps j ≥ 0, and fast has walked 2t. Their distance difference t is a multiple of λ, so μ + k is also a multiple of λ. This includes μ = 0, where the initial equality is not treated as a detected cycle.
+Count the steps each pointer has walked when they first meet (not counting the start, where both sit on the head). Slow reaches the cycle after μ steps, goes some number of whole laps, then k more. Fast moves twice as fast, so it has walked twice as far:
 
-So **μ ≡ −k (mod λ)**. A pointer starting at the meeting point (offset k) that walks μ more steps lands at offset k + μ = mλ, which is the cycle's start. A pointer walking μ steps from the head also lands there. Hence they meet at the start.
+```formula
+t = μ + k + j × λ
+2 × t − t = q × λ
+μ + k + j × λ = q × λ
+μ + k = (q − j) × λ = m × λ
+where
+t: the number of steps slow has taken when the pointers first meet; fast has taken 2 × t steps by then
+q: how many whole laps fast is ahead of slow at the meeting (they are on the same node, so fast's extra t steps must be whole laps)
+μ: mu, the number of steps from the head to the first node of the cycle
+k: how many steps past the cycle's first node the meeting point is (0 up to λ − 1)
+λ: lambda, the number of nodes in the cycle
+j: how many complete laps of the cycle slow made before meeting (0 or more)
+m: the whole number q − j (0 or more; it is 0 only when the cycle starts at the head and they meet there)
+In words: both pointers are on the same node, so fast's extra distance is a whole number of laps; that forces the tail length plus the meeting offset to be a whole number of laps too.
+```
+
+The last line is the key. Walking μ steps forward from the meeting point means walking μ + k steps from the cycle's start in total, which is a whole number of laps, so it lands exactly back on the cycle's start. Mathematicians write the same fact using **modular arithmetic** (arithmetic on remainders, like a clock face):
+
+```formula
+μ ≡ −k (mod λ)
+where
+μ: mu, the number of steps from the head to the cycle's start
+k: how many steps past the cycle's start the pointers met
+λ: lambda, the number of nodes in the cycle
+≡: is congruent to: both sides leave the same remainder when divided by the number after mod
+mod: modulo: (mod λ) means "comparing remainders after dividing by λ", i.e. ignoring whole laps
+In words: walking μ steps on from the meeting point has the same effect as stepping k back, which is exactly the cycle's start.
+```
+
+In the trace below, μ = 2, k = 2 and λ = 4: 2 and −2 both leave remainder 2 when divided by 4 (because −2 = −1 × 4 + 2), so the rule holds. A pointer walking μ steps from the head also lands on the cycle's start. Both pointers move one step at a time, so they arrive together, and the first node where they meet is the start. The argument also covers μ = 0, a cycle that starts at the head; there the initial equality at the head is not treated as a detected cycle.
+
+The trace below checks the numbers: the tail is 2 steps and the pointers meet 2 steps into a 4-node cycle, and 2 + 2 = 4 is exactly one lap.
 
 > [!example] Trace
-> List `1 -> 2 -> 3 -> 4 -> 5 -> 6 -> (back to 3)`, so μ = 2 and λ = 4. Phase 1: slow visits 2, 3, 4, 5 while fast visits 3, 5, 3, 5. They meet at **5** after 4 steps (k = 2). Phase 2: starting from 1 and 5, one step each gives (2, 6), then (3, 3). They meet at **3**, the cycle start, after μ = 2 steps.
+> List `1 -> 2 -> 3 -> 4 -> 5 -> 6 -> (back to 3)`, so the tail μ is 2 steps and the cycle length λ is 4. Phase 1: slow visits 2, 3, 4, 5 while fast visits 3, 5, 3, 5. They meet at **5** after 4 steps, 2 steps into the cycle (k is 2). Phase 2: starting from 1 and 5, one step each gives (2, 6), then (3, 3). They meet at **3**, the cycle start, after μ (2) steps.
 
 To get the cycle's length, hold one pointer at the meeting point and walk the other round until it returns, counting steps.
 
-The same idea finds a duplicate in an array of n + 1 values in the range 1..n, treating each value as a "next" pointer. Brent's algorithm is a variant that typically does fewer pointer moves.
+The same idea finds a duplicate in an array of n + 1 values, each between 1 and n, treating each value as a "next" pointer. Brent's algorithm is a variant that typically does fewer pointer moves.
 
 ## Dummy heads
 
@@ -204,9 +235,9 @@ a empty: attach rest of b (7)
 result: 1 2 3 4 6 7
 ```
 
-This is O(n + m) time and O(1) extra space: it relinks existing nodes rather than creating new ones. Using `<=` keeps equal elements in their original order (a **stable** merge), which matters for merge sort.
+For lists of n and m nodes, this is O(n + m) time and O(1) extra space: it relinks existing nodes rather than creating new ones. Using `<=` keeps equal elements in their original order (a **stable merge**), which matters for merge sort.
 
-Merge is the core of **merge sort on linked lists**, which is the standard way to sort a list in O(n log n) without random access: find the middle with fast/slow pointers, split, sort each half, merge.
+Merge is the core of **merge sort on linked lists**, which is the standard way to sort an n-node list in O(n log n) without random access (log n is log₂ n, the number of times n can be halved before reaching 1; it is how many levels of splitting there are): find the middle with fast/slow pointers, split, sort each half, merge.
 
 ## Combining patterns
 
@@ -223,11 +254,11 @@ Harder problems chain these together.
 > - Forgetting to restore a list you mutated (for example in the palindrome check), surprising the caller.
 
 ## Key takeaways
-- Iterative reversal uses `prev`, `cur` and a saved `nxt`: O(n) time, O(1) space. The recursive version uses O(n) stack.
+- Iterative reversal uses `prev`, `cur` and a saved `nxt`: O(n) time, O(1) space for n nodes. The recursive version uses O(n) stack.
 - Fast/slow pointers find the middle in one pass, and detect cycles in O(1) memory (Floyd).
-- After Floyd's pointers meet, restart one at the head and step both by one: they meet at the cycle start because μ + k is a multiple of λ.
+- After Floyd's pointers meet, restart one at the head and step both by one: they meet at the cycle start because the tail length plus the meeting offset is a whole number of laps of the cycle.
 - A dummy head removes head-of-list special cases in deletion and in building new lists.
-- Merging two sorted lists is O(n + m) and stable with `<=`; it's the heart of linked-list merge sort.
+- Merging two sorted lists of n and m nodes is O(n + m) and stable with `<=`; it's the heart of linked-list merge sort.
 
 ## Further reading
 - [Cycle detection — Wikipedia](https://en.wikipedia.org/wiki/Cycle_detection)

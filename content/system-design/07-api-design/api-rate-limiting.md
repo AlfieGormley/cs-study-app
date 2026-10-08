@@ -63,7 +63,32 @@ Two parameters, two meanings:
 - **Refill rate** = long-run average throughput.
 - **Capacity** = largest burst allowed.
 
-You don't need a timer to add tokens. Store `tokens` and `last_refill`, and top up lazily when a request arrives:
+You don't need a timer to add tokens. Store the token count and the time of the last top-up, and when a request arrives, add the tokens that would have dripped in since then:
+
+```formula
+b_new = min(C, b_old + r × Δt)
+where
+b_new: the number of tokens in the bucket after the top-up
+b_old: the tokens stored at the last top-up
+C: the capacity, the most tokens the bucket can hold
+r: the refill rate, in tokens per second
+Δt: delta t, the time since the last top-up, in seconds
+min: the smaller of the two values, so the bucket never overflows its capacity
+In words: add tokens for the time that has passed, but never more than the bucket holds.
+```
+
+If the bucket then holds less than one whole token, the request is rejected, and the client can be told how long until one token is ready:
+
+```formula
+W = (1 − b_new) / r
+where
+W: the wait until the bucket holds one whole token, in seconds; this is the natural Retry-After value
+b_new: the tokens in the bucket now, less than 1
+r: the refill rate, in tokens per second
+In words: the missing fraction of a token divided by how fast tokens arrive. This only applies while b_new is below 1 (otherwise the request is allowed); Retry-After takes whole seconds, so send W rounded up.
+```
+
+The same logic as code (here `C`, `r`, `tokens` and `last_refill` are the capacity, refill rate, b and the stored time):
 
 ```
 now = time()
@@ -79,6 +104,20 @@ else:
 
 > [!example] Token bucket maths
 > Capacity 10, refill 2 tokens/s, bucket full. A client sends 15 requests instantly: the first 10 succeed, 5 get 429. One second later the bucket has 2 tokens, so 2 more can go through. Sustained, the client gets 2 requests/s, or 120 per minute.
+
+The refill one second after the burst, and the long-run rate:
+
+```formula
+b_new = min(10, 0 + 2 tokens/s × 1 s) = 2
+R = 2 tokens/s × 60 s = 120 tokens
+where
+b_new: the tokens in the bucket one second after the burst emptied it
+R: the most requests the client can make per minute once its burst is spent, one per token
+tokens: the bucket's units; each request spends one
+s: seconds
+min: the smaller of the two values
+In words: an empty bucket earns 2 tokens each second, so after the first burst the client is held to 2 requests per second, 120 per minute.
+```
 
 Amazon API Gateway and AWS service APIs use token buckets (they call the parameters "rate" and "burst"). Stripe uses token buckets in Redis.
 
@@ -96,6 +135,19 @@ Requests enter a **queue** of fixed size, and are processed (they "leak out") at
        |
        v  constant rate r
    to backend
+```
+
+The worst-case extra delay is a full queue draining at the leak rate:
+
+```formula
+W_max = B / r
+W_max = 100 / 50 = 2 s
+where
+W_max: the longest a request can wait in the queue, in seconds (s)
+B: the queue size, in requests; here 100
+r: the leak rate, in requests per second; here 50
+s: seconds
+In words: a request that joins the back of a full queue waits for every request ahead of it to leak out, so a 100-request queue at 50 per second adds up to 2 s.
 ```
 
 The output is perfectly smooth, which is great for protecting a fragile downstream (say, a legacy system that can only handle 50 req/s). The cost is latency: bursty requests wait in the queue instead of being served immediately. NGINX's `limit_req` is a leaky bucket; its `burst` parameter is the queue size. Add `nodelay` and queued requests are served immediately instead, while still using up queue slots that drain at the set rate, so the behaviour becomes much closer to a token bucket.
@@ -118,7 +170,16 @@ if count == 1: EXPIRE key 60
 if count > limit: reject
 ```
 
-It's extremely cheap: one counter per client per window. But it has a **boundary problem**. With a limit of 100/min, a client can send 100 at 12:00:59 and another 100 at 12:01:00. That's 200 requests in two seconds, double the intended rate.
+It's extremely cheap: one counter per client per window. But it has a **boundary problem**. With a limit of 100/min, a client can send 100 at 12:00:59 and another 100 at 12:01:00. That's 200 requests in two seconds, double the intended rate:
+
+```formula
+A_max = 2 × L
+A_max = 2 × 100 = 200
+where
+A_max: the most requests a fixed-window limiter can accept in a short span that straddles a window boundary
+L: the limit per window, here 100 per minute
+In words: the end of one window and the start of the next each allow the full limit, so a client timing its bursts can get twice the limit through in a couple of seconds.
+```
 
 ```
  limit 100/min
@@ -142,7 +203,18 @@ if count < limit:
 EXPIRE k 60
 ```
 
-It's exact, with no boundary problem. But memory is O(requests) per client: at 10,000 requests/min, that's 10,000 entries per client. As written, the read/count/conditional-add must run in a Lua script, or use `WATCH` with a read followed by `MULTI`/`EXEC` and retry on conflict. `MULTI` alone cannot branch on a queued `ZCARD` result; otherwise two servers can both read `count = 99` and both add.
+It's exact, with no boundary problem. But it stores one entry per request in the window:
+
+```formula
+M = O(n)
+where
+M: the memory the log needs for one client
+n: the number of requests that client made inside the window
+O(...): Big O notation: how memory grows as n grows, ignoring constant factors
+In words: memory grows in step with the client's traffic; at 10,000 requests per minute that's 10,000 stored timestamps for that one client.
+```
+
+As written, the read/count/conditional-add must run in a Lua script, or use `WATCH` with a read followed by `MULTI`/`EXEC` and retry on conflict. `MULTI` alone cannot branch on a queued `ZCARD` result; otherwise two servers can both read `count = 99` and both add.
 
 This version only records *allowed* requests. If you record rejected ones too, a client that keeps hammering stays locked out until it actually backs off, a stricter policy some APIs choose deliberately.
 
@@ -150,22 +222,42 @@ This version only records *allowed* requests. If you record rejected ones too, a
 
 A clever approximation that keeps the cheapness of fixed windows and most of the accuracy of the log. Keep counts for the **current** and **previous** fixed windows, and weight the previous one by how much of it still overlaps the sliding window.
 
-```
-estimate = prev * (1 - t/W) + curr
+```formula
+estimate = prev × (1 − t / W) + curr
+where
+estimate: the approximate number of requests in the last W seconds, compared with the limit
+prev: the request count for the whole previous fixed window
+curr: the request count so far in the current fixed window
+t: the time elapsed since the current window started, in seconds
+W: the window length, in seconds (60 for a per-minute limit)
+In words: count all of this window's requests, plus the share of last window's requests that the sliding window still covers.
 ```
 
-where `t` is time elapsed in the current window and `W` is the window length.
+The weight 1 − t/W is the fraction of the previous window that still lies inside the sliding window: 1 at the start of the current window, falling to 0 at its end.
 
 > [!example] Sliding window counter
-> Limit 100/min. Previous minute: 80 requests. Current minute: 30 requests so far, and we're 15 s in (t/W = 0.25). Estimate = 80 × 0.75 + 30 = 60 + 30 = 90. That's under 100, so allow. Ten more requests would push it to 100, after which further requests are rejected until the weighting decays.
+> Limit 100/min. Previous minute: 80 requests. Current minute: 30 requests so far, and we're 15 s in, a quarter of the way through. The estimate is 90 (worked below). That's under 100, so allow. Ten more requests would push it to 100, after which further requests are rejected until the weighting decays.
 >
-> The weighting decays steadily. At 30 s in, the previous minute counts for 80 × 0.5 = 40, so with 40 requests in the current minute the estimate is 80, leaving room for 20 more.
+> The weighting decays steadily. At 30 s in, the previous minute counts for half its 80, which is 40, so with 40 requests in the current minute the estimate is 80, leaving room for 20 more.
+
+```formula
+estimate = 80 × (1 − 15 s / 60 s) + 30
+estimate = 80 × 0.75 + 30 = 90
+estimate = 80 × (1 − 30 s / 60 s) + 40
+estimate = 80 × 0.5 + 40 = 80
+where
+estimate: the approximate request count over the last 60 seconds
+s: seconds
+In words: 15 s into the minute, three quarters of the previous minute's 80 requests still count, giving 60 + 30 = 90; at 30 s only half count, giving 40 + 40 = 80.
+```
 
 The approximation assumes the previous window's requests were spread evenly. If all 80 arrived in its last second, the true count over the past 60 s is higher than the estimate, the error can be large under adversarial bursts.
 
 Cloudflare described this approach in its 2017 implementation. In that workload’s analysis of 400 million requests from 270,000 distinct sources, only about 0.003% were wrongly allowed or limited.
 
 ### Summary
+
+Memory is per client. O(1) means a fixed amount whatever the traffic; B is the leaky bucket's queue size, n the requests in one window and C the token bucket's capacity, as defined above.
 
 | Algorithm | Memory | Bursts | Accuracy |
 |---|---|---|---|
@@ -177,7 +269,17 @@ Cloudflare described this approach in its 2017 implementation. In that workload�
 
 ## Distributed rate limiting
 
-With 20 API servers behind a load balancer, a per-server in-memory limiter doesn't work: a client limited to 100/min could get 100 *per server*, or 2,000 in total.
+With 20 API servers behind a load balancer, a per-server in-memory limiter doesn't work: a client limited to 100/min could get 100 *per server*, or 2,000 in total:
+
+```formula
+L_eff = N × L
+L_eff = 20 × 100 = 2,000
+where
+L_eff: the most requests per minute the client can actually get through the fleet
+N: the number of servers, each with its own independent counter
+L: the limit each server enforces, here 100 per minute
+In words: independent limiters don't know about each other, so the real limit is multiplied by the number of servers the client can reach.
+```
 
 ```
  +----+ +----+ +----+
@@ -222,7 +324,24 @@ redis.call('EXPIRE', KEYS[1], ttl)
 return ok and 1 or 0
 ```
 
-This teaching script assumes validated finite `C >= 1`, `r > 0` and a trusted timestamp in seconds. Arbitrary client timestamps must not reach it. Expiry must be no shorter than the full refill time `C / r`; otherwise a slow-refilling bucket could expire and incorrectly reset to full.
+This teaching script assumes validated finite `C >= 1`, `r > 0` and a trusted timestamp in seconds. Arbitrary client timestamps must not reach it. Expiry must be no shorter than the time an empty bucket takes to refill completely; otherwise a slow-refilling bucket could expire and incorrectly reset to full:
+
+```formula
+T_full = C / r
+TTL = max(1, ⌈T_full⌉)
+TTL = max(1, ⌈10 / 0.1⌉) = 100 s
+where
+T_full: the time for an empty bucket to refill to capacity, in seconds (s)
+C: the bucket capacity, in tokens
+r: the refill rate, in tokens per second
+TTL: time to live, how long Redis keeps the key before deleting it, in whole seconds
+max: the larger of the two values, so the TTL is never below 1 s
+⌈ ⌉: ceiling: round up to the next whole number
+s: seconds
+In words: keep the key at least as long as a full refill takes; a bucket of 10 refilling at 0.1 tokens per second needs 100 s.
+```
+
+Once that time has passed with no requests the bucket would be full anyway, so deleting the key and starting again full gives the same answer.
 
 ### Practical concerns
 
@@ -230,7 +349,17 @@ This teaching script assumes validated finite `C >= 1`, `r > 0` and a trusted ti
 - **Fail open or closed?** If Redis is down, do you reject everything (closed) or allow everything (open)? A service may **fail open** with a local fallback limiter when availability is more important than temporary quota precision. Security-critical limits (login attempts) may fail closed.
 - **Hot keys.** One huge tenant's counter lives on one Redis shard. Shard by client id across a Redis Cluster, and consider local pre-aggregation.
 - **Clock skew.** The script above trusts `now` from whichever API server called it. If those clocks disagree, a server whose clock runs behind sees negative elapsed time. Use a trusted shared time source (for example Redis `TIME` in a compatible scripting/replication mode). The sample keeps the stored timestamp from moving backwards; merely clamping elapsed time while storing a lower timestamp can mint extra tokens when time catches up. Large forward jumps still require an explicit clock policy.
-- **Approximate local limiting.** At very high scale, each server can enforce `limit / N` locally and sync periodically. It's less precise but needs no per-request network hop.
+- **Approximate local limiting.** At very high scale, each server can enforce its share of the limit locally and sync periodically. It's less precise but needs no per-request network hop. The share is shown below.
+
+```formula
+L_local = L / N
+L_local = 1,000 / 20 = 50
+where
+L_local: the limit each server enforces on its own, per minute
+L: the client's overall limit, here 1,000 per minute
+N: the number of servers sharing it, here 20
+In words: split the limit evenly between the servers; this matches the global limit only when the client's traffic is spread evenly across all of them.
+```
 
 > [!note] Measurement gap
 > No benchmark establishes Redis latency, bytes per sorted-set member or a universal throughput cutoff here. These depend on deployment and data representation; measured capacity guidance is omitted.

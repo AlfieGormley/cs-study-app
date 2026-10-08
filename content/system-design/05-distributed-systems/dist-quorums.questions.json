@@ -3,11 +3,11 @@
     "id": "dist-quorums-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "With **N = 5**, which (W, R) pair guarantees that every read set overlaps every write set while tolerating the most failed nodes for *both* reads and writes?",
+    "prompt": "With **N = 5** (N replicas per key, W acknowledgements needed for a write, R responses needed for a read), which (W, R) pair guarantees that every read set overlaps every write set while tolerating the most failed nodes for *both* reads and writes?",
     "options": [
       {
         "text": "W = 5, R = 1",
-        "explanation": "Wrong. Overlap holds (6 > 5), but writes fail if even one replica is down: N − W = 0."
+        "explanation": "Wrong. Overlap holds (5 + 1 = 6, more than 5), but writes fail if even one replica is down: 5 − 5 = 0 failures tolerated."
       },
       {
         "text": "W = 2, R = 3",
@@ -15,15 +15,15 @@
       },
       {
         "text": "W = 4, R = 4",
-        "explanation": "Wrong. It overlaps, but only tolerates 1 failure each, and costs more round trips than necessary."
+        "explanation": "Wrong. It overlaps, but only tolerates 1 failure each, and every read and write waits for more replicas than necessary."
       },
       {
         "text": "W = 3, R = 3",
-        "explanation": "Correct. 3 + 3 = 6 > 5, and both reads and writes tolerate N − 3 = 2 failures, the best balanced choice."
+        "explanation": "Correct. 3 + 3 = 6 > 5, and both reads and writes tolerate 5 − 3 = 2 failures, the best balanced choice."
       }
     ],
     "answer": 3,
-    "workedExample": "Requirement: R + W > N = 5, so R + W ≥ 6.\n\nTolerance is min(N − W, N − R). To maximise it, split evenly: W = R = 3.\n\n| W | R | Overlap? | Tolerates |\n|---|---|---|---|\n| 5 | 1 | yes | 0 writes |\n| 3 | 3 | yes | 2 / 2 |\n| 2 | 3 | no | – |\n| 4 | 4 | yes | 1 / 1 |\n\nW = R = ⌊N/2⌋ + 1 is Cassandra's QUORUM.",
+    "workedExample": "Two rules decide it:\n\n```formula\nR + W > N\nF = min(N − W, N − R)\nF = min(5 − 3, 5 − 3) = 2\nwhere\nN: replicas per key; here 5\nW: replicas that must acknowledge a write\nR: replicas that must respond to a read\nF: failures tolerated by both reads and writes\nmin: the smaller of its inputs\nIn words: reads and writes must add up to more than the replica count, and the operation needing more replicas sets how many failures you can survive for both.\n```\n\nWith N = 5, R + W must be at least 6. To maximise the smaller tolerance, split evenly: W = R = 3.\n\n| W | R | Overlap? | Tolerates |\n|---|---|---|---|\n| 5 | 1 | yes | 0 writes |\n| 3 | 3 | yes | 2 / 2 |\n| 2 | 3 | no | – |\n| 4 | 4 | yes | 1 / 1 |\n\nW = R = 3 is a majority of 5 (5 halved and rounded down, plus one), which is Cassandra's QUORUM.",
     "link": {
       "title": "Dynamo paper (SOSP 2007)",
       "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
@@ -33,7 +33,7 @@
     "id": "dist-quorums-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A key has **N = 3, W = 2, R = 1**. A client writes v2 (replacing v1); replicas A and B ack, C hasn't received it yet. Another client immediately reads. What can it see?",
+    "prompt": "A key has **N = 3, W = 2, R = 1** (N replicas per key, W acknowledgements needed for a write, R responses needed for a read). A client writes v2 (replacing v1); replicas A and B ack, C hasn't received it yet. Another client immediately reads. What can it see?",
     "options": [
       {
         "text": "Always v2, because the write met its quorum.",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. State: A = v2, B = v2, C = v1.\n2. Overlap test: R + W = 1 + 2 = 3. Since 3 is not > N = 3, a read set {C} and write set {A, B} can be disjoint.\n3. Read picks one replica (often the fastest or a random one): P(C) ≈ 1/3 → v1.\n\nTo guarantee v2 you need R = 2 (2 + 2 = 4 > 3): any two replicas include A or B. C would then be fixed by read repair or anti-entropy.",
+    "workedExample": "1. State: A = v2, B = v2, C = v1.\n2. Overlap test:\n\n```formula\nR + W > N\n1 + 2 > 3   ✗\nwhere\n✗: the condition is false: 1 + 2 = 3, which is not more than 3\nR: replicas a read asks; here 1\nW: replicas that acknowledged the write; here 2 (A and B)\nN: replicas per key; here 3\nIn words: the read and write sets add up to exactly the replica count, not more, so they can miss each other completely.\n```\n\nSo a read set {C} and the write set {A, B} can be disjoint.\n\n3. The read picks one replica (often the fastest or a random one). If it picks C, about a 1-in-3 chance, it gets v1.\n\nTo guarantee v2 you need R = 2 (2 + 2 = 4, more than 3): any two replicas include A or B. C would then be fixed by read repair or anti-entropy.",
     "link": {
       "title": "Cassandra Dynamo architecture",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
@@ -63,7 +63,7 @@
     "id": "dist-quorums-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Riak with N = 3, W = 2 and sloppy quorums. Two of the three preference-list replicas for a key are unreachable. A write arrives. What happens?",
+    "prompt": "Riak with N = 3 replicas per key, W = 2 write acknowledgements needed, and sloppy quorums. Two of the three preference-list replicas for a key are unreachable. A write arrives. What happens?",
     "options": [
       {
         "text": "The write fails, because only one preference-list replica is up.",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Preference list: B, C, D. B and C are down.\n\n1. Coordinator sends to D (up) and walks the ring to the next healthy node, E.\n2. D and E ack: W = 2 met → success.\n3. E stores the value with a hint: 'belongs to B'.\n4. When B recovers, E pushes the value to B (**hinted handoff**) and deletes its copy.\n\nCatch: until then, a read from B, C, D with R = 2 might hit B and C (once they're back) and miss the write. Sloppy quorums trade overlap for availability.",
+    "workedExample": "Preference list: B, C, D. B and C are down.\n\n1. Coordinator sends to D (up) and walks the ring to the next healthy node, E.\n2. D and E ack: the 2 acknowledgements needed (W = 2) are met → success.\n3. E stores the value with a hint: 'belongs to B'.\n4. When B recovers, E pushes the value to B (**hinted handoff**) and deletes its copy.\n\nCatch: until then, a read from B, C, D asking 2 replicas (R = 2) might hit B and C (once they're back) and miss the write. Sloppy quorums trade overlap for availability.",
     "link": {
       "title": "Dynamo paper (SOSP 2007)",
       "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
@@ -97,7 +97,7 @@
     "options": [
       {
         "text": "About 40 hashes, then one 1,000-key range",
-        "explanation": "Correct. Depth ≈ log2(1,000,000) ≈ 20; at each level you compare 2 child hashes and descend into the one that differs, then sync that leaf's keys."
+        "explanation": "Correct. The tree is about 20 levels deep (1,000,000 is about 2 multiplied by itself 20 times); at each level you compare 2 child hashes and descend into the one that differs, then sync that leaf's keys."
       },
       {
         "text": "1 billion hashes, one per key",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Leaves: 10⁹ / 10³ = 10⁶.\n2. Binary tree depth: log₂(10⁶) ≈ 20.\n3. Compare roots: differ.\n4. At each of 20 levels, compare the 2 children; exactly one differs; descend. ≈ 2 × 20 = **40 hashes**.\n5. At the leaf, exchange its 1,000 keys (or their hashes) to find the one that differs.\n\nTotal ≈ 40 hashes + 1,000 keys versus 10⁹. This is why Dynamo and Cassandra use Merkle trees for anti-entropy.",
+    "workedExample": "Work out the tree's size and depth, then count comparisons:\n\n```formula\nB = K / k = 10^9 / 10^3 = 10^6\nd = log_2(B) = log_2(10^6) ≈ 20\nH ≈ 2 × d = 2 × 20 = 40\nwhere\nK: total keys; here 10^9 (1 billion)\nk: keys per leaf; here 10^3 (1,000)\nB: number of leaves; here 10^6 (1 million)\nd: depth of the binary tree, levels from root to leaf\nlog_2: base-2 logarithm: how many times you can halve a number before reaching 1\nH: hashes exchanged\n≈: approximately equal to\nIn words: each level halves the search, so about 20 levels of 2 hash comparisons find the one differing leaf.\n```\n\n1. Compare roots: they differ.\n2. At each of the 20 levels, compare the 2 children; exactly one differs; descend. That's about **40 hashes**.\n3. At the leaf, exchange its 1,000 keys (or their hashes) to find the one that differs.\n\nTotal ≈ 40 hashes + 1,000 keys versus 10⁹. This is why Dynamo and Cassandra use Merkle trees for anti-entropy.",
     "link": {
       "title": "Merkle tree (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Merkle_tree"
@@ -123,7 +123,7 @@
     "id": "dist-quorums-q5",
     "level": "advanced",
     "type": "multi",
-    "prompt": "For a strict N = 3, W = 2, R = 2 leaderless store using timestamp last-write-wins and no blocking read repair, which scenarios demonstrate a linearisability violation? Select all that apply.",
+    "prompt": "For a strict N = 3, W = 2, R = 2 leaderless store (N replicas per key, W acknowledgements needed for a write, R responses needed for a read) using timestamp last-write-wins and no blocking read repair, which scenarios demonstrate a linearisability violation? Select all that apply.",
     "options": [
       {
         "text": "A write in progress has reached one replica; one reader sees it, a later reader doesn't.",
@@ -134,7 +134,7 @@
         "explanation": "Correct. These writes do not overlap, so real-time order requires the second to take effect after the first. Skewed timestamp order can violate that."
       },
       {
-        "text": "A write that reached W = 2 replicas, followed by a read of any 2 replicas",
+        "text": "A write that reached 2 replicas, followed by a read of any 2 replicas",
         "explanation": "Wrong. After a successful quorum write with no concurrent activity, any 2 of 3 replicas include at least one holding it, so the read sees it."
       },
       {
@@ -186,7 +186,7 @@
     "id": "dist-quorums-q7",
     "level": "basic",
     "type": "single",
-    "prompt": "A read with R = 3 returns versions v7, v7 and v5 from three replicas. What does **read repair** do?",
+    "prompt": "A read that asks three replicas (R = 3) returns versions v7, v7 and v5 from three replicas. What does **read repair** do?",
     "options": [
       {
         "text": "Returns v5 because it's the majority-agreed old value.",
@@ -224,7 +224,7 @@
       },
       {
         "text": "Yes: the write needed only 2 EU acks and the read only 2 US replicas, so the sets need not overlap.",
-        "explanation": "Correct. Across both DCs N = 6, but W = 2 and R = 2, and 2 + 2 is not greater than 6. Cross-DC replication is asynchronous with respect to the client, so the US replicas may not have it yet."
+        "explanation": "Correct. Across both DCs there are 6 replicas, but the write needed 2 and the read 2, and 2 + 2 is not greater than 6. Cross-DC replication is asynchronous with respect to the client, so the US replicas may not have it yet."
       },
       {
         "text": "Only if a node in EU is down.",
@@ -236,7 +236,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Replicas: EU {e1, e2, e3}, US {u1, u2, u3}; N = 6.\n2. Write at LOCAL_QUORUM: acks from e1, e2. W = 2.\n3. Read at LOCAL_QUORUM in US: u1, u2. R = 2.\n4. R + W = 4, which is not > 6, and the sets are disjoint.\n\nOptions:\n\n- Write at `EACH_QUORUM` (2 in every DC): then any LOCAL_QUORUM read in any DC overlaps, at the cost of cross-region write latency.\n- Use `QUORUM` (4 of 6) for both.\n- Or pin each user to a home DC, so their reads and writes meet there.",
+    "workedExample": "1. Replicas: EU {e1, e2, e3}, US {u1, u2, u3}; N = 6.\n2. Write at LOCAL_QUORUM: acks from e1, e2. W = 2.\n3. Read at LOCAL_QUORUM in US: u1, u2. R = 2.\n4. Overlap test fails:\n\n```formula\nR + W > N\n2 + 2 > 6   ✗\nwhere\n✗: the condition is false\nR: replicas a read asks; here 2 US replicas\nW: replicas that acknowledged the write; here 2 EU replicas\nN: replicas per key across both data centres; here 6\nIn words: 4 replicas out of 6 can be two separate pairs, so the read can miss the write entirely.\n```\n\nOptions:\n\n- Write at `EACH_QUORUM` (2 in every DC): then any LOCAL_QUORUM read in any DC overlaps, at the cost of cross-region write latency.\n- Use `QUORUM` (4 of 6) for both.\n- Or pin each user to a home DC, so their reads and writes meet there.",
     "link": {
       "title": "Cassandra Dynamo architecture",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
@@ -246,7 +246,7 @@
     "id": "dist-quorums-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A store uses **N = 5, W = 2, R = 4**. Two clients write different values to the same key at the same moment, and both writes succeed. What does R + W > N guarantee here, and what does it not?",
+    "prompt": "A store uses **N = 5, W = 2, R = 4** (N replicas per key, W acknowledgements needed for a write, R responses needed for a read). Two clients write different values to the same key at the same moment, and both writes succeed. What does R + W > N guarantee here, and what does it not?",
     "options": [
       {
         "text": "It guarantees the two writes were applied in the same order on every replica.",
@@ -262,11 +262,11 @@
       },
       {
         "text": "Every later read sees at least one of the two writes, but the writes may sit on disjoint replicas, so which one wins depends only on the version rule (e.g. timestamps).",
-        "explanation": "Correct. Reads overlap writes (4 + 2 > 5), but writes don't overlap each other (W + W = 4, which is not greater than 5). Without write-write overlap, no replica is forced to see both and order them."
+        "explanation": "Correct. Reads overlap writes (4 + 2 = 6, more than 5), but writes don't overlap each other (2 + 2 = 4, which is not greater than 5). Without write-write overlap, no replica is forced to see both and order them."
       }
     ],
     "answer": 3,
-    "workedExample": "Two separate conditions:\n\n| Condition | Here | Gives |\n|---|---|---|\n| R + W > N | 6 > 5 ✓ | read meets write |\n| W > N/2 | 2 > 2.5 ✗ | write meets write |\n\nPossible state:\n\n```\nA:x1 B:x1 C:x2 D:x2 E:old\nread {A,B,C,D} -> sees x1 and x2\n```\n\nThe reader sees both and picks by version. With last-write-wins and skewed clocks, the real-time loser can win. Write-write overlap (W ≥ 3) at least ensures some replica sees both writes, but concurrent writes still need a real ordering mechanism (versions read first, or consensus) to be linearizable.",
+    "workedExample": "Two separate conditions:\n\n```formula\nR + W > N\n4 + 2 > 5   ✓\nW > N / 2\n2 > 2.5   ✗\nwhere\n✓: the condition is true\n✗: the condition is false\nR: replicas a read asks; here 4\nW: replicas a write needs; here 2\nN: replicas per key; here 5\nIn words: reads are big enough to meet every write, but writes are too small to be sure of meeting each other.\n```\n\n| Condition | Here | Gives |\n|---|---|---|\n| R + W > N | 6 > 5 ✓ | read meets write |\n| W > N/2 | 2 > 2.5 ✗ | write meets write |\n\nPossible state:\n\n```\nA:x1 B:x1 C:x2 D:x2 E:old\nread {A,B,C,D} -> sees x1 and x2\n```\n\nThe reader sees both and picks by version. With last-write-wins and skewed clocks, the real-time loser can win. Write-write overlap (W ≥ 3) at least ensures some replica sees both writes, but concurrent writes still need a real ordering mechanism (versions read first, or consensus) to be linearizable.",
     "link": {
       "title": "Quorum (distributed computing) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"
@@ -276,7 +276,7 @@
     "id": "dist-quorums-q10",
     "level": "advanced",
     "type": "multi",
-    "prompt": "You want a leaderless quorum store (N = 3, R = W = 2) to provide **linearizable reads and writes** of a single register, ABD-style. Which are required? Select all that apply.",
+    "prompt": "You want a leaderless quorum store (N = 3 replicas per key, with R = W = 2: reads and writes each need 2 replicas) to provide **linearizable reads and writes** of a single register, ABD-style. Which are required? Select all that apply.",
     "options": [
       {
         "text": "Strict quorums only: no sloppy stand-in nodes",
@@ -292,7 +292,7 @@
       },
       {
         "text": "Setting R = N so reads see every replica",
-        "explanation": "Not required. R = 2 with write-back already gives overlap and recency; R = N just loses read availability when one node is down."
+        "explanation": "Not required. Reading 2 replicas with write-back already gives overlap and recency; reading all 3 just loses read availability when one node is down."
       },
       {
         "text": "Wall-clock timestamps from synchronised clocks to order writes",
@@ -304,7 +304,7 @@
       1,
       2
     ],
-    "workedExample": "Map each requirement to the anomaly it removes:\n\n1. **Sloppy quorums** → overlap breaks. Use strict quorums.\n2. **In-flight write seen, then not seen** → readers write back before returning.\n3. **Concurrent writers with skewed clocks** → writers read the max version first, then use max + 1 (with writer id to break ties).\n\nCost: each read and each write takes **two** round trips. Even then you only get a linearizable register; compare-and-set needs consensus (e.g. Cassandra's Paxos-based lightweight transactions).",
+    "workedExample": "Map each requirement to the anomaly it removes:\n\n1. **Sloppy quorums** → overlap breaks. Use strict quorums.\n2. **In-flight write seen, then not seen** → readers write back before returning.\n3. **Concurrent writers with skewed clocks** → writers read the max version first, then write with one more than the highest version seen (with the writer id to break ties).\n\nCost: each read and each write takes **two** round trips. Even then you only get a linearizable register; compare-and-set needs consensus (e.g. Cassandra's Paxos-based lightweight transactions).",
     "link": {
       "title": "Quorum (distributed computing) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"
@@ -344,7 +344,7 @@
     "id": "dist-quorums-q12",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A key has **N = 5, W = 4, R = 2**. Do reads overlap writes, and how many unavailable replicas can writes and reads each tolerate?",
+    "prompt": "A key has **N = 5, W = 4, R = 2** (N replicas per key, W acknowledgements needed for a write, R responses needed for a read). Do reads overlap writes, and how many unavailable replicas can writes and reads each tolerate?",
     "options": [
       {
         "text": "Overlap: yes. Writes tolerate 1 down, reads tolerate 3 down.",
@@ -352,11 +352,11 @@
       },
       {
         "text": "Overlap: no, because R is less than N/2.",
-        "explanation": "Wrong. The rule is about R + W, not R alone. A small R is fine when W is large."
+        "explanation": "Wrong. The rule is about the read and write counts added together, not the read count alone. A small R is fine when W is large."
       },
       {
         "text": "Overlap: yes. Writes tolerate 4 down, reads tolerate 2 down.",
-        "explanation": "Wrong. That confuses the quorum size with the failures tolerated. Tolerance is N − W and N − R."
+        "explanation": "Wrong. That confuses the quorum size with the failures tolerated. Tolerance is the replicas left over: 5 − 4 for writes and 5 − 2 for reads."
       },
       {
         "text": "Overlap: yes. Both tolerate 2 down.",
@@ -364,7 +364,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Overlap: R + W = 2 + 4 = 6 > 5 ✓.\n2. Writes: N − W = 5 − 4 = **1** replica may be down.\n3. Reads: N − R = 5 − 2 = **3** may be down.\n\nThis shape suits read-heavy workloads where cheap, highly available reads matter more than write availability. Note W = 4 > N/2, so writes also overlap each other.",
+    "workedExample": "```formula\nR + W > N\n2 + 4 = 6 > 5\nF_w = N − W = 5 − 4 = 1\nF_r = N − R = 5 − 2 = 3\nwhere\nN: replicas per key; here 5\nW: replicas that must acknowledge a write; here 4\nR: replicas that must respond to a read; here 2\nF_w: replicas that can be down while writes succeed\nF_r: replicas that can be down while reads succeed\nIn words: reads and writes overlap, writes can lose only 1 replica, and reads can lose 3.\n```\n\n1. Overlap: 6 is more than 5 ✓.\n2. Writes: **1** replica may be down.\n3. Reads: **3** may be down.\n\nThis shape suits read-heavy workloads where cheap, highly available reads matter more than write availability. Note 4 is more than half of 5, so writes also overlap each other.",
     "link": {
       "title": "Dynamo: Amazon's Highly Available Key-value Store (SOSP 2007)",
       "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"

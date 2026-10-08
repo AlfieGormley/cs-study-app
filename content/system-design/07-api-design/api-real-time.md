@@ -31,6 +31,24 @@ It's trivially simple and uses ordinary HTTP infrastructure. But it's wasteful a
 - **Latency**: for uniformly distributed arrivals and successful punctual polls, the scheduling delay averages half the interval. A 5 s interval gives ~2.5 s average scheduling delay, up to 5 s before adding network and processing time.
 - **Load**: most responses are empty. 1 million clients polling every 5 s is **200,000 requests/s**, nearly all saying "nothing new".
 
+Both follow from the poll interval:
+
+```formula
+D_avg = I / 2
+D_avg = 5 s / 2 = 2.5 s
+R = N / I
+R = 1,000,000 / 5 s = 200,000 per s
+where
+D_avg: the average wait between an update happening and the next poll seeing it, in seconds (s)
+I: the poll interval, the time between one client's polls, in seconds
+R: the total request rate the server receives
+N: the number of clients polling
+s: seconds
+In words: an update lands at a random point in the interval, so on average it waits half of it; and every client sends one request per interval, so halving the delay doubles the load.
+```
+
+These assume updates arrive at random times and every poll goes out on schedule; network time comes on top of D_avg.
+
 Short polling is fine for dashboards that refresh every 30–60 s, or job-status checks. It's the right default when updates are rare and a delay is acceptable.
 
 ## Long polling
@@ -135,7 +153,7 @@ Costs:
 
 | | Latency | Direction | Complexity |
 |---|---|---|---|
-| Short poll | Interval/2 | Pull | Lowest |
+| Short poll | Half the interval | Pull | Lowest |
 | Long poll | Low | Pull-ish | Low |
 | SSE | Low | Server→client | Low |
 | WebSocket | Low | Both | Higher protocol responsibility |

@@ -57,34 +57,145 @@ Write them on the board. Then explicitly scope out what you won't do: "I'll skip
 
 Estimates tell you which problems are real. A write count alone does not determine capacity: transaction complexity, indexes, contention, durability, hardware and latency targets matter. Don't compute to three significant figures. Round aggressively and keep powers of ten.
 
-Numbers worth memorising:
+Numbers worth memorising. The first one turns "so many per day" into "so many per second", which is how almost every estimate in this module starts, because servers and databases are sized by their per-second load:
 
-- 1 day = 86,400 s ≈ **10^5 s** (use 100k for mental maths; it understates rates by 13.6%, which rarely matters).
-- 1 million requests/day ≈ **12 per second**. 1 billion/day ≈ 12,000/s.
-- Use **2–3x** as an explicit illustrative peak assumption if no traffic profile is supplied; campaigns and diurnal skew can produce much higher ratios.
-- 1 million × 1 KB = 1 GB; 1 billion × 1 KB = 1 TB. Most storage sums reduce to this.
+```formula
+s_day = 24 × 60 × 60 = 86,400 s
+s_day ≈ 10^5 s
+rate = N_day / s_day
+where
+s_day: the number of seconds in one day
+N_day: how many events (requests, posts, messages) happen in one day
+rate: the average number of events per second, often called QPS (queries per second)
+s: seconds, the unit of time
+10^5: ten to the power 5, a 1 followed by five zeros, which is 100,000
+≈: approximately equal to (the value has been rounded)
+In words: to get an average per-second rate, divide the daily total by the number of seconds in a day, and round that to 100,000 so the sum is easy to do in your head.
+```
+
+Rounding 86,400 up to 100,000 makes every rate about 13.6% too low (86,400 / 100,000 = 0.864), which rarely changes a design decision. Two anchors to remember:
+
+```formula
+rate = 1,000,000 / 86,400 s ≈ 12/s
+rate = 1,000,000,000 / 86,400 s ≈ 12,000/s
+where
+rate: the average number of events per second
+s: seconds
+/s: "per second"
+≈: approximately equal to (rounded)
+In words: one million events a day is about 12 a second; one billion a day is about 12,000 a second.
+```
+
+The rate above is an *average*. Traffic is not flat: it rises in the daytime and falls at night (diurnal skew), and campaigns or news events cause spikes. Capacity has to cover the busiest moment, so multiply the average by a peak factor:
+
+```formula
+rate_peak = rate_avg × k_peak
+where
+rate_peak: the requests per second at the busiest time, which is what you size for
+rate_avg: the average requests per second over the day
+k_peak: the peak factor, peak divided by average; use 2–3 as an explicit illustrative assumption when no traffic profile is given
+In words: the busiest second is several times the average one, so plan for the average times a peak factor that you state out loud.
+```
+
+Real peak factors can be much higher than 3 (a push campaign or a sports final), so treat 2–3 as a placeholder until real traffic data exists.
+
+Storage works the same way: count times size. Using decimal units, where each step is a factor of 1,000:
+
+```formula
+storage = N × size
+10^6 × 1 KB = 10^6 × 10^3 B = 10^9 B = 1 GB
+10^9 × 1 KB = 10^12 B = 1 TB
+where
+storage: total bytes needed
+N: the number of records stored
+size: the size of one record
+B: bytes; one byte is 8 bits, enough for one plain English character
+KB: kilobyte, 1,000 bytes (10^3 B)
+GB: gigabyte, 1,000,000,000 bytes (10^9 B)
+TB: terabyte, 10^12 bytes, a thousand gigabytes
+10^6: a million; 10^9: a billion; 10^12: a trillion
+In words: a million 1 KB records is 1 GB and a billion of them is 1 TB; most storage sums reduce to this.
+```
+
+(Some tools count a kilobyte as 1,024 bytes instead. At estimation precision the difference, 2.4% per step, doesn't matter.)
 
 > [!note] Content gap: universal capacity and latency numbers
 > No reproducible benchmark supports a universal database writes/s, Redis operations/s, app-server throughput or hardware/network latency for this scenario. Those values are omitted. Use measured workload capacity or explicitly supplied hypothetical inputs when sizing.
 
-A worked example, for a service with 100M daily active users who each make 10 reads and 1 write per day:
+### A worked estimate
 
-```
-Writes: 100M x 1 / 10^5 s  = 1,000/s
-Reads:  100M x 10 / 10^5 s = 10,000/s
-Peak (x3): 3k writes/s, 30k reads/s
-Storage: 100M writes/day x 1 KB
-       = 100 GB/day = ~36 TB/year
+Take a service with 100M (100 million) daily active users (DAU) who each make 10 reads and 1 write per day. First the rates:
+
+```formula
+writes = 100M × 1 / 10^5 s = 1,000/s
+reads = 100M × 10 / 10^5 s = 10,000/s
+peak writes = 1,000/s × 3 = 3,000/s
+peak reads = 10,000/s × 3 = 30,000/s
+where
+writes, reads: average write and read requests per second
+peak writes, peak reads: the same rates at the busiest time, using an assumed peak factor of 3
+M: million (10^6); 100M is 100,000,000 users
+10^5: 100,000, the rounded number of seconds in a day
+s: seconds; /s means per second
+In words: 100 million users doing one write a day is about a thousand writes a second, ten times that for reads, and three times both at peak.
 ```
 
 (Dividing by the exact 86,400 gives about 1,160 writes/s and 11,600 reads/s; the shortcut is close enough.)
+
+Then storage, assuming each write stores about 1 KB:
+
+```formula
+daily = 100M × 1 KB = 100 GB
+yearly = 100 GB × 365 ≈ 36 TB
+where
+daily, yearly: new data stored per day and per year, before replication
+M: million (10^6)
+KB: kilobyte, 1,000 bytes
+GB: gigabyte, 10^9 bytes
+TB: terabyte, 10^12 bytes (1,000 GB)
+≈: approximately equal to (36.5 rounded down)
+In words: 100 million 1 KB writes a day is 100 GB a day, which adds up to about 36 TB a year.
+```
 
 Now you know: reads dominate 10:1 (cache them), 3k writes/s is a target to test against the chosen primary (and a partitioning strategy is useful if tests reveal a limit), and storage grows by tens of terabytes a year.
 
 Say what the numbers *imply*. "36 TB a year, nearly 200 TB over five years before replication, requires a storage, backup and recovery plan; I will evaluate partitioning, tiering and sharding against those constraints" is worth far more than the arithmetic itself.
 
-> [!example] From QPS to machines
-> Divide peak load by what one unit handles, then add headroom. 30k reads/s at peak with a 90% cache hit rate leaves 3k reads/s for the database: the required replica count still depends on measured query capacity. If each app server handles an assumed 1,000 req/s, 33k total requests/s needs ~35 servers, with three evenly sized zones, 54 servers leave 36 after losing one zone, above the rounded 35-server requirement. Add further headroom for deploys, uneven traffic and measurement error.
+### From QPS to machines
+
+To turn a load into a machine count, divide peak load by what one unit handles, then add capacity headroom (spare capacity for failures and spikes). A cache in front of the database means only the misses reach it:
+
+```formula
+db reads = reads × (1 − h)
+db reads = 30,000/s × (1 − 0.9)
+db reads = 3,000/s
+where
+db reads: reads per second that reach the database
+reads: peak reads per second arriving at the service
+h: the cache hit rate, the fraction of reads answered by the cache, between 0 and 1; here 90% = 0.9
+/s: per second
+In words: with a 90% hit rate only one read in ten reaches the database, so 30,000 reads a second becomes 3,000.
+```
+
+How many database replicas that needs still depends on measured query capacity. For the app servers, assume each handles 1,000 requests a second (an assumption you would measure):
+
+```formula
+servers = load / capacity
+servers = 33,000/s / 1,000/s = 33
+total = 35 × Z / (Z − 1)
+total = 35 × 3 / 2 = 52.5 → 54
+where
+load: peak requests per second for the app tier, here 30,000 reads + 3,000 writes = 33,000/s
+capacity: requests per second one server handles, here an assumed 1,000/s
+servers: servers needed at peak with nothing broken: 33, rounded up to 35 for a little slack before the zone sum
+Z: the number of availability zones (separate data-centre sites) the fleet is spread over, here 3
+total: servers to run so that losing one whole zone still leaves enough
+→: "round up to", here to 54 so the three zones get 18 each
+/s: per second
+In words: 33 servers' worth of load, rounded to 35, spread over three zones needs about 54 servers so that if one zone fails, the remaining 36 can still carry the peak.
+```
+
+The reasoning behind the *Z / (Z − 1)* factor: if one of *Z* equal zones fails, only (*Z* − 1)/*Z* of the fleet survives, so the fleet must be that much bigger. With three zones, two thirds survive, so you need 1.5 times the bare requirement. Add further headroom for deploys, uneven traffic and measurement error.
 
 ## Step 3: API design
 
@@ -138,7 +249,7 @@ This is where you earn the senior rating. Pick the two or three hardest parts of
 
 Often the interviewer will steer you here. If they don't, choose yourself: "The interesting part is fan-out; shall I go deep on that?"
 
-For each deep dive, show **options and trade-offs**, then choose. "We could hash the URL, use a counter, or use Snowflake IDs. Hashing needs collision handling; a counter needs coordination; Snowflake needs clock discipline. I'll use a counter with range allocation because..."
+For each deep dive, show **options and trade-offs**, then choose. "We could hash the URL, use a counter, or use Snowflake IDs. Hashing needs collision handling; a counter needs coordination; Snowflake IDs need clock discipline. I'll use a counter with range allocation because..."
 
 Also cover failure: what happens when this node dies, this region goes dark, this queue backs up? Senior engineers think about failure modes by reflex.
 
@@ -146,7 +257,7 @@ A useful checklist of probes that come up in almost every design, so you can rai
 
 - **Hot keys and skew**: one celebrity, one viral link, one huge group chat.
 - **Retries and duplicates**: what is idempotent, and where is the dedup key?
-- **Consistency**: which reads can be stale, and for how long?
+- **Data consistency**: which reads can be stale, and for how long?
 - **Backpressure**: what happens when a downstream dependency is slow, and does the queue grow without bound?
 - **Fail-open or fail-closed**: when a dependency is down, do you allow the request or reject it?
 - **Multi-region**: where do writes go, and what does a user see after a regional failover?

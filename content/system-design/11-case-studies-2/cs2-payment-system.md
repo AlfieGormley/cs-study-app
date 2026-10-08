@@ -30,16 +30,46 @@ Assume a marketplace (think ride-hailing or e-commerce). Customers pay, the plat
 
 ## Back-of-the-envelope
 
+Assume 10 M (10 million) payments a day. Divide by the 86,400 seconds in a day for the average rate, then allow a peak of 10 times that (sales, evenings, holidays):
+
+```formula
+p_avg = P / 86,400 s
+p_avg = 10,000,000 / 86,400 s ≈ 115/s
+p_peak = 10 × p_avg ≈ 1,200/s
+where
+p_avg: average payments per second
+P: payments per day; here 10 million
+p_peak: payments per second at peak, assumed 10 times the average
+86,400 s: the seconds in one day
+s: seconds
+≈: approximately equal to
+In words: 10 million payments a day is about 115 a second on average and about 1,200 a second at a ten-times peak.
 ```
-Payments: 10 M/day
-  avg 10e6 / 86,400 = ~115/s
-  peak (10x) = ~1,200/s
-Ledger entries per payment: ~5
-  (charge, fee, PSP fee, payable...)
-  peak = ~6,000 entry writes/s
-Entry ~200 B:
-  10e6 x 5 x 200 B = 10 GB/day
-  = ~3.6 TB/year, retained 7+ years
+
+Each payment writes about 5 ledger entries (the charge, the platform fee, the PSP's fee, the amount payable to the seller, and so on), at about 200 bytes each:
+
+```formula
+e_peak = p_peak × n ≈ 1,200/s × 5 ≈ 6,000/s
+D = P × n × b
+D = 10,000,000 × 5 × 200 B = 10 GB/day
+Y = 10 GB/day × 365 days ≈ 3.6 TB/year
+where
+e_peak: ledger entry writes per second at peak
+p_peak: payments per second at peak; about 1,200
+n: ledger entries per payment; about 5
+D: ledger data written per day
+P: payments per day; 10 million
+b: bytes per ledger entry (B); about 200
+Y: ledger data per year, kept for 7 or more years in this scenario
+s: seconds
+B: bytes
+GB: gigabytes, 1,000,000,000 bytes
+TB: terabytes, 1,000 GB
+day: one day
+days: days
+year: one year
+≈: approximately equal to
+In words: about 6,000 entry writes a second at peak, adding about 10 GB a day, or about 3.6 TB a year.
 ```
 
 The estimate is a starting workload, not proof that any particular database configuration handles it. Benchmark the transaction shape, contention, replication and indexes. What's hard is **correctness under partial failure**: timeouts, retries, crashes between steps, and webhooks arriving out of order. Data volume matters mainly because of retention. Retention depends on jurisdiction and record type. For example, UK limited companies generally retain accounting records for six years from the end of the relevant company financial year, with exceptions requiring longer retention. The seven-year figure above is a scenario assumption. Plan retrieval and retention accordingly.
@@ -69,7 +99,21 @@ GET  /v1/accounts/{id}/balance
 
 Three rules:
 
-- **Amounts are integers in minor units** (2350 = £23.50) with an explicit currency. Never use floats. binary64 arithmetic commonly gives `0.1 + 0.2 != 0.3`. Exact decimal types are also valid when precision and rounding are specified; IEEE 754 includes decimal formats.
+- **Amounts are integers in minor units** (2350 = £23.50) with an explicit currency. A minor unit is the currency's smallest subdivision, such as the penny for pounds sterling:
+
+```formula
+A_major = A_minor / 10^d
+£23.50 = 2,350 / 10^2
+where
+A_major: the amount in the main currency unit, such as pounds (£)
+A_minor: the stored whole number of minor units, such as pence
+d: the number of decimal places the currency uses; 2 for GBP (pounds), 0 for JPY (yen), 3 for BHD (Bahraini dinar)
+10^d: 10 multiplied by itself d times; 10^2 = 100
+£: pounds sterling
+In words: store whole pence and divide by 100 only when displaying pounds, so the stored value is always exact.
+```
+
+The currency's number of decimal places is defined by the ISO 4217 currency standard, so look it up rather than assuming 2. Never use floats. binary64 arithmetic commonly gives `0.1 + 0.2 != 0.3`. Exact decimal types are also valid when precision and rounding are specified; IEEE 754 includes decimal formats.
 - **`payment_method_token`, never a card number.** The card is collected by the PSP's hosted fields or SDK and swapped for a token, which reduces PCI DSS scope; the merchant still has compliance obligations that depend on the integration.
 - **Every mutating call takes an idempotency key.**
 
@@ -166,7 +210,18 @@ The PSP call times out. Did the charge happen? You **don't know**, and guessing 
 Double-entry bookkeeping has been the basis of accounting for over 500 years, and it maps beautifully onto software.
 
 - Each **transaction** consists of two or more **entries**. Each entry debits or credits one account.
-- **Entries in a transaction sum to zero** per currency. This is an accounting equality; balancing entries alone does not prove the economic event is valid or that cash is conserved.
+- **Entries in a transaction sum to zero** per currency:
+
+```formula
+Σ a_i = 0
+where
+Σ: sigma, "add up all of": here every entry in one transaction
+a_i: the signed amount of entry number i, in minor units; debits positive, credits negative
+i: counts through the entries of the transaction (1, 2, 3, ...)
+In words: within one transaction, the debits and credits in each currency cancel out exactly.
+```
+
+This is an accounting equality; balancing entries alone does not prove the economic event is valid or that cash is conserved.
 - Entries are **immutable and append-only**. Mistakes are fixed by posting a *reversing* transaction, never by an UPDATE. History is the audit trail.
 - An account's **balance is the sum of its entries**. You can materialise it for speed, but it must always be derivable.
 
@@ -192,6 +247,18 @@ txn capture:pay_123
                  sum     0
 ```
 
+Checking the sum-to-zero rule for this transaction:
+
+```formula
+Σ a_i = 9,850 + 150 − 8,000 − 2,000
+Σ a_i = 10,000 − 10,000 = 0
+where
+Σ: sigma, "add up all of": every entry in the transaction
+a_i: the signed amount of entry i, in pence (minor units of GBP); debits positive, credits negative
+i: counts through the four entries
+In words: £100.00 of debits (10,000 pence) exactly cancels £100.00 of credits, so the transaction balances.
+```
+
 When the PSP pays out, a second transaction debits `bank` and credits `psp_clearing` by 9,850. When the driver is paid, `driver_payable` is debited and `bank` credited by 8,000. Each step balances, and every account's balance explains exactly where the money is.
 
 ### Making it consistent
@@ -202,7 +269,7 @@ When the PSP pays out, a second transaction debits `bank` and credits `psp_clear
 ### Hot accounts
 Every payment touches `platform_revenue`, so updating its balance row 1,200 times a second serialises on one lock. Options:
 
-- Split it into N sub-accounts (`platform_revenue_07`) and sum them on read.
+- Split it into N sub-accounts, where N is however many you need to spread the writes (`platform_revenue_07` is one of them), and sum them on read.
 - Don't materialise balances for hot accounts. Compute them from entries plus periodic snapshots.
 - Batch postings to hot accounts every few seconds.
 

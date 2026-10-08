@@ -27,7 +27,7 @@ Audio connections come in families with very different voltages and impedances:
 - **Instrument level** comes from sources like guitar pickups that can supply very little current. "Hi-Z" instrument inputs present an input impedance of roughly 47 kΩ to over 1 MΩ so as not to load them.
 - **Line level** is the level synths, mixers and interfaces use between each other. It is where your synth's output belongs.
 - **Headphone outputs** are amplifiers designed to drive headphones with impedances from about 20 Ω to a few hundred ohms.
-- **Speaker outputs** from power amplifiers drive passive loudspeakers (usually 4–8 Ω) with much higher voltages and currents.
+- **Speaker level** outputs from power amplifiers drive passive loudspeakers (usually 4–8 Ω) with much higher voltages and currents.
 
 These are **not interchangeable**. A speaker output into a line input can overload or damage it. A line output into a speaker is nearly a short circuit for the line driver: very weak sound and a possibly damaged output. A headphone output can usually drive a line input (its source impedance is low), but it is designed for a different job and its level is set by a volume knob.
 
@@ -36,12 +36,67 @@ These are **not interchangeable**. A speaker output into a line input can overlo
 A decibel figure is a ratio. To describe an absolute voltage it needs a reference:
 
 - **dBV**: relative to **1 V RMS**.
-- **dBu**: relative to **0.7746 V RMS** (√0.6 V), a holdover from 600 Ω telephone practice: the voltage that dissipates 1 mW in 600 Ω.
+- **dBu**: relative to **0.7746 V RMS**, a holdover from 600 Ω telephone practice: the voltage that dissipates 1 mW in 600 Ω.
 
-Voltage in decibels uses 20·log10, so V = V_ref × 10^(dB/20). The two nominal line levels:
+Where does 0.7746 V come from? Power in a resistor is voltage squared divided by resistance, so the voltage that gives a chosen power is the square root of power times resistance:
+
+```formula
+V_u = √(P × R)
+V_u = √(0.001 W × 600 Ω)
+V_u = √(0.6) V ≈ 0.7746 V
+where
+V_u: the dBu reference voltage (0 dBu), RMS, in volts (V)
+P: the reference power, 1 milliwatt = 0.001 watts (W)
+R: the reference load, 600 ohms (Ω), the old telephone-line standard
+√: square root
+W: watt, the unit of power
+Ω: ohm, the unit of resistance
+V: volt, the unit of voltage
+≈: approximately equal to (rounded)
+In words: 0.7746 V RMS is the voltage that would deliver one milliwatt into 600 ohms.
+```
+
+Today the 600 Ω load is history: 0 dBu just means 0.7746 V RMS, whatever the actual load.
+
+To turn a level in decibels into a voltage, undo the decibel formula for voltage ratios (which uses 20 times the base-10 logarithm):
+
+```formula
+V_L = V_ref × 10^{L / 20}
+V_L = 0.7746 V × 10^{4 / 20}
+V_L = 0.7746 V × 1.585 ≈ 1.228 V
+where
+V_L: the RMS voltage the level L describes, in volts (V)
+V_ref: the reference voltage: 0.7746 V for dBu, 1 V for dBV
+L: the level in decibels relative to that reference (dBu or dBV); +4 here
+10^{…}: 10 raised to the power in braces; it undoes a base-10 logarithm
+V: volt, the unit of voltage
+≈: approximately equal to (rounded)
+In words: every 20 dB multiplies the voltage by 10, so +4 dB is about 1.585 times the reference, and +4 dBu is about 1.228 V RMS.
+```
+
+For −10 dBV the same formula, with a 1 V reference and a power of −10/20, gives about 0.316 V. The two nominal line levels:
 
 - **Professional: +4 dBu.**
 - **Consumer: −10 dBV.**
+
+To compare two voltages in decibels, go the other way:
+
+```formula
+ΔL = 20 × log_10(V_1 / V_2)
+ΔL = 20 × log_10(1.228 V / 0.316 V)
+ΔL = 20 × log_10(3.88) ≈ 11.8 dB
+where
+ΔL: the difference in level, in decibels (dB); Δ (delta) means "difference"
+log_10: the base-10 logarithm: the power you raise 10 to in order to get the number; log_10(100) = 2
+V_1: the larger voltage, RMS; 1.228 V (+4 dBu)
+V_2: the smaller voltage, RMS; 0.316 V (−10 dBV)
+V: volt
+dB: decibel
+≈: approximately equal to (rounded)
+In words: pro line level is about 3.9 times the voltage of consumer line level, which is about 11.8 dB.
+```
+
+You can't just subtract −10 from +4 to get 14 dB, because the two figures use different references (0.7746 V and 1 V); converting both to volts first avoids that trap. The same sums in Python:
 
 ```python
 import math
@@ -65,14 +120,29 @@ print(f"gap     = "
       f"{20*math.log10(pro/con):.2f} dB")
 ```
 
-```
+```output
 +4 dBu  = 1.228 V rms
 -10 dBV = 0.316 V rms
 peak    = 1.736 V, 0.447 V
 gap     = 11.78 dB
 ```
 
-So pro line level is about four times the voltage of consumer line level, about 12 dB higher. For a sine wave, peak = RMS × √2 (the "peak" line above).
+So pro line level is about four times the voltage of consumer line level, about 12 dB higher. The "peak" line uses the relationship between a sine wave's RMS value and its peak:
+
+```formula
+V_peak = V_rms × √2
+V_peak = 1.228 V × 1.414
+V_peak ≈ 1.736 V
+where
+V_peak: the highest voltage the sine wave reaches, measured from 0 V, in volts (V)
+V_rms: the RMS (root mean square) voltage, the "effective" value that level figures quote, in volts
+√2: the square root of 2, about 1.414
+V: volt
+≈: approximately equal to (rounded)
+In words: a sine wave's peaks are about 1.41 times its RMS value, so +4 dBu (1.228 V RMS) swings to about ±1.74 V.
+```
+
+The factor of about 1.414 holds only for a pure sine wave. Real music has a higher ratio of peak to RMS, which is one reason equipment needs headroom.
 
 Two cautions:
 
@@ -81,15 +151,26 @@ Two cautions:
 
 ## Impedance bridging
 
-Audio line connections are not impedance-*matched* (that is for power transfer and radio). They are **bridged**: a **low output impedance** drives a **high input impedance**. Wikipedia's line-level summary gives typical line outputs as 100–600 Ω and line inputs as 10 kΩ or more.
+Audio line connections are not impedance-*matched* (that is for power transfer and radio). They use **impedance bridging**: a **low output impedance** drives a **high input impedance**. Wikipedia's line-level summary gives typical line outputs as 100–600 Ω and line inputs as 10 kΩ or more.
 
-The output impedance and input impedance form a voltage divider:
+The output impedance and input impedance form a voltage divider: the source's voltage is shared between its own output impedance and the input impedance in proportion to their sizes, and only the input's share reaches the next stage.
 
+```formula
+V_in = V_src × Z_in / (Z_out + Z_in)
+V_in = 1 V × 10000 Ω / (440 + 10000) Ω
+V_in = 1 V × 0.958 ≈ 0.958 V
+where
+V_in: the voltage that actually arrives at the input, in volts (V)
+V_src: the voltage the source generates internally, before its own output impedance, in volts
+Z_in: the input impedance of the receiving device, in ohms (Ω); 10 kΩ here
+Z_out: the output impedance of the source, in ohms; 440 Ω here (Elektron's figure for the Digitakt)
+V: volt
+Ω: ohm, the unit of resistance and impedance
+≈: approximately equal to (rounded)
+In words: the bigger the input impedance compared with the output impedance, the closer the received voltage is to the full source voltage.
 ```
-V_in = V_src * Z_in / (Z_out + Z_in)
-```
 
-The Digitakt's main outputs have a 440 Ω output impedance (Elektron's figure, unbalanced). See what happens to a 1 V signal from a 440 Ω source as the load changes:
+In decibels a voltage ratio of 0.958 is about −0.4 dB, a negligible loss. The Digitakt's main outputs have a 440 Ω output impedance (Elektron's figure, unbalanced). See what happens to a 1 V signal from a 440 Ω source as the load changes:
 
 ```python
 def bridged(v_src, z_out, z_in):
@@ -104,7 +185,7 @@ for z_in in (10_000, 1_000, 32, 8):
           f" ({db:.1f} dB)")
 ```
 
-```
+```output
  10000 ohm: 0.958 V (-0.4 dB)
   1000 ohm: 0.694 V (-3.2 dB)
     32 ohm: 0.068 V (-23.4 dB)
@@ -117,9 +198,9 @@ For your synth: give the output stage a **low output impedance** (an op-amp buff
 
 ## Balanced and unbalanced connections
 
-An **unbalanced** connection uses two conductors: signal and ground (which is also the shield). Any noise induced onto the signal wire, or any voltage difference between the two devices' grounds, adds directly to the audio.
+An **unbalanced connection** uses two conductors: signal and ground (which is also the shield). Any noise induced onto the signal wire, or any voltage difference between the two devices' grounds, adds directly to the audio.
 
-A **balanced** connection uses three: two signal conductors (hot and cold) with **equal impedances to ground**, plus a shield. Interference couples almost equally onto hot and cold, so it appears as a **common-mode** voltage. The receiver amplifies only the **difference** between hot and cold, which rejects the common-mode noise.
+A **balanced connection** (a **balanced line**) uses three: two signal conductors (hot and cold) with **equal impedances to ground**, plus a shield. Interference couples almost equally onto hot and cold, so it appears as a **common-mode** voltage. The receiver amplifies only the **difference** between hot and cold, which rejects the common-mode noise.
 
 Notes that save confusion:
 
@@ -143,11 +224,26 @@ Audio is an AC signal centred on 0 V. Many DIY synth circuits aren't:
 
 That constant offset is **DC**. Sent into an interface, it can shift the input stage's operating point, eat headroom, cause thumps when plugging and unplugging, and push speaker cones off centre. So the output is normally **AC-coupled**: a series **coupling capacitor** passes the audio and blocks the DC.
 
-The capacitor and the next stage's input impedance form a **high-pass filter**. This approximation assumes source output resistance is much smaller than `R_in`; otherwise use `R_out + R_in` for the resistance:
+The capacitor and the next stage's input impedance form a **high-pass filter**. Its corner frequency, below which the bass starts to roll off, is:
 
+```formula
+f_c = 1 / (2 × π × R_in × C)
+f_c = 1 / (2 × π × 10000 Ω × 0.00001 F)
+f_c = 1 / 0.628 s ≈ 1.59 Hz
+where
+f_c: the corner (cut-off) frequency, in hertz (Hz): the frequency where the output has fallen to about 71% of the input (−3 dB); below it the response falls by about 6 dB per octave
+π: pi, about 3.14159
+R_in: the input resistance of the next stage, in ohms (Ω); 10 kΩ here
+C: the coupling capacitance, in farads (F); 10 µF = 0.00001 F here
+Ω: ohm, the unit of resistance
+F: farad, the unit of capacitance (ohms times farads gives seconds)
+s: seconds
+Hz: hertz, cycles per second
+≈: approximately equal to (rounded)
+In words: the bigger the capacitor or the input resistance, the lower the corner; 10 µF into 10 kΩ only starts cutting at about 1.6 Hz, far below anything audible.
 ```
-f_c = 1 / (2 * pi * R_in * C)
-```
+
+This approximation assumes the source's output resistance is much smaller than the input resistance. If it isn't, use the source's output resistance plus the input resistance in place of the input resistance. The same calculation in Python, for three cases:
 
 ```python
 import math
@@ -178,12 +274,25 @@ Choose C so that the corner sits comfortably below 20 Hz for the *lowest* input 
 
 ### A worked level check
 
-Suppose (hypothetically) your synth's output stage swings a full-scale sine between 0 V and 3.3 V, centred on 1.65 V. After AC coupling, that is a 1.65 V peak sine:
+Suppose (hypothetically) your synth's output stage swings a full-scale sine between 0 V and 3.3 V, centred on 1.65 V. After AC coupling, that is a 1.65 V peak sine. Convert the peak to RMS, then express the RMS voltage relative to the dBu reference:
 
-```
-V_rms = 1.65 / sqrt(2)     = 1.167 V
-dBu   = 20*log10(1.167/0.7746)
-      = +3.56 dBu
+```formula
+V_rms = V_peak / √2
+V_rms = 1.65 V / 1.414 ≈ 1.167 V
+L = 20 × log_10(V_rms / 0.7746 V)
+L = 20 × log_10(1.167 V / 0.7746 V)
+L = 20 × log_10(1.506) ≈ +3.56 dBu
+where
+V_rms: the RMS (root mean square) voltage of the sine, in volts (V)
+V_peak: the sine's peak voltage after the DC is removed; half of the 3.3 V swing, 1.65 V
+√2: the square root of 2, about 1.414
+L: the output level in dBu (decibels relative to 0.7746 V RMS)
+log_10: the base-10 logarithm, the power of 10 that gives the number
+0.7746 V: the dBu reference voltage
+V: volt
+dBu: decibels relative to 0.7746 V RMS
+≈: approximately equal to (rounded)
+In words: a 1.65 V-peak sine is about 1.17 V RMS, which is about 3.6 dB above the 0.7746 V dBu reference.
 ```
 
 That's close to pro nominal level at full scale, and well within a line input that accepts, say, +18 dBu. You'd set the interface gain low, and there's no risk of overload. If instead your output were much smaller, you would add gain at the synth's output stage rather than crank the interface preamp and amplify its noise.
@@ -205,7 +314,7 @@ A checklist for the first connection:
 - +4 dBu = 1.228 V RMS (pro); −10 dBV = 0.316 V RMS (consumer); the gap is about 11.8 dB. Nominal isn't maximum: check each device's maximum level.
 - Line connections bridge a low output impedance (100–600 Ω) into a high input impedance (≥10 kΩ); driving low-impedance loads collapses the voltage and strains the output.
 - Balanced lines reject common-mode noise through equal impedances and a differential receiver; TRS can mean balanced mono or unbalanced stereo, so check the jack's documentation.
-- Single-supply DIY outputs carry DC offset; AC-couple them with a capacitor sized so 1/(2πRC) is well below 20 Hz, and connect with phantom power off and gain down.
+- Single-supply DIY outputs carry DC offset; AC-couple them with a capacitor sized so the high-pass corner it forms with the input resistance is well below 20 Hz, and connect with phantom power off and gain down.
 
 ## Further reading
 - [Line level — Wikipedia](https://en.wikipedia.org/wiki/Line_level)

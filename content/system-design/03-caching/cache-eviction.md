@@ -2,7 +2,7 @@
 id: cache-eviction
 title: Eviction policies
 level: intermediate
-minutes: 12
+minutes: 14
 summary: LRU, LFU, FIFO and TTL, how to implement them, and the cheap approximations that Redis, Memcached, Caffeine and Linux actually use.
 ---
 
@@ -25,7 +25,7 @@ FIFO is rarely used on its own for application caches, but variants like **CLOCK
 
 Evict the item that has gone longest without being accessed. The bet is temporal locality: what was used recently will be used again.
 
-The classic implementation combines a **hash map** (key to node) with a **doubly linked list** ordered by recency. Both get and put have expected/amortized O(1) cost with ordinary hash-table assumptions.
+The classic implementation combines a **hash map** (key to node) with a **doubly linked list** ordered by recency. Both get and put have expected/amortized O(1) cost with ordinary hash-table assumptions. O(1), read "order one" or constant time, means the work per operation does not grow with n, the number of keys in the cache: a cache of a million keys does a get as cheaply as a cache of ten.
 
 ```
  MRU                          LRU
@@ -81,7 +81,7 @@ A **TTL** says how long an entry may be served before it is considered expired, 
 
 - Short TTLs limit residence of an individual copy, at the cost of misses; delayed or lagging-source fills can still supply older data.
 - Long TTLs (hours) give high hit ratios but serve stale data longer.
-- Add **jitter** (randomise each TTL by ±10%) so that keys loaded together do not all expire together (see lesson 7).
+- Add **TTL jitter** (randomise each TTL by up to ±10%) so that keys loaded together do not all expire together (see lesson 7).
 
 How does Redis actually remove expired keys? Two ways:
 
@@ -101,7 +101,23 @@ So an expired key can still occupy memory for a short time after its TTL; it wil
 
 ## What real systems do
 
-Exact LRU needs a linked list with two pointers per key (16 bytes on a 64-bit machine) and a pointer update on every read, which also means a lock or atomic operation. At millions of keys and millions of reads per second, systems use **approximations**.
+Exact LRU needs a linked list with two pointers per key and a pointer update on every read, which also means a lock or atomic operation. The pointers alone cost:
+
+```formula
+M_ptr = n × 2 × p
+M_ptr = 100,000,000 × 2 × 8 B
+M_ptr = 1,600,000,000 B = 1.6 GB
+where
+M_ptr: the memory used by the list pointers, in bytes (B)
+n: the number of keys in the cache, here 100 million
+2: two pointers per key, one to the previous entry and one to the next
+p: the size of one pointer, in bytes; 8 B on a 64-bit machine
+B: bytes; 1 GB = 1,000,000,000 B
+GB: gigabytes
+In words: each key carries 16 bytes of pointers, so 100 million keys spend 1.6 GB just on keeping the recency order.
+```
+
+At millions of keys and millions of reads per second, systems use **approximations**.
 
 ### Redis: sampled LRU and LFU
 
@@ -126,7 +142,53 @@ To get a feel for the log counter, the Redis config file gives these figures for
 | 100,000 | ~142 |
 | 1,000,000 | 255 |
 
-Below saturation, each increment happens with probability `1 / (max(counter − 5, 0) × lfu-log-factor + 1)`, so the counter climbs quickly at first and then ever more slowly.
+The rule behind these figures comes from the Redis source. Below saturation, each access increments the counter only with this probability:
+
+```formula
+P = 1 / (max(C − 5, 0) × F + 1)
+where
+P: the probability (between 0 and 1) that this access adds 1 to the counter
+C: the key's current LFU counter, from 0 to 255; new keys start at 5
+5: the starting value Redis gives new keys (LFU_INIT_VAL)
+max: the larger of its two inputs, so max(C − 5, 0) is never negative
+F: the lfu-log-factor setting, default 10; a bigger F makes the counter climb more slowly
+In words: at or below the starting value every access counts; above it, the higher the counter already is, the less likely each access is to raise it.
+```
+
+For example, with the default factor of 10:
+
+```formula
+P = 1 / (max(C − 5, 0) × F + 1)
+C = 5:   P = 1 / (0 × 10 + 1) = 1
+C = 15:  P = 1 / (10 × 10 + 1) ≈ 0.01
+C = 105: P = 1 / (100 × 10 + 1) ≈ 0.001
+where
+P: the probability that one access increments the counter
+C: the current counter value
+max: the larger of its two inputs
+F: the lfu-log-factor, here 10
+≈: approximately equal to
+In words: a new key counts every hit, a key at 15 counts about one hit in a hundred, and a key at 105 about one in a thousand.
+```
+
+So the counter climbs quickly at first and then ever more slowly, which is how 8 bits (0 to 255) can stand for about a million hits. It is a rough popularity score, not an exact count. A counter of 255 stays at 255.
+
+Decay works the other way. Each time Redis looks at a key, it subtracts one for every whole decay period the key has sat untouched:
+
+```formula
+C_new = max(C − ⌊t_idle / D⌋, 0)
+where
+C_new: the counter after decay
+C: the counter before decay
+max: the larger of its two inputs, so the counter never goes below 0
+⌊ ⌋: floor, rounding down to a whole number
+t_idle: the whole minutes since Redis last stamped the key's decay clock, which it does on every access; in minutes (min)
+D: the lfu-decay-time setting, in minutes; default 1
+min: minutes
+In words: with the default setting, a key loses one point of popularity for every minute nobody uses it.
+```
+
+For example, a key with counter 200 left idle for 3 hours (180 minutes) decays to 200 − 180 = 20. Setting `lfu-decay-time` to 0 turns decay off.
 
 Redis eviction policies, set via `maxmemory-policy`:
 
@@ -147,7 +209,25 @@ Redis 8.6 added `allkeys-lrm` and `volatile-lrm` (*least recently modified*), wh
 
 ### Memcached: segmented LRU per slab class
 
-Memcached allocates memory in 1 MB **pages**, and assigns each page to a **slab class** that cuts it into fixed-size chunks (for example 96 B, 120 B, 152 B and so on, each class 1.25× the last by default). An item (key, value and a header of roughly 50 bytes) goes into the smallest chunk that fits it, so part of each chunk is usually wasted. Each class has its own LRU, split into **HOT, WARM and COLD** segments. New items enter HOT and flow down into COLD. Items that are hit again (while in HOT or COLD) move to WARM, where they are relatively protected. Items never hit again pass through COLD and out of the bottom, so a scan mostly churns COLD. A background "LRU crawler" also reclaims expired items.
+Memcached allocates memory in 1 MB **pages**, and assigns each page to a **slab class** that cuts it into fixed-size chunks (for example 96 B, 120 B, 152 B and so on, each class 1.25× the last by default). The chunk sizes grow geometrically:
+
+```formula
+S_{k+1} = S_k × g
+S_2 = 96 B × 1.25 = 120 B
+S_3 = 120 B × 1.25 = 150 B → 152 B
+where
+S_k: the chunk size of slab class number k, in bytes (B)
+S_{k+1}: the chunk size of the next class up
+S_2, S_3: the chunk sizes of the second and third classes; the first class, S_1, is 96 B by default
+g: the growth factor (Memcached's -f option), default 1.25
+→: "is rounded up to"; Memcached aligns chunk sizes to a multiple of 8 bytes
+B: bytes
+In words: each slab class's chunks are about 25% bigger than the class below, rounded up to a multiple of 8 bytes.
+```
+
+An item (key, value and a header of roughly 50 bytes) goes into the smallest chunk that fits it, so part of each chunk is usually wasted. A smaller growth factor wastes less space per item but needs more classes.
+
+Each class has its own LRU, split into **HOT, WARM and COLD** segments. New items enter HOT and flow down into COLD. Items that are hit again (while in HOT or COLD) move to WARM, where they are relatively protected. Items never hit again pass through COLD and out of the bottom, so a scan mostly churns COLD. A background "LRU crawler" also reclaims expired items.
 
 A consequence: eviction is per slab class. If most of your memory was assigned to 1 KB chunks and your values shrink to 100 B, the small class can be evicting heavily while plenty of memory sits in the large class (Memcached has a slab rebalancer to help).
 

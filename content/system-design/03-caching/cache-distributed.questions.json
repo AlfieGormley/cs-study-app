@@ -3,7 +3,7 @@
     "id": "cache-distributed-q1",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A Memcached fleet uses `server = hash(key) % N`. You scale from 4 to 5 servers during peak traffic. Roughly what fraction of keys now map to a different server?",
+    "prompt": "A Memcached fleet picks each key's server with `server = hash(key) % N`: hash the key to a number and take the remainder (`%`) after dividing by N, the number of servers. You scale from 4 to 5 servers during peak traffic. Roughly what fraction of keys now map to a different server?",
     "options": [
       {
         "text": "About 80%",
@@ -11,7 +11,7 @@
       },
       {
         "text": "About 20%",
-        "explanation": "This is roughly what *stays* in place. A key keeps its server only when `h % 4 == h % 5`, which happens for about 1 in 5 keys."
+        "explanation": "This is roughly what *stays* in place. A key keeps its server only when its hash leaves the same remainder divided by 4 as divided by 5, which happens for about 1 in 5 keys."
       },
       {
         "text": "About 25%",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. A key stays put if `h mod 4 = h mod 5`.\n2. Both residues repeat with period `lcm(4,5) = 20`. Check h = 0..19: matches at h = 0, 1, 2, 3 only (where h < 4, both residues equal h).\n3. 4 matches out of 20 = **20% stay**, so **80% move**.\n4. Those 80% miss on the new server and fall through to the DB, a self-inflicted stampede at peak.\n5. With consistent hashing, adding the 5th node moves only about 1/5 = 20% of keys.",
+    "workedExample": "1. A key stays put only if both remainders agree:\n\n```formula\nh mod 4 = h mod 5\nwhere\nh: the key's hash, a large whole number\nmod: modulo, the remainder after whole-number division; 13 mod 4 = 1\nIn words: the key keeps its server only if dividing its hash by 4 and by 5 leaves the same remainder.\n```\n\n2. The pair of remainders repeats every 20 numbers (20 is the smallest number that both 4 and 5 divide into exactly). Check hashes 0 to 19: they match only for 0, 1, 2 and 3, where both remainders equal the hash itself.\n3. In general, growing from N to N + 1 servers:\n\n```formula\nf_stay = 1 / (N + 1)\nf_stay = 1 / (4 + 1) = 0.2\nf_move = 1 − 0.2 = 0.8\nwhere\nf_stay: fraction of keys that keep their server\nf_move: fraction of keys that move\nN: servers before scaling, here 4\nIn words: only 1 key in 5 stays put, so 80% of keys move and miss.\n```\n\nSo **20% stay**, and **80% move**.\n4. Those 80% miss on the new server and fall through to the DB, a self-inflicted stampede at peak.\n5. With consistent hashing, adding the 5th node moves only about 1/5 = 20% of keys.",
     "link": {
       "title": "Consistent hashing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. One point per server: each server owns one arc. Arcs are random, so some servers may own 2–3× the average.\n2. Server S5 fails. All of its arc's keys go to the next server clockwise, S6.\n3. S6 now carries its own load plus S5's: often 2× or more, possibly enough to fail it too (a cascade).\n4. With 150 virtual nodes per server, S5's 150 small arcs are each followed by different servers, so its load is split ~9 ways.\n5. Each survivor gains ~1/9 of S5's load, about +11%.",
+    "workedExample": "1. One point per server: each server owns one arc. Arcs are random, so some servers may own 2–3× the average.\n2. Server S5 fails. All of its arc's keys go to the next server clockwise, S6.\n3. S6 now carries its own load plus S5's: often 2× or more, possibly enough to fail it too (a cascade).\n4. With 150 virtual nodes per server, S5's 150 small arcs are each followed by different servers, so its load is split ~9 ways.\n5. Each survivor's extra load:\n\n```formula\ne = (1 / N) / (N − 1)\ng = e / (1 / N) = 1 / (N − 1)\ng = 1 / 9 ≈ 0.11\nwhere\ne: the extra load each survivor picks up, as a fraction of the cluster's total load\ng: each survivor's load increase, as a fraction of its own normal load (1 / N of the total)\nN: the number of servers before the failure, 10\n≈: approximately equal to\nIn words: the failed server's share, split evenly over the 9 survivors, adds about 11% to each one's normal load.\n```",
     "link": {
       "title": "Consistent hashing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
@@ -101,7 +101,7 @@
       },
       {
         "text": "The two keys hash to different slots; rename them with a hash tag such as `{user:42}:profile` and `{user:42}:cart` so only `user:42` is hashed",
-        "explanation": "Correct. Redis Cluster computes `CRC16(key) % 16384`, using only the text in `{}` when present. Same tag → same slot → multi-key commands work."
+        "explanation": "Correct. Redis Cluster takes a CRC16 checksum of the key and keeps the remainder after dividing by 16,384 (`CRC16(key) % 16384` in code), using only the text in `{}` when present. Same tag → same slot → multi-key commands work."
       },
       {
         "text": "`MGET` isn't supported in Redis Cluster",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Slot = `CRC16(key) mod 16384`. `user:42:profile` and `user:42:cart` are different strings, so (almost certainly) different slots, possibly on different nodes.\n2. Multi-key commands must run on one node atomically, so Redis rejects them: `CROSSSLOT`.\n3. With hash tags, `{user:42}:profile` → hashes `user:42`; `{user:42}:cart` → hashes `user:42`. Same slot.\n4. Caveat: don't over-tag. All of user 42's keys on one node is fine; all users under `{users}` would put everything on one node.",
+    "workedExample": "1. Redis Cluster picks the slot like this:\n\n```formula\nslot = CRC16(key) mod 16384\nwhere\nslot: the hash slot, 0 to 16,383\nCRC16: a 16-bit checksum function that turns the key into a number from 0 to 65,535\nkey: the key, or only the {} part if it has a hash tag\nmod: modulo, the remainder after division\n16384: the fixed slot count, 2 to the power 14\nIn words: checksum the key and keep the remainder after dividing by 16,384.\n```\n\n   `user:42:profile` and `user:42:cart` are different strings, so (almost certainly) different slots, possibly on different nodes.\n2. Multi-key commands must run on one node atomically, so Redis rejects them: `CROSSSLOT`.\n3. With hash tags, `{user:42}:profile` → hashes `user:42`; `{user:42}:cart` → hashes `user:42`. Same slot.\n4. Caveat: don't over-tag. All of user 42's keys on one node is fine; all users under `{users}` would put everything on one node.",
     "link": {
       "title": "Redis Cluster specification",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. `BGSAVE` forks a child. Initially parent and child share all 26 GB of pages.\n2. When the parent modifies a page, the kernel copies it (copy-on-write).\n3. If 30% of pages are touched during a long snapshot: `0.3 × 26 = 7.8 GB` extra.\n4. `26 + 7.8 = 33.8 GB > 32 GB` → OOM killer.\n5. Fixes: keep `maxmemory` around 50–65% of RAM when snapshotting under write-heavy load, snapshot from a replica instead, evaluate the Redis/kernel guidance for transparent huge pages (which can increase copy-on-write and latency costs; actual page splitting/copy behavior depends on the kernel), or shard to smaller nodes.",
+    "workedExample": "1. `BGSAVE` forks a child. Initially parent and child share all 26 GB of pages.\n2. When the parent modifies a page, the kernel copies it (copy-on-write).\n3. If 30% of pages are touched during a long snapshot:\n\n```formula\nM_peak ≈ M × (1 + f)\nM_peak ≈ 26 GB × (1 + 0.3)\nM_peak ≈ 33.8 GB\nwhere\nM_peak: peak memory during the snapshot, in gigabytes (GB)\nM: the dataset's normal memory, 26 GB\nf: fraction of pages written during the snapshot, 0.3\nGB: gigabytes\n≈: approximately equal to\nIn words: 30% of 26 GB gets copied, adding 7.8 GB on top of the 26 GB.\n```\n\n4. 33.8 GB is more than the machine's 32 GB → OOM killer.\n5. Fixes: keep `maxmemory` around 50–65% of RAM when snapshotting under write-heavy load, snapshot from a replica instead, evaluate the Redis/kernel guidance for transparent huge pages (which can increase copy-on-write and latency costs; actual page splitting/copy behavior depends on the kernel), or shard to smaller nodes.",
     "link": {
       "title": "Redis persistence",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. After the change, each of 11 servers owns about `1/11 ≈ 9.1%` of the ring.\n2. The new server's share has to come from somewhere, so about **9.1% of keys move**, and nothing else does.\n3. Virtual nodes: the new server's 150 points land at random spots, each taking over a small arc from whichever server followed it.\n4. In a balanced illustrative case those arcs are distributed across the 10 old servers roughly equally:\n\n```\n9.1% / 10 ≈ 0.9% each\n```\n\n5. Each old server loses about 10% of its keys (from 10% to 9.1% of the ring). The miss-load change depends on key popularity, warming and origin capacity; moving 9% of keys is not a guarantee of a gentle request-load change.",
+    "workedExample": "1. After the change, each of 11 servers owns an equal share of the ring:\n\n```formula\nf_move ≈ 1 / (N + 1)\nf_move ≈ 1 / (10 + 1) ≈ 0.091\nwhere\nf_move: fraction of keys that move to the new server\nN: servers before the change, 10\n≈: approximately equal to; exact only with perfectly even arcs\nIn words: the new server takes about one-eleventh of the ring, 9.1%, and only those keys move.\n```\n2. The new server's share has to come from somewhere, so about **9.1% of keys move**, and nothing else does.\n3. Virtual nodes: the new server's 150 points land at random spots, each taking over a small arc from whichever server followed it.\n4. In a balanced illustrative case those arcs are distributed across the 10 old servers roughly equally:\n\n```\n9.1% / 10 ≈ 0.9% each\n```\n\n5. Each old server loses about 9% of its own keys (its share of the ring falls from 10% to about 9.1%). The miss-load change depends on key popularity, warming and origin capacity; moving 9% of keys is not a guarantee of a gentle request-load change.",
     "link": {
       "title": "Consistent hashing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Slot for any Acme key:\n\n```\nCRC16(\"tenant:acme\") % 16384\n```\n\n   One number, so **one slot**, so **one primary**.\n2. With 10 primaries, a fair share is 10% of traffic. That node gets 40% plus its share of everyone else.\n3. Scaling out doesn't help: a slot can't be split across nodes.\n4. Fixes: tag at a finer grain (`{acme:user:42}`) so only keys that really need co-location share a slot; use replicas for Acme's reads; or give very large tenants their own cluster.",
+    "workedExample": "1. Slot for any Acme key:\n\n```formula\nslot = CRC16(\"tenant:acme\") mod 16384\nwhere\nslot: the hash slot, 0 to 16,383\nCRC16: a 16-bit checksum of the text inside {}\nmod: modulo, the remainder after division\n16384: the fixed number of slots\nIn words: every Acme key hashes the same text, so every Acme key gets the same slot.\n```\n\n   One number, so **one slot**, so **one primary**.\n2. With 10 primaries, a fair share is 10% of traffic. That node gets 40% plus its share of everyone else.\n3. Scaling out doesn't help: a slot can't be split across nodes.\n4. Fixes: tag at a finer grain (`{acme:user:42}`) so only keys that really need co-location share a slot; use replicas for Acme's reads; or give very large tenants their own cluster.",
     "link": {
       "title": "Redis Cluster specification",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
@@ -353,7 +353,7 @@
     "options": [
       {
         "text": "8,000 before; 80 after",
-        "explanation": "Correct. Before: `2,000 × 4 = 8,000` per node. After: only proxies connect to nodes, so `20 × 4 = 80` per node. App instances connect to the proxies instead."
+        "explanation": "Correct. Before: 2,000 × 4 = 8,000 per node. After: only proxies connect to nodes, so 20 × 4 = 80 per node. App instances connect to the proxies instead."
       },
       {
         "text": "240,000 before; 2,400 after",
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Per node, before:\n\n```\n2,000 apps * 4 conns = 8,000\n```\n\n2. Cluster-wide that is `8,000 × 30 = 240,000` connections, each costing memory and file descriptors.\n3. Per node, after:\n\n```\n20 proxies * 4 conns = 80\n```\n\n4. A 100× reduction, plus clients no longer need the topology: the proxy handles routing and failover.\n5. Cost: an extra network hop (tens to hundreds of µs) and a tier you must run and keep highly available.",
+    "workedExample": "1. Per node, before and after:\n\n```formula\nC_node = I × P\nC_node = 2,000 × 4 = 8,000\nC_node = 20 × 4 = 80\nwhere\nC_node: connections one cache node holds\nI: clients connecting to each node: 2,000 apps before, 20 proxies after\nP: connections per client per node, 4\nIn words: each node holds one pool per directly connected client, so swapping 2,000 apps for 20 proxies cuts its connections a hundredfold.\n```\n\n2. Cluster-wide, before, that is 8,000 × 30 = 240,000 connections, each costing memory and file descriptors.\n3. Per node, after: 80.\n\n4. A 100× reduction, plus clients no longer need the topology: the proxy handles routing and failover.\n5. Cost: an extra network hop (tens to hundreds of µs) and a tier you must run and keep highly available.",
     "link": {
       "title": "Scaling Memcache at Facebook — full paper PDF",
       "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"

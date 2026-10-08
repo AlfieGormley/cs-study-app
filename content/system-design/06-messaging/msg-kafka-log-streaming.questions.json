@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Requirement: **per-account** order, not global order.\n2. Kafka guarantees order **within a partition**.\n3. So route every event for an account to the same partition: `key = accountId` → `toPositive(murmur2(serializedKey)) % N`.\n4. With 24 partitions, up to 24 consumers process accounts in parallel, each seeing its accounts' events in order.\n5. Keep idempotence on (the default) so producer retries cannot reorder records within the partition.",
+    "workedExample": "1. Requirement: **per-account** order, not global order.\n2. Kafka guarantees order **within a partition**.\n3. So route every event for an account to the same partition by using the account ID as the record key. The producer then picks the partition like this:\n\n```formula\np = h(k) mod N\nwhere\np: the partition number, from 0 to N − 1\nh: the hash function (murmur2 in the default Java client), which turns the key into a large positive number\nk: the record key, here the account ID\nmod: modulo: the remainder after whole-number division\nN: the number of partitions, here 24\nIn words: one account ID always gives the same hash, so all of that account's events land on one partition, where Kafka keeps them in order.\n```\n\n4. With 24 partitions, up to 24 consumers process accounts in parallel, each seeing its accounts' events in order.\n5. Keep idempotence on (the default) so producer retries cannot reorder records within the partition.",
     "link": {
       "title": "Apache Kafka documentation",
       "url": "https://kafka.apache.org/documentation/"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Start: ISR = {b1, b2, b3}. Writes need ≥ 2 in ISR.\n2. b2 and b3 fail and drop out of the ISR → ISR = {b1}.\n3. A producer sends with `acks=all`. Leader checks `|ISR| = 1 < 2` → error `NOT_ENOUGH_REPLICAS`.\n4. Consumers fetch from b1 up to the high watermark, which is unaffected.\n\n**Trade-off**: you chose consistency (no acknowledged write on a single disk) over write availability. With RF=3 and min ISR=2 you tolerate **one** failure while preserving data and eventual write availability after recovery/election; another failure blocks writes. The surviving copy must remain intact; this is not immunity to further disk loss.",
+    "workedExample": "1. Start: ISR = {b1, b2, b3}. Writes need ≥ 2 in ISR.\n2. b2 and b3 fail and drop out of the ISR → ISR = {b1}.\n3. A producer sends with `acks=all`. The leader checks the rule:\n\n```formula\n|ISR| ≥ m\n1 < 2 ✗\nwhere\n|ISR|: the number of replicas in the in-sync replica set, here 1 (just the leader)\nISR: in-sync replica set\nm: min.insync.replicas, here 2\n≥: is greater than or equal to\n<: is less than\n✗: the rule fails\nIn words: only one replica is in sync but the topic demands two, so the write is refused.\n```\n\n   The producer gets the error `NOT_ENOUGH_REPLICAS`.\n4. Consumers fetch from b1 up to the high watermark, which is unaffected.\n\n**Trade-off**: you chose consistency (no acknowledged write on a single disk) over write availability. With a replication factor of 3 and `min.insync.replicas=2` you tolerate **one** failure while preserving data and eventual write availability after recovery/election; another failure blocks writes. The surviving copy must remain intact; this is not immunity to further disk loss.",
     "link": {
       "title": "Kafka replication design (Confluent)",
       "url": "https://docs.confluent.io/kafka/design/replication.html"
@@ -151,7 +151,7 @@
       2,
       4
     ],
-    "workedExample": "Picture the log before and after compaction:\n\n```\nbefore: 0:k1=a 1:k2=b 2:k1=c 3:k2=null\nafter:  2:k1=c 3:k2=null\nlater:  2:k1=c   (tombstone removed)\n```\n\n1. k1 keeps only its latest value `c` → statement 1 true.\n2. Offsets 2 and 3 keep their numbers → statement 2 false.\n3. k2's tombstone removes it, then itself → statement 3 true.\n4. The active segment is left alone → statement 4 false.\n5. Reading from the earliest available offset within the required retention window recovers every live key → statement 5 true.",
+    "workedExample": "Picture the log before and after compaction. Each entry is written offset:key=value, so `2:k1=c` is the record at offset 2 with key k1 and value c:\n\n```\nbefore: 0:k1=a 1:k2=b 2:k1=c 3:k2=null\nafter:  2:k1=c 3:k2=null\nlater:  2:k1=c   (tombstone removed)\n```\n\n1. k1 keeps only its latest value `c` → statement 1 true.\n2. Offsets 2 and 3 keep their numbers → statement 2 false.\n3. k2's tombstone removes it, then itself → statement 3 true.\n4. The active segment is left alone → statement 4 false.\n5. Reading from the earliest available offset within the required retention window recovers every live key → statement 5 true.",
     "link": {
       "title": "Kafka log compaction (Confluent)",
       "url": "https://docs.confluent.io/kafka/design/log_compaction.html"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Before: for an illustrative positive hash value **19**, `19 % 8 = 3`. `OrderPlaced` goes to P3.\n2. Operator changes N to 12.\n3. After: `19 % 12 = 7` for the same illustrative hash. `OrderShipped` goes to P7.\n4. P3's consumer is behind at peak; P7's consumer (new, empty partition) is not. P7 is read first.\n5. Mitigations:\n   - Over-provision partitions up front for keyed topics.\n   - If you must grow, create a new topic with more partitions and migrate consumers after draining the old one.\n   - Make consumers tolerate out-of-order events (for example, a state machine that parks early events).",
+    "workedExample": "1. The producer picks a partition from the key's hash. Take an illustrative hash value of 19 and compare 8 partitions with 12:\n\n```formula\np = h(k) mod N\np = 19 mod 8 = 3\np = 19 mod 12 = 7\nwhere\np: the partition number the record goes to\nh: the hash function, which turns the key into a large positive number\nk: the record key, here the order ID; h(k) is 19 in this example\nmod: modulo: the remainder after whole-number division; 19 = 1 × 12 + 7\nN: the number of partitions: 8 before the change, 12 after\nIn words: the same key gives the same hash, but dividing by a different partition count gives a different remainder, so the order's events move partition.\n```\n\n2. Before the change, `OrderPlaced` went to P3 (partition 3).\n3. After the change, `OrderShipped` for the same order goes to P7.\n4. P3's consumer is behind at peak; P7's consumer (new, empty partition) is not. P7 is read first.\n5. Mitigations:\n   - Over-provision partitions up front for keyed topics.\n   - If you must grow, create a new topic with more partitions and migrate consumers after draining the old one.\n   - Make consumers tolerate out-of-order events (for example, a state machine that parks early events).",
     "link": {
       "title": "Apache Kafka documentation",
       "url": "https://kafka.apache.org/documentation/"
@@ -207,11 +207,11 @@
       },
       {
         "text": "1,000, to be safe",
-        "explanation": "Wrong. Far too many partitions add broker memory, file handles, longer failovers and slower rebalances, and most partitions would be nearly empty. Headroom should be proportionate."
+        "explanation": "Wrong. Far too many partitions add broker memory, file handles, longer failovers and slower rebalances, and most partitions would be nearly empty. Capacity headroom should be proportionate."
       }
     ],
     "answer": 1,
-    "workedExample": "1. **Consumers needed at peak**: 90,000 ÷ 4,000 = 22.5 → 23.\n2. **Add headroom**: 22.5 × 1.5 = 33.75 → 34.\n3. **Round to something convenient**: 36 divides evenly by 2, 3, 4, 6, 9, 12 and 18 consumers, so partitions spread evenly as you scale.\n4. **Check the broker side**: 36 partitions × RF 3 = 108 partition replicas; validate their storage, I/O, memory and controller overhead on the actual cluster.\n\nPartitions are cheap to over-provision a little and expensive to add later on keyed topics.",
+    "workedExample": "1. **Consumers needed at peak**, then **add headroom** of 50%:\n\n```formula\nC = R / r\nC = 90000/s / 4000/s = 22.5\nC_h = C × 1.5 = 33.75\nwhere\nC: consumers (and so partitions) needed at peak with no spare capacity\nR: the peak record rate, 90,000 records per second\nr: records per second one consumer can process, 4,000\nC_h: consumers needed with 50% headroom (× 1.5)\ns: seconds; \"/s\" means per second\nIn words: 22.5 consumers keep up exactly at peak, so you need at least 23; with 50% headroom that becomes about 34.\n```\n\n2. Round 33.75 up to 34.\n3. **Round to something convenient**: 36 divides evenly by 2, 3, 4, 6, 9, 12 and 18 consumers, so partitions spread evenly as you scale.\n4. **Check the broker side**: 36 partitions × replication factor 3 = 108 partition replicas; validate their storage, I/O, memory and controller overhead on the actual cluster.\n\nPartitions are cheap to over-provision a little and expensive to add later on keyed topics.",
     "link": {
       "title": "Kafka consumer design (Confluent)",
       "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Defaults in play:\n   - producer `acks=all` (default since 3.0)\n   - broker `min.insync.replicas=1` (default)\n2. Followers drop out → ISR = {leader}.\n3. Each write: leader appends, checks `|ISR| = 1 ≥ 1` ✓, all ISR members have it ✓ → **ack**.\n4. Leader's disk dies. Followers never fetched those records.\n5. Result: acknowledged writes are gone, whatever happens to leadership.\n\n**Fix**: set `min.insync.replicas=2` on important topics (or as the broker default). Now step 3 fails with `NOT_ENOUGH_REPLICAS`, the producer retries, and no write is acknowledged on a single disk.",
+    "workedExample": "1. Defaults in play:\n   - producer `acks=all` (default since 3.0)\n   - broker `min.insync.replicas=1` (default)\n2. Followers drop out → ISR = {leader}.\n3. Each write: the leader appends it and checks the rule:\n\n```formula\n|ISR| ≥ m\n1 ≥ 1 ✓\nwhere\n|ISR|: the number of replicas in the in-sync replica set, here 1 (just the leader)\nISR: in-sync replica set\nm: min.insync.replicas, here the broker default of 1\n≥: is greater than or equal to\n✓: the rule holds\nIn words: one in-sync replica is enough when the minimum is one, so the leader alone acknowledges every write.\n```\n\n   All ISR members (just the leader) have the record ✓ → **ack**.\n4. Leader's disk dies. Followers never fetched those records.\n5. Result: acknowledged writes are gone, whatever happens to leadership.\n\n**Fix**: set `min.insync.replicas=2` on important topics (or as the broker default). Now step 3 fails with `NOT_ENOUGH_REPLICAS`, the producer retries, and no write is acknowledged on a single disk.",
     "link": {
       "title": "Kafka replication design (Confluent docs)",
       "url": "https://docs.confluent.io/kafka/design/replication.html"

@@ -45,7 +45,7 @@
       },
       {
         "text": "Mean 79.6 ms, p50 20 ms, p99 3,000 ms",
-        "explanation": "Correct. Mean = (980×20 + 20×3,000)/1,000 = 79.6 ms. The median request is a fast one (20 ms). The slowest 2% are 3,000 ms, so the 99th percentile falls among them. The mean describes no real request."
+        "explanation": "Correct. The mean is (980 × 20 ms + 20 × 3,000 ms) divided by 1,000 requests, which is 79.6 ms. The median request is a fast one (20 ms). The slowest 2% are 3,000 ms, so the 99th percentile falls among them. The mean describes no real request."
       },
       {
         "text": "Mean 79.6 ms, p50 79.6 ms, p99 79.6 ms",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "**Mean** (weighted by count):\n\n```\ntotal = 980 x 20 + 20 x 3000\n      = 19,600 + 60,000 = 79,600 ms\nmean  = 79,600 / 1,000 = 79.6 ms\n```\n\n**Percentiles.** Sort all 1,000 latencies. Positions 1–980 are 20 ms; positions 981–1,000 are 3,000 ms.\n\n- p50 = position 500 = **20 ms**\n- p99 = position 990 = **3,000 ms** (inside the slow block)\n\nThe mean (79.6 ms) is 4× the typical request and 38× better than the slow ones. That's why SLOs are written in percentiles.",
+    "workedExample": "**Mean** (weighted by count): add up every request's time and divide by the number of requests.\n\n```formula\nT = 980 × 20 ms + 20 × 3,000 ms\nT = 19,600 ms + 60,000 ms\nT = 79,600 ms\nt_mean = T / n = 79,600 ms / 1,000\nt_mean = 79.6 ms\nwhere\nT: the total time of all requests added together, in milliseconds (ms)\nn: the number of requests, 1,000\nt_mean: the mean (average) latency, in ms\nms: millisecond, one thousandth of a second\nIn words: the mean is the total time divided by the number of requests, so each latency counts as often as it occurs.\n```\n\n**Percentiles.** Sort all 1,000 latencies from fastest to slowest. Positions 1–980 are 20 ms; positions 981–1,000 are 3,000 ms. Then read off the right position (nearest-rank method):\n\n```formula\nr = ⌈ (p / 100) × n ⌉\np = 50: r = ⌈ 0.5 × 1,000 ⌉ = 500\np = 99: r = ⌈ 0.99 × 1,000 ⌉ = 990\nwhere\nr: the rank, the position in the sorted list whose value is the percentile\np: the percentile wanted, from 0 to 100 (p50 is the median, p99 the 99th percentile)\nn: the number of measurements, 1,000\n⌈ ⌉: ceiling: round up to the next whole number (a whole number stays as it is)\nIn words: the p-th percentile is the value p% of the way along the sorted list.\n```\n\n- p50: the 500th value, **20 ms**\n- p99: the 990th value, **3,000 ms** (inside the slow block)\n\nThe mean (79.6 ms) is 4× the typical request and 38× better than the slow ones. That's why SLOs are written in percentiles.",
     "link": {
       "title": "Percentile (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Percentile"
@@ -71,19 +71,19 @@
       },
       {
         "text": "About 39%",
-        "explanation": "Correct. P(no shard slow) = 0.99^50 ≈ 0.605, so P(at least one slow) ≈ 1 − 0.605 = 39.5%. Fan-out turns a per-server tail into a common user experience."
+        "explanation": "Correct. The chance that no shard is slow is 0.99 multiplied by itself 50 times, about 0.605, so the chance that at least one is slow is about 1 − 0.605 = 0.395, i.e. 39.5%. Fan-out turns a per-server tail into a common user experience."
       },
       {
         "text": "50%",
-        "explanation": "Incorrect. This simply multiplies 50 × 1%, which overcounts cases where several shards are slow at once. The correct calculation uses the complement: 1 − 0.99^50."
+        "explanation": "Incorrect. This simply multiplies 50 × 1%, which overcounts cases where several shards are slow at once. The correct calculation uses the complement: 1 minus the chance that all 50 are fast (0.99 multiplied by itself 50 times)."
       },
       {
-        "text": "0.01^50, effectively zero",
-        "explanation": "Incorrect. That's the probability that *all* 50 shards are slow simultaneously. The query only needs *one* slow shard to be slow."
+        "text": "0.01 to the power 50: effectively zero",
+        "explanation": "Incorrect. 0.01 multiplied by itself 50 times is the probability that *all* 50 shards are slow simultaneously. The query only needs *one* slow shard to be slow."
       }
     ],
     "answer": 1,
-    "workedExample": "The query is slow if **at least one** shard is slow. Compute the complement:\n\n```\nP(shard fast)       = 0.99\nP(all 50 fast)      = 0.99^50\nln(0.99) ≈ -0.01005\n50 x -0.01005       = -0.5025\ne^-0.5025           ≈ 0.605\nP(at least one slow) = 1 - 0.605 = 0.395\n```\n\nSo ~39.5% of queries are slow. Mitigations: hedged requests to replica shards, returning partial results after a deadline, or reducing per-shard variance (GC tuning, isolating background work).",
+    "workedExample": "The query is slow if **at least one** shard is slow. It's easier to compute the complement, the chance that every shard is fast, and subtract it from 1:\n\n```formula\nP_all = (1 − q)^n = 0.99^50\nP_all = e^{n × ln(1 − q)}\nP_all ≈ e^{50 × (−0.01005)}\nP_all ≈ e^{−0.5025} ≈ 0.605\nP_slow = 1 − P_all ≈ 0.395\nwhere\nq: the probability that one shard is slow, 1% = 0.01\nn: the number of shards the query waits for, 50\nP_all: the probability that all 50 shards are fast\nP_slow: the probability that the query is slow (at least one shard slow)\n^: \"to the power of\": 0.99^50 means 0.99 multiplied by itself 50 times\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm, the inverse of raising e to a power; ln(0.99) ≈ −0.01005\n≈: approximately equal to (rounded)\nIn words: each shard is fast 99% of the time, all fifty are fast only about 60% of the time, so about 40% of queries wait for a slow shard. The e and ln lines are just a way to work out 0.99^50 without a calculator's power key.\n```\n\nSo ~39.5% of queries are slow. This assumes shards are slow independently of each other. Mitigations: hedged requests to replica shards, returning partial results after a deadline, or reducing per-shard variance (GC tuning, isolating background work).",
     "link": {
       "title": "The Tail at Scale (Dean and Barroso, PDF)",
       "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
@@ -93,7 +93,7 @@
     "id": "fund-latency-throughput-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A worker has a mean service time of 10 ms per request. Using the M/M/1 approximation `W = S / (1 − ρ)`, what's the average time in the system at 90% utilisation, and what happens if load rises to 95%?",
+    "prompt": "A worker has a mean service time of 10 ms per request. Using the M/M/1 queueing approximation below, what's the average time in the system at 90% utilisation, and what happens if load rises to 95%?\n\n```formula\nW = S / (1 − ρ)\nwhere\nW: the average time a request spends in the system, waiting plus being served, in milliseconds (ms)\nS: the mean service time, the work time per request with no queue, in ms\nρ: rho, the utilisation, the fraction of time the worker is busy, from 0 to just under 1\nms: millisecond, one thousandth of a second\nIn words: latency is the service time divided by the fraction of time the worker is idle.\n```",
     "options": [
       {
         "text": "100 ms at 90%; 200 ms at 95%",
@@ -101,7 +101,7 @@
       },
       {
         "text": "11 ms at 90%; 10.5 ms at 95%",
-        "explanation": "Incorrect. This multiplies service time by (1 + ρ) or similar. The formula divides by (1 − ρ), which explodes as ρ approaches 1."
+        "explanation": "Incorrect. This multiplies the service time by 1 plus the idle fraction (1.1 at 90%, 1.05 at 95%), which would make latency fall as load rises. The formula divides by (1 − ρ), which explodes as ρ approaches 1."
       },
       {
         "text": "90 ms at 90%; 95 ms at 95%",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Apply the formula:\n\n```\nρ = 0.90: W = 10 / (1 - 0.90)\n            = 10 / 0.10 = 100 ms\nρ = 0.95: W = 10 / (1 - 0.95)\n            = 10 / 0.05 = 200 ms\n```\n\nCompare with ρ = 0.5: W = 10 / 0.5 = 20 ms.\n\nGoing from 50% to 90% load increases latency 5×; from 90% to 95% doubles it again. Real systems are not necessarily M/M/1; arrival/service variability, scheduling and admission control change the curve. That's why you plan peak utilisation around 50–70%.",
+    "workedExample": "Apply the formula at each utilisation:\n\n```formula\nW = S / (1 − ρ)\nρ = 0.90: W = 10 / 0.10 = 100 ms\nρ = 0.95: W = 10 / 0.05 = 200 ms\nρ = 0.50: W = 10 / 0.50 = 20 ms\nwhere\nW: the average time in the system (waiting plus service), in milliseconds (ms)\nS: the mean service time, 10 ms\nρ: rho, the utilisation, the fraction of time the worker is busy\nms: millisecond, one thousandth of a second\nIn words: halving the idle fraction doubles the latency, so the last few points of utilisation are the most expensive.\n```\n\nGoing from 50% to 90% load increases latency 5×; from 90% to 95% doubles it again. Real systems are not necessarily M/M/1; arrival/service variability, scheduling and admission control change the curve. That's why you plan peak utilisation around 50–70%.",
     "link": {
       "title": "Queueing theory (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Queueing_theory"
@@ -151,7 +151,7 @@
       1,
       3
     ],
-    "workedExample": "Line the numbers up in the same unit (ns):\n\n| Operation | ns |\n|---|---|\n| L1 | 1 |\n| RAM | 100 |\n| SSD random 4 KB | ~100,000 |\n| DC round trip | 500,000 |\n| HDD seek | 10,000,000 |\n| London–NY RTT | 70,000,000 |\n\n- RAM / L1 = 100. True.\n- DC RTT (0.5 ms) < HDD seek (10 ms). True.\n- 70 ms vs 0.1 ms: ~700×, not the same. False.\n- Sequential beats random on disk. True.\n- Physics: 5,570 km × 2 / 200,000 km/s ≈ 56 ms minimum. False.",
+    "workedExample": "Line the numbers up in the same unit (ns):\n\n| Operation | ns |\n|---|---|\n| L1 | 1 |\n| RAM | 100 |\n| SSD random 4 KB | ~100,000 |\n| DC round trip | 500,000 |\n| HDD seek | 10,000,000 |\n| London–NY RTT | 70,000,000 |\n\n- RAM / L1 = 100. True.\n- DC RTT (0.5 ms) < HDD seek (10 ms). True.\n- 70 ms vs 0.1 ms: ~700×, not the same. False.\n- Sequential beats random on disk. True.\n- Physics sets a floor on the round trip (below). False.\n\n```formula\nt = 2 × d / v\nt = 2 × 5,570 km / 200,000 km/s\nt ≈ 0.056 s = 56 ms\nwhere\nt: the minimum round-trip time, there and back, in seconds (s) or milliseconds (ms)\nd: the one-way distance, London to New York, about 5,570 km\nv: the speed of light in fibre, about 200,000 km/s\nkm: kilometre\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: twice the distance divided by the speed of light in fibre is the fastest any round trip can be, whatever the bandwidth.\n```",
     "link": {
       "title": "Latency numbers every programmer should know (gist)",
       "url": "https://gist.github.com/jboner/2841832"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Concrete case: 19 healthy servers each have p99 = 50 ms; 1 degraded server has *every* request at 2,000 ms. Equal traffic, 1,000 req/min each.\n\n**Averaged p99:**\n```\n(19 x 50 + 2000) / 20 = 147.5 ms\n```\n\n**True fleet p99:** 20,000 requests in total; the slowest 1% is 200 requests. The degraded server alone contributed 1,000 requests at 2,000 ms, so the slowest 200 are all 2,000 ms.\n\n```\nfleet p99 = 2,000 ms\n```\n\nThe dashboard says 147 ms; users are seeing 2 s. Store latency as histograms (fixed buckets), sum bucket counts across servers, then compute the percentile.",
+    "workedExample": "Concrete case: 19 healthy servers each have p99 = 50 ms; 1 degraded server has *every* request at 2,000 ms. Equal traffic, 1,000 req/min each.\n\n**Averaged p99:**\n```formula\np_avg = (19 × 50 ms + 2,000 ms) / 20\np_avg = 2,950 ms / 20 = 147.5 ms\nwhere\np_avg: the mean of the 20 servers' p99 values, what the dashboard shows\nms: millisecond, one thousandth of a second\nIn words: nineteen healthy 50 ms values dilute one 2,000 ms value down to under 150 ms.\n```\n\n**True fleet p99:** 20,000 requests in total; the slowest 1% is 200 requests. The degraded server alone contributed 1,000 requests at 2,000 ms, so the slowest 200 are all 2,000 ms. So the true **fleet p99 is 2,000 ms**.\n\nThe dashboard says 147 ms; users are seeing 2 s. Store latency as histograms (fixed buckets), sum bucket counts across servers, then compute the percentile.",
     "link": {
       "title": "Implementing SLOs (Google SRE workbook)",
       "url": "https://sre.google/workbook/implementing-slos/"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Use `time ≈ round trips × RTT + bytes / bandwidth`.\n\n```\nbackup:\n  10 GB x 8 = 80 Gbit\n  80 Gbit / 1 Gbps = 80 s\n  RTT part: negligible\nrequests:\n  1,000 x 80 ms = 80 s\n  1 MB / 1 Gbps = ~8 ms\n```\n\nSame duration, opposite causes. Sending the 1,000 requests in one batch takes about one round trip (~80 ms plus ~8 ms of data). A 10 Gbps link would cut the backup to about 8 s.",
+    "workedExample": "Use the transfer-time model:\n\n```formula\nT ≈ k × RTT + D / B\nT_b ≈ 80 Gbit / 1 Gbps = 80 s\nT_r ≈ 1,000 × 80 ms + 8 Mbit / 1 Gbps\nT_r ≈ 80 s + 0.008 s ≈ 80 s\nwhere\nT: the time a job takes, in seconds (s)\nk: the number of round trips made one after another\nRTT: round-trip time, here 80 ms\nD: the data to send, in bits (bytes × 8)\nB: the link bandwidth, here 1 Gbps\nT_b: the backup's time: one long stream, so round trips are negligible, and D = 10 GB × 8 = 80 Gbit\nT_r: the requests' time: k = 1,000 sequential round trips, carrying 1,000 × 1 KB = 1 MB = 8 Mbit\nGbit: gigabit, 10^9 bits\nMbit: megabit, 10^6 bits\nGbps: gigabits per second\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: the backup's time is almost all data divided by bandwidth; the requests' time is almost all round trips multiplied by RTT.\n```\n\nSame duration, opposite causes. Sending the 1,000 requests in one batch takes about one round trip (~80 ms plus ~8 ms of data). A 10 Gbps link would cut the backup to about 8 s.",
     "link": {
       "title": "Latency (engineering) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Sequential calls add up:\n\n```\nclient-side: 12 x 70 ms = 840 ms\n```\n\nAggregate on the server (a 'backend for frontend' endpoint):\n\n```\n1 x 70 ms (client to server)\n+ 12 x 0.5 ms (inside DC)\n= ~76 ms\n```\n\nThe lesson's rule: chatty protocols are deadly over distance. Fix them by batching, parallelising, or moving the chatter close to the data.",
+    "workedExample": "Sequential calls add up; aggregating on the server (a 'backend for frontend' endpoint) pays the long round trip once:\n\n```formula\nT_c = 12 × 70 ms = 840 ms\nT_s ≈ 70 ms + 12 × 0.5 ms ≈ 76 ms\nwhere\nT_c: screen load time with 12 sequential calls from the phone, each paying the London–US round trip\nT_s: load time with one call to a server-side endpoint that makes the 12 calls inside the datacentre\nms: millisecond, one thousandth of a second; 70 ms is the London–US round trip, 0.5 ms a round trip inside the datacentre\n≈: approximately equal to\nIn words: twelve long round trips cost twelve times as much as one; moving the chatter inside the datacentre makes each extra call almost free.\n```\n\nThe lesson's rule: chatty protocols are deadly over distance. Fix them by batching, parallelising, or moving the chatter close to the data.",
     "link": {
       "title": "Latency (engineering) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Check each constraint separately and take the larger answer.\n\n```\nnormal, <= 60%:\n  45,000 / (1,000 x 0.6) = 75\nAZ lost, <= 90%:\n  survivors = 45,000 / 900 = 50\n  total = 50 x 3/2 = 75\n```\n\nBoth give 75 (25 per AZ). The exercise permits 90% during failure; whether that is acceptable in production depends on measured latency and overload behaviour, not only duration.",
+    "workedExample": "Check each constraint separately and take the larger answer.\n\n```formula\nN_1 = Q / (c × 0.6) = 45,000 / 600 = 75\nN_s = Q / (c × 0.9) = 45,000 / 900 = 50\nN_2 = N_s × 3 / 2 = 75\nwhere\nQ: peak traffic, 45,000 requests per second\nc: the requests per second at which one server saturates, 1,000\nN_1: servers needed to stay at or below 60% utilisation normally\nN_s: servers that must survive a zone loss to stay at or below 90%\nN_2: total servers so that two of the three zones still hold N_s (each zone holds a third of the fleet)\nIn words: both rules happen to need 75 servers, 25 per zone.\n```\n\nBoth give 75 (25 per AZ). The exercise permits 90% during failure; whether that is acceptable in production depends on measured latency and overload behaviour, not only duration.",
     "link": {
       "title": "Handling Overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"
@@ -377,7 +377,7 @@
       1,
       2
     ],
-    "workedExample": "Use the stated trace evidence to identify the bottleneck. Low average CPU alone cannot rule out queueing at a lock, an I/O device, a hot core or a constrained worker pool. The tail comes from per-shard variability amplified by fan-out:\n\n```\nP(slow) = 1 - 0.99^100 ≈ 63%\n```\n\nSo fix variability (isolate background work) or stop waiting for the slowest shard (hedging, deadlines with partial results). Adding capacity treats a queueing problem you don't have.",
+    "workedExample": "Use the stated trace evidence to identify the bottleneck. Low average CPU alone cannot rule out queueing at a lock, an I/O device, a hot core or a constrained worker pool. The tail comes from per-shard variability amplified by fan-out:\n\n```formula\nP_slow = 1 − 0.99^n\nP_slow = 1 − 0.99^100 ≈ 0.63\nwhere\nP_slow: the probability that a query waits on at least one slow shard\nn: the number of shards each query fans out to, 100\n0.99: the chance one shard responds in time (it is slow 1% of the time)\n^: \"to the power of\": 0.99^100 means 0.99 multiplied by itself 100 times\n≈: approximately equal to\nIn words: with 100 shards each slow 1% of the time, about 63% of queries meet at least one slow shard.\n```\n\nSo fix variability (isolate background work) or stop waiting for the slowest shard (hedging, deadlines with partial results). Adding capacity treats a queueing problem you don't have.",
     "link": {
       "title": "The Tail at Scale (Dean and Barroso, PDF)",
       "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"

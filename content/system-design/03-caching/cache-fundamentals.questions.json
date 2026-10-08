@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Hit ratio depends on **which keys are asked for**, not how many keys exist.\n2. Suppose 1 million products, and the top 100,000 (10%) receive 90% of page views, as an explicit hypothetical distribution, not a universal e-commerce measurement.\n3. If the cache holds those 100,000 products, then 90% of lookups find their key: `h ≈ 0.9`.\n4. The remaining 900,000 products share the other 10% of traffic, so caching them adds little.\n5. So skew (popularity) plus repetition (temporal locality) is what makes small caches effective.",
+    "workedExample": "1. Hit ratio depends on **which keys are asked for**, not how many keys exist.\n2. Suppose 1 million products, and the top 100,000 (10%) receive 90% of page views, as an explicit hypothetical distribution, not a universal e-commerce measurement.\n3. If the cache holds those 100,000 products, then 90% of lookups find their key: the hit ratio is about 0.9 (90%).\n4. The remaining 900,000 products share the other 10% of traffic, so caching them adds little.\n5. So skew (popularity) plus repetition (temporal locality) is what makes small caches effective.",
     "link": {
       "title": "Locality of reference — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Use `T_avg = T_cache + (1 - h) × T_backend`.\n\n1. `T_cache = 1 ms` is paid on **every** request, hit or miss, because you always look in the cache first.\n2. Miss ratio `= 1 - 0.85 = 0.15`.\n3. Backend cost on misses `= 0.15 × 20 = 3 ms`.\n4. Total `= 1 + 3 = 4 ms`.\n\nCompare with no cache: 20 ms. The cache gives a 5× speed-up and cuts database reads by 85%.",
+    "workedExample": "Use the average-access-time formula:\n\n```formula\nT_avg = T_cache + (1 − h) × T_backend\nT_avg = 1 ms + (1 − 0.85) × 20 ms\nT_avg = 1 ms + 0.15 × 20 ms\nT_avg = 1 ms + 3 ms = 4 ms\nwhere\nT_avg: the average read time, in milliseconds (ms)\nT_cache: the Redis lookup time, 1 ms, paid by every request\nh: the hit ratio, 0.85 (85%)\nT_backend: the database time, 20 ms, paid only by misses\nms: milliseconds; 1 ms = 0.001 seconds\nIn words: every read pays the 1 ms lookup, and the 15% that miss also pay 20 ms, which averages out at 4 ms.\n```\n\n1. The 1 ms cache lookup is paid on **every** request, hit or miss, because you always look in the cache first.\n2. Miss ratio = 1 − 0.85 = 0.15.\n3. Backend cost averaged over all requests = 0.15 × 20 ms = 3 ms.\n4. Total = 1 + 3 = 4 ms.\n\nCompare with no cache: 20 ms. The cache gives a 5× speed-up and cuts database reads by 85%.",
     "link": {
       "title": "Cache (computing) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Assume 100,000 reads/s, cache 1 ms, DB 20 ms.\n2. At 99%: misses `= 1% × 100,000 = 1,000/s`. Latency `= 1 + 0.01 × 20 = 1.2 ms`.\n3. At 99.9%: misses `= 0.1% × 100,000 = 100/s`. Latency `= 1 + 0.001 × 20 = 1.02 ms`.\n4. Latency improved ~15%. **Database load improved 10×.**\n5. Lesson: once hit ratios are high, think in miss ratios. That is the number that decides how big your database must be.",
+    "workedExample": "1. Assume 100,000 reads/s, cache 1 ms, DB 20 ms.\n2. The database sees only the misses:\n\n```formula\nR_db = (1 − h) × R\nR_db = (1 − 0.99) × 100,000 = 1,000\nR_db = (1 − 0.999) × 100,000 = 100\nwhere\nR_db: database reads per second\nh: the hit ratio, 0.99 before and 0.999 after\nR: total reads per second, here 100,000\nIn words: the database load is the miss ratio times the total load, so cutting misses from 1% to 0.1% cuts it tenfold.\n```\n\n3. Latency, using average = cache time + miss ratio × database time: at 99%, 1 + 0.01 × 20 = 1.2 ms; at 99.9%, 1 + 0.001 × 20 = 1.02 ms.\n4. Latency improved ~15%. **Database load improved 10×.**\n5. Lesson: once hit ratios are high, think in miss ratios. That is the number that decides how big your database must be.",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Normal DB load `= (1 - 0.98) × 200,000 = 4,000 reads/s`, under the 5,000/s limit.\n2. After a flush, the hit ratio is ~0%, so DB load `≈ 200,000 reads/s`.\n3. `200,000 / 5,000 = 40×` overload. Queries queue, latency soars, connections are exhausted, and the cache cannot refill because the database is too slow to answer.\n4. Capacity-planning lesson: if the backend cannot survive the cache disappearing, the cache is **critical infrastructure**. Plan for it with replicas, warming, request coalescing, rate-limiting misses, and load shedding (covered in lesson 7).",
+    "workedExample": "1. The database sees the miss ratio times the total read rate:\n\n```formula\nR_db = (1 − h) × R\nR_db = (1 − 0.98) × 200,000 = 4,000\nR_db = (1 − 0) × 200,000 = 200,000\nwhere\nR_db: database reads per second\nh: the hit ratio: 0.98 normally, about 0 after the flush\nR: total reads per second, here 200,000\nIn words: at a 98% hit ratio the database sees 2% of reads; with an empty cache it sees all of them.\n```\n\n2. Normal load, 4,000 reads/s, is under the 5,000/s limit.\n3. After the flush, 200,000 / 5,000 = 40× overload. Queries queue, latency soars, connections are exhausted, and the cache cannot refill because the database is too slow to answer.\n4. Capacity-planning lesson: if the backend cannot survive the cache disappearing, the cache is **critical infrastructure**. Plan for it with replicas, warming, request coalescing, rate-limiting misses, and load shedding (covered in lesson 7).",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -233,7 +233,7 @@
       },
       {
         "text": "10%",
-        "explanation": "Correct. `(1 − 0.6) × (1 − 0.75) = 0.4 × 0.25 = 0.10`, so the combined hit ratio is 90%."
+        "explanation": "Correct. Multiply the two miss ratios: (1 − 0.6) × (1 − 0.75) = 0.4 × 0.25 = 0.10, so the combined hit ratio is 90%."
       },
       {
         "text": "40%",
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Start with 100 reads.\n2. In-process hits 60, so **40** go to Redis.\n3. Redis hits 75% of 40 = 30, so **10** go to the database.\n4. Database share `= 10 / 100 = 10%`.\n\nGeneral rule for stacked caches:\n\n```\nDB = (1 - h1) * (1 - h2)\n```\n\nRedis's 75% looks mediocre, but that is because the in-process layer already took the hottest keys.",
+    "workedExample": "1. Start with 100 reads.\n2. In-process hits 60, so **40** go to Redis.\n3. Redis hits 75% of 40 = 30, so **10** go to the database.\n4. Database share `= 10 / 100 = 10%`.\n\nGeneral rule for stacked caches:\n\n```formula\ns_db = (1 − h_1) × (1 − h_2)\ns_db = (1 − 0.6) × (1 − 0.75)\ns_db = 0.4 × 0.25 = 0.10\nwhere\ns_db: the share of all reads reaching the DB\nh_1: the in-process hit ratio, here 0.6\nh_2: Redis's hit ratio on the reads that reach it, here 0.75\nIn words: multiply the layers' miss ratios; 40% get past the first layer and a quarter of those get past Redis, so 10% reach the database.\n```\n\nRedis's 75% looks mediocre, but that is because the in-process layer already took the hottest keys.",
     "link": {
       "title": "Cache (computing) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Working set = distinct keys touched in the window = **4 million** active users, not 20 million registered.\n2. Bytes per key `= 1,500 + 80 = 1,580 B`.\n3. Total:\n\n```\n4,000,000 * 1,580 B\n= 6.32e9 B ≈ 6.3 GB\n```\n\n4. Add headroom (say 25–50%) for fragmentation, replication buffers and growth, so plan for an 8–10 GB node.\n5. Then measure the hit ratio at a few sizes: skew may mean a smaller cache gets almost the same hits.",
+    "workedExample": "1. Working set = distinct keys touched in the window = **4 million** active users, not 20 million registered.\n2. Bytes per key = 1,500 + 80 = 1,580 B.\n3. Total:\n\n```formula\nM = K × (S_v + S_o)\nM = 4,000,000 × (1,500 B + 80 B)\nM = 6,320,000,000 B ≈ 6.3 GB\nwhere\nM: the memory needed, in bytes (B)\nK: the keys in the working set, 4 million\nS_v: the value size, 1.5 KB = 1,500 B\nS_o: the measured overhead per key, 80 B\nB: bytes\nGB: gigabytes; 1 GB = 1,000,000,000 B\n≈: approximately equal to\nIn words: 4 million keys at about 1.6 KB each, overhead included, need about 6.3 GB.\n```\n\n4. Add headroom (say 25–50%) for fragmentation, replication buffers and growth, so plan for an 8–10 GB node.\n5. Then measure the hit ratio at a few sizes: skew may mean a smaller cache gets almost the same hits.",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -335,11 +335,11 @@
       },
       {
         "text": "10%",
-        "explanation": "Correct. Solve `1 + (1 − h) × 10 = 10`, giving `h = 0.1`. Below a 10% hit ratio the cache costs more latency than it saves."
+        "explanation": "Correct. Set the cached average (1 ms plus the miss ratio times 10 ms) equal to 10 ms: the miss ratio must be 0.9, so the hit ratio is 0.1. Below a 10% hit ratio the cache costs more latency than it saves."
       }
     ],
     "answer": 3,
-    "workedExample": "1. With the cache: `T = 1 + (1 - h) × 10`.\n2. Without it: `T = 10`.\n3. Break-even:\n\n```\n1 + (1 - h) * 10 = 10\n(1 - h) * 10 = 9\nh = 0.1\n```\n\n4. In general, break-even `h = T_cache / T_backend`.\n5. Latency is not the only consideration: even at a low hit ratio the cache may still shed useful load. But you have also added a new dependency that can fail.",
+    "workedExample": "1. With the cache, the average is 1 ms plus the miss ratio times 10 ms. Without it, every read takes 10 ms.\n2. Break-even is where the two are equal:\n\n```formula\nT_c + (1 − h) × T_b = T_b\n1 + (1 − h) × 10 = 10\n(1 − h) × 10 = 9\nh = 0.1\nwhere\nT_c: the cache lookup time, 1 ms\nh: the hit ratio, between 0 and 1\nT_b: the database time, 10 ms\nIn words: the cache only breaks even on average latency once it serves at least 10% of reads.\n```\n\n3. In general, the break-even hit ratio is the cache time divided by the database time: 1 / 10 = 0.1 here.\n4. Latency is not the only consideration: even at a low hit ratio the cache may still shed useful load. But you have also added a new dependency that can fail.",
     "link": {
       "title": "Cache (computing) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
@@ -353,7 +353,7 @@
     "options": [
       {
         "text": "They should have used Memcached, which keeps data across restarts",
-        "explanation": "Memcached is purely in-memory too. Swapping products doesn't fix the fact that the data has no durable home."
+        "explanation": "Memcached is an in-memory cache too: its optional warm restart only survives supported graceful restarts, not crashes, and it is not a durable home for data. Swapping products doesn't fix the fact that the data has no durable home."
       },
       {
         "text": "Redis was being used as the system of record, so losing the cache lost data instead of just making things slower",

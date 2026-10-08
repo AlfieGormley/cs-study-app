@@ -34,13 +34,39 @@ q.append("A")   # enqueue, O(1)
 q.pop(0)        # dequeue, O(n)!
 ```
 
-`pop(0)` shifts every remaining element one slot left. Draining a queue of n items this way does about n²/2 element moves: for 100,000 items, roughly 5 billion. The bug is invisible in tests with 10 items and catastrophic in production with a million.
+`pop(0)` shifts every remaining element one slot left. Draining a queue of n items this way moves n − 1 elements on the first dequeue, n − 2 on the next, and so on down to 0:
+
+```formula
+moves = (n − 1) + (n − 2) + ... + 1 + 0
+moves = n × (n − 1) / 2
+moves ≈ n^2 / 2
+where
+moves: the total number of element moves to empty the queue
+n: the number of items in the queue at the start
+≈: approximately equal to; for large n, n − 1 is about n
+In words: each dequeue shifts everything still waiting, so the total grows with the square of the queue length.
+```
+
+For 100,000 items that is about 100,000² / 2 = 5 billion moves; a proper queue would do 100,000 cheap operations. That is O(n²) for the whole drain, or O(n) per dequeue. The bug is invisible in tests with 10 items and catastrophic in production with a million.
 
 Two structures fix it: a linked list with head and tail pointers (dequeue at the head, enqueue at the tail, both O(1)), or, usually better, a **circular buffer**.
 
 ## Circular buffers
 
-A **circular buffer** (ring buffer) is a fixed array whose end wraps round to its start. Track the index of the front (`head`) and the number of items (`count`). The back is `(head + count) % capacity`.
+A **circular buffer** (ring buffer) is a fixed array whose end wraps round to its start. Track the index of the front (`head`) and the number of items (`count`). The next free slot at the back is `count` places after `head`, wrapping round to slot 0 when it runs off the end:
+
+```formula
+back = (head + count) mod capacity
+where
+back: the slot index where the next enqueued item is written
+head: the slot index of the item at the front (the next to be dequeued)
+count: how many items are in the buffer now
+capacity: the number of slots in the array
+mod: modulo: the remainder after dividing; 6 mod 4 = 2. It makes indices wrap round, so they always stay between 0 and capacity − 1. Python writes it %
+In words: start at the front, step forward one slot per stored item, and wrap round to the start of the array when you pass the end.
+```
+
+With capacity 4, head 2 and count 1, the next item goes in (2 + 1) mod 4 = slot 3; the one after goes in (2 + 2) mod 4 = slot 0, back at the start. In Python this is `(head + count) % capacity`.
 
 Dequeuing just advances `head`. Nothing shifts.
 
@@ -89,20 +115,35 @@ class RingQueue:
 If you store `head` and `tail` indices instead of a count, `head == tail` is ambiguous: it is true both when the buffer is empty and when it is full. The usual fixes:
 
 1. Keep a **count** (as above).
-2. **Waste one slot**: declare the buffer full when `(tail + 1) % cap == head`.
+2. **Waste one slot**: declare the buffer full when `(tail + 1) % cap == head`, so a full buffer holds `cap − 1` items and `head == tail` can only mean empty.
 3. Use ever-increasing head and tail counters and compare `tail - head` with the capacity, taking indices `% cap` only when touching the array.
 
-Option 3 with a **power-of-two capacity** lets you replace `% cap` with a cheap bit mask `& (cap - 1)`. The Linux kernel's `kfifo` works this way.
+Option 3 with a **power-of-two capacity** lets you replace `% cap` with a cheap **bit mask** `& (cap - 1)`. When the capacity is a power of two, the remainder is just the lowest bits of the counter, and a bitwise AND keeps exactly those bits:
+
+```formula
+i mod cap = i AND (cap − 1)
+13 mod 8 = 13 AND 7 = 5
+where
+i: an ever-increasing head or tail counter
+cap: the buffer capacity, which must be a power of two (2, 4, 8, 16, ...)
+mod: modulo: the remainder after dividing by cap
+AND: bitwise AND: compares two numbers bit by bit, keeping a 1 only where both have a 1. Written & in C, Java and Python
+In words: for a power-of-two capacity, the remainder after dividing by the capacity is just the counter's lowest bits, which one cheap AND instruction extracts.
+```
+
+Worked through in binary: 13 is 1101 and 7 is 0111, so the AND keeps 0101, which is 5, the same as 13 mod 8. With a capacity that isn't a power of two, such as 6, the trick fails: 13 mod 6 = 1 but 13 AND 5 = 5. The Linux kernel's `kfifo` works this way.
 
 ### Growing and bounding
 
-A ring buffer can grow like a dynamic array: allocate double the space and copy the items across in queue order, "unwrapping" them. Java ArrayDeque also grows a circular array, but OpenJDK21 roughly doubles small buffers and grows larger ones by about50%, with additional adjustments for required capacity.
+A ring buffer can grow like a dynamic array: allocate double the space and copy the items across in queue order, "unwrapping" them. Java ArrayDeque also grows a circular array, but OpenJDK 21 roughly doubles small buffers and grows larger ones by about 50%, with additional adjustments for required capacity.
 
 Often you don't want it to grow. A bounded queue configured to block or reject producers provides **backpressure**: when consumers fall behind, producers block or are refused, instead of memory growing until the process dies. Audio drivers, network card receive rings and high-throughput designs like the LMAX Disruptor all use fixed-size rings.
 
 ## Deques: both ends
 
 A **deque** (double-ended queue, pronounced "deck") supports O(1) insertion and removal at **both** ends. It can act as a stack, a queue, or both at once.
+
+For a deque holding n items:
 
 | Python `collections.deque` | Cost |
 |---|---|
@@ -163,7 +204,7 @@ In an **unweighted** graph, `dist` is the shortest number of edges from `start` 
 
 ## Monotonic deques: sliding window maximum
 
-Given an array and window size k, find the maximum of every window. Recomputing each window is O(nk). A **monotonic deque** does it in O(n).
+Given an array of n numbers and a window size k, find the maximum of every run of k consecutive numbers (each run is a **sliding window**). Recomputing each window from scratch looks at k numbers for each of about n windows, O(nk). A **monotonic deque** does it in O(n).
 
 Keep indices in the deque with their values **decreasing** from front to back. The front is always the current window's maximum.
 
@@ -193,7 +234,7 @@ Values are removed from the **back** when a bigger value arrives (they're domina
 
 Sometimes "first come, first served" is wrong. An emergency department treats the most urgent patient first; an OS scheduler runs the highest-priority thread. A **priority queue** always removes the item with the **best priority** (smallest or largest key), whenever it arrived.
 
-Simple implementations make one operation slow:
+For a queue holding n items, simple implementations make one operation slow. In the table, log n means log₂ n, the number of times n can be halved before reaching 1: about 20 for a million items, so O(log n) operations stay cheap even for huge queues.
 
 | Implementation | insert | remove-min |
 |---|---|---|
@@ -214,18 +255,18 @@ heapq.heappop(h)  # (1, 'fix outage')
 
 Practical details:
 
-- The traditional heapq functions use a min-heap on a list. Python3.14 adds public max-heap functions such as heappush_max and heappop_max; on older versions, negate numeric keys.
+- The traditional heapq functions use a min-heap on a list. Python 3.14 adds public max-heap functions such as heappush_max and heappop_max; on older versions, negate numeric keys.
 - With `(priority, item)` tuples, equal priorities fall back to comparing the items, which fails with a `TypeError` for dicts and other non-comparable objects (and, for comparable items, silently orders ties by the item rather than by arrival). Add a counter: `(priority, next(counter), item)`.
 - Java's `PriorityQueue` is also a min-heap by default; pass a `Comparator` for other orders. Its iterator does **not** visit items in priority order.
 - Uses include Dijkstra's shortest paths, event-driven simulations, schedulers, merging k sorted lists and keeping the top k items.
 
 ## Key takeaways
-- A queue is FIFO; `list.pop(0)` makes dequeue O(n), so use `collections.deque` or a ring buffer.
+- A queue is FIFO; `list.pop(0)` makes dequeue O(n) for n queued items, so use `collections.deque` or a ring buffer.
 - A circular buffer wraps indices modulo capacity; disambiguate full from empty with a count or a wasted slot.
 - Bounded queues give backpressure; unbounded ones turn slow consumers into memory exhaustion.
 - Deques give O(1) at both ends; Python's is block-linked, Java's `ArrayDeque` is a circular array.
 - BFS's queue processes nodes in order of distance, giving shortest paths in unweighted graphs; mark nodes seen on enqueue.
-- A priority queue serves the best key first; a binary heap gives O(log n) insert and remove. In Python, use `heapq` with a tie-breaking counter.
+- A priority queue serves the best key first; for n items a binary heap gives O(log n) insert and remove. In Python, use `heapq` with a tie-breaking counter.
 
 ## Further reading
 - [Circular buffer — Wikipedia](https://en.wikipedia.org/wiki/Circular_buffer)

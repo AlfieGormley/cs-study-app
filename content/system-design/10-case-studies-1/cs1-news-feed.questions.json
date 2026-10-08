@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare the work per day with 500M posts, 3B timeline reads, 200 average followers and users following ~200 accounts:\n\n```\nPush: 500M x 200 followers\n    = 100B cheap appends (async)\nPull: 3B reads x 200 followees\n    = 600B lookups (hot path)\n```\n\nPull performs 6x as many enumerated operations in this simplified model; lookups and appends do not have identical cost, all of it while a user is waiting. Push's work happens in background workers, so the timeline load is one Redis read plus hydration.",
+    "workedExample": "Compare the work per day with 500M posts, 3B timeline reads, 200 average followers and users following ~200 accounts:\n\n```formula\npush = 500M × 200 = 100B/day\npull = 3B × 200 = 600B/day\npull / push = 6\nwhere\npush: timeline appends per day with fan-out on write (posts × followers), done by background workers\npull: lookups per day with fan-out on read (timeline loads × accounts followed), done while the user waits\nM: million\nB: billion\nday: one day; /day means per day\nIn words: pushing costs 100 billion background appends a day; pulling costs 600 billion lookups a day on the hot path, six times as many.\n```\n\nPull performs 6x as many enumerated operations in this simplified model; lookups and appends do not have identical cost, all of it while a user is waiting. Push's work happens in background workers, so the timeline load is one Redis read plus hydration.",
     "link": {
       "title": "InfoQ: Timelines at Scale",
       "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "```\nInserts/day = 400M x 150 = 6 x 10^10\nPer second  = 6x10^10 / 8.64x10^4\n            ≈ 694,000/s\nPeak (x3)   ≈ 2.1M/s\n```\n\nIs that feasible? Use a representative pipelined-fan-out benchmark to determine per-shard capacity and memory; a generic Redis operation rate does not establish how many nodes absorb this workload. Note that the average hides the skew: the celebrity accounts in the tail are what break it.",
+    "workedExample": "Each post is inserted once per eligible follower, so multiply, then divide by the seconds in a day:\n\n```formula\ndaily = 400M × 150 = 6 × 10^10\nrate = 6 × 10^10 / (8.64 × 10^4 s)\nrate ≈ 694,000/s\npeak = 694,000/s × 3 ≈ 2.1M/s\nwhere\ndaily: timeline inserts per day (60 billion)\nrate: average inserts per second\n8.64 × 10^4: 86,400, the seconds in a day\npeak: inserts per second at an assumed 3x peak\nM: million\n10^10, 10^4: 1 followed by 10 or 4 zeros\ns: seconds; /s means per second\n≈: approximately equal to (rounded)\nIn words: 60 billion inserts a day is about 700,000 a second on average and about 2 million a second at peak.\n```\n\nIs that feasible? Use a representative pipelined-fan-out benchmark to determine per-shard capacity and memory; a generic Redis operation rate does not establish how many nodes absorb this workload. Note that the average hides the skewed distribution: the celebrity accounts in the tail are what break it.",
     "link": {
       "title": "System Design Primer: design the Twitter timeline",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Cost of pushing:\n\n```\nPer post: 50M / 1M per s = 50 s\n          of whole-fleet time\nPer day:  20 x 50M = 1B inserts\n```\n\nCost of pulling instead:\n\n- Each follower's timeline load adds one cached lookup (the celebrity's last ~20 posts) and a merge of a few items into a sorted list.\n- The celebrity's user timeline is requested millions of times, so it stays hot in cache.\n\nSo set a threshold (e.g. > 1M followers) above which accounts are pulled, not pushed.",
+    "workedExample": "Cost of pushing:\n\n```formula\nt = 50M / 1M/s = 50 s\ndaily = 20 × 50M = 1B\nwhere\nt: whole-fleet time to fan out one post\ndaily: inserts per day from this one account (20 posts a day)\nM: million\nB: billion\ns: seconds; /s means per second\nIn words: each post ties up the entire fan-out fleet for 50 seconds, and the account generates a billion inserts a day on its own.\n```\n\nCost of pulling instead:\n\n- Each follower's timeline load adds one cached lookup (the celebrity's last ~20 posts) and a merge of a few items into a sorted list.\n- The celebrity's user timeline is requested millions of times, so it stays hot in cache.\n\nSo set a threshold (e.g. > 1M followers) above which accounts are pulled, not pushed.",
     "link": {
       "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
       "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Compare the memory for 300M active timelines × 800 entries:\n\n```\nIDs:   300M x 800 x 16 B ≈ 3.8 TB\nPosts: 300M x 800 x 1 KB ≈ 240 TB\n```\n\nAnd for a deletion of a post seen by 10M followers:\n\n- IDs: mark the post deleted once; hydration drops it.\n- Full copies: 10M updates.\n\nHydration is one multi-get of ~50 posts, whose latency depends on payloads, shard fan-out, misses and workload; no benchmark is supplied.",
+    "workedExample": "Compare the memory for 300M active timelines × 800 entries:\n\n```formula\nids = 300M × 800 × 16 B ≈ 3.8 TB\nbodies = 300M × 800 × 1 KB ≈ 240 TB\nwhere\nids: memory if timelines hold 16-byte entries (post ID + author ID)\nbodies: memory if timelines hold full posts of about 1 KB each\nM: million\nB: bytes\nKB: kilobyte, 1,000 bytes\nTB: terabyte, 10^12 bytes\n≈: approximately equal to (rounded)\nIn words: storing IDs takes about 3.8 TB; copying whole posts into every timeline would take about 240 TB, over 60 times more.\n```\n\nAnd for a deletion of a post seen by 10M followers:\n\n- IDs: mark the post deleted once; hydration drops it.\n- Full copies: 10M updates.\n\nHydration is one multi-get of ~50 posts, whose latency depends on payloads, shard fan-out, misses and workload; no benchmark is supplied.",
     "link": {
       "title": "InfoQ: Timelines at Scale",
       "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
@@ -203,7 +203,7 @@
       },
       {
         "text": "That's 27,000 GPU-seconds per second, so you need roughly 27,000 GPUs' worth of capacity; use a cheap first-stage model to prune to a few hundred candidates before the heavy model.",
-        "explanation": "Correct. 90k × 1,500 × 0.2 ms = 27,000 s of GPU time every second. Multi-stage ranking (light model on all candidates, heavy model on, say, the top 300) cuts this by ~5x, and caching recent ranked results cuts it further."
+        "explanation": "Correct. 90,000 × 1,500 × 0.2 ms = 27,000 s of GPU time every second. Multi-stage ranking (light model on all candidates, heavy model on, say, the top 300) cuts this by ~5x, and caching recent ranked results cuts it further."
       },
       {
         "text": "Score all candidates on CPU instead, because GPUs aren't used for ranking.",
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "```\nCandidates/s = 90,000 x 1,500\n             = 135,000,000\nGPU time/s   = 135M x 0.0002 s\n             = 27,000 s\n```\n\nSo you need ~27,000 GPU-equivalents running flat out (more with headroom). Reduce it:\n\n1. **Two-stage ranking**: a light model (~0.01 ms) scores all 1,500, keep the top 300 for the heavy model: `90k × 300 × 0.2 ms = 5,400 s/s`, 5x less for the heavy stage alone. The light stage adds 90k × 1,500 × 0.01 ms = 1,350 GPU-seconds/s, so total capacity is 6,750, a 4x reduction under these assumptions.\n2. **Cache** ranked pages for a minute or two per user; many refreshes reuse them.\n3. **Degrade** to chronological order under extreme load.\n\nThis is why feeds such as X's and Meta's use multi-stage ranking pipelines.\n\n(Real batching and hardware can change normalized per-candidate cost in either comparison; no deployment benchmark establishes that it is lower than 0.2 ms; the point is that scoring cost scales with requests × candidates, so cutting candidates per heavy model is the main lever.)",
+    "workedExample": "Total GPU time per second is requests × candidates × time per candidate:\n\n```formula\nc = 90,000/s × 1,500 = 1.35 × 10^8 /s\ng = 1.35 × 10^8 /s × 0.0002 s\ng = 27,000 s/s\nwhere\nc: candidates scored per second\ng: GPU-seconds of work needed every second, which is the number of GPUs kept fully busy\n0.0002 s: 0.2 ms (milliseconds), the assumed GPU time per candidate\ns: seconds; /s means per second\ns/s: seconds of GPU work per second of real time\n10^8: a hundred million\nIn words: 135 million candidates a second at 0.2 ms each is 27,000 seconds of GPU work every second, so about 27,000 GPUs running flat out.\n```\n\nSo you need ~27,000 GPU-equivalents running flat out (more with headroom). Reduce it:\n\n1. **Two-stage ranking**: a light model (~0.01 ms) scores all 1,500, keep the top 300 for the heavy model:\n\n```formula\nheavy = 90,000/s × 300 × 0.0002 s\nheavy = 5,400 s/s\nlight = 90,000/s × 1,500 × 0.00001 s\nlight = 1,350 s/s\ntotal = 5,400 + 1,350 = 6,750 s/s\nwhere\nheavy: GPU-seconds per second for the heavy model on the top 300\nlight: GPU-seconds per second for the light model (0.01 ms = 0.00001 s per candidate) on all 1,500\ntotal: both stages together\ns/s: seconds of GPU work per second\n/s: per second\nIn words: the heavy stage drops to a fifth; adding the cheap first stage back in, total GPU need falls about fourfold, from 27,000 to 6,750.\n```\n\n2. **Cache** ranked pages for a minute or two per user; many refreshes reuse them.\n3. **Degrade** to chronological order under extreme load.\n\nThis is why feeds such as X's and Meta's use multi-stage ranking pipelines.\n\n(Real batching and hardware can change normalized per-candidate cost in either comparison; no deployment benchmark establishes that it is lower than 0.2 ms; the point is that scoring cost scales with requests × candidates, so cutting candidates per heavy model is the main lever.)",
     "link": {
       "title": "Meta engineering: how machine learning powers News Feed ranking",
       "url": "https://engineering.fb.com/2021/01/26/ml-applications/news-feed-ranking/"
@@ -297,7 +297,7 @@
       },
       {
         "text": "Follower counts are heavily skewed and many accounts post to few or inactive followers, and fan-out only writes to users who have a cached timeline.",
-        "explanation": "Correct as a possible explanation: posting frequency weights the follower distribution, and eligibility/activity filters reduce deliveries. Skew alone does not prove that post-weighted fan-out is lower."
+        "explanation": "Correct as a possible explanation: posting frequency weights the follower distribution, and eligibility/activity filters reduce deliveries. A skewed distribution alone does not prove that post-weighted fan-out is lower."
       },
       {
         "text": "Each delivery covered several followers at once using Redis transactions.",
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\n30B / 400M = 75 deliveries per tweet\n30B / 86,400 s ≈ 350,000 per second\n```\n\nTwo effects shrink the real number:\n\n1. **Skew**: mean follower counts are pulled up by a few accounts with millions of followers, but most tweets come from ordinary accounts.\n2. **Activity**: timelines are kept only for active users, so dormant followers receive nothing.\n\nLesson for interviews: an unweighted account-average follower count is not a safe upper bound. Use the post-weighted eligible-recipient mean; prolific high-follower accounts can make it larger.",
+    "workedExample": "```formula\nd = 30B / 400M = 75\nrate = 30B / 86,400 s ≈ 350,000/s\nwhere\nd: timeline deliveries per post (tweet)\nrate: average deliveries per second\nB: billion\nM: million\ns: seconds; /s means per second\n≈: approximately equal to (rounded from 347,000)\nIn words: 30 billion deliveries from 400 million posts is 75 per post, about 350,000 a second.\n```\n\nTwo effects shrink the real number:\n\n1. **Skewed distribution**: mean follower counts are pulled up by a few accounts with millions of followers, but most tweets come from ordinary accounts.\n2. **Activity**: timelines are kept only for active users, so dormant followers receive nothing.\n\nLesson for interviews: an unweighted account-average follower count is not a safe upper bound. Use the post-weighted eligible-recipient mean; prolific high-follower accounts can make it larger.",
     "link": {
       "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
       "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```\nBefore: 300M x 800 x 16 B ≈ 3.84 TB\n        x 3 replicas        ≈ 11.5 TB\nAfter:  150M x 200 x 16 B  = 480 GB\n        x 3 replicas        ≈ 1.44 TB\n```\n\nThe trade-off: the 5% of reads that scroll past 200 entries, and users returning after more than a week, need a pull-based rebuild. That's a small, slower path in exchange for an 8x memory saving. Say which you'd monitor: the rebuild rate and its latency.",
+    "workedExample": "```formula\nbefore = 300M × 800 × 16 B ≈ 3.84 TB\nbefore × 3 ≈ 11.5 TB\nafter = 150M × 200 × 16 B = 480 GB\nafter × 3 ≈ 1.44 TB\nwhere\nbefore: one copy with 800 entries for each of 300 million users\nafter: one copy with 200 entries for each of 150 million weekly-active users\n× 3: three replicas of every timeline\nM: million\nB: bytes\nGB: gigabyte, 10^9 bytes\nTB: terabyte, 10^12 bytes (1,000 GB)\n≈: approximately equal to (rounded)\nIn words: half the users and a quarter of the entries means an eighth of the memory: about 1.44 TB replicated instead of 11.5 TB.\n```\n\nThe trade-off: the 5% of reads that scroll past 200 entries, and users returning after more than a week, need a pull-based rebuild. That's a small, slower path in exchange for an 8x memory saving. Say which you'd monitor: the rebuild rate and its latency.",
     "link": {
       "title": "InfoQ: Timelines at Scale",
       "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"

@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Trace it:\n\n```\n12:00:59  100 reqs -> window A = 100\n          (all allowed)\n12:01:00  window B starts at 0\n12:01:00  100 reqs -> window B = 100\n          (all allowed)\n```\n\n200 requests in ~1–2 seconds against a limit meant to average 100/minute. Sliding window counters reject this exact boundary example by weighting the previous window: at 12:01:00, `100 × (1 − 0/60) + 0 = 100`, so the second burst is rejected.",
+    "workedExample": "Trace it:\n\n```\n12:00:59  100 reqs -> window A = 100\n          (all allowed)\n12:01:00  window B starts at 0\n12:01:00  100 reqs -> window B = 100\n          (all allowed)\n```\n\n200 requests in ~1–2 seconds against a limit meant to average 100/minute. Sliding window counters reject this exact boundary example by weighting the previous window:\n\n```formula\nest = prev × (1 − t / w) + curr\nest = 100 × (1 − 0 s / 60 s) + 0 = 100\nwhere\nest: estimated requests in the last 60 seconds\nprev: requests in the previous window, 100\ncurr: requests so far in the current window, 0\nt: seconds since the current window began, 0 at 12:01:00\nw: the window length, 60 seconds\ns: seconds\nIn words: at the very start of a new minute the whole previous minute still counts, so the estimate is already at the limit of 100.\n```\n\nSo the second burst is rejected.",
     "link": {
       "title": "Cloudflare: counting things, a lot of different things",
       "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
@@ -36,11 +36,11 @@
     "prompt": "A sliding window counter limits a key to **100 requests/minute**. The previous minute had **84** requests. We are **30 seconds** into the current minute, which has **55** requests so far. Is the next request allowed?",
     "options": [
       {
-        "text": "Yes: estimate = 84 × (1 − 30/60) + 55 = 42 + 55 = 97, which is under 100.",
+        "text": "Yes: the estimate is 84 × (1 − 30/60) + 55 = 42 + 55 = 97, under 100.",
         "explanation": "Correct. Half the previous window still overlaps the trailing 60 s, so it contributes 42. 97 + 1 = 98 ≤ 100, so allow."
       },
       {
-        "text": "No: estimate = 84 + 55 × (30/60) = 111.5, which exceeds 100.",
+        "text": "No: the estimate is 84 + 55 × (30/60) = 111.5, over 100.",
         "explanation": "Wrong. This weights the wrong window. The current window's count is used in full; it's the *previous* window that is scaled by how much of it still overlaps the trailing 60 seconds (1 − 30/60 = 0.5)."
       },
       {
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Formula:\n\n```\nestimate = prev x (1 - elapsed/window)\n         + curr\n         = 84 x (1 - 30/60) + 55\n         = 84 x 0.5 + 55\n         = 42 + 55 = 97\n```\n\nThe new request would make 98, which is ≤ 100, so it is allowed and `curr` becomes 56.\n\nThe approximation assumes the 84 previous requests were evenly spread. If they all arrived in the last second of the previous minute, the true count in the trailing 60 s would be 139, so the estimate under-counts. Cloudflare reported about 0.003% incorrect decisions in its historical measured workload; this is not a bound for arbitrary or adversarial traffic.",
+    "workedExample": "The sliding window counter counts the current window in full and the previous window only for the share of it that still lies inside the last 60 seconds:\n\n```formula\nest = prev × (1 − t / w) + curr\nest = 84 × (1 − 30 s / 60 s) + 55\nest = 84 × 0.5 + 55\nest = 42 + 55 = 97\nwhere\nest: estimated requests in the trailing 60 seconds\nprev: requests in the previous minute, 84\ncurr: requests so far this minute, 55\nt: seconds elapsed in the current minute, 30\nw: the window length, 60 seconds\ns: seconds\nIn words: halfway through the minute, half of the previous minute still overlaps the trailing 60 seconds, so 42 of its 84 requests count, plus all 55 from this minute.\n```\n\nThe new request would make 98, which is ≤ 100 (less than or equal to 100), so it is allowed and the current count becomes 56.\n\nThe approximation assumes the 84 previous requests were evenly spread. If they all arrived in the last second of the previous minute, the true count in the trailing 60 s would be 139, so the estimate under-counts. Cloudflare reported about 0.003% incorrect decisions in its historical measured workload; this is not a bound for arbitrary or adversarial traffic.",
     "link": {
       "title": "Cloudflare: how we built rate limiting capable of scaling to millions of domains",
       "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Separate the two parameters a token bucket gives you:\n\n- **Capacity B** = the largest burst you're willing to serve at once. The launch burst is 15, so B = 20 leaves headroom.\n- **Refill rate r** = the sustained average, 1/s.\n\nTimeline: launch at t=0 takes 15 tokens (20 → 5). Over the next 15 s of quiet, the bucket refills to 20. A misbehaving client sending continuously gets at most 20 immediately, then 1/s thereafter. That's why Stripe and AWS API Gateway use token buckets for API limits.",
+    "workedExample": "A token bucket has two settings, and the lazy refill rule ties them together:\n\n```formula\nT_new = min(B, T + Δt × r)\nT_new = min(20, 5 + 15 s × 1/s) = 20\nwhere\nT_new: tokens after refilling\nT: tokens left after the last use, here 5\nB: the capacity, the largest burst you will serve at once; the launch burst is 15, so 20 leaves room\nr: the refill rate, the sustained average allowed, 1 token per second (1/s)\nΔt: seconds since the bucket was last updated, here 15 s of quiet\nmin: \"the smaller of\", so the bucket never holds more than B\ns: seconds\nIn words: after 15 quiet seconds at one token a second, the bucket is back to full.\n```\n\nTimeline: launch at time 0 takes 15 tokens (20 → 5). Over the next 15 s of quiet, the bucket refills to 20. A misbehaving client sending continuously gets at most 20 immediately, then 1 a second thereafter. That's why Stripe and AWS API Gateway use token buckets for API limits.",
     "link": {
       "title": "Stripe: scaling your API with rate limiters",
       "url": "https://stripe.com/blog/rate-limiters"
@@ -127,7 +127,7 @@
     "options": [
       {
         "text": "10",
-        "explanation": "Wrong. 800k / 80k = 10 runs every shard at 100% with no headroom; any skew or spike would push shards over capacity and blow your latency budget."
+        "explanation": "Wrong. 800k / 80k = 10 runs every shard at 100% with no headroom; any load skew or spike would push shards over capacity and blow your latency budget."
       },
       {
         "text": "100",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Target utilisation with 50% headroom: `80k × 0.5 = 40k ops/s` per shard.\n2. Shards: `800k / 40k = 20`.\n3. Add one replica each for failover: 40 Redis nodes in total.\n4. Illustrative memory arithmetic: assuming 100 B per rule/key, 10M × 2 × 100 B = 2 GB, or 100 MB per shard before other overhead. Measure actual memory before declaring throughput the limiting resource.\n\nIf you also use local rejection caching (gateways remember \"key over limit until T\"), abusive clients stop generating Redis calls, so the real load is usually lower.",
+    "workedExample": "Headroom means running each shard below its comfortable maximum, so first find the target load per shard, then divide:\n\n```formula\ntarget = cap × (1 − headroom)\ntarget = 80,000/s × 0.5 = 40,000/s\nshards = load / target\nshards = 800,000/s / 40,000/s = 20\nwhere\ntarget: operations per second each shard should run at\ncap: what one shard comfortably handles, 80,000 operations per second\nheadroom: the spare fraction to keep, 50% = 0.5\nshards: primary shards needed\nload: Redis calls per second, one per request: 800,000\n/s: per second\nIn words: at half of its 80,000 capacity, each shard takes 40,000 checks a second, so 800,000 checks need 20 shards.\n```\n\nAdd one replica each for failover: 40 Redis nodes in total.\n\nIllustrative memory arithmetic, assuming 100 bytes per rule per key:\n\n```formula\nmemory = 10M × 2 × 100 B = 2 GB\nm_shard = 2 GB / 20 = 100 MB\nwhere\nmemory: total counter memory for 10 million keys with 2 rules each\nm_shard: memory each of the 20 shards holds\nM: million\nB: bytes\nGB: gigabyte, 10^9 bytes\nMB: megabyte, 10^6 bytes\nIn words: two gigabytes of counters split over 20 shards is about 100 MB each, before other overhead.\n```\n\nMeasure actual memory before declaring throughput the limiting resource. If you also use local rejection caching (gateways remember \"key over limit until a given time\"), abusive clients stop generating Redis calls, so the real load is usually lower.",
     "link": {
       "title": "Envoy: global rate limiting",
       "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_features/global_rate_limiting"
@@ -194,7 +194,7 @@
     "prompt": "A customer has a global limit of **10,000 requests/minute**, and you serve them from **US and EU** regions. A cross-region round trip is ~90 ms. Which design best balances accuracy and latency?",
     "options": [
       {
-        "text": "Each region enforces locally against a share of the limit ; reserve shares so their sum stays within the quota and rebalance without double allocation.",
+        "text": "Each region enforces locally against a share of the limit; reserve shares so their sum stays within the quota and rebalance without double allocation.",
         "explanation": "Correct. Local enforcement avoids the 90 ms remote round trip. Static shares can preserve the total allowance but strand capacity in an idle region. Async full-quota replicas require separately justified overshoot bounds."
       },
       {
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Quantify the overshoot of the async option:\n\n- Limit = 10,000/min ≈ 167/s.\n- Sync interval = 1 s.\n- Overshoot ≈ what the other region admits before the next sync. For a client sending at about its limit, that's one second of traffic, roughly 167–333 requests, or 2–3% of the limit.\n\nA client blasting both regions far above its limit can overshoot by more within that second, which is why the async scheme is usually paired with a per-region per-second cap.\n\nCompare that with adding 90 ms to every EU request. Acceptable overshoot is a policy choice; gossip alone gives no small bound during an extended partition. The static-split variant (e.g. US 6,000, EU 4,000) is simpler still but unfair when traffic shifts between regions.",
+    "workedExample": "Quantify the overshoot of the async option. With a 1-second sync interval, the overshoot is roughly what the other region admits before the next sync:\n\n```formula\nrate = 10,000 / 60 s ≈ 167/s\nover ≈ rate × t_sync = 167/s × 1 s = 167\nshare = over / limit\nshare = 167 / 10,000 ≈ 1.7%\nwhere\nrate: the customer's limit as a per-second rate\nover: extra requests admitted beyond the limit before the regions next exchange counts\nt_sync: the sync interval, 1 second\nshare: the overshoot as a fraction of the per-minute limit\nlimit: the global limit, 10,000 requests per minute\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: a client sending at its limit can slip about one second of extra traffic through, roughly 2% of its per-minute limit.\n```\n\nIf both regions admit a second's worth, the overshoot is up to about 333, around 3%. So for a client sending at about its limit the overshoot is roughly 167–333 requests, or 2–3% of the limit.\n\nA client blasting both regions far above its limit can overshoot by more within that second, which is why the async scheme is usually paired with a per-region per-second cap.\n\nCompare that with adding 90 ms to every EU request. Acceptable overshoot is a policy choice; gossip alone gives no small bound during an extended partition. The static-split variant (e.g. US 6,000, EU 4,000) is simpler still but unfair when traffic shifts between regions.",
     "link": {
       "title": "Google Cloud: rate-limiting strategies and techniques",
       "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
@@ -301,7 +301,7 @@
       },
       {
         "text": "The first 10 gateways to ask take all 100 tokens; requests landing on the other 190 gateways are rejected even though most leased tokens sit unused.",
-        "explanation": "Correct. Leasing only works when the limit is large compared with lease size × gateway count. Here 10 × 200 = 2,000 tokens would be needed to give every gateway one lease; the customer has 100."
+        "explanation": "Correct. Leasing only works when the limit is large compared with the lease size times the number of gateways. Here 10 × 200 = 2,000 tokens would be needed to give every gateway one lease; the customer has 100."
       },
       {
         "text": "Redis load increases, because leasing adds a call per request.",
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare lease capacity with the limit:\n\n```\nGateways x lease = 200 x 10 = 2,000\nCustomer limit    = 100/min\n```\n\nBefore any further refill/window reset, only 10 gateways can obtain a lease. With traffic spread evenly, 95% of requests hit a gateway with no tokens.\n\nFixes:\n- Lease only for keys whose limit is much larger than `gateways × lease` (e.g. limits above ~100k/min).\n- Scale the lease size with the limit (e.g. 1% of it).\n- Use direct Redis checks for small keys, which are low-traffic anyway.",
+    "workedExample": "Compare lease capacity with the limit:\n\n```formula\nleased = G × lease = 200 × 10 = 2,000\nserved = limit / lease = 100 / 10 = 10\nwhere\nleased: tokens needed to give every gateway one lease\nG: the number of gateways, 200\nlease: tokens per lease, 10\nlimit: tokens the customer has this window, 100\nserved: how many gateways can get a lease before the tokens run out\nIn words: one lease for every gateway would need 2,000 tokens, but the customer's 100 tokens cover only 10 gateways.\n```\n\nBefore any further refill or window reset, only 10 of the 200 gateways can obtain a lease. With traffic spread evenly, 190 / 200 = 95% of requests hit a gateway with no tokens.\n\nFixes:\n- Lease only for keys whose limit is much larger than the gateway count times the lease size (e.g. limits above ~100k/min).\n- Scale the lease size with the limit (e.g. 1% of it).\n- Use direct Redis checks for small keys, which are low-traffic anyway.",
     "link": {
       "title": "Stripe: scaling your API with rate limiters",
       "url": "https://stripe.com/blog/rate-limiters"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Without jitter:\n\n```\nt=0   5,000 rejected, Retry-After 30\nt=30  5,000 arrive in 100 ms\n      bucket allows ~B, rest rejected\nt=60  repeat\n```\n\nWith `delay = 30 + random(0, 30)` the retries arrive at about 167/s over 30 seconds, as an expected average; actual admission still depends on the bucket rate, burst capacity and random variation. Exponential backoff on repeated 429s spreads them further. This is the same thundering-herd fix used for reconnect storms in chat systems.",
+    "workedExample": "Without jitter:\n\n```\nt=0   5,000 rejected, Retry-After 30\nt=30  5,000 arrive in 100 ms\n      bucket allows one burst, rest\n      rejected\nt=60  repeat\n```\n\n(Times are in seconds.) Now give each client a random extra delay:\n\n```formula\nd = 30 s + U(0, 30 s)\nrate ≈ 5,000 / 30 s ≈ 167/s\nwhere\nd: how long one client waits before retrying\nU(0, 30 s): a random number drawn evenly (uniformly) between 0 and 30 seconds, different for each client\nU: uniform random choice\nrate: the expected average arrival rate of the retries\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: spreading 5,000 retries evenly over a 30-second window brings them back at about 167 a second instead of all at once.\n```\n\nThat rate is an expected average; actual admission still depends on the bucket rate, burst capacity and random variation. Exponential backoff on repeated 429s spreads them further. This is the same thundering-herd fix used for reconnect storms in chat systems.",
     "link": {
       "title": "RFC 6585: HTTP 429 Too Many Requests",
       "url": "https://www.rfc-editor.org/rfc/rfc6585"
@@ -377,7 +377,7 @@
       1,
       4
     ],
-    "workedExample": "Little's law links stable averages: mean in-flight work = accepted arrival rate × mean duration. It is not a hard instantaneous concurrency cap.\n\n```\n100/min = 1.67/s\n1.67/s x 20 s ≈ 33 in flight\n```\n\nThat's per customer, all within the rate limit. So you need:\n\n1. **Concurrency limits** per customer for slow endpoints.\n2. **Fleet-wide load shedding** for aggregate overload.\n3. **Priorities** so shedding drops the least important work first.\n\nStripe's write-up describes exactly this layering: request-rate limiter, concurrency limiter, and two kinds of load shedder.",
+    "workedExample": "Little's law links stable averages: mean in-flight work = accepted arrival rate × mean duration. It is not a hard instantaneous concurrency cap.\n\n```formula\nL = λ × W\nλ = 100 / 60 s ≈ 1.67/s\nL = 1.67/s × 20 s ≈ 33\nwhere\nL: average requests in flight (started, not finished)\nλ: lambda, the average accepted arrival rate per customer: 100 per minute\nW: average time per request, 20 seconds\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: a customer sending 100 slow requests a minute keeps about 33 of them running at once.\n```\n\nThat's per customer, all within the rate limit. So you need:\n\n1. **Concurrency limits** per customer for slow endpoints.\n2. **Fleet-wide load shedding** for aggregate overload.\n3. **Priorities** so shedding drops the least important work first.\n\nStripe's write-up describes exactly this layering: request-rate limiter, concurrency limiter, and two kinds of load shedder.",
     "link": {
       "title": "Stripe: scaling your API with rate limiters",
       "url": "https://stripe.com/blog/rate-limiters"

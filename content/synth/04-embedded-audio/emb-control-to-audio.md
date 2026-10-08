@@ -115,7 +115,23 @@ pop():                 # consumer only
 
 Why the orderings: the producer must write the item *before* publishing the new `head` (release); the consumer must see that `head` *before* reading the item (acquire). The same pairing protects the slot being freed in the other direction.
 
-The indices count up forever and are reduced modulo the capacity. With a power-of-two capacity and unsigned integers, `h - t` stays correct even after the counters wrap around.
+The indices count up forever and are reduced modulo the capacity to find the array slot. The difference between them is how many items are waiting:
+
+```formula
+slot = h mod CAP
+used = h − t
+used = 7 − 5 = 2
+where
+slot: the array position the producer writes next (0 to CAP − 1)
+h: the head counter, the total number of items ever pushed
+t: the tail counter, the total number of items ever popped
+CAP: the capacity, how many slots the array has; best a power of two such as 64
+mod: modulo, the remainder after division; 7 mod 4 = 3
+used: how many items are in the queue now; 0 means empty, CAP means full
+In words: after 7 pushes and 5 pops, 2 items are waiting, and with 4 slots the next push goes into slot 7 mod 4 = 3.
+```
+
+With a power-of-two capacity and unsigned integers, `h - t` stays correct even after the counters wrap around, and `h mod CAP` can be computed cheaply as `h & (CAP - 1)`, as the Python below does.
 
 A single-threaded Python simulation of the index logic (it cannot show the concurrency, only the arithmetic):
 
@@ -191,7 +207,29 @@ The same pattern runs the other way: the callback pushes meter levels or a "clip
 
 The callback now receives correct values, but they arrive in steps: knob scans at around 1 kHz, MIDI CCs in 128 coarse steps. Jumping a gain or cutoff by a step at a block boundary makes **zipper noise**. Smooth again, at audio rate, inside the callback:
 
-**Per-sample one-pole** towards the latest target:
+**Per-sample one-pole** towards the latest target. This is the same smoother as lesson 3's, now updated once per audio sample instead of once per knob reading:
+
+```formula
+a = 1 − e^(−1 / (τ × f_s))
+a = 1 − e^(−1 / (0.005 s × 48000 Hz))
+a = 1 − e^(−1 / 240) ≈ 0.004158
+c_n = c_{n−1} + a × (g − c_{n−1})
+where
+a: the smoothing coefficient per sample, between 0 and 1, no unit
+e: Euler's number, about 2.71828
+τ: tau, the time constant, in seconds (s): the time to cover about 63% of a jump; here 5 ms = 0.005 s
+f_s: the sample rate, in hertz (Hz); here 48 kHz
+c_n: the smoothed parameter value used for sample n
+c_{n−1}: the smoothed value used for the previous sample
+g: the target, the latest value received from the foreground
+n: the sample number
+s: second
+Hz: hertz, samples per second
+≈: approximately equal to
+In words: a 5 ms time constant spans 240 samples at 48 kHz, so each sample closes about 0.42% of the gap to the target; a jump becomes a smooth curve lasting a few milliseconds.
+```
+
+For a 20 ms time constant, the same formula gives a coefficient of about 0.001041. Compute `a` once at start-up, not per sample, because the exponential is expensive. In code:
 
 ```
 a = 1 - exp(-1 / (tau * fs))   # at init
@@ -199,9 +237,21 @@ per sample:
   cur = cur + a * (target - cur)
 ```
 
-For τ = 5 ms at 48 kHz, a ≈ 0.004158; for 20 ms, a ≈ 0.001041. Compute `a` once at start-up, not per sample.
+**Linear ramp per block:** step from the old value to the new across the block, adding the same increment each sample:
 
-**Linear ramp per block:** step from the old value to the new across the block, adding (new − old) / N each sample: with N = 48, one forty-eighth of the change per sample. Simple, and it guarantees arrival by the block's end.
+```formula
+Δ = (v_new − v_old) / N
+Δ = (1000 Hz − 520 Hz) / 48 = 10 Hz
+where
+Δ: the amount added to the parameter on every sample of the block, in the parameter's own unit
+v_new: the value received for this block; here a cutoff of 1,000 Hz
+v_old: the value at the end of the previous block; here 520 Hz
+N: the block size, samples per channel; here 48
+Hz: hertz, the unit of this example parameter
+In words: spread the change evenly over the block, so a 480 Hz jump becomes 48 steps of 10 Hz.
+```
+
+Simple, and it guarantees arrival by the block's end. The steps are now one sample apart rather than one block apart, which is small enough not to be heard for most parameters.
 
 Why smooth here and not only in the foreground? The foreground can only deliver values as often as it runs. The receiving side knows the sample rate, so it is the only place that can make the change continuous. The foreground smoothing from lesson 3 is about rejecting knob noise; this smoothing is about removing steps.
 

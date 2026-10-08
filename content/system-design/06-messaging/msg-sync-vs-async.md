@@ -22,9 +22,58 @@ This is simple and gives you an immediate answer, which is exactly what you want
 
 But synchronous chains have three structural weaknesses:
 
-- **Availability multiplies.** If Checkout requires three services that are each 99.9% available and their failures are independent, dependency availability is 0.999³ ≈ 99.7%. Correlated failures change this calculation, and Checkout has its own failure modes. That is about 26 hours of downtime a year instead of 8.8.
-- **Latency adds up.** Sequential dependent calls add their durations; parallel fan-out waits for the required critical path, and tail latency (p99) gets worse as you add hops, because the slowest dependency dominates. If a request touches 5 services with independent delays and each is slow 1% of the time, the request hits at least one slow call 1 − 0.99⁵ ≈ 4.9% of the time: tail slowness becomes more frequent at the request level; exact quantiles depend on the full latency distributions.
+- **Availability multiplies.** If Checkout requires three services that are each 99.9% available and their failures are independent, all three must be up at once, so together they are only about 99.7% available (worked out below). Correlated failures change this calculation, and Checkout has its own failure modes. That is about 26 hours of downtime a year instead of 8.8.
+- **Latency adds up.** Sequential dependent calls add their durations; parallel fan-out waits for the required critical path, and tail latency (p99) gets worse as you add hops, because the slowest dependency dominates. If a request touches 5 services with independent delays and each is slow 1% of the time, the request hits at least one slow call about 4.9% of the time (worked out below): tail slowness becomes more frequent at the request level; exact quantiles depend on the full latency distributions.
 - **Load is coupled.** A spike at the front door hits every downstream service at the same instant. If Fraud can only handle 500 requests a second, Checkout can only handle 500 requests a second.
+
+Both numbers come from one rule of probability: when events are independent, the chance that all of them happen is the product of their separate chances. For availability, a request that needs every dependency succeeds only when all of them are up:
+
+```formula
+A_chain = A_1 × A_2 × A_3
+A_chain = 0.999 × 0.999 × 0.999
+A_chain ≈ 0.997 = 99.7%
+where
+A_chain: the availability of the chain: the fraction of time all three dependencies are up together, so the request can succeed (ignoring Checkout's own failures)
+A_1: the availability of the first dependency (Payments): the fraction of time it is up, here 0.999 (99.9%)
+A_2: the availability of the second dependency (Inventory), here 0.999
+A_3: the availability of the third dependency (Fraud), here 0.999
+≈: approximately equal to (the result is rounded)
+%: per cent; 0.997 is the same as 99.7%
+In words: when every dependency is required, multiply their availabilities; three 99.9% services together are only about 99.7% available.
+```
+
+To turn an availability into downtime, multiply the fraction of time it is *not* up by the 8,760 hours in a 365-day year:
+
+```formula
+D = (1 − A) × 8760 h
+D_one = (1 − 0.999) × 8760 h ≈ 8.8 h
+D_chain = (1 − 0.997) × 8760 h ≈ 26 h
+where
+D: expected downtime per year, in hours (h)
+A: an availability, as a fraction between 0 and 1
+D_one: the yearly downtime of one 99.9% service
+D_chain: the yearly downtime of the chain of three, which is about 99.7% available
+h: hours
+≈: approximately equal to
+In words: each extra required dependency adds its own downtime, so three 99.9% services cost about three times the downtime of one.
+```
+
+For tail latency, it is easier to work out the chance that *every* call is fast and subtract that from 1:
+
+```formula
+P_slow = 1 − (1 − p)^k
+P_slow = 1 − 0.99^5
+P_slow ≈ 1 − 0.951 = 0.049
+where
+P_slow: the probability that a request hits at least one slow call, as a fraction (0.049 is 4.9%)
+p: the probability that any one call is slow, here 0.01 (1%)
+k: the number of independent calls the request must wait for, here 5
+^: to the power of; 0.99^5 means 0.99 multiplied by itself 5 times
+≈: approximately equal to
+In words: if each of 5 calls is fast 99% of the time, all 5 are fast only about 95% of the time, so about 1 request in 20 is slow.
+```
+
+Both formulas assume independence. Shared causes (one database, one network link, one bad deploy) make failures and slow calls happen together, so real systems can be better or worse than these numbers, and you should measure.
 
 ## Asynchronous: send and carry on
 
@@ -39,7 +88,7 @@ Checkout ─▶ [ queue ] ─▶ Email worker
 With durable queues, suitable publish acknowledgement and retention settings, the broker retains the message, so the producer and consumer do not need to be running at the same time. This is the key idea: **the queue decouples the two sides in time**.
 
 > [!note] Message vs event vs command
-> A **command** asks for something to happen ("SendReceiptEmail"). An **event** states that something happened ("OrderPlaced"). Both travel as messages. Commands usually have one intended handler; events can have many. You will see why this matters in the pub/sub and event-driven lessons.
+> A **command message** asks for something to happen ("SendReceiptEmail"). An **event message** states that something happened ("OrderPlaced"). Both travel as messages. Commands usually have one intended handler; events can have many. You will see why this matters in the pub/sub and event-driven lessons.
 
 ## The kinds of decoupling
 
@@ -52,7 +101,7 @@ With durable queues, suitable publish acknowledgement and retention settings, th
 | Location | Producer doesn't know consumer's address |
 | Fan-out | Add consumers without changing producer |
 
-A direct HTTP request does not by itself buffer work during consumer outages or fan it out; discovery, proxies and other infrastructure can hide physical consumer addresses. A queue gives you the first three. A publish/subscribe topic adds the fourth.
+A direct HTTP request does not by itself buffer work during consumer outages or fan it out; service discovery, proxies and other infrastructure can hide physical consumer addresses. A queue gives you the first three. A publish/subscribe topic adds the fourth.
 
 What a queue does **not** decouple is the **message format**. If the producer changes the shape of the payload, consumers still break. Contracts and schema evolution (for example, Avro or Protobuf with a schema registry) remain your problem.
 
@@ -72,23 +121,76 @@ Imagine an image-thumbnail service. Uploads arrive in bursts: 2,000 per second f
       └──────────────────────▶ time
 ```
 
-Without a queue, you need 20 workers (2,000 ÷ 100) sitting mostly idle to survive the peak. With a queue and 2 workers (200 per second capacity):
+Without a queue, you need 20 workers (2,000 ÷ 100) sitting mostly idle to survive the peak. With a queue and 2 workers (200 per second capacity), the backlog grows while arrivals exceed capacity:
 
-1. During the burst, the backlog grows at 2,000 − 200 = 1,800 messages per second.
-2. After 30 seconds the backlog is 1,800 × 30 = 54,000 messages.
-3. Afterwards, arrivals drop to 50 per second, so the backlog drains at 200 − 50 = 150 per second.
-4. Draining takes 54,000 ÷ 150 = 360 seconds, or 6 minutes.
+```formula
+B = (λ_burst − μ) × T_burst
+B = (2000/s − 200/s) × 30 s
+B = 1800/s × 30 s = 54000 msg
+where
+B: the backlog: messages waiting in the queue when the burst ends
+λ_burst: lambda, the arrival rate during the burst, here 2,000 messages per second
+μ: mu, the processing capacity of all workers together, here 2 workers × 100 = 200 messages per second
+T_burst: how long the burst lasts, here 30 seconds
+s: seconds; "/s" means per second
+msg: messages
+In words: during a burst the queue grows by the excess of arrivals over capacity, for every second the burst lasts.
+```
 
-So you trade **latency** (the largest FIFO waiting time is about 54,000 ÷ 200 = 270 seconds, while the queue returns to empty after 6 minutes) for **cost and stability** (10× fewer workers in this idealised fixed-rate model; consumer admission and downstream capacity still need protection). That trade is acceptable when the product permits the resulting delay, including an explicit pending-job experience.
+After the burst, arrivals drop to 50 per second, so the workers eat into the backlog with whatever capacity is left over:
+
+```formula
+T_drain = B / (μ − λ_after)
+T_drain = 54000 msg / (200/s − 50/s)
+T_drain = 54000 msg / 150/s = 360 s
+where
+T_drain: the time after the burst until the queue is empty again, in seconds (s); 360 s is 6 minutes
+B: the backlog at the end of the burst, here 54,000 messages
+μ: mu, the total processing capacity, here 200 messages per second
+λ_after: lambda, the arrival rate after the burst, here 50 messages per second
+msg: messages
+s: seconds; "/s" means per second
+In words: the backlog shrinks only by the spare capacity left after serving new arrivals, so it takes 6 minutes to clear, not 54,000 ÷ 200 = 4.5 minutes.
+```
+
+The message at the back of the burst waits roughly as long as it takes the workers to get through everything in front of it:
+
+```formula
+W_max ≈ B / μ
+W_max ≈ 54000 msg / 200/s = 270 s
+where
+W_max: the longest wait in first-in, first-out (FIFO) order: the wait of the last message of the burst, in seconds (s)
+B: the backlog at the end of the burst, 54,000 messages
+μ: mu, the total processing capacity, 200 messages per second
+≈: approximately equal to
+msg: messages
+s: seconds; "/s" means per second
+In words: the last message of the burst waits about 4.5 minutes, because 54,000 messages are ahead of it and the workers do 200 a second.
+```
+
+So you trade **latency** (the longest wait is about 270 seconds, while the queue returns to empty after 6 minutes) for **cost and stability** (10× fewer workers in this idealised fixed-rate model; consumer admission and downstream capacity still need protection). That trade is acceptable when the product permits the resulting delay, including an explicit pending-job experience.
 
 > [!warning] A queue is not infinite capacity
 > Load levelling only works if the **average** arrival rate is below the processing rate. If arrivals average 250 per second and you can do 200, the backlog grows forever. A queue hides overload; it does not fix it. Always alarm on queue depth and on the age of the oldest message.
 
 ## Little's Law: a useful sanity check
 
-Little's Law says that, in a stable system, the average number of items in it equals arrival rate × average time spent in it: **L = λ × W**.
+Little's Law says that, in a stable system (one where, over time, items leave as fast as they arrive), the average number of items in it equals the arrival rate times the average time each item spends in it. Rearranged, it tells you the average wait from two numbers a dashboard already shows:
 
-If a queue receives 400 messages per second and holds a steady 12,000 messages, each message waits on average 12,000 ÷ 400 = 30 seconds. This turns "queue depth" (which dashboards show) into "delay" (which users feel).
+```formula
+L = λ × W
+W = L / λ
+W = 12000 msg / 400/s = 30 s
+where
+L: the average number of items in the system; for a queue, the average queue depth, here 12,000 messages
+λ: lambda, the average arrival rate, here 400 messages per second
+W: the average time an item spends in the system, in seconds (s)
+msg: messages
+s: seconds; "/s" means per second
+In words: average depth equals arrival rate times average wait, so depth divided by arrival rate gives the average wait.
+```
+
+So a queue that receives 400 messages per second and holds a steady 12,000 makes each message wait about 30 seconds on average. This turns "queue depth" (which dashboards show) into "delay" (which users feel). It holds for long-run averages in a stable system; while a queue is growing during a burst, the momentary numbers need not match it.
 
 ## When to choose which
 
@@ -107,7 +209,7 @@ A common shape is **sync at the edge, async inside**. The checkout API synchrono
 Asynchrony is not free. It moves complexity rather than removing it:
 
 - **Eventual consistency.** The user may see "order placed" before the loyalty points appear. The UI and product need to tolerate that.
-- **No direct error path.** If the email worker fails, it cannot return a 500 to the user. You need retries, dead-letter queues and alerts instead.
+- **No direct error path.** If the email worker fails, it cannot return an HTTP 500 error to the user. You need retries, dead-letter queues and alerts instead.
 - **Duplicate and out-of-order delivery.** Most brokers deliver at least once, so consumers must be idempotent. Later lessons cover this in depth.
 - **Harder debugging.** A request's story is split across processes and time. You need correlation IDs and distributed tracing (for example, propagating a W3C `traceparent` header in message attributes).
 - **One more system to run.** The broker itself must be highly available, monitored and capacity-planned.

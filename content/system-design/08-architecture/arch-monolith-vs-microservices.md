@@ -75,7 +75,38 @@ The cost is that you've turned a single program into a **distributed system**:
 > [!note] Evidence gap
 > Generic nanosecond-versus-millisecond call timings are omitted because no reproducible benchmark or execution environment was supplied. Measure the actual local and remote operations.
 
-Every network hop adds latency and a new failure mode. A request that fans out through 6 services, each independently 99.9% available and all required, has an availability of roughly 0.999^6 ≈ 99.4% under that simplified model. Carefully designed fallbacks can reduce required dependencies; retries can also amplify overload, and timeouts only bound waiting rather than guarantee success. You now need service discovery, distributed tracing, centralised logging, contract testing and a platform team to run it all.
+Every network hop adds latency and a new failure mode. When a request needs *every* service in a chain to work, the chances multiply: the request succeeds only if service 1 works **and** service 2 works **and** so on. Assuming the services fail independently of each other, the combined availability is:
+
+```formula
+A_total = A_1 × A_2 × ... × A_n
+A_total = A^n
+where
+A_total: the fraction of requests (or time) for which the whole chain works, between 0 and 1 (0.994 = 99.4 %)
+A_1: the availability of the first required service, a fraction between 0 and 1
+A_2: the availability of the second required service, likewise
+...: and so on, one factor per required service
+A_n: the availability of the last (nth) required service
+A: the availability of each service when they are all the same, e.g. 0.999 (99.9 %); the second line is the shortcut for that case
+n: the number of services the request must pass through, all of which must succeed
+^: "to the power of": A^n means A multiplied by itself n times
+%: per cent; 99.9 % = 0.999
+In words: the chain is only as available as all its links together, so every extra required service pulls the total down.
+```
+
+For a request that fans out through 6 services, each 99.9% available:
+
+```formula
+A_total = 0.999^6
+A_total ≈ 0.994 = 99.4 %
+where
+A_total: the availability of the whole six-service request path, as a fraction (or per cent)
+^: "to the power of": 0.999^6 is 0.999 multiplied by itself 6 times (0.999 × 0.999 × 0.999 × 0.999 × 0.999 × 0.999)
+≈: approximately equal to (rounded)
+%: per cent; 0.994 = 99.4 %
+In words: six 99.9 %-available services in a chain give about 99.4 %, roughly six times the failures of one service alone.
+```
+
+This is a simplified model: it assumes failures are independent (in reality, a shared database or network outage can take several services down together) and that every service is strictly required. Carefully designed fallbacks can reduce required dependencies; retries can also amplify overload, and timeouts only bound waiting rather than guarantee success. You now need service discovery, distributed tracing, centralised logging, contract testing and a platform team to run it all.
 
 ## Conway's law
 

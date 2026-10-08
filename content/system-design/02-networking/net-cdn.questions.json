@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Origin load = total × (1 − hit ratio).\n2. Before: 10,000 × 0.05 = **500 rps**.\n3. After: 10,000 × 0.01 = **100 rps**.\n4. Ratio: 500 / 100 = **5×** less origin load.\n\nThat's why chasing the last few percent of hit ratio is worth it: the miss rate, not the hit rate, sets origin cost.",
+    "workedExample": "Only misses reach the origin:\n\n```formula\nR_origin = (1 − CHR) × R_total\nR_95 = (1 − 0.95) × 10,000 rps\nR_95 = 500 rps\nR_99 = (1 − 0.99) × 10,000 rps\nR_99 = 100 rps\nR_95 / R_99 = 500 / 100 = 5\nwhere\nR_origin: the request rate reaching the origin, in requests per second (rps)\nCHR: the cache hit ratio, as a fraction between 0 and 1\nR_total: the total request rate from users, 10,000 rps\nR_95: origin load at a 95% hit ratio\nR_99: origin load at a 99% hit ratio\nrps: requests per second\nIn words: the miss rate falls from 5% to 1%, so the origin's load falls five-fold.\n```\n\nSo **500 rps** before, **100 rps** after: **5×** less origin load.\n\nThat's why chasing the last few percent of hit ratio is worth it: the miss rate, not the hit rate, sets origin cost.",
     "link": {
       "title": "Content delivery network (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Demand: say 2 million players × 40 GB = **80 PB** in an hour. That's ~178 Tbps, requiring very large aggregate delivery capacity.\n2. Pull at 18:00: hundreds of PoPs miss simultaneously → hundreds of origin fetches of 40 GB each (plus partial range requests).\n3. Push/pre-warm before 18:00 → the selected PoPs or shield can have it ready, subject to object-size limits, range-cache behavior and retention.\n4. Name it `patch-1.42.0.pak` and cache it for a year: immutable, no purges.",
+    "workedExample": "1. Demand: say 2 million players each download 40 GB within the hour: **80 PB**, about 178 Tbps (worked out below), requiring very large aggregate delivery capacity.\n2. Pull at 18:00: hundreds of PoPs miss simultaneously → hundreds of origin fetches of 40 GB each (plus partial range requests).\n3. Push/pre-warm before 18:00 → the selected PoPs or shield can have it ready, subject to object-size limits, range-cache behavior and retention.\n4. Name it `patch-1.42.0.pak` and cache it for a year: immutable, no purges.\n\nThe demand in step 1:\n\n```formula\nD = players × size\nD = 2,000,000 × 40 GB = 80 PB\nrate = 8 × D / t\nrate = 8 × 80 PB / 3,600 s\nrate ≈ 0.178 Pbit/s ≈ 178 Tbps\nwhere\nD: the total data downloaded in the hour\nplayers: the number of players downloading, 2 million\nsize: the size of the update, 40 gigabytes (GB)\nrate: the average delivery rate needed, in bits per second\n8: bits per byte\nt: the download window, one hour = 3,600 seconds (s)\nGB: gigabyte, 10^9 bytes\nPB: petabyte, 10^15 bytes; 80,000,000 GB = 80 PB\nPbit/s: petabits per second, 10^15 bits per second\nTbps: terabits per second, 10^12 bits per second\ns: second\n≈: approximately equal to\nIn words: 80 PB in an hour averages about 178 terabits every second, far more than any single origin can send.\n```",
     "link": {
       "title": "How CloudFront delivers content (AWS)",
       "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/HowCloudFrontWorks.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Diagnose: same page, many URLs → **cache-key fragmentation**.\n2. A page shared in a campaign might get 5,000 distinct `fbclid` values → 5,000 cache entries, each hit once.\n3. Fix: cache key = path + allow-listed params (e.g. `colour`, `size`); drop `utm_*`, `fbclid`, `gclid`; sort what remains.\n4. Now all 5,000 requests share one object: 1 miss + 4,999 hits.\n5. Analytics still work, because the browser keeps the full URL for client-side tracking.",
+    "workedExample": "1. Diagnose: same page, many URLs → **cache-key fragmentation**.\n2. A page shared in a campaign might get 5,000 distinct `fbclid` values → 5,000 cache entries, each hit once.\n3. Fix: build the cache key from the path plus allow-listed params (e.g. `colour`, `size`); drop `utm_*`, `fbclid`, `gclid`; sort what remains.\n4. Now all 5,000 requests share one object: 1 miss + 4,999 hits.\n5. Analytics still work, because the browser keeps the full URL for client-side tracking.",
     "link": {
       "title": "Understand the cache key (Amazon CloudFront)",
       "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "**Direct** (new connection):\n\n- TCP: 280 ms\n- TLS 1.3: 280 ms\n- Request/response: 280 ms\n- Total: **840 ms**\n\n**Via CDN**:\n\n- TCP to Sydney edge: 8 ms\n- TLS at edge: 8 ms\n- Request to edge: 8 ms\n- Edge → Frankfurt on an existing connection: 280 ms\n- Total: **304 ms**\n\n~2.8× faster with no caching at all. The remaining 280 ms is the assumed route RTT, not a physical lower bound. Better routing may reduce it, while nearby data avoids that origin round trip.",
+    "workedExample": "**Direct** (new connection):\n\n- TCP: 280 ms\n- TLS 1.3: 280 ms\n- Request/response: 280 ms\n- Total: **840 ms**\n\n**Via CDN**:\n\n- TCP to Sydney edge: 8 ms\n- TLS at edge: 8 ms\n- Request to edge: 8 ms\n- Edge → Frankfurt on an existing connection: 280 ms\n- Total: **304 ms**\n\n```formula\nT_direct = 3 × RTT_o = 3 × 280 ms\nT_direct = 840 ms\nT_cdn = 3 × RTT_e + RTT_o\nT_cdn = 3 × 8 ms + 280 ms = 304 ms\nT_direct / T_cdn = 840 / 304 ≈ 2.8\nwhere\nT_direct: the time going straight to Frankfurt on a new connection, in milliseconds (ms)\nT_cdn: the time via the Sydney edge with a warm edge-to-origin connection\nRTT_o: the round-trip time from Sydney to Frankfurt, 280 ms\nRTT_e: the round-trip time to the Sydney edge, 8 ms\n3: the round trips on a new connection: TCP, TLS 1.3 and the request\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: direct, all three round trips cross the long route; via the CDN, only the request does.\n```\n\n~2.8× faster with no caching at all. The remaining 280 ms is the assumed route RTT, not a physical lower bound. Better routing may reduce it, while nearby data avoids that origin round trip.",
     "link": {
       "title": "Cloud CDN overview (Google Cloud)",
       "url": "https://cloud.google.com/cdn/docs/overview"
@@ -279,7 +279,7 @@
       3,
       4
     ],
-    "workedExample": "Rule: **key on exactly what changes the response, normalised to as few values as possible.**\n\n| Input | Key on |\n|---|---|\n| Language | en / fr / de |\n| Device | mobile / desktop |\n| Query | `page`, `sort` only |\n| Session | nothing (public page) |\n\nMaximum variants per product page = 3 × 2 = 6 (times the distinct `page`/`sort` combinations), instead of thousands.",
+    "workedExample": "Rule: **key on exactly what changes the response, normalised to as few values as possible.**\n\n| Input | Key on |\n|---|---|\n| Language | en / fr / de |\n| Device | mobile / desktop |\n| Query | `page`, `sort` only |\n| Session | nothing (public page) |\n\n```formula\nV = L × D = 3 × 2 = 6\nwhere\nV: the maximum number of cached variants of one product page, for each distinct `page`/`sort` combination\nL: the number of language buckets (en, fr, de), 3\nD: the number of device buckets (mobile, desktop), 2\nIn words: three languages times two devices gives at most six cached copies per page and sort order, instead of thousands.\n```",
     "link": {
       "title": "Vary header (MDN)",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Vary"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Before: misses = 50,000 × 0.02 = **1,000 rps**.\n2. Just after purge-all: hit ratio ≈ 0 → misses approach **50,000 rps**.\n3. Request collapsing and a shield limit this to one fetch per distinct object per shield, but a large catalogue still means a huge spike.\n4. Better:\n  - Tag responses (`Surrogate-Key: product-42 prices`) and purge just `prices`.\n  - Version static assets so deploys need no purge.\n  - Use `stale-while-revalidate` so expiry refreshes in the background.",
+    "workedExample": "```formula\nR_miss = (1 − CHR) × R_total\nR_before = (1 − 0.98) × 50,000 rps\nR_before = 1,000 rps\nR_after ≈ (1 − 0) × 50,000 rps\nR_after ≈ 50,000 rps\nwhere\nR_miss: the rate of cache misses, which all go towards the origin, in requests per second (rps)\nCHR: the cache hit ratio, as a fraction: 0.98 normally, close to 0 just after a full purge\nR_total: the total request rate, 50,000 rps\nR_before: origin traffic before the purge\nR_after: origin traffic just after the purge, before request collapsing\nrps: requests per second\n≈: approximately equal to\nIn words: emptying the cache turns 2% misses into nearly 100% misses, up to 50 times the origin's normal load.\n```\n\n1. Request collapsing and a shield limit this to one fetch per distinct object per shield, but a large catalogue still means a huge spike.\n2. Better:\n  - Tag responses (`Surrogate-Key: product-42 prices`) and purge just `prices`.\n  - Version static assets so deploys need no purge.\n  - Use `stale-while-revalidate` so expiry refreshes in the background.",
     "link": {
       "title": "Content delivery network (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Ignore the user↔edge hop (the same in both designs):\n\n| Design | Edge-to-data time |\n|---|---|\n| Edge function | 3 × 200 = 600 ms |\n| Origin render | 200 + 3 × 1 = 203 ms |\n\nPut compute next to its **data**. Edge functions suit work that needs no origin data (redirects, A/B assignment, JWT checks) or reads from edge-replicated stores. Otherwise, keep chatty data access in the region and send one round trip across the ocean.",
+    "workedExample": "Ignore the user↔edge hop (the same in both designs):\n\n| Design | Edge-to-data time |\n|---|---|\n| Edge function | 3 × 200 = 600 ms |\n| Origin render | 200 + 3 × 1 = 203 ms |\n\n```formula\nT_edge = q × RTT_far = 3 × 200 ms\nT_edge = 600 ms\nT_origin = RTT_far + q × RTT_db\nT_origin = 200 ms + 3 × 1 ms = 203 ms\nwhere\nT_edge: the edge-to-data time for the edge function, in milliseconds (ms)\nT_origin: the same for rendering at the origin\nq: the number of sequential database queries per page, 3\nRTT_far: the round-trip time from Sydney to us-east-1, about 200 ms\nRTT_db: the round-trip time from the origin to its nearby database, about 1 ms\nms: millisecond, one thousandth of a second\nIn words: the edge function crosses the Pacific once per query; origin rendering crosses it once per page.\n```\n\nPut compute next to its **data**. Edge functions suit work that needs no origin data (redirects, A/B assignment, JWT checks) or reads from edge-replicated stores. Otherwise, keep chatty data access in the region and send one round trip across the ocean.",
     "link": {
       "title": "Cloud CDN overview (Google Cloud)",
       "url": "https://cloud.google.com/cdn/docs/overview"

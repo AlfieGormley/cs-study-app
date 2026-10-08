@@ -18,7 +18,26 @@ TCP gives applications the illusion of a reliable pipe:
 - **Flow control:** the receiver advertises how much it can buffer.
 - **Congestion control:** the sender probes for available bandwidth.
 
-That last point matters for performance. A new TCP connection starts in **slow start**, with a small congestion window (typically 10 segments ≈ 14 KB, proposed by the Experimental RFC 6928; the actual initial window is implementation/configuration dependent). It roughly doubles each RTT until loss appears, after which the sender cuts its window (by half for classic Reno, by about 30% for CUBIC, the Linux default) and grows more cautiously. So a fresh connection can't use a fast link fully for several round trips:
+That last point matters for performance. A new TCP connection starts in **slow start**, with a small congestion window (typically 10 segments ≈ 14 KB, proposed by the Experimental RFC 6928; the actual initial window is implementation/configuration dependent). It roughly doubles each RTT until loss appears, after which the sender cuts its window (by half for classic Reno, by about 30% for CUBIC, the Linux default) and grows more cautiously. So a fresh connection can't use a fast link fully for several round trips. In the idealised model below, the window starts at 10 full segments and doubles every round trip:
+
+```formula
+IW = 10 × MSS
+IW = 10 × 1,460 B = 14,600 B ≈ 14 KB
+W_k = IW × 2^{k − 1}
+S_k = IW × (2^k − 1)
+S_4 = 14 KB × (2^4 − 1) = 210 KB
+where
+IW: the initial congestion window: how much data a new connection may send in its first round trip, in bytes (B)
+MSS: the maximum segment size: the most data one TCP segment carries, typically 1,460 B on an Ethernet path
+B: bytes
+KB: kilobytes; 1 KB is 1,000 bytes here, and 14,600 B is rounded down to 14 KB
+≈: approximately equal to
+W_k: the congestion window during round trip number k, in KB
+k: which round trip we are on: 1 for the first, 2 for the second, and so on
+S_k: the total data sent after k round trips, in KB
+S_4: the total after 4 round trips, as in the last row of the table below
+In words: the window doubles every round trip, so after k rounds the total sent is the first window times one less than 2 to the power k.
+```
 
 | RTT # | Window | Cumulative sent |
 |---|---|---|
@@ -27,7 +46,30 @@ That last point matters for performance. A new TCP connection starts in **slow s
 | 3 | 56 KB | 98 KB |
 | 4 | 112 KB | 210 KB |
 
-In this idealised round-based model, a 200 KB response needs four transmission rounds, assuming a 14 KB starting window, doubling each round, no loss, immediate ACKs and negligible serialisation. This is not an exact packet-timing model or a bandwidth-independent guarantee. On a 1 Gbps link, 200 KB would take under 2 ms to clock out; at 50 ms RTT, slow start makes it take about 200 ms. **Warm, reused connections are fast; new ones are slow.**
+In this idealised round-based model, a 200 KB response needs four transmission rounds, assuming a 14 KB starting window, doubling each round, no loss, immediate ACKs and negligible serialisation (the time to clock the bits onto the wire). This is not an exact packet-timing model or a bandwidth-independent guarantee. Compare how long the link itself needs with how long slow start takes:
+
+```formula
+t_wire = 8 × size / rate
+t_wire = 8 × 200,000 B / 10^9 bit/s
+t_wire = 0.0016 s = 1.6 ms
+t_slow = rounds × RTT
+t_slow = 4 × 50 ms = 200 ms
+where
+t_wire: the serialisation time: how long the link takes to clock the response out, in seconds (s) or milliseconds (ms)
+size: the response size in bytes (B); 200 KB = 200,000 B
+8: the number of bits in a byte
+rate: the link speed in bits per second (bit/s); 1 Gbps (gigabit per second) = 10^9 bit/s
+B: bytes
+bit/s: bits per second
+t_slow: the transfer time when slow start is the limit, in ms
+rounds: the round trips slow start needs to deliver the response; 4 for 200 KB, from the table
+RTT: the round-trip time, here 50 ms
+s: second
+ms: millisecond, one thousandth of a second
+In words: the wire could deliver 200 KB in under 2 ms, but a new connection's growing window stretches it over four round trips, about 200 ms.
+```
+
+**Warm, reused connections are fast; new ones are slow.**
 
 > [!note] TCP Fast Open
 > TCP Fast Open (RFC 7413) lets a returning client put data in the SYN, saving the handshake RTT. Deployment depends on both endpoints and middlebox compatibility.
@@ -84,7 +126,7 @@ HTTP/2 (2015, now RFC 9113) keeps HTTP's semantics (methods, headers, status cod
 ```
 One TCP connection:
 [A1][B1][C1][A2][C2][B2][A3]...
- A, B, C = streams, interleaved
+ A, B, C: streams, interleaved
 ```
 
 A slow response no longer blocks fast ones, so the HTTP-level HOL problem is solved. The 6-connection limit, sharding and spriting become unnecessary, and often harmful (sharding defeats the single-connection design).

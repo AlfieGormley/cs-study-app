@@ -64,6 +64,8 @@ header.payload.signature
 <RSA signature over the first two>
 ```
 
+`exp` is the expiry time as a Unix timestamp, a count of seconds since 1 January 1970 UTC: 1767225600 is midnight UTC on 1 January 2026.
+
 The payload is **encoded, not encrypted**. Anyone holding the token can read it. Never put secrets or sensitive personal data in it.
 
 Signing choices:
@@ -123,9 +125,23 @@ User  Client       Auth server   API
 Why the extra steps?
 
 - The **code** travels via the browser (redirect URL), where it might leak: browser history, logs, a malicious app registered for the same URL scheme on mobile.
-- The code alone is useless. Exchanging it needs the **code verifier** `v`, a high-entropy random string sent only to the authorization server’s token endpoint, not in the front-channel authorization request. **PKCE** (RFC 7636, "pixy") binds the code to the client that started the flow. The challenge is `c = BASE64URL(SHA256(v))`, the `S256` method; the `plain` method (sending `v` itself as the challenge) gives up most of the protection and shouldn't be used.
-- PKCE also stops **code injection**: an attacker who slips a stolen code into a victim's session can't redeem it, because the victim's client holds a different verifier.
+- The code alone is useless. Exchanging it needs the **code verifier** `v`, a high-entropy random string sent only to the authorization server’s token endpoint, not in the front-channel authorization request. **PKCE** (RFC 7636, "pixy") binds the code to the client that started the flow. The client sends a one-way hash of the verifier, the **code challenge**, at the start (the `S256` method, shown below); the `plain` method (sending the verifier itself as the challenge) gives up most of the protection and shouldn't be used.
+- PKCE also stops **authorisation code injection**: an attacker who slips a stolen code into a victim's session can't redeem it, because the victim's client holds a different verifier.
 - Tokens return from the token endpoint, not in the redirect URL. A browser-based public client still receives them in its browser process; a BFF can keep them server-side.
+
+The `S256` challenge is computed like this:
+
+```formula
+c = BASE64URL(SHA256(v))
+where
+c: the code challenge, sent in the /authorize redirect at the start of the flow and stored by the authorisation server
+v: the code verifier: a high-entropy random string of 43 to 128 characters that the client keeps until the token request
+SHA256: the SHA-256 hash function, which turns any input into a 32-byte digest and cannot feasibly be reversed
+BASE64URL: base64url encoding without padding, which writes those 32 bytes as 43 URL-safe characters
+In words: the challenge is a one-way fingerprint of the verifier, so seeing the challenge in the browser reveals nothing that lets an attacker redeem the code.
+```
+
+At the token endpoint the server recomputes the challenge from the verifier the client sends and compares it with the stored one. RFC 7636's own example: the verifier `dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` gives the challenge `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`. The protection rests on the verifier being long and random: a short or guessable one could be found by trying candidates.
 
 ### Other grants
 

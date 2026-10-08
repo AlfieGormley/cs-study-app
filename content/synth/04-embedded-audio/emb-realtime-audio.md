@@ -36,7 +36,22 @@ cb       ##      ##     ##      ##
 
 ## Block size and the processing budget
 
-The callback processes **N samples per channel per call** (the **block size**). New blocks are due every N / fs seconds, so that is your **budget**: all the work for one block must finish within it, every time.
+The callback processes a fixed number of samples per channel per call (the **block size**). The hardware plays one block in the time those samples last, so a new block is due every block period. That period is your **budget**: all the work for one block must finish within it, every time.
+
+```formula
+T_block = N / f_s
+T_block = 48 / 48000 Hz = 0.001 s = 1 ms
+where
+T_block: the budget (block period), in seconds (s)
+N: the block size, samples per channel per callback; here 48, libDaisy's default
+f_s: the sample rate, in hertz (Hz); here 48 kHz = 48,000 Hz
+Hz: hertz, samples per second
+s: second
+ms: millisecond, one thousandth of a second
+In words: 48 samples at 48,000 samples a second last exactly 1 ms, so the callback must finish in under 1 ms every time.
+```
+
+Double the block size and the budget doubles; double the sample rate and it halves.
 
 | Platform default | Block | fs | Budget |
 |---|---|---|---|
@@ -63,7 +78,25 @@ for n, fs in [(48, 48000), (128, 44100),
 
 ### In CPU cycles
 
-Time is easier to reason about as cycles. A 480 MHz Cortex-M7 (Daisy Seed) at 48 kHz:
+Time is easier to reason about as cycles: the number of CPU clock ticks that fit in the budget. Multiply the budget by the clock frequency:
+
+```formula
+C_block = f_cpu × N / f_s
+C_block = 480000000 Hz × 48 / 48000 Hz
+C_block = 480000 cycles
+C_sample = f_cpu / f_s = 10000 cycles
+where
+C_block: CPU clock cycles available per block
+C_sample: CPU clock cycles available per sample frame
+f_cpu: the CPU clock frequency, in hertz (Hz); here 480 MHz for the Daisy Seed's Cortex-M7
+N: the block size, samples per channel; here 48
+f_s: the sample rate, in hertz (Hz); here 48 kHz
+Hz: hertz, cycles per second
+cycles: CPU clock ticks; a simple instruction often takes about one
+In words: a 480 MHz CPU gets 480,000 clock ticks for each 1 ms block, or 10,000 per stereo sample frame.
+```
+
+The same numbers in Python:
 
 ```python
 f_cpu = 480_000_000
@@ -91,7 +124,26 @@ Smaller blocks mean the callback runs more often, with fixed per-call overhead (
 
 The budget answers "how long do I have to compute a block?". **End-to-end latency** answers "how long from a key press to sound coming out?". They are related but not equal, and the project roadmap asks you to keep them distinct.
 
-For a MIDI-triggered note on a Daisy-style setup (48 samples, 48 kHz), the delays stack up:
+For a MIDI-triggered note on a Daisy-style setup (48 samples, 48 kHz), the delays stack up. In the worst case the note-on arrives just after a callback started:
+
+```formula
+L = t_MIDI + T_block + T_block + d_DAC
+d_DAC = 20 / f_s = 20 / 48000 Hz ≈ 0.42 ms
+L = 0.96 + 1.00 + 1.00 + 0.42 ms
+L ≈ 3.38 ms
+where
+L: the worst-case delay from the MIDI note-on starting to the sound leaving the codec, in milliseconds (ms)
+t_MIDI: the time to send a three-byte note-on over DIN MIDI, 0.96 ms (lesson 5)
+T_block: one block period, here 1 ms; it appears twice, once for waiting for the next callback and once for the double-buffer queue
+d_DAC: the codec DAC's digital-filter group delay; 20 sample periods for the PCM3060
+f_s: the sample rate, in hertz (Hz); here 48 kHz
+Hz: hertz, samples per second
+ms: millisecond
+≈: approximately equal to
+In words: the synth's own part of the delay is about 3.4 ms worst case; the block size accounts for two of those milliseconds.
+```
+
+The same sum as a Python breakdown:
 
 ```python
 fs = 48_000
@@ -158,11 +210,40 @@ main loop:
 
 ## Measuring CPU load
 
-**CPU load** is the fraction of the budget the callback uses: callback time / block period. Measure the **maximum**, not just the average: one slow block is one click.
+**CPU load** is the fraction of the budget the callback uses:
+
+```formula
+load = t_cb / T_block
+load = 0.6 ms / 1 ms = 0.6 = 60 %
+where
+load: the CPU load, a fraction (or percentage) of the budget; above 1 (100 %) the block is late
+t_cb: the time one callback takes to run, in milliseconds (ms); here 0.6 ms
+T_block: the block period, the budget, in milliseconds (ms); here 1 ms
+ms: millisecond
+%: per cent, hundredths
+In words: a callback that takes 0.6 ms out of a 1 ms budget is a 60% load, leaving 40% headroom.
+```
+
+Measured in cycles instead, divide the cycles the callback used by the cycles per block; the ratio is the same. Measure the **maximum**, not just the average: one slow block is one click.
 
 ### Cycle counters
 
-Most Cortex-M3, M4 and M7 chips include a cycle counter (`CYCCNT`, in the DWT debug unit) that counts CPU clock cycles. It is optional in the Armv7-M architecture (the `NOCYCCNT` bit in `DWT_CTRL` says whether it exists), and Cortex-M0/M0+ parts do not have it, so confirm your part has it. It is also off after reset: firmware must set `TRCENA` in `DEMCR` and `CYCCNTENA` in `DWT_CTRL`. Teensy 4's start-up code does both, and its audio library reads the counter as `ARM_DWT_CYCCNT`; PJRC's page notes it counts at the CPU clock (600 MHz). The 32-bit counter wraps every few seconds at these clocks, which unsigned subtraction handles for short intervals. Read it at the start and end of the callback:
+Most Cortex-M3, M4 and M7 chips include a cycle counter (`CYCCNT`, in the DWT debug unit) that counts CPU clock cycles. It is optional in the Armv7-M architecture (the `NOCYCCNT` bit in `DWT_CTRL` says whether it exists), and Cortex-M0/M0+ parts do not have it, so confirm your part has it. It is also off after reset: firmware must set `TRCENA` in `DEMCR` and `CYCCNTENA` in `DWT_CTRL`. Teensy 4's start-up code does both, and its audio library reads the counter as `ARM_DWT_CYCCNT`; PJRC's page notes it counts at the CPU clock (600 MHz). The 32-bit counter wraps every few seconds at these clocks, which unsigned subtraction handles for short intervals:
+
+```formula
+t_wrap = 2^32 / f_cpu
+t_wrap = 4294967296 / 600000000 Hz ≈ 7.2 s
+where
+t_wrap: the time until the counter overflows back to 0, in seconds (s)
+2^32: 2 raised to the power 32, the number of values a 32-bit counter can hold, about 4.29 billion
+f_cpu: the CPU clock frequency, in hertz (Hz); here Teensy 4's 600 MHz (at 480 MHz it is about 8.9 s)
+Hz: hertz, cycles per second
+s: second
+≈: approximately equal to
+In words: at 600 MHz the cycle counter rolls over about every 7 seconds, far longer than any callback, so subtracting two readings still gives the right answer.
+```
+
+Read it at the start and end of the callback:
 
 ```
 callback(in, out, n):
@@ -187,7 +268,7 @@ pin  _|‾‾|________|‾‾‾|_______|‾‾|____
       <-> busy     <--- period --->
 ```
 
-- Pulse **width** = callback time; **period** = block period; width / period = load.
+- Pulse **width** is the callback time and the **period** is the block period, so the load is the width divided by the period (0.8 ms wide every 2.9 ms is about 28%).
 - You see **jitter** and occasional long blocks directly, using persistence or a trigger on pulse width.
 - Overhead is one pin write at each end, which is tiny.
 
@@ -200,7 +281,7 @@ pin  _|‾‾|________|‾‾‾|_______|‾‾|____
 
 ## Key takeaways
 - A DMA interrupt (or a software interrupt it triggers) runs your callback once per block; the main loop runs in the gaps.
-- Budget = block size / sample rate: 1 ms for 48 samples at 48 kHz (480,000 cycles at 480 MHz), 2.9 ms for 128 at 44.1 kHz.
+- The budget is the block size divided by the sample rate: 1 ms for 48 samples at 48 kHz (480,000 cycles at 480 MHz), 2.9 ms for 128 at 44.1 kHz.
 - End-to-end latency adds MIDI transmission, waiting for a block, buffering and converter delay, then the interface and DAW. Estimate it, then measure it.
 - Never allocate, lock, log, do file or bus I/O, or run unbounded loops in the callback.
 - Measure maximum load with a cycle counter or a GPIO toggle on a scope, under worst-case conditions.

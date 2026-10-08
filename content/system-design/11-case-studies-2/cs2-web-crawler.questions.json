@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "You need about 1,000 requests in flight at once, so use asynchronous, event-driven I/O rather than a blocking thread per request",
-        "explanation": "Correct. By Little's law, concurrency = throughput x latency = 1,000/s x 1 s = 1,000. Async I/O handles thousands of mostly idle sockets cheaply, while thousands of OS threads waste memory and context switches."
+        "explanation": "Correct. By Little's law, concurrency = throughput × latency = 1,000/s × 1 s = 1,000. Async I/O handles thousands of mostly idle sockets cheaply, while thousands of OS threads waste memory and context switches."
       },
       {
         "text": "You need a single very fast machine, because each request takes only 1 ms of CPU",
@@ -15,7 +15,7 @@
       },
       {
         "text": "You need 1,000 Gbps of bandwidth",
-        "explanation": "Wrong. 1,000 pages/s x 100 KB = 100 MB/s, which is about 0.8 Gbps. Bandwidth is modest here. Concurrency is what needs care."
+        "explanation": "Wrong. 1,000 pages/s × 100 KB = 100 MB/s, which is about 0.8 Gbps. Bandwidth is modest here. Concurrency is what needs care."
       },
       {
         "text": "Nothing special. Sequential fetching at 1 s per page gives 1,000 pages/s",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Little’s law gives mean concurrency 1,000/s ×1s=1,000 requests, assuming a stable workload. At 100KB each, payload is 100MB/s=0.8Gbps before protocol overhead. Async I/O can avoid one native thread per blocked request; thread-stack allocation and scheduler cost vary, and lightweight/virtual-thread alternatives exist. Add margin for latency tails and failure recovery.",
+    "workedExample": "Little’s law links three long-run averages in a stable system: work in progress equals arrival rate times time spent.\n\n```formula\nL = λ × W\nL = 1,000/s × 1 s = 1,000 requests\nwhere\nL: requests in flight at once (concurrency)\nλ: the arrival rate: fetches started per second; here 1,000\nW: average time one fetch takes, in seconds (s); about 1\ns: seconds\nrequests: open HTTP fetches\nIn words: starting 1,000 fetches a second that each last a second means about 1,000 are open at any moment.\n```\n\nBandwidth is small by comparison:\n\n```formula\nD = 1,000/s × 100 KB = 100 MB/s\nD = 100 MB/s × 8 = 800 Mbps = 0.8 Gbps\nwhere\nD: download bandwidth\ns: seconds\nKB: kilobytes, 1,000 bytes; 100 KB is the assumed average page\nMB: megabytes, 1,000,000 bytes\nMbps: megabits per second; 1 byte is 8 bits\nGbps: gigabits per second, 1,000 Mbps\nIn words: 1,000 pages of 100 KB a second is 100 megabytes a second, about 0.8 gigabits a second before protocol overhead.\n```\n\nAsync I/O can avoid one native thread per blocked request; thread-stack allocation and scheduler cost vary, and lightweight/virtual-thread alternatives exist. Add margin for latency tails and failure recovery.",
     "link": {
       "title": "Web crawler (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Web_crawler"
@@ -37,11 +37,11 @@
     "options": [
       {
         "text": "About 1.2 GB. A false positive means a URL is fetched twice",
-        "explanation": "Wrong on both counts. 9.6 bits x 10e9 = 9.6e10 bits = 12 GB (the slip is a factor of 10). And a Bloom false positive says 'seen' for an unseen URL, so it causes a *skip*, not a double fetch."
+        "explanation": "Wrong on both counts. 9.6 bits × 10 billion = 96 billion bits = 12 GB (the slip is a factor of 10). And a Bloom false positive says 'seen' for an unseen URL, so it causes a *skip*, not a double fetch."
       },
       {
         "text": "About 12 GB. A false positive means a genuinely new URL is wrongly treated as seen and skipped",
-        "explanation": "At the designed load and hash assumptions, about 12GB supports a1% false-positive probability for new membership probes. An insert-only correctly maintained Bloom filter has no false negatives; races, lost state or unsafe deletion violate that assumption."
+        "explanation": "At the designed load and hash assumptions, about 12 GB supports a 1% false-positive probability for new membership probes. An insert-only correctly maintained Bloom filter has no false negatives; races, lost state or unsafe deletion violate that assumption."
       },
       {
         "text": "About 96 GB. A false positive means a URL is never added to the filter",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Bloom filter sizing: bits per element = -ln(p) / (ln 2)^2.\n\n1. p = 0.01, so -ln(0.01) = 4.605.\n2. (ln 2)^2 = 0.4805.\n3. Bits/element = 4.605 / 0.4805 = **9.59**.\n4. Total bits = 9.59 x 10e9 = 9.59e10, / 8 = **~12 GB**.\n5. Optimal hashes k = (bits/element) x ln 2 = 9.59 x 0.693 = **~7**.\n\nThe error semantics:\n- Lookup says **'not seen'**: definitely new. Add it to the frontier.\n- Lookup says **'maybe seen'**: about 1% of truly new URLs land here and get skipped (unless you double-check an exact store).\n\nGoing to 0.1% needs 14.4 bits/element, which is about 18 GB.",
+    "workedExample": "Bloom filter sizing, for a filter using the best number of hash functions:\n\n```formula\nb = −ln(p) / (ln 2)^2\nb = 4.605 / 0.4805 ≈ 9.59\nwhere\nb: bits of filter needed per stored element (URL)\np: target false-positive rate as a fraction; 1% = 0.01, so −ln(0.01) = 4.605\nln: natural logarithm, the logarithm to base e (about 2.718); ln 2 ≈ 0.693, so (ln 2)^2 ≈ 0.4805\n−: minus; ln of a number below 1 is negative, so this makes b positive\n^2: squared\n≈: approximately equal to\nIn words: a 1% false-positive rate needs about 9.6 bits per URL.\n```\n\n```formula\nM = b × n / 8\nM = 9.59 × 10,000,000,000 / 8\nM ≈ 12,000,000,000 B ≈ 12 GB\nk = b × ln 2 = 9.59 × 0.693 ≈ 7\nwhere\nM: total filter memory, in bytes (B)\nb: bits per element; 9.59\nn: elements stored; 10 billion URLs\n8: bits per byte\nk: best number of hash functions per URL\nln: natural logarithm; ln 2 ≈ 0.693\nB: bytes\nGB: gigabytes, 1,000,000,000 bytes\n≈: approximately equal to\nIn words: 10 billion URLs at 9.59 bits each is about 96 billion bits, which is about 12 gigabytes, using about 7 hash functions.\n```\n\nThe error semantics:\n- Lookup says **'not seen'**: definitely new. Add it to the frontier.\n- Lookup says **'maybe seen'**: about 1% of truly new URLs land here and get skipped (unless you double-check an exact store).\n\nGoing to 0.1% (p = 0.001) needs about 14.4 bits per element, which is about 18 GB.",
     "link": {
       "title": "Bloom filter (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Bloom_filter"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "RFC9309 distinguishes unavailable 4xx (the crawler may access resources) from undefined robots due to 5xx/network failure (assume disallow). Retry politely and retain cache state according to the RFC. Its example 30-day long-outage period is not a mandatory threshold. A robots permission is not authentication or a blanket legal permission to access content.",
+    "workedExample": "RFC 9309 distinguishes unavailable 4xx (the crawler may access resources) from undefined robots due to 5xx/network failure (assume disallow). Retry politely and retain cache state according to the RFC. Its example 30-day long-outage period is not a mandatory threshold. A robots permission is not authentication or a blanket legal permission to access content.",
     "link": {
       "title": "RFC 9309: Robots Exclusion Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
@@ -139,11 +139,11 @@
       },
       {
         "text": "Compare every new page byte by byte against all stored pages",
-        "explanation": "Wrong. With billions of pages, pairwise comparison is impossibly expensive (O(N) per page, O(N^2) overall)."
+        "explanation": "Wrong. With billions of pages, pairwise comparison is impossibly expensive. With N stored pages, each new page needs N comparisons, and the whole crawl needs on the order of N × N comparisons: in Big O terms, O(N) per page and O(N^2) overall."
       }
     ],
     "answer": 0,
-    "workedExample": "Construct a64-bit weighted SimHash by summing signed feature weights per bit and taking each sum’s sign. Split into four 16-bit blocks: at most three differing bits imply at least one exactly matching block by the pigeonhole principle. Use those block matches to retrieve candidates, then check full Hamming distance. Similar-content behavior is probabilistic and feature-dependent; four simple tables may produce too many candidates at billions of pages, so the paper uses more refined indexing.",
+    "workedExample": "Construct a 64-bit weighted SimHash by summing signed feature weights per bit and taking each sum’s sign. Split into four 16-bit blocks: at most three differing bits imply at least one exactly matching block by the pigeonhole principle. Use those block matches to retrieve candidates, then check full Hamming distance. Similar-content behavior is probabilistic and feature-dependent; four simple tables may produce too many candidates at billions of pages, so the paper uses more refined indexing.",
     "link": {
       "title": "Detecting near-duplicates for web crawling (Google Research)",
       "url": "https://research.google/pubs/detecting-near-duplicates-for-web-crawling/"
@@ -181,7 +181,7 @@
       1,
       3
     ],
-    "workedExample": "Classify the trap: an **infinite space of distinct URLs** with near-identical content.\n\n- Seen-URL dedup can't help, because every URL is new.\n- What *can* help is bounding effort and spotting low value:\n  1. **Budget**: `max_pages(host) = f(importance)`, for example 5,000 for an obscure host.\n  2. **Value signal**: SimHash shows 99% near duplicates on this host, so throttle it.\n  3. **Structure signal**: depth > 15, or one query parameter with 10,000+ distinct values, so demote it.\n\nAdd URL length and path-repetition limits, and spider traps become a bounded, small cost.",
+    "workedExample": "Classify the trap: an **infinite space of distinct URLs** with near-identical content.\n\n- Seen-URL dedup can't help, because every URL is new.\n- What *can* help is bounding effort and spotting low value:\n  1. **Budget**: a maximum page count per host that grows with the host's importance, for example 5,000 for an obscure host.\n  2. **Value signal**: SimHash shows 99% near duplicates on this host, so throttle it.\n  3. **Structure signal**: depth over 15, or one query parameter with 10,000+ distinct values, so demote it.\n\nAdd URL length and path-repetition limits, and spider traps become a bounded, small cost.",
     "link": {
       "title": "Web crawler (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Web_crawler"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Weekly re-crawl = 300 M pages x 100 KB = **30 TB**.\n2. 80% unchanged = 240 M pages.\n3. With 304s at about 500 B: 240 M x 500 B = **0.12 TB**, against 24 TB for full bodies.\n4. New total is about 6 TB (changed pages) + 0.12 TB, roughly an **80% saving** where servers support validators.\n\nGo further by learning each page's change rate. If a page has changed once in 20 checks, re-crawl it less often. Weight the schedule by importance x change probability.",
+    "workedExample": "Compare the bytes transferred with and without conditional GETs:\n\n```formula\nF = 300 M × 100 KB = 30 TB\nU = 0.8 × 300 M = 240 M pages\nC = 240 M × 500 B = 0.12 TB\nR = 60 M × 100 KB + C ≈ 6.12 TB\nwhere\nF: weekly re-crawl transfer if every page returns a full body\nU: unchanged pages (80%)\nC: transfer for the unchanged pages when each returns a 304 Not Modified of about 500 bytes\nR: new weekly total: 60 M changed pages at full size plus the 304s\nM: million\nKB: kilobytes, 1,000 bytes\nB: bytes\nTB: terabytes, 10^12 bytes\npages: web pages\n≈: approximately equal to\nIn words: answering the 240 million unchanged pages with tiny 304s cuts the week from 30 TB to about 6 TB, roughly an 80% saving.\n```\n\nWithout validators those 240 M unchanged pages would cost 24 TB in full bodies. The saving applies only where servers support validators (ETag or Last-Modified).\n\nGo further by learning each page's change rate. If a page has changed once in 20 checks, re-crawl it less often. Weight the schedule by importance × change probability.",
     "link": {
       "title": "Web crawler (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Web_crawler"
@@ -279,7 +279,7 @@
       1,
       4
     ],
-    "workedExample": "For robots handling: follow parseable successful rules; a4xx may permit access under the protocol; undefined 5xx/network failure requires disallow; cache guidance is SHOULD NOT exceed 24h unless unreachable; product-token matching is case-insensitive. Crawl-delay is an optional extension. A long undefined period may permit the RFC’s documented fallback. These rules do not make robots.txt an authorization mechanism.",
+    "workedExample": "For robots handling: follow parseable successful rules; a 4xx may permit access under the protocol; undefined 5xx/network failure requires disallow; cache guidance is SHOULD NOT exceed 24h unless unreachable; product-token matching is case-insensitive. Crawl-delay is an optional extension. A long undefined period may permit the RFC’s documented fallback. These rules do not make robots.txt an authorization mechanism.",
     "link": {
       "title": "RFC 9309: Robots Exclusion Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "2,000 hosts at 0.5 requests/s each offer 1,000 requests/s to the same IP. Actual server capacity is not known from its label or host count. Enforce a coordinated per-IP budget in addition to host limits, using the resolved address while respecting DNS caching and changes. CDNs/anycast complicate the one-IP/one-machine assumption, so tune policy using evidence.",
+    "workedExample": "Each host allows one request every 2 seconds, but all the hosts share one IP address, so their rates add up:\n\n```formula\nr = H / d\nr = 2,000 / 2 s = 1,000 requests/s\nwhere\nr: requests per second arriving at the shared IP address\nH: hosts on that IP that are in your frontier; here 2,000\nd: per-host delay between requests, in seconds (s); here 2\ns: seconds\nrequests: HTTP requests\nIn words: 2,000 sites each fetched every 2 seconds is 1,000 requests a second at one server.\n```\n\nActual server capacity is not known from its label or host count. Enforce a coordinated per-IP budget in addition to host limits, using the resolved address while respecting DNS caching and changes. CDNs/anycast complicate the one-IP/one-machine assumption, so tune policy using evidence.",
     "link": {
       "title": "Web crawler (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Web_crawler"
@@ -327,11 +327,11 @@
       },
       {
         "text": "50%",
-        "explanation": "Wrong. This treats it as a coin flip. The Poisson model gives a specific value: 1 - e^(-1)."
+        "explanation": "Wrong. This treats it as a coin flip. The Poisson model gives a specific value, about 63% (see the worked example)."
       },
       {
         "text": "About 63%",
-        "explanation": "Correct. With rate lambda = 0.1 per day and t = 10 days, P(no change) = e^(-1) = 0.37, so P(at least one change) is about 0.63."
+        "explanation": "Correct. At 0.1 changes a day over 10 days, one change is expected; the Poisson chance of no change is then about 37%, so the chance of at least one change is about 63%."
       },
       {
         "text": "About 10%",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "For a Poisson process with rate lambda, the chance of **no** events in time t is e^(-lambda t).\n\n1. lambda = 1 change / 10 days = 0.1 per day.\n2. t = 10 days, so lambda t = 1.\n3. P(no change) = e^(-1) = **0.368**.\n4. P(changed) = 1 - 0.368 = **0.632**.\n\nWhat it means for scheduling:\n\n| Re-crawl every | P(changed) |\n|---|---|\n| 2 days | 1 - e^(-0.2) = 18% |\n| 10 days | 63% |\n| 30 days | 1 - e^(-3) = 95% |\n\nCrawl often and most fetches are wasted 304s. Crawl rarely and the copy is stale most of the time. Weighting the interval by importance is how you pick a point on that curve.",
+    "workedExample": "In a Poisson process, events happen independently at a steady average rate. The chance of **no** events in a window follows from that model:\n\n```formula\nP_0 = e^(−λ × t)\nP_c = 1 − P_0\nwhere\nP_0: probability the page has not changed during the window (0 = never, 1 = certain)\nP_c: probability it has changed at least once\ne: Euler's number, about 2.718, the base of natural logarithms\nλ: the average change rate, in changes per day\nt: time since the last fetch, in days\n−: minus; e raised to a negative power is a number between 0 and 1\nIn words: the longer you wait, relative to how often the page changes, the less likely it is to be unchanged.\n```\n\nHere the page changes once every 10 days on average, and you wait 10 days:\n\n```formula\nλ = 1 / 10 days = 0.1/day\nλ × t = 0.1/day × 10 days = 1\nP_0 = e^(−1) ≈ 0.368\nP_c = 1 − 0.368 = 0.632 ≈ 63%\nwhere\nλ: the change rate, in changes per day\nt: the re-crawl interval; here 10 days\nP_0: probability of no change\nP_c: probability of at least one change\ne: Euler's number, about 2.718\nday: one day\ndays: days\n≈: approximately equal to\nIn words: re-crawling at the page's average change interval finds it changed about 63% of the time, not 100%.\n```\n\nWhat it means for scheduling (same formula with other intervals):\n\n| Re-crawl every | P(changed) |\n|---|---|\n| 2 days | 18% |\n| 10 days | 63% |\n| 30 days | 95% |\n\nCrawl often and most fetches are wasted 304s. Crawl rarely and the copy is stale most of the time. Weighting the interval by importance is how you pick a point on that curve. Real pages are not perfectly Poisson (news sites change in bursts), so treat this as a model.",
     "link": {
       "title": "Web crawler (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Web_crawler"
@@ -376,7 +376,7 @@
       2,
       4
     ],
-    "workedExample": "Normalize scheme/host case, the scheme’s default port and dot segments; omit fragments for ordinary server-side HTTP fetch identity. Do not universally lowercase paths, strip tracking-looking query parameters or mergeHTTP withHTTPS. Redirects and canonical tags provide evidence/hints, not proof that all future content is identical. JavaScript fragment-routed applications may need a separate rendering identity policy.",
+    "workedExample": "Normalize scheme/host case, the scheme’s default port and dot segments; omit fragments for ordinary server-side HTTP fetch identity. Do not universally lowercase paths, strip tracking-looking query parameters or merge HTTP with HTTPS. Redirects and canonical tags provide evidence/hints, not proof that all future content is identical. JavaScript fragment-routed applications may need a separate rendering identity policy.",
     "link": {
       "title": "Web crawler (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Web_crawler"

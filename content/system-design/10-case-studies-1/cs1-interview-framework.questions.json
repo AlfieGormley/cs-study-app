@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Think of the first five minutes as converting the prompt into a spec.\n\n1. **Functional**: list user actions. \"Users upload photos; follow others; see a feed of people they follow.\"\n2. **Non-functional**: ask the questions that change the design. \"How many DAU? Read-heavy? Global?\" Propose defaults: \"Say 500M DAU, feed p99 under 200 ms, availability over consistency for the feed.\"\n3. **Out of scope**: \"I'll skip DMs, stories and ads unless you want them.\"\n\nOnly now do you know enough to estimate and draw.",
+    "workedExample": "Think of the first five minutes as converting the prompt into a spec.\n\n1. **Functional**: list user actions. \"Users upload photos; follow others; see a feed of people they follow.\"\n2. **Non-functional**: ask the questions that change the design. \"How many daily active users (DAU)? Read-heavy? Global?\" Propose defaults: \"Say 500 million DAU, 99% of feed loads (p99) under 200 ms, availability over consistency for the feed.\"\n3. **Out of scope**: \"I'll skip DMs, stories and ads unless you want them.\"\n\nOnly now do you know enough to estimate and draw.",
     "link": {
       "title": "The System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
@@ -37,11 +37,11 @@
     "options": [
       {
         "text": "About 500–600 per second",
-        "explanation": "Correct. 50 million / 86,400 s ≈ 580/s. Using the 10^5 shortcut gives 500/s, close enough for design decisions."
+        "explanation": "Correct. 50 million / 86,400 s ≈ 580/s. Using the shortcut of 100,000 seconds a day gives 500/s, close enough for design decisions."
       },
       {
         "text": "About 6,000 per second",
-        "explanation": "Wrong. 6,000/s would be about 500 million requests a day. Check the division: 50M / 100k = 500, not 6,000."
+        "explanation": "Wrong. 6,000/s would be about 500 million requests a day. Check the division: 50 million / 100,000 = 500, not 6,000."
       },
       {
         "text": "About 50 per second",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Use the shortcut **1 day ≈ 10^5 seconds**.\n\n```\n50,000,000 / 100,000 = 500 req/s\nExact: 50,000,000 / 86,400 ≈ 579 req/s\n```\n\nWith an explicitly assumed 2–3x peak factor and the rounded 500/s baseline, plan for **1,000–1,500 req/s**. Measure the workload before deciding server count; request rate alone does not prove that a particular database or fleet is sufficient.\n\nA handy anchor: **1M/day ≈ 12/s**, so 50M/day ≈ 50 × 12 = 600/s.",
+    "workedExample": "A rate per second is the daily count divided by the number of seconds in a day. Use the shortcut **1 day ≈ 100,000 seconds**:\n\n```formula\ns_day = 24 × 60 × 60 = 86,400 s ≈ 10^5 s\nrate = N_day / s_day\nrate ≈ 50,000,000 / 100,000 s = 500/s\nexact = 50,000,000 / 86,400 s ≈ 579/s\nwhere\ns_day: seconds in one day\nN_day: requests in one day, here 50 million\nrate: average requests per second using the rounded day\nexact: the same rate using the exact 86,400 s\ns: seconds; /s means per second\n10^5: ten to the power 5, which is 100,000\n≈: approximately equal to (rounded)\nIn words: 50 million a day is about 500 to 580 a second, depending on whether you round the day to 100,000 seconds.\n```\n\nTraffic peaks above its average, so multiply by a peak factor:\n\n```formula\npeak = rate × k_peak\nlow = 500/s × 2 = 1,000/s\nhigh = 500/s × 3 = 1,500/s\nwhere\npeak: requests per second at the busiest time\nlow, high: the peak with a factor of 2 and of 3\nrate: the rounded average, 500 requests per second\nk_peak: the peak factor (peak ÷ average), an explicitly assumed 2–3 here\n/s: per second\nIn words: with a peak two to three times the average, plan for 1,000 to 1,500 requests a second.\n```\n\nMeasure the workload before deciding server count; request rate alone does not prove that a particular database or fleet is sufficient.\n\nA handy anchor: **1 million a day ≈ 12 a second**, so 50 million a day ≈ 50 × 12 = 600 a second.",
     "link": {
       "title": "Latency numbers every programmer should know",
       "url": "https://gist.github.com/jboner/2841832"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Step by step:\n\n```\nPer day:  20M x 2 KB   = 40 GB\nPer year: 40 GB x 365  ≈ 14.6 TB\n5 years:  14.6 x 5     ≈ 73 TB\nWith 3x replication    ≈ 220 TB\n```\n\nThe implication is what you say out loud: \"About 70 TB of raw data, over 200 TB replicated. I would evaluate sharding and backup/recovery costs, and I'd consider moving records older than a year to cheaper object storage.\"",
+    "workedExample": "Storage is records per day × size per record × days kept. Step by step:\n\n```formula\ndaily = 20M × 2 KB = 40 GB\nyearly = 40 GB × 365 ≈ 14.6 TB\ntotal = 14.6 TB × 5 ≈ 73 TB\nreplicated = 73 TB × 3 ≈ 220 TB\nwhere\ndaily, yearly: new data stored per day and per year\ntotal: raw data after 5 years\nreplicated: the footprint with 3 copies of every record (3x replication)\nM: million; 20M is 20,000,000 records\nKB: kilobyte, 1,000 bytes\nGB: gigabyte, 10^9 bytes (1,000,000 KB)\nTB: terabyte, 10^12 bytes (1,000 GB)\n≈: approximately equal to (rounded)\nIn words: 20 million 2 KB records a day is 40 GB a day, about 15 TB a year, about 73 TB over five years, and about 220 TB once stored three times.\n```\n\nThe implication is what you say out loud: \"About 70 TB of raw data, over 200 TB replicated. I would evaluate sharding and backup/recovery costs, and I'd consider moving records older than a year to cheaper object storage.\"",
     "link": {
       "title": "System Design Primer: back-of-the-envelope calculations",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
@@ -96,7 +96,7 @@
     "prompt": "Which of these are **non-functional** requirements? Select all that apply.",
     "options": [
       {
-        "text": "Redirects must complete in under 50 ms at p99.",
+        "text": "Redirects must complete in under 50 ms at p99 (for 99% of requests).",
         "explanation": "Correct. Latency is a quality of the system, not a feature a user performs."
       },
       {
@@ -121,7 +121,7 @@
       2,
       3
     ],
-    "workedExample": "Ask of each statement: \"Is this something a user *does*, or a property of *how well* the system does it?\"\n\n- Custom alias, view click counts: user actions, so **functional**.\n- p99 latency, AZ failure tolerance, never losing data: properties of the system, so **non-functional**.\n\nNon-functional requirements are usually what make a design hard. Any intern can build a URL shortener; building one that does 100k redirects/s at 50 ms p99 across regions is the interview.",
+    "workedExample": "Ask of each statement: \"Is this something a user *does*, or a property of *how well* the system does it?\"\n\n- Custom alias, view click counts: user actions, so **functional**.\n- p99 latency (the time 99% of requests beat), availability zone (AZ) failure tolerance, never losing data: properties of the system, so **non-functional**.\n\nNon-functional requirements are usually what make a design hard. Any intern can build a URL shortener; building one that does 100k redirects/s at 50 ms p99 across regions is the interview.",
     "link": {
       "title": "Tech Interview Handbook: system design",
       "url": "https://www.techinterviewhandbook.org/system-design/"
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Recognise the pattern: a pointed \"what happens if...\" question means the interviewer has spotted something.\n\n1. **Name the problem**: a single key hashes to one cache node; 200k reads/s may saturate that node; establish its actual limit using a representative benchmark.\n2. **Options**:\n   - Replicate the key to N nodes and read from a random replica (`key#1`..`key#N`).\n   - Add a small in-process LRU cache on each app server with a short TTL.\n   - Put a CDN in front if the response is cacheable.\n3. **Choose**: \"I'd add a local cache with a 5-second TTL; it absorbs most of the load and the staleness is acceptable here.\"",
+    "workedExample": "Recognise the pattern: a pointed \"what happens if...\" question means the interviewer has spotted something.\n\n1. **Name the problem**: a single key hashes to one cache node; 200k reads/s may saturate that node; establish its actual limit using a representative benchmark.\n2. **Options**:\n   - Replicate the key to a few nodes, say four, and read from a random copy (`key#1`..`key#4`).\n   - Add a small in-process LRU cache on each app server with a short TTL.\n   - Put a CDN in front if the response is cacheable.\n3. **Choose**: \"I'd add a local cache with a 5-second TTL; it absorbs most of the load and the staleness is acceptable here.\"",
     "link": {
       "title": "Hello Interview: system design delivery framework",
       "url": "https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery"
@@ -249,7 +249,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Size for peak, then for the failure you must survive.\n\n```\nNeeded at peak: 40,000 / 1,000 = 40\nSurvive 1 of 3 zones down:\n  40 / (2/3) = 60 servers\n  = 20 per zone\n```\n\nSaying this out loud shows the interviewer you think about failure while sizing, not after. You'd then add: \"plus some slack for deploys, so maybe 66–70\".",
+    "workedExample": "Size for peak, then for the failure you must survive.\n\n```formula\nneeded = load / capacity\nneeded = 40,000/s / 1,000/s = 40\ntotal = needed × Z / (Z − 1)\ntotal = 40 × 3 / 2 = 60\nn_zone = 60 / 3 = 20\nwhere\nneeded: servers required at peak with nothing broken\nload: peak requests per second, here 40,000\ncapacity: requests per second one server handles safely, here 1,000\nZ: the number of availability zones (separate data-centre sites), here 3\ntotal: servers to run so that losing one zone still leaves enough\nn_zone: servers placed in each zone\n/s: per second\nIn words: 40 servers' worth of load spread over three zones needs 60 servers, 20 per zone, so that losing a zone still leaves 40.\n```\n\nWhy *Z* / (*Z* − 1): if one of three equal zones fails, two thirds of the fleet survive, so the fleet must be 1.5 times the bare need.\n\nSaying this out loud shows the interviewer you think about failure while sizing, not after. You'd then add: \"plus some slack for deploys, so maybe 66–70\".",
     "link": {
       "title": "The System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"

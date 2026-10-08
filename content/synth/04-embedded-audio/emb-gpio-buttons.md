@@ -60,7 +60,23 @@ The fix is a **pull resistor** that sets a default level:
 
 With a pull-up, pressing the button connects the pin straight to ground and it reads 0. Released, the resistor pulls it to 1. This is **active-low**: pressed means 0. It is the most common button wiring, and the one PJRC's Bounce library documentation describes ("pushbuttons connect between a pin and ground, and the pin mode is set to INPUT_PULLUP").
 
-When pressed, current flows through the resistor: with 10 kΩ, I = 3.3 V / 10,000 Ω = 0.33 mA. That is why pull-ups are "weak" (high value): to waste little current while the button is held.
+When pressed, current flows through the resistor. The pin end of the resistor is now at 0 V and the other end at 3.3 V, so the whole supply voltage sits across it. Ohm's law gives the current:
+
+```formula
+I = V / R
+I = 3.3 V / 10000 Ω
+I = 0.00033 A = 0.33 mA
+where
+I: the current flowing through the pull-up resistor while the button is held, in amperes (A)
+V: the voltage across the resistor, in volts (V); here the full 3.3 V supply, because the pressed button holds the pin at 0 V
+R: the pull-up resistance, in ohms (Ω); here 10 kΩ = 10,000 Ω
+A: ampere, the unit of current
+mA: milliampere, one thousandth of an ampere
+Ω: ohm, the unit of resistance
+In words: a 10 kΩ pull-up wastes only a third of a milliampere while the button is held; a bigger resistor wastes even less.
+```
+
+That is why pull-ups are "weak" (high value): to waste little current while the button is held. The formula assumes the button itself has almost no resistance; a worn or dirty contact adds a little, which only lowers the current.
 
 ### Internal or external?
 
@@ -200,11 +216,39 @@ An RC filter (resistor plus capacitor) followed by a Schmitt-trigger input smoot
 
 ## Driving LEDs
 
-An LED needs a series resistor to limit current. The resistor drops the difference between the supply and the LED's forward voltage V_f:
+An LED needs a series resistor to limit current. An LED is not like a resistor: once it is lit, the voltage across it stays roughly fixed at its **forward voltage**, whatever the current. So the resistor takes up the rest of the supply voltage, and Ohm's law on the resistor alone gives the value you need:
 
+```formula
 R = (V_supply − V_f) / I
+where
+R: the series resistor, in ohms (Ω)
+V_supply: the voltage the output pin drives when high, in volts (V); 3.3 V on Teensy and Daisy
+V_f: the LED's forward voltage, in volts (V): roughly 1.8–2.2 V for red, up to about 3 V for blue or white; take it from the LED's datasheet
+I: the current you want through the LED, in amperes (A); a few milliamperes (mA) for an indicator
+Ω: ohm, the unit of resistance
+V: volt, the unit of voltage
+A: ampere, the unit of current
+In words: subtract the LED's own voltage from the supply, then divide what is left by the current you want. A smaller resistor gives more current and a brighter LED.
+```
 
-PJRC gives a recommended maximum of 4 mA per Teensy 4.1 output. With a red LED at V_f ≈ 2.0 V (check the LED's datasheet):
+PJRC gives a recommended maximum of 4 mA per Teensy 4.1 output. With a red LED at a forward voltage of about 2.0 V (check the LED's datasheet), the smallest safe resistor is:
+
+```formula
+R_min = (V_supply − V_f) / I_max
+R_min = (3.3 V − 2.0 V) / 0.004 A
+R_min = 1.3 V / 0.004 A = 325 Ω
+where
+R_min: the smallest series resistor that keeps the current within the limit, in ohms (Ω)
+V_supply: the output pin's high voltage, in volts (V); here 3.3 V
+V_f: the red LED's forward voltage, in volts (V); here about 2.0 V
+I_max: the largest current allowed, in amperes (A); here PJRC's 4 mA = 0.004 A
+Ω: ohm, the unit of resistance
+V: volt, the unit of voltage
+A: ampere, the unit of current
+In words: 1.3 V is left for the resistor, and 1.3 V at 4 mA needs 325 Ω, so round up to the next standard value, 330 Ω.
+```
+
+The same sum in Python, also checking two standard resistor values:
 
 ```python
 v_supply, v_f = 3.3, 2.0
@@ -231,7 +275,7 @@ Pins also have a **total** current limit for the whole chip. A row of 16 LEDs at
 - An unconnected input floats. Use a pull-up and an active-low button: pressed reads 0.
 - Switches bounce for around a millisecond or two, sometimes far longer. Poll on a tick and debounce in software; don't send raw switches to interrupts.
 - Lockout is fastest but trusts glitches; stable-for-N, shift-register and integrator methods trade a few milliseconds for robustness.
-- LED resistor: R = (V_supply − V_f) / I. Respect per-pin and total-chip current limits.
+- LED resistor: supply voltage minus the LED's forward voltage, divided by the current you want. Respect per-pin and total-chip current limits.
 
 ## Further reading
 - [A Guide to Debouncing, part 1 — Jack Ganssle](https://www.ganssle.com/debouncing.htm)

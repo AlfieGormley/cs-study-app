@@ -7,23 +7,23 @@
     "options": [
       {
         "text": "7 characters",
-        "explanation": "Correct. 62^7 ≈ 3.5 trillion, about 70x the requirement. That headroom tolerates wasted ID ranges, reserved formats and growth beyond the forecast."
+        "explanation": "Correct. Seven base62 characters give about 3.5 trillion codes, about 70x the requirement. That headroom tolerates wasted ID ranges, reserved formats and growth beyond the forecast."
       },
       {
         "text": "6 characters",
-        "explanation": "Wrong. 62^6 ≈ 56.8 billion, barely above 50 billion. At 50 billion allocated codes you would be about 88% full; waste or further growth could exhaust the remaining space."
+        "explanation": "Wrong. Six characters give about 56.8 billion codes, barely above 50 billion. At 50 billion allocated codes you would be about 88% full; waste or further growth could exhaust the remaining space."
       },
       {
         "text": "5 characters",
-        "explanation": "Wrong. 62^5 ≈ 916 million codes, which is less than 2% of what you need."
+        "explanation": "Wrong. Five characters give about 916 million codes, which is less than 2% of what you need."
       },
       {
         "text": "11 characters",
-        "explanation": "Wrong. 11 characters is what a 64-bit Snowflake ID needs, giving ~5 × 10^19 codes. It works but makes links needlessly long for a service whose whole point is shortness."
+        "explanation": "Wrong. 11 characters is what a 64-bit Snowflake ID needs, giving about 52 billion billion (5.2 × 10^19) codes. It works but makes links needlessly long for a service whose whole point is shortness."
       }
     ],
     "answer": 0,
-    "workedExample": "Compute powers of 62:\n\n```\n62^5 ≈ 9.2 x 10^8   (916 million)\n62^6 ≈ 5.7 x 10^10  (56.8 billion)\n62^7 ≈ 3.5 x 10^12  (3.5 trillion)\n```\n\nCompare with 5 × 10^10 needed. Six characters gives a ratio of only 1.1x; seven gives 70x. You want headroom because range allocation wastes IDs when servers crash, and forecasts are usually wrong, so choose **7**.",
+    "workedExample": "Each base62 character is one of 62 symbols, so a code of a given length has 62 multiplied by itself that many times possible values. Compute the powers of 62:\n\n```formula\ncodes = 62^L\n62^5 ≈ 9.2 × 10^8\n62^6 ≈ 5.7 × 10^10\n62^7 ≈ 3.5 × 10^12\nwhere\ncodes: how many distinct codes of that length exist\n62: characters in the base62 alphabet (0–9, a–z, A–Z)\nL: the code length in characters\n62^L: 62 multiplied by itself L times\n10^8, 10^10, 10^12: 1 followed by 8, 10 or 12 zeros, so the three results are about 916 million, 56.8 billion and 3.5 trillion\n≈: approximately equal to (rounded)\nIn words: each extra character multiplies the number of codes by 62.\n```\n\nCompare each with the 50 billion (5 × 10^10) you need:\n\n```formula\nratio = codes / needed\nr_6 = 5.7 × 10^10 / (5 × 10^10) ≈ 1.1\nr_7 = 3.5 × 10^12 / (5 × 10^10) = 70\nwhere\nratio: how many times the code space covers the need\ncodes: available codes at that length\nneeded: links you expect to create, 50 billion\nr_6, r_7: the ratio for 6 and 7 characters\n≈: approximately equal to (rounded)\nIn words: six characters barely cover the need; seven cover it seventy times over.\n```\n\nYou want headroom because range allocation wastes IDs when servers crash, and forecasts are usually wrong, so choose **7**.",
     "link": {
       "title": "Base62 (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Base62"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Apply the birthday problem. For a space of N codes, a 50% collision chance arrives at about `1.18 × √N` items.\n\n```\nN = 62^7 ≈ 3.5 x 10^12\n√N ≈ 1.87 x 10^6\n50% point ≈ 2.2 million links\n```\n\nOnce you hold, say, 350 billion links, the chance that a fresh random 7-char code is already taken is `350B / 3.5T = 10%`. So one write in ten collides and needs a retry, each requiring an atomic conditional insert, not a racy read-before-write. Add the dedup problem (same URL → same code for every user) and a counter-based scheme is much simpler.",
+    "workedExample": "Apply the birthday problem: when you draw random values from a space, repeats turn up far sooner than intuition suggests, after roughly the *square root* of the space size.\n\n```formula\nn_50 ≈ 1.18 × √N\nN = 62^7 ≈ 3.5 × 10^12\n√N ≈ 1.87 × 10^6\nn_50 ≈ 2.2 × 10^6\nwhere\nN: the number of possible 7-character base62 codes\n√: square root, the number that multiplied by itself gives the value inside\nn_50: how many random codes you can issue before a 50% chance that two are the same\n1.18: the constant √(2 × ln 2) from the birthday approximation (ln is the natural logarithm)\n10^6, 10^12: a million and a trillion\n≈: approximately equal to (rounded)\nIn words: in a 3.5-trillion space, a repeat becomes a coin flip after about 2.2 million random codes.\n```\n\nOnce the space is partly full, each new random code collides with probability equal to the fraction already used:\n\n```formula\np = stored / N\np = 350 × 10^9 / (3.5 × 10^12) = 0.1\nwhere\np: the chance a fresh random code is already taken\nstored: links already held, here 350 billion\nN: total possible codes, 3.5 trillion\nIn words: with a tenth of the codes used, one new code in ten collides.\n```\n\nSo one write in ten collides and needs a retry, each requiring an atomic conditional insert, not a racy read-before-write. Add the dedup problem (same URL → same code for every user) and a counter-based scheme is much simpler.",
     "link": {
       "title": "Birthday problem (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Birthday_problem"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\nIDs per block:         1,000,000\nGlobal write rate:     3,000/s\nTime to use 1 block:   1M / 3k ≈ 333 s\n```\n\nSo the coordinator handles roughly one request every ~5.5 minutes in aggregate (each of 10 servers asks about once an hour). That's why it isn't a bottleneck.\n\nOn a crash, the coordinator has already advanced past the block, so the remaining IDs are never handed out again. Waste per crash ≤ 1M; even 1,000 crashes waste 1 billion, under 0.03% of 62^7.",
+    "workedExample": "The coordinator is asked once per block, so the time between requests is the block size divided by the write rate.\n\n```formula\nt = block / writes\nt = 1,000,000 / 3,000/s ≈ 333 s\nt_server = 1,000,000 / 300/s ≈ 3,333 s\nwhere\nt: time between block requests across the whole fleet, in seconds (s)\nblock: IDs per block, 1 million\nwrites: global peak write rate, 3,000 links per second\nt_server: time between requests from one server, which sees a tenth of the writes (300/s)\n/s: per second\n≈: approximately equal to (rounded)\nIn words: the fleet asks for a block about every 5.5 minutes, and each server about once an hour.\n```\n\nThat's why the coordinator isn't a bottleneck.\n\nOn a crash, the coordinator has already advanced past the block, so the remaining IDs are never handed out again. Waste per crash is at most 1 million IDs; even 1,000 crashes waste 1 billion, under 0.03% of the 3.5 trillion 7-character codes.",
     "link": {
       "title": "System Design Primer: design Bit.ly",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md"
@@ -123,7 +123,7 @@
     "id": "cs1-url-shortener-q5",
     "level": "advanced",
     "type": "single",
-    "prompt": "A usability review flags that your counter-based codes are sequential: `aZ3kQ9x` is followed by `aZ3kQ9y`, revealing sequential allocation. Private-link access control is handled separately. What algebraic approach that keeps codes collision-free and 7 characters long?",
+    "prompt": "A usability review flags that your counter-based codes are sequential: `aZ3kQ9x` is followed by `aZ3kQ9y`, revealing sequential allocation. Private-link access control is handled separately. Which algebraic approach keeps codes collision-free and 7 characters long?",
     "options": [
       {
         "text": "Switch to random 7-character codes and retry on collision.",
@@ -134,8 +134,8 @@
         "explanation": "Wrong. Snowflake IDs are also time-ordered and largely predictable (timestamp plus machine plus sequence), and they need about 11 base62 characters, breaking the 7-character requirement."
       },
       {
-        "text": "Apply a bijective permutation to the counter (e.g. multiply by a constant coprime with 62^7, mod 62^7, with the explicit understanding that this multiplication is only obfuscation) before base62-encoding.",
-        "explanation": "Correct. A bijection on [0, 62^7) maps each counter value to a unique code, so it stays collision-free, but consecutive counters produce unrelated-looking codes. This guarantees uniqueness, not secrecy: at 10% occupancy random probes hit valid links about 10% of the time."
+        "text": "Apply a bijective permutation to the counter (e.g. multiply by a constant sharing no factor with the code-space size and keep the remainder, understanding that this is only obfuscation) before base62-encoding.",
+        "explanation": "Correct. A bijection (one-to-one mapping) over all 3.5 trillion 7-character values maps each counter value to a unique code, so it stays collision-free, but consecutive counters produce unrelated-looking codes. This guarantees uniqueness, not secrecy: at 10% occupancy random probes hit valid links about 10% of the time."
       },
       {
         "text": "Rate limit the redirect endpoint so enumeration takes longer.",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "You want a function `f` such that:\n\n1. `f` is one-to-one on [0, 62^7), so no collisions.\n2. `f(n)` and `f(n+1)` look unrelated.\n\nSimplest version: choose a constant `a` coprime with 62^7 (any odd number not divisible by 31 works, since 62 = 2 × 31). Then `f(n) = (a × n) mod 62^7` is a bijection, though two known codes reveal `a`. A custom four-round Feistel recipe is omitted because no reviewed cryptographic construction is supplied. For private links use authorization or a properly designed longer capability token; a dense seven-character namespace is not adequate secrecy.\n\n```\n1000001 -> f -> base62 -> \"Qx81bKa\"\n1000002 -> f -> base62 -> \"3mPz0Wd\"\n```\n\nCodes remain unique and 7 characters, with no extra database reads.",
+    "workedExample": "You want a function `f` such that:\n\n1. `f` is one-to-one over all 7-character values, so no collisions.\n2. `f(n)` and `f(n+1)` look unrelated.\n\nSimplest version:\n\n```formula\nf(n) = (a × n) mod 62^7\nwhere\nf: the shuffle function applied before base62 encoding\nn: the counter value, from 0 to 62^7 − 1\na: a constant that shares no factor with 62^7 (coprime with it): any odd number not divisible by 31, since 62 = 2 × 31\nmod: modulo, the remainder after division, which wraps the result back into the 7-character range\n62^7: the number of 7-character base62 codes, about 3.5 trillion\nIn words: multiply the counter by a fixed constant and keep the remainder; because the constant shares no factor with the space size, every counter value gets a different code.\n```\n\nThis is a bijection, though two known codes reveal `a`. A custom four-round Feistel recipe is omitted because no reviewed cryptographic construction is supplied. For private links use authorization or a properly designed longer capability token; a dense seven-character namespace is not adequate secrecy.\n\n```\n1000001 -> f -> base62 -> \"Qx81bKa\"\n1000002 -> f -> base62 -> \"3mPz0Wd\"\n```\n\nCodes remain unique and 7 characters, with no extra database reads.",
     "link": {
       "title": "URL shortening (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/URL_shortening"
@@ -195,7 +195,7 @@
     "options": [
       {
         "text": "The ID coordinator can no longer keep up with block requests.",
-        "explanation": "Wrong. At 1B links/day the peak is about 30,000 writes/s, so 1M-ID blocks are requested about 0.03 times a second, roughly once every 33 s overall. You can also simply make blocks bigger."
+        "explanation": "Wrong. At 1 billion links/day the peak is about 30,000 writes/s, so 1M-ID blocks are requested about 0.03 times a second, roughly once every 33 s overall. You can also simply make blocks bigger."
       },
       {
         "text": "Base62 encoding becomes too CPU-intensive.",
@@ -207,11 +207,11 @@
       },
       {
         "text": "The 7-character code space runs out: 3.65 trillion links needed vs ~3.5 trillion codes available.",
-        "explanation": "Correct. 1B × 365 × 10 = 3.65 × 10^12, slightly more than 62^7 ≈ 3.52 × 10^12, before counting wasted ranges. You need to move new links to 8 characters (218 trillion)."
+        "explanation": "Correct. 1 billion × 365 × 10 = 3.65 trillion, slightly more than the 3.52 trillion 7-character codes, before counting wasted ranges. You need to move new links to 8 characters (218 trillion)."
       }
     ],
     "answer": 3,
-    "workedExample": "Recompute the key estimate with the new numbers:\n\n```\nLinks in 10 years = 1B/day x 365 x 10\n                  = 3.65 x 10^12\nCode space (7)    = 62^7 ≈ 3.52 x 10^12\n```\n\nYou'd exhaust 7-character codes in about 9.6 years, sooner with waste. Moving to 8 characters gives 62^8 ≈ 2.18 × 10^14, about 60x headroom. An 8-character string can never equal a 7-character one, so you can switch with no migration: new generated links use exactly eight characters, including left-padding, and old codes keep working. Revise alias rules or use conditional inserts because existing custom aliases may already have eight characters.\n\nThe lesson: always re-run your capacity maths when the scale changes; a constraint that was 10x away can become binding.",
+    "workedExample": "Recompute the key estimate with the new numbers:\n\n```formula\nlinks = 1 bn × 365 × 10 = 3.65 × 10^12\nspace_7 = 62^7 ≈ 3.52 × 10^12\nyears = 3.52 × 10^12 / (3.65 × 10^11)\nyears ≈ 9.6\nspace_8 = 62^8 ≈ 2.18 × 10^14\nwhere\nlinks: links created in 10 years at 1 billion a day\nbn: billion (10^9)\nspace_7, space_8: the number of 7- and 8-character base62 codes (62 multiplied by itself 7 or 8 times)\nyears: how long 7-character codes last at 365 billion (3.65 × 10^11) links a year\n10^11, 10^12, 10^14: 1 followed by that many zeros\n≈: approximately equal to (rounded)\nIn words: ten years at this rate needs 3.65 trillion codes but seven characters give only 3.52 trillion, so they run out in under ten years; eight characters give about 60 times the need.\n```\n\nYou'd exhaust 7-character codes in about 9.6 years, sooner with waste. Moving to 8 characters gives about 218 trillion codes, about 60x headroom. An 8-character string can never equal a 7-character one, so you can switch with no migration: new generated links use exactly eight characters, including left-padding, and old codes keep working. Revise alias rules or use conditional inserts because existing custom aliases may already have eight characters.\n\nThe lesson: always re-run your capacity maths when the scale changes; a constraint that was 10x away can become binding.",
     "link": {
       "title": "URL shortening (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/URL_shortening"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Database load = total × miss rate.\n\n```\n95% hit: 30,000 x 0.05 = 1,500/s\n80% hit: 30,000 x 0.20 = 6,000/s\n```\n\nThe miss rate is what matters, and it is very sensitive near the top: going from 99% to 98% hit rate *doubles* database load. Long TTLs save reads but can delay deletion or abuse blocking unless those states have a separate freshness mechanism. Choose the cache policy against both cost and correctness requirements.",
+    "workedExample": "Only cache misses reach the database, so its load is the total times the miss rate.\n\n```formula\ndb = total × (1 − h)\ndb_95 = 30,000/s × 0.05 = 1,500/s\ndb_80 = 30,000/s × 0.20 = 6,000/s\nwhere\ndb: database reads per second\ntotal: peak redirects per second, 30,000\nh: the cache hit rate as a fraction (95% = 0.95), so 1 − h is the miss rate\ndb_95, db_80: database load at 95% and 80% hit rates\n/s: per second\nIn words: at 95% hits one read in twenty reaches the database; at 80% one in five does, four times as many.\n```\n\nThe miss rate is what matters, and it is very sensitive near the top: going from 99% to 98% hit rate *doubles* database load. Long TTLs save reads but can delay deletion or abuse blocking unless those states have a separate freshness mechanism. Choose the cache policy against both cost and correctness requirements.",
     "link": {
       "title": "System Design Primer: design Pastebin / Bit.ly",
       "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md"
@@ -309,7 +309,7 @@
       1,
       2
     ],
-    "workedExample": "Aliases share one namespace with generated codes, so three things can go wrong:\n\n1. **Two users race** for the same alias → conditional write.\n2. **Alias vs future generated code** → disjoint formats (aliases ≥ 8 chars or contain `-`), so the generator can never produce one.\n3. **Abuse** → denylist reserved paths and brand names.\n\nA single table keyed by `code` keeps the redirect path to one lookup.",
+    "workedExample": "Aliases share one namespace with generated codes, so three things can go wrong:\n\n1. **Two users race** for the same alias → conditional write.\n2. **Alias vs future generated code** → disjoint formats (aliases of 8 or more characters, or containing `-`), so the generator can never produce one.\n3. **Abuse** → denylist reserved paths and brand names.\n\nA single table keyed by `code` keeps the redirect path to one lookup.",
     "link": {
       "title": "Hello Interview: design a URL shortener like Bit.ly",
       "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The bottleneck is one key on one shard, so the fix must **replicate the read**, not partition it further.\n\n```\nEdge/in-process copies: hundreds\nLoad per copy: 200k / 300 ≈ 700/s\nTTL 5 s: nominal cache freshness 5 s\n```\n\nAnalytics can survive if batches are durably buffered/retried and duplicates handled; best-effort buffering can still lose events. In this design, edge workers or app servers log each click locally and ship counts in batches, rather than writing per click. The same idea (replicate hot keys, batch writes) applies to every hot-key question in this module.",
+    "workedExample": "The bottleneck is one key on one shard, so the fix must **replicate the read**, not partition it further.\n\n```formula\nload = clicks / copies\nload = 200,000/s / 300 ≈ 700/s\nwhere\nload: requests per second each cached copy serves\nclicks: total clicks per second, 200,000\ncopies: edge locations or app servers holding the mapping, assumed about 300 (\"hundreds\")\n/s: per second\n≈: approximately equal to (rounded from 667)\nIn words: spreading 200,000 clicks a second over about 300 copies leaves each one only about 700 a second.\n```\n\nWith a 5-second TTL, each copy is at most about 5 seconds stale.\n\nAnalytics can survive if batches are durably buffered/retried and duplicates handled; best-effort buffering can still lose events. In this design, edge workers or app servers log each click locally and ship counts in batches, rather than writing per click. The same idea (replicate hot keys, batch writes) applies to every hot-key question in this module.",
     "link": {
       "title": "Hello Interview: design a URL shortener like Bit.ly",
       "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly"

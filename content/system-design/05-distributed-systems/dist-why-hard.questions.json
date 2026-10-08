@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Per call time = round trip + work.\n\n- Before: 0.5 + 1 = 1.5 ms, × 40 = **60 ms**.\n- After: 70 + 1 = 71 ms, × 40 = **2,840 ms**.\n\nThat is the fallacy \"latency is zero\" in action. Fixes: batch the 40 calls into one, run them in parallel (total ≈ 71 ms), or keep chatty services co-located.",
+    "workedExample": "Each sequential call must finish before the next starts, so the page pays the round trip plus the work once per call:\n\n```formula\nT = n × (RTT + w)\nT_old = 40 × (0.5 ms + 1 ms)\nT_old = 60 ms\nT_new = 40 × (70 ms + 1 ms)\nT_new = 2,840 ms ≈ 2.8 s\nwhere\nT: total time the page spends on the calls, in milliseconds (ms)\nT_old: the total with the backend in the same data centre\nT_new: the total with the backend in another region\nn: the number of sequential calls; here 40\nRTT: round-trip time, the time for a request to reach the backend and the reply to return, in ms\nw: the work the backend does per call; here 1 ms\nms: millisecond, one thousandth of a second\ns: second\n≈: approximately equal to\nIn words: every sequential call pays the full round trip, so a 140-fold increase in round-trip time makes the page about 47 times slower.\n```\n\nThat is the fallacy \"latency is zero\" in action. Fixes: batch the 40 calls into one, run them in parallel (total ≈ 71 ms), or keep chatty services co-located.",
     "link": {
       "title": "Fallacies of distributed computing",
       "url": "https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Proof by contradiction:\n\n1. Assume a protocol exists; take its shortest successful run of *k* messages.\n2. The *k*th message might be captured. Its sender acts the same whether or not it arrived (they can't tell).\n3. For agreement to be guaranteed, the receiver must also act the same without it. So *k − 1* messages suffice.\n4. Repeat until *k = 0*: no messages can't coordinate an attack. Contradiction.\n\nIn practice systems accept probabilistic agreement (many messengers) or idempotent retries.",
+    "workedExample": "Proof by contradiction:\n\n1. Assume a protocol exists; take its shortest successful run of messages.\n2. The last message in that run might be captured. Its sender acts the same whether or not it arrived (they can't tell).\n3. For agreement to be guaranteed, the receiver must also act the same without it. So a run one message shorter also works, contradicting \"shortest\".\n4. Repeat the argument until no messages are left: zero messages can't coordinate an attack. Contradiction.\n\nIn practice systems accept probabilistic agreement (many messengers) or idempotent retries.",
     "link": {
       "title": "Two Generals' Problem",
       "url": "https://en.wikipedia.org/wiki/Two_Generals%27_Problem"
@@ -136,23 +136,23 @@
     "options": [
       {
         "text": "Crash: 3, Byzantine: 5",
-        "explanation": "Wrong. 3 nodes with 2 crashed leaves 1, which isn't a majority. Crash tolerance needs 2f + 1."
+        "explanation": "Wrong. 3 nodes with 2 crashed leaves 1, which isn't a majority. Crash tolerance needs twice the number of faults plus one: 2 × 2 + 1 = 5."
       },
       {
         "text": "Crash: 5, Byzantine: 7",
-        "explanation": "Correct. Crash faults need 2f + 1 = 5 so a majority (3) survives. Byzantine faults need 3f + 1 = 7 so honest nodes outvote liars even when some honest nodes are slow."
+        "explanation": "Correct. Crash faults need 2 × 2 + 1 = 5 nodes so a majority (3) survives. Byzantine faults need 3 × 2 + 1 = 7 so honest nodes outvote liars even when some honest nodes are slow."
       },
       {
         "text": "Crash: 4, Byzantine: 6",
-        "explanation": "Wrong. Even sizes don't improve fault tolerance for majorities, and these miss the 2f + 1 and 3f + 1 bounds."
+        "explanation": "Wrong. Even sizes don't improve fault tolerance for majorities, and these fall short of the 5 and 7 nodes that the crash and Byzantine bounds require for 2 faults."
       },
       {
         "text": "Crash: 5, Byzantine: 5",
-        "explanation": "Wrong. Byzantine nodes can send conflicting messages to different peers, so you need extra honest nodes: 3f + 1 = 7."
+        "explanation": "Wrong. Byzantine nodes can send conflicting messages to different peers, so you need extra honest nodes: 3 × 2 + 1 = 7."
       }
     ],
     "answer": 1,
-    "workedExample": "With f = 2:\n\n- **Crash**: n = 2f + 1 = 5. If 2 crash, 3 remain, and 3 is a majority of 5, so quorums can still form and any two quorums overlap.\n- **Byzantine**: n = 3f + 1 = 7. Quorums are 2f + 1 = 5. Two quorums overlap in at least 3 nodes, and at most 2 are traitors, so at least one honest node is in both.\n\nThis is why Raft clusters are 3 or 5 nodes and BFT systems are 4, 7, 10...",
+    "workedExample": "Use the node-count rules for each fault model:\n\n```formula\nn_crash = 2 × f + 1 = 2 × 2 + 1 = 5\nn_byz = 3 × f + 1 = 3 × 2 + 1 = 7\nq_byz = 2 × f + 1 = 2 × 2 + 1 = 5\nwhere\nf: the number of nodes that may be faulty at once; here 2\nn_crash: nodes needed when faulty nodes can only crash\nn_byz: nodes needed when faulty nodes can lie (Byzantine)\nq_byz: the quorum size (how many nodes must agree) in the Byzantine case\nIn words: crash tolerance needs a surviving majority; Byzantine tolerance needs quorums big enough that any two share at least one honest node.\n```\n\n- **Crash**: with 5 nodes, if 2 crash, 3 remain, and 3 is a majority of 5, so quorums can still form and any two quorums overlap.\n- **Byzantine**: with 7 nodes and quorums of 5, two quorums overlap in at least 5 + 5 − 7 = 3 nodes. At most 2 are traitors, so at least one honest node is in both.\n\nThis is why Raft clusters are 3 or 5 nodes and BFT systems are 4, 7, 10...",
     "link": {
       "title": "Byzantine fault",
       "url": "https://en.wikipedia.org/wiki/Byzantine_fault"
@@ -182,7 +182,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Timeline:\n\n```\nt=0   lease granted (to t=10)\nt=2   check: 8 s left, OK\nt=2   GC pause starts\nt=10  lease expires; n2 elected\nt=17  pause ends; old leader writes\n```\n\nAt t=17 two nodes believe they are leader. This is a check-then-act race made worse by unbounded pauses. The defence (lesson 6) is a **fencing token**: storage remembers the highest token it has seen and rejects the old leader's lower one.",
+    "workedExample": "Timeline:\n\n```\nt=0   lease granted (to t=10)\nt=2   check: 8 s left, OK\nt=2   GC pause starts\nt=10  lease expires; n2 elected\nt=17  pause ends; old leader writes\n```\n\nAt 17 s two nodes believe they are leader. This is a check-then-act race made worse by unbounded pauses. The defence (lesson 6) is a **fencing token**: storage remembers the highest token it has seen and rejects the old leader's lower one.",
     "link": {
       "title": "How to do distributed locking (Kleppmann)",
       "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
@@ -370,7 +370,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Multiply attempts down the stack:\n\n| Tier | Attempts | Running total |\n|---|---|---|\n| Web | 3 | 3 |\n| API | 3 each | 9 |\n| DB | 3 each | **27** |\n\nSo a database that is already struggling receives 27× its normal load from the retries alone, which keeps it down. Standard practice:\n\n1. Retry at **one** layer.\n2. Exponential backoff with jitter.\n3. A **retry budget** (e.g. retries may add at most 10% extra load) or a circuit breaker that fails fast when errors are widespread.",
+    "workedExample": "Multiply attempts down the stack:\n\n| Tier | Attempts | Running total |\n|---|---|---|\n| Web | 3 | 3 |\n| API | 3 each | 9 |\n| DB | 3 each | **27** |\n\nThe general rule, when every layer retries independently:\n\n```formula\nC = a^L\nC = 3^3 = 27\nwhere\nC: the worst-case number of database calls for one user request (a count)\na: attempts per layer, counting the first try; here 3\nL: the number of stacked layers that retry; here 3\nIn words: retries multiply down the stack, so the load grows as a power of the number of retrying layers.\n```\n\nSo a database that is already struggling receives 27× its normal load from the retries alone, which keeps it down. Standard practice:\n\n1. Retry at **one** layer.\n2. Exponential backoff with jitter.\n3. A **retry budget** (e.g. retries may add at most 10% extra load) or a circuit breaker that fails fast when errors are widespread.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"

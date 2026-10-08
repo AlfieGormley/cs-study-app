@@ -9,17 +9,35 @@ summary: Why and how systems span several regions, the trade-offs between active
 A cloud region may offer several availability zones, each with separate infrastructure and possibly multiple data centres. A correctly configured multi-AZ workload can tolerate specified zone failures, but a region label alone does not guarantee application availability. So why go **multi-region**?
 
 - **Disaster recovery**: whole regions do fail, or partially fail in ways that look total (control-plane outages, bad deploys of regional services, major network events).
-- **Latency**: long paths impose propagation delay. A hypothetical 17,000 km fibre path at 200 km/ms takes 85 ms one way before routing and equipment overhead; actual routes and measured RTTs differ. Serving Australian users from Australia matters.
+- **Latency**: long paths impose propagation delay. Light in optical fibre travels at roughly two-thirds of its speed in a vacuum, about 200 km every millisecond, so distance alone sets a minimum delay (worked out below). Serving Australian users from Australia matters.
 - **Data residency**: laws and contracts may require data about EU residents, or a particular government's citizens, to stay in specific places.
 
-It's also expensive and hard. Extra regions add infrastructure and operating costs and, more importantly, forces you to confront **the speed of light in your data layer**.
+The minimum one-way delay over a fibre path is just distance divided by speed:
+
+```formula
+t = d / v
+t = 17000 km / (200 km/ms) = 85 ms
+where
+t: the one-way propagation delay, in milliseconds (ms)
+d: the length of the fibre path, in kilometres (km); here a hypothetical 17,000 km route
+v: the speed of light in fibre, about 200 km per millisecond (km/ms), roughly two-thirds of its speed in a vacuum
+km: kilometres
+ms: milliseconds, thousandths of a second
+In words: 17,000 km of fibre costs at least 85 ms each way, so at least 170 ms for a round trip, before any routing or equipment delay.
+```
+
+This is a floor, not a prediction: real routes are longer than the straight line, and routers and queues add more. Measure actual round-trip times (RTTs).
+
+It's also expensive and hard. Extra regions add infrastructure and operating costs and, more importantly, force you to confront **the speed of light in your data layer**.
 
 ## The fundamental trade-off
 
 Synchronous acknowledgment latency depends on required replicas, distance, storage and protocol. Benchmark the chosen deployment.
 
 > [!note] Evidence gap
-> Generic cross-AZ/region latency and recovery-time estimates are omitted because no measured deployment establishes them. Numeric quiz examples state hypothetical inputs. That gives you a choice for each piece of data:
+> Generic cross-AZ/region latency and recovery-time estimates are omitted because no measured deployment establishes them. Numeric quiz examples state hypothetical inputs.
+
+That gives you a choice for each piece of data:
 
 - **Synchronous cross-region replication**: can protect acknowledged commits from loss of one region when they are durably retained in a surviving region and failover selects the correct replica; this can meet a zero-loss objective for that failure model. Each required remote acknowledgment adds latency, and writes stop if the required remote acknowledgements or quorum become unreachable; a three-region quorum can continue after losing one region.
 - **Asynchronous replication**: fast local writes, but a failure can lose acknowledged writes not yet durably replicated. Observed lag does not by itself guarantee a worst-case recovery point.
@@ -79,7 +97,19 @@ Every region serves live traffic. Users are routed to the nearest healthy region
 
 Pros: local serving can reduce latency and each region exercises a production path. Failure routing, data promotion and spare-capacity behavior still need separate tests; active-active does not exercise every failover scenario.
 
-Cons: if both regions accept writes to the **same data**, you must handle **conflicts**. And each region needs spare capacity to absorb the other's traffic: with two regions, the simple equal-capacity, equally loaded linear model requires each to use at most 50% of available capacity before loss of one. Real designs need margin and must account for state, retries, caches and resource-specific bottlenecks.
+Cons: if both regions accept writes to the **same data**, you must handle **conflicts**. And each region needs spare capacity to absorb the other's traffic. In the simplest model (equal regions, equally loaded, load divides linearly), when one of N regions fails its traffic is shared by the N − 1 survivors, so each region can run at most at:
+
+```formula
+U_max = (N − 1) / N
+U_max = (2 − 1) / 2 = 0.5 = 50 %
+where
+U_max: the highest safe normal utilisation of each region, as a fraction of its capacity
+N: the number of equal active regions, here 2
+%: per cent; 0.5 = 50 %
+In words: with N regions, survive one failure by keeping each region at most (N − 1)/N busy: 50 % for two regions, about 67 % for three, 75 % for four.
+```
+
+With two regions, each must stay at or below 50% before losing one. Real designs need margin below this and must account for state, retries, caches and resource-specific bottlenecks.
 
 ### Avoiding conflicts: partition the writes
 
@@ -96,9 +126,28 @@ This is often called *geo-partitioning*. CockroachDB, Spanner and DynamoDB-based
 If two regions can write the same record concurrently (DynamoDB global tables, Cassandra multi-DC, CouchDB, multi-primary MySQL), concurrent writes will collide. Options:
 
 1. **Last-writer-wins (LWW)**: keep the write with the highest timestamp. Simple, and what DynamoDB global tables do in their default, eventually consistent mode, but it **silently discards** the other write, and clock skew can make the "wrong" one win. (Since 2025 DynamoDB also offers a multi-Region *strongly* consistent mode for global tables, which avoids conflicts by paying cross-region latency on writes.)
-2. **Merge by data type**: use **CRDTs** (conflict-free replicated data types) that converge under their required delivery and merge assumptions, including eventual exchange of updates: counters (each region increments its own slot; the total is the sum), sets with add/remove semantics, registers with defined rules. Riak and Redis Enterprise's active-active mode use CRDTs.
+2. **Merge by data type**: use **CRDTs** (conflict-free replicated data types) that converge under their required delivery and merge assumptions, including eventual exchange of updates: counters (each region increments its own slot; the total is the sum, shown below), sets with add/remove semantics, registers with defined rules. Riak and Redis Enterprise's active-active mode use CRDTs.
 3. **Application-level resolution**: keep both versions (siblings) and let the application or the user merge them, as with conflicting edits in a document.
 4. **Avoid it for invariants**: anything with a hard constraint (account balance must not go negative; one seat sold once) usually uses a single writer or a consensus-based store (Spanner, CockroachDB). Some bounded invariants can instead use escrow: preallocate disjoint spending or stock rights to regions, and reject locally when rights run out. Transferring rights then requires coordination.
+
+The counter CRDT (often called a G-Counter, a grow-only counter) is the simplest to see. Each region only ever increases its own slot, and merging two copies takes the larger value of each slot, so no increment is ever counted twice or lost:
+
+```formula
+C = c_EU + c_US
+merge(a, b)_r = max(a_r, b_r)
+where
+C: the counter's value as read by anyone
+c_EU: the EU region's slot: how many increments the EU has made
+c_US: the US region's slot
+merge(a, b)_r: slot r of the result of merging two copies a and b of the counter
+a_r: slot r in copy a
+b_r: slot r in copy b
+r: one region's slot, e.g. EU
+max: the larger of the two values
+In words: the total is the sum of every region's slot, and merging keeps the highest value seen for each slot.
+```
+
+If one copy has {EU: 41, US: 60} and another has {EU: 40, US: 62}, the merge is {EU: 41, US: 62}, and the counter reads 103.
 
 > [!example] Shopping basket vs bank balance
 > A basket can use a CRDT with chosen add/remove semantics, but quantities, checkout, deletion and inventory constraints still need explicit product rules. Convergence alone does not bound every bad outcome. An ordinary mergeable balance counter cannot safely let both regions independently approve £100 against the same £150 balance. Escrow can partition spending rights, but neither region may spend beyond its allocation. Route balance updates to the account's fenced home region, or use a strongly consistent store, and atomically validate and apply each debit.
@@ -129,7 +178,7 @@ A **cell-based architecture** divides the system into many independent, identica
    customers mapped to one cell
 ```
 
-- **Blast radius**: a cell-local failure can be contained to that cell if shared dependencies remain healthy. With 20 equally populated cells, one cell holds 5% of customers.
+- **Blast radius**: a cell-local failure can be contained to that cell if shared dependencies remain healthy. With 20 equally populated cells, one cell holds 1/20 = 5% of customers.
 - **Staged deploys**: roll out to one cell, watch, then expand in waves.
 - **Known scaling limits**: each cell has a fixed maximum size that has been load tested. Growth means adding cells, not scaling one system into unknown territory.
 - **Routing layer**: a thin, extremely simple router (often a lookup of customer → cell) is a shared dependency to keep minimal and robust; audit other shared services and control-plane dependencies too.

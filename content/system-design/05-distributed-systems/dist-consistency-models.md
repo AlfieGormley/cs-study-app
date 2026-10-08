@@ -8,7 +8,7 @@ summary: What linearizable, sequential, causal and eventual consistency actually
 
 When data is replicated, different clients can see different values at the same moment. A **consistency model** is a contract that says which histories of reads and writes are allowed. Stronger models allow fewer surprising histories, at a cost in latency and availability.
 
-CAP's "C" means one specific model, linearizability. In practice there's a whole spectrum, and choosing the right point on it is one of the most important design decisions you make.
+The CAP theorem's "C" means one specific model, linearizability. In practice there's a whole spectrum, and choosing the right point on it is one of the most important design decisions you make.
 
 ## The hierarchy
 
@@ -27,6 +27,8 @@ Each level shown allows every history the level above allows, plus more. Session
 ## Linearizability
 
 **Linearizability** (also called atomic or strong consistency) means the system behaves as if there were **one copy** of the data, and every operation takes effect **atomically at some instant between its start and its end**.
+
+In the timelines below, x is a single stored value (one key) that starts at 0. `write x=1` means a client sets it to 1, `read x` means a client asks for its current value, and each bar runs from when the client sent the request to when it got the reply.
 
 The key consequence is **recency**: once a write completes, every later read (in real time) must see it or something newer. And once any client has read a new value, no later read anywhere may return the old one.
 
@@ -61,7 +63,7 @@ Linearizability is **local** (Herlihy and Wing call it *composable*): if every i
 
 ### What it costs
 
-Linearizability needs coordination (a single leader with synchronous confirmation, or consensus). Every read and write must reach a majority or the leader, so latency includes at least one round trip to them. During a partition, the minority side must stop serving. That's CAP, and PACELC's "else latency" is the cost even without partitions.
+Linearizability needs coordination (a single leader with synchronous confirmation, or consensus). Every read and write must reach a majority or the leader, so latency includes at least one round trip to them. During a partition, the minority side must stop serving. That's the CAP theorem, and PACELC's "else latency" is the cost even without partitions.
 
 > [!note] Linearizable vs serializable
 > **Serializability** is about *transactions* over many objects: the result equals *some* serial order, which needn't match real time. **Linearizability** is about *single operations* respecting real time. Having both is called **strict serializability**. Spanner (which calls it external consistency) and FoundationDB provide it; CockroachDB provides serializability with somewhat weaker real-time guarantees.
@@ -163,7 +165,7 @@ A common pattern is to mix them: strong consistency for a small core (account ba
 
 ## Key takeaways
 - A consistency model defines which read/write histories are allowed; stronger means fewer anomalies but more coordination.
-- Linearizability = one copy, real-time order. Needed for locks, leader election and uniqueness; it costs latency and partition availability.
+- Linearizability means one copy and real-time order. Needed for locks, leader election and uniqueness; it costs latency and partition availability.
 - Sequential consistency keeps per-client order but not real time; causal consistency orders only causally related operations.
 - Linearizability composes across objects (you can shard it); sequential consistency doesn't.
 - Causal consistency can preserve availability for clients that remain on a suitable replica (sticky availability); arbitrary client migration during a partition can require waiting for dependencies.

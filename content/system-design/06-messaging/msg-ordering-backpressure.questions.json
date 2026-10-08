@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. FIFO rule: one receive may contain multiple same-group messages; further receives for the group wait for deletion or visibility expiry. Process same-group effects in order.\n2. Across groups: independent.\n3. Effective parallelism = min(consumers, active groups) = min(50, 10,000) = **50**.\n4. Contrast: if `MessageGroupId` were a constant like `\"all\"`, parallelism would be **1**, a very common mistake.\n5. Throughput ceiling still applies: 300 API calls/s per action without batching (3,000 messages/s with batches of 10), or higher in high-throughput mode.",
+    "workedExample": "1. FIFO rule: one receive may contain multiple same-group messages; further receives for the group wait for deletion or visibility expiry. Process same-group effects in order.\n2. Across groups: independent.\n3. Effective parallelism is limited by whichever is scarcer, consumers or groups with work:\n\n```formula\nP = min(C, G)\nP = min(50, 10000) = 50\nwhere\nP: how many consumers can work at the same time\nmin: the smaller of the two values\nC: the number of single-job consumers, here 50\nG: the number of message groups with available work, here 10,000\nIn words: each consumer needs a group of its own to work on, so parallelism is capped by the consumers or by the groups, whichever is smaller: here 50.\n```\n\n4. Contrast: if `MessageGroupId` were a constant like `\"all\"`, parallelism would be **1**, a very common mistake.\n5. Throughput ceiling still applies: 300 API calls/s per action without batching (3,000 messages/s with batches of 10), or higher in high-throughput mode.",
     "link": {
       "title": "Amazon SQS FIFO queues",
       "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Use the diagnosis checklist:\n\n1. **All partitions or one?** One → partition-specific cause.\n2. **Is the committed offset moving?**\n   - Not moving + errors in logs → **poison message** stuck in a retry loop. CPU is low because the consumer spends its time in backoff sleeps.\n   - Moving slowly with high CPU on that one consumer → **hot key**.\n3. Low CPU here points to the poison message.\n4. Fix: route the failing record to a retry/dead-letter topic (or park its key) so the partition can proceed; add an alert on 'offset not advancing for N minutes'.",
+    "workedExample": "Use the diagnosis checklist:\n\n1. **All partitions or one?** One → partition-specific cause.\n2. **Is the committed offset moving?**\n   - Not moving + errors in logs → **poison message** stuck in a retry loop. CPU is low because the consumer spends its time in backoff sleeps.\n   - Moving slowly with high CPU on that one consumer → **hot key**.\n3. Low CPU here points to the poison message.\n4. Fix: route the failing record to a retry/dead-letter topic (or park its key) so the partition can proceed; add an alert on 'offset not advancing for, say, 10 minutes'.",
     "link": {
       "title": "Error handling patterns in Kafka (Confluent)",
       "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. **Estimate average backlog age under these assumptions**: `180,000 ÷ 2,000/s = 90 s`.\n2. **Read the trend**: flat → consume rate = produce rate ≈ 2,000/s.\n3. **Interpretation**: steady state with a 90-second delay. The group is not falling behind, but it is not catching up either.\n4. **If 90 s is too slow** for the product, you need consumption above 2,000/s for a while. E.g. at 2,500/s the backlog drains at 500/s → 180,000 ÷ 500 = 360 s to catch up.",
+    "workedExample": "1. **Estimate average backlog age under these assumptions**, then how long catching up would take if the group could consume at 2,500 a second:\n\n```formula\nt_lag ≈ lag / λ\nt_lag ≈ 180000 / 2000/s = 90 s\nT_catch = lag / (μ − λ)\nT_catch = 180000 / (2500/s − 2000/s)\nT_catch = 180000 / 500/s = 360 s\nwhere\nt_lag: how far behind real time the group is, in seconds (s)\nlag: the total consumer lag, 180,000 records\nλ: lambda, the rate records arrive, 2,000 per second\nT_catch: the time to clear the lag, in seconds\nμ: mu, a faster consumption rate you might provision, 2,500 per second\n≈: approximately equal to\ns: seconds; \"/s\" means per second\nIn words: the group is 90 seconds of traffic behind; consuming 500 a second faster than records arrive would clear that in 6 minutes.\n```\n\n2. **Read the trend**: flat lag means the consumption rate equals the production rate, about 2,000 per second.\n3. **Interpretation**: steady state with a 90-second delay. The group is not falling behind, but it is not catching up either.\n4. **If 90 s is too slow** for the product, you need consumption above 2,000 per second for a while, as in the catch-up line above.",
     "link": {
       "title": "Kafka consumer (Confluent)",
       "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. **Root cause**: Kafka's pull model gives you backpressure for free, but an unbounded in-memory queue throws it away. The consumer keeps pulling at network speed while the database processes at incident speed.\n2. **Memory maths**: 20,000 records/s fetched, 2,000/s processed, 2 KB each → 36 MB/s growth → a 4 GB heap is full in under 2 minutes.\n3. **Fix**:\n   - `ArrayBlockingQueue(capacity = 1000)`.\n   - When it is above 80%: `consumer.pause(assignment())`.\n   - When it is below 20%: `consumer.resume(...)`.\n   - Keep calling `poll()` (which returns nothing for paused partitions) so heartbeats and `max.poll.interval.ms` are satisfied.\n4. Commit only the next offset after the highest contiguous completed record per partition; account for tasks still running when ownership changes.\n5. Now the backlog sits in Kafka as lag, visible and durable, instead of in RAM.",
+    "workedExample": "1. **Root cause**: Kafka's pull model gives you backpressure for free, but an unbounded in-memory queue throws it away. The consumer keeps pulling at network speed while the database processes at incident speed.\n2. **Memory maths**:\n\n```formula\ng = (r_in − r_out) × b\ng = (20000/s − 2000/s) × 2 KB\ng = 36000 KB/s = 36 MB/s\nT = M / g = 4000 MB / 36 MB/s ≈ 111 s\nwhere\ng: how fast the in-memory queue grows, in megabytes per second (MB/s)\nr_in: records fetched per second, 20,000\nr_out: records processed per second, 2,000\nb: the size of one record, 2 kilobytes (KB)\nT: the time until memory is full, in seconds (s)\nM: the heap memory available, 4 gigabytes (GB), which is 4,000 MB\nKB: kilobytes, thousands of bytes\nMB: megabytes, millions of bytes\ns: seconds; \"/s\" means per second\n≈: approximately equal to\nIn words: fetching 18,000 more records a second than it can process fills 36 MB a second, so a 4 GB heap is full in under 2 minutes.\n```\n\n3. **Fix**:\n   - `ArrayBlockingQueue(capacity = 1000)`.\n   - When it is above 80%: `consumer.pause(assignment())`.\n   - When it is below 20%: `consumer.resume(...)`.\n   - Keep calling `poll()` (which returns nothing for paused partitions) so heartbeats and `max.poll.interval.ms` are satisfied.\n4. Commit only the next offset after the highest contiguous completed record per partition; account for tasks still running when ownership changes.\n5. Now the backlog sits in Kafka as lag, visible and durable, instead of in RAM.",
     "link": {
       "title": "Kafka consumer (Confluent)",
       "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
@@ -181,7 +181,7 @@
       1,
       2
     ],
-    "workedExample": "Ask of each mechanism: **when the downstream is slow, does the upstream end up sending less?**\n\n1. Producer buffer full → `send()` blocks → application produces less. ✓\n2. `request(n)` → publisher limited to n. ✓\n3. Prefetch full → broker stops pushing to that consumer. ✓\n4. Autoscaling → downstream gets faster; upstream unchanged. ✗ (useful, but different)\n5. Tight retries → upstream sends **more**. ✗",
+    "workedExample": "Ask of each mechanism: **when the downstream is slow, does the upstream end up sending less?**\n\n1. Producer buffer full → `send()` blocks → application produces less. ✓\n2. `request(n)` → the publisher may send only as many items as have been requested. ✓\n3. Prefetch full → broker stops pushing to that consumer. ✓\n4. Autoscaling → downstream gets faster; upstream unchanged. ✗ (useful, but different)\n5. Tight retries → upstream sends **more**. ✗",
     "link": {
       "title": "Reactive Streams specification",
       "url": "https://www.reactive-streams.org/"
@@ -279,7 +279,7 @@
       3,
       4
     ],
-    "workedExample": "1. Default `max.poll.interval.ms` = **5 minutes** (300 s).\n2. Batch time = 500 × 0.7 s = **350 s** > 300 s.\n3. The client leaves the group → rebalance → partitions move → the new owner reprocesses from the last commit and hits the same limit. Lag grows everywhere.\n4. Fixes act on one side of the inequality `batch time < max.poll.interval.ms`:\n   - smaller batches (`max.poll.records = 100` → 70 s)\n   - a larger interval\n   - decouple processing from polling (pool + pause/resume)\n5. `session.timeout.ms` is the heartbeat liveness check, a separate mechanism.",
+    "workedExample": "1. Default `max.poll.interval.ms` = **5 minutes** (300 s).\n2. Compare the batch time with the limit:\n\n```formula\nT_batch = n × t\nT_batch = 500 × 0.7 s = 350 s\n350 s > 300 s\nwhere\nT_batch: the time to process one poll's batch, in seconds (s)\nn: records returned per poll (max.poll.records), here 500\nt: processing time per record, here 0.7 s (700 ms)\n>: is greater than\ns: seconds\nIn words: 500 records at 0.7 seconds each take 350 seconds, longer than the 300-second (5-minute) poll interval.\n```\n\n3. The client leaves the group → rebalance → partitions move → the new owner reprocesses from the last commit and hits the same limit. Lag grows everywhere.\n4. The batch time must stay below `max.poll.interval.ms`, so the fixes act on one side or the other:\n   - smaller batches (`max.poll.records = 100` → 70 s)\n   - a larger interval\n   - decouple processing from polling (pool + pause/resume)\n5. `session.timeout.ms` is the heartbeat liveness check, a separate mechanism.",
     "link": {
       "title": "Kafka consumer (Confluent docs)",
       "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
@@ -331,7 +331,7 @@
       },
       {
         "text": "Use exponential backoff with jitter, and a circuit breaker that pauses consumption while the database is unhealthy and resumes gradually",
-        "explanation": "Correct. Jitter spreads retries out so they do not arrive in lockstep, backoff reduces pressure the longer the outage lasts, and the breaker stops consumers hammering a known-bad dependency. The backlog waits safely in the broker."
+        "explanation": "Correct. Retry jitter spreads retries out so they do not arrive in lockstep, backoff reduces pressure the longer the outage lasts, and the breaker stops consumers hammering a known-bad dependency. The backlog waits safely in the broker."
       },
       {
         "text": "Increase the database connection pool size",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Fixed delays synchronise clients: everything that failed at time *t* retries at *t* + 30 s, together.\n2. 200 instances × their in-flight batches all retrying at once is a **retry storm**, landing just as the database is weakest.\n3. Fix in layers:\n   - **Exponential backoff**: 1 s, 2 s, 4 s … capped.\n   - **Jitter**: randomise each delay (for example \"full jitter\": uniform between 0 and the backoff).\n   - **Circuit breaker**: after N consecutive failures, stop consuming for a period; probe with a few requests; resume gradually.\n4. For a log or queue, pausing is cheap: the data waits in the broker as lag.",
+    "workedExample": "1. Fixed delays synchronise clients: everything that failed at the same moment retries exactly 30 seconds later, together.\n2. 200 instances × their in-flight batches all retrying at once is a **retry storm**, landing just as the database is weakest.\n3. Fix in layers:\n   - **Exponential backoff**: 1 s, 2 s, 4 s … capped.\n   - **Retry jitter**: randomise each delay (for example \"full jitter\": uniform between 0 and the backoff).\n   - **Circuit breaker**: after a set number of consecutive failures (say 5), stop consuming for a period; probe with a few requests; resume gradually.\n4. For a log or queue, pausing is cheap: the data waits in the broker as lag.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (Amazon Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Size against **both** write limits and take the larger:\n\n1. Bytes: `4,000 × 500 B = 2,000,000 B/s ≈ 2 MB/s` → `2 ÷ 1 = 2` shards.\n2. Records: `4,000 ÷ 1,000 = 4` shards.\n3. Minimum = max(2, 4) = **4**.\n\nSmall records hit the record limit first; large records hit the byte limit. In practice add headroom and check for hot partition keys, since the limits apply per shard, not to the stream on average.",
+    "workedExample": "Size against **both** write limits and take the larger:\n\n```formula\nW = 4000/s × 500 B = 2 MB/s\nS_W = 2 MB/s / 1 MB/s = 2\nS_R = 4000/s / 1000/s = 4\nS = max(S_W, S_R) = 4\nwhere\nW: bytes written per second: 4,000 records of 500 bytes is 2,000,000 B/s, about 2 MB/s\nB: bytes\nS_W: shards needed for the byte limit of 1 MB/s per shard\nS_R: shards needed for the record limit of 1,000 records per second per shard\nS: the minimum number of shards\nmax: the larger of the values\nMB: megabytes, millions of bytes; \"MB/s\" is megabytes per second\ns: seconds; \"/s\" means per second\nIn words: bytes need 2 shards but records need 4, and the stream must satisfy both, so it needs 4.\n```\n\nSmall records hit the record limit first; large records hit the byte limit. In practice add headroom and check for hot partition keys, since the limits apply per shard, not to the stream on average.",
     "link": {
       "title": "Amazon Kinesis Data Streams quotas and limits (AWS docs)",
       "url": "https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html"

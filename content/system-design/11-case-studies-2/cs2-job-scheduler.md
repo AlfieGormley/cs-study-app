@@ -27,21 +27,61 @@ A distributed scheduler is really three systems. A **durable store of what shoul
 
 ## Back-of-the-envelope
 
+Assume 100 M (100 million) schedules, mostly recurring, and that on average each one runs about once every 3 hours (10,800 seconds). The average firing rate is the number of schedules divided by how often each fires:
+
+```formula
+r = J / p
+r = 100,000,000 / 10,800 s ≈ 9,300 runs/s
+where
+r: average job runs started per second, across all schedules
+J: schedules stored; here 100 million
+p: average gap between one schedule's runs, in seconds (s); 3 hours = 10,800 s
+s: seconds
+runs: job executions
+≈: approximately equal to
+In words: 100 million jobs that each run every three hours start about 9,300 runs a second on average.
 ```
-Schedules: 100 M (mostly recurring)
-Avg frequency: ~1 run / 3 h
-  100e6 / 10,800 s = ~9,300 runs/s avg
 
-Top-of-hour spike ("0 * * * *"):
-  say 10 M schedules are hourly
-  and 20% of them fire at :00
-  -> 2 M runs due at hh:00:00
-  -> ~200x the per-second average
-  spread over 60 s: ~33,000/s
+Averages hide the real load. Cron schedules cluster on round times: the hourly expression `0 * * * *` means "minute 0 of every hour". Say 10 M schedules are hourly and 20% of those fire exactly at the top of the hour (hh:00:00):
 
-Job record ~1 KB  -> 100 GB
-Run history ~500 B x 9,300/s x 86,400
-  = ~400 GB/day (TTL to 30 days = 12 TB)
+```formula
+B = H × f
+B = 10,000,000 × 0.2 = 2,000,000 runs
+m = B / r = 2,000,000 / 9,300 ≈ 215
+B / 60 s ≈ 33,000 runs/s
+where
+B: runs due in the same second at the top of the hour
+H: hourly schedules; here 10 million
+f: fraction of them that fire exactly at :00; here 20% = 0.2
+m: how many times bigger that burst is than one second's average load
+r: the average rate, about 9,300 runs per second
+60 s: one minute, if the burst may be spread across it
+s: seconds
+runs: job executions
+≈: approximately equal to
+In words: 2 million runs land in the same second, more than 200 times an average second; even spread over a minute that is about 33,000 a second.
+```
+
+Storage, assuming about 1 KB (kilobyte) per job record and about 500 bytes per run-history row:
+
+```formula
+D_jobs = 100,000,000 × 1 KB = 100 GB
+D_runs = 500 B × 9,300/s × 86,400 s
+D_runs ≈ 400 GB/day
+D_30 = 400 GB/day × 30 days = 12 TB
+where
+D_jobs: storage for all job definitions
+D_runs: run history written per day
+D_30: run history kept with a 30-day TTL (time to live: rows are deleted after 30 days)
+B: bytes
+KB: kilobytes, 1,000 bytes
+GB: gigabytes, 1,000,000,000 bytes
+TB: terabytes, 1,000 GB
+s: seconds; a day has 86,400 s
+day: one day
+days: days
+≈: approximately equal to
+In words: the job table is about 100 GB, but run history grows by about 400 GB a day, so 30 days of it is about 12 TB.
 ```
 
 What matters:
@@ -149,25 +189,25 @@ COMMIT;
 
 - The `(shard_id, next_run_at)` index makes the scan cheap.
 - `FOR UPDATE SKIP LOCKED` (PostgreSQL, MySQL 8) lets several pollers share a shard safely, because each skips rows another poller has locked.
-- Reading **5 s ahead** and dispatching into an in-memory timer absorbs polling jitter, which can reduce polling jitter. Persist pending dispatch so timers can be rebuilt after failure; no timer guarantees exact execution time.
+- Reading **5 s ahead** and dispatching into an in-memory timer absorbs polling jitter, the small variation in exactly when each poll runs. Persist pending dispatch so timers can be rebuilt after failure; no timer guarantees exact execution time.
 - Computing `next_run_at` *in the same transaction* as the run insert makes the run creation, next-time update and durable outbox intent atomic under the database durability contract. The relay and worker still require recovery and deduplication.
 
 ### Option B: time-bucketed tables
 Write jobs into buckets keyed by minute: `due(bucket = '2026-10-01T09:00', shard, job_id)`. The scheduler reads due buckets, including missed buckets after downtime; reschedules and cancellation need version checks and bucket cleanup. This works well on Cassandra or DynamoDB, which support secondary indexing but still benefit from deliberately partitioned time buckets rather than one hot global due-time access path.
 
 ### Option C: in-memory timing wheel
-Load the next N minutes of due jobs into a **hierarchical timing wheel**: an array of slots, one per second, with overflow wheels for minutes and hours. Insertion can be O(1) for a fixed number of wheel levels; expiring a bucket costs at least O(k) for its k due timers. Kafka uses timing wheels internally for delayed operations. The database stays the source of truth, and the wheel is a cache of the near future, rebuilt from the store on failover.
+Load the next N minutes of due jobs into a **hierarchical timing wheel**: an array of slots, one per second, with overflow wheels for minutes and hours. Insertion can be O(1), meaning constant time however many timers exist, for a fixed number of wheel levels; expiring a bucket costs at least O(k), time proportional to k, for its k due timers. Kafka uses timing wheels internally for delayed operations. The database stays the source of truth, and the wheel is a cache of the near future, rebuilt from the store on failover.
 
 ### Option D: delayed-message queues
 For one-off delays, a queue with native delay does the waiting for you. SQS delay queues and per-message timers support delays of up to 15 minutes (FIFO queues only support the queue-level delay). For anything longer, AWS points you at EventBridge Scheduler. A Redis sorted set scored by timestamp, polled with `ZRANGEBYSCORE` and moved atomically into recoverable in-flight state with a Lua script, is a popular DIY version. Long delays go in the database, and are moved into the short-delay queue when they're close.
 
 ## Deep dive 2: who is in charge? Leader election and sharding
 
-A **single leader** scheduler is simple, but it's a throughput ceiling and its failover is a visible outage. Slack's write-up is a useful real example: it replaced a single cron host with a scheduler service that runs several pods with leader election, hands the work to its distributed job queue, and records runs in a database table for deduplication and monitoring. Instead, split jobs into many **shards** (say 1,024, using `shard_id = hash(job_id) % 1024`) and give each shard exactly one owner at a time.
+A **single leader** scheduler is simple, but it's a throughput ceiling and its failover is a visible outage. Slack's write-up is a useful real example: it replaced a single cron host with a scheduler service that runs several pods with leader election, hands the work to its distributed job queue, and records runs in a database table for deduplication and monitoring. Instead, split jobs into many **shards** (say 1,024, using `shard_id = hash(job_id) % 1024`, where `%` is the remainder after division, so every job lands in a shard numbered 0 to 1,023) and give each shard exactly one owner at a time.
 
 - Owners take **leases** in a coordination service (etcd, ZooKeeper, Consul). Each lease has a TTL (say 10 s) and is renewed every few seconds.
 - If a node dies, its leases expire, and other nodes claim the orphaned shards.
-- Rebalance as nodes join, aiming for about 1,024/N shards each.
+- Rebalance as nodes join, aiming for about 1,024/N shards each, where N is the number of scheduler nodes.
 
 ### Split brain and fencing
 Leases expire by **time**, and a paused process (a 15 s GC pause, a frozen VM) doesn't know its lease ran out. When it wakes, it may still act as owner while the new owner also acts. Defences:
@@ -189,14 +229,14 @@ QUEUED -> LEASED(worker, until)
 - A worker **leases** a run (like an SQS visibility timeout) and **heartbeats** to extend the lease for long jobs.
 - It **acks only after** the work completes. If it crashes, the lease expires and the run is redelivered.
 - Therefore a run may execute **more than once**: a worker can finish the work and then die before acking. Exactly-once *execution* is impossible in general (it's the Two Generals problem in disguise). What you can achieve is **effectively-once effects** when the side-effect destination enforces deduplication or the effect and run record share one atomic transaction. A local pre-send flag can lose work, and a post-send flag leaves ambiguity.
-- Retries use exponential backoff with **jitter**, and go to a dead-letter queue after max attempts, with an alert to the owner.
+- Retries use exponential backoff with **random jitter** (a random extra delay), and go to a dead-letter queue after max attempts, with an alert to the owner.
 
 ## Deep dive 4: cron semantics that bite
 
-- **Time zones and DST**: "01:30 Europe/London" doesn't exist on the last Sunday in March (clocks jump from 01:00 GMT to 02:00 BST), and occurs *twice* on the last Sunday in October. Choose and document a policy (for example, skip non-existent times, and fire once on the first occurrence). Always store the zone, not a UTC offset.
+- **Time zones and DST**: "01:30 Europe/London" doesn't exist on the last Sunday in March (clocks jump from 01:00 GMT, Greenwich Mean Time, to 02:00 BST, British Summer Time), and occurs *twice* on the last Sunday in October. Choose and document a policy (for example, skip non-existent times, and fire once on the first occurrence). Always store the zone, not a UTC offset.
 - **Missed runs**: if the scheduler was down from 08:55 to 09:10, does the 09:00 run fire late, or get skipped? Kubernetes CronJob exposes this as `startingDeadlineSeconds`: a run that can't start within that many seconds of its scheduled time is counted as missed and skipped. Offer per-job policy, and limit catch-up to stop a flood of backlogged runs after an outage.
 - **Overlap**: a job scheduled every minute that takes 3 minutes. Policies are **Allow** (run concurrently), **Forbid** (do not start concurrently; missed occurrences may still start later within the starting deadline) and **Replace** (replace the running Job). These are Kubernetes' `concurrencyPolicy` values.
-- **Thundering herd**: add deterministic **jitter** within a window the tenant allows ("hourly, any time in the first 5 minutes"). Hash `job_id` to an offset so each job is stable from run to run but the jobs spread out.
+- **Thundering herd**: add **deterministic jitter** within a window the tenant allows ("hourly, any time in the first 5 minutes"). Hash `job_id` to an offset so each job is stable from run to run but the jobs spread out.
 
 ## Multi-tenancy and fairness
 
@@ -221,8 +261,8 @@ QUEUED -> LEASED(worker, until)
 - Separate the durable schedule store, the trigger and the executors. The store is the source of truth, and every in-memory structure (timing wheels, read-ahead buffers) is a rebuildable cache.
 - Find due jobs with an indexed `next_run_at` scan using `FOR UPDATE SKIP LOCKED` and read-ahead, advancing `next_run_at` in the same transaction as recording the run.
 - Shard schedules and give each shard one owner via leases. Leases alone aren't safe, so add fencing tokens and an idempotent `(job_id, scheduled_at)` run key.
-- Recovery uses leases, heartbeats and acknowledgments after work; attempts may repeat, while deadlines/retry limits can stop eventual execution. Make side effects idempotent with the run id, and use backoff with jitter plus a dead-letter queue.
-- Handle cron edge cases explicitly: DST gaps and overlaps, missed-run policy, concurrency policy, and top-of-hour spikes (add jitter).
+- Recovery uses leases, heartbeats and acknowledgments after work; attempts may repeat, while deadlines/retry limits can stop eventual execution. Make side effects idempotent with the run id, and use backoff with random jitter plus a dead-letter queue.
+- Handle cron edge cases explicitly: DST gaps and overlaps, missed-run policy, concurrency policy, and top-of-hour spikes (add deterministic jitter).
 
 ## Further reading
 - [Executing cron scripts reliably at scale (Slack Engineering)](https://slack.engineering/executing-cron-scripts-reliably-at-scale/)

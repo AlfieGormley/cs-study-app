@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Majority of 5 = ⌊5/2⌋ + 1 = **3**.\n2. Partition: side A has 3 nodes, side B has 2.\n3. Side A can elect a leader (3 votes) and commit writes (3 acks).\n4. Side B can't get 3 votes or 3 acks, so writes there fail or time out. Any old leader on side B steps down when it can't reach a majority.\n\nIn CAP terms: non-failing nodes on side B can't serve writes, so it's not CAP-available; but it stays linearisable, so it's CP. In practice, availability is still high, because clients can reconnect to side A.",
+    "workedExample": "First, the size of a majority:\n\n```formula\nQ = ⌊N / 2⌋ + 1\nQ = ⌊5 / 2⌋ + 1 = 2 + 1 = 3\nwhere\nQ: the majority (quorum) size, the fewest nodes that make up more than half the cluster\nN: the number of nodes in the cluster, 5\n⌊ ⌋: floor: round down to a whole number (2.5 becomes 2)\nIn words: a majority is just over half, so two groups can never both have one.\n```\n\n1. A majority of 5 nodes is **3**.\n2. Partition: side A has 3 nodes, side B has 2.\n3. Side A can elect a leader (3 votes) and commit writes (3 acks).\n4. Side B can't get 3 votes or 3 acks, so writes there fail or time out. Any old leader on side B steps down when it can't reach a majority.\n\nIn CAP terms: non-failing nodes on side B can't serve writes, so it's not CAP-available; but it stays linearisable, so it's CP. In practice, availability is still high, because clients can reconnect to side A.",
     "link": {
       "title": "Please stop calling databases CP or AP (Martin Kleppmann)",
       "url": "https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html"
@@ -151,7 +151,7 @@
       1,
       2
     ],
-    "workedExample": "Test each claim against the precise definitions:\n\n- C = linearisable; A = every non-failing node responds; P = arbitrary message loss.\n\n1. Single node: C and A can coexist with an appropriate implementation; neither follows solely from having one node. True as qualified.\n2. CP + high availability: CAP-A is all-or-nothing per node; operational availability is measured over requests. True.\n3. PACELC else-branch: true by definition.\n4. Non-linearisable ⇒ available? No; async leader-follower is a counterexample.\n5. CAP is binary, not a dial. False.",
+    "workedExample": "Test each claim against the precise definitions:\n\n- C means linearisable; A means every non-failing node responds; P means the network may lose arbitrary messages.\n\n1. Single node: C and A can coexist with an appropriate implementation; neither follows solely from having one node. True as qualified.\n2. CP + high availability: CAP-A is all-or-nothing per node; operational availability is measured over requests. True.\n3. PACELC else-branch: true by definition.\n4. Non-linearisable ⇒ available? No; async leader-follower is a counterexample.\n5. CAP is binary, not a dial. False.",
     "link": {
       "title": "CAP Twelve Years Later (Eric Brewer, InfoQ)",
       "url": "https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/"
@@ -221,11 +221,11 @@
     "id": "fund-cap-pacelc-q8",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "A Cassandra table has replication factor **N = 3**. Which (write level, read level) combinations guarantee that a read overlaps with at least one replica holding the latest successful write? Select all that apply.",
+    "prompt": "A Cassandra table has replication factor **3**: every row is stored on 3 replicas. Which (write level, read level) combinations guarantee that a read overlaps with at least one replica holding the latest successful write? Select all that apply.",
     "options": [
       {
         "text": "Write `QUORUM`, read `QUORUM`",
-        "explanation": "Correct. W + R = 2 + 2 = 4 > 3, so every read set shares at least one replica with every write set."
+        "explanation": "Correct. 2 replicas written plus 2 replicas read is 4, more than the 3 replicas, so every read set shares at least one replica with every write set."
       },
       {
         "text": "Write `ONE`, read `ONE`",
@@ -248,7 +248,7 @@
       0,
       2
     ],
-    "workedExample": "The overlap rule is **W + R > N**.\n\n| W | R | W+R | Overlap? |\n|---|---|---|---|\n| 2 | 2 | 4 | Yes |\n| 1 | 1 | 2 | No |\n| 3 | 1 | 4 | Yes |\n| 1 | 2 | 3 | No |\n| 2 | 1 | 3 | No |\n\nOverlap is necessary but not sufficient for linearisability: with last-write-wins timestamps and concurrent writes, Cassandra needs lightweight transactions for that. In PACELC terms, higher W and R move you from EL towards EC, paying latency on every request.",
+    "workedExample": "The overlap rule:\n\n```formula\nW + R > N\nwhere\nW: the number of replicas that must acknowledge a write (ONE = 1, QUORUM = 2, ALL = 3 here)\nR: the number of replicas a read consults\nN: the replication factor, the number of replicas holding each row, 3\n>: is greater than\nIn words: if the replicas written plus the replicas read add up to more than the total, the two groups must share at least one replica.\n```\n\n| W | R | W+R | Overlap? |\n|---|---|---|---|\n| 2 | 2 | 4 | Yes |\n| 1 | 1 | 2 | No |\n| 3 | 1 | 4 | Yes |\n| 1 | 2 | 3 | No |\n| 2 | 1 | 3 | No |\n\nOverlap is necessary but not sufficient for linearisability: with last-write-wins timestamps and concurrent writes, Cassandra needs lightweight transactions for that. In PACELC terms, higher W and R move you from EL towards EC, paying latency on every request.",
     "link": {
       "title": "Dynamo-style replication and tunable consistency (Apache Cassandra docs)",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
@@ -338,7 +338,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "An ATM can continue serving within a local limit and later reconcile its withdrawal log. If a card is used at k disconnected ATMs, each allowing £200 independently, total withdrawals can reach £200 × k in a day. That is not a global £200 exposure guarantee. A stricter global bound requires spending rights allocated in advance or a reachable coordinating authority.\n\nThe £200 amount is a hypothetical exercise limit, not a sourced banking policy.",
+    "workedExample": "An ATM can continue serving within a local limit and later reconcile its withdrawal log. If a card is used at several disconnected ATMs, each allowing £200 independently:\n\n```formula\nM = k × £200\nk = 3: M = 3 × £200 = £600\nwhere\nM: the most that can be withdrawn on one card in a day during the partition, in pounds (£)\nk: the number of disconnected ATMs the card is used at\nIn words: every disconnected ATM applies the limit on its own, so the limits add up.\n```\n\nThat is not a global £200 exposure guarantee. A stricter global bound requires spending rights allocated in advance or a reachable coordinating authority.\n\nThe £200 amount is a hypothetical exercise limit, not a sourced banking policy.",
     "link": {
       "title": "CAP Twelve Years Later (Eric Brewer, InfoQ)",
       "url": "https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/"

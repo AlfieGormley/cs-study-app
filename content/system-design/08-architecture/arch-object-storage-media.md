@@ -78,8 +78,24 @@ Uploading a 4 GB video in one request is fragile: if the connection drops at 3.9
 3. Failed parts are retried individually.
 4. `CompleteMultipartUpload` stitches the parts into one object.
 
+The number of parts is the file size divided by the part size, rounded up (the last part holds whatever is left over):
+
+```formula
+P = ⌈F / S⌉
+P = ⌈4 GB / 100 MB⌉
+P = ⌈4000 MB / 100 MB⌉ = 40
+where
+P: the number of parts to upload
+F: the file size, here 4 gigabytes (GB)
+S: the part size, here 100 megabytes (MB)
+GB: gigabyte; 1 GB = 1,000 MB
+MB: megabyte, a million bytes
+⌈ ⌉: ceiling: round up to the next whole number
+In words: a 4 GB file in 100 MB parts is 40 parts, which can be uploaded side by side.
 ```
- 4 GB file, 100 MB parts = 40 parts
+
+```
+ 40 parts of 100 MB each
  [p1][p2][p3] ... [p40]
    \   |   /        |
    parallel PUTs, retry failures
@@ -89,7 +105,36 @@ Uploading a 4 GB video in one request is fragile: if the connection drops at 3.9
 
 Benefits: parallelism (faster uploads on fat pipes), resilience (lose only one part on failure) and the ability to pause and resume. AWS suggests considering multipart for anything over about 100 MB.
 
-The 10,000-part cap means **part size sets the maximum file size**. With 100 MB parts you top out at about 1 TB; to reach the 48.8 TiB maximum you need parts near the 5 GiB ceiling (10,000 × 5 GiB). Pick a part size from the largest file you expect.
+The 10,000-part cap means **part size sets the maximum file size**:
+
+```formula
+F_max = N_max × S
+F_max = 10000 × 100 MB = 1000000 MB
+F_max = 1 TB
+where
+F_max: the largest file you can upload with that part size
+N_max: S3's maximum number of parts in one upload, 10,000
+S: the part size you chose, here 100 megabytes (MB)
+MB: megabyte, a million bytes
+TB: terabyte, a million MB (10^12 bytes)
+^: "to the power of": 10^12 is a 1 followed by 12 zeros
+In words: with 100 MB parts you top out at about 1 TB.
+```
+
+To reach the 48.8 TiB maximum object size you need parts near the 5 GiB ceiling:
+
+```formula
+F_max = 10000 × 5 GiB = 50000 GiB
+F_max = 50000 / 1024 TiB ≈ 48.8 TiB
+where
+F_max: the largest file with maximum-size parts
+GiB: gibibyte, 1,024 × 1,024 × 1,024 bytes (about 1.07 GB)
+TiB: tebibyte, 1,024 GiB
+≈: approximately equal to (rounded)
+In words: 10,000 parts of 5 GiB each is 50,000 GiB, about 48.8 TiB.
+```
+
+Pick a part size from the largest file you expect.
 
 Set a lifecycle rule to abort incomplete multipart uploads after a few days, or orphaned parts will quietly cost money.
 
@@ -127,7 +172,7 @@ Raw uploads aren't what you want to serve. A phone video might be 4K HEVC at 50 
 Design points:
 
 - **Event-driven and asynchronous**: the upload API returns immediately; the video shows "processing" until done.
-- **Parallelise by chunk**: split work at suitable codec boundaries, encode chunks concurrently, then assemble and package them. Handle keyframes/GOPs, timestamps, audio alignment and rendition boundaries; speedup depends on available workers and split/encode/assembly costs.
+- **Parallelise by chunk**: split work at boundaries the video codec allows, encode chunks concurrently, then assemble and package them. Handle keyframes/GOPs, timestamps, audio alignment and rendition boundaries; speedup depends on available workers and split/encode/assembly costs.
 - **Idempotent, retryable steps**: workers can die (often on cheap spot instances). Include source version and encoding settings in output identity. Deterministic names alone do not guarantee idempotency: write temporary outputs, validate them, and conditionally publish a manifest so a stale retry cannot replace newer work.
 - **A workflow engine** (Step Functions, Temporal, or a simple state table) tracks each video's progress through stages: validate → transcode → thumbnail → moderate → publish.
 - **Prioritise**: publish a low-resolution rendition first so the video is watchable sooner, and fill in higher qualities afterwards.

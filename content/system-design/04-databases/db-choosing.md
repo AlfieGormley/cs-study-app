@@ -21,6 +21,30 @@ Write down how the data is read and written before thinking about products.
 > [!example] Back-of-envelope
 > 20 million users × 50 orders each × 500 bytes = 500 GB of orders. Peak 2,000 writes/s and 20,000 reads/s. That is a candidate for a Postgres primary with read replicas and a cache. Benchmark the actual transactions, indexes, contention and recovery requirements before deciding whether one primary has enough headroom.
 
+The size estimate in that example is a chain of multiplications, the same one you use for any dataset:
+
+```formula
+D = U × k × b
+where
+D: the total data size, in bytes (B), before indexes, replicas and overhead
+U: the number of users (or other top-level entities)
+k: the average number of items per user, here orders
+b: the average size of one item, in bytes (B)
+In words: multiply how many things you have by how big each one is; indexes, replicas and storage overhead then add on top.
+```
+
+```formula
+D = 20,000,000 × 50 × 500 B
+D = 500,000,000,000 B = 500 GB
+where
+D: the total size of the orders data
+B: bytes
+GB: gigabytes, 1,000,000,000 bytes
+In words: 20 million users with 50 half-kilobyte orders each comes to about 500 GB of raw order data.
+```
+
+Treat the result as a lower bound: indexes commonly add a large fraction on top, and every replica or backup multiplies it again.
+
 ## Consistency and transaction needs
 
 - Do you need **multi-row atomic updates**, such as moving money or reserving stock? That points to a relational database or a distributed SQL database (Spanner, CockroachDB, YugabyteDB).

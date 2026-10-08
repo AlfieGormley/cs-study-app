@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Consider the timeline:\n\n1. Client sends `POST /orders` at T=0.\n2. Server inserts the order at T=1.5 s, but a GC pause delays the reply until T=2.3 s.\n3. Client gave up at T=2.0 s and retries.\n4. Server inserts a **second** order.\n\nFix: the client generates `Idempotency-Key: <uuid>` once per logical operation and sends it on every attempt. The server stores `key → result` and, on seeing the key again, returns the stored result instead of re-executing.",
+    "workedExample": "Consider the timeline (T is the time in seconds since the client sent the request):\n\n1. Client sends `POST /orders` at T=0.\n2. Server inserts the order at T=1.5 s, but a GC pause delays the reply until T=2.3 s.\n3. Client gave up at T=2.0 s and retries.\n4. Server inserts a **second** order.\n\nFix: the client generates `Idempotency-Key: <uuid>` once per logical operation and sends it on every attempt. The server stores `key → result` and, on seeing the key again, returns the stored result instead of re-executing.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Track attempts layer by layer:\n\n| Caller | Attempts it makes | Cumulative at next hop |\n|---|---|---|\n| Client → gateway | 3 | 3 |\n| Gateway → A | 3 each | 9 |\n| A → B | 3 each | 27 |\n| B → DB | 3 each | 81 |\n\nFormula: `attempts^layers = 3^4 = 81`.\n\nAt 1,000 user requests/s, the database would receive **81,000 attempts/s** while it's trying to recover. Fix: retry at one layer only (so the DB sees 3), and add a retry budget.",
+    "workedExample": "Track attempts layer by layer:\n\n| Caller | Attempts it makes | Cumulative at next hop |\n|---|---|---|\n| Client → gateway | 3 | 3 |\n| Gateway → A | 3 each | 9 |\n| A → B | 3 each | 27 |\n| B → DB | 3 each | 81 |\n\nEach retrying layer multiplies by its attempts:\n\n```formula\nM = n^L\nM = 3^4 = 3 × 3 × 3 × 3 = 81\nwhere\nM: the attempts reaching the database per user request\nn: the maximum attempts each caller makes, here 3\nL: the number of callers that retry, here 4\n^: \"to the power of\"\nIn words: four layers each making three attempts multiply to 81 database attempts for one user request.\n```\n\nAt 1,000 user requests/s, the database would receive **81,000 attempts/s** while it's trying to recover. Fix: retry at one layer only (so the DB sees 3), and add a retry budget.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Delays without jitter: attempt 0 waits 1 s, attempt 1 waits 2 s, attempt 2 waits 4 s.\n2. All 10,000 clients failed at T=0, so all retry at T=1 s.\n3. Suppose the server can handle 2,000 connects/s: 8,000 fail and all wait 2 s, retrying at T=3 s.\n4. Again a spike, again most fail, next wave at T=7 s.\n\nWith **full jitter**, attempt 0 is uniform over [0, 1 s], so ~10,000 attempts arrive over a full second; attempt 1 over [0, 2 s], and so on. Load is smoothed, but 10,000 attempts/s still exceeds the assumed 2,000/s capacity; sufficient backoff, budgets and admission control are needed for recovery. AWS's simulations found full jitter completes the work with the fewest total calls.",
+    "workedExample": "1. Delays without jitter follow exponential backoff, identical for every client:\n\n```formula\nw = b × 2^a\nw = 1 s × 2^0 = 1 s\nw = 1 s × 2^1 = 2 s\nw = 1 s × 2^2 = 4 s\nwhere\nw: the wait before the next attempt, in seconds (s)\nb: the base delay, here 1 s\na: the retry number, counting from 0\n2^a: 2 to the power a (1, 2, 4, ...)\ns: seconds\nIn words: every client waits 1 s, then 2 s, then 4 s, so they all retry at the same moments: T = 1, 3 and 7 s.\n```\n\n2. All 10,000 clients failed at T=0 (T is seconds since the restart), so all retry at T=1 s.\n3. Suppose the server can handle 2,000 connects/s: 8,000 fail and all wait 2 s, retrying at T=3 s.\n4. Again a spike, again most fail, next wave at T=7 s.\n\nWith **full jitter**, attempt 0 waits a random time anywhere between 0 and 1 s (every value equally likely), so ~10,000 attempts arrive over a full second; attempt 1 between 0 and 2 s, and so on. Load is smoothed, but 10,000 attempts/s still exceeds the assumed 2,000/s capacity; sufficient backoff, budgets and admission control are needed for recovery. AWS's simulations found full jitter completes the work with the fewest total calls.",
     "link": {
       "title": "Exponential backoff and jitter (AWS Architecture Blog)",
       "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
@@ -131,7 +131,7 @@
     "id": "rel-timeouts-retries-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A dependency's latency is p50 = 15 ms, p99 = 80 ms, p99.9 = 140 ms, p99.99 = 2 s (rare GC pauses). You can tolerate about 0.1% of calls timing out and being retried. Which per-try timeout is most sensible?",
+    "prompt": "A dependency's latency percentiles (pN is the latency that N% of calls beat) are p50 = 15 ms, p99 = 80 ms, p99.9 = 140 ms, p99.99 = 2 s (rare GC pauses). You can tolerate about 0.1% of calls timing out and being retried. Which per-try timeout is most sensible?",
     "options": [
       {
         "text": "20 ms, just above p50",
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "**(a) Per-request limit only (max 3 attempts):**\n\n```\nTry 1:    10,000  (50% fail → 5,000)\nRetry 1:   5,000  (50% fail → 2,500)\nRetry 2:   2,500\nTotal:    17,500 req/s  (+75%)\n```\n\n**(b) Retry budget at 10% of requests:**\n\n```\nTry 1:    10,000\nRetries:   1,000 (capped)\nTotal:    11,000 req/s  (+10%)\n```\n\nAt a 90% failure rate, (a) grows to 10,000 + 9,000 + 8,100 = 27,100/s, nearly triple, while (b) stays at 11,000/s. Budgets keep retries useful for blips without letting them pile load onto a struggling dependency.",
+    "workedExample": "**(a) Per-request limit only (max 3 attempts):**\n\n```\nTry 1:    10,000  (50% fail → 5,000)\nRetry 1:   5,000  (50% fail → 2,500)\nRetry 2:   2,500\nTotal:    17,500 req/s  (+75%)\n```\n\nThe same total from the expected-attempts formula:\n\n```formula\nL = N × (1 + p + p^2)\nL = 10,000 × (1 + 0.5 + 0.25)\nL = 10,000 × 1.75 = 17,500 req/s\nwhere\nL: attempts per second reaching the dependency\nN: original requests per second, here 10,000\np: the chance one attempt fails, here 0.5\np^2: p squared, the chance the first two attempts both fail (so a third is made)\nreq/s: requests (attempts) per second\nIn words: with half of attempts failing, each request makes 1.75 attempts on average, 75% extra load.\n```\n\n**(b) Retry budget at 10% of requests:**\n\n```\nTry 1:    10,000\nRetries:   1,000 (capped)\nTotal:    11,000 req/s  (+10%)\n```\n\nAt a 90% failure rate, (a) grows to 10,000 + 9,000 + 8,100 = 27,100/s, nearly triple, while (b) stays at 11,000/s. Budgets keep retries useful for blips without letting them pile load onto a struggling dependency.",
     "link": {
       "title": "Handling overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Edge starts at T=0, deadline T=1.0 s.\n2. A receives the call at T=0.1 and calls B at T=0.3 with a **fresh** 1 s timeout (until T=1.3).\n3. B calls C at T=0.6 with a fresh 1 s timeout (until T=1.6).\n4. At T=1.0 the edge gives up and returns an error to the user, but B and A carry on until T=1.6 and T=1.3, doing useless work.\n\nWith deadline propagation, B receives \"deadline = T+1.0\", sees 0.4 s remaining when calling C, and sets C's timeout to 0.4 s (or skips the call if C's p50 exceeds that). Handlers must observe cancellation and stop cancellable work; deadline propagation alone neither terminates every task nor rolls back completed effects.",
+    "workedExample": "1. Edge starts at T=0 (T is seconds since the edge received the request); deadline T=1.0 s.\n2. A receives the call at T=0.1 and calls B at T=0.3 with a **fresh** 1 s timeout (until T=1.3).\n3. B calls C at T=0.6 with a fresh 1 s timeout (until T=1.6).\n4. At T=1.0 the edge gives up and returns an error to the user, but B and A carry on until T=1.6 and T=1.3, doing useless work.\n\nWith deadline propagation, B receives \"deadline = T+1.0\", sees 0.4 s remaining when calling C, and sets C's timeout to 0.4 s (or skips the call if C's p50 exceeds that). Handlers must observe cancellation and stop cancellable work; deadline propagation alone neither terminates every task nor rolls back completed effects.",
     "link": {
       "title": "Addressing cascading failures (Google SRE book)",
       "url": "https://sre.google/sre-book/addressing-cascading-failures/"
@@ -233,7 +233,7 @@
       },
       {
         "text": "About 6,200/s",
-        "explanation": "Correct. Expected attempts per request = 1 + p + p² = 1 + 0.2 + 0.04 = 1.24, so 5,000 × 1.24 = 6,200/s, about 24% extra load."
+        "explanation": "Correct. Expected attempts per request = 1 + 0.2 + 0.2² = 1 + 0.2 + 0.04 = 1.24, so 5,000 × 1.24 = 6,200/s, about 24% extra load."
       },
       {
         "text": "15,000/s, three attempts for every request",
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Every request makes a first attempt: `5,000/s`.\n2. 20% fail and retry: `5,000 × 0.2 = 1,000/s`.\n3. 20% of those fail and retry once more: `1,000 × 0.2 = 200/s`.\n4. Total: `5,000 + 1,000 + 200 = 6,200/s`.\n\nGeneral form for up to 3 attempts: `1 + p + p²` per request.\n\n```\np = 0.2  → 1.24×\np = 0.5  → 1.75×\np = 1.0  → 3.00×\n```\n\nThe extra load grows as the dependency gets worse, which is why a retry budget (e.g. ≤10% extra) is added on top of the per-request cap.",
+    "workedExample": "1. Every request makes a first attempt: `5,000/s`.\n2. 20% fail and retry: `5,000 × 0.2 = 1,000/s`.\n3. 20% of those fail and retry once more: `1,000 × 0.2 = 200/s`.\n4. Total: `5,000 + 1,000 + 200 = 6,200/s`.\n\nGeneral form for up to 3 attempts:\n\n```formula\nE = 1 + p + p^2\nE = 1 + 0.2 + 0.2^2 = 1.24\nL = N × E = 5,000 × 1.24 = 6,200\nwhere\nE: the expected (average) attempts per request\np: the chance one attempt fails, here 0.2 (20%), assumed independent\np^2: p squared, the chance the first two attempts both fail\nL: attempts per second at the dependency\nN: original requests per second, here 5,000\nIn words: at 20% failure each request averages 1.24 attempts, so 5,000 req/s becomes 6,200 attempts/s.\n```\n\nThe same formula gives 1.75× at p = 0.5 and 3× at p = 1.0.\n\nThe extra load grows as the dependency gets worse, which is why a retry budget (e.g. ≤10% extra) is added on top of the per-request cap.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Trace the loop with maximum sleeps:\n\n```\nt=0    attempt 0, timeout 300\nt=300  fail; sleep ≤ 100×2⁰ = 100\nt=400  attempt 1, timeout 300\nt=700  fail; sleep ≤ 100×2¹ = 200\nt=900  attempt 2:\n       remaining = 1000−900 = 100\n       timeout = min(100,300) = 100\nt=1000 fail → Exhausted\n```\n\nWith full jitter the average sleeps are half the maximum (50 ms, then 100 ms), so the third attempt would usually start around 750 ms and get a 250 ms timeout. This bounds intended waiting in the idealized loop. Actual completion can exceed the deadline because of scheduling delays or an RPC implementation that does not promptly observe cancellation.",
+    "workedExample": "Two rules drive the trace: the largest full-jitter sleep doubles with each retry, and each attempt's timeout is whatever is smaller, the per-try limit or the time left.\n\n```formula\nw_max = B × 2^a\nw_max = 100 ms × 2^1 = 200 ms\nt_out = min(D − t, P)\nt_out = min(1000 − 900, 300) ms\nt_out = min(100, 300) ms = 100 ms\nwhere\nw_max: the longest sleep full jitter can pick after retry number a, in milliseconds (ms)\nB: the base delay (BASE), here 100 ms\na: the retry number, counting from 0\n2^a: 2 to the power a\nt_out: the timeout given to an attempt\nmin: the smaller of the values\nD: the deadline, 1,000 ms after the start\nt: the time now, in ms since the start (900 ms when the third attempt, attempt 2, begins)\nP: the per-try timeout (PER_TRY), here 300 ms\nms: milliseconds\nIn words: by the third attempt only 100 ms of the deadline remain, so that attempt gets 100 ms, not the full 300 ms.\n```\n\nTrace the loop with maximum sleeps (t in ms since the start):\n\n```\nt=0    attempt 0, timeout 300\nt=300  fail; sleep ≤ 100×2⁰ = 100\nt=400  attempt 1, timeout 300\nt=700  fail; sleep ≤ 100×2¹ = 200\nt=900  attempt 2:\n       remaining = 1000−900 = 100\n       timeout = min(100,300) = 100\nt=1000 fail → Exhausted\n```\n\nWith full jitter the average sleeps are half the maximum (50 ms, then 100 ms), so the third attempt would usually start around 750 ms and get a 250 ms timeout. This bounds intended waiting in the idealized loop. Actual completion can exceed the deadline because of scheduling delays or an RPC implementation that does not promptly observe cancellation.",
     "link": {
       "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Per failing request: 2 retries × 5 tokens = `10` tokens.\n2. Drain rate: `100 req/s × 10 = 1,000 tokens/s`.\n3. Time to empty: `500 / 1,000 = 0.5 s`.\n4. After that, every retry is refused:\n\n```\nbefore: 100 × 3 = 300 attempts/s\nafter:  100 × 1 = 100 attempts/s\n```\n\n5. When the dependency recovers, first-try successes refund 1 token each, so retries come back gradually.\n\nIn a simplified steady state where every request either succeeds immediately or fails every attempt, a request that fails every attempt costs 10 tokens and a first-try success refunds 1, so the bucket drains whenever more than about 1 in 11 requests fail outright (`10f > 1 − f` → `f > 9%`). Real SDK costs vary by version and error type; the shape of the behaviour is the point.",
+    "workedExample": "```formula\nc = r × k = 2 × 5 = 10 tokens\nd = R × c\nd = 100 req/s × 10 = 1,000 tokens/s\nt = B / d = 500 / 1,000 = 0.5 s\nwhere\nc: the tokens one fully failing request spends\nr: the retries per failing request, here 2\nk: the token cost of one retry, here 5\nd: the drain rate, tokens per second\nR: the request rate, here 100 requests per second (req/s)\nt: the time until the bucket is empty, in seconds (s)\nB: the bucket capacity, here 500 tokens\ntokens: units of the retry quota; a retry is allowed only if its cost can be paid from the bucket\nreq: requests\ns: seconds\nIn words: each failing request spends 10 tokens; 100 of them a second spend 1,000 tokens a second, emptying a 500-token bucket in half a second.\n```\n\nSo, step by step: 1. each failing request costs 10 tokens; 2. the bucket drains at 1,000 tokens/s; 3. it is empty after 0.5 s.\n4. After that, every retry is refused:\n\n```\nbefore: 100 × 3 = 300 attempts/s\nafter:  100 × 1 = 100 attempts/s\n```\n\n5. When the dependency recovers, first-try successes refund 1 token each, so retries come back gradually.\n\nIn a simplified steady state where every request either succeeds immediately or fails every attempt, a request that fails every attempt costs 10 tokens and a first-try success refunds 1, so the bucket drains whenever more than about 1 in 11 requests fail outright:\n\n```formula\n10 × f > 1 × (1 − f)\n11 × f > 1\nf > 1/11 ≈ 9%\nwhere\nf: the fraction of requests that fail every attempt, from 0 to 1\n10: tokens spent by each fully failing request\n1: tokens refunded by each first-try success\n>: \"is greater than\"\n≈: approximately equal to (rounded)\nIn words: the bucket shrinks when tokens spent exceed tokens refunded, which happens once more than about 9% of requests fail outright.\n```\n\nReal SDK costs vary by version and error type; the shape of the behaviour is the point.",
     "link": {
       "title": "Retry behaviour (AWS SDKs and Tools reference)",
       "url": "https://docs.aws.amazon.com/sdkref/latest/guide/feature-retry-behavior.html"

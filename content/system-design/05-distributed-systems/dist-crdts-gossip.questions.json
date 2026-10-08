@@ -53,7 +53,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Merge = element-wise max:\n\n| | A | B | C |\n|---|---|---|---|\n| A's state | 4 | 1 | 0 |\n| B's state | 2 | 3 | 0 |\n| C's state | 3 | 1 | 2 |\n| **max** | **4** | **3** | **2** |\n\nValue = 4 + 3 + 2 = **9**.\n\nEach entry is only ever incremented by its owner, so the max is that owner's true count. Summing would count A's increments up to three times.",
+    "workedExample": "Merge by taking the element-wise max:\n\n| | A | B | C |\n|---|---|---|---|\n| A's state | 4 | 1 | 0 |\n| B's state | 2 | 3 | 0 |\n| C's state | 3 | 1 | 2 |\n| **max** | **4** | **3** | **2** |\n\n```formula\nM[k] = max(A[k], B[k], C[k])\nv = Σ_k M[k] = 4 + 3 + 2 = 9\nwhere\nA: replica A's vector\nB: replica B's vector\nC: replica C's vector\nk: a position in the vector (one per replica)\nM: the merged vector\nmax: the largest of its inputs\nv: the counter's value\nΣ_k: sigma: add up the term for every position k\nIn words: keep the largest count in each position, then add the positions up.\n```\n\nThe value is **9**.\n\nEach entry is only ever incremented by its owner, so the max is that owner's true count. Summing would count A's increments up to three times.",
     "link": {
       "title": "A comprehensive study of CRDTs (Shapiro et al.)",
       "url": "https://hal.inria.fr/inria-00555588/document"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. A = [A:5], gossips to B. B = [A:5].\n2. A decrements by lowering: A = [A:4].\n3. Merge(A, B) = [max(4, 5)] = [A:5]. The decrement vanished.\n\nPN-Counter fix: keep P = [A:5] and N = [A:1]. Both only grow, so max-merge is correct. Value = 5 − 1 = 4.",
+    "workedExample": "1. A = [A:5], gossips to B. B = [A:5].\n2. A decrements by lowering: A = [A:4].\n3. Merging A with B keeps the larger of 4 and 5 in A's entry, giving [A:5]. The decrement vanished.\n\nPN-Counter fix: keep an increments vector P = [A:5] and a decrements vector N = [A:1]. Both only grow, so max-merge is correct.\n\n```formula\nv = Σ P − Σ N\nv = 5 − 1 = 4\nwhere\nv: the counter's value\nP: the vector of increments, one entry per replica\nN: the vector of decrements, one entry per replica\nΣ: sigma: add up every entry of the vector that follows\nIn words: the value is total increments minus total decrements, and neither vector ever has to shrink.\n```",
     "link": {
       "title": "Conflict-free replicated data type (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Track tags:\n\n1. A: add(milk, a1). Sync → B sees {a1}.\n2. B: remove(milk) → tombstones the tags it sees: {a1}.\n3. A (concurrently): add(milk, a2).\n4. Merge:\n  - adds = {a1, a2}\n  - removed = {a1}\n  - live = {a2} → milk **present**.\n\nA 2P-Set would have said 'removed forever'. The OR-Set's unique tags let re-adds survive.",
+    "workedExample": "Track tags:\n\n1. A: add(milk, a1). Sync → B sees {a1}.\n2. B: remove(milk) → tombstones the tags it sees: {a1}.\n3. A (concurrently): add(milk, a2).\n4. Merge:\n  - added tags: a1, a2\n  - removed tags: a1\n  - live tags: a2 only → milk **present**.\n\nA 2P-Set would have said 'removed forever'. The OR-Set's unique tags let re-adds survive.",
     "link": {
       "title": "A comprehensive study of CRDTs (Shapiro et al.)",
       "url": "https://hal.inria.fr/inria-00555588/document"
@@ -131,7 +131,7 @@
       },
       {
         "text": "Associative",
-        "explanation": "Correct. States arrive via different paths and groupings; merge(merge(a, b), c) must equal merge(a, merge(b, c))."
+        "explanation": "Correct. States arrive via different paths and groupings; merging a with b and then the result with c must give the same as merging b with c first and then with a."
       },
       {
         "text": "Idempotent",
@@ -151,7 +151,7 @@
       1,
       2
     ],
-    "workedExample": "Gossip gives you no control over:\n\n- **order** of merges → need commutativity,\n- **grouping/path** → need associativity,\n- **duplicates** → need idempotence.\n\nThese three make the state a *join-semilattice*: merge = least upper bound. Every replica that has seen the same set of updates computes the same join. That's strong eventual consistency.",
+    "workedExample": "Gossip gives you no control over:\n\n- **order** of merges → need commutativity,\n- **grouping/path** → need associativity,\n- **duplicates** → need idempotence.\n\n```formula\nmerge(a, b) = merge(b, a)\nmerge(merge(a,b),c)\n  = merge(a,merge(b,c))\nmerge(a, a) = a\nwhere\nmerge: the function combining two replica states\na: one replica's state\nb: another replica's state\nc: a third replica's state\nIn words: order, grouping and repetition must not change the result: commutativity, associativity and idempotence.\n```\n\nThese three make the state a *join-semilattice*: merge = least upper bound. Every replica that has seen the same set of updates computes the same join. That's strong eventual consistency.",
     "link": {
       "title": "crdt.tech",
       "url": "https://crdt.tech/"
@@ -173,7 +173,7 @@
       },
       {
         "text": "About 15–20 seconds: O(log N) rounds",
-        "explanation": "Correct. The informed set roughly doubles each round at first (log₂ 1024 = 10), but random peer choice makes the last few nodes slow to reach. Push gossip needs about log₂N + ln N ≈ 17 rounds."
+        "explanation": "Correct. The informed set roughly doubles each round at first (1,024 is 2 doubled 10 times), but random peer choice makes the last few nodes slow to reach. Push gossip needs about 17 rounds for 1,024 nodes."
       },
       {
         "text": "It never converges without a central server.",
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Each round, every informed node tells one random peer.\n\n| Round | Informed (ideal) |\n|---|---|\n| 0 | 1 |\n| 1 | 2 |\n| 2 | 4 |\n| 10 | ~1,024 |\n\nThat doubling is the best case. As more nodes know, more pushes land on nodes that already know, so the final stragglers take extra rounds. For push gossip the expected total is about log₂N + ln N:\n\n- log₂ 1024 = 10\n- ln 1024 ≈ 6.9\n- total ≈ **17 rounds ≈ 17 s**\n\nPush-pull shortens the tail. Per-node load stays at one message per second regardless of cluster size.",
+    "workedExample": "Each round, every informed node tells one random peer.\n\n| Round | Informed (ideal) |\n|---|---|\n| 0 | 1 |\n| 1 | 2 |\n| 2 | 4 |\n| 10 | ~1,024 |\n\nThat doubling is the best case. As more nodes know, more pushes land on nodes that already know, so the final stragglers take extra rounds. For push gossip the expected total is:\n\n```formula\nr ≈ log_2(N) + ln(N)\nr ≈ log_2(1,024) + ln(1,024)\nr ≈ 10 + 6.9 ≈ 17\nwhere\nr: rounds until every node knows; at one round per second, also the time in seconds\nN: the number of nodes; here 1,024\nlog_2: base-2 logarithm: how many doublings get from 1 to N\nln: natural logarithm (base e ≈ 2.718)\n≈: approximately equal to\nIn words: about 10 rounds of doubling, plus about 7 more to reach the last stragglers, so roughly 17 seconds.\n```\n\nPush-pull shortens the tail. Per-node load stays at one message per second regardless of cluster size.",
     "link": {
       "title": "Gossip protocol (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Gossip_protocol"
@@ -229,7 +229,7 @@
       },
       {
         "text": "No: with the same observed mean and elapsed silence, this model gives the same phi.",
-        "explanation": "Correct. Its scaled phi is elapsed silence divided by the mean, multiplied by log10(e). Variance is not a separate input."
+        "explanation": "Correct. In this model phi is the elapsed silence divided by the mean interval, multiplied by a fixed constant (about 0.434). Variance is not a separate input."
       },
       {
         "text": "Yes: phi 8 always means eight seconds.",
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "For the exponential model, phi = (silence / mean) × log10(e). With mean 1 s and silence 1.1 s, phi is about 0.478 for either peer, regardless of variance. Longer observed mean intervals slow phi growth. This tail probability is not the posterior probability that the node is alive, nor a guaranteed false-positive rate.",
+    "workedExample": "In the exponential model:\n\n```formula\nφ = (t / μ) × log_10(e)\nφ = (1.1 s / 1 s) × 0.434 ≈ 0.478\nwhere\nφ: phi, the suspicion level (no unit)\nt: the silence since the last heartbeat, in seconds (s); here 1.1 s\nμ: mu, the observed mean heartbeat interval; here 1 s\ne: Euler's number, about 2.718\nlog_10(e): the base-10 logarithm of e, about 0.434\ns: second\n≈: approximately equal to\nIn words: phi depends only on how long the silence is compared with the average interval; jitter in the intervals is not an input.\n```\n\nSo phi is about 0.478 for either peer, regardless of variance. Longer observed mean intervals slow phi growth. This tail probability is not the posterior probability that the node is alive, nor a guaranteed false-positive rate.",
     "link": {
       "title": "Cassandra failure detector implementation",
       "url": "https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/gms/FailureDetector.java"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "PN-Counter state before: P = [EU:1, US:0], N = [0, 0] → value 1.\n\n1. EU sells: N[EU] = 1.\n2. US sells concurrently: N[US] = 1.\n3. Merge: P = 1, N = 1 + 1 = 2 → **−1**.\n\nEscrow version:\n\n- EU holds 1 unit of allowance, US holds 0.\n- EU sells locally: allowance 0.\n- US must request a transfer before selling; EU has none to give → \"sold out\".\n\nCoordination happens only when a region runs out of allowance, not on every sale.",
+    "workedExample": "PN-Counter state before: P = [EU:1, US:0], N = [0, 0] → value 1.\n\n1. EU sells: N[EU] = 1.\n2. US sells concurrently: N[US] = 1.\n3. Merge, then compute the value:\n\n```formula\nv = Σ P − Σ N\nv = (1 + 0) − (1 + 1) = −1\nwhere\nv: the stock value\nP: increments per region: EU 1, US 0\nN: decrements per region: EU 1, US 1\nΣ: sigma: add up every entry\nIn words: both sales are kept after the merge, so two units were subtracted from one.\n```\n\nThe merged stock is **−1**.\n\nEscrow version:\n\n- EU holds 1 unit of allowance, US holds 0.\n- EU sells locally: allowance 0.\n- US must request a transfer before selling; EU has none to give → \"sold out\".\n\nCoordination happens only when a region runs out of allowance, not on every sale.",
     "link": {
       "title": "Conflict-free replicated data type (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"

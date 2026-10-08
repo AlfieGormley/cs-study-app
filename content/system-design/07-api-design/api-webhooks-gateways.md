@@ -46,14 +46,32 @@ The alternative is the consumer polling `GET /events?since=...`. Webhooks are mo
 
 Your webhook URL is public. Anyone who discovers it can `POST` a fake "payment succeeded" event and get free goods. You must verify that each request genuinely came from the provider.
 
-A common technique is an **HMAC signature** (a shared-secret message authentication code). Follow the provider-specific signing protocol; asymmetric signatures are another option. Provider and consumer share a secret (`whsec_...`). The provider computes:
+A common technique is an **HMAC signature** (a shared-secret message authentication code). Follow the provider-specific signing protocol; asymmetric signatures are another option. Provider and consumer share a secret (`whsec_...`). The provider computes (this is Stripe's scheme):
 
-```
-signed = timestamp + "." + raw_body
-sig = HMAC_SHA256(secret, signed)
+```formula
+m = t + "." + b
+sig = HMAC(k, m)
+where
+m: the signed message: the bytes the signature covers
+t: the timestamp of the delivery, as a Unix timestamp in seconds
+b: the raw request body, exactly the bytes sent
++: joined end to end (concatenation), not addition
+k: the shared webhook secret
+HMAC: HMAC-SHA256, a keyed hash that only someone holding k can compute; it outputs 32 bytes, sent as 64 hex characters
+sig: the signature
+In words: glue the timestamp, a dot and the raw body together, then hash that with the shared secret.
 ```
 
-and sends `t=<timestamp>,v1=<sig>` in a header. The consumer recomputes the HMAC and compares.
+and sends `t=<timestamp>,v1=<sig>` in a header. For the delivery above, the signed message is `1767225600.` followed by the exact body bytes. The consumer recomputes the HMAC and compares. In Python:
+
+```python
+import hashlib, hmac
+
+def sign(secret, t, raw_body):
+    msg = t.encode() + b"." + raw_body
+    return hmac.new(secret, msg,
+        hashlib.sha256).hexdigest()
+```
 
 Details that matter:
 
@@ -69,8 +87,23 @@ An attacker who captures one genuine, correctly signed webhook (from a log, a mi
 
 Defences:
 
-- **Sign the timestamp** along with the body (as above), and **reject events whose timestamp is too old**. Stripe's libraries default to a 5-minute tolerance.
+- **Sign the timestamp** along with the body (as above), and **reject events whose timestamp is too old**. Stripe's libraries default to a 5-minute tolerance. The check is shown below this list.
 - **Deduplicate by event id.** Store processed `evt_...` ids and ignore repeats. You need this anyway for retries (below). For GitHub, `X-GitHub-Delivery` is useful for ordinary redelivery deduplication, but it is not included in the body HMAC: someone replaying a captured body can change that header. Use authenticated payload identity or a retained digest of the verified raw body where appropriate, make business effects idempotent, and reconcile current provider state. Without signed freshness or retained identity, the signature alone cannot reject an old valid payload.
+
+The freshness check, applied after the signature has verified:
+
+```formula
+T_now − t ≤ τ
+T_now − t = 1,767,226,500 − 1,767,225,600
+T_now − t = 900 s
+where
+T_now: the receiver's current time, as a Unix timestamp in seconds
+t: the signed timestamp from the header
+τ: tau, the tolerance, here 300 s (5 minutes)
+≤: less than or equal to; the event is accepted only when this holds
+s: seconds
+In words: accept the event only if it was signed within the tolerance; a delivery signed 900 s (15 minutes) ago fails the 300 s check, so it is refused even though its signature is genuine.
+```
 
 > [!warning] Why the timestamp must be inside the signature
 > If the timestamp were sent separately and unsigned, an attacker could replay an old body with a fresh timestamp. Including it in the signed string means changing it breaks the signature.

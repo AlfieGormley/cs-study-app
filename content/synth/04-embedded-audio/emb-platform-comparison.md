@@ -110,7 +110,22 @@ Then list what the official sources **do not** tell you, and how you will find o
 
 ## Step 5: score, then test the scoring
 
-Apply must-haves as pass/fail first. Then score the survivors on each weighted criterion, with a sentence of evidence per score. Then check whether the result depends on your weights.
+Apply must-haves as pass/fail first. Then score the survivors on each weighted criterion, with a sentence of evidence per score. Each option's total is its scores multiplied by the weights and added up:
+
+```formula
+T = Σ (w_c × s_c)
+T_X = 3 × 4 + 2 × 4 + 1 × 3 = 23
+where
+T: an option's weighted total; higher is better
+Σ: sigma, "add up over every criterion"
+w_c: the weight you gave criterion c before scoring, for example 1 to 3
+s_c: the option's score on criterion c, for example 1 to 5
+c: one criterion, such as audio, debugging or documentation
+T_X: the total for placeholder option X below, with weights audio 3, debug 2, docs 1 and scores 4, 4, 3
+In words: multiply each score by how much that criterion matters, then add the products; the biggest total wins on paper.
+```
+
+Then check whether the result depends on your weights:
 
 ```python
 # Placeholder scores (1-5), NOT real data.

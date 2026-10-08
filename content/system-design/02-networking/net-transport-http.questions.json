@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Updates every 1000 / 30 ≈ **33 ms**.\n2. With TCP, if one packet is lost, retransmission takes at least 1 RTT (say 60 ms). Meanwhile the next two updates have arrived but TCP **can't deliver them** until the lost one is filled in.\n3. Result: a 60+ ms stutter, all to deliver a position that's already out of date.\n4. With UDP, the game just uses the newest packet it has. Important events (a kill, a purchase) can be sent with the game's own lightweight acknowledgements.",
+    "workedExample": "First, how often a new update arrives:\n\n```formula\nt_gap = 1 / f = 1 s / 30 ≈ 33 ms\nwhere\nt_gap: the time between one position update and the next, in milliseconds (ms)\nf: the update rate, 30 updates per second\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: thirty updates a second means a fresh one every 33 ms or so.\n```\n\n1. With TCP, if one packet is lost, retransmission takes at least 1 RTT (say 60 ms). Meanwhile the next two updates have arrived but TCP **can't deliver them** until the lost one is filled in.\n2. Result: a 60+ ms stutter, all to deliver a position that's already out of date.\n3. With UDP, the game just uses the newest packet it has. Important events (a kill, a purchase) can be sent with the game's own lightweight acknowledgements.",
     "link": {
       "title": "User Datagram Protocol (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/User_Datagram_Protocol"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. A page needs, say, 60 resources.\n2. On one HTTP/1.1 connection, they come back strictly one after another, each costing at least 1 RTT.\n3. At 50 ms RTT: 60 × 50 = 3 s minimum.\n4. With 6 connections: ~10 rounds × 50 ms ≈ 0.5 s (plus 5 extra handshakes).\n5. HTTP/2 instead multiplexes all 60 on one connection: roughly 1–2 RTTs for requests to go out, limited mainly by bandwidth.",
+    "workedExample": "1. A page needs, say, 60 resources.\n2. On one HTTP/1.1 connection, they come back strictly one after another, each costing at least 1 RTT.\n3. At 50 ms RTT, compare one connection with six:\n\n```formula\nT_1 = k × RTT = 60 × 50 ms = 3,000 ms\nT_6 = (k / c) × RTT\nT_6 = (60 / 6) × 50 ms = 500 ms\nwhere\nT_1: the minimum time to fetch every resource over one HTTP/1.1 connection, in milliseconds (ms)\nT_6: the same over c parallel connections\nk: the number of resources on the page, 60\nc: the number of parallel connections, 6\nRTT: the round-trip time, 50 ms\nms: millisecond, one thousandth of a second\nIn words: one request per round trip per connection, so six connections cut 60 rounds to 10.\n```\n\nThat's 3 s on one connection versus about 0.5 s on six (plus 5 extra handshakes). HTTP/2 instead multiplexes all 60 on one connection: roughly 1–2 RTTs for requests to go out, limited mainly by bandwidth.",
     "link": {
       "title": "High Performance Browser Networking: HTTP/1.x",
       "url": "https://hpbn.co/http1x/"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. HTTP/2 = many streams, **one** TCP connection.\n2. TCP delivers bytes in order. If packet 17 is lost, packets 18–40 wait in the kernel even if they belong to other streams.\n3. At 2% loss with ~100 packets in flight, a loss happens almost every RTT, so every stream stalls repeatedly.\n4. TCP also cuts its congestion window on loss (by half for Reno, about 30% for CUBIC). With one connection, *all* throughput drops; with six, only one connection's share does.\n5. HTTP/3 fixes this with per-stream loss recovery in QUIC.",
+    "workedExample": "1. HTTP/2 = many streams, **one** TCP connection.\n2. TCP delivers bytes in order. If packet 17 is lost, packets 18–40 wait in the kernel even if they belong to other streams.\n3. At 2% loss with ~100 packets in flight, a loss happens almost every RTT, so every stream stalls repeatedly.\n4. TCP also cuts its congestion window on loss (by half for Reno, about 30% for CUBIC). With one connection, *all* throughput drops; with six, only one connection's share does.\n5. HTTP/3 fixes this with per-stream loss recovery in QUIC.\n\nWhy step 3 says 'almost every RTT': the chance that at least one of the packets in a round trip is lost is\n\n```formula\nP = 1 − (1 − p)^m\nP = 1 − 0.98^100 ≈ 0.87\nwhere\nP: the probability that at least one packet in a round trip's worth is lost\np: the probability that any one packet is lost, 0.02 (2%)\nm: the number of packets in flight in one round trip, about 100\n≈: approximately equal to\nIn words: with 100 packets at 2% loss each, about 87% of round trips contain at least one loss.\n```",
     "link": {
       "title": "Head-of-line blocking (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Head-of-line_blocking"
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Fresh connection:\n\n| Step | RTTs |\n|---|---|\n| TCP handshake | 1 |\n| TLS 1.3 | 1 |\n| Data: 14 KB | 1 |\n| Data: +28 KB (42) | 1 |\n| Data: +56 KB (98 ≥ 60) | 1 |\n\n5 RTT × 30 ms = **150 ms**. (The request itself goes out with the first data round.)\n\nWarm connection: window already large, so 1 RTT = **30 ms**. Connection pooling gives a 5× speed-up here.",
+    "workedExample": "Fresh connection:\n\n| Step | RTTs |\n|---|---|\n| TCP handshake | 1 |\n| TLS 1.3 | 1 |\n| Data: 14 KB | 1 |\n| Data: +28 KB (42) | 1 |\n| Data: +56 KB (98 ≥ 60) | 1 |\n\n```formula\nT_fresh = (n_setup + n_data) × RTT\nT_fresh = (2 + 3) × 30 ms = 150 ms\nT_warm = 1 × 30 ms = 30 ms\nT_fresh / T_warm = 150 / 30 = 5\nwhere\nT_fresh: the time on a brand-new connection, in milliseconds (ms)\nT_warm: the time on a warm connection whose window already fits the whole response\nn_setup: the handshake round trips, TCP plus TLS 1.3, so 2\nn_data: the slow-start rounds needed for 60 KB: 14, then 42, then 98 KB cumulative, so 3\nRTT: the round-trip time, 30 ms\nms: millisecond, one thousandth of a second\nIn words: five round trips fresh against one warm, a five-fold difference.\n```\n\nSo about **150 ms** fresh versus **30 ms** warm. (The request itself goes out with the first data round.) Connection pooling gives a 5× speed-up here.",
     "link": {
       "title": "High Performance Browser Networking: Building blocks of TCP",
       "url": "https://hpbn.co/building-blocks-of-tcp/"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. L4 load balancing = choose a backend **per TCP connection**.\n2. HTTP/2 clients open a connection once and send thousands of requests over it for hours.\n3. Scale-up adds pods, but no client opens a new connection, so the new pods get nothing.\n4. Fixes:\n  - **L7 balancing** (Envoy, Linkerd, an ALB with gRPC support): balance each request (stream).\n  - **Client-side balancing**: the gRPC client resolves all pod IPs and round-robins.\n  - **`MAX_CONNECTION_AGE`** on the server: e.g. close after 5 minutes so clients reconnect and rebalance.",
+    "workedExample": "1. L4 load balancing chooses a backend **per TCP connection**.\n2. HTTP/2 clients open a connection once and send thousands of requests over it for hours.\n3. Scale-up adds pods, but no client opens a new connection, so the new pods get nothing.\n4. Fixes:\n  - **L7 balancing** (Envoy, Linkerd, an ALB with gRPC support): balance each request (stream).\n  - **Client-side balancing**: the gRPC client resolves all pod IPs and round-robins.\n  - **`MAX_CONNECTION_AGE`** on the server: e.g. close after 5 minutes so clients reconnect and rebalance.",
     "link": {
       "title": "Supported load balancers (Envoy)",
       "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Track the congestion window round by round:\n\n| RTT | Window | Total |\n|---|---|---|\n| 1 | 14 KB | 14 KB |\n| 2 | 28 KB | 42 KB |\n| 3 | 56 KB | 98 KB |\n\n98 KB ≥ 90 KB after 3 RTTs → **≈ 300 ms**.\n\nThe link could clock out 90 KB in about 0.7 ms. On a new connection, latency, not bandwidth, sets the transfer time for small responses, which is why reused connections matter so much.",
+    "workedExample": "Track the congestion window round by round:\n\n| RTT | Window | Total |\n|---|---|---|\n| 1 | 14 KB | 14 KB |\n| 2 | 28 KB | 42 KB |\n| 3 | 56 KB | 98 KB |\n\n```formula\nS_k = IW × (2^k − 1)\nS_3 = 14 KB × (2^3 − 1) = 98 KB\nT = 3 × RTT = 3 × 100 ms = 300 ms\nt_wire = 8 × 90,000 B / 10^9 bit/s\nt_wire = 0.00072 s ≈ 0.7 ms\nwhere\nS_k: the total data delivered after k round trips of slow start, in kilobytes (KB)\nS_3: the total after 3 round trips\nIW: the initial window, 14 KB\nk: the number of round trips\nT: the transfer time limited by slow start, in milliseconds (ms)\nRTT: the round-trip time, 100 ms\nt_wire: the time the 1 Gbps link needs to clock out 90 KB if nothing held it back\n8: the number of bits in a byte\nB: bytes; 90 KB = 90,000 B\nKB: kilobytes, thousands of bytes\nbit/s: bits per second; 1 Gbps = 10^9 bit/s\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: two rounds deliver only 42 KB, so a third is needed; three 100 ms round trips take 300 ms, though the wire alone would need under a millisecond.\n```\n\n98 KB covers the 90 KB response after 3 RTTs, so **≈ 300 ms**. The link could clock out 90 KB in about 0.7 ms. On a new connection, latency, not bandwidth, sets the transfer time for small responses, which is why reused connections matter so much.",
     "link": {
       "title": "High Performance Browser Networking: Building blocks of TCP",
       "url": "https://hpbn.co/building-blocks-of-tcp/"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. HTTP/1.1 problem: one request at a time per connection, ~6 connections per origin → shard to get more connections.\n2. HTTP/2: multiple concurrent streams, subject to negotiated limits on one connection → that problem is gone.\n3. Keeping shards: 3 extra origins × (DNS + TCP + TLS) ≈ 3 extra round trips each, plus 3 fresh slow-start windows.\n4. Each connection is also prioritised separately, so the browser can't order images against CSS and scripts globally.\n5. Fix: serve from one origin, or make the shards coalescible (same IP, one certificate covering all names).",
+    "workedExample": "1. HTTP/1.1 problem: one request at a time per connection, ~6 connections per origin → shard to get more connections.\n2. HTTP/2: multiple concurrent streams, subject to negotiated limits on one connection → that problem is gone.\n3. Keeping shards: each of the 3 extra origins needs its own DNS lookup, TCP handshake and TLS handshake (about 3 extra round trips each) and starts its own fresh slow-start window.\n4. Each connection is also prioritised separately, so the browser can't order images against CSS and scripts globally.\n5. Fix: serve from one origin, or make the shards coalescible (same IP, one certificate covering all names).",
     "link": {
       "title": "High Performance Browser Networking: HTTP/2",
       "url": "https://hpbn.co/http2/"

@@ -28,7 +28,24 @@ LIMIT 20 OFFSET 40;
 
 It's simple and lets users jump to "page 37". But it has two serious problems.
 
-**1. It gets slower the deeper you go.** The database can't jump to row 40,000. It has to walk the index and discard the first 40,000 rows, then return 20. Cost is O(offset + limit).
+**1. It gets slower the deeper you go.** The database can't jump to row 40,000. It has to walk the index and discard the first 40,000 rows, then return 20:
+
+```formula
+E_off ≈ offset + limit
+E_off ≈ 40,000 + 20 = 40,020 entries
+cost = O(offset + limit)
+where
+E_off: the number of index entries the database walks to serve one offset page
+offset: how many rows the client asks to skip (the offset query parameter)
+limit: how many rows the page returns (the limit query parameter)
+entries: index entries, one per row in the index
+cost: the work the database does for one page
+O(...): Big O notation: how the cost grows as the quantities inside the brackets grow, ignoring constant factors
+≈: approximately equal to
+In words: every row before the page still has to be stepped over, so page 2,001 costs about 2,000 times as much as page 1.
+```
+
+This assumes the database walks an index in sort order. Without a suitable index it is worse: it may sort the whole table first.
 
 **2. Results shift under concurrent writes.**
 
@@ -71,8 +88,28 @@ LIMIT 21;
 Three details make this work:
 
 - **A unique tiebreaker**. Two orders can share a `created_at`. Adding `id` makes the order total. With immutable sort keys, inserts ahead of the cursor no longer shift later pages; changes to sort keys or filters can still move items across the cursor. Use a stable snapshot if the entire traversal must represent one instant.
-- **An index** on `(created_at, id)`. The `WHERE` clause becomes an index seek, so each page costs roughly O(log n + limit) for the index seek and scan, without an offset-dependent walk.
+- **An index** on `(created_at, id)`. The `WHERE` clause becomes an index seek, so each page costs a few steps down the tree plus the rows it returns (the formula below makes this precise), without an offset-dependent walk.
 - **Fetch limit + 1**. If you get 21 rows, `has_more` is true and you return 20.
+
+The cost of a keyset page comes from the seek down the B-tree plus the rows it returns:
+
+```formula
+E_key ≈ log_b(n) + limit
+cost = O(log n + limit)
+where
+E_key: the work for one keyset page: index pages read during the seek, plus entries returned
+cost: the work the database does for one page
+n: the number of rows in the index
+b: the fan-out of the B-tree: how many child pointers one index page holds, often a few hundred
+log_b: the logarithm to base b: how many times you can divide n by b before reaching 1, which is the number of tree levels the seek walks down
+log: a logarithm; inside Big O its base doesn't matter
+limit: how many rows the page returns
+O(...): Big O notation: how the cost grows as the quantities inside grow, ignoring constant factors
+≈: approximately equal to
+In words: finding the starting point takes only a few steps down the tree, however big the table, and then the page reads just its own rows.
+```
+
+For 2 million rows and a B-tree fan-out of about 300, log₃₀₀(2,000,000) ≈ 2.5, so the seek reads about 3 index pages, then 20 entries, whether the cursor points at the first page or the last.
 
 | | Offset | Cursor |
 |---|---|---|
@@ -188,7 +225,7 @@ New **enum values** are a classic trap. If a client has a `switch` over `status`
 
 ## Key takeaways
 - **Always paginate**, with a default and a maximum page size.
-- **Offset** pagination is O(offset) and unstable under writes. **Cursor/keyset** pagination is roughly O(log n + limit), avoids offset shifts with stable sort keys, and cannot jump directly to page N.
+- **Offset** pagination is O(offset) and unstable under writes. **Cursor/keyset** pagination is roughly O(log n + limit), where n is the number of rows in the index and limit is the page size, avoids offset shifts with stable sort keys, and cannot jump directly to page N.
 - Cursors need a **unique tiebreaker** and a matching **index**, and should be **opaque**.
 - Allow-list filters and sorts; budget the cost of supported sorts; reject unknown parameters.
 - Use one structured error format everywhere; **RFC 9457 Problem Details** is the standard.

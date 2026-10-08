@@ -26,26 +26,82 @@ Ride-sharing looks like a booking app, but the core is a **real-time geospatial 
 
 ## Back-of-the-envelope
 
-Uber reported nearly 11.3 billion trips for 2024, about 31 M a day, but that figure includes Uber Eats deliveries, so rides alone are a good deal fewer. Design for a large ride-hailing platform:
+Uber reported nearly 11.3 billion trips for 2024, about 31 M a day, but that figure includes Uber Eats deliveries, so rides alone are a good deal fewer. Design for a large ride-hailing platform.
 
+Trips: assume **20 M (20 million) a day**. To get a rate per second, divide by the 86,400 seconds in a day (24 × 60 × 60), then multiply by a peak factor, because demand is not spread evenly:
+
+```formula
+T_avg = T_day / 86,400 s
+T_avg = 20,000,000 / 86,400 s ≈ 230/s
+T_peak = 5 × T_avg ≈ 1,200/s
+where
+T_avg: average trip requests per second over the day
+T_day: trips per day; here 20 million
+T_peak: trip requests per second at the busiest time (a Friday evening), assumed 5 times the average
+86,400 s: the number of seconds in a day
+s: seconds
+≈: approximately equal to
+In words: 20 million trips a day averages about 230 a second, and about 1,200 a second at a five-times peak.
 ```
-Trips:      20 M/day
-  avg  20e6 / 86,400  = ~230/s
-  peak (5x, Friday evening) = ~1,200/s
-Online drivers at peak: 2 M
-Location update every 4 s:
-  2e6 / 4 = 500,000 writes/s
-Payload ~100 B (id, lat, lng,
-  heading, speed, ts, status)
-  500k x 100 B = 50 MB/s ingest
+
+Locations: assume **2 M drivers online at peak**, each sending its position every 4 seconds. Each update is a payload of about 100 bytes (driver id, latitude, longitude, heading, speed, timestamp, status):
+
+```formula
+U = N / i
+U = 2,000,000 / 4 s = 500,000/s
+D = U × p
+D = 500,000/s × 100 B = 50 MB/s
+where
+U: location updates arriving per second (writes per second)
+N: drivers online at peak; here 2,000,000
+i: interval between one driver's updates, in seconds (s); here 4
+D: incoming data rate (ingest bandwidth), in megabytes per second (MB/s)
+p: size of one update, in bytes (B); about 100
+B: bytes
+s: seconds
+MB: megabytes; 1 MB = 1,000,000 bytes
+In words: 2 million drivers reporting every 4 seconds is half a million writes a second, about 50 megabytes of data every second.
 ```
 
 What matters:
 
 - **500 k writes/s** of location, each overwriting the previous one. A rebuildable in-memory index is a useful design option; durable stores can also handle high write rates when partitioned and provisioned appropriately.
-- The latest-location state is tiny: 2 M drivers × ~100 B = **200 MB**. That is raw payload only: geospatial indexes, identifiers, object overhead and replication increase memory. Sharding choices need measured memory and throughput.
+- The latest-location state is tiny, because each driver keeps only one current position:
+
+```formula
+M = N × p
+M = 2,000,000 × 100 B = 200 MB
+where
+M: memory for the latest position of every driver, in megabytes (MB)
+N: drivers online; here 2,000,000
+p: bytes per position record (B); about 100
+B: bytes
+MB: megabytes; 1 MB = 1,000,000 bytes
+In words: one 100-byte record for each of 2 million drivers is only 200 megabytes, which fits easily in memory.
+```
+
+That is raw payload only: geospatial indexes, identifiers, object overhead and replication increase memory. Sharding choices need measured memory and throughput.
 - Trip writes are modest (around a thousand a second), but they must be transactional.
-- Location history for trip receipts and analytics: 500 k/s × 100 B × 86,400 = about **4.3 TB/day**, streamed to cheap storage.
+- Location history for trip receipts and analytics keeps *every* update, not just the latest, so it grows with time:
+
+```formula
+H = U × p × 86,400 s
+H = 500,000/s × 100 B × 86,400 s
+H = 4,320,000,000,000 B ≈ 4.3 TB/day
+where
+H: location history written per day, in bytes (B)
+U: location updates per second; here 500,000
+p: bytes per update; about 100
+86,400 s: seconds in a day
+s: seconds
+B: bytes
+TB: terabytes; 1 TB = 10^12 bytes
+day: one day
+≈: approximately equal to
+In words: keeping every 100-byte update at half a million a second adds about 4.3 terabytes a day, which is streamed to cheap storage.
+```
+
+The 5x peak, 4-second interval and 100-byte payload are planning assumptions; real figures vary by city and app version.
 
 ## API design
 
@@ -225,7 +281,7 @@ For the live map, the rider subscribes to the driver's location, and the gateway
 ## Bottlenecks and trade-offs
 
 - **Hot cells**: a stadium emptying creates 50 k requests in one hexagon. Finer cells for dense areas, and batching, keep any one shard from melting.
-- **Consistency vs availability**: locations are AP (stale by seconds is fine). Driver assignment and trip state are CP (they must never double-book). Mixing the two tiers deliberately is the key insight.
+- **Consistency vs availability**: in CAP theorem terms, locations are AP, favouring availability (stale by seconds is fine). Driver assignment and trip state are CP, favouring consistency (they must never double-book). Mixing the two tiers deliberately is the key insight.
 - **Straight-line vs ETA**: ETA calls are expensive, so pre-filter cheaply by cell and call routing only for the top candidates.
 - **Mobile networks**: drivers drop out in tunnels. Treat a driver as stale after ~30 s without a ping and exclude them from matching.
 

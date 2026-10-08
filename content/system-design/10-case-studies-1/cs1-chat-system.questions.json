@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Quantify polling for 250M connected clients:\n\n```\nPoll every 2 s:  250M / 2 = 125M req/s\nReal messages:   ~600k/s at peak\n```\n\nIf each sent message needs one delivery, more than 99% of polls would return nothing; group and multi-device fan-out increase delivery counts, and messages would still wait up to 2 s. With WebSockets, the connection idles cheaply (a heartbeat every ~30 s is ~8M pings/s plus pongs) and messages are pushed immediately.",
+    "workedExample": "Quantify polling for 250M connected clients:\n\n```formula\npolls = clients / interval\npolls = 250M / 2 s = 125M/s\nuseful = 600k/s / 125M/s ≈ 0.5%\nwhere\npolls: poll requests per second across all clients\nclients: connected clients, 250 million\ninterval: time between polls from one client, 2 seconds\nuseful: the share of polls that could return a message, given about 600,000 messages a second at peak\nM: million\nk: thousand\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: polling every 2 seconds means 125 million requests a second, and fewer than 1 in 100 of them would find anything new.\n```\n\nIf each sent message needs one delivery, more than 99% of polls would return nothing; group and multi-device fan-out increase delivery counts, and messages would still wait up to 2 s. With WebSockets, the connection idles cheaply (a heartbeat every ~30 s is ~8M pings/s plus pongs) and messages are pushed immediately.",
     "link": {
       "title": "MDN: the WebSocket API",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "```\nGateways = 300,000,000 / 200,000 = 1,500\n```\n\nIf one fails, 200,000 clients reconnect. Without jitter they might all retry within the same second, plus re-authenticate and re-register sessions, a spike other gateways must absorb. With exponential backoff and random jitter (say, uniformly over 0–10 s), it's ~20,000 reconnects/s, easily spread across 1,499 gateways.\n\nDelivery correctness comes from the inbox + ack protocol, not from the gateway: the server keeps each message until the recipient's device acks it.",
+    "workedExample": "```formula\ngateways = conns / cap\ngateways = 300,000,000 / 200,000 = 1,500\nwhere\ngateways: gateway servers needed\nconns: concurrent connections at peak\ncap: connections each gateway is run at\nIn words: 300 million connections at 200,000 each needs 1,500 gateways.\n```\n\nIf one fails, 200,000 clients reconnect. Without jitter they might all retry within the same second, plus re-authenticate and re-register sessions, a spike other gateways must absorb. With exponential backoff and random jitter, spreading reconnects evenly over 10 seconds:\n\n```formula\nrate = clients / spread\nrate = 200,000 / 10 s = 20,000/s\nwhere\nrate: reconnects per second hitting the remaining gateways\nclients: clients of the failed gateway\nspread: the window the random delays are spread over, 10 seconds\ns: seconds; /s means per second\nIn words: spreading 200,000 reconnects over 10 seconds gives 20,000 a second, easily shared by the other 1,499 gateways.\n```\n\nDelivery correctness comes from the inbox + ack protocol, not from the gateway: the server keeps each message until the recipient's device acks it.",
     "link": {
       "title": "WhatsApp blog: 1 million is so 2011",
       "url": "https://blog.whatsapp.com/1-million-is-so-2011"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "What you need: **the same order for everyone in a conversation**. You don't need global order across conversations.\n\n1. Partition the chat service by `conv_id`, so one owner handles each conversation.\n2. The owner keeps `next_seq` per conversation and assigns `seq = next_seq++` on each accepted message.\n3. Clients display by `seq`.\n\n```\nAlice \"see you at 6\" -> seq 118\nBob   \"ok!\"          -> seq 119\n```\n\nEveryone sees 118 before 119. For the assumed low per-conversation rate, one owner can suffice; high-volume channels still require capacity checks. On failover, establish a new storage-enforced epoch, recover committed state, and atomically allocate/persist so stale owners or failed allocations cannot corrupt the sequence.",
+    "workedExample": "What you need: **the same order for everyone in a conversation**. You don't need global order across conversations.\n\n1. Partition the chat service by `conv_id`, so one owner handles each conversation.\n2. The owner keeps a counter, `next_seq`, per conversation. Each accepted message gets the counter's current value as its `seq`, and the counter then goes up by one.\n3. Clients display by `seq`.\n\n```\nAlice \"see you at 6\" -> seq 118\nBob   \"ok!\"          -> seq 119\n```\n\nEveryone sees 118 before 119. For the assumed low per-conversation rate, one owner can suffice; high-volume channels still require capacity checks. On failover, establish a new storage-enforced epoch, recover committed state, and atomically allocate/persist so stale owners or failed allocations cannot corrupt the sequence.",
     "link": {
       "title": "Lamport timestamp (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare write load for one message:\n\n```\nFamily group: 200 writes (trivial)\nBig channel:  500,000 writes (huge)\n```\n\nAt 10 messages/minute in the big channel:\n\n```\n10/60 x 500,000 ≈ 83,000 writes/s\n(from one channel)\n```\n\nStore-once instead: one write, plus a pub/sub publish to the gateways of the (say) 5,000 members online with the channel open. Offline members see an unread count computed from `channel_latest_seq - my_read_seq` only if visible messages use contiguous sequence numbers without deletions or filtering; otherwise count unread visible messages explicitly.",
+    "workedExample": "Compare write load for one message:\n\n```\nFamily group: 200 writes (trivial)\nBig channel:  500,000 writes (huge)\n```\n\nAt 10 messages/minute in the big channel:\n\n```formula\nwrites = (m / 60 s) × members\nwrites = (10 / 60 s) × 500,000\nwrites ≈ 83,000/s\nwhere\nwrites: inbox writes per second from this one channel\nm: messages posted per minute, 10\n60 s: one minute in seconds\nmembers: inboxes each message is copied into, 500,000\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: one message every six seconds copied to half a million inboxes is about 83,000 writes a second from a single channel.\n```\n\nStore-once instead: one write, plus a pub/sub publish to the gateways of the (say) 5,000 members online with the channel open. Offline members see an unread count computed from `channel_latest_seq - my_read_seq` only if visible messages use contiguous sequence numbers without deletions or filtering; otherwise count unread visible messages explicitly.",
     "link": {
       "title": "Discord: how Discord scaled Elixir to 5,000,000 concurrent users",
       "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
@@ -181,7 +181,7 @@
       1,
       3
     ],
-    "workedExample": "Estimate naive presence fan-out:\n\n```\n250M online, 200 contacts each\n1 status change per user per 10 min\n(flaps included)\n= 250M x 200 / 600 s\n≈ 83M presence events/s\n```\n\nThat dwarfs ~600k messages/s. Apply the fixes:\n\n- Only ~1% of contacts have the chat open → ~830k/s.\n- Debouncing removes most flaps → perhaps a few hundred thousand/s.\n- Heartbeats at 30 s: 250M / 30 ≈ 8M tiny in-memory TTL refreshes/s, handled by gateways and Redis, not fanned out.",
+    "workedExample": "Estimate naive presence fan-out:\n\n```formula\nevents = users × contacts / t\nevents = 250M × 200 / 600 s ≈ 83M/s\nopen = 83M/s × 0.01 ≈ 830k/s\nwhere\nevents: presence updates sent per second if every change goes to every contact\nusers: online users, 250 million\ncontacts: contacts per user, 200\nt: average time between status changes per user (flaps included), 10 minutes = 600 s\nopen: updates per second if only the ~1% of contacts with the chat open receive them\nM: million\nk: thousand\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: naive presence fan-out is about 83 million updates a second; sending only to the 1% who are looking cuts it to about 830,000.\n```\n\nThat naive figure dwarfs ~600k messages/s. Apply the fixes:\n\n- Only ~1% of contacts have the chat open → ~830k/s.\n- Debouncing removes most flaps → perhaps a few hundred thousand/s.\n- Heartbeats at 30 s: 250M / 30 ≈ 8M tiny in-memory TTL refreshes/s, handled by gateways and Redis, not fanned out.",
     "link": {
       "title": "Meta engineering: building mobile-first infrastructure for Messenger",
       "url": "https://engineering.fb.com/2014/10/09/production-engineering/building-mobile-first-infrastructure-for-messenger/"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "```\nBytes/s = 50 x 200 B = 10 KB/s\nLimit   = 100 MB = 100,000 KB\nTime    = 100,000 / 10 = 10,000 s\n        ≈ 2.8 hours\n```\n\nThe tension: wide buckets risk huge partitions for busy channels; narrow buckets force quiet channels to query many empty buckets to find recent history. Discord uses a static time window and walks back through buckets as needed.",
+    "workedExample": "The bucket width is the time it takes the channel to write the size limit:\n\n```formula\nrate = 50/s × 200 B = 10 KB/s\nt = limit / rate\nt = 100,000 KB / 10 KB/s = 10,000 s\nt ≈ 2.8 hours\nwhere\nrate: bytes written to the channel per second\nlimit: the partition size target, 100 MB = 100,000 KB\nt: the bucket width that just fills the limit\nB: bytes\nKB: kilobyte, 1,000 bytes\nMB: megabyte, 1,000,000 bytes\ns: seconds; /s means per second\nhours: 10,000 s / 3,600 s per hour ≈ 2.8\n≈: approximately equal to\nIn words: at 10 KB a second, a 100 MB partition fills in 10,000 seconds, so buckets should be no wider than about 2.8 hours.\n```\n\nThe tension: wide buckets risk huge partitions for busy channels; narrow buckets force quiet channels to query many empty buckets to find recent history. Discord uses a static time window and walks back through buckets as needed.",
     "link": {
       "title": "Discord: how Discord stores trillions of messages",
       "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"

@@ -2,8 +2,8 @@
 id: elec-ohms-law
 title: Voltage, current, resistance and power
 level: basic
-minutes: 12
-summary: The four quantities behind every circuit, Ohm's law and P = VI, unit prefixes, ground as a reference, complete circuits, and which way current "flows".
+minutes: 15
+summary: The four quantities behind every circuit, Ohm's law, electrical power, unit prefixes, ground as a reference, complete circuits, and which way current "flows".
 ---
 
 Every circuit in a synth, from an LED on the front panel to the board's audio output, obeys a few simple rules. Learn them well now and the rest of this module is mostly applying them.
@@ -13,44 +13,111 @@ Every circuit in a synth, from an LED on the front panel to the board's audio ou
 
 ## Four quantities
 
-**Voltage** (V, measured in volts) is the difference in electrical potential between two points. It is the "push". A voltage is always *between* two points. "This pin is at 3.3 V" really means "3.3 V higher than ground".
+**Voltage** (written V, measured in volts, also V) is the difference in electrical potential between two points. It is the "push". A voltage is always *between* two points. "This pin is at 3.3 V" really means "3.3 V higher than ground".
 
-**Current** (I, measured in amperes or amps, A) is the rate at which charge flows past a point. One amp is one coulomb per second. Current flows *through* things.
+**Current** (electric current, written I, measured in amperes or amps, A) is the rate at which charge flows past a point. One amp is one coulomb per second. Current flows *through* things.
 
-**Resistance** (R, measured in ohms, Ω) is how strongly something opposes current. A resistor is a part made to have a known resistance.
+**Resistance** (electrical resistance, written R, measured in ohms, Ω) is how strongly something opposes current. A resistor is a part made to have a known resistance.
 
-**Power** (P, measured in watts, W) is the rate at which energy is transferred, for example turned into heat in a resistor or into light in an LED.
+**Power** (electrical power, written P, measured in watts, W) is the rate at which energy is transferred, for example turned into heat in a resistor or into light in an LED.
 
 A water analogy helps at first: voltage is pressure, current is flow rate, and resistance is a narrow pipe. Don't push it too far. It breaks down for capacitors and for anything at audio or radio frequencies.
 
 ## Ohm's law
 
-For a resistor, the voltage across it is proportional to the current through it:
+Ohm's law is the rule you use most: it links the voltage across a resistor to the current through it. For a resistor, the two are proportional. Double the voltage and the current doubles. The resistance is the fixed ratio between them:
 
-```
+```formula
 V = I × R
 I = V / R
 R = V / I
+where
+V: the voltage across the resistor, in volts (V); written after a number, V is the unit volt
+I: the current through the resistor, in amperes (A)
+R: the resistance, in ohms (Ω)
+A: amperes (amps), the unit of current
+Ω: ohms, the unit of resistance; 1 Ω passes 1 A when 1 V is across it
+In words: voltage equals current times resistance. The second and third lines are the same law rearranged, so if you know any two of the three you can find the third.
 ```
 
-If you know any two, you can find the third. A 1 kΩ resistor with 5 V across it carries 5 / 1000 = 5 mA.
+For example, a 1 kΩ resistor (1000 Ω) with 5 V across it:
 
-Ohm's law describes resistors (and wires). It does not describe LEDs and diodes. Their current rises steeply once the voltage passes a threshold, so you can't use "V / R" on an LED directly. You use it on the resistor in series with the LED, as in the worked example below.
-
-## Power: P = VI
-
-Power is voltage times current. Substituting Ohm's law gives two more forms that are useful for resistors:
-
+```formula
+I = V / R
+I = 5 V / 1000 Ω
+I = 0.005 A = 5 mA
+where
+I: the current through the resistor, in amperes (A)
+V: the voltage across the resistor, here 5 volts (V)
+R: the resistance, here 1 kΩ = 1000 ohms (Ω)
+A: amperes, the unit of current
+mA: milliamperes; 1 mA = 0.001 A
+Ω: ohms, the unit of resistance
+In words: 5 volts across 1000 ohms drives 5 milliamps.
 ```
+
+Ohm's law describes resistors (and wires). It does not describe LEDs and diodes. Their current rises steeply once the voltage passes a threshold, so dividing the LED's voltage by some "resistance" gives a meaningless answer. You apply Ohm's law to the resistor in series with the LED instead, as in the worked example below.
+
+## Power: voltage times current
+
+Power tells you how fast a part turns electrical energy into heat (or light). It's what decides whether a resistor survives. Power is voltage times current, for any part:
+
+```formula
 P = V × I
-P = I² × R
-P = V² / R
+where
+P: the power, in watts (W); 1 W is 1 joule of energy per second
+V: the voltage across the part, in volts (V)
+I: the current through the part, in amperes (A)
+W: watts, the unit of power
+In words: power is voltage times current. 1 volt driving 1 amp is 1 watt. This holds for any component, not just resistors.
 ```
+
+For a resistor only, you can substitute Ohm's law into it. Replace V with I × R to get the second line, or replace I with V / R to get the third:
+
+```formula
+P = V × I
+P = (I × R) × I = I^2 × R
+P = V × (V / R) = V^2 / R
+where
+P: the power the resistor turns into heat, in watts (W)
+V: the voltage across the resistor, in volts (V)
+I: the current through the resistor, in amperes (A)
+R: the resistance, in ohms (Ω)
+I^2: the current squared (multiplied by itself)
+V^2: the voltage squared
+W: watts, the unit of power
+In words: all three lines give the same answer for a resistor. Use whichever matches the two quantities you know. Because current and voltage are squared, doubling either one quadruples the heat.
+```
+
+The squared forms only work for resistors, because they rely on Ohm's law. For an LED or a chip, multiply its measured voltage by its measured current instead.
 
 Power matters because resistors, regulators and chips all have a maximum they can dissipate before they overheat. A typical small through-hole resistor is rated at 0.25 W (check the actual part's datasheet).
 
 > [!example] An LED's resistor
-> A 5 V supply drives an LED through a 330 Ω resistor, and you measure 10 mA. The resistor drops 10 mA × 330 Ω = 3.3 V and dissipates 3.3 V × 10 mA = 33 mW. That is well inside a 0.25 W (250 mW) rating. The remaining 1.7 V is across the LED.
+> A 5 V supply drives an LED through a 330 Ω resistor, and you measure 10 mA. How much voltage does the resistor take, how hot does it get, and what is left for the LED?
+
+```formula
+V_R = I × R
+V_R = 0.010 A × 330 Ω = 3.3 V
+P_R = V_R × I
+P_R = 3.3 V × 0.010 A = 0.033 W = 33 mW
+V_LED = V_supply − V_R = 5 V − 3.3 V = 1.7 V
+where
+V_R: the voltage across the resistor, in volts (V)
+I: the current in the loop, here 10 mA = 0.010 amperes (A)
+R: the resistor's resistance, here 330 ohms (Ω)
+P_R: the power the resistor turns into heat, in watts (W)
+V_LED: the voltage left across the LED, in volts (V)
+V_supply: the supply voltage, here 5 V
+V: volts, the unit of voltage
+A: amperes, the unit of current
+Ω: ohms, the unit of resistance
+W: watts, the unit of power
+mW: milliwatts; 1 mW = 0.001 W
+In words: the resistor takes 3.3 V and makes 33 mW of heat, well inside a typical 0.25 W (250 mW) rating, and the remaining 1.7 V is across the LED.
+```
+
+The same sum as a short Python script:
 
 ```python
 # LED budget on a 5 V supply
@@ -88,12 +155,12 @@ Electronics spans huge ranges, so SI prefixes are everywhere. Get them wrong and
 Tips:
 
 - Note the case: **m** (milli) and **M** (mega) differ by 10⁹.
-- Schematics often put the prefix where the decimal point would be: `4k7` = 4.7 kΩ, `2R2` = 2.2 Ω, `100n` = 100 nF.
+- Schematics often put the prefix where the decimal point would be (the RKM code, part of IEC 60062): `4k7` means 4.7 kΩ, `2R2` means 2.2 Ω, and `100n` means 100 nF.
 - A handy pairing: volts ÷ kilohms = milliamps. 3.3 V across 1 kΩ is 3.3 mA.
 
 ## Complete circuits
 
-Current only flows around a **closed loop**: from the supply's positive terminal, through the load, and back to the supply's negative terminal. Break the loop anywhere (an open switch, a loose jumper, a cracked solder joint) and the current everywhere in that loop drops to zero.
+Current only flows around a **closed loop** (a complete circuit): from the supply's positive terminal, through the load, and back to the supply's negative terminal. Break the loop anywhere (an open switch, a loose jumper, a cracked solder joint) and the current everywhere in that loop drops to zero.
 
 ```diagram
  +5V ---[ R 330 ]---[ LED >| ]---+
@@ -109,7 +176,20 @@ Two consequences:
 - **The return path is part of the circuit.** A signal that leaves your synth board on one wire must come back on another. With audio cables, the sleeve or shield is that return.
 - **Current is the same everywhere in a single loop.** If 10 mA flows through the resistor, 10 mA flows through the LED. This is Kirchhoff's current law in its simplest form.
 
-Kirchhoff's voltage law is the other half: around any closed loop, the voltage rises equal the drops. In the LED circuit, 5 V = 3.3 V (resistor) + 1.7 V (LED).
+Kirchhoff's voltage law is the other half: around any closed loop, the voltage rises equal the drops. It's how you work out what is left for the LED once the resistor has taken its share:
+
+```formula
+V_supply = V_R + V_LED
+5 V = 3.3 V + 1.7 V
+where
+V_supply: the voltage the supply raises, in volts (V)
+V_R: the voltage dropped across the resistor, in volts
+V_LED: the voltage dropped across the LED, in volts
+V: volts, the unit of voltage
+In words: going once round the loop, the voltage the supply provides is used up exactly by the parts in the loop. Nothing is left over and nothing is missing.
+```
+
+Both laws assume the wires themselves are ideal. Real wires have a tiny resistance, which is why "ground" isn't exactly the same voltage everywhere (see below).
 
 ## Ground is a reference
 
@@ -136,14 +216,14 @@ Both descriptions predict the same voltages, currents and power. Every formula, 
 
 - **Measuring a voltage "at a point" without a reference.** Always know which two points you mean. Usually one of them is ground.
 - **Forgetting the return path.** A direct single-ended GPIO signal needs its reference/return; isolated interfaces use a different return arrangement.
-- **Ignoring power.** A resistor that's correct by Ohm's law can still cook if P = I²R exceeds its rating.
+- **Ignoring power.** A resistor that's correct by Ohm's law can still cook if its power (current squared times resistance) exceeds its rating.
 - **Prefix slips.** 1 MΩ instead of 1 kΩ is a thousand-fold error. Write values with their units every time.
 
 ## Key takeaways
 
 - Voltage is between two points, current flows through a component, resistance opposes current, and power is energy per second.
-- Ohm's law V = IR applies to resistors. Use it on the resistor, not on an LED or diode.
-- P = VI = I²R = V²/R. Check every resistor against its power rating.
+- Ohm's law (voltage equals current times resistance) applies to resistors. Use it on the resistor, not on an LED or diode.
+- Power is voltage times current. For a resistor that also equals current squared times resistance, or voltage squared divided by resistance. Check every resistor against its power rating.
 - Current needs a complete loop, and the return path is part of the circuit.
 - Ground is the reference you measure against. Connected devices must share it.
 - Use conventional current (+ to −). Electron flow is the physical reality in wires but gives the same answers.

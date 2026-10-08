@@ -15,10 +15,10 @@ The interesting problems aren't sending a message, which is one API call to a pr
 **Functional**
 
 - Internal services send notifications to users via **push** (iOS, Android), **SMS**, **email** and **in-app**.
-- Messages are built from **templates** with parameters and localisation (`order_shipped`, `en-GB`).
+- Messages are built from **notification templates** with parameters and language localisation (`order_shipped`, `en-GB`).
 - **User preferences**: opt in/out per category (security, social, marketing) and per channel; quiet hours in the user's time zone.
 - **Scheduling**: send now, or at a given time (including "9 am local time" for each recipient).
-- **Bulk campaigns**: send to a segment of millions of users.
+- **Bulk campaigns**: send to an audience segment of millions of users.
 - **Tracking**: sent, delivered, opened, failed.
 
 **Non-functional**
@@ -33,30 +33,79 @@ The interesting problems aren't sending a message, which is one API call to a pr
 
 Assume **200 million daily active users** and on average **5 notifications per user per day**.
 
-```
-Total:   200M x 5 = 1B/day
-Average: 1B / 10^5 s ≈ 10,000/s
+```formula
+total = 200M × 5 = 1B/day
+avg = 1B / 10^5 s ≈ 10,000/s
+where
+total: notifications per day
+avg: average notifications per second
+M: million (10^6)
+B: billion (10^9)
+day: one day; /day means per day
+10^5: 100,000, the seconds in a day (86,400) rounded up
+s: seconds; /s means per second
+≈: approximately equal to (rounded)
+In words: 200 million users receiving 5 notifications a day is a billion a day, about 10,000 a second on average.
 ```
 
-Channel mix, say 85% push, 12% email, 3% SMS:
+Channel mix, say 85% push, 12% email, 3% SMS. Each channel's rate is its share of the total:
 
+```formula
+push = 0.85 × 10,000/s = 8,500/s
+email = 0.12 × 10,000/s = 1,200/s
+sms = 0.03 × 10,000/s = 300/s
+where
+push, email, sms: average sends per second on each channel (850 million, 120 million and 30 million a day)
+0.85, 0.12, 0.03: each channel's share of all notifications (85%, 12%, 3%)
+/s: per second
+In words: most of the volume is push; SMS is only 300 a second, but it is the expensive one.
 ```
-Push:  850M/day ≈ 8,500/s
-Email: 120M/day ≈ 1,200/s
-SMS:    30M/day ≈   300/s
+
+Campaigns create bursts on top. Sending to 50M users within an hour adds:
+
+```formula
+burst = 50,000,000 / 3,600 s ≈ 14,000/s
+peak = 3 × 10,000/s = 30,000/s
+where
+burst: extra sends per second from one campaign spread over an hour
+3,600 s: the seconds in one hour
+peak: the normal daily peak, three times the average
+s: seconds; /s means per second
+≈: approximately equal to (rounded)
+In words: one 50-million-user campaign over an hour adds about 14,000 a second on top of a normal peak of about 30,000 a second.
 ```
 
-Campaigns create bursts on top: sending to 50M users within an hour adds ~14,000/s. With a normal 3x daily peak of ~30k/s, design for **30–50k/s** peaks.
+So design for **30–50k/s** peaks.
 
-For an illustrative cost model, assume $0.01 per single-segment SMS, excluding other fees: 30M/day costs $300,000/day, or $109.5M per 365-day year. Actual rates depend on destination, provider, sender and segment count. Reducing unnecessary SMS and duplicates matters.
+For an illustrative cost model, assume $0.01 per single-segment SMS, excluding other fees:
+
+```formula
+daily = 30M × $0.01 = $300,000
+yearly = $300,000 × 365 = $109.5M
+where
+daily, yearly: SMS spend per day and per 365-day year
+M: million
+$: US dollars
+In words: 30 million texts a day at a cent each costs $300,000 a day, about $110 million a year.
+```
+
+So 30M/day costs $300,000/day, or $109.5M per 365-day year. Actual rates depend on destination, provider, sender and segment count. Reducing unnecessary SMS and duplicates matters.
 
 > **Content gap:** no current provider quote or production throughput benchmark is supplied. Rates and capacity here are scenario assumptions, not measured service characteristics.
 
-Storage for the notification log at ~500 B per record:
+Storage for the notification log at ~500 B (bytes) per record:
 
-```
-1B x 500 B = 500 GB/day
-90-day retention ≈ 45 TB
+```formula
+daily = 1 bn × 500 B = 500 GB
+kept = 500 GB × 90 = 45 TB
+where
+daily: new log data per day
+kept: data held with 90-day retention (records older than 90 days deleted)
+bn: billion (10^9) records per day
+B: bytes
+GB: gigabyte, 10^9 bytes
+TB: terabyte, 10^12 bytes (1,000 GB)
+In words: a billion 500-byte records a day is 500 GB a day, and keeping 90 days of them takes 45 TB.
 ```
 
 ## Step 3: API
@@ -82,7 +131,7 @@ Notes:
 - **202 Accepted** explicitly represents work accepted for asynchronous processing. A 200 response can also describe a successful enqueue operation under another API contract; it does not inherently mean delivered.
 - `idempotencyKey` is required. The order service might retry; the same key must not produce a second notification.
 - `ttlSeconds` says when the notification becomes pointless. Stop initiating retries at expiry, request provider-side expiry where supported, and enforce OTP validity on the server: an already queued SMS may still arrive late.
-- Campaigns use a separate endpoint that takes a **segment** and a schedule, rather than millions of individual calls.
+- Campaigns use a separate endpoint that takes an **audience segment** and a schedule, rather than millions of individual calls.
 
 ## Step 4: Data model
 
@@ -151,7 +200,7 @@ A 50-million-user marketing campaign must not delay a password reset code. Achie
 
 - **Separate topics or queues per priority** (`critical`, `high`, `low`), each with its **own worker pool**. This avoids head-of-line blocking in the critical pool; shared stores, networks and provider quotas still need capacity protection.
 - **Reserved provider capacity.** Providers rate-limit you (e.g. SMS throughput per sender number, APNs and FCM throttling per app). Reserve a share of each provider's capacity for critical traffic so campaigns can't consume it all.
-- **Throttle campaigns at the source.** The campaign scheduler expands a segment into messages gradually (say, 20k/s) rather than dumping 50M into the queue at once. At 20k/s, 50M messages take about 42 minutes; that keeps queue lag predictable and stays within provider limits. Expand the segment in pages (cursor over the user table or a precomputed segment file) so the scheduler can pause, resume after a crash without resending, and be cancelled if the campaign has a mistake.
+- **Throttle campaigns at the source.** The campaign scheduler expands a segment into messages gradually (say, 20k/s) rather than dumping 50M into the queue at once. At 20k/s, 50M messages take about 42 minutes (50,000,000 / 20,000 per second = 2,500 s); that keeps queue lag predictable and stays within provider limits. Expand the segment in pages (cursor over the user table or a precomputed segment file) so the scheduler can pause, resume after a crash without resending, and be cancelled if the campaign has a mistake.
 
 A single queue with a priority field is weaker: a consumer working through a 50M-message backlog won't see a new critical message until it reaches it, unless the broker supports true priority ordering, and even then the providers are shared.
 
@@ -183,11 +232,31 @@ Classify every provider response:
 | Invalid token / number | Don't retry; clean up |
 | Unsubscribed / blocked | Don't retry; update prefs |
 
-- **Exponential backoff with jitter**: wait ~1 s, 2 s, 4 s, 8 s... each randomised, so thousands of failed messages don't retry in lockstep and hammer a recovering provider.
+- **Exponential backoff with jitter**: wait ~1 s, 2 s, 4 s, 8 s... each randomised, so thousands of failed messages don't retry in lockstep and hammer a recovering provider (formula below).
 - **Respect the TTL**: if the notification's `ttlSeconds` has passed, drop it instead of retrying. A late OTP is worse than none.
-- **Dead-letter queue**: after N attempts, move the message to a DLQ for inspection rather than retrying forever.
+- **Dead-letter queue**: after a fixed number of attempts (say 5), move the message to a DLQ for inspection rather than retrying forever.
 - **Token hygiene**: APNs tells you when a device token is no longer valid (HTTP 410 for an unregistered device), and FCM returns an `UNREGISTERED` error. Deactivate the affected registration; for APNs, compare its invalidation timestamp with the latest registration so an old response cannot invalidate a newer registration. Apply FCM token-lifecycle guidance separately.
 - **Circuit breakers and failover**: if one SMS provider's error rate spikes, open a circuit breaker and route to a secondary provider. Email can similarly fail over between configured providers. Secondary routes need approved senders, capacity and appropriate consent; ambiguous primary outcomes can cause duplicates across providers. Push can't fail over (only Apple can deliver to iPhones), so you queue and retry.
+
+The backoff schedule, with "full jitter" as described on the [AWS Architecture Blog](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/):
+
+```formula
+cap_n = min(c, b × 2^n)
+wait_n = U(0, cap_n)
+where
+n: the retry number, starting at 0 for the first retry
+b: the base delay, here 1 second
+2^n: 2 multiplied by itself n times (1, 2, 4, 8...), so the ceiling doubles on each retry
+c: a maximum delay, so waits stop growing (say 60 seconds)
+min: "the smaller of"
+cap_n: the longest wait allowed before retry n
+U(0, cap_n): a random time chosen evenly between 0 and cap_n
+U: uniform random choice
+wait_n: how long to actually wait before retry n
+In words: double the ceiling on each retry, up to a cap, and wait a random time below it, so failed messages spread out instead of retrying together.
+```
+
+So ceilings run 1 s, 2 s, 4 s, 8 s and so on, and two messages that failed at the same moment almost never retry at the same moment.
 
 ## Deep dive 4: Preferences, caps and quiet hours
 
@@ -210,11 +279,11 @@ Tracking uses provider callbacks: Twilio status webhooks, SES events, APNs/FCM r
 - **Provider rate limits**, not your own servers, are usually the ceiling. Know them and shape traffic to them.
 - **Preference lookups** at 50k/s need caching; accept that a preference change can take a few seconds to apply, with a freshly checked suppression state before marketing sends. Cache invalidation alone does not eliminate races with in-flight sends.
 - **Fan-out from campaigns** can swamp shared stores. Throttle at the scheduler.
-- **Cost vs reach**: SMS can reach many users without an installed app, but needs a reachable SMS-capable number and incurs charges. Push generally has low marginal provider cost but still has infrastructure costs and requires a usable app/device registration. A common pattern is *escalation*: send push, and only if it isn't opened within N minutes, send SMS.
+- **Cost vs reach**: SMS can reach many users without an installed app, but needs a reachable SMS-capable number and incurs charges. Push generally has low marginal provider cost but still has infrastructure costs and requires a usable app/device registration. A common pattern is *channel escalation*: send push, and only if it isn't opened within a set time (say 10 minutes), send SMS.
 
 ## At 10x scale
 
-At 10 billion notifications/day (~100k/s average, ~500k/s peak):
+At 10 billion notifications/day (10 billion / 100,000 s ≈ 100k/s average, ~500k/s peak once campaigns are added):
 
 - **Partition everything by `user_id`**: Kafka partitions, the log, and preference caches, to improve locality. Kafka ordering is per partition within a topic; separate priorities/channels, parallel senders and providers do not guarantee end-to-end user-visible order.
 - **Regional deployments** close to users and providers, with each region sending for its own users.

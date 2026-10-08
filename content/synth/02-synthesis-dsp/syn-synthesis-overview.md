@@ -3,7 +3,7 @@ id: syn-synthesis-overview
 title: Synthesis approaches and signal flow
 level: basic
 minutes: 11
-summary: The main ways synths make sound (subtractive, additive, FM/PM, wavetable, sample-based, physical modelling), the classic subtractive voice, and how mono and poly synths allocate voices.
+summary: The main ways synths make sound (subtractive, additive, FM/PM, wavetable, sample-based, physical modelling), the classic subtractive voice, and how monophonic and polyphonic synths allocate voices.
 ---
 
 A synthesiser is a program (or circuit) that turns *control* information, such as "play note 60, fairly hard", into a stream of audio samples. Every design answers the same two questions:
@@ -34,9 +34,25 @@ Any periodic sound can be described as a sum of sine waves (the next-but-one les
 
 ### FM and PM
 
-In **frequency modulation** one oscillator (the *modulator*) varies the frequency of another (the *carrier*) at audio rate. This creates sidebands at the carrier frequency plus and minus multiples of the modulator frequency, so two sine oscillators can produce a complex spectrum. John Chowning developed it at Stanford from 1967 and Yamaha licensed it; the DX7 (1983) made it famous.
+In **frequency modulation** one oscillator (the *modulator*) varies the frequency of another (the *carrier*) at audio rate. This creates new frequency components, called **sidebands**, at the carrier frequency plus and minus multiples of the modulator frequency, so two sine oscillators can produce a complex spectrum. The formula below tells you where those sidebands land:
 
-Yamaha's commercial "FM" (the DX7 included) is actually implemented as **phase modulation** (adding the modulator to the carrier's *phase* rather than its frequency). An industry-wide prevalence claim is omitted because no reliable survey of implementations was available for this review. The two are mathematically closely related: phase-modulating with a signal is the same as frequency-modulating with its derivative. A practical advantage of PM is that a modulator with a DC offset only shifts the carrier's phase, whereas in true FM it shifts the carrier's pitch. FM is cheap in CPU but notoriously hard to programme by ear.
+```formula
+f_sb = f_car ± k × f_mod
+where
+f_sb: the frequency of one sideband, in hertz (Hz)
+f_car: the carrier frequency (the oscillator you hear), in Hz
+f_mod: the modulator frequency (the oscillator doing the modulating), in Hz
+k: a whole number, 1, 2, 3 and so on; each value gives one pair of sidebands
+±: "plus or minus": each k gives one sideband above the carrier and one below it
+Hz: hertz, cycles per second
+In words: sidebands sit either side of the carrier, spaced at whole multiples of the modulator frequency.
+```
+
+For example, a 400 Hz carrier modulated by a 100 Hz modulator gives sidebands at 300 and 500 Hz (k = 1), 200 and 600 Hz (k = 2), and so on, so the result sounds like a 100 Hz harmonic tone. An unrelated ratio such as 400 Hz and 141 Hz gives sidebands that are not multiples of one fundamental, which is where FM's bell and metallic sounds come from. How strong each pair is depends on the **modulation index** (how hard the modulator pushes); a low index gives only the first pair or two, a high index spreads energy over many. (A sideband that would land below 0 Hz reflects back to a positive frequency.)
+
+John Chowning developed FM synthesis at Stanford from 1967 and Yamaha licensed it; the DX7 (1983) made it famous.
+
+Yamaha's commercial "FM" (the DX7 included) is actually implemented as **phase modulation** (adding the modulator to the carrier's *phase* rather than its frequency). The two are mathematically closely related: phase-modulating with a signal is the same as frequency-modulating with its derivative. A practical advantage of PM is that a modulator with a DC offset only shifts the carrier's phase, whereas in true FM it shifts the carrier's pitch. FM is cheap in CPU but notoriously hard to programme by ear.
 
 ### Wavetable
 
@@ -48,7 +64,22 @@ Play back recordings of real sounds, re-pitched by reading them faster or slower
 
 ### Physical modelling
 
-Simulate the physics of a string, tube or membrane. The classic small example is **Karplus–Strong**: fill a short delay line with noise and feed it back through a gentle low-pass filter. The loop's length sets the pitch (roughly `fs / f0` samples) and the filter makes high harmonics die first, like a plucked string. Julius O. Smith's *Physical Audio Signal Processing* covers this family in depth.
+Simulate the physics of a string, tube or membrane. The classic small example is **Karplus–Strong**: fill a short delay line with noise and feed it back through a gentle low-pass filter. The loop's length sets the pitch, and the filter makes high harmonics die first, like a plucked string. One trip round the loop is one period of the note, so the length you need is:
+
+```formula
+N ≈ f_s / f_0
+N ≈ 48000 Hz / 220 Hz ≈ 218 samples
+where
+N: the length of the delay line, in samples
+f_s: the sample rate, in hertz (Hz): how many samples are produced per second, e.g. 48,000
+f_0: the pitch you want (the fundamental frequency), in Hz
+≈: approximately equal to; the loop filter adds about half a sample of extra delay, so exact tuning needs a fractional adjustment
+Hz: hertz, cycles per second
+samples: individual numbers in the audio stream; here, slots in the delay line
+In words: the delay line must hold one period's worth of samples; higher notes need shorter lines.
+```
+
+So a 220 Hz string at 48 kHz needs a loop of about 218 samples, and a note an octave up (440 Hz) needs about 109. Julius O. Smith's *Physical Audio Signal Processing* covers this family in depth.
 
 > [!tip] A reasonable first instrument
 > Subtractive is the usual first build because each block (oscillator, filter, amplifier, envelope, LFO) can be built and tested on its own. The project brief suggests a monophonic digital subtractive synth as an option; this module teaches every block it would need without committing you to it.
@@ -159,14 +190,14 @@ print([p.note_on(n) for n in (60, 64, 67)])
 # [0, 1, 0]: 67 steals voice 0 from 60
 ```
 
-This sketch marks a voice free as soon as its key is released, so a voice still sounding its release tail can be reused abruptly. Real allocators track the envelope state, prefer voices that have finished, and fade a stolen voice out over a few milliseconds to avoid a click (lesson 5).
+This sketch marks a voice free as soon as its key is released, so a voice still sounding its release tail can be reused abruptly. Real voice allocators track the envelope state, prefer voices that have finished, and fade a stolen voice out over a few milliseconds to avoid a click (lesson 5).
 
 > [!warning] Stuck notes
 > Every note-on must eventually be matched by a note-off for the same note, or a voice sounds forever. Handle the MIDI convention that a note-on with velocity 0 means note-off, and give yourself an "all notes off" escape. The project brief lists "no stuck notes" as a success criterion.
 
 ## Cost and choice
 
-Polyphony multiplies everything: 8 voices means 8 oscillators, 8 filters and 16 envelopes per sample. On a microcontroller this decides your CPU budget. A mono synth is the smallest complete instrument, and a well-structured mono voice becomes one voice of a poly synth later.
+Polyphony multiplies everything: 8 voices means 8 oscillators, 8 filters and 16 envelopes per sample. On a microcontroller this decides your CPU budget. A mono synth is the smallest complete instrument, and a well-structured monophonic voice becomes one voice of a poly synth later.
 
 ## Key takeaways
 

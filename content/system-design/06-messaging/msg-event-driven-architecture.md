@@ -51,7 +51,18 @@ stream: account-42
  2 Deposited    {100}
  3 Withdrew     {30}
  4 Deposited    {50}
- state = 100 − 30 + 50 = 120
+```
+
+The current state is whatever you get by applying every event in order, starting from nothing:
+
+```formula
+balance = 0 + 100 − 30 + 50
+balance = 120
+where
+balance: the account's current balance, in pounds, derived by replaying its events
+0: the balance right after the Opened event
+100, 30, 50: the amounts in the Deposited, Withdrew and Deposited events, applied in stream order
+In words: the balance is not stored anywhere; it is recomputed by adding each deposit and subtracting each withdrawal in the order they happened.
 ```
 
 Benefits:
@@ -84,7 +95,7 @@ Event sourcing is a **storage** pattern inside one service. It does not require 
             query           search
 ```
 
-Each read model is denormalised for one access pattern. CQRS pairs naturally with event sourcing (projections are built from the event stream) but does not require it.
+Each read model is denormalised for one access pattern. CQRS pairs naturally with event sourcing (event projections are built from the event stream) but does not require it.
 
 With asynchronously maintained read stores, the price is **eventual consistency between write and read**: after a command succeeds, a projection may lag. CQRS itself does not require separate databases or asynchronous propagation; separate models can share one transactionally updated store. UIs must handle it, for example by returning the new state from the command, or by waiting for the projection to reach a version.
 
@@ -122,7 +133,7 @@ INSERT INTO outbox (id, aggregate_id,
 COMMIT;
 ```
 
-Either both rows commit or neither does. A separate **relay** process then reads the outbox and publishes to the broker:
+Either both rows commit or neither does. A separate **outbox relay** process then reads the outbox and publishes to the broker:
 
 ```
  app ─txn─▶ [orders | outbox]
@@ -160,7 +171,7 @@ Two ways to use CDC:
 1. **Raw table CDC**: stream the `orders` table itself. Zero application changes, but your internal schema becomes a public contract, and you get row changes, not business events.
 2. **Outbox + CDC**: stream only the `outbox` table, and use Debezium's **outbox event router** transformation to route each row to a topic based on its `aggregatetype` column and to key it by `aggregateid`. Producers publish deliberate, versioned events; CDC provides the reliable delivery.
 
-The schematic outbox SQL above uses aggregate_id and type; the default Debezium router expects aggregateid and aggregatetype (plus its other required columns). Adapt the schema or explicitly configure field mappings; the sketch is not a ready-to-run router schema.
+The illustrative outbox SQL above uses aggregate_id and type; the default Debezium router expects aggregateid and aggregatetype (plus its other required columns). Adapt the schema or explicitly configure field mappings; the sketch is not a ready-to-run router schema.
 
 Option 2 is a common choice for service-to-service events. Option 1 is ideal for feeding search indexes, caches and data warehouses.
 
@@ -173,7 +184,7 @@ Option 2 is a common choice for service-to-service events. Option 1 is ideal for
 - **Include an event ID, type, schema version, timestamp and aggregate ID.** CloudEvents standardises an envelope with required `id`, `source`, `specversion` and `type`, plus optional `time`, `subject` and `dataschema`. `specversion` versions the envelope, not your business payload; define aggregate identity and payload version deliberately.
 - **Evolve schemas compatibly**: add optional fields, never repurpose or remove required ones. Schema compatibility depends on the encoding and reader behavior. Configure the required backward/forward/transitive checks in the registry and CI; backward-only checks do not protect every old reader or replay.
 - **Key events by aggregate ID** so per-entity ordering holds in a partitioned log.
-- Decide deliberately between **thin** (notification) and **fat** (state transfer) events. Fat events reduce coupling at runtime but increase coupling at the schema level.
+- Decide deliberately between **thin events** (notification) and **fat events** (state transfer). Fat events reduce coupling at runtime but increase coupling at the schema level.
 
 ## Key takeaways
 - Event notification, event-carried state transfer, event sourcing and CQRS are different patterns with different coupling and consistency trade-offs.

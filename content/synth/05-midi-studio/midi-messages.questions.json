@@ -60,7 +60,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Pitch bend is a 14-bit value, 0–16,383, centre 8,192 (0x2000).\n2. It is sent LSB first: `En ll mm`.\n3. Split 8,192:\n\n```\nlsb = 8192 & 0x7F       = 0x00\nmsb = (8192 >> 7) & 0x7F = 0x40\n```\n\n4. So the message is `E0 00 40`.",
+    "workedExample": "1. Pitch bend is a 14-bit value, 0–16,383, centre 8,192 (0x2000).\n2. It is sent LSB first: `En ll mm`.\n3. Split 8,192:\n\n```formula\nLSB = v & 0x7F\nMSB = (v >> 7) & 0x7F\nLSB = 8192 & 0x7F = 0x00\nMSB = (8192 >> 7) & 0x7F\nMSB = 64 & 0x7F = 0x40\nwhere\nv: the 14-bit bend value, 0 to 16,383\nLSB: the first data byte, the low 7 bits\nMSB: the second data byte, the high 7 bits\n&: bitwise AND; with 0x7F (binary 0111 1111) it keeps only the low 7 bits\n>>: shift right by the given number of bits; a shift of 7 divides by 128 and drops the remainder\n0x: prefix meaning hexadecimal (base 16)\nIn words: 8,192 is exactly 64 × 128, so its low 7 bits are all zero and its high 7 bits are 64 (0x40).\n```\n\n4. So the message is `E0 00 40`.",
     "link": {
       "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
       "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
@@ -90,7 +90,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The specification: Timing Clock is sent 24 times per quarter note.\n2. A 4/4 bar contains 4 quarter notes.\n3. 24 × 4 = 96 `F8` bytes per bar.\n\nAs a check: a sixteenth is 24 ÷ 4 = 6 clocks, which is also the unit the Song Position Pointer counts in.",
+    "workedExample": "1. The specification: Timing Clock is sent 24 times per quarter note.\n2. A 4/4 bar contains 4 quarter notes.\n3. Multiply:\n\n```formula\nN = PPQN × q\nN = 24 × 4 = 96\nwhere\nN: the number of Timing Clock (F8) bytes per bar\nPPQN: pulses per quarter note, 24 for MIDI clock\nq: the number of quarter notes in the bar; 4 in 4/4 time\nIn words: four beats of 24 clocks each make 96 clocks per bar.\n```\n\nAs a check: a sixteenth is 24 ÷ 4 = 6 clocks, which is also the unit the Song Position Pointer counts in.",
     "link": {
       "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
       "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
@@ -180,7 +180,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\nbeats/s  = 125 / 60  = 2.0833\nclocks/s = 2.0833*24 = 50\ninterval = 1 / 50    = 0.020 s\n```\n\nSo 20 ms between clocks. A synced arpeggiator can estimate tempo by averaging several intervals, since individual clocks jitter by up to a byte time or more.",
+    "workedExample": "```formula\nt_clk = 60 s / (BPM × PPQN)\nt_clk = 60 s / (125 × 24)\nt_clk = 60 s / 3000\nt_clk = 0.020 s = 20 ms\nwhere\nt_clk: the time between consecutive F8 bytes, in seconds (s) or milliseconds (ms)\nBPM: tempo in beats (quarter notes) per minute; 125 here\nPPQN: pulses per quarter note, 24 for MIDI clock\n60 s: one minute in seconds\ns: seconds\nms: milliseconds, thousandths of a second\nIn words: at 125 BPM there are 3,000 clocks a minute, which is 50 a second, so one every 20 ms.\n```\n\nSo 20 ms between clocks. A synced arpeggiator can estimate tempo by averaging several intervals, since individual clocks jitter by up to a byte time or more.",
     "link": {
       "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
       "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
@@ -210,7 +210,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. `B0 01 40`: MSB = 64, LSB reset to 0 → 8,192.\n2. `B0 21 20`: CC 33 is the LSB of CC 1; LSB = 32 → 64 × 128 + 32 = 8,224.\n3. `B0 01 41`: new MSB = 65. Spec: \"When an MSB is received, the receiver should set its concept of the LSB to zero.\" → 65 × 128 + 0 = 8,320.\n\nIf the sender wants a fine value it follows up with another LSB.",
+    "workedExample": "The combined value is always:\n\n```formula\nv = MSB × 128 + LSB\nwhere\nv: the 14-bit controller value, 0 to 16,383\nMSB: the coarse byte (CC 1 here), 0 to 127\nLSB: the fine byte (CC 33 here), 0 to 127\nIn words: the coarse byte counts in steps of 128 and the fine byte fills in between.\n```\n\n1. `B0 01 40`: MSB 64, LSB reset to 0, giving 64 × 128 + 0 = 8,192.\n2. `B0 21 20`: CC 33 is the LSB of CC 1, so LSB becomes 32, giving 64 × 128 + 32 = 8,224.\n3. `B0 01 41`: a new MSB of 65. Spec: \"When an MSB is received, the receiver should set its concept of the LSB to zero.\" So the value is 65 × 128 + 0 = 8,320.\n\nIf the sender wants a fine value it follows up with another LSB.",
     "link": {
       "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
       "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
@@ -240,7 +240,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. One semitone is half of the +2 range, so you need halfway between centre (8,192) and maximum (16,383): about 8,192 + 4,096 = 12,288.\n2. Split it:\n\n```\n12288 & 0x7F        = 0x00 (LSB)\n(12288 >> 7) & 0x7F = 0x60 (MSB)\n```\n\n3. Message: `E0 00 60`.\n4. Check: (12,288 − 8,192) / 8,192 × 2 = 1.0 semitone.",
+    "workedExample": "1. One semitone is half of the +2 range, so you need halfway between centre (8,192) and maximum (16,383): about 8,192 + 4,096 = 12,288.\n2. Split it:\n\n```formula\nLSB = v & 0x7F\nMSB = (v >> 7) & 0x7F\nLSB = 12288 & 0x7F = 0x00\nMSB = (12288 >> 7) & 0x7F\nMSB = 96 & 0x7F = 0x60\nwhere\nv: the 14-bit bend value, 0 to 16,383\nLSB: the first data byte, the low 7 bits\nMSB: the second data byte, the high 7 bits\n&: bitwise AND; with 0x7F (binary 0111 1111) it keeps only the low 7 bits\n>>: shift right by the given number of bits; a shift of 7 divides by 128 and drops the remainder\n0x: prefix meaning hexadecimal (base 16)\nIn words: 12,288 is exactly 96 × 128, so the low byte is 0 and the high byte is 96 (0x60).\n```\n\n3. Message: `E0 00 60`.\n4. Check the bend amount:\n\n```formula\ns = (v − 8192) / 8192 × r\ns = (12288 − 8192) / 8192 × 2\ns = 1.0\nwhere\ns: the pitch offset in semitones\nv: the 14-bit bend value; here 12,288\n8192: the centre value (no bend)\nr: the bend range in semitones; 2 here\nIn words: 12,288 is halfway from centre to the top, so it bends up half of the 2-semitone range: one semitone.\n```",
     "link": {
       "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
       "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"

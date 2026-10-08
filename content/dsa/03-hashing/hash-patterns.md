@@ -6,7 +6,7 @@ minutes: 13
 summary: The hash map patterns behind a large share of coding problems: complement lookup (two-sum), frequency maps, grouping by a canonical key, prefix sums with a map, and sliding windows that track counts.
 ---
 
-Many problems that look like they need two nested loops have an O(n) solution that walks the input once while a hash map remembers what it has seen. The pattern is always the same trade: spend O(n) memory to turn "search everything I've seen so far" (O(n) each time) into "look it up" (O(1) on average).
+Many problems that look like they need two nested loops have an O(n) solution (n being the length of the input) that walks the input once while a hash map remembers what it has seen. The pattern is always the same trade: spend O(n) memory to turn "search everything I've seen so far" (O(n) each time) into "look it up" (O(1) on average).
 
 Complexity below assumes expected constant-time hash operations and bounded-cost arithmetic/equality; Python arbitrary-size integers can add bit costs. This lesson covers five recurring shapes. Learn to recognise them and a large share of array and string problems become routine.
 
@@ -14,7 +14,19 @@ Complexity below assumes expected constant-time hash operations and bounded-cost
 
 > Given `nums` and `target`, return the indices of two numbers that add up to `target`.
 
-The brute force checks every pair: O(n²). The insight: for each `x`, the partner you need is exactly `target − x`. Instead of searching for it, ask a map whether you have already seen it.
+A brute-force search checks every pair: O(n²) for an array of n numbers. The insight: for each number, the partner you need is fixed:
+
+```formula
+y = T − x
+y = 9 − 2 = 7
+where
+y: the complement, the value that would pair with x to reach the target
+T: the target sum (`target` in the code), here 9
+x: the current number (`x` in the code), here 2
+In words: if the target is 9 and you are looking at 2, the only number that can complete the pair is 7, so you need one lookup, not a search.
+```
+
+Instead of searching for the complement, ask a map whether you have already seen it.
 
 ```python
 def two_sum(nums, target):
@@ -55,11 +67,11 @@ def first_unique(s):
 first_unique("swiss")  # 1 ('w')
 ```
 
-Two passes, O(n) total. Related problems:
+Two passes over a string of n characters, so O(n) total. Related problems:
 
 - **Is `t` an anagram of `s`?** `Counter(s) == Counter(t)`: O(n), versus O(n log n) for sorting both.
-- **Top k frequent elements.** Count in O(n), then `counts.most_common(k)`, which typically uses a heap when 1 < k < u distinct keys; k = 1 uses max and k >= u uses sorting in CPython. A useful bound is O(n + u log(k+1)) for 1 <= k <= u. Bucketing by frequency gets it to O(n).
-- **Majority element.** Count, then find the key with count above n/2 (Boyer–Moore voting does it in O(1) space).
+- **Top k frequent elements.** Count in O(n), then `counts.most_common(k)`. With u distinct keys, CPython uses a heap when k is between 2 and u − 1, `max` when k = 1, and a full sort when k is u or more. The cost is at most about O(n + u × log(k + 1)), where log is a logarithm (the heap's height grows like the logarithm of its size, k). Bucketing by frequency gets it to O(n).
+- **Majority element.** Count, then find the key that appears in more than half of the n positions (the **Boyer–Moore majority vote** algorithm does it in O(1) space, without a map).
 
 > [!tip] Bounded alphabets
 > If keys are lowercase letters only, a list of 26 counters (`counts[ord(c) - 97]`) does the same job with no hashing at all, and its space is O(1) in the size of the input.
@@ -96,17 +108,42 @@ Choosing the key is the whole problem:
 | Shifted lowercase strings (abc, bcd) | length plus adjacent gaps modulo 26 |
 | Same row in a grid | the row index |
 
-The key must be hashable, which is why it is `tuple(sorted(w))` rather than `sorted(w)` (a list). With n words of length up to k, sorting costs O(n + n · k log(k+1)) in total; for a fixed lowercase alphabet a 26-count key costs O(n · (k+1)).
+The key must be hashable, which is why it is `tuple(sorted(w))` rather than `sorted(w)` (a list).
+
+The cost depends on how you build the key. Sorting each word's letters costs more than counting them:
+
+```formula
+T_sort = O(n + n × k × log(k + 1))
+T_count = O(n × (k + 1))
+where
+T_sort: the running time with sorted-letter keys
+T_count: the running time with 26-count keys (lowercase letters only)
+O(…): Big-O, the growth rate of the cost, ignoring constant factors
+n: the number of words
+k: the length of the longest word, in characters
+log: logarithm (any fixed base, since Big-O ignores the constant); log_2(9) ≈ 3.2
+In words: sorting a word of k letters costs about k × log k steps, while counting its letters costs about k; the "+ 1" terms only make the formulas correct for empty words.
+```
+
+For example, 1,000 words of 8 letters cost on the order of 1,000 × 8 × 3.2 ≈ 25,000 steps with sorting and 9,000 with counting. Big-O hides constant factors, so for short words the difference in real time is small; it matters for long strings.
 
 ## 4. Prefix sum plus hash map
 
 > Count the subarrays of `nums` whose sum equals `k`. Values may be negative.
 
-A **prefix sum** P[j] is the sum of the first j elements. The sum of the subarray from index i to j − 1 is P[j] − P[i]. So we want pairs i < j with
+A **prefix sum** is a running total: the sum of the first so-many elements. The sum of any contiguous stretch is then the difference of two prefix sums, so we want pairs of positions i < j with
 
-```
-P[j] - P[i] = k
-  =>  P[i] = P[j] - k
+```formula
+P[j] − P[i] = k
+⇒ P[i] = P[j] − k
+P[2] − P[0] = 3 − 0 = 3
+where
+P[j]: the prefix sum, the total of the first j elements of nums (P[0] = 0, the empty prefix)
+i: the start index of the subarray, counting from 0
+j: one past the end index, so the subarray is nums[i] up to nums[j − 1]
+k: the target sum
+⇒: "which means"; rearranging the first line gives the second
+In words: the subarray from i to j − 1 sums to k exactly when an earlier running total equals the current running total minus k; for nums = [1, 2, 1, −1, 2], P = [0, 1, 3, 4, 3, 5], and P[2] − P[0] = 3 is the subarray [1, 2].
 ```
 
 That is two-sum again, on prefix sums. Walk once, keeping a count of each prefix sum seen so far:
@@ -140,8 +177,26 @@ The **`{0: 1}` seed** represents the empty prefix before the array starts. Witho
 Variants:
 
 - **Longest subarray with sum k**: store the *first* index at which each prefix sum appears, and maximise `j − first[p − k]`.
-- **Subarray sum divisible by k**: for nonzero k, key on `p % k`; two prefixes with equal remainders bound a divisible subarray.
+- **Subarray sum divisible by k**: for nonzero k, key on `p % k` (the remainder, written mod below); two prefixes with equal remainders bound a divisible subarray.
 - **Equal numbers of 0s and 1s**: map 0 to −1, then look for subarrays with sum 0.
+
+The divisible-by-k variant rests on one fact about remainders:
+
+```formula
+(P[j] − P[i]) mod k = 0
+⇔ P[j] mod k = P[i] mod k
+(13 − 3) mod 5 = 10 mod 5 = 0
+13 mod 5 = 3 mod 5 = 3
+where
+P[j]: the prefix sum of the first j elements
+P[i]: an earlier prefix sum, i < j
+k: the divisor, a nonzero integer; here 5
+mod: "modulo", the remainder after division, taken from 0 to k − 1
+⇔: "exactly when", the statements on either side are both true or both false
+In words: a difference is divisible by k exactly when the two numbers leave the same remainder; prefix sums 13 and 3 both leave 3 when divided by 5, so the stretch between them sums to 10, a multiple of 5.
+```
+
+So count, for each remainder, how many earlier prefixes had it. (Some languages return negative remainders for negative numbers, so normalise them first.)
 
 > [!warning] Why not a sliding window?
 > The usual sum-based two-pointer rule relies on monotonicity, as with nonnegative inputs. Counting all matching windows also needs care with zeros. Arbitrary mixed signs break that monotonicity; prefix sums with a map handle them.
@@ -195,13 +250,13 @@ def longest_k_distinct(s, k):
 longest_k_distinct("eceba", 2)  # 3 ("ece")
 ```
 
-Deleting keys whose count hits zero is essential: otherwise `len(counts)` overstates the number of distinct characters. Each character enters and leaves the window at most once, so the inner `while` loop does O(n) work in total, not per step. Total: O(n).
+Deleting keys whose count hits zero is essential: otherwise `len(counts)` overstates the number of distinct characters. Each character enters and leaves the window at most once, so for a string of n characters the inner `while` loop does O(n) work in total, not per step. Total: O(n).
 
 The same skeleton solves "minimum window containing all characters of t" (track how many required characters are satisfied) and "find all anagrams of p in s" (a fixed-size window compared with `Counter(p)`).
 
 ## Sets for O(1) membership
 
-Sometimes all you need is fast membership. **Longest consecutive sequence** (`[100, 4, 200, 1, 3, 2]` → 4, for 1, 2, 3, 4) looks like it needs sorting, O(n log n). With a set it is O(n):
+Sometimes all you need is fast membership. **Longest consecutive sequence** (`[100, 4, 200, 1, 3, 2]` → 4, for 1, 2, 3, 4) looks like it needs sorting, O(n log n) for n numbers. With a set it is O(n):
 
 ```python
 def longest_consecutive(nums):
@@ -232,7 +287,7 @@ The `x − 1 not in s` test means each run is walked only from its start, so eve
 > Every pattern here trades O(n) extra memory for speed, and every O(1) is the *average* case. In an interview, say so; on a real system with adversarial input, remember lesson 2.
 
 ## Key takeaways
-- The core move: replace "search what I've seen" with "look it up in a map", turning O(n²) into O(n) at the cost of O(n) space.
+- The core move: replace "search what I've seen" with "look it up in a map", turning O(n²) into O(n) for n input items, at the cost of O(n) space.
 - Two-sum: check for `target − x` before inserting `x`, so an element never pairs with itself.
 - Grouping: pick a hashable canonical key (sorted letters, a count tuple) that is identical within a group.
 - Subarray sum equals k: count prefix sums in a map seeded with `{0: 1}`; it works with negative numbers where sliding windows do not.

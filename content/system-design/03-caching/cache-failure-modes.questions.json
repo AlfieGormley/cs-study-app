@@ -15,7 +15,7 @@
       },
       {
         "text": "About 1,000",
-        "explanation": "Correct. All requests arriving during the 0.5 s rebuild window miss: `2,000/s × 0.5 s = 1,000` concurrent rebuilds, and more if the DB slows down under the load."
+        "explanation": "Correct. All requests arriving during the 0.5 s rebuild window miss: 2,000/s × 0.5 s = 1,000 concurrent rebuilds, and more if the DB slows down under the load."
       },
       {
         "text": "About 2,000",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Window of vulnerability = rebuild time = 0.5 s.\n2. Requests in window = rate × window = `2,000 × 0.5 = 1,000`.\n3. Each runs the same 500 ms query. The DB, sized for a trickle of misses, now has 1,000 heavy queries in flight.\n4. Queries slow to, say, 3 s, so the window grows to 3 s and `2,000 × 3 = 6,000` requests pile up: a feedback loop.\n5. With single-flight: 1 rebuild per key (or per server), everyone else waits or gets stale data.",
+    "workedExample": "1. Window of vulnerability = rebuild time = 0.5 s.\n2. Every request in that window misses:\n\n```formula\nn = r × t_rebuild\nn = 2,000 /s × 0.5 s = 1,000\nwhere\nn: requests that start their own rebuild\nr: the request rate, 2,000 per second (/s)\nt_rebuild: rebuild time, 0.5 seconds (s)\ns: seconds\nIn words: half a second of traffic at 2,000 a second is 1,000 duplicate rebuilds.\n```\n3. Each runs the same 500 ms query. The DB, sized for a trickle of misses, now has 1,000 heavy queries in flight.\n4. Queries slow to, say, 3 s, so the window grows to 3 s and 2,000 × 3 = 6,000 requests pile up: a feedback loop.\n5. With single-flight: 1 rebuild per key (or per server), everyone else waits or gets stale data.",
     "link": {
       "title": "Cache stampede — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_stampede"
@@ -33,7 +33,7 @@
     "id": "cache-failure-modes-q2",
     "level": "advanced",
     "type": "single",
-    "prompt": "With probabilistic early expiration (XFetch), a request refreshes early if `now + delta × beta × (−ln(rand())) ≥ expiry`. Why does this reduce stampede risk on hot keys **without** routinely wasting work on cold ones?",
+    "prompt": "With probabilistic early expiration (XFetch), a request refreshes early if:\n\n```formula\nt + δ × β × (−ln(U)) ≥ t_exp\nwhere\nt: the current time, in seconds (s)\nδ: delta, how long a rebuild takes, in s\nβ: beta, a tuning knob (default 1)\nln: the natural logarithm (base e ≈ 2.718)\nU: a fresh random number between 0 and 1\nt_exp: when the value expires, in s\n≥: is greater than or equal to\ns: seconds\nIn words: each request adds a random head start to the clock and refreshes if that pushes it past expiry.\n```\n Why does this reduce stampede risk on hot keys **without** routinely wasting work on cold ones?",
     "options": [
       {
         "text": "Each request has a small, rising chance of refreshing as expiry nears; a hot key gets so many requests that one refreshes just before expiry, while a cold key is rarely requested in that window so rarely refreshes early",
@@ -44,7 +44,7 @@
         "explanation": "XFetch needs no lock or coordination; each request decides independently."
       },
       {
-        "text": "It refreshes all keys at exactly `delta` seconds before expiry",
+        "text": "It refreshes all keys at exactly δ (delta) seconds before expiry",
         "explanation": "A fixed early time would make all requests in that instant refresh together, just shifting the stampede earlier. The randomness spreads it out."
       },
       {
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. `−ln(rand())` is exponentially distributed with mean 1, so the \"early\" offset averages `delta × beta`.\n2. Let delta = 0.5 s, beta = 1. A request 2 s before expiry refreshes only if the offset ≥ 2 s: probability `e^(−2/0.5) = e^(−4) ≈ 1.8%`.\n3. Hot key at 1,000 req/s: in the last 2 s there are 2,000 rolls, so one almost surely succeeds; a refresh is likely to start before expiry, but it must also finish successfully; overlapping decisions may launch multiple refreshes.\n4. Cold key at 1 request/minute: probably zero requests in that 2 s window, so no wasted early refresh.\n5. Tune `beta` > 1 to refresh earlier if rebuild times vary.",
+    "workedExample": "1. −ln(U) is exponentially distributed with mean 1, so the \"early\" offset averages δ × β (delta times beta).\n2. Let δ = 0.5 s and β = 1. A request 2 s before expiry refreshes only if its offset is at least 2 s:\n\n```formula\nP = e^(−Δ / (δ × β))\nP = e^(−2 / (0.5 × 1)) = e^(−4)\nP ≈ 0.018\nwhere\nP: chance this one request refreshes early\ne: Euler's number, about 2.718\nΔ: time left before expiry, 2 seconds (s)\nδ: delta, the rebuild time, 0.5 s\nβ: beta, the tuning knob, 1\n≈: approximately equal to\ns: seconds\nIn words: 2 s before expiry each request has about a 1.8% chance of refreshing; closer to expiry the chance rises.\n```\n3. Hot key at 1,000 req/s: in the last 2 s there are 2,000 rolls, so one almost surely succeeds; a refresh is likely to start before expiry, but it must also finish successfully; overlapping decisions may launch multiple refreshes.\n4. Cold key at 1 request/minute: probably zero requests in that 2 s window, so no wasted early refresh.\n5. Tune β (beta) above 1 to refresh earlier if rebuild times vary.",
     "link": {
       "title": "Optimal Probabilistic Cache Stampede Prevention (VLDB 2015)",
       "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Negative caching only helps **repeated** misses. Random UUIDs never repeat: hit ratio ≈ 0.\n2. So all 30,000 req/s hit the DB.\n3. Bloom filter of 10 million product ids at 1% FPR: `10M × 9.6 bits ≈ 12 MB`. Fits in every app server's memory.\n4. Random UUID → filter says \"definitely not\" 99% of the time → return 404 immediately.\n5. DB load: `30,000 × 1% = 300 req/s`.\n6. Add per-client rate limits on 404s to stop the traffic at the edge.\nCoordinate filter publication with creation so a newly visible product cannot be absent from the filter; during uncertainty fall back to an authoritative lookup rather than return a false 404. Rate limits reduce accepted attack traffic, not literally all attacker resource use.",
+    "workedExample": "1. Negative caching only helps **repeated** misses. Random UUIDs never repeat: hit ratio ≈ 0.\n2. So all 30,000 req/s hit the DB.\n3. Bloom filter of 10 million product ids at a 1% false-positive rate (FPR):\n\n```formula\nM = n × b / 8\nM = 10,000,000 × 9.6 / 8\nM = 12,000,000 B = 12 MB\nwhere\nM: filter memory, in bytes (B)\nn: ids stored, 10 million\nb: bits per id for a 1% FPR, about 9.6\n8: bits per byte\nB: bytes\nMB: megabytes; 1 MB = 1,000,000 B\nIn words: 10 million ids at 9.6 bits each is 12 MB, small enough for every app server.\n```\n\n4. Random UUID → filter says \"definitely not\" 99% of the time → return 404 immediately.\n5. Only false positives get through:\n\n```formula\nR_db = R × p\nR_db = 30,000 /s × 0.01 = 300 /s\nwhere\nR_db: attack requests reaching the DB, per second (/s)\nR: attack requests, 30,000 per second\np: the false-positive rate, 0.01 (1%)\ns: seconds\nIn words: 1% of 30,000 random ids slip through as \"maybe\", so 300 a second still reach the database.\n```\n6. Add per-client rate limits on 404s to stop the traffic at the edge.\nCoordinate filter publication with creation so a newly visible product cannot be absent from the filter; during uncertainty fall back to an authoritative lookup rather than return a false 404. Rate limits reduce accepted attack traffic, not literally all attacker resource use.",
     "link": {
       "title": "Bloom filter — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Bloom_filter"
@@ -100,7 +100,7 @@
         "explanation": "This just moves the synchronised expiry to 08:00."
       },
       {
-        "text": "Add random jitter to each TTL (for example 3600 + random(0–360) seconds)",
+        "text": "Add random TTL jitter to each key (for example 3600 + random(0–360) seconds)",
         "explanation": "Correct. Jitter spreads expiry/reload opportunities rather than guaranteeing the resulting rate is small enough. Compare the remaining peak miss rate with origin capacity."
       },
       {
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. All 2M keys were set within minutes of 06:00 with the same TTL → all expire at ~07:00. That's an avalanche.\n2. With jitter of up to 10%: expiries spread uniformly over 07:00–07:06 (360 s).\n3. Rate of expiries: `2,000,000 / 360 ≈ 5,600/s` rather than 2M at once, and only keys actually requested get reloaded.\n4. One line of code: `ttl = 3600 + random.randint(0, 360)`.",
+    "workedExample": "1. All 2M keys were set within minutes of 06:00 with the same TTL → all expire at ~07:00. That's an avalanche.\n2. With TTL jitter of up to 10%: expiries spread uniformly over 07:00–07:06 (360 s).\n3. Rate of expiries:\n\n```formula\nE = K / W\nE = 2,000,000 / 360 s ≈ 5,600 /s\nwhere\nE: expiries per second (/s)\nK: keys warmed together, 2 million\nW: the jitter window, 10% of 3,600 s = 360 s\ns: seconds\n≈: approximately equal to\nIn words: spreading 2 million expiries over 6 minutes gives about 5,600 a second instead of all at once.\n```\n\n   Only keys actually requested get reloaded, so the database sees roughly this rate at most (plus any duplicate rebuilds of the same key).\n4. One line of code: `ttl = 3600 + random.randint(0, 360)`.",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -151,7 +151,7 @@
       2,
       3
     ],
-    "workedExample": "1. Diagnose: one key → one hash slot → one shard. Cluster size is irrelevant for a single key.\n2. Need: cut per-shard load from 400k to under 120k.\n3. Local cache (1 s TTL, 200 servers): Redis load ≈ 200/s. Huge reduction.\n4. Key splitting (8 copies): if copies occupy eight distinct capable shards, 400k/8=50k reads/s each before overhead; verify placement and headroom.\n5. Replicas (3 + primary): ~100k each. Just within capacity.\n6. Often you combine the local cache with one of the others for headroom.",
+    "workedExample": "1. Diagnose: one key → one hash slot → one shard. Cluster size is irrelevant for a single key.\n2. Need: cut per-shard load from 400k to under 120k.\n3. Local cache (1 s TTL, 200 servers): each server refills once per TTL, so Redis load ≈ 200 / 1 s = 200 reads/s. Huge reduction.\n4. Key splitting and replicas both divide the reads by the number of nodes serving them:\n\n```formula\nR_node = R / k\nR_node = 400,000 / 8 = 50,000\nR_node = 400,000 / 4 = 100,000\nwhere\nR_node: reads per second on each node\nR: reads per second for the key, 400,000\nk: nodes sharing the key: 8 split copies, or 3 replicas + 1 primary = 4\nIn words: 8 copies on 8 shards give 50k reads/s each; 4 nodes give 100k each, just under the 120k limit.\n```\n\n5. Both assume the copies sit on distinct, capable nodes and the load is spread evenly; verify placement and headroom.\n6. Often you combine the local cache with one of the others for headroom.",
     "link": {
       "title": "Redis Cluster specification",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Full traffic T. DB capacity ≈ 2% of T.\n2. Cold cache at 100% traffic → misses ≈ T → 50× overload.\n3. Ramp: at 1% traffic, misses ≈ 1% of T (within capacity). As the hit ratio climbs, step up.\n4. Step to 5% when hit ratio > 60% → misses ≈ `0.05 × 0.4 = 2%` of T. OK.\n5. Continue until 100%, by which time the hit ratio is ~98%.\n6. Pre-warming the top keys (or reading misses from a warm peer cluster, as Facebook did) makes each step safer and faster.",
+    "workedExample": "1. The database sees the new cache's share of traffic times its miss ratio:\n\n```formula\nR_db = s × (1 − h) × R\nR_db = 1 × (1 − 0) × R = R\nR_db = 0.05 × (1 − 0.6) × R\nR_db = 0.02 × R\nwhere\nR_db: reads per second reaching the DB\ns: share of traffic sent to the new cache\nh: the new cache's current hit ratio\nR: full traffic, in reads per second\nIn words: a cold cache at full traffic passes everything to the database; 5% of traffic at a 60% hit ratio passes only 2%.\n```\n\n2. DB capacity ≈ 2% of full traffic, so a cold cache at 100% traffic is a 50× overload.\n3. Ramp: at 1% traffic, misses ≈ 1% of full traffic (within capacity). As the hit ratio climbs, step up.\n4. Step to 5% when the hit ratio passes 60%: misses ≈ 2% of full traffic, right at capacity.\n5. Continue until 100%, by which time the hit ratio is ~98%.\n6. Pre-warming the top keys (or reading misses from a warm peer cluster, as Facebook did) makes each step safer and faster.",
     "link": {
       "title": "Scaling Memcache at Facebook — full paper PDF",
       "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Before: hit ratio 98% on `user:v2:*`.\n2. After an all-at-once deploy: every request looks up `user:v3:*`, which doesn't exist yet → hit ratio ≈ 0%.\n3. DB load jumps ~50×: a self-inflicted avalanche.\n4. Safer options:\n   - Canary 5% of servers → the new 5% may all miss plus existing misses on the other 95%; with 2% old misses this is about 6.9% overall before warming.\n   - Dual-read: try v3; on miss, read v2, convert, write v3.\n   - Pre-populate v3 keys from v2 with a background job before switching reads.\n5. Treat a key-format change like a schema migration.\nChoose rollout percentages from available origin headroom, not a fixed 5% rule, and keep both key versions coherent until old readers have drained.",
+    "workedExample": "1. Before: hit ratio 98% on `user:v2:*`.\n2. After an all-at-once deploy: every request looks up `user:v3:*`, which doesn't exist yet → hit ratio ≈ 0%.\n3. DB load jumps ~50×: a self-inflicted avalanche.\n4. Safer options:\n   - Canary 5% of servers → the new 5% may all miss, plus the usual 2% misses on the other 95%:\n\n```formula\nm = s + (1 − s) × m_old\nm = 0.05 + 0.95 × 0.02 = 0.069\nwhere\nm: overall miss ratio during the canary\ns: share of servers on v3, 0.05\nm_old: the old miss ratio, 0.02\nIn words: about 6.9% of reads miss, roughly 3.5 times the usual database load, before the v3 keys warm up.\n```\n\n   - Dual-read: try v3; on miss, read v2, convert, write v3.\n   - Pre-populate v3 keys from v2 with a background job before switching reads.\n5. Treat a key-format change like a schema migration.\nChoose rollout percentages from available origin headroom, not a fixed 5% rule, and keep both key versions coherent until old readers have drained.",
     "link": {
       "title": "Thundering herd problem — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Thundering_herd_problem"
@@ -263,7 +263,7 @@
       },
       {
         "text": "About 60 MB; about 1% reach the database",
-        "explanation": "Correct. `50M × 9.6 bits = 480 Mbit ≈ 60 MB`, and by design about 1% of ids that are not in the set are wrongly reported as \"maybe present\"."
+        "explanation": "Correct. 50 million × 9.6 bits = 480 megabits (Mbit) = 60 MB, and by design about 1% of ids that are not in the set are wrongly reported as \"maybe present\"."
       },
       {
         "text": "About 60 MB; about 1% of *valid* ids are wrongly rejected",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Rule of thumb: ~9.6 bits per element for a 1% false-positive rate.\n2. Memory:\n\n```\n50,000,000 * 9.6 = 480,000,000 bits\n480e6 / 8 = 60e6 bytes ≈ 60 MB\n```\n\n3. An invalid id is wrongly reported as \"maybe\" 1% of the time, so 1% of attack traffic still reaches the cache and then the database.\n4. At 30,000 attack req/s, that is ~300 req/s, a remaining load that must be checked against measured database capacity.\n5. Reducing the error tenfold to 0.1% costs about 14.4 bits per element (~90 MB). Each 10× cut in false positives costs roughly 4.8 extra bits per element.",
+    "workedExample": "1. Bits per element for false-positive rate p:\n\n```formula\nb = −ln(p) / (ln 2)^2\nb = −ln(0.01) / 0.4805 ≈ 9.6\nwhere\nb: bits per element, with the best number of hash functions\np: the false-positive rate, 0.01\nln: natural logarithm (base e ≈ 2.718)\n≈: approximately equal to\nIn words: a 1% false-positive rate needs about 9.6 bits per stored id.\n```\n\n2. Memory:\n\n```formula\nM = n × b / 8\nM = 50,000,000 × 9.6 / 8\nM = 60,000,000 B = 60 MB\nwhere\nM: filter memory, in bytes (B)\nn: ids stored, 50 million\nb: bits per id, 9.6\n8: bits per byte\nB: bytes\nMB: megabytes; 1 MB = 1,000,000 B\nIn words: 480 million bits is 60 million bytes, 60 MB.\n```\n\n3. An invalid id is wrongly reported as \"maybe\" 1% of the time, so 1% of attack traffic still reaches the cache and then the database.\n4. At 30,000 attack req/s, that is ~300 req/s, a remaining load that must be checked against measured database capacity.\n5. Reducing the error tenfold to 0.1% costs about 14.4 bits per element (−ln(0.001) / 0.4805 ≈ 14.4, so ~90 MB). Each 10× cut in false positives costs roughly 4.8 extra bits per element.",
     "link": {
       "title": "Bloom filter — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Bloom_filter"
@@ -370,7 +370,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Normal DB load: `100,000 × (1 − 0.97) = 3,000/s`. Within the 6,000/s capacity.\n2. Redis down: only the local caches remain.\n\n```\nDB = 100,000 * (1 - 0.60)\n   = 40,000 reads/s\n```\n\n3. Overload: `40,000 / 6,000 ≈ 6.7×`.\n4. So the local cache helps a lot (it turns 100k into 40k), but not enough.\n5. Next steps: a circuit breaker on the database path, serving degraded or default responses for non-critical reads, rate-limiting rebuilds per key, and restoring Redis (replicas across zones make this outage less likely in the first place).",
+    "workedExample": "1. The database sees the miss ratio times the total load:\n\n```formula\nR_db = (1 − h) × R\nR_db = (1 − 0.97) × 100,000 = 3,000\nR_db = (1 − 0.60) × 100,000 = 40,000\nwhere\nR_db: database reads per second\nh: hit ratio: 0.97 normally, 0.60 with only the local caches\nR: total reads per second, 100,000\nIn words: losing Redis takes the miss ratio from 3% to 40%, so database load jumps from 3,000 to 40,000 reads a second.\n```\n\n2. Normally 3,000/s is within the 6,000/s capacity. With Redis down, only the local caches remain.\n3. Overload: 40,000 / 6,000 ≈ 6.7×.\n4. So the local cache helps a lot (it turns 100k into 40k), but not enough.\n5. Next steps: a circuit breaker on the database path, serving degraded or default responses for non-critical reads, rate-limiting rebuilds per key, and restoring Redis (replicas across zones make this outage less likely in the first place).",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"

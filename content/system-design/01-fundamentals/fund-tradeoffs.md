@@ -72,7 +72,21 @@ Real knobs that control this:
 - **Kafka** producer `acks`: `0` (fire and forget), `1` (leader only), `all` (all in-sync replicas), combined with the topic's `min.insync.replicas`. Since Kafka 3.0 the producer defaults to `acks=all` with idempotence on, but `min.insync.replicas` still defaults to 1, a value such as 2 with at least 3 appropriately placed replicas improves tolerance of one replica loss, but no setting alone guarantees zero loss under all failures.
 - **Redis** persistence: no persistence, RDB snapshots (lose everything since the last snapshot), or the append-only file (AOF) with `appendfsync always` (slow, safest), `everysec` (the usual choice: lose about a second of writes) or `no` (let the OS decide when to flush).
 
-Batching (group commit) softens this trade-off: fsync once for many writes. If an fsync takes 2 ms, one-commit-per-fsync caps a serial log at about 500 commits/s; flushing 50 commits together lifts that towards 25,000/s, with a latency cost determined by the batching policy, queueing and flush completion time. Kafka and most databases do this, which is why throughput can be high even with durable writes.
+Batching (group commit) softens this trade-off: fsync once for many writes. A log that does one fsync at a time can only do so many per second, and each one can make a whole batch durable:
+
+```formula
+X = b / t_f
+b = 1: X = 1 / 0.002 s = 500 /s
+b = 50: X = 50 / 0.002 s = 25,000 /s
+where
+X: the maximum commits per second one log can make durable
+b: the batch size, the number of commits made durable by each fsync
+t_f: the time one fsync takes, in seconds (s); here 2 ms = 0.002 s
+s: second
+In words: a log that can fsync 500 times a second commits 500 transactions a second one at a time, or fifty times as many if each fsync carries fifty.
+```
+
+The ceiling assumes fsyncs happen one after another and that there are always enough commits waiting to fill a batch. The price is latency: a commit may wait for the next batch, by an amount set by the batching policy, queueing and flush completion time. Kafka and most databases do this, which is why throughput can be high even with durable writes.
 
 ## Throughput vs latency
 
@@ -91,8 +105,26 @@ Cost is a first-class requirement, not an afterthought.
 - **Storage tiers.** Hot SSD, object storage and archive tiers have different storage, request and retrieval prices; compare current provider pricing for the expected workload. Lifecycle policies move cold data down.
 - **Over-provisioning vs autoscaling.** Headroom costs money; too little costs outages.
 
+To price an availability target, multiply the downtime it allows by what an hour of downtime costs:
+
+```formula
+C = (1 − A) × H × c
+C_{99.9} = 0.001 × 8,766 h × £20k/h ≈ £175k
+C_{99.99} = 0.0001 × 8,766 h × £20k/h ≈ £18k
+where
+C: the expected yearly cost of downtime, in pounds (£), if you use the whole allowed downtime
+A: the availability as a fraction (99.9% = 0.999)
+H: the hours in a year, 365.25 × 24 = 8,766 hours (h)
+h: hour
+c: the cost of one hour of downtime, in pounds per hour (£/h)
+k: thousand (£20k = £20,000)
+C_{99.9}, C_{99.99}: the yearly downtime cost at 99.9% and at 99.99%
+≈: approximately equal to (rounded)
+In words: the downtime a target allows, times the price of an hour of downtime, is the yearly bill for being down.
+```
+
 > [!example] Pricing the trade-off
-> Suppose an outage costs £20k per hour. 99.9% allows ~8.8 h/year (about £175k of downtime cost if you use the whole budget); 99.99% allows ~53 min (about £18k). The upgrade saves roughly £157k a year. If moving to 99.99% costs £300k/year in extra infrastructure and staff, it isn't worth it on these numbers, unless downtime also causes reputational or regulatory damage.
+> Suppose an outage costs £20k per hour. 99.9% allows about 8.8 hours a year (about £175k of downtime cost if you use the whole budget); 99.99% allows about 53 minutes (about £18k). The upgrade saves roughly £157k a year. If moving to 99.99% costs £300k/year in extra infrastructure and staff, it isn't worth it on these numbers, unless downtime also causes reputational or regulatory damage.
 
 ## Complexity
 

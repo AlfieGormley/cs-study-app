@@ -33,34 +33,154 @@ Assume a YouTube-scale platform.
 
 **Uploads.** In 2019 YouTube said that more than 500 hours of video were uploaded every minute. Use that dated figure as an illustrative planning input, not a measurement of current upload volume.
 
-```
-500 h/min x 1,440 min = 720,000 h/day
-Source at ~10 Mbps (1080p):
-  10e6 b/s x 3,600 s / 8 = 4.5 GB/hour
-720,000 x 4.5 GB = ~3.2 PB/day originals
+First, turn the per-minute upload rate into hours of video per day, because storage is planned per day. A day has 24 × 60 = 1,440 minutes.
+
+```formula
+H_day = H_min × 1,440 min/day
+H_day = 500 h/min × 1,440 min/day
+H_day = 720,000 h/day
+where
+H_day: hours of new video uploaded per day, in hours per day (h/day)
+H_min: hours of new video uploaded per minute, in hours per minute (h/min); here 500
+h: hours of video playing time
+min: minutes
+day: one day of 24 hours (1,440 minutes)
+In words: 500 hours arriving every minute, for all 1,440 minutes of a day, is 720,000 hours of new video a day.
 ```
 
-For a hypothetical storage model, assume additional renditions bring total new storage to **6–8 PB/day**. This multiplier depends on the actual ladders/codecs and is not a measured YouTube ratio. Over a year that is 365 x 6–8 PB, or **about 2–3 EB**, before replication. These are deliberately rough: real sources range from 5 Mbps phone clips to 50+ Mbps 4K. Clip duration does not itself reduce the assumed bytes per hour; source bitrate and format determine that.
+Next, work out how many bytes one hour of source video takes. A video's bitrate is given in bits per second, but storage is counted in bytes, and one byte is 8 bits, so you divide by 8 at the end. Assume an average source of about 10 megabits per second (Mbps), typical of a 1080p upload.
 
-**Viewing.** Say 200 M daily viewers each watching 1 hour at an average 3 Mbps.
-
+```formula
+S_hour = r × t / 8
+S_hour = 10,000,000 b/s × 3,600 s / 8
+S_hour = 4,500,000,000 B ≈ 4.5 GB
+where
+S_hour: the size of one hour of source video, in bytes (B)
+r: the source bitrate, in bits per second (b/s); here 10 Mbps = 10,000,000 b/s
+t: the length of the video, in seconds (s); one hour is 3,600 s
+8: the number of bits in one byte
+b/s: bits per second; a bit is a single 0 or 1
+s: seconds
+B: bytes; one byte is 8 bits
+GB: gigabytes; 1 GB = 1,000,000,000 bytes
+≈: approximately equal to
+In words: a 10 megabit-per-second video uses 4.5 gigabytes for every hour of footage.
 ```
-Average concurrent viewers:
-  200 M x 1 h / 24 h = ~8.3 M
-Peak (about 2x average) = ~17 M
-Peak egress: 17 M x 3 Mbps = ~50 Tbps
-Daily egress:
-  200 M x 3,600 s x 3 Mbps / 8 = ~270 PB
+
+Multiply the two to get the daily volume of original uploads:
+
+```formula
+S_day = H_day × S_hour
+S_day = 720,000 h/day × 4.5 GB/h
+S_day = 3,240,000 GB/day ≈ 3.2 PB/day
+where
+S_day: bytes of original uploads stored per day, in gigabytes per day (GB/day)
+H_day: hours uploaded per day; here 720,000 h/day
+S_hour: bytes per hour of source; here 4.5 GB per hour (GB/h)
+h: hours
+GB: gigabytes; 1 GB = 1,000,000,000 bytes
+PB: petabytes; 1 PB = 1,000,000 GB = 10^15 bytes
+day: one day
+≈: approximately equal to
+In words: 720,000 hours a day at 4.5 GB an hour is about 3.2 petabytes of originals every day.
+```
+
+For a hypothetical storage model, assume additional renditions bring total new storage to **6–8 PB/day**. This multiplier depends on the actual ladders/codecs and is not a measured YouTube ratio. Over a year that is:
+
+```formula
+S_year = S_day × 365 days
+S_year = 6 PB/day × 365 = 2,190 PB ≈ 2.2 EB
+S_year = 8 PB/day × 365 = 2,920 PB ≈ 2.9 EB
+where
+S_year: new storage needed per year, in petabytes (PB) or exabytes (EB)
+S_day: total new storage per day including renditions, in petabytes per day (PB/day); here 6 to 8
+PB: petabytes; 1 PB = 10^15 bytes
+EB: exabytes; 1 EB = 1,000 PB = 10^18 bytes
+days: days in the year (365)
+day: one day
+≈: approximately equal to
+In words: adding 6 to 8 petabytes a day for a year comes to about 2 to 3 exabytes, before any replication copies.
+```
+
+So the platform grows by **about 2–3 EB** a year, before replication. These are deliberately rough: real sources range from 5 Mbps phone clips to 50+ Mbps 4K. Clip duration does not itself reduce the assumed bytes per hour; source bitrate and format determine that.
+
+**Viewing.** Say 200 M (200 million) daily viewers each watching 1 hour at an average 3 Mbps.
+
+The network has to be sized for how many people are watching *at the same moment*, not per day. If viewing were spread evenly over the day, the average number watching at once is total viewing hours divided by the hours in a day:
+
+```formula
+C_avg = D × T_watch / 24 h
+C_avg = 200 M × 1 h / 24 h ≈ 8.3 M
+C_peak ≈ 2 × C_avg ≈ 17 M
+where
+C_avg: average number of viewers watching at the same moment
+C_peak: number watching at once at the busiest time of day; assumed about twice the average
+D: daily viewers, people who watch at least once a day; here 200 M
+T_watch: viewing time per viewer per day, in hours (h); here 1 h
+24 h: the hours in one day
+h: hours
+M: million (1,000,000)
+≈: approximately equal to
+In words: 200 million people each watching an hour a day means about 8.3 million watching at any moment on average, and roughly 17 million at the evening peak.
+```
+
+The "2x" peak factor is an assumption: real daily curves depend on time zones and audience. Egress (data sent out of your network to viewers) at peak is the number watching times the bitrate each one receives:
+
+```formula
+E_peak = C_peak × r
+E_peak = 17 M × 3 Mbps ≈ 51 Tbps ≈ 50 Tbps
+where
+E_peak: peak egress, in terabits per second (Tbps)
+C_peak: viewers watching at once at peak; here about 17 M
+r: average bitrate each viewer streams, in megabits per second (Mbps); here 3
+M: million
+Mbps: megabits per second; 1 Mbps = 1,000,000 bits per second
+Tbps: terabits per second; 1 Tbps = 1,000,000 Mbps
+≈: approximately equal to
+In words: 17 million streams at 3 megabits per second each add up to about 50 terabits per second leaving the platform.
+```
+
+Daily egress, in bytes, is every viewer's watch time in seconds times the bitrate, divided by 8 to turn bits into bytes:
+
+```formula
+E_day = D × t × r / 8
+E_day = 200 M × 3,600 s × 3 Mbps / 8
+E_day = 2.7 × 10^17 B ≈ 270 PB
+where
+E_day: data sent to viewers per day, in bytes (B)
+D: daily viewers; here 200 M
+t: viewing time per viewer per day, in seconds (s); 1 hour is 3,600 s
+r: average bitrate, in megabits per second (Mbps); here 3
+8: bits per byte
+M: million
+Mbps: megabits per second; 1 Mbps = 1,000,000 bits per second
+s: seconds
+B: bytes
+PB: petabytes; 1 PB = 10^15 bytes
+≈: approximately equal to
+In words: 200 million hours of viewing at 3 megabits per second is about 270 petabytes of video delivered every day.
 ```
 
 Serving 50 Tbps to a global audience makes geographic distribution, network capacity and egress cost central design concerns. A CDN also reduces network distance; 50 Tbps is not a universal single-data-centre limit.
 
-**Transcoding.** As a working assumption (it varies hugely with presets and hardware), assume15 core-hours per source hour across the chosen ladder. This is a hypothetical input, not a hardware/codec benchmark.
+**Transcoding.** As a working assumption (it varies hugely with presets and hardware), assume 15 core-hours per source hour across the chosen ladder. A core-hour is one CPU core busy for one hour. This is a hypothetical input, not a hardware/codec benchmark.
 
-```
-720,000 h/day x 15 core-h
-  = 10.8 M core-h/day
-/ 24 = ~450,000 cores running non-stop
+To find how many cores must run around the clock, multiply total compute per day and divide by the 24 hours each core can work:
+
+```formula
+N_cores = H_day × c / 24 h
+N_cores = 720,000 × 15 core-h / 24 h
+N_cores = 10,800,000 core-h / 24 h
+N_cores = 450,000 cores
+where
+N_cores: CPU cores that must run non-stop to keep up
+H_day: hours of source video uploaded per day; here 720,000
+c: compute needed per hour of source, in core-hours; here 15
+core-h: core-hours: one processor core busy for one hour
+24 h: the hours in a day each core can work
+h: hours
+cores: processor cores, each able to run one stream of work at a time
+In words: 10.8 million core-hours of work a day needs about 450,000 cores running all day.
 ```
 
 Even if the assumption is off by 2x either way, the answer is hundreds of thousands of cores. This is why platforms spend expensive codecs (AV1, heavy VP9 presets) on videos that actually get watched.
@@ -150,10 +270,26 @@ Encoding a 2-hour film serially on one machine takes hours. Instead:
 
 1. **Validate and probe** the file (container, codec, duration, corrupt frames).
 2. **Split** it into chunks of a few seconds, cut on keyframe (GOP) boundaries using independently decodable boundaries (such as closed GOPs/appropriate random-access points), aligned across renditions. An arbitrary keyframe in an open GOP may still depend on other frames.
-3. **Fan out** one task per (chunk × rendition) to a worker pool. A 2-hour film in 4 s chunks across 6 renditions is about 10,800 tasks, giving parallel work units; completion time depends on actual encoder throughput, available workers, input decoding and assembly.
+3. **Fan out** one task per (chunk × rendition) to a worker pool. A 2-hour film in 4 s chunks across 6 renditions is about 10,800 tasks (worked out below), giving parallel work units; completion time depends on actual encoder throughput, available workers, input decoding and assembly.
 4. **Assemble** the outputs into packaged segments and write the manifests.
 5. Generate thumbnails, run content checks (copyright matching, safety classifiers) and extract captions in parallel branches.
 6. Mark the video `ready` in the metadata DB.
+
+The task count in step 3 is the number of chunks times the number of renditions:
+
+```formula
+N_tasks = (T / c) × R
+N_tasks = (7,200 s / 4 s) × 6
+N_tasks = 1,800 × 6 = 10,800 tasks
+where
+N_tasks: independent encoding tasks
+T: length of the film, in seconds (s); 2 hours is 7,200 s
+c: length of one chunk, in seconds (s); here 4
+R: number of renditions (quality levels) in the ladder; here 6
+s: seconds
+tasks: the unit being counted (encoding jobs)
+In words: 1,800 four-second chunks, each encoded at 6 quality levels, gives 10,800 tasks.
+```
 
 Model this as a **DAG** of tasks with a workflow engine. Every task must be **idempotent**, keyed on video/source version, chunk, rendition and encoding profile. Publish only complete validated outputs, using immutable attempt objects plus an atomic winning-result pointer or conditional writes. A deterministic path alone cannot stop a stale attempt overwriting a newer encode.
 
@@ -240,7 +376,22 @@ Manifests and segment URLs carry **signed tokens** with an expiry, so URLs can't
 
 Writing a row per view at 17 M concurrent viewers is wasteful. Players emit heartbeats every few tens of seconds into a stream such as Kafka. A stream processor deduplicates (one view per session, with a product-specific minimum watch time and additional abuse controls), aggregates per video per minute, and writes counters. Displayed counts can lag by minutes. A lag of minutes may be acceptable for a display counter; billing or audit metrics may need another contract.
 
-The numbers show why. 17 M viewers sending a heartbeat every 30 s is about 570,000 events per second. That is a workload to benchmark for the chosen partitioning and durability settings, but a viral video would turn `UPDATE videos SET views = views + 1` into a single hot row taking tens of thousands of writes a second. Pre-aggregating in the stream turns that into one write per video per minute.
+The numbers show why. The event rate is the number of viewers divided by the gap between each viewer's heartbeats:
+
+```formula
+E = C / i
+E = 17,000,000 / 30 s ≈ 570,000 events/s
+where
+E: heartbeat events arriving per second
+C: viewers watching at the same moment; here 17 million at peak
+i: the interval between one player's heartbeats, in seconds (s); here 30
+s: seconds
+events: heartbeat messages
+≈: approximately equal to
+In words: 17 million players each reporting once every 30 seconds send about 570,000 events every second.
+```
+
+That is a workload to benchmark for the chosen partitioning and durability settings, but a viral video would turn `UPDATE videos SET views = views + 1` into a single hot row taking tens of thousands of writes a second. Pre-aggregating in the stream turns that into one write per video per minute.
 
 Watch progress can use a versioned KV record keyed by `(user_id, video_id)`. Define ordering across sessions/devices; client-clock LWW can let a delayed update overwrite newer progress, while taking the maximum position breaks intentional rewinds. It is debounced on the client so it isn't written every second.
 

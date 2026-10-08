@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Suppose the primary handles 10,000 writes/s.\n2. Each of 5 replicas also applies those 10,000 writes/s.\n3. Total write work across the cluster = 60,000 applies/s, but the *useful* write throughput is still 10,000/s.\n4. Contrast with 4 shards: each takes 2,500 of 10,000 writes/s, so they could support more writes if each has spare capacity and no shared bottleneck dominates.\n5. Copying helps reads; splitting helps writes.",
+    "workedExample": "1. Suppose the primary handles 10,000 writes/s.\n2. Each of 5 replicas also applies those 10,000 writes/s.\n3. Add up the work across the cluster:\n\n```formula\nW_total = W × (1 + r)\nW_total = 10000 /s × (1 + 5)\nW_total = 60000 /s\nwhere\nW_total: write applications per second across all nodes\nW: writes per second from the application, 10,000\nr: the number of full replicas, 5\n/s: per second\nIn words: 6 nodes each apply all 10,000 writes a second: 60,000 applies a second of work for 10,000 useful writes.\n```\n\nThe *useful* write throughput is still 10,000/s.\n4. Contrast with 4 shards: each takes 2,500 of 10,000 writes/s, so they could support more writes if each has spare capacity and no shared bottleneck dominates.\n5. Copying helps reads; splitting helps writes.",
     "link": {
       "title": "Azure Architecture Center: Sharding pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Unbatched: each row needs its own commit and fsync.\n   - 1,000 ms / 2 ms = 500 commits/s, so 500 rows/s.\n2. Batched: 500 rows share one commit.\n   - Still about 500 commits/s, now × 500 rows = 250,000 rows/s.\n3. In reality CPU, network and index maintenance cap it lower, and no typical gain is asserted without a representative benchmark.\n4. Trade-off: rows wait in the batch buffer (say up to 100 ms), and an unflushed batch can be lost on crash unless it was read from a durable queue.",
+    "workedExample": "1. With serialised commits, throughput is commits per second times rows per commit:\n\n```formula\nX = (1000 ms / t_c) × B\nwhere\nX: rows written per second (rows/s)\nt_c: time for one commit's fsync, here 2 ms\nB: rows per transaction (batch size)\nms: milliseconds; 1000 ms is one second\nIn words: count how many commits fit in a second, then multiply by the rows in each.\n```\n\n2. Unbatched, each row needs its own commit (B = 1):\n\n```formula\nX = (1000 ms / 2 ms) × 1 = 500 /s\nwhere\nX: rows per second\nms: milliseconds\n/s: per second\nIn words: 500 commits a second, one row each.\n```\n\n3. Batched, 500 rows share one commit (B = 500), assuming the fsync still dominates:\n\n```formula\nX = (1000 ms / 2 ms) × 500\nX = 500 × 500 = 250000 /s\nwhere\nX: rows per second\nms: milliseconds\n/s: per second\nIn words: still 500 commits a second, but each carries 500 rows.\n```\n4. In reality CPU, network and index maintenance cap it lower, and no typical gain is asserted without a representative benchmark.\n5. Trade-off: rows wait in the batch buffer (say up to 100 ms), and an unflushed batch can be lost on crash unless it was read from a durable queue.",
     "link": {
       "title": "Azure Architecture Center: Queue-Based Load Leveling",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
@@ -105,7 +105,7 @@
       },
       {
         "text": "About 20 minutes",
-        "explanation": "Correct. Backlog = (30,000 − 6,000) × 300 s = 7.2 million orders. At 6,000/s, that takes 1,200 s = 20 minutes to drain."
+        "explanation": "Correct. The queue grows by 24,000 orders a second (30,000 in, 6,000 out) for 300 seconds, a backlog of 7.2 million orders. At 6,000 a second, that takes 1,200 seconds, or 20 minutes, to drain."
       },
       {
         "text": "Never, because queues grow without bound.",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Net growth during burst = arrivals − drain = 30,000 − 6,000 = 24,000/s.\n2. Burst length = 5 min = 300 s.\n3. Peak backlog = 24,000 × 300 = 7,200,000 orders.\n4. Drain after burst at 6,000/s: 7,200,000 / 6,000 = 1,200 s = 20 min.\n5. Design implications:\n   - The queue must hold more than 7.2M messages.\n   - Users wait up to 20 min for confirmation, so show 'order received, confirming…'.\n   - If that's unacceptable, add write capacity (shard) or shed load with a waiting room.",
+    "workedExample": "1. During the burst the backlog grows by arrivals minus drain, every second:\n\n```formula\nB = (A − D) × T\nB = (30000 − 6000) /s × 300 s\nB = 24000 /s × 300 s = 7200000\nwhere\nB: peak backlog, in orders\nA: the arrival rate: 30,000 orders per second (/s)\nD: the drain rate: 6,000 orders per second\nT: burst length: 5 minutes = 300 seconds (s)\ns: seconds\n/s: per second\nIn words: 24,000 extra orders a second for 300 seconds leaves 7.2 million queued.\n```\n\n2. After the burst, arrivals are about zero, so the workers drain at full rate:\n\n```formula\nT_drain = B / D\nT_drain = 7200000 / (6000 /s)\nT_drain = 1200 s = 20 min\nwhere\nT_drain: time to clear the backlog\nB: backlog, 7.2 million orders\nD: the drain rate, 6,000 orders per second (/s)\ns: seconds\nmin: minutes; 1,200 s = 20 min\nIn words: 7.2 million orders at 6,000 a second take 20 minutes.\n```\n\n3. Design implications:\n   - The queue must hold more than 7.2M messages.\n   - Users wait up to 20 min for confirmation, so show 'order received, confirming…'.\n   - If that's unacceptable, add write capacity (shard) or shed load with a waiting room.",
     "link": {
       "title": "Azure Architecture Center: Queue-Based Load Leveling",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
@@ -146,7 +146,7 @@
       0,
       1
     ],
-    "workedExample": "1. Constraint: one partition ≈ 1,000 write units/s; one item = one partition.\n2. Demand: 15,000 writes/s on one item, so ~15× over the limit.\n3. Option A, salting: 20 sub-keys ≈ 750 writes/s each, under the limit. Read the 20 keys using individual or batch gets and sum; a single Query cannot span distinct partition-key values. Verify their physical distribution.\n4. Option B, aggregation: buffer counts for 1 s, then apply an idempotently identified batch; a retry of bare ADD can double count. Writes fall from 15,000/s to about 1/s.\n5. Raising table capacity doesn't touch the per-partition cap, and a GSI adds writes.",
+    "workedExample": "1. Constraint: one partition takes about 1,000 write units per second, and one item always lives in one partition.\n2. Demand: 15,000 writes/s on one item, so about 15,000 / 1,000 = 15× over the limit.\n3. Option A, salting spreads the writes evenly over the sub-keys:\n\n```formula\nw = W / N\nw = 15000 /s / 20 = 750 /s\nwhere\nw: writes per second on each sub-key\nW: total writes per second on the counter, 15,000\nN: number of sub-keys (salt values), 20\n/s: per second\nIn words: 20 sub-keys share 15,000 writes a second, 750 each, under the 1,000 limit.\n```\n\n   That assumes a random, even choice of sub-key. Read the 20 keys using individual or batch gets and sum; a single Query cannot span distinct partition-key values. Verify their physical distribution.\n4. Option B, aggregation: buffer counts for 1 s, then apply an idempotently identified batch; a retry of bare ADD can double count. Writes fall from 15,000/s to about 1/s.\n5. Raising table capacity doesn't touch the per-partition cap, and a GSI adds writes.",
     "link": {
       "title": "AWS: Using write sharding to distribute workloads evenly (DynamoDB)",
       "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-sharding.html"
@@ -236,7 +236,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. `h % 4` and `h % 5` repeat together every lcm(4, 5) = 20 values.\n2. Count h in 0..19 where both agree: h = 0, 1, 2, 3 → 4 values.\n3. Unchanged = 4/20 = 20%; moved = 80%.\n4. Fix: thousands of logical shards, mapped to physical servers in a lookup table. Adding a server moves whole logical shards, about 1/5 of them.\n\n```\nsum(h % 4 == h % 5\n    for h in range(20))  # 4\n```",
+    "workedExample": "1. The shard is the remainder after dividing the hash by the shard count. Both patterns repeat together every 20 hash values:\n\n```formula\nL = lcm(4, 5) = 20\nwhere\nL: the length of the repeating cycle\nlcm: least common multiple: the smallest number both 4 and 5 divide into exactly\nIn words: after every 20 hash values, both remainders start again from 0.\n```\n\n2. Count h in 0..19 where both remainders agree: h = 0, 1, 2, 3, so 4 values.\n3. Turn that into fractions:\n\n```formula\nF_same = 4 / 20 = 0.2 = 20 %\nF_moved = 1 − F_same = 80 %\nwhere\nF_same: the fraction of keys whose shard is unchanged\nF_moved: the fraction that move to a new shard\n%: per cent; 0.2 = 20 %\nIn words: only 1 key in 5 stays; 4 in 5 move.\n```\n4. Fix: thousands of logical shards, mapped to physical servers in a lookup table. Adding a server moves whole logical shards, about 1/5 of them.\n\n```\nsum(h % 4 == h % 5\n    for h in range(20))  # 4\n```",
     "link": {
       "title": "Azure Architecture Center: Sharding pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
@@ -266,7 +266,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Even linger.ms=0 can batch records when records accumulate before sending.\n2. linger.ms=10 permits waiting for an unfilled per-partition batch, normally until its delay expires or it fills.\n3. At a uniform 50,000 records/s, 10 ms brings 500 records total, distributed across partitions.\n4. Measure request counts, compression and end-to-end latency; broker backpressure and queues can delay sends beyond linger.",
+    "workedExample": "1. Even linger.ms=0 can batch records when records accumulate before sending.\n2. linger.ms=10 permits waiting for an unfilled per-partition batch, normally until its delay expires or it fills.\n3. At a uniform rate, records arriving during the linger window:\n\n```formula\nn = r × t\nn = 50000 /s × 0.010 s = 500\nwhere\nn: records that arrive during one linger window\nr: the send rate, 50,000 records per second (/s)\nt: the linger time, 10 ms = 0.010 seconds (s)\nms: milliseconds\ns: seconds\n/s: per second\nIn words: 10 ms at 50,000 a second is 500 records, spread across the partitions' batches.\n```\n4. Measure request counts, compression and end-to-end latency; broker backpressure and queues can delay sends beyond linger.",
     "link": {
       "title": "Apache Kafka documentation",
       "url": "https://kafka.apache.org/documentation/"
@@ -304,7 +304,7 @@
       1,
       2
     ],
-    "workedExample": "1. Update-in-place: every payment locks the same row, so payments are serialised.\n2. Ledger: every payment inserts a row, potentially avoiding that shared row lock while other contention remains.\n3. Balance = snapshot + sum of entries since the snapshot.\n4. Crediting a merchant needs no balance check, which is the hot path here.\n5. Debits that must not overdraw need atomic balance validation and spending: serialise per account, or reserve funds.\n6. Corrections: append `-x` with a reference to the original entry.",
+    "workedExample": "1. Update-in-place: every payment locks the same row, so payments are serialised.\n2. Ledger: every payment inserts a row, potentially avoiding that shared row lock while other contention remains.\n3. The current balance is derived:\n\n```formula\nbalance = S + Σ e_i\nwhere\nbalance: the account's current balance\nS: the balance stored in the latest snapshot\ne_i: each ledger entry since that snapshot (negative for debits)\ni: counts through those entries\nΣ: sigma, \"the sum of\": add up every e_i\nIn words: last snapshot plus every change since.\n```\n4. Crediting a merchant needs no balance check, which is the hot path here.\n5. Debits that must not overdraw need atomic balance validation and spending: serialise per account, or reserve funds.\n6. Corrections: append `-x` with a reference to the original entry.",
     "link": {
       "title": "Martin Fowler: Event Sourcing",
       "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
@@ -334,7 +334,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Net growth = 5,300 − 5,000 = 300/s.\n2. Per day: 300 × 86,400 ≈ 25.9 million messages.\n3. Age keeps rising because the backlog never drains.\n4. Options: scale workers if the DB has headroom; batch writes to raise per-worker throughput; shard the DB; drop or sample low-value events.\n5. Alert on oldest-message age, not just queue length.",
+    "workedExample": "1. The backlog grows by the difference, for as long as it lasts:\n\n```formula\nG = (A − D) × T\nG = (5300 − 5000) /s × 86400 s\nG = 300 /s × 86400 s ≈ 25900000\nwhere\nG: messages added to the backlog in one day\nA: the average arrival rate, 5,300 per second (/s)\nD: the drain rate, 5,000 per second\nT: one day in seconds: 24 × 60 × 60 = 86,400 s\ns: seconds\n/s: per second\n≈: approximately equal to\nIn words: 300 extra messages a second is about 25.9 million more waiting each day.\n```\n\n2. Age keeps rising because the backlog never drains.\n3. Options: scale workers if the DB has headroom; batch writes to raise per-worker throughput; shard the DB; drop or sample low-value events.\n4. Alert on oldest-message age, not just queue length.",
     "link": {
       "title": "Azure Architecture Center: Queue-Based Load Leveling",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"

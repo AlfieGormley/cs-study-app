@@ -52,7 +52,17 @@ DNS steering is only as fast as caches expire. With a 60 s TTL, most clients mov
 
 With anycast, **many locations advertise the same IP prefix** via BGP. Internet routers send each packet to the "nearest" location by BGP's measure, which isn't distance or latency. Each network first applies its own **policy** (typically preferring routes learnt from paying customers over peers, and peers over paid transit), and only then breaks ties on the shortest **AS path** (the number of networks to cross).
 
-Anycast relies on BGP announcing *prefixes*, and in practice the smallest IPv4 prefix most networks will accept is a /24 (256 addresses), so anycast is done with whole /24s (or /48s in IPv6).
+Anycast relies on BGP announcing *prefixes*, and in practice the smallest IPv4 prefix most networks will accept is a /24 (256 addresses), so anycast is done with whole /24s (or /48s in IPv6). The number after the slash says how many leading bits of the address are fixed; the rest are free:
+
+```formula
+count = 2^{32 − p}
+count = 2^{32 − 24} = 2^8 = 256
+where
+count: how many IPv4 addresses the prefix contains
+p: the prefix length, the number after the slash: how many of the address's leading bits are fixed; 24 for a /24
+32: the number of bits in an IPv4 address
+In words: each bit left free doubles the block, so a /24 leaves 8 free bits and holds 256 addresses.
+```
 
 ```
       203.0.113.1 announced
@@ -116,14 +126,24 @@ Routing is the easy part. The hard part is what happens to **data and capacity**
 
 ### Capacity planning for failover
 
-If you run three regions at 70% utilisation and one fails, its traffic lands on the other two:
+If you run three regions at 70% utilisation and one fails, its traffic lands on the other two. In an ideal model with equal region capacities, proportional work, no extra failover overhead and even redistribution, the arithmetic is:
 
-```
-Before: 70% + 70% + 70%  (total 210)
-After:  105% + 105%      (overloaded)
+```formula
+u_after = N × u / (N − 1)
+u_after = 3 × 70% / 2 = 105%
+u_max = (N − 1) / N × 100%
+u_max = 2 / 3 × 100% ≈ 66.7%
+where
+u_after: the utilisation of each surviving region after one region fails and its load is shared evenly, as a percentage of that region's capacity
+N: the number of regions, all with the same capacity; here 3
+u: each region's utilisation before the failure, as a percentage of its capacity; here 70%
+u_max: the highest utilisation you can run each region at and still stay at or below 100% after losing one region
+%: per cent of a region's capacity
+≈: approximately equal to
+In words: the total load (here 210% of one region) must fit in one region fewer, so each region can normally run at most (N − 1)/N full.
 ```
 
-In an ideal model with equal region capacities, proportional work, no extra failover overhead and even redistribution, the no-overload ceiling before losing one of *N* regions is `(N − 1) / N`: **about 66% for three regions**, 50% for two. Use a lower target when latency SLOs, cold caches or other bottlenecks require spare capacity. (This assumes traffic redistributes evenly. With GeoDNS or anycast it often doesn't: a failed EU region's users may mostly land in the next-nearest region, which needs more headroom than the average.)
+So three regions at 70% each become two regions at 105%: overloaded. The no-overload ceiling before losing one of *N* regions is (N − 1)/N: **about 66% for three regions**, 50% for two and 80% for five. Use a lower target when latency SLOs, cold caches or other bottlenecks require spare capacity. (This assumes traffic redistributes evenly. With GeoDNS or anycast it often doesn't: a failed EU region's users may mostly land in the next-nearest region, which needs more headroom than the average.)
 
 ### Failover mechanics that bite
 

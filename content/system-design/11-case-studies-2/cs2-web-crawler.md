@@ -24,29 +24,128 @@ A web crawler sounds simple: fetch a page, extract the links, repeat. At a billi
 
 ## Back-of-the-envelope
 
-```
-1 B pages / month
-  / (30 x 86,400 s) = ~400 pages/s
-  peak/headroom: plan 1,000 pages/s
+Start from the target of 1 B (one billion) pages a month and turn it into a rate per second. A 30-day month has 30 × 86,400 = 2,592,000 seconds:
 
-Avg HTML page ~100 KB (uncompressed)
-  400 x 100 KB = 40 MB/s = ~320 Mbps
-Storage: 1e9 x 100 KB = 100 TB/month
-  (~25 TB compressed)
+```formula
+P = N / (30 × 86,400 s)
+P = 1,000,000,000 / 2,592,000 s
+P ≈ 386 ≈ 400 pages/s
+where
+P: average pages fetched per second
+N: pages to fetch per month; here 1 billion
+86,400 s: the number of seconds in one day
+30: days in the month
+s: seconds
+pages: web pages fetched
+≈: approximately equal to
+In words: a billion pages a month works out at roughly 400 pages every second, around the clock.
 ```
 
-Bandwidth is modest. The hard numbers are about **URLs**. Each page has dozens of outlinks, so the set of *discovered* URLs grows far faster than the set of fetched pages. Plan for about 10 B known URLs.
+Plan for **1,000 pages/s** to leave room for peaks, retries and growth.
 
+Bandwidth is pages per second times page size. Assume an average HTML page of about 100 KB (kilobytes) uncompressed. Network speeds are quoted in bits, so multiply bytes by 8:
+
+```formula
+D = P × S
+D = 400 pages/s × 100 KB = 40 MB/s
+D = 40 MB/s × 8 = 320 Mbps
+where
+D: download bandwidth needed, in megabytes per second (MB/s) or megabits per second (Mbps)
+P: pages fetched per second; here about 400
+S: average page size; about 100 KB
+pages: web pages fetched
+s: seconds
+KB: kilobytes, 1,000 bytes
+MB: megabytes, 1,000,000 bytes
+Mbps: megabits per second; one byte is 8 bits
+In words: 400 pages a second at 100 KB each is 40 megabytes a second, or about 320 megabits a second on the network.
 ```
-Seen-URL set, exact:
-  10e9 x ~100 B = ~1 TB (disk/KV)
-Seen-URL Bloom filter, 1% false positives:
-  ~9.6 bits/URL x 10e9 = ~12 GB, k=7
+
+Storage for a month of pages is the page count times page size:
+
+```formula
+T = N × S
+T = 1,000,000,000 × 100 KB = 100 TB
+where
+T: raw page storage per month
+N: pages fetched per month; here 1 billion
+S: average page size; about 100 KB
+KB: kilobytes, 1,000 bytes
+TB: terabytes, 10^12 bytes (a million million)
+In words: a billion 100 KB pages is 100 terabytes a month, or roughly 25 TB if HTML compresses about four to one.
 ```
+
+Bandwidth is modest. The hard numbers are about **URLs**. Each page has dozens of outlinks, so the set of *discovered* URLs grows far faster than the set of fetched pages. Plan for about 10 B known URLs. An exact seen-URL set stores every URL, at roughly 100 bytes each:
+
+```formula
+X = U × L
+X = 10,000,000,000 × 100 B
+X = 10^12 B ≈ 1 TB
+where
+X: size of an exact seen-URL set
+U: URLs known to the crawler; here 10 billion
+L: average stored size of one URL, in bytes (B); about 100
+B: bytes
+TB: terabytes, 10^12 bytes
+≈: approximately equal to
+In words: storing 10 billion URLs exactly takes about a terabyte, which needs disk or a key-value store.
+```
+
+A **Bloom filter** stores only a few bits per URL, at the price of occasional false positives. The standard sizing formula for a Bloom filter with the best number of hash functions is:
+
+```formula
+b = −ln(p) / (ln 2)^2
+b = −ln(0.01) / (0.693)^2
+b = 4.605 / 0.480 ≈ 9.6 bits/URL
+where
+b: bits of filter memory needed per stored URL
+p: the target false-positive rate, as a fraction; 1% = 0.01
+ln: the natural logarithm, the logarithm to base e (e is about 2.718)
+−: minus; ln of a number below 1 is negative, so the minus sign makes b positive
+^2: squared (multiplied by itself)
+bits: binary digits (0 or 1)
+URL: one web address
+≈: approximately equal to
+In words: a 1% false-positive rate costs about 9.6 bits for every URL stored, however long the URL is.
+```
+
+Multiply by the number of URLs, divide by 8 for bytes, and pick the number of hash functions:
+
+```formula
+M = b × U / 8
+M = 9.6 × 10,000,000,000 / 8 ≈ 12 GB
+k = b × ln 2 = 9.6 × 0.693 ≈ 7
+where
+M: total Bloom filter size, in bytes
+b: bits per URL; about 9.6 for 1%
+U: URLs stored; here 10 billion
+8: bits per byte
+k: the best number of hash functions; each URL sets and checks k bits
+ln: natural logarithm; ln 2 ≈ 0.693
+GB: gigabytes, 1,000,000,000 bytes
+≈: approximately equal to
+In words: 10 billion URLs at 9.6 bits each is about 12 gigabytes, using 7 hash functions.
+```
+
+These formulas assume the hash functions behave like independent random choices and that you know the item count in advance; a filter filled beyond its planned size has a higher false-positive rate.
 
 A 12 GB Bloom filter fits in RAM, split across a few nodes. An exact 1TB set usually motivates disk-backed or distributed storage; it is not inherently impossible to keep it in a large RAM cluster. This trade-off returns in the dedup section.
 
-**Latency drives concurrency.** A fetch takes about 1 s on average (DNS + TCP + TLS + download), so 1,000 pages/s means about **1,000 requests in flight**. Use async I/O (epoll, an event loop) rather than a thread per request.
+**Latency drives concurrency.** Little's law links three averages in any steady system: the number of things in progress equals the rate they arrive times how long each one stays.
+
+```formula
+L = λ × W
+L = 1,000 pages/s × 1 s = 1,000
+where
+L: requests in flight at the same moment (concurrency)
+λ: the arrival rate: pages started per second; here 1,000
+W: average time one fetch takes, in seconds (s); about 1 s for DNS + TCP + TLS + download
+s: seconds
+pages: web page fetches
+In words: starting 1,000 fetches a second, each taking a second, keeps about 1,000 requests open at once.
+```
+
+A fetch takes about 1 s on average (DNS + TCP + TLS + download), so 1,000 pages/s means about **1,000 requests in flight**. Little's law holds for long-run averages in a stable system; slow hosts raise W and so raise concurrency. Use async I/O (epoll, an event loop) rather than a thread per request.
 
 ## API and interfaces
 
@@ -119,7 +218,7 @@ The frontier answers one question: **which URL should a fetcher take next?** It 
 ### Back queues: politeness
 - Keep B back queues, each holding URLs for **exactly one host**.
 - Keep a **min-heap** keyed by `next_allowed_at` for each back queue.
-- Atomically reserve the host so no other fetcher starts concurrently, then fetch. On completion, set `next_allowed_at = now + delay` and pushes the host back.
+- Atomically reserve the host so no other fetcher starts concurrently, then fetch. On completion, set `next_allowed_at = now + delay` and push the host back.
 - When a back queue empties, refill it from the front queues with a URL for a new host.
 
 ```
@@ -136,7 +235,20 @@ back queues (one host each)
     fetchers
 ```
 
-A common heuristic, from the Mercator work, sets the delay to **about 10× the time the last fetch took**. If a page took 200 ms, wait 2 s before the next request to that host. A slow, struggling server automatically gets more breathing room.
+A common heuristic, from the Mercator work, sets the delay to **about 10× the time the last fetch took**:
+
+```formula
+d = 10 × f
+d = 10 × 200 ms = 2,000 ms = 2 s
+where
+d: the wait before the next request to the same host, in milliseconds (ms)
+f: how long the last fetch from that host took, in milliseconds (ms)
+ms: milliseconds, thousandths of a second
+s: seconds
+In words: wait ten times as long as the last fetch took; a 200 ms fetch means a 2 second pause.
+```
+
+So if a page took 200 ms, wait 2 s before the next request to that host. A slow, struggling server automatically gets more breathing room.
 
 ### Persistence
 The frontier holds billions of URLs, so it can't all live in memory. Keep the head of each queue in RAM and spill the rest to disk (RocksDB or append-only segment files). Persist accepted discoveries and queue transitions in a write-ahead log/transaction before acknowledging them; checkpoints alone lose discoveries since the last checkpoint. Reclaim abandoned fetch leases after crashes.
@@ -171,7 +283,7 @@ Before checking "seen", canonicalise URLs. Lower-case the scheme and host, drop 
 ### 2. Seen-URL test
 Ask for each discovered URL: "have we already queued or fetched this?"
 
-- A **Bloom filter** answers in O(k) memory lookups with **no false negatives**. A false positive means you wrongly skip a new URL. At a 1% false-positive rate, approximately 1% of genuinely new membership probes may be skipped. Rediscovering the same URL does not fix a stable false positive: it hashes to the same already-set bits.
+- A **Bloom filter** answers in O(k) memory lookups, where k is the number of hash functions (about 7 here) and O(k) means the work grows in proportion to k, with **no false negatives**. A false positive means you wrongly skip a new URL. At a 1% false-positive rate, approximately 1% of genuinely new membership probes may be skipped. Rediscovering the same URL does not fix a stable false positive: it hashes to the same already-set bits.
 - If missing pages is unacceptable, treat the Bloom filter as a fast negative check. "Definitely not seen" proceeds to an atomic exact-store claim and durable enqueue; concurrent Bloom misses must not enqueue twice. "Maybe seen" is checked against the exact `url_state` store.
 - Bloom filters can't delete entries. For re-crawl scheduling, use the exact store (or a counting or cuckoo filter).
 
@@ -218,7 +330,7 @@ Use **conditional GETs** (`If-None-Match` with the stored ETag, or `If-Modified-
 ## Bottlenecks and trade-offs
 
 - **Politeness caps throughput per host**. Large sites with millions of pages take weeks at one request every few seconds, and priority decides which of their pages you get.
-- **Bloom filter false positives vs memory**: 1% at 12 GB, 0.1% at about 18 GB.
+- **Bloom filter false positives vs memory**: 1% at 12 GB, 0.1% at about 18 GB (the same sizing formula with a false-positive rate of 0.001 gives about 14.4 bits per URL).
 - **JavaScript rendering** adds browser CPU, memory and subresource work; the cost multiplier is workload-dependent. Render only hosts whose raw HTML lacks content, and keep it a separate, smaller pool.
 - **Storage format**: big WARC files beat billions of small objects (object-store cost per request, and listing overhead).
 

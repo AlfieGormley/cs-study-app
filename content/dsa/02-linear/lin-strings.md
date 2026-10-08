@@ -9,7 +9,7 @@ summary: Strings as arrays of characters, why most languages make them immutable
 A string represents a sequence of text units. Many implementations use arrays, but indexing cost depends on which units are requested and how the string is represented. But strings come with two complications that trip up beginners and experienced engineers alike:
 
 1. In most modern languages they are **immutable**: you can never change one, only make a new one.
-2. A "character" is not as simple as it sounds. How many bytes it takes depends on the **encoding**.
+2. A "character" is not as simple as it sounds. How many bytes it takes depends on the **character encoding**.
 
 Both have real performance and correctness consequences.
 
@@ -47,7 +47,7 @@ Changing the text generally requires producing another value; allocation and cop
 
 ## Encoding basics
 
-Computers store bytes, not letters. An **encoding** maps characters to bytes.
+Computers store bytes, not letters. A **character encoding** maps characters to bytes.
 
 - **ASCII** covers 128 characters (English letters, digits, punctuation) in 7 bits.
 - **Unicode** assigns a number, a **code point**, to over 150,000 characters: `U+0041` is `A`, `U+00E9` is `é`, `U+1F600` is 😀.
@@ -75,17 +75,29 @@ len("😀")               # 1
 
 In Java and JavaScript, `"😀".length()` / `"😀".length` is **2**, because they count UTF-16 code units. Slicing such a string in the wrong place splits a surrogate pair and produces garbage.
 
-Even code points aren't what a reader thinks of as a character. `é` can be one code point (`U+00E9`) or two (`e` plus a combining accent `U+0301`). The two forms look identical but compare unequal unless you **normalise** them (Python's `unicodedata.normalize`). A flag emoji like 🇬🇧 is two code points. What users perceive as one character is a **grapheme cluster**.
+Even code points aren't what a reader thinks of as a character. `é` can be one code point (`U+00E9`) or two (`e` plus a combining accent `U+0301`). The two forms look identical but compare unequal unless you apply **Unicode normalisation** to both (Python's `unicodedata.normalize`). A flag emoji like 🇬🇧 is two code points. What users perceive as one character is a **grapheme cluster**.
 
 ### How runtimes store strings
 
 - **CPython** (PEP 393) picks 1, 2 or 4 bytes per code point for each string, based on the widest character it contains. Every code point then has a fixed width, so `s[i]` stays O(1). One emoji in a long ASCII string makes the whole string 4 bytes per character.
 - **Java 9+** uses "compact strings": Latin-1 (1 byte per char) when possible, otherwise UTF-16.
-- **Rust String** stores valid UTF-8. **Go strings** are arbitrary byte sequences, conventionally UTF-8 for text. Getting the *i*-th code point means scanning from the start, O(n), which is why Rust doesn't let you write `s[i]` on a `String` and Go's `s[i]` gives you a byte.
+- **Rust String** stores valid UTF-8. **Go strings** are arbitrary byte sequences, conventionally UTF-8 for text. Getting the *i*-th code point of an n-byte string means scanning from the start, O(n), which is why Rust doesn't let you write `s[i]` on a `String` and Go's `s[i]` gives you a byte.
 
 ## Concatenation cost
 
-Because strings are immutable, `a + b` allocates a new string of length `len(a) + len(b)` and copies both in. That is O(len(a) + len(b)).
+Because strings are immutable, `a + b` cannot add `b` onto the end of `a`. It allocates a brand-new string big enough for both and copies every character of each into it:
+
+```formula
+cost(a + b) ∝ len(a) + len(b)
+where
+cost(a + b): the work to build the joined string, counted in characters copied
+len(a): the length of string a, in characters
+len(b): the length of string b, in characters
+∝: proportional to: doubling the right-hand side roughly doubles the cost
+In words: joining two strings costs time in proportion to their combined length, because both are copied in full.
+```
+
+So `"abc" + "de"` copies 5 characters, and appending one character to a 1,000-character string copies 1,001. That is O(len(a) + len(b)).
 
 Now put it in a loop:
 
@@ -95,7 +107,21 @@ for word in words:   # n words
     result += word   # copies all of result
 ```
 
-If each word has length k, iteration i copies about i·k characters. Total: k + 2k + ... + nk ≈ **k·n²/2**. That's quadratic. For 100,000 one-character pieces, about 5 billion character copies.
+Each pass copies everything built so far plus the new word, so the cost of each pass grows. Adding up all the passes gives an arithmetic series:
+
+```formula
+total = k + 2 × k + ... + n × k
+total = k × n × (n + 1) / 2
+total ≈ k × n^2 / 2
+where
+total: the number of characters copied over the whole loop
+n: the number of words joined
+k: the length of each word, in characters (assumed all equal)
+≈: approximately equal to; for large n, n + 1 is about the same as n
+In words: pass i copies about i words' worth of characters, so the total grows with the square of the number of words.
+```
+
+That's quadratic: **O(n²)** for a fixed word length. For 100,000 one-character pieces (n = 100,000, k = 1) it is about 1 × 100,000² / 2 = 5 billion character copies.
 
 > [!note] CPython sometimes cheats
 > CPython can extend `result` in place when nothing else references it, which often makes this loop fast in practice. It's an implementation detail: it disappears if another reference exists, and PEP 8 says not to rely on it. It is not a portable guarantee across Python implementations.
@@ -126,7 +152,7 @@ String result = sb.toString();
 
 ## Common operations and their complexity
 
-For a string of length n (Python and Java, which store their length and support O(1) indexing):
+For a string `s` of length n (Python and Java, which store their length and support O(1) indexing). In the table, `a` and `b` in `s[a:b]` are the start and end positions of the slice, and m is the length of the string `t` being searched for:
 
 | Operation | Cost | Note |
 |---|---|---|
@@ -154,10 +180,10 @@ A few details matter here:
 - **Reversing user-visible text.** `s[::-1]` reverses code points, which mangles combining accents and multi-code-point emoji.
 
 ## Key takeaways
-- A string is an array of code units: O(1) indexing and length in Python and Java; O(n) `strlen` in C.
+- A string is an array of code units: O(1) indexing and length in Python and Java; O(n) `strlen` in C, for a string of n characters.
 - Immutability makes strings safe to share and to use as hash keys, at the cost of copying on every change.
 - UTF-8 uses 1–4 bytes per Unicode scalar value; Java and JavaScript lengths count UTF-16 units, so an emoji has length 2.
-- `s += piece` in a loop is O(n²) in general. Use `"".join(list)` or `StringBuilder` for O(n).
+- `s += piece` in a loop is O(n²) in general, where n is the total length built. Use `"".join(list)` or `StringBuilder` for O(n).
 - Slicing copies, so passing `s[1:]` down a recursion is quadratic; pass indices.
 
 ## Further reading

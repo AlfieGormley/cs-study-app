@@ -135,9 +135,38 @@ Examples: MySQL/MariaDB multi-source setups, Postgres with BDR/pgEdge, CouchDB, 
 
 ## Leaderless replication
 
-Any replica accepts writes. The client (or a coordinator node) sends each write to all **n** replicas and considers it successful when **w** acknowledge; reads query **r** replicas and take the newest value. This is the **Dynamo** style, used by Cassandra, ScyllaDB, Riak and Amazon's original Dynamo.
+Any replica accepts writes. The client (or a coordinator node) sends each write to all *n* replicas and considers it successful when *w* acknowledge; reads query *r* replicas and take the newest value. This is the **Dynamo** style, used by Cassandra, ScyllaDB, Riak and Amazon's original Dynamo.
 
-If `w + r > n` (e.g. n=3, w=2, r=2), every read overlaps at least one replica with the latest write. How quorums behave under failure, and why they're weaker than they look, is covered in the consensus module.
+The quorum condition tells you when a read is guaranteed to reach at least one replica that took the latest successful write:
+
+```formula
+w + r > n
+overlap ≥ w + r − n
+where
+n: the replication factor, the number of replicas that store each key; often 3
+w: the write quorum, how many replicas must acknowledge a write before it counts as successful
+r: the read quorum, how many replicas a read asks before returning the newest value it sees
+overlap: the smallest possible number of replicas that are in both the write set and the read set
+≥: greater than or equal to
+In words: if the replicas you write to and the replicas you read from add up to more than the total, the two groups must share at least one replica, so the read sees the latest write.
+```
+
+Worked example with three replicas:
+
+```formula
+n = 3, w = 2, r = 2
+w + r = 4 > 3
+overlap ≥ 2 + 2 − 3 = 1
+where
+n: the number of replicas per key
+w: the write quorum
+r: the read quorum
+overlap: the minimum number of replicas shared by any write set and any read set
+≥: greater than or equal to
+In words: with 3 replicas, writing to 2 and reading from 2 always shares at least one replica, and the cluster can still read and write with one replica down.
+```
+
+The cost of raising *w* or *r* is latency and availability: each request waits for more replicas and fails if too few are up. How quorums behave under failure, and why they're weaker than they look (sloppy quorums, concurrent writes, clock-based conflict resolution), is covered in the consensus module.
 
 Repairing stale replicas:
 

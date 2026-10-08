@@ -28,17 +28,51 @@ The interview centres on one decision, **Operational Transformation (OT) or CRDT
 
 ## Back-of-the-envelope
 
+Assume 50 M DAU (daily active users: distinct people who use the product on a given day) and 2 M editors with a document open at the peak. Only some of those are typing at any instant, say 10%. Clients don't send every keystroke separately; they batch keystrokes and send one message about every 200 ms (milliseconds), which is 5 messages a second while someone types:
+
+```formula
+T = E × f = 2,000,000 × 0.1 = 200,000
+m = 1,000 ms / 200 ms = 5 msgs/s
+O = T × m = 200,000 × 5/s = 1 M ops/s
+where
+T: editors typing at the same moment
+E: editors with a document open at peak; 2 million
+f: fraction typing at any instant; assumed 10% = 0.1
+m: messages per second from one typing client
+ms: milliseconds, thousandths of a second; 1,000 ms = 1 s
+msgs: messages sent to the server
+O: operations (edits) arriving at the servers per second
+M: million
+ops: operations, the edit messages
+s: seconds
+In words: 200,000 people typing, each sending 5 batched messages a second, is about a million operations a second.
 ```
-DAU: 50 M; peak concurrent editors: 2 M
-Concurrently *typing*: ~10% = 200 k
-Client batches keystrokes every ~200 ms
-  -> 200 k x 5 msgs/s = 1 M ops/s in
-Avg 3 collaborators per doc: each op
-  goes to the ~2 others
-  -> ~2 M msgs/s fan-out
-Op size ~100 B -> 100 MB/s in
-  = ~8.6 TB/day if peak is sustained
+
+Each operation must reach the other people in the same document. With about 3 collaborators per document, each op goes to about 2 others. With about 100 bytes per op:
+
+```formula
+F = O × (c − 1) = 1 M/s × 2 = 2 M msgs/s
+I = O × b = 1,000,000/s × 100 B = 100 MB/s
+D = 100 MB/s × 86,400 s ≈ 8.6 TB/day
+where
+F: messages per second sent out to other collaborators (fan-out)
+O: operations arriving per second; 1 million
+c: average people editing one document; about 3
+I: incoming data per second
+b: bytes per operation (B); about 100
+D: data per day, if the peak rate lasted all day
+M: million
+msgs: messages
+s: seconds; a day has 86,400 s
+B: bytes
+MB: megabytes, 1,000,000 bytes
+TB: terabytes, 10^12 bytes
+day: one day
+≈: approximately equal to
+In words: a million ops a second fans out to about 2 million messages a second, about 100 MB a second coming in, or up to about 8.6 TB a day.
 ```
+
+The 8.6 TB/day figure is an upper bound: real traffic falls well below peak for most of the day.
 
 What matters:
 

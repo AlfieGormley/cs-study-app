@@ -53,7 +53,21 @@ Client --HTTP--> LB --> backend
 
 Send each new request to the next server in turn. Simple, requiring only rotation state rather than load measurements, and fair **if every request costs the same and every server is identical**. Neither is usually true.
 
-**Weighted round robin** gives bigger servers proportionally more traffic (e.g. weights 2:1:1).
+**Weighted round robin** gives bigger servers proportionally more traffic. Each server gets its weight's share of the total:
+
+```formula
+share_i = w_i / Σw
+share_1 = 2 / (2 + 1 + 1) = 0.5 = 50%
+where
+share_i: the fraction of requests that server number i receives
+w_i: the weight configured for server i; bigger servers get bigger weights
+i: which server we mean: 1, 2, 3 and so on
+share_1: the share for server 1, the big server with weight 2
+Σ: sigma, "the sum of": add up the term after it for every server
+w: a server's weight; Σw is all the weights added together, here 2 + 1 + 1 = 4
+%: per cent
+In words: with weights 2:1:1, the big server gets half the requests and each smaller one gets a quarter.
+```
 
 ### Least connections / least outstanding requests
 
@@ -68,7 +82,37 @@ Pure random spreads load evenly *on average*, but some servers get unlucky strea
 1. Pick **two** servers at random.
 2. Send the request to the one with fewer outstanding requests.
 
-Work by Azar and colleagues, popularised by Michael Mitzenmacher's analysis, showed this dramatically shrinks the maximum load compared with one random choice. Throwing *n* requests at *n* servers, the busiest server's load drops from roughly `log n / log log n` to about `log log n`: an exponential improvement. Going from two choices to three helps only a little more; almost all the gain comes from the second choice.
+Work by Azar and colleagues, popularised by Michael Mitzenmacher's analysis, showed this dramatically shrinks the maximum load compared with one random choice. The classic result imagines sending as many requests as there are servers and asks how loaded the busiest server ends up. With high probability:
+
+```formula
+L_1 ≈ ln(n) / ln(ln(n))
+L_d ≈ ln(ln(n)) / ln(d)
+where
+L_1: the number of requests on the busiest server when each request goes to one server chosen at random
+L_d: the same, when each request samples d servers at random and joins the least loaded of them
+n: the number of servers, and also the number of requests sent
+d: how many servers each request samples; 2 for the power of two choices
+ln: the natural logarithm, a function that grows very slowly: ln(1,000,000) ≈ 13.8
+≈: approximately; these are the leading terms of how the load grows, ignoring smaller constant terms
+In words: with one random choice the worst server's load grows almost as fast as ln(n); with two choices it grows only like the logarithm of a logarithm, which barely moves.
+```
+
+Worked example with a million servers and a million requests:
+
+```formula
+L_1 ≈ ln(10^6) / ln(ln(10^6))
+L_1 ≈ 13.8 / 2.63 ≈ 5.3
+L_2 ≈ ln(ln(10^6)) / ln(2)
+L_2 ≈ 2.63 / 0.69 ≈ 3.8
+where
+L_1: the leading-term estimate of the busiest server's load with one random choice, in requests
+L_2: the same estimate with two choices
+ln: the natural logarithm; ln(10^6) ≈ 13.8 and ln(2) ≈ 0.69
+≈: approximately equal to
+In words: at this size the leading terms differ by less than you might expect; the big difference is in how fast each grows as the system gets larger.
+```
+
+The real difference is in growth: multiply the number of servers by a thousand, from 1,000 to 1,000,000, and ln(ln(n)) only rises from about 1.93 to 2.63. That change in how the load grows is the exponential improvement. These are asymptotic results, so treat the exact numbers as illustrations, not predictions. Going from two choices to three only divides by ln(3) ≈ 1.10 instead of ln(2) ≈ 0.69, a constant-factor gain; almost all the benefit comes from the second choice.
 
 It also avoids the **herding** problem of global least-connections, where every balancer sees the same "least loaded" server and they all pile on at once. Envoy's `LEAST_REQUEST` policy (which samples two hosts by default) and NGINX's `random two least_conn` use this idea. Select the desired policy explicitly; defaults and weighted-host behavior depend on the Envoy configuration/API being used.
 
@@ -76,7 +120,24 @@ It also avoids the **herding** problem of global least-connections, where every 
 
 Sometimes you *want* the same key to go to the same server: for example, routing by user ID to a server that has that user's data cached.
 
-Naive hashing (`hash(key) % N`) breaks when N changes: going from 10 to 11 servers remaps about **91%** of keys, destroying every cache at once.
+Naive hashing sends each key to server number `hash(key) % N`: the remainder when the key's hash is divided by the number of servers. It breaks when the number of servers changes:
+
+```formula
+s = h mod N
+f_moved = N / (N + 1)
+f_moved = 10 / 11 ≈ 0.91 = 91%
+where
+s: the server a key is sent to, numbered from 0 up to one less than the number of servers
+h: the key's hash: a large, evenly spread whole number computed from the key (for example from a user ID)
+mod: modulo: the remainder after division, so 23 mod 10 = 3
+N: the number of servers before the change; here 10
+f_moved: the fraction of keys that end up on a different server when the pool grows from N to N + 1 servers
+≈: approximately equal to
+%: per cent
+In words: a key keeps its server only if dividing its hash by N and by N + 1 leaves the same remainder, which happens for just 1 key in N + 1, so almost every key moves.
+```
+
+Going from 10 to 11 servers therefore remaps about **91%** of keys, destroying every cache at once.
 
 **Consistent hashing** places servers and keys on a ring; each key goes to the next server clockwise:
 
@@ -91,7 +152,20 @@ Naive hashing (`hash(key) % N`) breaks when N changes: going from 10 to 11 serve
 k1 -> S2, k2 -> S3, k3 -> S1
 ```
 
-Adding or removing a server only moves the keys in its arc, about **1/N** of them. Each server gets many **virtual nodes** on the ring (say 100–200) so the load evens out. Variants include **rendezvous (HRW) hashing** and Google's **Maglev hashing**, which builds a lookup table for fast, near-even assignment with minimal disruption. Consistent hashing is covered in more depth in the partitioning lessons; here, its job is cache affinity.
+Adding or removing a server only moves the keys in its arc, about **1/N** of them: on average 1/N when one of N servers leaves, and 1/(N + 1) when one joins N. Adding an 11th server to 10:
+
+```formula
+f_moved ≈ 1 / (N + 1)
+f_moved ≈ 1 / 11 ≈ 0.09 = 9%
+where
+f_moved: the fraction of keys that change server when one server joins a consistent-hashing ring
+N: the number of servers before the change; here 10
+≈: approximately (on average, given enough virtual nodes)
+%: per cent
+In words: only the keys in the new server's share of the ring move, about one in eleven here, instead of ten in eleven with modulo hashing.
+```
+
+Each server gets many **virtual nodes** on the ring (say 100–200) so the load evens out. Variants include **rendezvous (HRW) hashing** and Google's **Maglev hashing**, which builds a lookup table for fast, near-even assignment with minimal disruption. Consistent hashing is covered in more depth in the partitioning lessons; here, its job is cache affinity.
 
 ### Choosing
 
@@ -107,10 +181,24 @@ Adding or removing a server only moves the keys in its arc, about **1/N** of the
 
 A balancer must know which backends can take traffic.
 
-- **Active checks:** the balancer probes each backend, e.g. `GET /healthz` every 5–10 s. Mark unhealthy after N consecutive failures (say 2–3); healthy again after M successes.
+- **Active checks:** the balancer probes each backend, e.g. `GET /healthz` every 5–10 s. Mark a backend unhealthy after a set number of consecutive failures (the *unhealthy threshold*, say 2–3), and healthy again after a set number of consecutive successes (the *healthy threshold*).
 - **Passive checks (outlier detection):** watch real traffic; eject a backend that returns, say, 5 consecutive 5xx errors (Envoy's default) or times out, for a cool-off period.
 
-Active checks can discover a dead server independently of user traffic, but requests may still fail before the next checks detect it; passive checks catch servers that answer `/healthz` happily but fail real requests. Use both. Do the detection maths: with a 10 s interval and 3 failures to mark unhealthy, a dead server can receive traffic for up to about 30 s.
+Active checks can discover a dead server independently of user traffic, but requests may still fail before the next checks detect it; passive checks catch servers that answer `/healthz` happily but fail real requests. Use both. Do the detection maths for active checks:
+
+```formula
+t_detect ≈ interval × threshold
+t_detect ≈ 10 s × 3 = 30 s
+where
+t_detect: the worst-case time a dead server keeps receiving traffic before active checks remove it, in seconds (s)
+interval: the time between one health-check probe and the next, in seconds; here 10 s
+threshold: the unhealthy threshold: how many failed probes in a row mark a backend unhealthy; here 3
+s: second
+≈: approximately (probe timeouts add a little more)
+In words: if the server dies just after a passing probe, it takes three more probes, 10 s apart, before the balancer stops sending it traffic.
+```
+
+So with a 10 s interval and 3 failures to mark unhealthy, a dead server can receive traffic for up to about 30 s. At 200 requests per second to that server, that's about 6,000 failed requests.
 
 What should `/healthz` check? This is where teams get burned:
 
@@ -118,7 +206,7 @@ What should `/healthz` check? This is where teams get burned:
 - **Too deep** (checks the database, cache and three downstream services): when the shared database blips, *every* backend fails its health check at once, the balancer removes them all, and a partial outage becomes a total one.
 
 > [!warning] Fail open
-> A configurable availability trade-off: if too many backends are unhealthy, some balancers route to all of them anyway. This can help when checks are misleading or healthy capacity is insufficient, but it can also send traffic to truly broken hosts; disable fail-open where serving such responses is unacceptable. Envoy calls this the *panic threshold* (default 50%). Serving with some errors is better than serving nothing. Similarly, separate **liveness** ("restart me") from **readiness** ("don't send me traffic right now"), as Kubernetes does.
+> A configurable availability trade-off: if too many backends are unhealthy, some balancers route to all of them anyway. This can help when checks are misleading or healthy capacity is insufficient, but it can also send traffic to truly broken hosts; disable fail-open where serving such responses is unacceptable. Envoy calls this the *panic threshold* (default 50%). Serving with some errors is better than serving nothing. Similarly, separate **liveness probes** ("restart me") from **readiness probes** ("don't send me traffic right now"), as Kubernetes does.
 
 ### Graceful draining
 

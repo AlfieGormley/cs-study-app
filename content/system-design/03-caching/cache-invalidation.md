@@ -2,7 +2,7 @@
 id: cache-invalidation
 title: Invalidation and consistency
 level: intermediate
-minutes: 13
+minutes: 14
 summary: Why caches serve stale data, the race conditions between database and cache writes, and the tools that tame them — delete over update, versioning, leases and change data capture.
 ---
 
@@ -68,13 +68,37 @@ This interleaving is possible even without an exceptional pause; its frequency d
 ### Mitigations
 
 - **Short TTLs** bound how long the bad value survives.
-- **Delayed double delete**: delete, then delete again after a delay longer than a typical read (say 500 ms). It narrows the window but is a heuristic, not a guarantee.
+- **Delayed double delete**: delete, then delete again after a delay longer than nearly all miss-path reads take (say 500 ms). It narrows the window but is a heuristic, not a guarantee.
 - **Leases** (below) fix it properly.
 - **Versioned writes** (below) make stale sets lose.
 
+For the delayed double delete, the second delete only helps if it lands after the slow reader's `SET`. So the delay has to be longer than the slowest read you want to cover:
+
+```formula
+d > t_read
+where
+d: the delay between the first and the second delete, in milliseconds (ms)
+t_read: the time a reader takes from its database read to its cache SET, in ms; pick a high percentile such as p99.9, the time that 99.9% of reads finish within
+ms: milliseconds; 1 ms = 0.001 seconds
+In words: wait longer than nearly all slow readers take, then delete again to clean up any stale value they wrote.
+```
+
+For example, if 99.9% of miss-path reads finish within 400 ms, a 500 ms delay catches them. A reader stalled for 2 s (a long garbage-collection pause, say) still lands after both deletes, which is why this is only a heuristic.
+
 ## Versioning
 
-Store a version with each cached value (a database-ordered row version or other strictly increasing per-record revision). Only allow a cache write if it is **newer** than what is there.
+Store a version with each cached value (a database-ordered row version or other strictly increasing per-record revision). Only allow a cache write if it is **newer** than what is there:
+
+```formula
+v_new > v_cur
+where
+v_new: the version number carried by the incoming cache write
+v_cur: the version number already stored in the cache for that key, if there is one
+>: "is greater than"; the write is accepted only when this is true, otherwise it is rejected and the stored value stays
+In words: a cache write only lands if it carries a higher version than the one already cached. If nothing is cached, there is no stored version and the write is accepted.
+```
+
+In Race 1 above, suppose B's write carries version 8 and A's late-arriving write carries version 7. When A's arrives, 7 is not greater than 8, so it is rejected. The check has to run atomically inside Redis, which is why it is a Lua script rather than a read followed by a write from the application:
 
 ```python
 # Atomic "set if newer" (Redis Lua)
@@ -91,7 +115,7 @@ return 1
 """
 ```
 
-The Lua example assumes non-negative integer versions no greater than 2^53 − 1, which `tonumber` can compare exactly, and retained version metadata. With these assumptions, Race 1 is fixed: A's late write of version 7 is rejected because B already wrote version 8. Versioning alone does not fix Race 2 after a delete, because the key is empty and any version is "newer" than nothing. A tombstone can retain the new version floor, but its comparison metadata must survive until older fills are impossible or rejected by another authority. Expiry/eviction loses that protection. A tombstone-aware script must permit equal-version data to replace that tombstone; the simple strict-greater script below does not do so.
+The Lua example assumes non-negative integer versions no greater than 9,007,199,254,740,991 (two to the power 53, minus one: up to this limit a standard 64-bit floating-point number, which is what `tonumber` returns, holds every whole number exactly; above it, some whole numbers are skipped), so they compare exactly, and retained version metadata. With these assumptions, Race 1 is fixed: A's late write of version 7 is rejected because B already wrote version 8. Versioning alone does not fix Race 2 after a delete, because the key is empty and any version is "newer" than nothing. A tombstone can retain the new version floor, but its comparison metadata must survive until older fills are impossible or rejected by another authority. Expiry/eviction loses that protection. A tombstone-aware script must permit equal-version data to replace that tombstone; the simple strict-greater script below does not do so.
 
 A different form of versioning is **versioned keys**: include a version in the key name, such as `user:42:v8`. The writer bumps the version (stored somewhere cheap); readers build the key from the current version, and old keys simply age out via TTL. Fingerprinted asset URLs are the HTTP version of this.
 
@@ -112,7 +136,7 @@ Facebook's 2013 paper *Scaling Memcache at Facebook* introduced **leases** to fi
 
 The stale set in Race 2 simply fails. The paper compares this to load-link/store-conditional on a CPU: the write only succeeds if nothing touched the key in between.
 
-Leases also tame **thundering herds**. By default Facebook's servers handed out at most one token per key every 10 seconds. Other clients that missed were told to wait briefly and retry; the token holder usually set the value within a few milliseconds, so the retry tended to hit. Over a week of measurements on keys particularly prone to herds, the paper reports peak database query rates falling from 17K/s without leases to 1.3K/s with them.
+Leases also tame **thundering herds**. By default Facebook's servers handed out at most one token per key every 10 seconds. Other clients that missed were told to wait briefly and retry; the token holder usually set the value within a few milliseconds, so the retry tended to hit. Over a week of measurements on keys particularly prone to herds, the paper reports peak database query rates falling from 17K/s (17,000 queries per second) without leases to 1.3K/s with them, roughly a 13-fold cut.
 
 A refinement lets readers accept **stale values**: a deleted item is kept briefly in a side structure, and a miss can return it marked as stale. Applications that can tolerate slightly old data carry on without waiting.
 
@@ -158,7 +182,7 @@ Users notice staleness most when it's *their own* change. Even if global stalene
 Delete is the safe default. Update (with versioning) is worth it for hot keys where a miss would cause a stampede.
 
 > [!tip] A layered recipe
-> TTL on everything (with jitter) + delete after commit + leases or versioning for correctness + CDC for writes that bypass the app. Each layer catches the failures of the one above it.
+> TTL on everything (with TTL jitter) + delete after commit + leases or versioning for correctness + CDC for writes that bypass the app. Each layer catches the failures of the one above it.
 
 ## Key takeaways
 - Cache and database share no transaction, so interleavings and partial failures create stale entries.

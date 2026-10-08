@@ -132,8 +132,23 @@ Walk a request through it: "A redirect hits the load balancer, goes to any app s
 This is where the real design happens. Pick the parts that are hard *for this system*:
 
 - How are short codes generated without collisions across many servers?
-- What happens if the cache cluster fails? With a 95% hit rate, the database normally sees 5% of reads; if the cache vanishes it sees all of them, a 20x jump. Can it survive that?
+- What happens if the cache cluster fails? (Worked through below.)
 - What's the hot-key story when one link goes viral?
+
+The cache question deserves a quick calculation, because it decides whether the cache is an optimisation or critical infrastructure. The database only sees the reads the cache misses:
+
+```formula
+R_db = R_total × (1 − h)
+h = 0.95: R_db = 0.05 × R_total
+h = 0: R_db = R_total
+where
+R_db: the reads per second that reach the database, i.e. the cache misses
+R_total: all reads per second arriving at the service
+h: the cache hit rate, the fraction of reads the cache answers itself, from 0 (cache gone) to 1 (every read a hit); here 0.95, i.e. 95%
+In words: the database carries only the share of reads the cache misses. At a 95% hit rate that is 5% of all reads; if the cache disappears the hit rate drops to 0 and the database carries every read, 1 / 0.05 = 20 times as many.
+```
+
+For example, at 100,000 reads/s the database normally sees 100,000 × 0.05 = 5,000 reads/s. With the cache gone it sees all 100,000 reads/s, a 20x jump. Can it survive that? The sum assumes every miss goes to the database and that clients don't add retries on top; in a real outage, retries make it worse.
 
 Later modules cover the tools for these questions: caching, databases and partitioning, consistency and consensus, messaging, API design and reliability patterns.
 

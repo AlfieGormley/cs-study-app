@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Split the lookup into two phases:\n\n1. **Find the prefix node**: `O(p)` where p = prefix length. For `s`, p = 1.\n2. **Collect completions**: visit every terminal node in the subtree and keep the best 10. For `s`, that's millions of nodes.\n\nPhase 2 dominates. The fix is to **precompute** the top-10 list at every node during the offline build, so phase 2 becomes \"return the stored list\" and the lookup is O(p + k) plus output-string bytes, conventionally O(p) only when output size is treated as fixed.",
+    "workedExample": "Split the lookup into two phases:\n\n1. **Find the prefix node**: one step per character. For `s`, that is one step.\n2. **Collect completions**: visit every terminal node in the subtree and keep the best 10. For `s`, that's millions of nodes.\n\nIn Big-O terms:\n\n```formula\nplain = O(p + S)\nprecomputed = O(p + k)\nwhere\nO(...): Big-O, \"grows at most in proportion to\" what is inside, ignoring constant factors\np: the prefix length in characters; for \"s\", p = 1\nS: the number of nodes in the subtree under the prefix, millions for \"s\"\nk: the number of suggestions returned, 10\nplain, precomputed: lookup cost without and with a stored top-k list at each node\nIn words: a plain trie pays for the whole subtree; storing the top 10 at each node leaves only the short walk plus reading 10 items.\n```\n\nPhase 2 dominates. The fix is to **precompute** the top-10 list at every node during the offline build, so phase 2 becomes \"return the stored list\". The cost is then O(p + k) plus output-string bytes, conventionally written O(p) only when output size is treated as fixed.",
     "link": {
       "title": "Trie (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Trie"
@@ -49,11 +49,11 @@
       },
       {
         "text": "About 300,000/s",
-        "explanation": "Correct. 2B × 5 = 10B requests/day; 10B / 10^5 s ≈ 100,000/s average (115k exactly); × 3 ≈ 300,000–350,000/s at peak."
+        "explanation": "Correct. 2 billion × 5 = 10 billion requests/day; 10 billion / 100,000 s ≈ 100,000/s average (115k exactly); × 3 ≈ 300,000–350,000/s at peak."
       }
     ],
     "answer": 3,
-    "workedExample": "```\nRequests/day = 2B searches x 5    = 10B\nAverage   = 10B / 86,400 s ≈ 115,700/s\n          (10B / 10^5    ≈ 100,000/s)\nPeak (x3) ≈ 300,000-350,000/s\n```\n\nWhat it implies: assuming a benchmark demonstrates 1,000 req/s per core at the target latency, so ~350 cores at peak, i.e. a few dozen servers before caching. A CDN serving short prefixes typically absorbs a large share of this, so the origin fleet can be much smaller.",
+    "workedExample": "Multiply searches by requests per search, divide by the seconds in a day, then apply the peak factor:\n\n```formula\ndaily = 2B × 5 = 10B\navg = 10B / 86,400 s ≈ 115,700/s\nquick = 10B / 10^5 s ≈ 100,000/s\nlow = 3 × 100,000/s = 300,000/s\nhigh = 3 × 115,700/s ≈ 350,000/s\nwhere\ndaily: suggestion requests per day\navg: the exact average requests per second\nquick: the same using 1 day ≈ 100,000 s\nlow, high: peak requests per second (3 times the average) from the rounded and the exact average\nB: billion (10^9)\n10^5: 100,000\ns: seconds; /s means per second\n≈: approximately equal to (rounded)\nIn words: 10 billion requests a day is about 100,000–116,000 a second on average, roughly 300,000–350,000 at peak.\n```\n\nWhat it implies: assuming a benchmark demonstrates 1,000 req/s per core at the target latency, that is ~350 cores at peak, i.e. a few dozen servers before caching. A CDN serving short prefixes typically absorbs a large share of this, so the origin fleet can be much smaller.",
     "link": {
       "title": "Meta engineering: the life of a typeahead query",
       "url": "https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/"
@@ -79,11 +79,11 @@
       },
       {
         "text": "Keep it in object storage and read the relevant node on each request.",
-        "explanation": "Wrong. Object storage reads take tens of milliseconds each, consuming the whole latency budget for a single lookup. Object storage is where snapshots are published, not served from."
+        "explanation": "Wrong. Object storage reads take tens of milliseconds each, consuming the whole latency budget for a single lookup. Object storage is where trie snapshots are published, not served from."
       }
     ],
     "answer": 0,
-    "workedExample": "Decision process:\n\n1. **Does it fit in RAM?** 40 GB on a 128 GB machine: yes, with room for two versions during a swap (80 GB).\n2. **If it fits, replicate.** Sharding adds routing, skew and partial-failure modes; it's only worth it when data doesn't fit.\n3. **Size the fleet**: 300k req/s at an explicitly assumed 1,000 req/s per core ≈ 300 cores. With 32-core nodes that's ~10 nodes, so put 4–5 per region for redundancy.\n\nShard (by locale first, then by hashed prefix) only when the index outgrows a single machine.",
+    "workedExample": "Decision process:\n\n1. **Does it fit in RAM?** 40 GB on a 128 GB machine: yes, with room for two versions during a swap (80 GB).\n2. **If it fits, replicate.** Sharding adds routing, load skew and partial-failure modes; it's only worth it when data doesn't fit.\n3. **Size the fleet**, with an explicitly assumed 1,000 req/s per core:\n\n```formula\ncores = 300,000/s / 1,000/s = 300\nnodes = 300 / 32 ≈ 10\nwhere\ncores: CPU cores needed at full use\nnodes: servers needed if each has 32 cores\n/s: per second\n≈: approximately equal to (9.4 rounded up)\nIn words: 300,000 requests a second needs about 300 cores, or about ten 32-core machines.\n```\n\nSo put 4–5 nodes per region for redundancy.\n\nShard (by locale first, then by hashed prefix) only when the index outgrows a single machine.",
     "link": {
       "title": "Elasticsearch: completion suggester",
       "url": "https://www.elastic.co/docs/reference/elasticsearch/rest-apis/search-suggesters"
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "This is the lambda-architecture pattern: a large, slow, accurate batch view plus a small, fast speed layer.\n\n1. Stream job (Flink) counts queries in 1-minute tumbling windows.\n2. Flag a query as trending if `count_last_10min > 20 × baseline` and distinct users exceed a threshold (to resist manipulation).\n3. Publish the trending set (a few thousand entries) to the suggest service every minute.\n4. At request time, take the trie's top-10 for the prefix, merge any trending queries matching that prefix with a boosted score, and return the top 10.\n\nCost: a tiny in-memory list per node; latency impact: negligible.",
+    "workedExample": "This is the lambda-architecture pattern: a large, slow, accurate batch view plus a small, fast speed layer.\n\n1. Stream job (Flink) counts queries in 1-minute tumbling windows.\n2. Flag a query as trending when its recent count far exceeds its usual level, and distinct users exceed a threshold (to resist manipulation):\n\n```formula\nc_10 > 20 × base\nwhere\nc_10: searches for the query in the last 10 minutes\nbase: its usual (baseline) count for a 10-minute period\n>: is greater than\nIn words: a query is trending when it is being searched more than 20 times as often as normal.\n```\n\n3. Publish the trending set (a few thousand entries) to the suggest service every minute.\n4. At request time, take the trie's top-10 for the prefix, merge any trending queries matching that prefix with a boosted score, and return the top 10.\n\nCost: a tiny in-memory list per node; latency impact: negligible.",
     "link": {
       "title": "Count–min sketch (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
@@ -221,7 +221,7 @@
     "id": "cs1-typeahead-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Ranking uses `score = Σ count_d × 0.9^(age in days)`. Query A had **10,000** searches exactly **14 days ago** and none since. Query B has **2,000** searches **today** and none before. Which ranks higher today?",
+    "prompt": "Ranking uses a time-decayed score:\n\n```formula\nscore = Σ count_d × 0.9^{age_d}\nwhere\nscore: a query's ranking score\nΣ: sigma, \"add up over every day d\"\ncount_d: searches for the query on day d\nage_d: how many days ago day d was (0 for today)\n0.9^{age_d}: 0.9 multiplied by itself age_d times\nIn words: every day of age multiplies a day's searches by 0.9.\n```\n\nQuery A had **10,000** searches exactly **14 days ago** and none since. Query B has **2,000** searches **today** and none before. Which ranks higher today?",
     "options": [
       {
         "text": "B, because recent searches always outrank older ones.",
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Apply the decay factor:\n\n```\n0.9^7  ≈ 0.478\n0.9^14 ≈ 0.478^2 ≈ 0.229\nA = 10,000 x 0.229 ≈ 2,290\nB =  2,000 x 1     = 2,000\n```\n\nA factor of 0.9/day means a half-life of about 6.6 days. If you want trending queries to win faster, lower the factor (e.g. 0.7/day gives a half-life of ~2 days) or add the real-time trending layer, which is designed for minutes-scale freshness.",
+    "workedExample": "Apply the decay factor. Squaring the 7-day factor gives the 14-day one:\n\n```formula\n0.9^7 ≈ 0.478\n0.9^{14} = (0.9^7)^2 ≈ 0.478^2 ≈ 0.229\nA = 10,000 × 0.229 ≈ 2,290\nB = 2,000 × 0.9^0 = 2,000 × 1 = 2,000\nwhere\n0.9^7: 0.9 multiplied by itself 7 times\n0.9^0: anything to the power 0 is 1, so today's searches count in full\nA, B: the two queries' scores today\n≈: approximately equal to (rounded)\nIn words: after 14 days A keeps about 23% of its 10,000 searches, about 2,290, which still beats B's 2,000.\n```\n\nA factor of 0.9/day means a half-life (the time for a weight to halve) of about 6.6 days. If you want trending queries to win faster, lower the factor (e.g. 0.7/day gives a half-life of ~2 days) or add the real-time trending layer, which is designed for minutes-scale freshness.",
     "link": {
       "title": "Exponential decay (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Exponential_decay"
@@ -319,27 +319,27 @@
     "id": "cs1-typeahead-q11",
     "level": "advanced",
     "type": "multi",
-    "prompt": "A new nightly snapshot is ready. Which practices make the swap safe on serving nodes? Select all that apply.",
+    "prompt": "A new nightly trie snapshot is ready. Which practices make the swap safe on serving nodes? Select all that apply.",
     "options": [
       {
-        "text": "Load the new snapshot alongside the old one and swap a pointer atomically, so requests never see a half-loaded trie.",
-        "explanation": "Correct. Readers keep using the old version until the new one is fully built in memory; the root publication must use synchronization appropriate to the runtime, and old snapshots must remain alive for existing readers."
+        "text": "Load the new trie snapshot alongside the old one and swap a pointer atomically, so requests never see a half-loaded trie.",
+        "explanation": "Correct. Readers keep using the old version until the new one is fully built in memory; the root publication must use synchronization appropriate to the runtime, and old trie snapshots must remain alive for existing readers."
       },
       {
-        "text": "Provision RAM for two snapshots, since both are resident during the swap.",
+        "text": "Provision RAM for two trie snapshots, since both are resident during the swap.",
         "explanation": "Correct. A 50 GB index needs ~100 GB during the swap. Forgetting this leads to out-of-memory kills exactly at deploy time."
       },
       {
-        "text": "Validate the snapshot (size, sample lookups, blocklist check) and roll it to a few canary nodes first.",
+        "text": "Validate the trie snapshot (size, sample lookups, blocklist check) and roll it to a few canary nodes first.",
         "explanation": "Correct. A pipeline bug can produce an empty or offensive trie. Validation and a canary stop it reaching everyone."
       },
       {
-        "text": "Delete the previous snapshot from object storage as soon as the new one is published.",
+        "text": "Delete the previous trie snapshot from object storage as soon as the new one is published.",
         "explanation": "Incorrect. Keeping the previous version allows instant rollback if the canary or metrics look wrong."
       },
       {
         "text": "Restart all serving nodes at once so they pick up the new file together.",
-        "explanation": "Incorrect. A simultaneous restart drops capacity to zero and a bad snapshot would hit every user at once."
+        "explanation": "Incorrect. A simultaneous restart drops capacity to zero and a bad trie snapshot would hit every user at once."
       }
     ],
     "answer": [
@@ -347,7 +347,7 @@
       1,
       2
     ],
-    "workedExample": "Treat a data snapshot like a code deploy:\n\n```\n1. build -> validate -> publish v42\n2. canary: 2 nodes load v42\n3. compare metrics vs v41\n4. roll out region by region\n5. keep v41 for rollback\n```\n\nIn memory, each node does: load v42 → build structures → synchronized root swap → wait for old readers → free v41. Peak RAM is both versions at once.",
+    "workedExample": "Treat a trie snapshot like a code deploy:\n\n```\n1. build -> validate -> publish v42\n2. canary: 2 nodes load v42\n3. compare metrics vs v41\n4. roll out region by region\n5. keep v41 for rollback\n```\n\nIn memory, each node does: load v42 → build structures → synchronized root swap → wait for old readers → free v41. Peak RAM is both versions at once.",
     "link": {
       "title": "Andrew Gallant: index 1,600,000,000 keys with automata and Rust",
       "url": "https://burntsushi.net/transducers/"
@@ -377,7 +377,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Compare organic and bot patterns:\n\n```\nBot: 500,000 / 300 ≈ 1,700 per account\nExample cap: 3 contributions per user\n```\n\nIf each user's contribution is capped at, say, 3 per day, the bot query's count falls to ~900, far below genuinely popular queries. Add anomaly detection on concentration (share of volume from the top 1% of users or IPs) to catch it outright.",
+    "workedExample": "Compare organic and bot patterns:\n\n```formula\na = 500,000 / 300 ≈ 1,700\ncapped = 300 × 3 = 900\nwhere\na: searches per bot account in a day\ncapped: the query's count if each user can contribute at most 3 per day\n≈: approximately equal to (rounded from 1,667)\nIn words: each bot account searched about 1,700 times; capping every user at 3 cuts the bot query's count to 900.\n```\n\nWith that cap the bot query's count falls to ~900, far below genuinely popular queries. Add anomaly detection on concentration (share of volume from the top 1% of users or IPs) to catch it outright.",
     "link": {
       "title": "Meta engineering: the life of a typeahead query",
       "url": "https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/"

@@ -6,7 +6,7 @@ minutes: 14
 summary: How CDNs work, push vs pull, designing cache keys, tiered caching and origin shields, and how CDNs speed up even uncacheable dynamic content.
 ---
 
-A content delivery network (CDN) is a globally distributed fleet of reverse proxies, called **edge servers** or **PoPs** (points of presence), that sit between users and your **origin**. Examples include Akamai, Cloudflare, Fastly, Amazon CloudFront and Google Cloud CDN; footprint and terminology vary by provider.
+A content delivery network (CDN) is a globally distributed fleet of reverse proxies, called **edge servers** or **PoPs** (points of presence), that sit between users and your **origin server** (usually just called the *origin*). Examples include Akamai, Cloudflare, Fastly, Amazon CloudFront and Google Cloud CDN; footprint and terminology vary by provider.
 
 A CDN does three jobs:
 
@@ -40,7 +40,24 @@ User --> Edge (London)
         Edge stores it, serves user
 ```
 
-The key metric is the **cache hit ratio** (CHR): the fraction of requests served from the edge. In a simplified single-cache model where each miss causes one origin fetch and hits cause none, 95% CHR means 1 origin fetch per 20 user requests; 99% means 1 per 100. Shields, coalescing, background revalidation and bypass traffic change that relationship. Going from 95% to 99% cuts origin load by **5×**, so small CHR improvements matter a lot.
+The key metric is the **cache hit ratio** (CHR): the fraction of requests served from the edge. In a simplified single-cache model where each miss causes one origin fetch and hits cause none, 95% CHR means 1 origin fetch per 20 user requests; 99% means 1 per 100. Shields, coalescing, background revalidation and bypass traffic change that relationship. The origin only sees the misses:
+
+```formula
+R_origin = (1 − CHR) × R_total
+R_95 = (1 − 0.95) × 10,000 rps = 500 rps
+R_99 = (1 − 0.99) × 10,000 rps = 100 rps
+R_95 / R_99 = 500 / 100 = 5
+where
+R_origin: the request rate reaching the origin, in requests per second (rps)
+CHR: the cache hit ratio as a fraction between 0 and 1; 0.95 means 95% of requests are served from the edge
+R_total: the total request rate from users to the CDN; here 10,000 rps
+R_95: the origin load at a 95% hit ratio
+R_99: the origin load at a 99% hit ratio
+rps: requests per second
+In words: the origin's load is set by the miss rate, so going from 5% misses to 1% misses cuts it five times over.
+```
+
+Going from 95% to 99% cuts origin load by **5×**, so small CHR improvements matter a lot.
 
 ## Pull vs push
 
@@ -54,7 +71,7 @@ The key metric is the **cache hit ratio** (CHR): the fraction of requests served
 
 **Pull** is the default for almost everything: configure the origin, set cache headers and the CDN fills itself. Long-tail content that nobody requests never takes up edge storage.
 
-**Push** suits big, predictable content: game patches, software releases, video libraries, where you know exactly what will be requested and want no cold misses at launch. Netflix's Open Connect is an extreme version: it pre-positions content on appliances inside ISPs during off-peak hours, based on predicted demand.
+**Push** (a *push CDN* setup) suits big, predictable content: game patches, software releases, video libraries, where you know exactly what will be requested and want no cold misses at launch. Netflix's Open Connect is an extreme version: it pre-positions content on appliances inside ISPs during off-peak hours, based on predicted demand.
 
 ## Cache keys: the most important design decision
 
@@ -87,10 +104,10 @@ The opposite failure is worse. If a personalised response (`/account` showing Al
 There are two ways to change cached content:
 
 1. **Purge:** tell the CDN to drop objects (by URL, prefix or tag). Propagation time and purge semantics depend on the provider and product; purging everything can cause a miss storm on the origin.
+2. **Versioned URLs:** put a content hash in the filename (`app.3f9a1c.js`) and cache it for a year with `immutable`. A new deploy references a new URL, so there's nothing to purge.
 
 > [!note] Measurement gap
 > This lesson has no reproducible purge-latency or network-route measurements. Fixed purge and shield-route timings are omitted; numerical request examples use explicit hypothetical assumptions.
-2. **Versioned URLs:** put a content hash in the filename (`app.3f9a1c.js`) and cache it for a year with `immutable`. A new deploy references a new URL, so there's nothing to purge.
 
 Use **versioned URLs for static assets** and short TTLs or tag-based purges for HTML and API responses. **Surrogate keys** (cache tags) let you purge "everything related to product 42" across many URLs in one call.
 
@@ -133,6 +150,25 @@ Worked example: a user in Singapore, origin in Frankfurt (RTT 160 ms), edge in S
 | TLS 1.3 | 160 ms | 5 ms |
 | Request | 160 ms | 5 + 160 ms |
 | **Total** | **480 ms** | **175 ms** |
+
+As a formula:
+
+```formula
+T_direct = 3 × RTT_origin
+T_direct = 3 × 160 ms = 480 ms
+T_cdn = 3 × RTT_edge + RTT_origin
+T_cdn = 3 × 5 ms + 160 ms = 175 ms
+T_direct / T_cdn = 480 / 175 ≈ 2.7
+where
+T_direct: the time to the first response byte when the user connects straight to the origin, in milliseconds (ms)
+T_cdn: the same time through the CDN edge
+RTT_origin: the round-trip time to the origin in Frankfurt, 160 ms from Singapore in this example
+RTT_edge: the round-trip time from the user to the Singapore edge, 5 ms
+3: the round trips on a new connection: TCP handshake, TLS 1.3 handshake and the request itself
+ms: millisecond, one thousandth of a second
+≈: approximately equal to
+In words: going direct pays all three round trips over the long path; via the CDN, only the request itself crosses it, because the edge's connection to the origin is already open.
+```
 
 Even with zero caching, a cold request is ~2.7× faster. The remaining 160 ms is the assumed origin RTT, not a proven speed-of-light minimum. Better routes may reduce it; moving data or caching it nearby avoids the long origin round trip.
 

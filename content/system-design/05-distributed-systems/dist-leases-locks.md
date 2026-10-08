@@ -65,12 +65,39 @@ Client checks can't make a lease *safe*, but they make trouble rarer, and gettin
 - **Use the monotonic clock**, never the time-of-day clock, so an NTP step can't extend the lease.
 - **Leave a margin for clock rate drift.** Two machines don't need synchronised clocks for leases, but their clocks must run at roughly the same *rate*. Stop acting a little before your local expiry.
 
+Put together, the holder works out its own deadline like this:
+
+```formula
+t_stop = t_send + T_lease − m
+t_stop = 0.0 s + 10 s − 0.5 s = 9.5 s
+where
+t_stop: the time, on the holder's monotonic clock, after which it must stop acting as the lease holder
+t_send: the holder's monotonic clock reading just before it sent the acquire request; here 0.0 s
+T_lease: the lease duration the service granted; here 10 seconds (s)
+m: a safety margin for clock rate drift and processing delays; here 0.5 s
+s: second
+In words: count the lease from before you asked, not from when the answer arrived, and stop a little early.
+```
+
+Worked example: the request takes 300 ms to arrive, so the service grants at 0.3 s and its lease runs to 10.3 s. The reply takes another 300 ms. Counting from the reply would let the holder act until 10.6 s, after the service has already given the lease away. Counting from the send, with the margin, the holder stops at 9.5 s, safely first. This assumes the two clocks run at nearly the same rate; it does nothing about a pause that strikes between checking the deadline and acting.
+
 ## Fencing tokens
 
 The fix, described in the Chubby paper and popularised by Martin Kleppmann: every time the lock service grants the lock, it also returns a **fencing token**, a number that strictly increases with each grant.
 
 - The client sends the token with every request to the protected resource.
 - The resource remembers the highest token it has seen and **rejects** any request with a lower one.
+
+The resource's rule fits on one line:
+
+```formula
+T ≥ T_max
+where
+T: the fencing token attached to the incoming request (a whole number)
+T_max: the highest token the resource has accepted so far
+≥: greater than or equal to
+In words: accept a request only if its token is at least as high as any token already used; then raise the remembered highest token to match.
+```
 
 ```
 A gets lock, token 33
@@ -134,11 +161,33 @@ return 0
 
 Redlock is an algorithm proposed by Salvatore Sanfilippo (antirez), Redis's creator, for a lock that survives a Redis node failing. It uses N independent Redis masters (typically 5), with no replication between them:
 
-1. Get the current time T1.
-2. Try `SET resource token NX PX ttl` on all 5 instances, with a short per-node timeout.
-3. Get the time T2. The lock is held if a majority (≥ 3) succeeded **and** T2 − T1 < ttl.
-4. The validity time is ttl − (T2 − T1) − clock drift allowance.
+1. Read the current time (call it T1).
+2. Try `SET resource token NX PX ttl` on all 5 instances, with a short per-node timeout. Here ttl is the lock's time to live: how long each instance keeps the key before deleting it.
+3. Read the time again (T2). The lock is held only if a majority of instances (at least 3 of 5) succeeded **and** acquiring took less than the ttl.
+4. The client may use the lock only for the remaining validity time, worked out below.
 5. On failure, release on all instances.
+
+```formula
+T_acq = T_2 − T_1
+n_ok ≥ ⌊N / 2⌋ + 1
+T_acq < ttl
+V = ttl − T_acq − D
+V = 10 s − 0.2 s − 0.1 s = 9.7 s
+where
+T_1: the client's clock reading before it starts acquiring
+T_2: the client's clock reading after the last instance has answered
+T_acq: how long acquisition took, in seconds (s)
+n_ok: how many instances accepted the lock
+N: the number of independent Redis instances; typically 5
+⌊ ⌋: floor: round down to a whole number, so a majority of 5 is 3
+ttl: the key's time to live on each instance; here 10 s
+D: an allowance for clock drift between the instances; here 0.1 s
+V: the validity time, how long the client may treat the lock as held
+s: second
+In words: the lock counts only if a majority agreed and the acquisition didn't eat the whole ttl, and what's left of the ttl, minus a drift allowance, is how long the client may use it.
+```
+
+The safety of this calculation rests on clocks: if an instance's clock runs fast or jumps, its copy of the key expires earlier than V assumes. That is the heart of the critique below.
 
 ### Kleppmann's critique (2016)
 

@@ -63,6 +63,21 @@ web (3 tries)
    -> db (3 tries each) = 27
 ```
 
+The numbers multiply because every attempt at one layer starts a fresh set of attempts at the layer below. In general, when every layer in a stack retries independently:
+
+```formula
+C = a^L
+C = 3^3
+C = 27
+where
+C: the worst-case number of calls that reach the bottom layer for one user request (a count, no unit)
+a: the maximum number of attempts each layer makes, counting the first try; here 3
+L: the number of stacked layers that each retry; here 3 (web, API and database)
+In words: the worst-case load on the bottom layer grows as a power of the number of retrying layers. Three layers of 3 attempts turn 1 request into 27 calls; a fourth layer would make it 81.
+```
+
+This is the worst case: it happens when every attempt fails, which is exactly what an overloaded database does. If only one layer retries (3 attempts), the bottom layer sees at most 3 calls per request.
+
 ## The network is asynchronous
 
 Most real networks (Ethernet, IP, the internet) are **asynchronous packet networks**. They promise nothing about delivery time. A packet can be:
@@ -96,7 +111,7 @@ A **partition** is when the network splits nodes into groups that cannot talk to
  both sides think the other is dead
 ```
 
-This is exactly the situation CAP talks about: during a partition, each side either refuses some requests (choosing consistency) or accepts them and risks divergence (choosing availability). PACELC adds that even with no partition you trade latency against consistency.
+This is exactly the situation the CAP theorem talks about: during a partition, each side either refuses some requests (choosing consistency) or accepts them and risks divergence (choosing availability). PACELC adds that even with no partition you trade latency against consistency.
 
 ## Unreliable clocks and process pauses
 
@@ -129,6 +144,23 @@ Peter Deutsch and colleagues at Sun Microsystems listed the false assumptions th
 > [!example] Latency is not zero
 > A page that makes 50 sequential calls to a service in the same data centre (0.5 ms round trip) spends 25 ms on the network. Move that service to another region (80 ms round trip) and the same page takes 4 seconds. Nothing in the code changed.
 
+When calls are made one after another (sequentially), each one waits for a full round trip before the next can start, so the network time is simply the number of calls multiplied by the round-trip time:
+
+```formula
+T = n × RTT
+T = 50 × 0.5 ms = 25 ms
+T = 50 × 80 ms = 4,000 ms = 4 s
+where
+T: the total time the page spends waiting on the network, in milliseconds (ms) or seconds (s)
+n: the number of sequential calls the page makes; here 50
+RTT: round-trip time, how long one request takes to reach the service and its reply to come back, in milliseconds (ms)
+ms: millisecond, one thousandth of a second
+s: second
+In words: sequential calls pay the round trip once per call, so moving a chatty service from 0.5 ms away to 80 ms away makes the page 160 times slower.
+```
+
+This ignores the time the service spends doing the work, which adds on top. It only holds for sequential calls: calls made in parallel overlap, so 50 parallel calls cost roughly one round trip, not fifty.
+
 ## The Two Generals problem
 
 This thought experiment proves that **no protocol over an unreliable channel can guarantee that two parties agree** to act together.
@@ -160,7 +192,7 @@ You can't get *certain* agreement over a lossy network, so real systems settle f
 TCP's connection close runs into the same limitation: the final ACK can be lost, and the side that sent it can't know. That's one reason the `TIME_WAIT` state exists: it lingers so it can re-send the ACK if the peer re-sends its FIN.
 
 > [!note] Two Generals vs Byzantine Generals
-> Two Generals is about **unreliable messages** between honest parties. The Byzantine Generals problem is about **dishonest or arbitrarily faulty nodes**. Practical Byzantine fault tolerance (PBFT and its descendants) needs 3f + 1 nodes to tolerate f traitors; most data-centre systems assume nodes are honest and only tolerate crashes, needing 2f + 1.
+> Two Generals is about **unreliable messages** between honest parties. The Byzantine Generals problem is about **dishonest or arbitrarily faulty nodes**. Practical Byzantine fault tolerance (PBFT and its descendants) needs more than three nodes per traitor tolerated; most data-centre systems assume nodes are honest and only tolerate crashes, which needs a little over two nodes per fault. The next section gives the exact counts.
 
 ## Fault models
 
@@ -174,6 +206,29 @@ When you read about an algorithm, check which faults it tolerates:
 | Byzantine | Anything, including lying |
 
 Raft and Paxos assume crash-recovery with durable storage. Blockchains assume Byzantine. Choosing the model is a design decision: Byzantine tolerance is expensive and rarely needed inside one company's data centre.
+
+### How many nodes you need
+
+The fault model sets how many nodes a cluster needs to survive a given number of faulty ones:
+
+```formula
+n_crash = 2 × f + 1
+n_byz = 3 × f + 1
+n_crash = 2 × 2 + 1 = 5
+n_byz = 3 × 2 + 1 = 7
+where
+n_crash: the minimum number of nodes needed when faulty nodes can only crash (stop)
+n_byz: the minimum number of nodes needed when faulty nodes can be Byzantine (lie or behave arbitrarily)
+f: the number of nodes that may be faulty at the same time; here 2
+In words: to survive f crashes you need a majority still alive, so 2f + 1 nodes; to survive f liars you need 3f + 1, so that honest nodes always outvote them.
+```
+
+Where the numbers come from:
+
+- **Crashes**: decisions need a majority. If f nodes crash, the remaining f + 1 must still be a majority of the cluster, which first happens at 2f + 1 nodes. Any two majorities share at least one node, so no two decisions can contradict each other.
+- **Byzantine faults**: a liar can tell different nodes different things, so a quorum must contain enough honest nodes to outvote it. With 3f + 1 nodes and quorums of 2f + 1, any two quorums share at least f + 1 nodes, and since at most f of those are liars, at least one honest node is in both.
+
+So tolerating 2 faults takes 5 nodes for crashes but 7 for Byzantine faults. That extra cost is why most data-centre systems assume crash faults only.
 
 The fine print matters. "Crash-recovery with durable storage" means a node that restarts still has everything it `fsync`ed. A node that comes back with an empty or rolled-back disk (a replaced VM, a disk cache that lied about flushing) has **amnesia**, and that falls outside the model: it can vote twice in the same term and break safety. Likewise, silent data corruption is closer to a Byzantine fault than a crash, which is why storage systems add checksums.
 

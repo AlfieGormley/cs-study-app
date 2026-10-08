@@ -41,11 +41,39 @@ The common types (as in Prometheus and OpenTelemetry):
 With fixed-cardinality, periodically exported aggregates, metric storage primarily scales with series count, sample frequency and retention rather than individual requests. Instrumentation work still scales with observations. A million requests per second still produces one time series per combination.
 
 > [!warning] Cardinality explosions
-> Never put unbounded values like user IDs, request IDs or full URLs in metric labels. 10 routes × 5 status codes × 100 hosts = 5,000 series, fine. Adding `user_id` with 1 million users permits up to 5 billion label combinations if all combinations occur, likely exceeding ordinary metrics capacity.
+> Never put unbounded values like user IDs, request IDs or full URLs in metric labels. Every distinct combination of label values is a separate time series, so the label counts multiply (see the formula below).
+
+The number of series one metric can create is the product of how many values each label can take:
+
+```formula
+N = v_1 × v_2 × ... × v_k
+N = 10 × 5 × 100 = 5,000
+N = 5,000 × 1,000,000 = 5,000,000,000
+where
+N: the maximum number of time series for one metric name
+v_1, v_2, ... v_k: the number of distinct values of each label (here 10 routes, 5 status codes, 100 hosts, then 1 million user IDs)
+k: the number of labels on the metric
+In words: 10 routes, 5 status codes and 100 hosts give 5,000 series, which is fine. Adding a user_id label with a million users multiplies that to as many as 5 billion series, far beyond what an ordinary metrics system can store.
+```
+
+It is a maximum: only combinations that actually occur create series. But an unbounded label means there is no ceiling at all.
 
 ### Percentiles, not averages
 
-Averages hide the tail. If 99 requests take 10 ms and one takes 5 s, the mean is ~60 ms: it looks fine, but 1% of users wait 5 seconds. Use p50, p95, p99 and p99.9.
+Averages hide the tail. The mean adds every latency and divides by the count, so one huge value barely moves it:
+
+```formula
+m = (99 × 10 ms + 1 × 5,000 ms) / 100
+m = (990 + 5,000) ms / 100
+m = 5,990 ms / 100 ≈ 60 ms
+where
+m: the mean (average) latency, in milliseconds (ms)
+ms: milliseconds; 5 s = 5,000 ms
+≈: approximately equal to (rounded)
+In words: 99 requests at 10 ms and one at 5 seconds average about 60 ms, which looks fine, yet 1 user in 100 waited 5 seconds.
+```
+
+Use percentiles instead. The **p99** (99th percentile) is the latency that 99% of requests beat; p50 is the median. Track p50, p95, p99 and p99.9.
 
 You **cannot average percentiles** across hosts (the mean of each host's p99 is not the fleet p99). Aggregate histograms first, then compute percentiles.
 
@@ -79,7 +107,27 @@ Good logging practice:
 - Never log secrets, tokens, passwords or full card numbers; redact PII.
 - Sample high-volume debug logs; prioritize errors, but rate-limit or deduplicate error storms while preserving counters and useful examples.
 
-Log cost depends on event size, indexing, volume and retention. At 50,000 req/s with 1 KB of logs per request, you produce ~4.3 TB per day, or around 130 TB over a 30-day retention period.
+Log cost depends on event size, indexing, volume and retention. Raw volume is simply rate × size × time:
+
+```formula
+V = r × b × t
+V = 50,000 /s × 1 KB × 86,400 s
+V = 4,320,000,000 KB ≈ 4.3 TB
+V_30 = 4.32 TB × 30 ≈ 130 TB
+where
+V: the log volume produced in one day
+V_30: the volume kept over a 30-day retention period
+r: the request rate, here 50,000 requests per second (/s)
+b: the log bytes written per request, here 1 kilobyte (KB)
+t: the time period, here one day = 86,400 seconds (s)
+KB: kilobytes; 1 TB = 1,000,000,000 KB (decimal units)
+TB: terabytes
+s: seconds
+≈: approximately equal to (rounded)
+In words: 50,000 requests a second at 1 KB each is about 4.3 terabytes of logs a day, roughly 130 TB if you keep 30 days.
+```
+
+Indexing, replication and compression can make the stored size larger or smaller than this raw figure.
 
 ## Distributed traces
 

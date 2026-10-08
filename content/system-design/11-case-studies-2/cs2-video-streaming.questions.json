@@ -41,19 +41,19 @@
       },
       {
         "text": "About 25 Tbps",
-        "explanation": "Close, but this is the *average* (8.3 M x 3 Mbps). Capacity must be planned for peak, which the question puts at 2x average."
+        "explanation": "Close, but this is the *average* (8.3 M × 3 Mbps). Capacity must be planned for peak, which the question puts at 2x average."
       },
       {
         "text": "About 50 Tbps",
-        "explanation": "Correct. Average concurrency is 200 M x 1/24 = 8.3 M. Peak is about 17 M. 17 M x 3 Mbps = 51 Tbps."
+        "explanation": "Correct. Average concurrency is 200 M × 1/24 = 8.3 M. Peak is about 17 M. 17 M × 3 Mbps = 51 Tbps."
       },
       {
         "text": "About 600 Tbps",
-        "explanation": "Wrong. This assumes all 200 M viewers watch at the same time (200 M x 3 Mbps). Daily viewers are spread across the day, so concurrency is much lower than DAU."
+        "explanation": "Wrong. This assumes all 200 M viewers watch at the same time (200 M × 3 Mbps). Daily viewers are spread across the day, so concurrency is much lower than DAU."
       }
     ],
     "answer": 2,
-    "workedExample": "200M viewer-hours/day divided by 24 gives 8.333M average concurrent viewers. At 2× peak and 3Mbps, required peak payload egress is 50Tbps. Daily payload is 270PB. Geographic distribution and network/egress budgets justify a CDN; these figures do not prove a universal data-center limit or a required number of edge sites.",
+    "workedExample": "Capacity is set by how many people watch **at the same moment**, so first turn daily viewing into average concurrency, then apply the peak factor:\n\n```formula\nC_avg = D × T / 24 h\nC_avg = 200 M × 1 h / 24 h ≈ 8.33 M\nC_peak = 2 × 8.33 M ≈ 17 M\nwhere\nC_avg: average viewers watching at once\nC_peak: viewers watching at once at the busiest time; the question says about twice the average\nD: daily viewers; here 200 M\nT: viewing time per viewer per day, in hours (h); here 1\n24 h: the hours in a day\nh: hours\nM: million (1,000,000)\n≈: approximately equal to\nIn words: 200 million viewer-hours spread over 24 hours is about 8.3 million watching at once on average, so about 17 million at peak.\n```\n\nPeak egress (data leaving your network towards viewers) is concurrency times bitrate:\n\n```formula\nE = C_peak × r\nE = 16.7 M × 3 Mbps ≈ 50 Tbps\nwhere\nE: peak egress, in terabits per second (Tbps)\nC_peak: viewers watching at once at peak; here 2 × 8.33 M ≈ 16.7 M\nr: average bitrate per viewer, in megabits per second (Mbps); here 3\nM: million\nMbps: megabits per second, 1,000,000 bits per second\nTbps: terabits per second, 1,000,000 Mbps\n≈: approximately equal to\nIn words: about 17 million streams at 3 megabits per second each is about 50 terabits per second.\n```\n\nDaily payload is 200 M × 3,600 s × 3 Mbps / 8 bits per byte ≈ 270 PB (petabytes). Geographic distribution and network/egress budgets justify a CDN; these figures do not prove a universal data-centre limit or a required number of edge sites.",
     "link": {
       "title": "Content delivery network (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "7,200 seconds divided into 4-second units gives 1,800 chunks; six renditions give 10,800 tasks. Dividing 6 serial wall-hours by task count is only an ideal equal-cost model, not a measured per-task runtime. Benchmark compute and I/O, align independently decodable boundaries, version task identities and publish complete outputs atomically before marking ready.",
+    "workedExample": "Count the independent work units: chunks in the film times renditions per chunk.\n\n```formula\nN = (T / c) × R\nN = (7,200 s / 4 s) × 6\nN = 1,800 × 6 = 10,800 tasks\nwhere\nN: number of encoding tasks\nT: film length, in seconds (s); 2 hours is 7,200 s\nc: chunk length, in seconds (s); here 4\nR: renditions (quality levels); here 6\ns: seconds\ntasks: encoding jobs, the thing being counted\nIn words: 1,800 four-second chunks, each encoded at 6 quality levels, is 10,800 tasks that can run in parallel.\n```\n\nDividing 6 serial wall-hours by the task count is only an ideal equal-cost model, not a measured per-task runtime. Benchmark compute and I/O, align independently decodable boundaries, version task identities and publish complete outputs atomically before marking ready.",
     "link": {
       "title": "Adaptive bitrate streaming (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Diagnose the cause:\n\n- Mobile throughput is noisy. One segment downloads at 8 Mbps and the next at 2 Mbps.\n- A throughput rule like 'pick the highest bitrate below 0.8 x the last measured throughput' flips between 5 Mbps (1080p) and 1 Mbps (480p) every segment.\n\nThe fix is to use the **buffer** as a shock absorber:\n\n| Buffer | Choice |\n|---|---|\n| < 10 s | lowest safe rung |\n| 10–30 s | step up gradually |\n| > 30 s | top sustainable rung |\n\nWith 30 s buffered, a 4 s dip doesn't threaten a stall, so there's no reason to drop quality. Add hysteresis (require sustained evidence before switching) to reduce unnecessary switching, then validate the policy on representative network traces.",
+    "workedExample": "Diagnose the cause:\n\n- Mobile throughput is noisy. One segment downloads at 8 Mbps and the next at 2 Mbps.\n- A throughput rule picks the highest rung that fits under a safety margin:\n\n```formula\nb ≤ 0.8 × T_last\nwhere\nb: the bitrate of the rendition chosen for the next segment, in megabits per second (Mbps)\nT_last: the throughput measured while downloading the last segment, in Mbps\n0.8: a safety margin, so only 80% of the measured speed is used\n≤: is less than or equal to\nMbps: megabits per second\nIn words: choose the best quality whose bitrate is at most 80% of how fast the last segment arrived.\n```\n\nWith that rule, at 8 Mbps the limit is 6.4 Mbps, so it picks 5 Mbps (1080p); at 2 Mbps the limit is 1.6 Mbps, so it picks 1 Mbps (480p). It flips every segment.\n\nThe fix is to use the **buffer** as a shock absorber:\n\n| Buffer | Choice |\n|---|---|\n| < 10 s | lowest safe rung |\n| 10–30 s | step up gradually |\n| > 30 s | top sustainable rung |\n\nWith 30 s buffered, a 4 s dip doesn't threaten a stall, so there's no reason to drop quality. Add hysteresis (require sustained evidence before switching) to reduce unnecessary switching, then validate the policy on representative network traces.",
     "link": {
       "title": "Adaptive bitrate streaming (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
@@ -169,7 +169,7 @@
       },
       {
         "text": "About 360 minutes watched (roughly 36 full views)",
-        "explanation": "Wrong. 360 minutes saves only 360 x 7.5 MB = 2.7 GB, which is $0.027 of egress, about 15x short of the $0.40 encode cost. Always finish by multiplying the per-minute saving back out and comparing it with the cost."
+        "explanation": "Wrong. 360 minutes saves only 360 × 7.5 MB = 2.7 GB, which is $0.027 of egress, about 15x short of the $0.40 encode cost. Always finish by multiplying the per-minute saving back out and comparing it with the cost."
       },
       {
         "text": "About 5,300 minutes watched (roughly 530 full views)",
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "2.5Mbps x60/8=18.75MB per minute. A40% reduction saves 7.5MB=0.0075GB, worth$0.000075 at the assumed egress price. $0.40/$0.000075=5,333.33 watch-minutes, or about 534 complete 10-minute views. This covers only the stated encode/egress terms and viewers actually receiving AV1; storage, device support and other costs can shift the threshold.",
+    "workedExample": "Find the bytes saved per minute watched, price them, then divide the one-off encode cost by that saving.\n\n```formula\nS = r × 60 s / 8\nS = 2.5 Mbps × 60 s / 8 = 18.75 MB\nwhere\nS: size of one minute of the H.264 stream, in megabytes (MB)\nr: the stream bitrate, in megabits per second (Mbps); here 2.5\n60 s: one minute in seconds\n8: bits per byte\nMbps: megabits per second\ns: seconds\nMB: megabytes, 1,000,000 bytes\nIn words: one minute of a 2.5 megabit-per-second stream is 18.75 megabytes.\n```\n\n```formula\nv = p × S × u\nv = 0.4 × 0.01875 GB × $0.01/GB\nv = $0.000075/min\nM = E / v\nM = $0.40 / $0.000075 ≈ 5,333 min\nwhere\nv: money saved per minute watched in AV1, in US dollars per minute ($/min)\np: the fraction of bits AV1 saves; 40% = 0.4\nS: one minute of H.264, 18.75 MB = 0.01875 GB\nu: the egress price, in dollars per gigabyte ($/GB)\nM: minutes watched to break even\nE: the extra one-off encode cost, $0.40\nGB: gigabytes, 1,000 MB\n$: US dollars\nmin: minutes\n≈: approximately equal to\nIn words: each minute watched saves 7.5 MB, worth $0.000075, so about 5,333 minutes are needed to repay $0.40.\n```\n\nThat is about 533 complete 10-minute views. This covers only the stated encode/egress terms and viewers actually receiving AV1; storage, device support and other costs can shift the threshold.",
     "link": {
       "title": "Adaptive bitrate streaming (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "The server’s committed range, not the client’s sent-byte counter, determines where to resume. For 369 complete 8MiB chunks, the next offset is 369×8,388,608=3,095,396,352 bytes. Resume the GCS session with the appropriate Content-Range. Multiple concurrent parts would require separate recovery accounting; S3 tracks part numbers and ETags.",
+    "workedExample": "The server’s committed range, not the client’s sent-byte counter, determines where to resume. Chunks are 8 MiB (mebibytes): 1 MiB = 1,048,576 bytes, so 8 MiB = 8,388,608 bytes. If the server reports 369 complete chunks:\n\n```formula\no = n × c\no = 369 × 8,388,608 B\no = 3,095,396,352 B ≈ 3.1 GB\nwhere\no: the byte offset to resume from (the first byte not yet stored)\nn: chunks the server has committed; here 369\nc: chunk size, in bytes (B); 8 MiB = 8,388,608 B\nB: bytes\nGB: gigabytes, 1,000,000,000 bytes\n≈: approximately equal to\nIn words: 369 complete 8 MiB chunks means the server already holds the first 3,095,396,352 bytes, so the upload restarts from that byte.\n```\n\nResume the GCS session with the appropriate Content-Range. Multiple concurrent parts would require separate recovery accounting; S3 tracks part numbers and ETags.",
     "link": {
       "title": "Adaptive bitrate streaming (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Quantify the hot spot. Suppose 2 M viewers start within about 10 minutes:\n\n```\n2,000,000 / 600 s = ~3,300 writes/s\n```\n\nall to **one row**. Each increment takes the row lock, writes redo and commits. Even at 1 ms each that saturates the row.\n\nWith stream aggregation:\n\n```\nKafka: 3,300 events/s (trivial)\nprocessor: sum per video per minute\nDB: 1 write/min for this video\n```\n\nThat is a reduction of about 200,000x for the hot row, and it gives you a place to dedupe one view per session.",
+    "workedExample": "Quantify the hot spot. Suppose 2 M viewers start within about 10 minutes (600 seconds):\n\n```formula\nw = V / t\nw = 2,000,000 / 600 s ≈ 3,300 writes/s\nwhere\nw: increments arriving at the one row, in writes per second\nV: viewers starting playback; here 2,000,000\nt: the window they start in, in seconds (s); 10 minutes = 600 s\ns: seconds\nwrites: single-row UPDATE statements\n≈: approximately equal to\nIn words: two million starts in ten minutes is about 3,300 writes a second, all to one row.\n```\n\nEach increment takes the row lock, writes redo and commits. Even at 1 ms (one millisecond) each, one row can take at most about 1,000 increments a second, so 3,300 a second saturates it.\n\nWith stream aggregation:\n\n```\nKafka: 3,300 events/s (trivial)\nprocessor: sum per video per minute\nDB: 1 write/min for this video\n```\n\n```formula\nF = w × 60 s / 1\nF = 3,333 writes/s × 60 s ≈ 200,000\nwhere\nF: how many times fewer writes the hot row receives\nw: writes per second without aggregation; here about 3,333\n60 s: one minute, the aggregation window\n1: the single write per minute after aggregation\ns: seconds\nwrites: row updates\n≈: approximately equal to\nIn words: about 200,000 increments a minute collapse into one write a minute.\n```\n\nThat is a reduction of about 200,000 times for the hot row, and it gives you a place to dedupe one view per session.",
     "link": {
       "title": "The System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Full-segment requests increase from 60/6=10 to 60/2=30 per minute, excluding manifests/audio/parts. If encode/package delay is one segment, transport 2 seconds and player buffer three segments, the illustrative latency changes from 26 to 10 seconds. These are chosen assumptions, not universal player behavior. LL-HLS parts can be delivered before a complete segment exists; not every part must be independently decodable.",
+    "workedExample": "Requests per minute is 60 seconds divided by the segment length:\n\n```formula\nq = 60 s / d\nq = 60 s / 6 s = 10\nq = 60 s / 2 s = 30\nwhere\nq: full-segment requests per viewer per minute (excluding manifests, audio and parts)\nd: segment duration, in seconds (s)\ns: seconds\nIn words: cutting segments from 6 s to 2 s triples the requests, from 10 to 30 a minute.\n```\n\nWith an illustrative latency model (encode/package delay of one segment, 2 seconds of transport, a player buffer of three segments):\n\n```formula\nL = d + 2 s + 3 × d\nL = 6 s + 2 s + 18 s = 26 s\nL = 2 s + 2 s + 6 s = 10 s\nwhere\nL: glass-to-glass live latency, in seconds (s)\nd: segment duration, in seconds (s); 6 then 2\n2 s: assumed network transport delay\n3 × d: three buffered segments\ns: seconds\nIn words: under these assumptions, latency falls from 26 seconds to 10 seconds.\n```\n\nThese are chosen assumptions, not universal player behaviour. LL-HLS parts can be delivered before a complete segment exists; not every part must be independently decodable.",
     "link": {
       "title": "HTTP Live Streaming (Apple developer docs)",
       "url": "https://developer.apple.com/documentation/http-live-streaming"

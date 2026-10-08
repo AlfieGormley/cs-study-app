@@ -6,7 +6,7 @@ minutes: 10
 summary: Topics and subscriptions, the SNS-to-SQS fan-out pattern, message filtering, and when consumers should be pushed messages or pull them.
 ---
 
-A queue hands each message to **one** consumer. But many real messages are facts that several systems care about. When an order is placed, billing, shipping, analytics and email all want to know. **Publish/subscribe** (pub/sub) solves this: a publisher sends a message to a **topic**, and the broker delivers to each matching subscription according to its delivery guarantees.
+A queue hands each message to **one** consumer. But many real messages are facts that several systems care about. When an order is placed, billing, shipping, analytics and email all want to know. **Publish/subscribe** (pub/sub) solves this: a publisher sends a message to a **pub/sub topic**, and the broker delivers to each matching subscription according to its delivery guarantees.
 
 ## Topics and subscriptions
 
@@ -17,7 +17,7 @@ publisher ─▶│
             └─▶ sub: email    ─▶ svc
 ```
 
-- The **publisher** knows only the topic name. It has no idea who is listening.
+- The **message publisher** knows only the topic name. It has no idea who is listening.
 - Each **subscription** is an independent stream of copies with its own delivery state.
 - Adding a new consumer means adding a subscription. The publisher does not change or redeploy.
 
@@ -90,7 +90,7 @@ For HTTP push versus polling pull, how does a message reach the consumer? A brok
 
 **Pull** delivery (SQS, Kafka, Pub/Sub pull, Kinesis) lets the consumer ask only when it has capacity. This gives natural **backpressure**: a slow consumer simply asks less often, and the backlog builds in the broker, subject to retention, capacity and durability limits. Pull also works for consumers behind firewalls, since they make outbound connections only.
 
-RabbitMQ is a hybrid: the broker pushes over a persistent connection, but **prefetch** acts as a credit limit, so the consumer controls how much is in flight.
+RabbitMQ is a hybrid: the broker pushes over a persistent connection, but **consumer prefetch** acts as a credit limit, so the consumer controls how much is in flight.
 
 > [!tip] Rule of thumb
 > Prefer **pull** for high-throughput or heavy processing, where flow control matters. Use **push** for low-volume integrations and serverless endpoints, and make sure the endpoint returns errors quickly when overloaded rather than timing out.
@@ -99,11 +99,30 @@ RabbitMQ is a hybrid: the broker pushes over a persistent connection, but **pref
 
 Fan-out multiplies messages and therefore multiplies costs and failure modes.
 
-- **Cost.** One publish to a topic with 8 SQS subscriptions is 1 SNS publish plus 8 deliveries, then 8 receives and 8 deletes. At 5,000 orders per second that is 80,000 consumer receive/delete SQS API calls per second (fewer with batching).
+- **Cost.** One publish to a topic with 8 SQS subscriptions is 1 SNS publish plus 8 deliveries, then 8 receives and 8 deletes. At 5,000 orders per second that is 80,000 consumer receive/delete SQS API calls per second (worked out below; fewer with batching).
 - **Partial failure.** Delivery to each subscription is independent. Billing may have processed an order that email has not even received yet. Never assume all subscribers are in the same state.
 - **Duplicates.** SNS standard topics and SQS standard queues are both at-least-once. Every subscriber must deduplicate independently.
 - **Ordering.** Standard SNS gives no ordering guarantee across messages.
 - **Slow subscriber.** In a queue-per-subscriber design, one slow consumer's backlog is isolated. In a design where the broker must keep each message until every subscriber has acknowledged it, a slow subscriber can increase storage for everyone.
+
+The cost grows with both the publish rate and the number of subscriptions, because every subscription's consumers must receive, then delete, their own copy of each message:
+
+```formula
+R = 2 × λ × k / b
+R = 2 × 5000/s × 8 / 1
+R = 80000 calls/s
+where
+R: SQS API calls per second on the consumer side (receives plus deletes)
+2: one ReceiveMessage call and one DeleteMessage call per message
+λ: lambda, messages published to the topic per second, here 5,000 orders per second
+k: the number of SQS queue subscriptions, here 8
+b: messages handled per API call (the batch size), 1 without batching and up to 10 with it
+calls: API requests, each billed by SQS
+s: seconds; "/s" means per second
+In words: fan-out multiplies consumer traffic by the number of subscriptions; batching divides it by the batch size.
+```
+
+With full batches of 10 the same traffic needs 8,000 calls per second. Real batches are often only partly full at low traffic, so measure the average batch size before relying on that figure.
 
 ## Pub/sub on a log
 

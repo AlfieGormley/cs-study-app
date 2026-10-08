@@ -28,19 +28,68 @@ The interview insight is that you **don't** scale the booking core to millions o
 
 ## Back-of-the-envelope
 
+Start with supply. A stadium has 60,000 seats and the average order is 4 seats, so the number of orders that can ever succeed is:
+
+```formula
+O = S / q
+O = 60,000 seats / 4 seats = 15,000
+where
+O: successful orders the event can sell
+S: seats in the stadium; here 60,000
+q: average seats per order; assumed 4
+seats: individual tickets
+In words: 60,000 seats sold four at a time is only 15,000 winning orders.
 ```
-Stadium: 60,000 seats, avg order 4 seats
-  -> ~15,000 successful orders
-Assumed fans at on-sale: 2-14 M
-Waiting room polls every 30 s:
-  2 M / 30 = ~67,000 req/s (edge only)
-Seat-map views while shopping:
-  50,000 shoppers x 1 refresh/5 s
-  = 10,000 req/s (cacheable)
-Hold attempts: if admitted shoppers
-  try ~2 holds/min:
-  50,000 x 2 / 60 = ~1,700 holds/s
+
+Now demand. Assume 2–14 M (2 to 14 million) fans arrive at the on-sale. Compare that with the orders available:
+
+```formula
+x = F / O
+x = 2,000,000 / 15,000 ≈ 133
+x = 14,000,000 / 15,000 ≈ 933
+where
+x: how many fans there are for each order that can succeed (the oversubscription ratio)
+F: fans at the on-sale; an assumed 2 to 14 million
+O: successful orders available; 15,000
+≈: approximately equal to
+In words: there are between about 133 and 933 fans for every order that can be sold.
 ```
+
+The traffic each part of the system sees is "users × how often each one sends a request". Fans in the waiting room poll for their position every 30 seconds:
+
+```formula
+R_wait = F / i
+R_wait = 2,000,000 / 30 s ≈ 67,000 req/s
+where
+R_wait: waiting-room status requests per second
+F: fans waiting; here the low estimate, 2 million
+i: polling interval, in seconds (s); here 30
+s: seconds
+req: HTTP requests
+≈: approximately equal to
+In words: 2 million fans each checking every 30 seconds is about 67,000 requests a second, all of which must be answered at the edge.
+```
+
+Only admitted shoppers reach the seat map and the holds. Assume 50,000 shoppers at a time, each refreshing the seat map every 5 seconds and trying about 2 holds a minute:
+
+```formula
+R_map = 50,000 / 5 s = 10,000 req/s
+R_hold = 50,000 × 2 / 60 s ≈ 1,700 holds/s
+where
+R_map: seat-map reads per second (cacheable)
+R_hold: hold attempts per second reaching the inventory database
+50,000: shoppers admitted at once
+5 s: seconds between one shopper's map refreshes
+2: hold attempts per shopper per minute
+60 s: one minute
+s: seconds
+req: HTTP requests
+holds: hold attempts (conditional writes)
+≈: approximately equal to
+In words: 50,000 shoppers make about 10,000 cacheable map reads and about 1,700 hold writes every second.
+```
+
+All of these are planning assumptions, not measured Ticketmaster figures.
 
 What matters:
 
@@ -151,13 +200,13 @@ Note the `hold_expires_at < now()` clause. An expired hold is treated as availab
 `SELECT ... FOR UPDATE` on the seat rows, check, then update. This is correct, but locks are held across round trips. Under contention, waiters pile up, and multi-seat orders can deadlock unless you **always lock in a consistent order** (for example, sorted by `seat_id`).
 
 ### Option C: Redis holds
-`SET seat:{e}:{s} {hold} NX PX 480000` for each seat gives very fast holds with built-in expiry. But Redis is now a second source of truth that must agree with the database. If Redis fails over and loses a recent write (replication is asynchronous), two users can hold the same seat. Use Redis as a **fast pre-filter**, and still make the final, authoritative transition in the database with a conditional update.
+`SET seat:{e}:{s} {hold} NX PX 480000` for each seat gives very fast holds with built-in expiry (`NX` sets the key only if it does not already exist; `PX 480000` expires it after 480,000 milliseconds, which is 8 minutes). But Redis is now a second source of truth that must agree with the database. If Redis fails over and loses a recent write (replication is asynchronous), two users can hold the same seat. Use Redis as a **fast pre-filter**, and still make the final, authoritative transition in the database with a conditional update.
 
 > [!warning] Hold expiry vs slow payment
 > Atomically move all seats of a still-valid owned hold into PAYMENT_PENDING before authorisation. A longer deadline reduces expiry races but cannot eliminate arbitrary provider delays. After authorisation, conditionally reserve the seats for the order with matching hold ID and state, and durably enqueue capture. Retry capture using its stable PSP operation key; mark the order confirmed only after success. An unknown capture outcome must be reconciled before releasing seats. A definitive failure follows a fenced cancellation/void workflow. PAYMENT_PENDING needs its own recovery process, not blind expiry by the ordinary HELD sweeper.
 
 ### General admission
-For standing tickets there are no seat ids, just a count. A single `remaining` counter row becomes a hot spot under thousands of decrements a second. **Split** the inventory into N buckets (say 50 rows of 400 tickets each), pick a random bucket and decrement it with `WHERE remaining >= :qty`, falling back to other buckets. With evenly distributed traffic, load per bucket can fall toward 1/N; shared bottlenecks and near-empty buckets reduce the gain. Orders larger than every individual remainder may need atomic multi-bucket allocation.
+For standing tickets there are no seat ids, just a count. A single `remaining` counter row becomes a hot spot under thousands of decrements a second. **Split** the inventory into N buckets, where N is the number of bucket rows (say 50 rows of 400 tickets each), pick a random bucket and decrement it with `WHERE remaining >= :qty`, falling back to other buckets. With evenly distributed traffic, each bucket can receive close to 1/N of the load (one fiftieth with 50 buckets); shared bottlenecks and near-empty buckets reduce the gain. Orders larger than every individual remainder may need atomic multi-bucket allocation.
 
 ## Deep dive 2: the virtual waiting room
 
@@ -173,13 +222,23 @@ Without a queue, 2 M people hammer the booking API. The database melts, everyone
 Cloudflare Waiting Room and Queue-it are commercial versions of this pattern.
 
 ### Sizing the admission rate
-If mean admitted-user residence is about 5 minutes to shop and pay, and the core comfortably handles 50,000 concurrent shoppers, then Little's law estimates a steady-state admission rate; keep safety margin and adapt to bursts:
+Little's law says that, in a steady system, the average number of people inside equals the rate they arrive times how long each one stays. Rearranged, it tells you how fast to admit people so the number shopping at once stays at what the core can handle:
 
+```formula
+L = λ × W
+λ = L / W
+λ = 50,000 users / 5 min
+λ = 10,000 users/min
+where
+L: shoppers inside the booking system at once (concurrency); here the core comfortably handles 50,000
+λ: the admission rate, in users per minute
+W: average time an admitted user spends shopping and paying, in minutes (min); about 5
+users: admitted fans
+min: minutes
+In words: if each shopper stays about 5 minutes and the core can hold 50,000 at once, admit about 10,000 a minute.
 ```
-admit rate = concurrency / time
-           = 50,000 / 5 min
-           = 10,000 users/min
-```
+
+Little's law gives a long-run average; keep a safety margin and adapt the rate to bursts and to live latency and error rates.
 
 ### Bots and fairness
 - Pre-registration plus lottery ("Verified Fan"), so only vetted accounts enter the queue.
@@ -196,7 +255,24 @@ For huge on-sales, offer **"best available"** instead of free picking. The serve
 ## Bottlenecks and trade-offs
 
 - **Hot partition**: one event lives on one shard by design, so everything hits that shard during its on-sale. Sub-partitioning by section can spread load, but cross-section orders then require a cross-shard protocol or a product restriction. Keep admissions within measured capacity.
-- **Hold duration**: long holds feel kind but lock up inventory, causing "sold out" followed by seats reappearing later. An illustrative range is 5–10 minutes. Little's law sizes the cost: if 600 four-seat holds per minute are destined to be abandoned and each remains allocated for its entire eight-minute lifetime, they occupy 600 x 4 x 8 = 19,200 seats on average in steady state. If counting only time after abandonment, use the remaining lifetime instead. A short initial hold, extended when checkout starts, keeps that down.
+- **Hold duration**: long holds feel kind but lock up inventory, causing "sold out" followed by seats reappearing later. An illustrative range is 5–10 minutes. Little's law sizes the cost: if 600 four-seat holds per minute are destined to be abandoned and each remains allocated for its entire eight-minute lifetime, then on average in steady state:
+
+```formula
+L = λ × W
+λ = 600 holds/min × 4 seats
+λ = 2,400 seats/min
+L = 2,400 seats/min × 8 min = 19,200 seats
+where
+L: seats tied up in abandoned holds at any moment
+λ: the rate seats enter abandoned holds, in seats per minute
+W: how long each abandoned hold keeps its seats, in minutes (min); here the full 8-minute hold
+holds: hold attempts
+seats: tickets
+min: minutes
+In words: 2,400 seats a minute, each stuck for 8 minutes, keeps 19,200 seats unavailable on average.
+```
+
+That is nearly a third of a 60,000-seat stadium. If counting only time after abandonment, use the remaining lifetime instead. A short initial hold, extended when checkout starts, keeps that down.
 - **Strict queue fairness vs throughput**: admitting exactly in order needs a central sequencer. Batched admission (top 2,000 every minute) is nearly as fair and far simpler.
 - **Payment provider limits**: the PSP may cap your authorisations per second. The admission rate must respect the *slowest* downstream dependency.
 

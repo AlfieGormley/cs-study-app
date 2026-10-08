@@ -2,7 +2,7 @@
 id: cache-http
 title: HTTP caching
 level: intermediate
-minutes: 12
+minutes: 13
 summary: How browsers, proxies and CDNs decide what to store and for how long — Cache-Control, validators (ETag, Last-Modified), Vary and stale-while-revalidate.
 ---
 
@@ -35,11 +35,39 @@ Two common points of confusion:
 - **`no-cache` does not mean "don't cache".** It means "you may store it, but you must check with me before each use". Use no-store to prohibit intentional HTTP-cache storage. It is not a guarantee that data never reaches disk, browser history or a compromised cache, nor a complete privacy mechanism.
 - **`private` matters for shared caches.** A response containing a user's name or basket must be `private` (or `no-store`), otherwise a CDN might hand it to the next visitor.
 
-A response's **age** is the time since the origin generated or last validated it; shared caches pass it on in an `Age` header. A stored response is fresh while its age is less than its **freshness lifetime**, which comes from `s-maxage` (shared caches only), then `max-age`, then the older `Expires` header.
+A response's **age** is the time since the origin generated or last validated it; shared caches pass it on in an `Age` header. A stored response is fresh while its age is less than its **freshness lifetime**, which comes from `s-maxage` (shared caches only), then `max-age`, then the older `Expires` header. RFC 9111 states the test like this:
+
+```formula
+a < L
+r = L − a
+where
+a: the response's current age, in seconds (s): time since the origin generated or last validated it, including any time already spent in other caches (the Age header)
+L: the freshness lifetime, in seconds; from s-maxage (shared caches only), else max-age, else Expires minus the response's Date
+r: the freshness remaining, in seconds; once it reaches 0 the response is stale
+<: is less than; while a < L holds, the response is fresh and the cache may reuse it without contacting the origin; once it fails, the response is stale
+s: seconds
+In words: a cached response is fresh while it is younger than its lifetime, and the time left is the lifetime minus its age.
+```
+
+For example, a browser that receives `max-age=300` from a CDN with `Age: 250` may treat it as fresh for only 300 − 250 = 50 more seconds, not 300. A response whose age reaches its lifetime is stale: the cache must revalidate it before reuse, unless a directive such as `stale-while-revalidate` allows otherwise.
 
 Why `must-revalidate`? HTTP normally lets a cache serve a stale response in some situations, such as when it is disconnected from the origin. `must-revalidate` forbids that: once stale, the cache must revalidate successfully or return an error (typically `504 Gateway Timeout`). Use it when serving stale data would be worse than serving an error.
 
-If there is no explicit lifetime, caches may apply a **heuristic** to responses that are cacheable by default (such as a `200` to a `GET`). RFC 9111 suggests a fraction of the time since `Last-Modified`, with 10% as a typical setting: a file last changed 10 days ago may be treated as fresh for a day. This surprises people, so always set `Cache-Control` explicitly.
+If there is no explicit lifetime, caches may apply a **heuristic** to responses that are cacheable by default (such as a `200` to a `GET`). RFC 9111 encourages a lifetime of no more than some fraction of the time since `Last-Modified`, and says a typical setting of that fraction might be 10%:
+
+```formula
+L_h = k × (t_resp − t_mod)
+L_h = 0.1 × 10 days = 1 day
+where
+L_h: the heuristic freshness lifetime the cache picks, in seconds or days
+k: the fraction the cache uses; RFC 9111 only says "some fraction" and that 10% (0.1) might be typical, so each cache chooses its own
+t_resp: when the response was generated (its Date header)
+t_mod: when the resource last changed (its Last-Modified header)
+day, days: units of time; 1 day = 86,400 seconds
+In words: the longer a file has gone unchanged, the longer a cache may guess it will stay unchanged, about a tenth as long again.
+```
+
+So a file last changed 10 days ago may be treated as fresh for a day, with no request to the origin. This surprises people, so always set `Cache-Control` explicitly.
 
 ### Typical policies
 
@@ -59,6 +87,15 @@ Cache-Control: no-store
 ```
 
 HTML is set to `no-cache` so the browser always checks for a new page, which in turn references the latest fingerprinted assets.
+
+The number 31536000 is simply one year in seconds:
+
+```formula
+365 × 24 × 60 × 60 = 31,536,000 s
+where
+s: seconds; the four factors are days per year, hours per day, minutes per hour and seconds per minute
+In words: max-age=31536000 means "fresh for one (non-leap) year", the longest lifetime commonly used in practice.
+```
 
 ## Validation: ETag and Last-Modified
 
@@ -136,7 +173,24 @@ Cache-Control: max-age=60,
 
 - For the first 60 s: fresh, served directly.
 - From 60 s to 360 s: serve the stale copy **immediately**, and refresh it in the background.
-- If the origin is unreachable or returns `500`, `502`, `503` or `504`: serve the stale copy for up to a day after it went stale.
+- If the origin is unreachable or returns `500`, `502`, `503` or `504`: serve the stale copy for up to a day (86,400 s) after it went stale.
+
+The window boundaries are sums of the directives:
+
+```formula
+t_swr = L + W_swr
+t_swr = 60 s + 300 s = 360 s
+t_sie = L + W_sie
+t_sie = 60 s + 86,400 s = 86,460 s
+where
+t_swr: the age, in seconds (s), up to which a stale copy may be served while it is refreshed in the background
+L: the freshness lifetime, here max-age = 60 s
+W_swr: the stale-while-revalidate value, here 300 s
+t_sie: the age up to which a stale copy may be served if the origin is failing
+W_sie: the stale-if-error value, here 86,400 s (one day)
+s: seconds
+In words: each stale window starts when freshness ends, so you add its length to the max-age.
+```
 
 ```
  age 0      60          360

@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Given 5 seconds of worker occupancy: 8 / 5 = 1.6 requests/s.\n2. Given 50 ms occupancy with adequate proxy buffering: 8 / 0.05 = 160 requests/s.\n3. This is a 100-fold increase in the ideal worker-limited ceiling, not a benchmark of overall throughput.\n4. Client bandwidth, proxy memory/disk buffers, CPU and connection limits can become bottlenecks; no universal 10,000-client capacity follows.",
+    "workedExample": "Each worker handles one request at a time, so the ceiling is workers divided by time per request:\n\n```formula\nX = W / t\nX_slow = 8 / 5 s = 1.6 requests/s\nX_buf = 8 / 0.05 s = 160 requests/s\nX_buf / X_slow = 160 / 1.6 = 100\nwhere\nX: the worker-limited throughput ceiling, in requests per second (requests/s)\nW: the number of synchronous workers, 8\nt: how long each request occupies a worker, in seconds (s)\nX_slow: the ceiling when a slow client holds the worker for 5 s\nX_buf: the ceiling when buffering frees the worker after 0.05 s (50 ms)\nrequests/s: requests per second\ns: second\nIn words: freeing each worker 100 times sooner raises the ceiling 100-fold.\n```\n\nThis is a 100-fold increase in the ideal worker-limited ceiling, not a benchmark of overall throughput. Client bandwidth, proxy memory/disk buffers, CPU and connection limits can become bottlenecks; no universal 10,000-client capacity follows.",
     "link": {
       "title": "ngx_http_proxy_module: proxy buffering (NGINX docs)",
       "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html"
@@ -182,7 +182,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Gateway makes up to **3** attempts to A.\n2. For each of those, A's HTTP client makes up to **3** attempts to B.\n3. Each of those passes through A's outbound sidecar, which makes up to **3** attempts.\n4. Total against B = 3 × 3 × 3 = **27**.\n5. If B is failing because it's overloaded, up to 27× the attempts can prolong the overload.\n6. Fix: retry only at the innermost caller (or one chosen layer); use budgets, exponential backoff with jitter, and deadlines that propagate so outer layers don't retry work that's already doomed.",
+    "workedExample": "1. Gateway makes up to **3** attempts to A.\n2. For each of those, A's HTTP client makes up to **3** attempts to B.\n3. Each of those passes through A's outbound sidecar, which makes up to **3** attempts.\n4. The attempts multiply:\n\n```formula\nA_total = a^L = 3^3 = 3 × 3 × 3 = 27\nwhere\nA_total: the worst-case attempts against B for one user call\na: the attempts each layer may make, 3\nL: the number of independently retrying layers, 3 (gateway, A's HTTP client and A's sidecar)\nIn words: every outer attempt triggers a full set of inner attempts, so three layers of three make 27.\n```\n\nIf B is failing because it's overloaded, up to 27× the attempts can prolong the overload. Fix: retry only at the innermost caller (or one chosen layer); use budgets, exponential backoff with jitter, and deadlines that propagate so outer layers don't retry work that's already doomed.",
     "link": {
       "title": "What is a service mesh? (Linkerd)",
       "url": "https://linkerd.io/what-is-a-service-mesh/"
@@ -242,7 +242,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "| Design | Network time |\n|---|---|\n| App calls 6 services | 6 × 150 = 900 ms |\n| App → BFF → 6 services | 150 + 6 × 1 = 156 ms |\n\nSaving ≈ 900 − 156 ≈ **744 ms**.\n\nSequential calls over a slow link are the worst case. A BFF (or an aggregating gateway, or GraphQL) moves the chatty part onto the fast internal network and shapes one response for the client.",
+    "workedExample": "| Design | Network time |\n|---|---|\n| App calls 6 services | 6 × 150 = 900 ms |\n| App → BFF → 6 services | 150 + 6 × 1 = 156 ms |\n\n```formula\nT_app = n × RTT_user\nT_app = 6 × 150 ms = 900 ms\nT_bff = RTT_user + n × RTT_dc\nT_bff = 150 ms + 6 × 1 ms = 156 ms\nsaving = T_app − T_bff = 744 ms\nwhere\nT_app: the network time when the app calls each service itself, in milliseconds (ms)\nT_bff: the network time through a BFF\nn: the number of sequential service calls, 6\nRTT_user: the round-trip time between the phone and the region, 150 ms\nRTT_dc: the round-trip time between services inside the region, 1 ms\nsaving: the time the BFF saves per screen load\nms: millisecond, one thousandth of a second\nIn words: through the BFF the phone makes one slow round trip instead of six, and the six service calls run over the fast internal network.\n```\n\nSaving ≈ **744 ms**.\n\nSequential calls over a slow link are the worst case. A BFF (or an aggregating gateway, or GraphQL) moves the chatty part onto the fast internal network and shapes one response for the client.",
     "link": {
       "title": "Pattern: API gateway / backends for frontends (microservices.io)",
       "url": "https://microservices.io/patterns/apigateway.html"
@@ -310,7 +310,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. At t=0 the gateway starts attempt 1: A → B → database.\n2. At t=2 the first attempt times out; the gateway starts attempt 2 while the abandoned database query continues. It has not yet returned a final response to the user.\n3. Around t=4 the first query finishes too late for its attempt; the overall gateway budget expires while the second query is still running.\n4. Two database queries were started for one user call.\n5. Propagate deadlines and implement cancellation in application/database work, or use shorter inner budgets. A deadline alone does not automatically interrupt every computation or database query.",
+    "workedExample": "1. At 0 s the gateway starts attempt 1: A → B → database.\n2. At 2 s the first attempt times out; the gateway starts attempt 2 while the abandoned database query continues. It has not yet returned a final response to the user.\n3. Around 4 s the first query finishes too late for its attempt; the overall gateway budget expires while the second query is still running.\n4. Two database queries were started for one user call.\n5. Propagate deadlines and implement cancellation in application/database work, or use shorter inner budgets. A deadline alone does not automatically interrupt every computation or database query.",
     "link": {
       "title": "What is a service mesh? (Linkerd)",
       "url": "https://linkerd.io/what-is-a-service-mesh/"
@@ -340,7 +340,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Normal load: 1,000 rps. Failures: 50% → 500 rps.\n2. Blind retry-once: +500 rps → dependency sees **1,500 rps** (+50%) just as it's struggling.\n3. With a 20% budget: retries ≤ 0.2 × 1,000 = **200 rps** → dependency sees 1,200 rps.\n4. If failures rise to 100%, blind retries double the load (2,000 rps), while the budget still caps it at 1,200.\n\nBudgets keep retries useful for occasional blips but stop them amplifying a real overload.",
+    "workedExample": "```formula\nR_blind = p × λ\nR_blind = 0.5 × 1,000 rps = 500 rps\nL_blind = λ + R_blind = 1,500 rps\nR_max = b × λ\nR_max = 0.2 × 1,000 rps = 200 rps\nL_budget = λ + R_max = 1,200 rps\nwhere\nR_blind: retries per second when every failure is retried once, in requests per second (rps)\np: the fraction of calls that fail, 0.5 (50%)\nλ: lambda, the normal request rate, 1,000 rps\nL_blind: the total load on the dependency with blind retries\nR_max: the most retries per second the budget allows\nb: the retry budget as a fraction of normal traffic, 0.2 (20%)\nL_budget: the total load on the dependency with the budget\nrps: requests per second\nIn words: blind retries add load in proportion to failures; a budget caps the extra at a fixed slice of normal traffic.\n```\n\nSo the dependency sees **1,500 rps** (+50%) with blind retries, just as it's struggling, but **1,200 rps** with the budget. If failures rise to 100%, blind retries double the load (2,000 rps), while the budget still caps it at 1,200.\n\nBudgets keep retries useful for occasional blips but stop them amplifying a real overload.",
     "link": {
       "title": "Handling overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"

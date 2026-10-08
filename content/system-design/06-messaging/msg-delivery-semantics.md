@@ -135,7 +135,7 @@ How it works underneath:
 3. On commit, the coordinator writes **commit markers** to every partition involved, including `__consumer_offsets`.
 4. Consumers with isolation.level=read_committed see non-transactional records and committed transactional records, up to the last stable offset. An earlier open transaction can delay later records. Aborted records are skipped. The Java consumer's default is `read_uncommitted`, so a downstream consumer that does not set this sees aborted output and loses the guarantee.
 
-**Zombie fencing** handles the nasty case of a consumer that pauses (a long GC pause, say), is presumed dead and replaced, then wakes up and tries to write. Each `transactional.id` has an **epoch**; `initTransactions()` bumps it, and the broker rejects writes from the older epoch.
+**Zombie fencing** handles the nasty case of a consumer that pauses (a long GC pause, say), is presumed dead and replaced, then wakes up and tries to write. Each `transactional.id` has a **producer epoch**; `initTransactions()` bumps it, and the broker rejects writes from the older epoch.
 
 Kafka Streams wraps all of this behind one setting: `processing.guarantee=exactly_once_v2`.
 

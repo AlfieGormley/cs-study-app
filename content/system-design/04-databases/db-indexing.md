@@ -12,6 +12,42 @@ Without a suitable access path, a database may need a full scan; partition pruni
 
 Take a 100 million row `orders` table on 8 KB pages, about 100 rows per page: one million pages, or 8 GB. A full scan at 1 GB/s takes around 8 seconds. A B-tree lookup touches 3–4 pages: well under a millisecond if they're cached.
 
+To estimate how long a full scan takes, work out how many pages the table fills, how many bytes that is, and divide by how fast the disk can stream them:
+
+```formula
+P = N_rows / r
+S = P × B
+t_scan = S / v
+where
+P: the number of pages the table occupies
+N_rows: the number of rows in the table
+r: the number of rows that fit on one page; about 100 for rows of roughly 80 bytes on an 8 KB page
+S: the table's size on disk, in gigabytes (GB)
+B: the page size, in kilobytes (KB); 8 KB in Postgres
+t_scan: the time to read the whole table once, in seconds (s)
+v: the disk's sequential read speed, in gigabytes per second (GB/s)
+In words: a scan has to read every page, so its time grows in step with the table's size, however few rows you actually want.
+```
+
+With the numbers above:
+
+```formula
+P = 100,000,000 / 100 = 1,000,000
+S = 1,000,000 × 8 KB = 8 GB
+t_scan = 8 GB / (1 GB/s) = 8 s
+where
+P: the number of pages
+S: the table's size on disk
+t_scan: the time for one full scan
+KB: kilobyte, 1,000 bytes (here rounded; Postgres pages are 8,192 bytes)
+GB: gigabyte, 1,000,000,000 bytes
+GB/s: gigabytes per second, a read speed
+s: seconds
+In words: reading a 100-million-row table end to end takes about 8 seconds, against well under a millisecond for an index lookup.
+```
+
+This assumes the whole scan is sequential and nothing is cached; real scans can be faster if pages are in memory and slower if the disk is busy.
+
 ## B-trees
 
 The **B-tree** (strictly, the B+tree) is the default index in Postgres, MySQL InnoDB, SQL Server, Oracle and SQLite.
@@ -25,10 +61,37 @@ The **B-tree** (strictly, the B+tree) is the default index in Postgres, MySQL In
   linked left to right for range scans
 ```
 
-- Each node is one **page** (typically 4–16 KB) holding hundreds of keys, so the tree is very wide and shallow. With a fan-out of 500, four levels address 500⁴ ≈ 62 billion keys.
-- Lookups walk root → leaf: O(log n), usually 3–4 page reads, and the top levels are almost always in memory.
+- Each node is one **database page** (typically 4–16 KB) holding hundreds of keys, so the tree is very wide and shallow. With a fan-out of 500, four levels address 500⁴ ≈ 62 billion keys.
+- Lookups walk root → leaf: O(log n), usually 3–4 page reads, and the top levels are almost always in memory. Here n is the number of keys in the index.
 - Leaves are sorted and linked, so **range scans** (`BETWEEN`, `>`, `ORDER BY`) are efficient.
 - Writes **update pages in place**. Inserting into a full page *splits* it into two. To survive crashes, every change is first written to the write-ahead log (see the storage internals lesson).
+
+Why so shallow? Each level multiplies the number of keys the tree can reach by the **fan-out**, the number of child pointers per page. So the depth only grows with the logarithm of the number of keys:
+
+```formula
+n_max = f^h
+h = ⌈log_f(n)⌉
+where
+n_max: the most keys a tree of this height can address
+f: the fan-out, the number of children per page; typically a few hundred
+h: the height, the number of levels from root to leaf, which is also the number of page reads per lookup
+n: the number of keys in the index
+log_f: the logarithm to base f: how many times you must multiply f by itself to reach n
+⌈ ⌉: ceiling: round up to the next whole number, because a tree can't have part of a level
+In words: every extra level multiplies the capacity by the fan-out, so a tree with hundreds of children per page needs only 3–4 levels even for billions of keys.
+```
+
+For a fan-out of 500:
+
+```formula
+n_max = 500^4
+n_max = 62,500,000,000
+where
+n_max: the most keys four levels can address, about 62 billion
+In words: four levels of 500-way branching reach about 62 billion keys, so a lookup in a table of tens of billions of rows still reads only four pages.
+```
+
+That is the meaning of O(log n) here: doubling n adds almost nothing to the height. The estimate assumes full pages; real pages are rarely completely full, which lowers the effective fan-out a little but barely changes the height.
 
 In InnoDB, the table *is* a B-tree clustered on the primary key, and secondary indexes store the primary key as their pointer. In Postgres, the table is an unordered heap and every index points to a physical tuple location.
 
@@ -125,7 +188,7 @@ In Postgres, index-only scans also depend on the **visibility map**: if a page h
 Each index adds maintenance for writes affecting its entries; partial indexes and HOT updates are important exceptions.
 
 - An `INSERT` into a Postgres heap table with 6 B-tree indexes inserts one heap tuple and 6 index entries; InnoDB uses a clustered B-tree for the table itself. Each structure adds buffer, I/O and WAL work.
-- An `UPDATE` touching an indexed column updates that index too. In Postgres, updating *any* column covered by a B-tree (or other non-summarising) index prevents a **HOT** (heap-only tuple) update, so ordinary indexes need entries for the new tuple version; summarizing indexes such as BRIN have different maintenance. HOT also needs free space on the same page, which is why hot tables often use a `fillfactor` below 100.
+- An `UPDATE` touching an indexed column updates that index too. In Postgres, updating *any* column covered by a B-tree (or other non-summarising) index prevents a **HOT update** (heap-only tuple update), so ordinary indexes need entries for the new tuple version; summarizing indexes such as BRIN have different maintenance. A HOT update also needs free space on the same page, which is why hot tables often use a `fillfactor` below 100.
 - Indexes consume memory. If they don't fit in the buffer cache, lookups and inserts start hitting disk.
 - More indexes give the planner more choices, which occasionally means a bad choice.
 
@@ -141,7 +204,7 @@ Each index adds maintenance for writes affecting its entries; partial indexes an
 - Stale statistics: run `ANALYZE` so the planner knows the data distribution.
 
 ## Key takeaways
-- B-trees update fixed-size pages in place and give O(log n) lookups in 3–4 page reads; LSM trees append, flush sorted files and compact in the background.
+- B-trees update fixed-size pages in place and give logarithmic lookups (O(log n) for n keys) in 3–4 page reads; LSM trees append, flush sorted files and compact in the background.
 - Composite indexes follow the leftmost-prefix rule: put equality columns first, range or sort columns last.
 - Covering indexes can avoid table visits, subject to visibility checks and the chosen plan.
 - Every index slows writes, uses memory, and must earn its keep; drop unused ones.

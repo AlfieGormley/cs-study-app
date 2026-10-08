@@ -30,15 +30,34 @@ On one server it's an in-memory counter. The interview is about making it work a
 
 Assume an API fleet handling **1 million requests/s** at peak, with **10 million active keys** a day.
 
+Every request needs one limiter check, which is one Redis call (a single Lua script). The number of Redis shards follows from dividing the check rate by what one shard handles:
+
+```formula
+shards = checks / cap
+shards = 1,000,000/s / 50,000/s = 20
+where
+shards: Redis shards (separate servers each holding part of the keys) needed, before adding replicas
+checks: limiter checks per second, one per API request: 1 million at peak
+cap: checks per second one shard handles at the target tail latency, here an assumed 50,000 (50k)
+/s: per second
+In words: a million checks a second at an assumed 50,000 per shard needs about 20 shards, plus replicas for failover.
 ```
-Checks:   1M/s, 1 Redis call each
-          (one Lua script per check)
-Example: assume 50k checks/s per shard
-         at the target tail latency
-         -> 20 shards (plus replicas)
-Memory:   assume 100 B per rule/key
-          10M keys x 2 rules x 100 B
-          -> ~2 GB
+
+Memory is keys times rules per key times bytes per counter:
+
+```formula
+memory = keys × rules × size
+memory = 10M × 2 × 100 B ≈ 2 GB
+where
+memory: RAM needed for all counters
+keys: active client keys per day, 10 million (10M)
+rules: rules applied to each key, here 2 (a burst limit and a daily quota)
+size: bytes per stored counter, an assumed 100 bytes (B)
+M: million
+B: bytes
+GB: gigabyte, 10^9 bytes
+≈: approximately equal to
+In words: 10 million keys with two 100-byte counters each is about 2 GB of memory.
 ```
 
 These are illustrative sizing inputs, not measured Redis capacity or memory bounds. Actual key strings, objects, allocator overhead, scripts, replication and network tails must be measured. A single atomic call reduces both race windows and network hops.
@@ -149,27 +168,49 @@ Store a timestamp for every request (a Redis sorted set). On each request, drop 
 
 ### Sliding window counter
 
-Keep fixed-window counts for the current and previous window and weight the previous one by how much of it still overlaps:
+Keep fixed-window counts for the current and previous window. A true rolling window ending now still overlaps the tail end of the previous window, so count the previous window in proportion to that overlap:
 
-```
-estimate = prev x (1 - elapsed/window)
-         + curr
+```formula
+est = prev × (1 − t / w) + curr
+est = 80 × (1 − 15 s / 60 s) + 30
+est = 80 × 0.75 + 30 = 90
+where
+est: the estimated number of requests in the last full window
+prev: requests counted in the previous fixed window
+curr: requests counted so far in the current window
+t: time elapsed since the current window started, in seconds (s)
+w: the window length, in seconds; here one minute = 60 s
+t / w: the fraction of the current window that has passed, so 1 − t / w is the share of the previous window still inside the rolling window
+s: seconds
+In words: count the current window fully and the previous one only for the part that still falls inside the last minute; 25% into the minute, that is three quarters of the previous count.
 ```
 
-If the previous minute had 80 requests, the current has 30, and we're 25% through it: `80 × 0.75 + 30 = 90`. Under a limit of 100, allow.
+So if the previous minute had 80 requests, the current has 30, and we're 25% through it, the estimate is 90. Under a limit of 100, allow.
 
 - **Pro**: two integers per key, smooths boundary bursts.
 - **Con**: approximate; it assumes requests in the previous window were evenly spread. Cloudflare reported around 0.003% incorrect decisions in its published workload. That historical empirical result is not a worst-case error bound; concentrated traffic can produce large errors.
 
 ### Token bucket
 
-Each key has a bucket of capacity `B` tokens, refilled at `r` tokens/second. Each request takes a token; an empty bucket means reject. Store just `tokens` and `last_refill`; refill lazily on each request:
+Each key has a bucket that holds up to a fixed number of tokens and is topped up at a steady rate. Each request takes a token; an empty bucket means reject. Instead of a timer adding tokens, store just `tokens` and `last_refill` and work out the refill lazily on each request:
 
-```
-tokens = min(B, tokens + (now - last) x r)
+```formula
+T_new = min(B, T + (now − last) × r)
+where
+T_new: tokens in the bucket after the refill, before this request takes one
+T: tokens stored at the last update
+B: the bucket capacity, the most tokens it can hold, which is the largest burst allowed
+r: the refill rate, in tokens per second
+now: the current time, in seconds
+last: the time of the last update (last_refill), in seconds
+now − last: seconds since the last update
+min: "the smaller of", which stops the bucket filling beyond B
+In words: add the tokens earned since the last request at r per second, but never more than the capacity B.
 ```
 
-- **Pro**: allows controlled bursts (up to `B`) while enforcing a long-run average of `r`. Two numbers per key. This is what Stripe and AWS API Gateway use.
+For example, with *B* = 10 and *r* = 1, a bucket left with 2 tokens and untouched for 5 s refills to min(10, 2 + 5) = 7; untouched for a minute it stops at 10.
+
+- **Pro**: allows controlled bursts (up to *B*) while enforcing a long-run average of *r*. Two numbers per key. This is what Stripe and AWS API Gateway use.
 - **Con**: two parameters to tune; bursts are allowed by design, which might not suit a fragile downstream.
 
 ### Leaky bucket
@@ -197,15 +238,42 @@ The limiter must never be the reason your API is down.
 
 - **Fail open.** If Redis times out (set an aggressive timeout like 5–10 ms), allow the request and emit a metric. Briefly over-admitting is better than rejecting all traffic.
 - **Fail closed** only for limits that protect something critical, such as login attempts (brute-force protection) or expensive operations.
-- **Local fallback.** Each gateway keeps an approximate in-memory bucket per key (global limit divided by the number of gateways). When Redis is unreachable, use that instead of nothing.
+- **Local fallback.** Each gateway keeps an approximate in-memory bucket per key, sized as below. When Redis is unreachable, use that instead of nothing.
+
+```formula
+local = limit / G
+local = 1,000/min / 50 = 20/min
+where
+local: the limit one gateway enforces on its own
+limit: the global limit for the key
+G: the number of gateways sharing the key's traffic, here an assumed 50
+min: minute (/min means per minute)
+In words: each gateway takes an equal slice of the global limit; it is only approximate, because a client's traffic is rarely spread evenly over gateways.
+```
 
 ## Deep dive 4: Scaling the hot path
 
 At a million checks a second, even one Redis round trip per request adds up. Options:
 
 - **Local pre-check.** Gateways cache "this key is over limit until T" after a rejection, so a client hammering you is rejected locally without touching Redis.
-- **Batching / lease tokens.** A gateway takes, say, 10 tokens at a time from Redis and spends them locally. Ten times fewer Redis calls, at the cost of slight inaccuracy (unused leased tokens). Only lease for keys whose limit is much larger than `gateways × lease size`: with 200 gateways leasing 10 each, a 100/min customer's whole allowance would be stranded on 10 gateways while requests on the other 190 are rejected.
+- **Batching / lease tokens.** A gateway takes, say, 10 tokens at a time from Redis and spends them locally. Ten times fewer Redis calls, at the cost of slight inaccuracy (unused leased tokens). Only lease for keys whose limit is much larger than the total that could be leased out at once (worked out below): with 200 gateways leasing 10 each, a 100/min customer's whole allowance would be stranded on 10 gateways while requests on the other 190 are rejected.
 - **Hot keys.** One huge customer can concentrate load on one Redis shard. Splitting the key into sub-buckets (`key#0..key#7`, each with 1/8 of the limit, picked at random) spreads it. The cost is accuracy: a request can be rejected by an empty sub-bucket while others still have tokens, so this only suits customers whose traffic is large enough to average out.
+
+The leasing rule and the sub-bucket split, as sums:
+
+```formula
+leased = G × lease
+leased = 200 × 10 = 2,000 ≫ 100
+sub = limit / 8
+where
+leased: the most tokens that could be held by gateways at once
+G: the number of gateways, here 200
+lease: tokens each gateway takes per Redis call, here 10
+≫: much greater than
+sub: the limit given to each of the 8 sub-buckets a hot key is split into
+limit: the customer's total limit
+In words: if the gateways together could lease far more than a customer's limit, leasing strands the allowance; splitting a hot key eight ways gives each piece an eighth of the limit.
+```
 
 ## Deep dive 5: Multiple regions
 
@@ -227,7 +295,21 @@ Static regional shares can preserve a global quota if their allowances sum to th
 
 Also mention that rate limiting is not load shedding. Stripe, for example, runs request-rate and concurrency limiters per user *and* fleet-wide load shedders that drop low-priority traffic when the whole system is under strain. Per-key limits don't protect you when a million well-behaved clients all arrive at once.
 
-Rate is also not the same as work in progress. By Little's law, average in-flight requests = accepted arrival rate × mean duration in a stable system: a customer within a 100/min limit on a 20-second report endpoint holds about 33 requests in flight. A **concurrency limiter** (at most N in-flight requests per customer) bounds that directly.
+Rate is also not the same as work in progress. Little's law, a general result for any stable queueing system, links them:
+
+```formula
+L = λ × W
+L = (100 / 60 s) × 20 s ≈ 33
+where
+L: the average number of requests in flight (started but not finished)
+λ: lambda, the average rate of accepted arrivals, here 100 per minute = 100 / 60 s ≈ 1.67 per second
+W: the average time each request takes, in seconds, here 20 s
+s: seconds
+≈: approximately equal to
+In words: in-flight work equals how fast requests arrive times how long each one stays.
+```
+
+So a customer within a 100/min limit on a 20-second report endpoint holds about 33 requests in flight, even though the rate limit is respected. Little's law holds only for long-run averages in a stable system (one that keeps up with its arrivals). A **concurrency limiter** (a cap on in-flight requests per customer, say 10) bounds that directly.
 
 ## At 10x scale
 
@@ -241,7 +323,7 @@ At 10 million checks/s:
 ## Key takeaways
 
 - Put the limiter in the gateway or a sidecar, backed by a sharded in-memory store; choose counter durability from the consequence of resets.
-- Fixed windows allow 2x bursts at boundaries; sliding window logs are exact but memory-hungry; sliding window counters and token buckets are the practical choices.
+- Fixed windows allow double-limit bursts at boundaries; sliding window logs are exact but memory-hungry; sliding window counters and token buckets are the practical choices.
 - Avoid read-modify-write races with atomic `INCR` or a Lua script, and use one authoritative clock per key.
 - Fail open by default; fail closed only for security-sensitive limits.
 - Reduce hot-path cost with local rejection caches and leased tokens; accept small inaccuracy for large latency wins.

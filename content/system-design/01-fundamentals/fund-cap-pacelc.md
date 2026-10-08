@@ -110,7 +110,7 @@ The "else" half is the important addition. Even with a perfectly healthy network
 ```
  EC: write -> wait for quorum ack
      London --80ms-- Virginia
-     latency >= 1 cross-region RTT
+     latency at least 1 cross-region RTT
 
  EL: write -> ack locally, replicate
      async; fast but may be stale
@@ -127,10 +127,29 @@ These are approximate defaults; many are tunable.
 | Spanner, CockroachDB | PC | EC |
 | etcd, ZooKeeper | PC | EC |
 
-- **Cassandra** with `ONE` reads and writes favours availability and low latency when at least one actual replica for the key is reachable, but can still time out or reject requests. With `QUORUM` reads and writes, it pays latency for stronger guarantees (though it still isn't fully linearisable without lightweight transactions). The rule behind this: with *N* replicas, writes acknowledged by *W* and reads consulting *R*, reads are guaranteed to overlap the latest write when **W + R > N**. With N = 3, `QUORUM` is 2, and 2 + 2 > 3.
+- **Cassandra** with `ONE` reads and writes favours availability and low latency when at least one actual replica for the key is reachable, but can still time out or reject requests. With `QUORUM` reads and writes, it pays latency for stronger guarantees (though it still isn't fully linearisable without lightweight transactions). The rule behind this, quorum overlap, is worked through after this list.
 - **DynamoDB** reads are eventually consistent by default (cheaper and faster); `ConsistentRead=true` costs twice the read capacity and is served by the partition's leader replica. Multi-Region eventual-consistency global tables replicate asynchronously across regions, though AWS now also offers a multi-Region strong consistency mode that pays cross-region latency on writes.
 - **etcd** serves linearisable reads by default, confirming with a quorum before answering. **ZooKeeper** commits writes through a quorum, but by default a client reads from whichever server it's connected to, which may lag: reads are ordered but can be stale. `sync()` is a useful freshness barrier, but is not a quorum operation and is not a strict linearisability guarantee under all failures. Same "CP" label, different everyday guarantee.
 - **Spanner** pays commit latency for external consistency, using TrueTime and Paxos across replicas.
+
+**Quorum overlap.** In a leaderless store like Cassandra, each key is copied to several replicas. A write is reported successful once some of them acknowledge it, and a read asks some of them and takes the newest answer. A read is guaranteed to include at least one replica holding the latest successful write when the two groups must overlap:
+
+```formula
+W + R > N
+Q = ⌊N / 2⌋ + 1
+N = 3: Q = ⌊1.5⌋ + 1 = 2
+W = R = 2: 2 + 2 = 4 > 3
+where
+N: the replication factor, the number of replicas holding each key
+W: the number of replicas that must acknowledge a write before it counts as successful
+R: the number of replicas a read consults
+Q: the size of a majority quorum, what Cassandra's QUORUM level uses
+⌊ ⌋: floor: round down to the whole number below (1.5 becomes 1)
+>: is greater than
+In words: if the replicas you write to plus the replicas you read from add up to more than the total, the two groups must share at least one replica, so the read sees the write.
+```
+
+With N = 3, `ONE` + `ONE` gives 1 + 1 = 2, which is not greater than 3, so a read can miss the latest write. Overlap is necessary but not sufficient for linearisability: concurrent writes, last-write-wins timestamps and failed writes that partly landed still need extra machinery such as lightweight transactions.
 
 > [!tip] The everyday question
 > PACELC's "E" half is the one you face daily. Partitions are rare; latency is paid on every request. "Do we need this read to be strongly consistent, at the cost of a cross-zone round trip?" is a question you'll ask constantly.

@@ -36,6 +36,21 @@ for p in posts:          # 50 more
 # vs 2 queries (IN (...)) = ~2 ms
 ```
 
+The name comes from the count: one query for the list, then one more per item. When each query has to wait for its own network round trip, the time spent just on round trips is:
+
+```formula
+T = (N + 1) × t
+T = (50 + 1) × 1 ms = 51 ms
+where
+T: total time spent on network round trips, in milliseconds (ms)
+N: the number of items in the list, here 50 posts
+t: the time for one round trip to the database, here an assumed 1 ms
+ms: milliseconds, thousandths of a second
+In words: the N+1 pattern costs one round trip per item, so 50 posts take 51 round trips instead of 2.
+```
+
+Fetching all the authors in one second query (`WHERE id IN (...)`) makes it 2 × 1 ms = about 2 ms, whatever N is. The 1 ms figure is an assumption; inside one data centre it is often less, across regions far more, and query execution time comes on top.
+
 ## Read replicas
 
 A primary handles all writes and streams its change log to one or more **replicas**, which serve reads.
@@ -90,14 +105,36 @@ Layers from the user inwards:
 > [!note] Evidence gap
 > Fixed cache and database latency ranges are omitted because no measured environment supports them. The calculation below uses explicit hypothetical inputs.
 
-The arithmetic is why caches matter. With a 95% hit rate, a 0.5 ms cache and a 20 ms database:
+The arithmetic is why caches matter. Every read checks the cache first. A **hit** is answered from the cache; a **miss** pays for the cache check *and* the database. The average read time and the share of reads that reach the database are:
 
-```
-avg = 0.95*0.5 + 0.05*20.5 = 1.5 ms
-DB load = 5% of reads
+```formula
+T_avg = h × t_c + (1 − h) × (t_c + t_db)
+F_db = 1 − h
+where
+T_avg: the average time per read, in milliseconds (ms)
+h: the hit rate: the fraction of reads found in the cache, between 0 and 1 (95 % = 0.95)
+t_c: the time for one cache lookup, in ms
+t_db: the time for one database query, in ms
+F_db: the fraction of all reads that still reach the database
+ms: milliseconds, thousandths of a second
+In words: the average is mostly the fast cache time, plus the misses' share of the slow path; only the misses load the database.
 ```
 
-That's 20× less database load. Push the hit rate from 95% to 99% and database load drops another 5×. Another module covers cache patterns, invalidation and stampedes in depth; architecturally, the key points are to cache close to the consumer, choose freshness, invalidation and eviction policies for each kind of data. A TTL is useful in many designs but does not alone bound source-data age; immutable content-addressed data can use different policies.
+With a 95% hit rate, a 0.5 ms cache and a 20 ms database:
+
+```formula
+T_avg = 0.95 × 0.5 + 0.05 × (0.5 + 20)
+T_avg = 0.475 + 1.025 = 1.5 ms
+F_db = 1 − 0.95 = 0.05 = 5 %
+where
+T_avg: average time per read, in milliseconds (ms)
+F_db: fraction of reads reaching the database
+%: per cent; 0.05 = 5 %
+ms: milliseconds
+In words: reads average 1.5 ms instead of 20 ms, and only 1 read in 20 touches the database.
+```
+
+That's 20× less database load. Push the hit rate from 95% to 99% and F_db falls from 5% to 1%, so database load drops another 5×. The numbers are hypothetical inputs; real hit rates depend on how much of the data is hot, and the formula assumes every miss goes to the database (no second cache layer). Another module covers cache patterns, invalidation and stampedes in depth; architecturally, the key points are to cache close to the consumer, choose freshness, invalidation and eviction policies for each kind of data. A TTL is useful in many designs but does not alone bound source-data age; immutable content-addressed data can use different policies.
 
 ## Denormalisation
 

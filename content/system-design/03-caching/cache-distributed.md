@@ -2,7 +2,7 @@
 id: cache-distributed
 title: Distributed caching
 level: advanced
-minutes: 14
+minutes: 15
 summary: Redis versus Memcached, spreading keys across nodes with consistent hashing and hash slots, and what replication and persistence do (and don't) protect you from.
 ---
 
@@ -40,11 +40,35 @@ Both are in-memory key-value stores whose latency depends on payload, network, c
 
 ### The naive approach: hash mod N
 
-```
-node = hash(key) % N
+The simplest way to pick a node is to turn the key into a number and take the remainder after dividing by the number of nodes:
+
+```formula
+node = hash(key) mod N
+where
+node: the index of the node that holds the key, a whole number from 0 to N − 1
+hash: a hash function, which turns the key (a string) into a large, evenly spread whole number
+key: the cache key, such as user:42
+mod: modulo, the remainder after whole-number division; 17 mod 4 = 1; written % in most programming languages
+N: the number of cache nodes
+In words: hash the key and use the remainder after dividing by the node count as the node number.
 ```
 
-This spreads keys evenly, but it falls apart when N changes. Going from 4 to 5 nodes, a key stays put only if `hash % 4 == hash % 5`, which is true for about **1 in 5** keys. So **80%** of keys suddenly live on a different node, and all of them miss at once. For a cache, that is a self-inflicted stampede on the database.
+In code this is `hash(key) % N`. For example, a key whose hash is 1,000,003 goes to node 1,000,003 mod 4 = 3 in a four-node cluster.
+
+This spreads keys evenly, but it falls apart when N changes. Going from 4 to 5 nodes, a key stays put only if its hash leaves the same remainder when divided by 4 as when divided by 5. The pair of remainders repeats every 20 numbers (20 is the smallest number divisible by both 4 and 5), and they match only for hashes that leave a remainder of 0, 1, 2 or 3 when divided by 20: 4 cases in 20. In general, growing from N to N + 1 nodes:
+
+```formula
+f_stay = 1 / (N + 1)
+f_move = N / (N + 1)
+f_move = 4 / (4 + 1) = 0.8
+where
+f_stay: the fraction of keys that keep their node
+f_move: the fraction of keys that move to a different node
+N: the number of nodes before adding one, here 4
+In words: adding one node to N under hash-mod-N moves all but one key in N + 1, so the bigger the cluster, the worse it gets.
+```
+
+So about **1 in 5** keys stay, and **80%** of keys suddenly live on a different node, all of them missing at once. For a cache, that is a self-inflicted stampede on the database.
 
 ### Consistent hashing
 
@@ -60,8 +84,22 @@ Map both nodes and keys onto a ring (for example, the range 0 to 2³²). A key b
 ```
 
 - k1 → N2, k2 → N3, k3 → N1.
-- Add a node N4 between N3 and N1: only the keys between N3 and N4 move, about 1/(N+1) of the total.
+- Add a node N4 between N3 and N1: only the keys between N3 and N4 move.
 - Remove N2: only N2's keys move, to the next node clockwise.
+
+When the points are evenly spread, the new node ends up with an equal share of the ring, and that share is all that moves:
+
+```formula
+f_move ≈ 1 / (N + 1)
+f_move ≈ 1 / (4 + 1) = 0.2
+where
+f_move: the fraction of keys that move when one node is added
+N: the number of nodes before adding one, here 4
+≈: approximately equal to; exact only when every node owns an equal arc of the ring
+In words: adding a node takes over just its fair share of keys, about one in N + 1, instead of almost all of them.
+```
+
+Going from 4 to 5 nodes moves about 20% of keys, against 80% for hash mod N. Removing a node moves only that node's share, about 1 / N of the keys.
 
 The problem with one point per node is uneven arcs: one node may own 40% of the ring. The fix is **virtual nodes**: each physical node is placed on the ring at 100–200 points. Arc sizes average out, and when a node fails its load is spread across many survivors rather than dumped on one neighbour.
 
@@ -71,8 +109,15 @@ Memcached clients typically use the **ketama** consistent hashing algorithm. Ama
 
 Redis Cluster uses a fixed set of **16,384 hash slots**:
 
-```
-slot = CRC16(key) % 16384
+```formula
+slot = CRC16(key) mod 16384
+where
+slot: the hash slot number, from 0 to 16,383
+CRC16: a 16-bit cyclic redundancy check, a fast checksum function that turns the key into a number from 0 to 65,535; Redis uses the XMODEM variant
+key: the cache key, or only the part inside {} when the key contains a hash tag
+mod: modulo, the remainder after whole-number division; written % in code
+16384: the fixed number of slots, 2 to the power 14
+In words: checksum the key and take the remainder after dividing by 16,384 to get its slot.
 ```
 
 Each primary owns a set of slots. Adding a node means **migrating some slots** to it, key by key, while the cluster keeps serving. Clients cache the slot map and send each command straight to the right node.
@@ -126,7 +171,21 @@ Memcached is ordinarily a volatile cache; optional warm restart preserves data o
 | AOF `always` | fsync each write | Minimal; slow |
 | None | Memory only | Everything |
 
-**RDB** snapshots are compact and fast to load, but the `fork()` uses copy-on-write: under heavy writes, memory usage can nearly double while the snapshot runs. Leave headroom (do not run Redis at 95% of RAM with RDB enabled).
+**RDB** snapshots are compact and fast to load, but the `fork()` uses copy-on-write: under heavy writes, memory usage can nearly double while the snapshot runs. Every memory page the parent changes during the snapshot gets copied, so:
+
+```formula
+M_peak ≈ M × (1 + f)
+M_peak ≈ 26 GB × (1 + 0.3) = 33.8 GB
+where
+M_peak: the peak memory used during the snapshot, in gigabytes (GB)
+M: the memory the dataset uses normally, here 26 GB
+f: the fraction of memory pages written to while the snapshot runs, between 0 and 1; here 0.3 (30%)
+GB: gigabytes; 1 GB = 1,000,000,000 bytes
+≈: approximately equal to
+In words: the snapshot costs extra memory equal to the share of pages modified while it runs; if every page is touched, memory doubles.
+```
+
+A 26 GB dataset on a 32 GB machine fits normally, but with 30% of pages rewritten during the snapshot it needs about 33.8 GB and can be killed for running out of memory. Leave headroom (do not run Redis at 95% of RAM with RDB enabled).
 
 **AOF** (append-only file) logs every write command, and is periodically rewritten to stay compact. Many deployments use both: AOF for durability, RDB for backups and fast restarts.
 
@@ -141,11 +200,24 @@ Why would a cache want persistence? **Warm restarts.** A 200 GB cache that resta
 | Redis Cluster | Large, self-managing |
 | Proxy (mcrouter, Envoy) | Many clients, simple config |
 
-A proxy layer hides the topology from clients and pools connections, which matters when thousands of app instances would otherwise each open connections to every node. Facebook's **mcrouter** is a proxy of this kind for Memcached; it also routes invalidations and can replicate writes to pools of servers. Twemproxy (from Twitter) and Envoy's Redis proxy play the same role, and modern Memcached ships its own built-in proxy.
+A proxy layer hides the topology from clients and pools connections, which matters when thousands of app instances would otherwise each open connections to every node. Each node holds one pool per client that connects to it:
+
+```formula
+C_node = I × P
+C_node = 2,000 × 4 = 8,000
+C_node = 20 × 4 = 80
+where
+C_node: the connections one cache node must hold open
+I: the number of clients connecting directly to the node: 2,000 app instances without a proxy, or 20 proxies with one
+P: the connections each client keeps open to each node (its pool size), here 4
+In words: without a proxy every app instance connects to every node; with one, only the proxies do, so the count per node falls a hundredfold here.
+```
+
+Facebook's **mcrouter** is a proxy of this kind for Memcached; it also routes invalidations and can replicate writes to pools of servers. Twemproxy (from Twitter) and Envoy's Redis proxy play the same role, and modern Memcached ships its own built-in proxy.
 
 ## Key takeaways
 - Memcached: simple, multi-threaded, no built-in primary–replica durability; optional graceful warm restart is not crash-safe persistence. Redis: data structures, replication, persistence, clustering.
-- `hash % N` remaps most keys when N changes; consistent hashing moves only about 1/N.
+- Hash mod N remaps most keys when the node count changes; consistent hashing moves only about one node's share.
 - Virtual nodes even out load and spread a failed node's keys across many survivors.
 - Redis Cluster uses 16,384 hash slots with `MOVED` redirects; hash tags co-locate keys but can create hot slots.
 - Redis replication is asynchronous: failover can lose acknowledged writes.

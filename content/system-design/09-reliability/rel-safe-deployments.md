@@ -56,13 +56,34 @@ Send a small fraction of real traffic to the new version, compare its metrics wi
 any stage bad → route 0% to v2
 ```
 
-The key is **comparison**: the canary's error rate and latency are judged against a control group (the baseline running v1 at the same time, ideally on the same number of hosts), not against a fixed threshold. Tools like Spinnaker's Kayenta and Argo Rollouts run automated canary analysis.
+The key is **comparison**: the canary's error rate and latency are judged against a canary control group (the baseline running v1 at the same time, ideally on the same number of hosts), not against a fixed threshold. Tools like Spinnaker's Kayenta and Argo Rollouts run automated canary analysis.
 
 Considerations from the SRE workbook:
 
-- The canary must get enough traffic to be statistically meaningful. 1% of a 100 req/s service is one request a second; a 0.1% error-rate increase would take a long time to detect.
+- The canary must get enough traffic to be statistically meaningful. 1% of a 100 req/s service is one request a second; a 0.1% error-rate increase would take a long time to detect (see the formula below).
 - Bake time must cover slow-to-appear problems: memory leaks, cache expiry, daily batch jobs.
 - Canary populations can be hosts, a percentage of requests, or specific users (internal staff first).
+
+How much evidence does a small canary collect? Multiply its traffic by the extra error rate you hope to spot:
+
+```formula
+r_c = f × R
+r_c = 0.01 × 100 req/s = 1 req/s
+X = r_c × Δe × t
+X = 1 req/s × 0.001 × 3,600 s = 3.6
+where
+r_c: the request rate reaching the canary, in requests per second (req/s)
+f: the fraction of traffic sent to the canary, here 1% = 0.01
+R: the service's total request rate, here 100 req/s
+X: the extra errors the bad version causes during the observation time
+Δe: delta e, the increase in error rate caused by the new version, here 0.1% = 0.001
+t: how long you watch, here one hour = 3,600 seconds (s)
+req/s: requests per second
+s: seconds
+In words: a 1% canary on a 100 req/s service sees 3,600 requests an hour, and a 0.1% regression adds only about 3.6 extra errors in that hour, easily lost in normal noise.
+```
+
+To detect small regressions sooner, send the canary more traffic, run it longer, or compare it with a baseline group of the same size so random variation is easier to separate from a real change.
 
 ### Staged rollouts at scale
 
@@ -95,7 +116,19 @@ Benefits: potentially fast behavior rollback by flipping a flag (subject to prop
 Pete Hodgson's article on martinfowler.com classifies flags by longevity and dynamism: **release toggles** (short-lived), **experiment toggles**, **ops toggles** (kill switches for expensive features under load) and **permission toggles**.
 
 > [!warning] Flags are debt and config is code
-> Independent binary flags permit up to `2^n` configurations, although not every combination is reachable or a distinct execution path. Remove release flags once rolled out. And remember a flag change is a production change: stage it, audit it and monitor it like a deploy. Several major outages have come from a config or flag pushed globally at once.
+> Every independent on/off flag doubles the number of possible configurations (see the formula below), although not every combination is reachable or a distinct execution path. Remove release flags once rolled out. And remember a flag change is a production change: stage it, audit it and monitor it like a deploy. Several major outages have come from a config or flag pushed globally at once.
+
+The number of possible configurations grows exponentially with the number of flags:
+
+```formula
+C = 2^n
+C = 2^10 = 1,024
+where
+C: the number of possible on/off combinations
+n: the number of independent binary (on/off) flags, here 10
+^: "to the power of"
+In words: each extra flag doubles the combinations, so 10 flags allow 1,024 configurations, far more than anyone tests.
+```
 
 ## Rollback safety
 

@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Start reads wall clock = 12:00:00.500.\n2. NTP decides the clock is 300 ms fast and **steps** it back.\n3. End reads 12:00:00.250.\n4. Duration = −250 ms.\n\nFix: use `CLOCK_MONOTONIC` (`System.nanoTime()` in Java, `performance.now()` in JS, `time.monotonic()` in Python). It only measures elapsed time and is unaffected by NTP steps.",
+    "workedExample": "1. Start reads wall clock = 12:00:00.500.\n2. NTP decides the clock is 300 ms fast and **steps** it back.\n3. End reads 12:00:00.250.\n4. The duration comes out negative:\n\n```formula\nd = t_end − t_start\nd = 12:00:00.250 − 12:00:00.500\nd = −250 ms\nwhere\nd: the measured duration, in milliseconds (ms)\nt_end: the wall-clock reading when the request finished\nt_start: the wall-clock reading when the request started\nms: millisecond, one thousandth of a second\nIn words: if the clock is stepped back between the two readings, the end reading can be earlier than the start, so the subtraction goes negative.\n```\n\nFix: use `CLOCK_MONOTONIC` (`System.nanoTime()` in Java, `performance.now()` in JS, `time.monotonic()` in Python). It only measures elapsed time and is unaffected by NTP steps.",
     "link": {
       "title": "Network Time Protocol (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Send is an event on P1: L1 = 7 + 1 = **8**, message carries 8.\n2. Receive on P2: L2 = max(3, 8) + 1 = **9**.\n\nCheck the guarantee: send (8) → receive (9), and 8 < 9 as required.",
+    "workedExample": "Apply Lamport's two rules:\n\n```formula\nL_1 = 7 + 1 = 8\nL_2 = max(L, t) + 1\nL_2 = max(3, 8) + 1 = 9\nwhere\nL_1: P1's counter after the send; the message carries this value\nL_2: P2's counter after the receive\nL: P2's counter before the receive; here 3\nt: the timestamp on the incoming message; here 8\nmax: the larger of its inputs\nIn words: the sender adds one before sending; the receiver jumps past both its own counter and the message's timestamp, then adds one.\n```\n\nCheck the guarantee: send (8) → receive (9), and 8 < 9 as required.",
     "link": {
       "title": "Lamport timestamp (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Compare element-wise:\n\n| | R1 | R2 | R3 |\n|---|---|---|---|\n| A | 2 | 1 | 0 |\n| B | 1 | 2 | 0 |\n\n- A ≤ B? No (2 > 1 at R1).\n- B ≤ A? No (2 > 1 at R2).\n\nSo A ∥ B. In Riak these become **siblings**; the next read returns both, and the client writes back a merged value with clock [2, 2, 0] incremented on its coordinator.",
+    "workedExample": "Compare element-wise:\n\n| | R1 | R2 | R3 |\n|---|---|---|---|\n| A | 2 | 1 | 0 |\n| B | 1 | 2 | 0 |\n\nThe rule for comparing vector clocks:\n\n```formula\nA ≤ B ⇔ ∀k: A[k] ≤ B[k]\nA ∥ B ⇔ A ≰ B ∧ B ≰ A\nwhere\nA: the first version's vector clock\nB: the second version's vector clock\nk: a position in the vectors (R1, R2 or R3)\n∀k: \"for every position k\"\n⇔: \"exactly when\"\n∧: \"and\": both must hold\n≤: less than or equal to; for vectors, in every position\n≰: not less than or equal to: bigger in at least one position\n∥: \"is concurrent with\": neither happened before the other\nIn words: one version happened before another only if it is no bigger in any position; if each is bigger somewhere, they're concurrent.\n```\n\n- Is A ≤ B? No (2 > 1 at R1).\n- Is B ≤ A? No (2 > 1 at R2).\n\nSo A ∥ B. In Riak these become **siblings**; the next read returns both, and the client writes back a merged value with clock [2, 2, 0] incremented on its coordinator.",
     "link": {
       "title": "Vector clock (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Vector_clock"
@@ -97,11 +97,11 @@
     "options": [
       {
         "text": "+60 ms",
-        "explanation": "Wrong. That's just t1 − t0, which includes the one-way network delay as well as the offset."
+        "explanation": "Wrong. That's just the server's receive time minus the client's send time (160 − 100), which includes the one-way network delay as well as the offset."
       },
       {
         "text": "+50.5 ms (server ahead)",
-        "explanation": "Correct. offset = ((t1 − t0) + (t2 − t3)) / 2 = (60 + 41) / 2 = 50.5 ms."
+        "explanation": "Correct. Averaging the two one-way differences, (60 ms + 41 ms) / 2, gives 50.5 ms; the worked example shows the formula."
       },
       {
         "text": "−50.5 ms (server behind)",
@@ -109,11 +109,11 @@
       },
       {
         "text": "19 ms",
-        "explanation": "Wrong. 19 ms is the round-trip delay: (t3 − t0) − (t2 − t1) = 20 − 1. It's not the offset."
+        "explanation": "Wrong. 19 ms is the round-trip delay: 20 ms between send and reply on the client, minus 1 ms the server held the request. It's not the offset."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Round-trip delay δ = (t3 − t0) − (t2 − t1) = (120 − 100) − (161 − 160) = 19 ms.\n2. Offset θ = ((t1 − t0) + (t2 − t3)) / 2 = ((160 − 100) + (161 − 120)) / 2 = (60 + 41) / 2 = **50.5 ms**.\n3. Sanity check: one-way delay ≈ 9.5 ms. Client time 100 + 9.5 = 109.5 corresponds to server 160, so server is ≈ 50.5 ahead. ✓\n\nThe formula assumes symmetric paths; if the outbound path really took 15 ms and return 4 ms, the estimate is off by (15 − 4) / 2 = 5.5 ms.",
+    "workedExample": "Use NTP's two formulas:\n\n```formula\nδ = (t_3 − t_0) − (t_2 − t_1)\nδ = (120 − 100) − (161 − 160)\nδ = 19 ms\nθ = ((t_1 − t_0) + (t_2 − t_3)) / 2\nθ = ((160 − 100) + (161 − 120)) / 2\nθ = (60 + 41) / 2 = 50.5 ms\nwhere\nδ: delta, the round-trip network delay, in milliseconds (ms)\nθ: theta, the server's clock offset relative to the client's, in ms; positive means the server is ahead\nt_0: client's clock when it sent the request; 100 ms\nt_1: server's clock when the request arrived; 160 ms\nt_2: server's clock when it sent the reply; 161 ms\nt_3: client's clock when the reply arrived; 120 ms\nms: millisecond\nIn words: the messages spent 19 ms on the network, and the server's clock is about 50.5 ms ahead.\n```\n\nSanity check: one-way delay ≈ 9.5 ms. Client time 100 + 9.5 = 109.5 corresponds to server 160, so the server is ≈ 50.5 ms ahead. ✓\n\nThe formula assumes symmetric paths; if the outbound path really took 15 ms and the return 4 ms, the estimate is off by (15 − 4) / 2 = 5.5 ms.",
     "link": {
       "title": "Network Time Protocol (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Network_Time_Protocol"
@@ -123,7 +123,7 @@
     "id": "dist-time-ordering-q5",
     "level": "advanced",
     "type": "single",
-    "prompt": "TrueTime reports ε = 4 ms. A Spanner transaction picks commit timestamp s = TT.now().latest. Roughly how long does commit wait take, and why is it needed?",
+    "prompt": "TrueTime reports an error bound ε (epsilon) of 4 ms: the true time is within 4 ms either side of the local clock. A Spanner transaction picks its commit timestamp s as TT.now().latest, the latest the current time could be. Roughly how long does commit wait take, and why is it needed?",
     "options": [
       {
         "text": "0 ms: the timestamp is already in the past.",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. TT.now() = [t − 4, t + 4]. Pick s = t + 4.\n2. Wait until TT.now().earliest > s, i.e. until real time ≥ t + 4 is certain everywhere. Earliest = now − 4 > t + 4 → now > t + 8. That's ~**8 ms** (2ε).\n3. Now s is in the past on every server.\n4. Any transaction T2 starting after T1's commit is visible picks s2 ≥ TT.now().latest > s.\n\nSo timestamp order matches real-time order. Spanner overlaps the wait with Paxos replication, so the real cost is often less.",
+    "workedExample": "Write the TrueTime interval in terms of the true time t at the moment the timestamp is chosen:\n\n```formula\nTT.now() = [t − ε, t + ε]\ns = t + ε\nt_now − ε > t + ε\nt_now > t + 2 × ε = t + 8 ms\nwhere\nTT.now(): TrueTime's answer to \"what time is it?\", an interval guaranteed to contain the true time\nt: the true time when the commit timestamp is chosen\nε: epsilon, the error bound; here 4 ms\ns: the commit timestamp, the top of the interval\nt_now: the true time later, while Spanner waits; TT.now().earliest is then t_now − ε\nms: millisecond\nIn words: the commit must wait until even the earliest possible current time is past s, and that takes about 2ε of real time.\n```\n\n1. The wait condition is TT.now().earliest > s, which is the third line.\n2. So the wait lasts about **8 ms** (2ε).\n3. Now s is in the past on every server.\n4. Any transaction T2 starting after T1's commit is visible picks a timestamp at least as large as TT.now().latest, which is already bigger than s.\n\nSo timestamp order matches real-time order. Spanner overlaps the wait with Paxos replication, so the real cost is often less.",
     "link": {
       "title": "Spanner (OSDI 2012)",
       "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"
@@ -153,7 +153,7 @@
     "id": "dist-time-ordering-q6",
     "level": "advanced",
     "type": "multi",
-    "prompt": "Which statements about hybrid logical clocks (HLC) are true? Select all that apply.",
+    "prompt": "Which statements about hybrid logical clocks (HLC) are true? Here a → b means event a happened before event b, and HLC(x) is the hybrid timestamp of event x. Select all that apply.",
     "options": [
       {
         "text": "If a → b then HLC(a) < HLC(b).",
@@ -176,7 +176,7 @@
       0,
       2
     ],
-    "workedExample": "Walk through each:\n\n1. **Causality**: on receive, l = max(l, l_msg, pt), and c increments if l didn't advance, so the receive is strictly greater. ✓\n2. **Concurrency detection**: a single (l, c) pair can't encode \"neither before the other\". ✗\n3. **Close to real time**: l is the max physical time seen, bounded by ε. ✓\n4. **Skew bound**: CockroachDB needs it for read uncertainty restarts. ✗",
+    "workedExample": "Walk through each:\n\n1. **Causality**: on receive, the physical part becomes the largest of three values, and the counter c increments if it didn't advance, so the receive is strictly greater. ✓\n\n```formula\nl′ = max(l, l_msg, pt)\nwhere\nl: the receiver's current physical part (largest physical time it has seen)\nl_msg: the physical part carried on the message\npt: the receiver's own wall-clock time now\nl′: l-prime, the new physical part\nmax: the largest of its inputs\nIn words: the receiver's timestamp is at least as big as both its own and the message's, so it can never come before the send.\n```\n\n2. **Concurrency detection**: a single (l, c) pair can't encode \"neither before the other\". ✗\n3. **Close to real time**: l is the max physical time seen, bounded by ε. ✓\n4. **Skew bound**: CockroachDB needs it for read uncertainty restarts. ✗",
     "link": {
       "title": "Logical Physical Clocks (HLC paper)",
       "url": "https://cse.buffalo.edu/tech-reports/2014-04.pdf"
@@ -206,7 +206,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Read timestamp r = 10.000; uncertainty window = (r, r + 500 ms] = (10.000, 10.500].\n2. Found a write at w = 10.200, inside the window.\n3. Because clocks may differ by up to 500 ms, the writer's 10.200 could correspond to real time before the reader's 10.000.\n4. Ambiguous → **uncertainty restart**: re-read at 10.200 (or above), which then includes the value.\n\nThis is CockroachDB's price for not having TrueTime: occasional read restarts rather than a commit wait on every write.",
+    "workedExample": "Test whether the value is in the uncertainty interval:\n\n```formula\nr < w ≤ r + Δ_max\n10.000 s < 10.200 s ≤ 10.500 s\nwhere\nr: the read timestamp; 10.000 s\nw: the timestamp of the value found; 10.200 s\nΔ_max: delta-max, CockroachDB's maximum clock offset; 500 ms = 0.500 s\ns: seconds\nms: milliseconds\nIn words: the value is stamped after the read, but by less than the maximum clock offset, so it might really have been written before the read.\n```\n\n1. Read timestamp 10.000 s; uncertainty window runs from just above 10.000 s up to 10.500 s.\n2. Found a write at 10.200 s, inside the window.\n3. Because clocks may differ by up to 500 ms, the writer's 10.200 could correspond to real time before the reader's 10.000.\n4. Ambiguous → **uncertainty restart**: re-read at 10.200 (or above), which then includes the value.\n\nThis is CockroachDB's price for not having TrueTime: occasional read restarts rather than a commit wait on every write.",
     "link": {
       "title": "Living without atomic clocks (Cockroach Labs)",
       "url": "https://www.cockroachlabs.com/blog/living-without-atomic-clocks/"
@@ -224,19 +224,19 @@
       },
       {
         "text": "[4, 5, 2]",
-        "explanation": "Wrong. Only the receiver's own entry is incremented. P1's entry is taken from the message as-is (max of 1 and 3)."
+        "explanation": "Wrong. Only the receiver's own entry is incremented. P1's entry is taken from the message as-is (the larger of 1 and 3)."
       },
       {
         "text": "[3, 5, 2]",
-        "explanation": "Correct. Take the element-wise max, [max(1,3), max(4,1), max(2,0)] = [3, 4, 2], then increment P2's own entry: [3, 5, 2]."
+        "explanation": "Correct. Take the larger value in each position, giving [3, 4, 2], then increment P2's own entry: [3, 5, 2]."
       },
       {
         "text": "[3, 5, 3]",
-        "explanation": "Wrong. Only the receiving process increments its own entry. P3 did nothing new, so its entry stays at max(2, 0) = 2."
+        "explanation": "Wrong. Only the receiving process increments its own entry. P3 did nothing new, so its entry stays at the larger of 2 and 0, which is 2."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Element-wise max of local [1, 4, 2] and message [3, 1, 0]:\n\n| | P1 | P2 | P3 |\n|---|---|---|---|\n| local | 1 | 4 | 2 |\n| msg | 3 | 1 | 0 |\n| max | 3 | 4 | 2 |\n\n2. Increment own entry (P2): **[3, 5, 2]**.\n\nCheck: the send [3, 1, 0] ≤ [3, 5, 2] in every entry and they differ, so send → receive, as it must be.",
+    "workedExample": "1. Element-wise max of local [1, 4, 2] and message [3, 1, 0]:\n\n| | P1 | P2 | P3 |\n|---|---|---|---|\n| local | 1 | 4 | 2 |\n| msg | 3 | 1 | 0 |\n| max | 3 | 4 | 2 |\n\n2. Increment own entry (P2): **[3, 5, 2]**.\n\n```formula\nV_new[j] = max(V[j], V′[j])\nV_new[2] = max(4, 1) + 1 = 5\nwhere\nV: P2's vector before the receive, [1, 4, 2]\nV′: V-prime, the vector on the message, [3, 1, 0]\nV_new: P2's vector after the receive\nj: any position (P1, P2 or P3)\nmax: the larger of its inputs\nIn words: take the larger value in every position; then, because the receive is an event on P2, add one to P2's own entry (position 2).\n```\n\nCheck: the send [3, 1, 0] ≤ [3, 5, 2] in every entry and they differ, so send → receive, as it must be.",
     "link": {
       "title": "Vector clock (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Vector_clock"
@@ -304,7 +304,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Let v1 happen at real time t through A, and v2 at t + d through B.\n\n```\nts(v1) = t + 80 ms   (A is fast)\nts(v2) = t + d       (B accurate)\n```\n\nv2 loses when ts(v1) > ts(v2), i.e. 80 > d.\n\nSo every pair of writes less than 80 ms apart is at risk. For a busy key (a counter, a cart) that's a lot of writes. Options: avoid LWW for data that matters (use version vectors and merges, or CRDTs), route each key's writes through one leader, or at least monitor clock offset and alert well below the skew you can tolerate.",
+    "workedExample": "Let v1 happen at real time t through A, and v2 a little later through B.\n\n```formula\nts_1 = t + 80 ms\nts_2 = t + d\nts_1 > ts_2 ⇔ d < 80 ms\nwhere\nt: the real time of the first write\nts_1: the timestamp node A puts on v1; A's clock is 80 ms fast\nts_2: the timestamp node B puts on v2; B's clock is accurate\nd: how long after v1 the write v2 really happens, in milliseconds (ms)\n⇔: \"exactly when\"\nms: millisecond\nIn words: v1 carries a timestamp 80 ms in the future, so any write less than 80 ms after it looks older and loses.\n```\n\nSo every pair of writes less than 80 ms apart is at risk. For a busy key (a counter, a cart) that's a lot of writes. Options: avoid LWW for data that matters (use version vectors and merges, or CRDTs), route each key's writes through one leader, or at least monitor clock offset and alert well below the skew you can tolerate.",
     "link": {
       "title": "Living without atomic clocks (Cockroach Labs)",
       "url": "https://www.cockroachlabs.com/blog/living-without-atomic-clocks/"
@@ -314,7 +314,7 @@
     "id": "dist-time-ordering-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "You have Lamport timestamps for four events: a on P1 has L = 5, b on P2 has L = 5, c on P1 has L = 3, d on P3 has L = 7. Which conclusion is **valid**?",
+    "prompt": "You have Lamport timestamps L for four events (a → b means a happened before b): a on P1 has L = 5, b on P2 has L = 5, c on P1 has L = 3, d on P3 has L = 7. Which conclusion is **valid**?",
     "options": [
       {
         "text": "a and b are concurrent.",
@@ -334,7 +334,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "The only rule is: **a → b implies L(a) < L(b)**. Its contrapositive: L(a) ≥ L(b) implies a did **not** happen before b.\n\n1. a, b: L(a) = L(b). So a ↛ b and b ↛ a. **Concurrent.** ✓\n2. c, d: 3 < 7. Could be c → d or c ∥ d. Unknown.\n3. a, d: 5 < 7. Same, unknown.\n\n(c and a are on the same process with 3 < 5, so c → a by program order, but that comes from knowing they share a process, not from the timestamps alone.)",
+    "workedExample": "The only rule is:\n\n```formula\na → b ⇒ L(a) < L(b)\nL(a) ≥ L(b) ⇒ a ↛ b\nwhere\na: an event\nb: another event\nL(a): the Lamport timestamp of event a\nL(b): the Lamport timestamp of event b\n→: \"happened before\"\n↛: \"did not happen before\"\n⇒: \"implies\": if the left side is true, so is the right\nIn words: an earlier event always has a smaller timestamp; so if a's timestamp is not smaller, a did not happen before b. The second line is the contrapositive of the first.\n```\n\n1. a, b: L(a) = L(b). So a ↛ b and b ↛ a. **Concurrent.** ✓\n2. c, d: 3 < 7. Could be c → d or c ∥ d. Unknown.\n3. a, d: 5 < 7. Same, unknown.\n\n(c and a are on the same process with 3 < 5, so c → a by program order, but that comes from knowing they share a process, not from the timestamps alone.)",
     "link": {
       "title": "Lamport timestamp (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"
@@ -364,7 +364,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Commit wait ≈ 2ε (the interval's full width).\n2. Normal: 2 × 4 = **8 ms**.\n3. Degraded: 2 × 50 = **100 ms**.\n4. Safety: TT.now() still brackets real time, so after the wait the commit timestamp is definitely in the past.\n\nThis is the core idea behind TrueTime: express clock uncertainty explicitly and pay for it in **latency**, rather than risk correctness when clocks get worse. Contrast an LWW store, which silently misorders writes when skew grows.",
+    "workedExample": "Commit wait lasts about twice the error bound:\n\n```formula\nt_wait ≈ 2 × ε\nt_wait ≈ 2 × 4 ms = 8 ms\nt_wait ≈ 2 × 50 ms = 100 ms\nwhere\nt_wait: the commit wait, in milliseconds (ms)\nε: epsilon, TrueTime's error bound: normally about 4 ms, degraded 50 ms\n≈: approximately equal to\nms: millisecond\nIn words: the commit wait scales with the clock uncertainty, so a 12.5-fold larger error bound makes every commit wait 12.5 times longer.\n```\n\n1. Normal: about **8 ms**.\n2. Degraded: about **100 ms**.\n3. Safety: TT.now() still brackets real time, so after the wait the commit timestamp is definitely in the past.\n\nThis is the core idea behind TrueTime: express clock uncertainty explicitly and pay for it in **latency**, rather than risk correctness when clocks get worse. Contrast an LWW store, which silently misorders writes when skew grows.",
     "link": {
       "title": "Spanner: Google's Globally-Distributed Database (OSDI 2012)",
       "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"

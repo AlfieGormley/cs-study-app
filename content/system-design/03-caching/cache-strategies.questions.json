@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Timeline:\n\n```\nt=0s  write to cache, ACK to user\nt=3s  cache node crashes\nt=5s  flush would have happened\n```\n\n1. At t=0 the only copy of the change is in cache RAM.\n2. The crash at t=3 destroys it.\n3. The database never received it, so the basket is missing the item.\n\nTo use write-back safely you need a failure-tested durability protocol in the cache; asynchronous replication alone can lose acknowledged writes, or a workload where losing up to one flush interval of writes is acceptable.",
+    "workedExample": "Timeline:\n\n```\n0 s  write to cache, ACK to user\n3 s  cache node crashes\n5 s  flush would have happened\n```\n\n1. At 0 s the only copy of the change is in cache RAM.\n2. The crash at 3 s destroys it.\n3. The database never received it, so the basket is missing the item.\n\nTo use write-back safely you need a failure-tested durability protocol in the cache; asynchronous replication alone can lose acknowledged writes, or a workload where losing up to one flush interval of writes is acceptable.",
     "link": {
       "title": "Cache (computing): writing policies — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
@@ -117,7 +117,7 @@
       1,
       3
     ],
-    "workedExample": "1. Write volume: 30,000/s to a single row. In Postgres, each `UPDATE` takes a row lock, so they serialise and contend.\n2. Write-back: `INCR article:9:views` in Redis (an O(1) in-memory operation), and a job every 1 s reads the total and runs one `UPDATE`.\n3. DB writes: 30,000/s → 1/s.\n4. Risk: a crash loses up to 1 s ≈ 30,000 views, which the scenario says is fine.\n5. Write-through or cache-aside both leave the database doing all 30,000 writes, so neither solves the problem.\nInitialize counters from the durable total after cache loss and preserve flush ordering/idempotency. Blindly writing a reset counter or replaying an old total can corrupt even previously persisted counts. Delayed or failed flushes enlarge the loss window.",
+    "workedExample": "1. Write volume: 30,000/s to a single row. In Postgres, each `UPDATE` takes a row lock, so they serialise and contend.\n2. Write-back: `INCR article:9:views` in Redis (an O(1) in-memory operation), and a job every 1 s reads the total and runs one `UPDATE`.\n3. DB writes: 30,000/s → 1/s.\n4. Risk: a crash loses up to one flush interval of increments:\n\n```formula\nL_max = r × t_flush\nL_max = 30,000 /s × 1 s = 30,000\nwhere\nL_max: the most increments a crash can lose\nr: the increment rate, 30,000 per second (/s)\nt_flush: the time between flushes, 1 second (s)\ns: seconds\nIn words: a crash loses at most one flush interval's worth of views, here about 30,000, which the scenario says is fine.\n```\n5. Write-through or cache-aside both leave the database doing all 30,000 writes, so neither solves the problem.\nInitialize counters from the durable total after cache loss and preserve flush ordering/idempotency. Blindly writing a reset counter or replaying an old total can corrupt even previously persisted counts. Delayed or failed flushes enlarge the loss window.",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -237,7 +237,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Timeline for the entry:\n\n```\n0s   loaded\n48s  eligible for refresh\n50s  read arrives\n60s  would expire\n```\n\n2. At 50 s the entry is still valid, so the reader gets it at cache speed.\n3. Because it is past 48 s, the read also kicks off a reload in the background.\n4. If the reload finishes before 60 s and the cache refreshes its expiry on replacement, readers can avoid a miss. Slow or failed refreshes can still allow expiry.\n5. Caffeine's refreshAfterWrite likewise returns the old value during refresh; configure expireAfterWrite separately when a hard expiry is required: the old value is returned while the refresh runs.",
+    "workedExample": "1. Timeline for the entry:\n\n```\n0s   loaded\n48s  eligible for refresh\n50s  read arrives\n60s  would expire\n```\n\nThe refresh point is the refresh factor times the TTL:\n\n```formula\nt_refresh = f × TTL\nt_refresh = 0.8 × 60 s = 48 s\nwhere\nt_refresh: the age after which a read starts a reload, in seconds (s)\nf: the refresh factor, here 0.8\nTTL: time to live, here 60 s\ns: seconds\nIn words: a 60 s TTL with a factor of 0.8 makes any read after 48 s trigger a background reload.\n```\n\n2. At 50 s the entry is still valid, so the reader gets it at cache speed.\n3. Because it is past 48 s, the read also kicks off a reload in the background.\n4. If the reload finishes before 60 s and the cache refreshes its expiry on replacement, readers can avoid a miss. Slow or failed refreshes can still allow expiry.\n5. Caffeine's refreshAfterWrite likewise returns the old value during refresh; configure expireAfterWrite separately when a hard expiry is required: the old value is returned while the refresh runs.",
     "link": {
       "title": "Refresh — Caffeine wiki",
       "url": "https://github.com/ben-manes/caffeine/wiki/Refresh"

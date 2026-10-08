@@ -128,14 +128,30 @@ When you do call synchronously, protect the caller:
 4. **Bulkheads**: bound in-flight work and queues per dependency, with separate resources where needed. Separate connection pools alone do not guarantee isolation of a shared thread pool.
 5. **Fallbacks**: serve cached or default data (generic recommendations instead of personalised ones).
 
-Watch out for **retry amplification**. Retries multiply down a chain. If each of three hops makes up to 3 attempts (1 try + 2 retries), one user request can become 3 × 3 × 3 = 27 calls on the bottom service, exactly when it's already struggling.
+Watch out for **retry amplification**. Retries multiply down a chain: each attempt at the top triggers a full set of attempts at the next layer, and each of those triggers a full set below. In the worst case, when the bottom service keeps failing, the number of calls it receives for one user request is:
 
+```formula
+C = a^n
+where
+C: the worst-case number of calls the bottom service receives for one user request
+a: the maximum attempts each layer makes per call (1 try + its retries), e.g. 3 for 1 try + 2 retries
+n: the number of layers in the chain that retry
+^: "to the power of": a^n means a multiplied by itself n times
+In words: retries multiply rather than add, so the load on the bottom service grows exponentially with the number of retrying layers.
 ```
- attempts per hop: a
- hops in chain:    n
- calls at bottom:  a ** n
- a=3, n=3 -> 27    a=4, n=2 -> 16
+
+If each of three hops makes up to 3 attempts (1 try + 2 retries), one user request can become 27 calls on the bottom service, exactly when it's already struggling:
+
+```formula
+C = 3^3 = 3 × 3 × 3 = 27
+C = 4^2 = 4 × 4 = 16
+where
+C: worst-case calls reaching the bottom service for one user request
+^: "to the power of": 3^3 is 3 multiplied by itself 3 times
+In words: 3 retrying layers of 3 attempts give 27 calls; 2 layers of 4 attempts give 16.
 ```
+
+This is the worst case. If the bottom service recovers, or some failures are not retried (for example a "400 Bad Request"), the real count is lower.
 
 The usual fix is to retry at **one** layer only (often the one nearest the failing dependency), and to cap retries with a budget, for example retries may add at most 10% to normal traffic.
 

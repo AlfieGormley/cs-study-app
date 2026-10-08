@@ -37,6 +37,21 @@ Split data by a **shard key** so each shard (its own primary) owns a subset of k
    0,4,8..  1,5,9..  2,6,..   3,7,..
 ```
 
+The router in the diagram picks a shard with the remainder after division:
+
+```formula
+s = u mod N
+s = 42 mod 4 = 2
+where
+s: the shard number the row lives on, from 0 to N − 1
+u: the shard key, here the numeric user ID (user_id); user 42 in the example
+N: the number of shards, here 4
+mod: modulo: the remainder after dividing u by N (42 ÷ 4 = 10 remainder 2)
+In words: divide the user ID by the number of shards; the remainder says which shard owns that user.
+```
+
+In code this is written `user_id % 4`. Real systems usually apply it to a *hash* of the key rather than the raw ID, so that keys that happen to follow a pattern still spread evenly.
+
 Four equivalent shards can approach four times one shard's capacity if writes spread evenly and routing, coordination and other shared resources do not become bottlenecks.
 
 The price is paid by queries that don't include the shard key. "Find all messages containing X" or "top 10 users by spend" must ask *every* shard and merge the answers (scatter-gather), so they get slower and more fragile as you add shards. A common answer is to send such queries to a separate system built for them, such as a search index or warehouse fed by CDC.
@@ -50,17 +65,40 @@ Choosing the shard key is the critical decision:
 > [!warning] Sharding is a one-way door
 > Re-sharding a live system is one of the hardest migrations in engineering. Instagram famously pre-split into thousands of *logical* shards mapped onto a few physical servers, so that later they could move logical shards between machines instead of re-hashing data.
 
-Note also that plain `hash(key) % N` can remap a large fraction of keys when N changes: going from 4 to 5 shards moves about 80% of keys. Logical shards (or consistent hashing) mean adding a server moves only the shards you choose.
+Note also that plain `hash(key) % N` (the same remainder rule, applied to a hash of the key) can remap a large fraction of keys when N changes. A key stays put only if its remainder happens to be the same for both shard counts. For hashes spread evenly, the share of keys that has to move when you add one shard is:
+
+```formula
+F_moved = N / (N + 1)
+F_moved = 4 / (4 + 1) = 0.8 = 80 %
+where
+F_moved: the fraction of all keys whose shard changes, between 0 and 1
+N: the number of shards before the change, here 4 (going to 5)
+%: per cent; 0.8 = 80 %
+In words: adding one shard to N moves almost everything, about N out of every N + 1 keys; going from 4 to 5 shards moves about 80 % of keys.
+```
+
+That holds because, out of every 20 consecutive hash values, only the 4 whose remainders are 0, 1, 2 and 3 under both rules stay (20 is the first number divisible by both 4 and 5). Logical shards (or consistent hashing) mean adding a server moves only the shards you choose.
 
 ## Write batching
 
 Much of a write's cost is fixed overhead: a network round trip, a transaction, an `fsync`. Batching amortises it.
 
+Suppose each commit has to wait for its own `fsync` (no grouping by the database). Then the number of flushes depends only on how many rows you put in each transaction:
+
+```formula
+F = R / B
+F = 1000 / 1 = 1000 fsyncs
+F = 1000 / 1000 = 1 fsync
+where
+F: the number of transactions, and so of fsync flushes to disk
+R: the number of rows to write, here 1,000
+B: rows per transaction (the batch size): 1 in the first case, 1,000 in the second
+fsync: one forced flush of the log to durable storage, the slow fixed cost of a commit
+fsyncs: plural of fsync
+In words: 1,000 one-row transactions pay for 1,000 disk flushes; one 1,000-row transaction pays for one.
 ```
-# Serial synchronous commits; no grouping
-1 insert per txn:   1,000 txns, 1,000 fsyncs
-1,000 rows per txn:     1 txn,      1 fsync
-```
+
+Each row still has to be written, so the saving is the fixed per-commit cost, not all of the work.
 
 Examples:
 
@@ -85,7 +123,38 @@ Traffic is spiky, and databases have a fixed write capacity. A **queue between p
 
 - The API accepts the request, enqueues it durably, and returns `202 Accepted`.
 - Workers pull at a rate the database can sustain.
-- If a 2-minute burst runs at 20,000/s and workers drain at 5,000/s, the backlog peaks at (20,000 − 5,000) × 120 = 1.8 million messages and takes another 6 minutes to clear if traffic then drops to zero.
+
+For example, take a 2-minute burst at 20,000 messages a second while workers drain 5,000 a second. During a burst, the queue grows by the difference between what arrives and what workers remove:
+
+```formula
+B = (A − D) × T
+B = (20000 − 5000) /s × 120 s
+B = 1800000
+where
+B: the peak backlog at the end of the burst, in messages
+A: the arrival rate during the burst, here 20,000 messages per second (/s)
+D: the drain rate: how many messages per second the workers finish, here 5,000/s
+T: how long the burst lasts, in seconds (s): 2 minutes = 120 s
+s: seconds
+/s: per second
+In words: 15,000 extra messages a second for 120 seconds piles up 1.8 million messages.
+```
+
+If traffic then drops to zero, the time to clear it is the backlog divided by the drain rate:
+
+```formula
+T_drain = B / D
+T_drain = 1800000 / (5000 /s)
+T_drain = 360 s
+where
+T_drain: time to empty the queue, in seconds (s): 360 s = 6 minutes
+B: the backlog, 1.8 million messages
+D: the drain rate, 5,000 messages per second (/s)
+s: seconds
+In words: 1.8 million messages at 5,000 a second take 6 minutes to clear.
+```
+
+If traffic doesn't drop to zero, use the spare rate instead: drain time is B divided by (D − arrival rate), which is why a queue barely below capacity takes a very long time to recover.
 
 It works when the client doesn't need the result immediately (an order confirmation can arrive by email). It doesn't fix a *sustained* overload: if input exceeds drain rate forever, the queue grows without bound. You need monitoring on queue age and a way to shed load.
 
@@ -101,23 +170,66 @@ Many write-heavy systems are built on this:
 - **Time-series data**: metrics and IoT readings are naturally append-only and partitioned by time.
 
 > [!example] Counters as appends
-> Instead of `UPDATE balance = balance - 10` with row locking, a ledger appends `(account, -10, ts)` rows. The balance is a sum, kept current by a projection or periodic snapshot. Independent appends reduce contention and provide an audit trail. A no-overdraft rule still needs atomic balance validation, stream-version concurrency control or preallocated spending rights; appending debits alone does not prevent overspending.
+> Instead of `UPDATE balance = balance - 10` with row locking, a ledger appends `(account, -10, ts)` rows (ts is the timestamp). The balance is a sum, kept current by a projection or periodic snapshot. Independent appends reduce contention and provide an audit trail. A no-overdraft rule still needs atomic balance validation, stream-version concurrency control or preallocated spending rights; appending debits alone does not prevent overspending.
+
+Reading a balance from a ledger means adding the entries up, usually starting from the last saved snapshot so you don't sum the whole history every time:
+
+```formula
+balance = S + Σ e_i
+balance = 100 + (−10) + 25 + (−5) = 110
+where
+balance: the account's current balance, in the account's currency (e.g. pounds, £)
+S: the balance recorded in the latest snapshot, here £100
+e_i: one ledger entry written after that snapshot: negative for a debit, positive for a credit
+i: counts through the entries, 1, 2, 3, …
+Σ: sigma, "the sum of": add up every e_i
+In words: the balance is the last snapshot plus every change since; here £100 − £10 + £25 − £5 = £110.
+```
 
 ## Hot partitions
 
 Sharding assumes load spreads evenly. Real traffic is skewed: a celebrity's post, a flash-sale product, a single huge tenant. A **hot partition** gets far more traffic than the others and caps the whole system's throughput.
 
-DynamoDB, for example, supports at most 1,000 write units/s and 3,000 read units/s per partition. Units are not generally requests: an ordinary write consumes one unit per 1 KiB, while strongly consistent reads consume one per 4 KiB; transactional operations cost more. A single item receiving 10,000 writes/s will throttle no matter how much total capacity the table has.
+DynamoDB, for example, supports at most 1,000 write units/s and 3,000 read units/s per partition. Units are not generally requests: an ordinary write consumes one unit per 1 KiB, while strongly consistent reads consume one per 4 KiB; transactional operations cost more. The units a write consumes depend on the item's size, rounded up:
+
+```formula
+U = ⌈S / 1 KiB⌉
+U = ⌈2.5 KiB / 1 KiB⌉ = ⌈2.5⌉ = 3
+where
+U: write units consumed by one standard write
+S: the item's size, in kibibytes (KiB); here 2.5 KiB
+KiB: kibibyte, 1,024 bytes
+⌈ ⌉: ceiling: round up to the next whole number
+In words: every started kibibyte of item costs one write unit, so a 2.5 KiB item costs 3.
+```
+
+So one partition takes at most 1,000 small (≤ 1 KiB) writes a second, or about 333 writes a second of 2.5 KiB items. A single item receiving 10,000 writes/s will throttle no matter how much total capacity the table has.
 
 Mitigations:
 
-1. **Key salting / write sharding**: spread one logical key across N physical keys.
-   ```
-   key = "post:42#" + rand(0..9)
-   write: one of 10 sub-keys
-   read:  sum all 10
-   ```
-   Writes spread 10 ways; reads must gather 10 items (fine for counters).
+1. **Key salting / write sharding**: spread one logical key across several physical keys, here 10:
+
+```
+key = "post:42#" + rand(0..9)
+write: one of 10 sub-keys
+read:  sum all 10
+```
+
+Writes spread 10 ways; reads must gather 10 items (fine for counters):
+
+```formula
+C = c_0 + c_1 + ... + c_9
+where
+C: the true count for post 42
+c_0: the count stored under sub-key post:42#0
+c_1: the count under post:42#1
+...: and so on for the remaining sub-keys
+c_9: the count under post:42#9
+In words: the real total is the sum of the 10 partial counters.
+```
+
+Each sub-key gets about a tenth of the writes, so ten sub-keys lift the cap about tenfold, at the cost of 10 reads per lookup.
+
 2. **Better key choice**: `date` concentrates today's writes on one logical key. Physical splitting depends on the store, sort keys and indexes; do not equate a partition-key value with one permanent physical partition. A well-distributed device_id (or device_id + date) reduces this concentration.
 3. **Batch the hot key**: aggregate increments in memory or a stream processor and write once per second.
 4. **Isolate big tenants**: move a huge customer onto dedicated shards.

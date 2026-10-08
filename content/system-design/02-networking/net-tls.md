@@ -118,11 +118,30 @@ But "plaintext inside the network" is increasingly unacceptable. **Zero-trust** 
 
 ## The latency cost, and how to reduce it
 
-In the simplified model with no DNS delay, TCP Fast Open, handshake retry, loss or processing delay, a new HTTPS connection over TCP costs **TCP (1 RTT) + TLS 1.3 (1 RTT)** before the request goes out. At 100 ms RTT, that's 200 ms of pure setup. Ways to cut it:
+In the simplified model with no DNS delay, TCP Fast Open, handshake retry, loss or processing delay, a new HTTPS connection over TCP costs **TCP (1 RTT) + TLS 1.3 (1 RTT)** before the request goes out. Setup time is a count of round trips multiplied by the round-trip time:
+
+```formula
+T_setup = (n_TCP + n_TLS) × RTT
+T_setup = (1 + 1) × 100 ms = 200 ms
+T_edge = (1 + 1) × 10 ms = 20 ms
+where
+T_setup: the time spent on handshakes before the first request byte can leave the client, in milliseconds (ms)
+n_TCP: the round trips for the TCP handshake: 1 (QUIC folds it into its own handshake)
+n_TLS: the round trips for the TLS handshake: 1 for TLS 1.3, 2 for a full TLS 1.2 handshake, 0 with 0-RTT early data
+RTT: the round-trip time between the client and whichever server terminates TLS, in ms
+T_edge: the same setup when TLS terminates at a CDN edge only 10 ms away
+ms: millisecond, one thousandth of a second
+In words: you can cut handshake cost in two ways, by doing fewer round trips or by making each round trip shorter.
+```
+
+At 100 ms RTT, that's 200 ms of pure setup. Ways to cut it:
 
 1. **Use TLS 1.3.** Saves a full RTT over TLS 1.2.
 2. **Session resumption.** The server hands the client a *session ticket*; next time, the handshake skips certificate exchange and verification (less CPU and fewer bytes).
 3. **0-RTT (early data).** With a ticket, TLS 1.3 lets the client send its request *in the first flight*. Setup cost on resumption drops to just the TCP handshake (or nothing extra with QUIC).
+4. **Terminate close to the user.** Handshakes at a CDN edge 10 ms away cost 20 ms, not 200 ms. The edge keeps warm, long-lived connections to the origin.
+5. **Reuse connections.** The best handshake is the one you don't do.
+6. **Keep certificate chains small.** For comparable certificate fields, ECDSA P-256 uses smaller keys and signatures than RSA-2048; actual certificate size and signing time depend on the chain and implementation. Oversized chains can overflow TCP's initial window and add an RTT.
 
 Putting the round trips together, before the first request byte can leave the client:
 
@@ -133,9 +152,6 @@ Putting the round trips together, before the first request byte can leave the cl
 | QUIC | 1 RTT | 1 (0 with 0-RTT) |
 
 Note that plain TLS 1.3 resumption *without* early data saves CPU and bytes, not round trips: it still takes a full round trip before the request goes out.
-4. **Terminate close to the user.** Handshakes at a CDN edge 10 ms away cost 20 ms, not 200 ms. The edge keeps warm, long-lived connections to the origin.
-5. **Reuse connections.** The best handshake is the one you don't do.
-6. **Keep certificate chains small.** For comparable certificate fields, ECDSA P-256 uses smaller keys and signatures than RSA-2048; actual certificate size and signing time depend on the chain and implementation. Oversized chains can overflow TCP's initial window and add an RTT.
 
 > [!warning] 0-RTT replay
 > Early data has no protection against replay across connections: an attacker who captures the first flight can resend it. Servers must assess **replay safety**, not merely idempotency. RFC 8470 permits clients, absent other information, to send only safe HTTP methods in early data. Even a nominal `GET` requires care if its implementation has sensitive side effects. When Cloudflare launched 0-RTT in 2017, it answered only `GET` requests without query parameters in early data, and tagged them with a header so the origin could spot replays. RFC 8470 standardises this pattern: a proxy adds `Early-Data: 1`, and an origin that won't risk it replies `425 Too Early`, making the client retry after the handshake completes.

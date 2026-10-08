@@ -89,13 +89,21 @@ These are the hard problems covered in the databases, consistency and messaging 
 
 ## Amdahl's law: the limit of parallelism
 
-If a fraction *p* of a task can be parallelised and the rest (1 − p) is serial, the maximum speed-up with *N* workers is:
+Some part of almost every job can only be done one step at a time (it is **serial**); the rest can be split across workers (it is **parallel**). Gene Amdahl pointed out in 1967 that the serial part limits how much faster extra workers can make the job. Measure the job's time on one worker as 1; the serial share still takes the same time, while the parallel share is divided between the workers:
 
+```formula
+S(N) = 1 / ((1 − p) + p / N)
+S_max = 1 / (1 − p)
+where
+S(N): the speed-up with N workers: how many times faster the job runs than on one worker
+N: the number of workers (cores, machines) sharing the parallel part
+p: the parallel fraction, the share of the one-worker running time that can be split between workers, from 0 to 1
+1 − p: the serial fraction, the share that must run on one worker whatever happens
+S_max: the limit of S(N) as N grows without bound (infinitely many workers): the parallel term p / N shrinks to 0
+In words: the speed-up is the original time divided by the new time, and the new time can never drop below the serial part, so the serial part caps the speed-up.
 ```
-S(N) = 1 / ((1 - p) + p / N)
 
-as N -> infinity:  S = 1 / (1 - p)
-```
+Example: with a parallel fraction of 0.95 and 10 workers, the speed-up is 1 / (0.05 + 0.095) = 1 / 0.145 ≈ 6.9x. With unlimited workers the cap is 1 / 0.05 = 20x. The law assumes the job's size stays fixed and that splitting the work costs nothing; real coordination costs make things worse (see the USL below).
 
 | Parallel part p | Max speed-up |
 |---|---|
@@ -115,46 +123,77 @@ In system design, a shared bottleneck may play a similar limiting role. These co
 Amdahl tells you that adding app servers won't help once you're bottlenecked on one of these. You must remove or partition the serial component.
 
 > [!note] Universal Scalability Law
-> Real systems often do worse than Amdahl, because nodes must coordinate (cache coherence, cross-node chatter). Neil Gunther's USL models two costs: **contention** (queueing for a shared resource, which is Amdahl's serial part) and **coherence** (nodes keeping each other up to date). Coherence cost grows roughly with the number of node *pairs*, about N²/2, so it can make throughput *fall* as you add nodes.
+> Real systems often do worse than Amdahl, because nodes must coordinate (cache coherence, cross-node chatter). Neil Gunther's USL models two costs: **contention** (queueing for a shared resource, which is Amdahl's serial part) and **coherence** (nodes keeping each other up to date). Coherence cost grows roughly with the number of node *pairs*, which grows much faster than the number of nodes (formula below), so it can make throughput *fall* as you add nodes.
 >
 > The shapes are diagnostic. A curve that rises then **flattens** points to contention: find the shared bottleneck. A curve that rises then **falls** points to coherence: look for all-to-all chatter, global locks or broadcast cache invalidation.
+
+The number of pairs among a group of nodes is:
+
+```formula
+P = N × (N − 1) / 2 ≈ N^2 / 2
+N = 8: P = 8 × 7 / 2 = 28
+N = 16: P = 16 × 15 / 2 = 120
+where
+P: the number of distinct node pairs, each a pair that may need to exchange coordination messages
+N: the number of nodes in the cluster
+N^2: N squared, N × N
+≈: approximately equal to (close for large N)
+In words: each of the N nodes can pair with the N − 1 others, and dividing by 2 stops each pair being counted twice. Doubling the nodes roughly quadruples the pairs.
+```
 
 Gustafson's law gives the optimistic counterpart: as you add machines you usually also grow the *problem* (more users, more data), so the parallel portion grows and scaling stays useful.
 
 ## Little's law: concurrency, throughput, latency
 
-Little's law is one of the most useful equations in capacity planning. For any stable system:
+Little's law is one of the most useful equations in capacity planning. For any stable system (one where the queue doesn't grow forever), averaged over a long enough time:
 
-```
-L = λ x W
-
-L = average number of items in the system
-λ = average arrival (= throughput) rate
-W = average time each item spends inside
+```formula
+L = λ × W
+where
+L: the average number of items in the system at once (requests in flight, busy threads, open connections); a plain count
+λ: lambda, the average arrival rate, which in a stable system equals the throughput, in items per second (/s)
+W: the average time each item spends inside the system, in seconds (s)
+s: second
+In words: the number of things inside equals how fast they arrive multiplied by how long each one stays.
 ```
 
 It holds regardless of arrival distribution, and applies to a single thread pool, a whole service or a coffee shop.
 
 **Example 1: sizing a thread pool.** A service handles 2,000 req/s, and each request spends 50 ms in the service (much of it waiting on the database):
 
-```
-L = 2000 x 0.050 = 100 concurrent requests
+```formula
+L = λ × W
+L = 2,000 /s × 0.050 s = 100
+where
+L: the average number of requests in the service at once
+λ: lambda, the arrival rate, 2,000 requests per second (/s)
+W: the time each request spends in the service, 50 ms = 0.050 s
+s: second
+In words: 2,000 requests arriving every second, each staying a twentieth of a second, means about 100 inside at any moment.
 ```
 
 With one thread per request, you need at least ~100 threads (plus headroom).
 
 **Example 2: database connections.** 5,000 queries/s at 4 ms each:
 
-```
-L = 5000 x 0.004 = 20 connections busy
+```formula
+L = 5,000 /s × 0.004 s = 20
+where
+L: the average number of database connections busy at once
+s: second; 4 ms = 0.004 s is how long each query holds a connection
+In words: 5,000 queries a second, each holding a connection for 4 ms, keep about 20 connections busy.
 ```
 
 A pool of 30–40 is a starting hypothesis, not a guarantee: burstiness, latency tails and database capacity determine the necessary headroom. A pool of 500 per app instance across 50 instances permits 25,000 connections and can impose substantial overhead; validate the total against database capacity rather than assuming more connections help.
 
 **Example 3: what happens when latency rises.** The database slows from 4 ms to 40 ms while traffic stays at 5,000/s:
 
-```
-L = 5000 x 0.040 = 200 connections needed
+```formula
+L = 5,000 /s × 0.040 s = 200
+where
+L: the average number of database connections needed at once
+s: second; 40 ms = 0.040 s is the new time each query holds a connection
+In words: the same traffic held ten times as long needs ten times as many connections.
 ```
 
 The pool of 40 is exhausted; requests queue, latency rises further, and the problem cascades. Little's law explains why a slow dependency causes thread or connection-pool exhaustion upstream, and why timeouts and bulkheads (reliability module) matter.
@@ -175,9 +214,9 @@ Each technique gets its own lesson later. The pattern is consistent: find the bo
 - Scalability means handling more load by adding resources, with roughly proportional cost; always specify which dimension of load.
 - Vertical scaling is simple and surprisingly powerful but has a ceiling and is a single point of failure; horizontal scaling is near-unlimited but adds distributed-systems complexity.
 - Stateless services scale trivially; push state into a few dedicated stateful systems and beware hidden state.
-- Amdahl's law: the serial fraction caps speed-up at 1/(1 − p), so find and remove serial bottlenecks.
+- Amdahl's law: the serial fraction caps speed-up at 1 divided by that fraction (a 5% serial part caps it at 20x), so find and remove serial bottlenecks.
 - The USL adds coherence costs: a throughput curve that flattens means contention; one that falls means coordination overhead.
-- Little's law `L = λW` links concurrency, throughput and latency; use it to size pools and to predict pool exhaustion when latency rises.
+- Little's law (items inside = arrival rate × time inside) links concurrency, throughput and latency; use it to size pools and to predict pool exhaustion when latency rises.
 
 ## Further reading
 - [Scalability (Wikipedia)](https://en.wikipedia.org/wiki/Scalability)

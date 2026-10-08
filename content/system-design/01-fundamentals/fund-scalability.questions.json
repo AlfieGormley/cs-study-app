@@ -86,7 +86,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "p = 0.9 (parallel fraction), 1 − p = 0.1 (serial).\n\n**10 workers:**\n```\ntime = serial + parallel / N\n     = 10 + 90 / 10\n     = 19 min\nS(10) = 100 / 19 ≈ 5.3x\n```\n\nCheck with the formula: `1 / (0.1 + 0.9/10) = 1 / 0.19 ≈ 5.26`.\n\n**Unlimited workers:**\n```\ntime -> 10 + 0 = 10 min\nS_max = 1 / (1 - p) = 1 / 0.1 = 10x\n```\n\nLesson: to go faster, shrink the serial merge (e.g. tree-shaped merging), not add workers.",
+    "workedExample": "Amdahl's law splits the job into a serial part and a parallel part. Here 90 of the 100 minutes parallelise (a parallel fraction of 0.9) and the 10-minute merge is serial (a serial fraction of 0.1).\n\n**10 workers:**\n```formula\nt_N = t_ser + t_par / N\nt_N = 10 min + 90 min / 10 = 19 min\nS = 100 min / 19 min ≈ 5.3\nwhere\nt_N: the job's running time with N workers, in minutes (min)\nt_ser: the serial part's time, 10 min, which no extra worker can shorten\nt_par: the parallelisable part's time on one worker, 90 min\nN: the number of workers, here 10\nS: the speed-up, one-worker time divided by the new time\nmin: minute\n≈: approximately equal to (rounded)\nIn words: the parallel part is shared out between the workers, the serial part isn't, and the speed-up compares the old time with the new.\n```\n\nCheck with Amdahl's formula:\n```formula\nS(N) = 1 / ((1 − p) + p / N)\nS(10) = 1 / (0.1 + 0.9 / 10)\nS(10) = 1 / 0.19 ≈ 5.26\nwhere\nS(N): the speed-up with N workers\np: the parallel fraction, 0.9\nN: the number of workers, 10\n≈: approximately equal to (rounded)\nIn words: the same answer from the general formula: the job runs in 0.19 of its original time.\n```\n\n**Unlimited workers:**\n```formula\nt_N → 10 min + 0 = 10 min\nS_max = 1 / (1 − p) = 1 / 0.1 = 10\nwhere\nt_N: the running time, which approaches the serial part as N grows\n→: \"tends to\": gets as close as you like as N grows without limit\nmin: minute\nS_max: the maximum possible speed-up, 10×\np: the parallel fraction, 0.9\nIn words: with endless workers the parallel part takes no time, leaving the 10-minute merge, so the job can never be more than 10 times faster.\n```\n\nLesson: to go faster, shrink the serial merge (e.g. tree-shaped merging), not add workers.",
     "link": {
       "title": "Amdahl's law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
@@ -108,7 +108,7 @@
       },
       {
         "text": "30",
-        "explanation": "Correct. L = λ × W = 1,200 × 0.025 s = 30 connections in use on average. Size the pool with headroom above this, e.g. 40–50."
+        "explanation": "Correct. Little's law: 1,200 requests/s × 0.025 s = 30 connections in use on average. Size the pool with headroom above this, e.g. 40–50."
       },
       {
         "text": "30,000",
@@ -116,7 +116,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Little's law: `L = λ × W`.\n\n```\nλ = 1,200 req/s\nW = 25 ms = 0.025 s\nL = 1,200 x 0.025 = 30\n```\n\nSo on average 30 connections are busy. Add headroom for bursts and variance (say 40–50). If you run 6 app instances, that's ~8 connections each.\n\nSanity check on units: (requests/s) × s = requests, i.e. a count of things in flight.",
+    "workedExample": "Little's law says the number of things inside a system equals their arrival rate multiplied by how long each stays.\n\n```formula\nL = λ × W\nL = 1,200 /s × 0.025 s = 30\nwhere\nL: the average number of connections in use at once\nλ: lambda, the arrival rate, 1,200 requests per second (/s)\nW: the time each request holds a connection, 25 ms = 0.025 s\ns: second\nIn words: 1,200 requests a second, each holding a connection for a fortieth of a second, keep 30 connections busy.\n```\n\nSo on average 30 connections are busy. Add headroom for bursts and variance (say 40–50). If you run 6 app instances, that's ~8 connections each.\n\nSanity check on units: (requests/s) × s = requests, i.e. a count of things in flight.",
     "link": {
       "title": "Little's law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Little%27s_law"
@@ -172,11 +172,11 @@
       },
       {
         "text": "The service needs 800 concurrent threads but has 300, so requests queue, latency spirals and the service effectively fails",
-        "explanation": "Correct. L = 2,000 × 0.4 = 800. With only 300 threads, throughput is capped at 300/0.4 = 750 req/s; the remaining load queues up and times out. A slow dependency has exhausted the caller's thread pool."
+        "explanation": "Correct. By Little's law, 2,000 requests/s × 0.4 s = 800 threads are needed. With only 300 threads, each busy for 0.4 s, throughput is capped at 300 / 0.4 s = 750 req/s; the remaining load queues up and times out. A slow dependency has exhausted the caller's thread pool."
       }
     ],
     "answer": 3,
-    "workedExample": "**Before:**\n```\nL = 2000 x 0.050 = 100 threads in use\ncapacity = 2 x 150 = 300 threads\n```\nComfortable.\n\n**After degradation:**\n```\nL needed = 2000 x 0.400 = 800 threads\n```\n\n**Max throughput** with 300 threads at 400 ms each:\n```\nλ_max = L / W = 300 / 0.4 = 750 req/s\n```\n\n2,000 arrive, 750 can be served. 1,250 req/s pile into the queue, so waiting time grows every second until clients time out (and possibly retry, making it worse).\n\nDefences: aggressive timeouts on the dependency, a circuit breaker to fail fast, a separate bulkhead pool for that dependency, and load shedding.",
+    "workedExample": "Use Little's law: things in the system = arrival rate × time each stays (symbols defined below).\n\n**Before:**\n```formula\nL = λ × W = 2,000 /s × 0.050 s = 100\nC = 2 × 150 = 300\nwhere\nL: the threads in use on average\nλ: lambda, the arrival rate, 2,000 requests per second (/s)\nW: the time each request holds a thread, 50 ms = 0.050 s\nC: the thread capacity, 2 instances × 150 threads\ns: second\nIn words: 100 of the 300 threads are busy. Comfortable.\n```\n\n**After degradation:**\n```formula\nL = 2,000 /s × 0.400 s = 800\nwhere\nL: the threads now needed on average\ns: second; each request now holds a thread for 400 ms = 0.400 s\nIn words: eight times the holding time needs eight times the threads.\n```\n\n**Max throughput** with 300 threads at 400 ms each, rearranging Little's law:\n```formula\nλ_max = C / W = 300 / 0.4 s = 750 /s\nwhere\nλ_max: the most requests per second the pool can complete\nC: the thread capacity, 300\nW: the time each request holds a thread, 0.4 s\ns: second\nIn words: 300 threads that each finish a request every 0.4 s complete at most 750 requests a second.\n```\n\n2,000 arrive, 750 can be served. 1,250 req/s pile into the queue, so waiting time grows every second until clients time out (and possibly retry, making it worse).\n\nDefences: aggressive timeouts on the dependency, a circuit breaker to fail fast, a separate bulkhead pool for that dependency, and load shedding.",
     "link": {
       "title": "Little's Law (Marc Brooker)",
       "url": "https://brooker.co.za/blog/2018/06/20/littles-law.html"
@@ -236,7 +236,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Count the coordination paths:\n\n```\npairs = N x (N - 1) / 2\nN = 4  ->   6\nN = 8  ->  28\nN = 16 -> 120\n```\n\nDoubling from 8 to 16 nodes doubles capacity but more than quadruples pairwise chatter. Once that overhead outgrows the extra capacity, throughput falls.\n\nFixes: partition the cache so each key has one owner, use short TTLs instead of broadcasts, or send invalidations through a shared log that nodes consume.",
+    "workedExample": "Count the coordination paths:\n\n```formula\nP = N × (N − 1) / 2\nN = 4: P = 4 × 3 / 2 = 6\nN = 8: P = 8 × 7 / 2 = 28\nN = 16: P = 16 × 15 / 2 = 120\nwhere\nP: the number of node pairs that may exchange invalidation messages\nN: the number of nodes\nIn words: each node pairs with every other node, and dividing by 2 avoids counting each pair twice; the count grows roughly with the square of N.\n```\n\nDoubling from 8 to 16 nodes doubles capacity but more than quadruples pairwise chatter. Once that overhead outgrows the extra capacity, throughput falls.\n\nFixes: partition the cache so each key has one owner, use short TTLs instead of broadcasts, or send invalidations through a shared log that nodes consume.",
     "link": {
       "title": "Neil J. Gunther and the Universal Scalability Law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Neil_J._Gunther"
@@ -304,7 +304,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Project the load:\n\n```\nnow:   70% of 16 vCPU ≈ 11 vCPU\n2x:    ≈ 22 vCPU -> over capacity\n32 vCPU: 22 / 32 ≈ 69% (as today)\n64 vCPU: 22 / 64 ≈ 35%\n```\n\nA larger instance alone buys time, and because the load is read-heavy, a cache and read replicas take most of it off the primary. Sharding solves *write* scaling, at a high cost in complexity. Use the cheapest technique that matches the bottleneck.",
+    "workedExample": "Project the load:\n\n```formula\nc_now = 0.7 × 16 vCPU ≈ 11 vCPU\nc_2x = 2 × 11 vCPU ≈ 22 vCPU\nu_32 = 22 / 32 ≈ 0.69\nu_64 = 22 / 64 ≈ 0.35\nwhere\nc_now: vCPUs of work at today's peak, 70% of 16\nc_2x: vCPUs of work after traffic doubles, more than the 16 the server has\nvCPU: a virtual CPU, one schedulable core (or hardware thread) of a cloud server\nu_32: utilisation on a 32-vCPU instance, about 69%, the same as today\nu_64: utilisation on a 64-vCPU instance, about 35%\n≈: approximately equal to (rounded)\nIn words: doubled load needs about 22 vCPUs, which overloads today's 16 but fits comfortably on a bigger machine.\n```\n\nA larger instance alone buys time, and because the load is read-heavy, a cache and read replicas take most of it off the primary. Sharding solves *write* scaling, at a high cost in complexity. Use the cheapest technique that matches the bottleneck.",
     "link": {
       "title": "Read replicas (Amazon RDS)",
       "url": "https://aws.amazon.com/rds/features/read-replicas/"
@@ -318,11 +318,11 @@
     "options": [
       {
         "text": "8 workers; yes, with about 25 workers",
-        "explanation": "Incorrect. 8 workers give only 1 / (0.05 + 0.95/8) ≈ 5.9x, because the serial 5% doesn't speed up. And 25x is above the 20x ceiling."
+        "explanation": "Incorrect. 8 workers give a speed-up of only 1 / (0.05 + 0.95 / 8) ≈ 5.9x, because the serial 5% doesn't speed up. And 25x is above the 20x ceiling."
       },
       {
         "text": "13 workers; no, the ceiling is 20x",
-        "explanation": "Correct. S(13) = 1 / (0.05 + 0.95/13) ≈ 8.1x, while S(12) ≈ 7.7x. As N grows without limit, S → 1 / 0.05 = 20x, so 25x is impossible without shrinking the serial part."
+        "explanation": "Correct. With 13 workers the speed-up is 1 / (0.05 + 0.95 / 13) ≈ 8.1x, while 12 workers give ≈ 7.7x. With unlimited workers it approaches 1 / 0.05 = 20x, so 25x is impossible without shrinking the serial part."
       },
       {
         "text": "160 workers; yes, with about 500 workers",
@@ -334,7 +334,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Solve Amdahl for N:\n\n```\n8 = 1 / (0.05 + 0.95 / N)\n0.05 + 0.95 / N = 0.125\n0.95 / N = 0.075\nN = 12.67 -> 13 workers\n```\n\nCheck: `1 / (0.05 + 0.95/13) ≈ 8.12`.\n\nCeiling: `1 / (1 - 0.95) = 20x`. To reach 25x you must cut the serial share below 4% (`1/25 = 0.04`), for example by parallelising the merge step.",
+    "workedExample": "Set Amdahl's formula equal to the target and solve for the number of workers:\n\n```formula\nS(N) = 1 / ((1 − p) + p / N)\n8 = 1 / (0.05 + 0.95 / N)\n0.05 + 0.95 / N = 1 / 8 = 0.125\n0.95 / N = 0.075\nN = 0.95 / 0.075 ≈ 12.67\nwhere\nS(N): the speed-up with N workers, here the target 8\np: the parallel fraction, 0.95; the serial fraction 1 − p is 0.05\nN: the number of workers; round 12.67 up to 13, since you can't run part of a worker\n≈: approximately equal to (rounded)\nIn words: work out what share of the original time the job must shrink to (an eighth), subtract the serial part, and see how many workers shrink the parallel part enough.\n```\n\nCheck: 1 / (0.05 + 0.95 / 13) ≈ 8.12.\n\nThe ceiling with unlimited workers:\n```formula\nS_max = 1 / (1 − p) = 1 / 0.05 = 20\n1 − p < 1 / 25 = 0.04\nwhere\nS_max: the largest possible speed-up, 20×\np: the parallel fraction\n<: is less than\nIn words: the speed-up can never beat one over the serial fraction, so 25× needs a serial share below 4%.\n```\n\nTo reach 25x you must cut the serial share below 4%, for example by parallelising the merge step.",
     "link": {
       "title": "Amdahl's law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"

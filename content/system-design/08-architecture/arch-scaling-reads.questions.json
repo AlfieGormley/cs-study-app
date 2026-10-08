@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. DB receives the misses: 10,000 reads/s = 10% of total.\n2. Total traffic = 10,000 / 0.10 = 100,000 reads/s.\n3. New miss rate = 1%, so DB load = 0.01 × 100,000 = 1,000 reads/s.\n4. Average latency also improves:\n   - Before: 0.9 × 0.5 + 0.1 × 20.5 ≈ 2.5 ms\n   - After: 0.99 × 0.5 + 0.01 × 20.5 ≈ 0.7 ms\n5. Lesson: think in *miss rate*. Going from 90% to 99% hits is a 10× cut in DB load.",
+    "workedExample": "1. The database only sees the misses. A miss rate of 10% producing 10,000 reads/s tells you the total traffic:\n\n```formula\nR_total = R_db / (1 − h)\nR_total = 10000 / (1 − 0.90)\nR_total = 10000 / 0.10 = 100000\nwhere\nR_total: all product reads per second, hits and misses\nR_db: reads per second reaching the database (the misses), here 10,000\nh: the cache hit rate as a fraction, here 90 % = 0.90\n1 − h: the miss rate, here 0.10 (10 %)\n%: per cent\nIn words: if 10 % of traffic is 10,000 reads a second, all of it is 100,000.\n```\n\n2. Now raise the hit rate to 99%, with the same total traffic:\n\n```formula\nR_db = (1 − h) × R_total\nR_db = (1 − 0.99) × 100000\nR_db = 0.01 × 100000 = 1000\nwhere\nR_db: reads per second reaching the database\nh: the new hit rate, 99 % = 0.99\nR_total: total reads per second, 100,000\n%: per cent\nIn words: a 1 % miss rate sends 1,000 of the 100,000 reads a second to the database.\n```\n\n3. Average latency also improves (a miss pays for the cache check and the database):\n\n```formula\nT = h × t_c + (1 − h) × (t_c + t_db)\nT = 0.9 × 0.5 + 0.1 × 20.5 ≈ 2.5 ms\nT = 0.99 × 0.5 + 0.01 × 20.5 ≈ 0.7 ms\nwhere\nT: average time per read, in milliseconds (ms); the first result is at 90 % hits, the second at 99 %\nh: hit rate as a fraction\nt_c: Redis lookup time, 0.5 ms\nt_db: database read time, 20 ms\nms: milliseconds\n≈: approximately equal to (rounded)\nIn words: more hits pull the average read time down towards the cache's 0.5 ms.\n```\n\n4. Lesson: think in *miss rate*. Going from 90% to 99% hits cuts misses from 10% to 1% of traffic: a 10× cut in DB load.",
     "link": {
       "title": "System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Queries: 1 (posts) + 50 (authors) = 51.\n2. 51 × 1 ms ≈ 51 ms of pure round-trip time.\n3. Fix: collect the author IDs, run `SELECT ... WHERE id IN (...)`: 2 queries ≈ 2 ms.\n4. ORM terms: eager loading, `select_related` / `prefetch_related` in Django, `includes` in Rails.\n5. Do this before adding any infrastructure.",
+    "workedExample": "1. Count the queries: 1 for the list of posts, plus 1 per post for its author.\n\n```formula\nQ = N + 1\nQ = 50 + 1 = 51\nT = Q × t\nT = 51 × 1 ms ≈ 51 ms\nwhere\nQ: the number of queries, each its own round trip\nN: posts on the page, here 50\nT: total time spent on round trips, in milliseconds (ms)\nt: one round trip, about 1 ms here\nms: milliseconds\n≈: approximately equal to\nIn words: 51 queries at about 1 ms each is about 51 ms of waiting on the network.\n```\n\n2. Fix: collect the author IDs, run `SELECT ... WHERE id IN (...)`: 2 queries ≈ 2 ms.\n3. ORM terms: eager loading, `select_related` / `prefetch_related` in Django, `includes` in Rails.\n4. Do this before adding any infrastructure.",
     "link": {
       "title": "System Design Primer",
       "url": "https://github.com/donnemartin/system-design-primer"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Refresh 1 → replica A (lag 0.2 s): reply visible.\n2. Refresh 2 → replica B (lag 3 s): reply not there yet.\n3. Monotonic reads: once you've seen a value, you never see an older one.\n4. Fix: `replica = replicas[hash(user_id) % 3]`.\n5. If that replica fails, the user moves to another and may see one backwards step; that is a policy choice, not a monotonic-read guarantee. Preserve an observed-version token across reassignment if the product requires monotonic reads.",
+    "workedExample": "1. Refresh 1 → replica A (lag 0.2 s): reply visible.\n2. Refresh 2 → replica B (lag 3 s): reply not there yet.\n3. Monotonic reads: once you've seen a value, you never see an older one.\n4. Fix: choose the replica from a hash of the user ID, so the same user always lands on the same replica:\n\n```formula\nr = hash(u) mod 3\nwhere\nr: the replica number, 0, 1 or 2\nhash: a hash function: turns the user ID into a big, evenly spread number, always the same for the same input\nu: the user's ID\nmod: modulo: the remainder after dividing, so the answer is always 0, 1 or 2\nIn words: hash the user ID and take the remainder after dividing by 3 to pick one of the 3 replicas.\n```\n\nIn Python: `replica = replicas[hash(user_id) % 3]`.\n5. If that replica fails, the user moves to another and may see one backwards step; that is a policy choice, not a monotonic-read guarantee. Preserve an observed-version token across reassignment if the product requires monotonic reads.",
     "link": {
       "title": "AWS: Working with read replicas",
       "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
@@ -353,7 +353,7 @@
     "options": [
       {
         "text": "Keep scores in a Redis sorted set (`ZADD` on each score change) and read the top 100 with `ZREVRANGE` and a player's rank with `ZREVRANK`.",
-        "explanation": "Correct. Sorted sets keep members ordered, so rank and range queries are O(log N) plus the result size, not a sort of 20 million rows."
+        "explanation": "Correct. Sorted sets keep members ordered, so rank and range queries cost O(log N) plus the size of the result, where N is the number of players in the set (20 million here). That is far less than sorting 20 million rows."
       },
       {
         "text": "Cache the top-100 list for a few seconds, since every player sees the same one.",
@@ -377,7 +377,7 @@
       1,
       4
     ],
-    "workedExample": "1. Top 100: same for everyone → cache it, or read it from an ordered structure.\n2. Redis ZREVRANK returns a zero-based position including a member-order tie-break; add 1 for ordinal display. Equal-score competition/dense ranks require a different policy.\n   - SQL with an index: still O(rank) to count.\n   - Redis sorted set: `ZREVRANK` is O(log N).\n3. Memory and node fit are not established here. Measure representative member lengths, encodings, allocator overhead, persistence/fork headroom and replica requirements; no universal bytes-per-member estimate is included.\n4. Write path: one `ZADD` per score change. That's precomputation: do the work on write.",
+    "workedExample": "1. Top 100: same for everyone → cache it, or read it from an ordered structure.\n2. Redis ZREVRANK returns a zero-based position including a member-order tie-break; add 1 for ordinal display. Equal-score competition/dense ranks require a different policy.\n   - SQL with an index: still O(rank) to count, i.e. work that grows with the number of players above you.\n   - Redis sorted set: `ZREVRANK` is O(log N), where N is the number of players in the set: doubling the players adds only about one more step.\n3. Memory and node fit are not established here. Measure representative member lengths, encodings, allocator overhead, persistence/fork headroom and replica requirements; no universal bytes-per-member estimate is included.\n4. Write path: one `ZADD` per score change. That's precomputation: do the work on write.",
     "link": {
       "title": "Redis ZREVRANK",
       "url": "https://redis.io/docs/latest/commands/zrevrank/"

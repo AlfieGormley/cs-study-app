@@ -71,11 +71,11 @@
     "options": [
       {
         "text": "Survivors run at about 93%; theoretical ceiling is 75%",
-        "explanation": "Correct. Total work is 4 × 70% = 280% of a node. Spread over 3 survivors that is 93.3% each, dangerously close to saturation. Safe maximum is (N − k)/N = 3/4 = 75%."
+        "explanation": "Correct. Total work is 4 × 70% = 280% of a node. Spread over 3 survivors that is 93.3% each, dangerously close to saturation. The safe maximum is the fraction of nodes that survive: 3 of 4 = 75%."
       },
       {
         "text": "Survivors run at about 93%; theoretical ceiling is 66%",
-        "explanation": "The 93% is right, but 66% is the threshold for 3 nodes surviving one loss ((3−1)/3). With 4 nodes the threshold is (4−1)/4 = 75%."
+        "explanation": "The 93% is right, but about 67% is the threshold for 3 nodes surviving one loss (2 of 3 survive). With 4 nodes, 3 of 4 survive, so the threshold is 75%."
       },
       {
         "text": "Survivors run at 70%; the load balancer spreads load so nothing changes",
@@ -87,7 +87,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Total work at peak: `4 × 70% = 280%` of one node's capacity.\n2. After losing one node: `280% / 3 = 93.3%` per survivor. At this level, queueing delay explodes (latency grows sharply as utilisation approaches 100%), which leaves little headroom; actual latency and cascading risk depend on the workload and controls.\n3. Safe ceiling for surviving `k` failures out of `N`: `(N − k) / N`.\n4. `(4 − 1) / 4 = 0.75`, so keep peak below **75%**, and in practice a little lower to leave room for queueing.\n\nCheck: at 75%, total = 300%, over 3 survivors = 100%. That is the absolute limit, which is why real teams leave a further margin.",
+    "workedExample": "The total work doesn't shrink when a node dies; it is shared by fewer survivors. Work it through:\n\n```formula\nW = N × U\nW = 4 × 70% = 280%\nU_after = W / (N − k)\nU_after = 280% / 3 ≈ 93.3%\nU_max = (N − k) / N\nU_max = (4 − 1) / 4 = 0.75 = 75%\nwhere\nW: the total work at peak, as a percentage of one node's capacity\nN: the number of nodes before the failure, here 4\nU: each node's peak utilisation before the failure, here 70%\nk: the number of node failures to survive, here 1\nU_after: each survivor's utilisation after the failure\nU_max: the highest pre-failure utilisation that keeps each survivor at or below 100%\n≈: approximately equal to (rounded)\n%: per cent of one node's full capacity\nIn words: four nodes at 70% do 2.8 nodes' worth of work; three survivors must each carry about 93%. To keep survivors at 100% or less, run below 3/4 = 75% before the failure.\n```\n\nAt 93%, queueing delay explodes (latency grows sharply as utilisation approaches 100%), which leaves little headroom; actual latency and cascading risk depend on the workload and controls.\n\nSo keep peak below **75%**, and in practice a little lower to leave room for queueing.\n\nCheck: at 75%, total = 300%, over 3 survivors = 100%. That is the absolute limit, which is why real teams leave a further margin.",
     "link": {
       "title": "Static stability using Availability Zones (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
@@ -109,7 +109,7 @@
       },
       {
         "text": "1 in 28 (about 3.6%)",
-        "explanation": "Correct. There are C(8,2) = 28 distinct pairs. Only tenants assigned the exact same pair lose both their workers; others retain at least one unaffected worker; continued service also requires spare capacity and retry/rerouting."
+        "explanation": "Correct. There are 28 distinct pairs of workers (\"8 choose 2\"). Only tenants assigned the exact same pair lose both their workers; others retain at least one unaffected worker; continued service also requires spare capacity and retry/rerouting."
       },
       {
         "text": "All of them, since every tenant uses the same pool",
@@ -117,7 +117,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Count the possible shards: choose 2 workers out of 8, `C(8,2) = 8 × 7 / 2 = 28`.\n2. The poisonous tenant kills both its workers, say W2 and W5.\n3. A different tenant is fully down only if it was also assigned {W2, W5}: probability `1/28 ≈ 3.6%`.\n4. Tenants sharing one worker (e.g. {W2, W7}) lose half their capacity but stay available, assuming clients retry on the other worker.\n\nCompare with regular sharding into 4 fixed pairs: a poison request takes out a quarter of all tenants. Route 53 scales this up to 2,048 servers with 4 per domain, giving around 730 billion combinations.",
+    "workedExample": "1. Count the possible shards: the number of ways to choose 2 workers out of 8.\n\n```formula\nS = C(n, k) = n! / (k! × (n − k)!)\nS = C(8, 2) = (8 × 7) / (2 × 1) = 28\nP = 1 / S = 1 / 28 ≈ 3.6%\nwhere\nS: the number of distinct worker pairs (shuffle shards)\nC(n, k): \"n choose k\", the number of ways to pick k items from n when order doesn't matter\nn: the total number of workers, here 8\nk: the workers given to each tenant, here 2\n!: factorial; 3! = 3 × 2 × 1 = 6\nP: the chance that a randomly assigned other tenant got exactly the same pair\n≈: approximately equal to (rounded)\nIn words: there are 28 possible pairs, so only about 1 tenant in 28 shares both workers with the poisonous one.\n```\n\n2. The poisonous tenant kills both its workers, say W2 and W5.\n3. A different tenant is fully down only if it was also assigned {W2, W5}: probability 1 in 28, about 3.6%.\n4. Tenants sharing one worker (e.g. {W2, W7}) lose half their capacity but stay available, assuming clients retry on the other worker.\n\nCompare with regular sharding into 4 fixed pairs: a poison request takes out a quarter of all tenants. Route 53 scales this up to 2,048 servers with 4 per domain, giving around 730 billion combinations.",
     "link": {
       "title": "Workload isolation using shuffle-sharding (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
@@ -147,7 +147,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Independent parallel maths: `P(both down) = 0.001 × 0.001 = 0.000001` = 0.0001%.\n2. That multiplication is only valid if one replica failing tells you nothing about the other.\n3. Here both received the **same schema migration**: a common cause. Given that the first failed, the second was almost certain to fail too.\n4. Real combined availability is bounded by the reliability of the shared change process, not by hardware.\n\nFixes: apply migrations in a backwards-compatible way (expand/contract), stage changes across independent test deployments or cells; physical database replicas usually replay primary DDL and cannot independently canary a replicated migration, and treat config and schema changes as deployments with canaries.",
+    "workedExample": "1. Independent parallel maths:\n\n```formula\nP_both = (1 − A) × (1 − A)\nP_both = 0.001 × 0.001\nP_both = 0.000001 = 0.0001%\nwhere\nP_both: the probability both replicas are down at the same moment\nA: one replica's availability (fraction of time up), here 99.9% = 0.999\n%: per cent; 0.000001 = 0.0001%\nIn words: each replica is down 0.1% of the time; if, and only if, they fail independently, both are down at once 0.0001% of the time.\n```\n\n2. That multiplication is only valid if one replica failing tells you nothing about the other.\n3. Here both received the **same schema migration**: a common cause. Given that the first failed, the second was almost certain to fail too.\n4. Real combined availability is bounded by the reliability of the shared change process, not by hardware.\n\nFixes: apply migrations in a backwards-compatible way (expand/contract), stage changes across independent test deployments or cells; physical database replicas usually replay primary DDL and cannot independently canary a replicated migration, and treat config and schema changes as deployments with canaries.",
     "link": {
       "title": "AWS Well-Architected Reliability Pillar",
       "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"
@@ -177,7 +177,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Identify the dependency: recovery needed the **control plane** (the EC2 launch API).\n2. Control planes are more complex than data planes and are often impaired during exactly the events you're trying to survive.\n3. Static stability removes the dependency: provision so that the *current* fleet survives the failure as-is.\n4. Capacity maths for 3 AZs surviving loss of 1: each AZ must hold `1/2` of peak (since 2 AZs carry 100%). Total provisioned = `3 × 50% = 150%` of peak.\n5. The cost is ~50% extra capacity; the benefit is that an AZ loss requires no new provisioning; health detection, rerouting and other prearranged data-plane recovery may still occur.\n\nThis is the approach AWS describes for services like EC2 itself: pre-provision, don't react.",
+    "workedExample": "1. Identify the dependency: recovery needed the **control plane** (the EC2 launch API).\n2. Control planes are more complex than data planes and are often impaired during exactly the events you're trying to survive.\n3. Static stability removes the dependency: provision so that the *current* fleet survives the failure as-is.\n4. Capacity maths for 3 AZs surviving loss of 1:\n\n```formula\nC_AZ = 100% / (Z − k)\nC_AZ = 100% / (3 − 1) = 50%\nC_total = Z × C_AZ\nC_total = 3 × 50% = 150%\nwhere\nC_AZ: the capacity each AZ must hold, as a percentage of peak load\nC_total: the total capacity provisioned across all AZs, as a percentage of peak load\nZ: the number of availability zones (AZs), here 3\nk: the number of AZs that may fail, here 1\n%: per cent of peak load\nIn words: the two surviving AZs must carry all of peak between them, so each holds half of peak; three halves is 150% of peak in total.\n```\n\n5. The cost is ~50% extra capacity; the benefit is that an AZ loss requires no new provisioning; health detection, rerouting and other prearranged data-plane recovery may still occur.\n\nThis is the approach AWS describes for services like EC2 itself: pre-provision, don't react.",
     "link": {
       "title": "Static stability using Availability Zones (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
@@ -187,7 +187,7 @@
     "id": "rel-designing-for-failure-q7",
     "level": "advanced",
     "type": "single",
-    "prompt": "A payments service occasionally receives corrupted messages from a buggy upstream: amounts are negative or currency codes are invalid. Full Byzantine fault tolerance (3f+1 replicas with voting) is proposed. What's the most proportionate design?",
+    "prompt": "A payments service occasionally receives corrupted messages from a buggy upstream: amounts are negative or currency codes are invalid. Full Byzantine fault tolerance (BFT: at least four voting replicas to tolerate one faulty one) is proposed. What's the most proportionate design?",
     "options": [
       {
         "text": "Adopt BFT consensus: four replicas to tolerate one faulty replica",
@@ -207,7 +207,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Locate the fault: the *source* of the wrong answers is a buggy upstream, not your replicas.\n2. Classical PBFT under its assumptions handles f faulty replicas with at least 3f+1; this is not a universal bound for every Byzantine model. If all inputs are already wrong, every replica faithfully processes the same wrong value; BFT doesn't help.\n3. Cheaper, targeted defences:\n   - **Validate** at the boundary: `amount satisfies the operation's documented sign/range rules`, currency in ISO 4217 list, checksum matches.\n   - **Reject** to a dead-letter queue so bad messages are visible and don't block the stream.\n   - **Reconcile** end to end (e.g. daily ledger totals vs bank statements).\n4. This converts a silent wrong-answer failure into a loud, contained omission failure, which the rest of the system already knows how to handle.",
+    "workedExample": "1. Locate the fault: the *source* of the wrong answers is a buggy upstream, not your replicas.\n2. Classical PBFT, under its assumptions, needs this many replicas:\n\n```formula\nR ≥ 3 × f + 1\nR ≥ 3 × 1 + 1 = 4\nwhere\nR: the number of replicas running the protocol\nf: the number of replicas that may be faulty or lying at once, here 1\n≥: \"is at least\"\nIn words: to outvote one lying replica you need at least four replicas.\n```\n\nThis is not a universal bound for every Byzantine model. And it only helps when a *replica* lies. If all inputs are already wrong, every replica faithfully processes the same wrong value; BFT doesn't help.\n3. Cheaper, targeted defences:\n   - **Validate** at the boundary: `amount satisfies the operation's documented sign/range rules`, currency in ISO 4217 list, checksum matches.\n   - **Reject** to a dead-letter queue so bad messages are visible and don't block the stream.\n   - **Reconcile** end to end (e.g. daily ledger totals vs bank statements).\n4. This converts a silent wrong-answer failure into a loud, contained omission failure, which the rest of the system already knows how to handle.",
     "link": {
       "title": "Byzantine fault (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Byzantine_fault"
@@ -237,7 +237,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Expected failures per year: `5,000 × 0.04 = 200`.\n2. Per week: `200 / 52 ≈ 3.8`.\n3. Per day: `200 / 365 ≈ 0.55`, so roughly one every other day.\n\nAt this rate:\n- Replication (or erasure coding) must keep data safe while a disk is down.\n- Re-replication must start automatically and finish within the repair-risk budget for the affected redundancy group; a second failure elsewhere in the fleet is not automatically catastrophic.\n- Replacement is a routine maintenance task, not an incident.\n\nThis is the mindset shift at scale: failure is background noise to be designed for, not an exception.",
+    "workedExample": "Expected failures scale with the number of disks:\n\n```formula\nF_year = D × r\nF_year = 5,000 × 0.04 = 200\nF_week = 200 / 52 ≈ 3.8\nF_day = 200 / 365 ≈ 0.55\nwhere\nF_year: expected disk failures per year\nF_week: expected disk failures per week (52 weeks a year)\nF_day: expected disk failures per day (365 days a year)\nD: the number of disks in the fleet, here 5,000\nr: the annual failure rate of one disk, here 4% = 0.04\n≈: approximately equal to (rounded)\nIn words: 4% of 5,000 disks is 200 a year, nearly 4 a week, or roughly one every other day.\n```\n\nAt this rate:\n- Replication (or erasure coding) must keep data safe while a disk is down.\n- Re-replication must start automatically and finish within the repair-risk budget for the affected redundancy group; a second failure elsewhere in the fleet is not automatically catastrophic.\n- Replacement is a routine maintenance task, not an incident.\n\nThis is the mindset shift at scale: failure is background noise to be designed for, not an exception.",
     "link": {
       "title": "AWS Well-Architected Reliability Pillar",
       "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"
@@ -305,7 +305,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Blast radius with N cells: `1 / N = 1 / 20 = 5%`.\n2. Compare with a single shared fleet: a shared rollout or propagated poison request can affect the whole fleet.\n3. What's still shared? The **cell router** (and its mapping data). It's the cell architecture's remaining global component.\n4. Design it to be:\n   - minimal logic (look up customer → cell),\n   - statically stable (cached mapping),\n   - deployed more carefully than anything else.\n\nCombined with staged deploys (one cell first), a bad change usually stops at a few percent of customers.",
+    "workedExample": "1. Blast radius with equal-sized cells:\n\n```formula\nB = 1 / N\nB = 1 / 20 = 0.05 = 5%\nwhere\nB: the blast radius, the fraction of customers affected when one cell fails\nN: the number of equal-sized cells, here 20\n%: per cent; 0.05 = 5%\nIn words: one cell out of 20 holds a twentieth of customers, so a failure confined to it hits 5%.\n```\n\n2. Compare with a single shared fleet: a shared rollout or propagated poison request can affect the whole fleet.\n3. What's still shared? The **cell router** (and its mapping data). It's the cell architecture's remaining global component.\n4. Design it to be:\n   - minimal logic (look up customer → cell),\n   - statically stable (cached mapping),\n   - deployed more carefully than anything else.\n\nCombined with staged deploys (one cell first), a bad change usually stops at a few percent of customers.",
     "link": {
       "title": "Workload isolation using shuffle-sharding (AWS Builders' Library)",
       "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
@@ -335,7 +335,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Timeline:\n\n```\nt=0   leader pauses (GC)\nt=3   followers: 3 missed beats\nt=3+  new leader elected, epoch 8\nt=5   old leader (epoch 7) resumes\n      and writes\n```\n\n2. Two nodes now believe they lead: **split brain**, caused by a timing failure that looked like a crash.\n3. Defences:\n   - **Lease**: the leader may act only while its lease is valid; it must check before each action (clock assumptions apply).\n   - **Fencing token**: every write carries the epoch; the new owner first establishes epoch8 at storage before relying on exclusive effects. Thereafter storage atomically rejects epoch7. Merely issuing epoch8 in a separate coordinator is insufficient until storage observes/enforces it.\n\nThe lesson: design for detectors being wrong, not just slow.",
+    "workedExample": "1. Timeline (t is seconds since the GC pause began; an epoch is the leader term number):\n\n```\nt=0   leader pauses (GC)\nt=3   followers: 3 missed beats\nt=3+  new leader elected, epoch 8\nt=5   old leader (epoch 7) resumes\n      and writes\n```\n\n2. Two nodes now believe they lead: **split brain**, caused by a timing failure that looked like a crash.\n3. Defences:\n   - **Lease**: the leader may act only while its lease is valid; it must check before each action (clock assumptions apply).\n   - **Fencing token**: every write carries the epoch; the new owner first establishes epoch8 at storage before relying on exclusive effects. Thereafter storage atomically rejects epoch7. Merely issuing epoch8 in a separate coordinator is insufficient until storage observes/enforces it.\n\nThe lesson: design for detectors being wrong, not just slow.",
     "link": {
       "title": "Addressing cascading failures (Google SRE book)",
       "url": "https://sre.google/sre-book/addressing-cascading-failures/"
@@ -365,7 +365,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Parallel pair (independent): `A = 1 − (1 − 0.999)² = 1 − 0.000001 = 99.9999%`.\n2. Series with the database: `0.999999 × 0.9995 ≈ 0.99950`.\n3. Downtime per 30 days ≈ `0.0005 × 43,200 ≈ 22 min`, almost all from the database.\n4. Effort goes where the downtime is: a standby with automatic failover, tested regularly.\n\nCaveat from the lesson: the 99.9999% only holds if the two LBs fail independently. A shared config push or certificate makes them fail together, and the pair is then no better than one.",
+    "workedExample": "Parallel parts are down only when all copies are down; serial parts must all be up, so their availabilities multiply.\n\n```formula\nA_LB = 1 − (1 − a)^2\nA_LB = 1 − 0.001^2 = 0.999999\nA = A_LB × A_DB\nA = 0.999999 × 0.9995 ≈ 0.9995\nT_down = (1 − A) × T\nT_down ≈ 0.0005 × 43,200 min ≈ 22 min\nwhere\nA_LB: the availability of the load-balancer pair\na: one load balancer's availability, here 99.9% = 0.999\n^2: squared (one factor per load balancer)\nA_DB: the database primary's availability, here 99.95% = 0.9995\nA: the whole service's availability\nT_down: expected downtime in the period, in minutes (min)\nT: the period length: 30 days = 43,200 min\nmin: minutes\n≈: approximately equal to (rounded)\nIn words: the redundant pair is down almost never, so the service is about as available as the single database, 99.95%, which is roughly 22 minutes of downtime a month.\n```\n\nAlmost all of that downtime comes from the database.\nEffort goes where the downtime is: a standby with automatic failover, tested regularly.\n\nCaveat from the lesson: the 99.9999% only holds if the two LBs fail independently. A shared config push or certificate makes them fail together, and the pair is then no better than one.",
     "link": {
       "title": "AWS Well-Architected Reliability Pillar",
       "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"

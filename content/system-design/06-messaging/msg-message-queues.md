@@ -6,7 +6,7 @@ minutes: 13
 summary: How point-to-point queues hand each message to one worker, and how acknowledgements, visibility timeouts and dead-letter queues keep work from being lost.
 ---
 
-A message queue is the simplest broker: producers put messages in, consumers take them out, and **each delivery is assigned to one competing consumer, rather than broadcast to every consumer**. This is called **point-to-point** messaging. It is the workhorse behind background jobs, email sending, image processing and most "do this later" tasks.
+A message queue is the simplest broker: producers put messages in, consumers take them out, and **each delivery is assigned to one competing consumer, rather than broadcast to every consumer**. This is called **point-to-point messaging**. It is the workhorse behind background jobs, email sending, image processing and most "do this later" tasks.
 
 ## Competing consumers
 
@@ -52,13 +52,29 @@ Amazon SQS has no persistent connection between broker and consumer, so it canno
 4. If not, the message becomes visible again and another consumer can receive it.
 
 ```
-t=0     receive m1 (invisible)
-t=0–30  worker processing...
-t=30    timeout: m1 visible again
-t=31    worker B receives m1 (dup!)
+0 s     receive m1 (invisible)
+0–30 s  worker processing...
+30 s    timeout: m1 visible again
+31 s    worker B receives m1 (dup!)
 ```
 
-The key tuning rule: **set the visibility timeout comfortably longer than your worst-case processing time.** AWS suggests at least six times the Lambda function timeout plus any batching window when SQS triggers Lambda. If jobs genuinely vary (a 10-second job sometimes takes 10 minutes), the worker can call `ChangeMessageVisibility` periodically as a heartbeat to extend its lease.
+(Times are seconds after the first receive.)
+
+The key tuning rule: **set the visibility timeout comfortably longer than your worst-case processing time.** When SQS triggers AWS Lambda, AWS gives a concrete minimum, because Lambda may need to retry a throttled batch before the messages reappear:
+
+```formula
+V ≥ 6 × T_fn + T_batch
+V ≥ 6 × 2 min + 0 min = 12 min
+where
+V: the queue's visibility timeout
+≥: is at least
+T_fn: the Lambda function's timeout, for example 2 minutes
+T_batch: the batching window (MaximumBatchingWindowInSeconds) if you set one; 0 in this example
+min: minutes
+In words: give the queue at least six times the function's timeout, plus any batching window; a 2-minute function needs a visibility timeout of at least 12 minutes.
+```
+
+If jobs genuinely vary (a 10-second job sometimes takes 10 minutes), the worker can call `ChangeMessageVisibility` periodically as a heartbeat to extend its lease.
 
 Other SQS details worth knowing:
 
@@ -73,19 +89,46 @@ For anything bigger than the limit (images, large documents), use the **claim ch
 
 Use **long polling** (`WaitTimeSeconds=20`). Short polling returns immediately even when the queue is empty, which wastes requests (and money, since SQS bills per request) and can miss messages because it samples only a subset of servers.
 
-Standard SQS queues offer nearly unlimited throughput but only **best-effort ordering** and **at-least-once** delivery. **FIFO queues** guarantee order within a *message group* and deduplicate within a 5-minute window, at lower throughput. Without high-throughput mode, a FIFO queue handles 300 API calls per second per action (`SendMessage`, `ReceiveMessage`, `DeleteMessage`), so up to 3,000 messages per second with batches of 10. **High-throughput mode** spreads groups across internal partitions and raises this to thousands or tens of thousands of calls per second, depending on the region, provided you use many distinct message group IDs.
+Standard SQS queues offer nearly unlimited throughput but only **best-effort ordering** and **at-least-once** delivery. **SQS FIFO queues** guarantee order within a *message group* and deduplicate within a 5-minute window, at lower throughput. Without high-throughput mode, a FIFO queue handles 300 API calls per second per action (`SendMessage`, `ReceiveMessage`, `DeleteMessage`). Each call can carry a batch of up to 10 messages, which sets the ceiling:
+
+```formula
+R_max = C × b
+R_max = 300/s × 10 = 3000 msg/s
+where
+R_max: the most messages per second one action (for example SendMessage) can move
+C: API calls per second allowed per action: 300 for a FIFO queue without high-throughput mode
+b: messages per call (the batch size), at most 10 in SQS
+msg: messages
+s: seconds; "/s" means per second
+In words: 300 calls a second, each carrying up to 10 messages, is at most 3,000 messages a second per action; unbatched it is only 300.
+```
+
+**High-throughput mode** spreads groups across internal partitions and raises this to thousands or tens of thousands of calls per second, depending on the region, provided you use many distinct message group IDs.
 
 ## How RabbitMQ does it: channels, acks and prefetch
 
-RabbitMQ consumers hold a long-lived TCP connection. The broker *pushes* messages to them, and it knows a consumer has died when the connection or channel closes.
+RabbitMQ consumers hold a long-lived TCP connection. The broker *pushes* messages to them, and it knows a consumer has died when the connection or its AMQP channel closes.
 
 - Consumers send `basic.ack` when done, or `basic.nack` / `basic.reject` to give up (optionally with `requeue=true`).
 - Unacknowledged messages on a closed channel are **requeued** automatically.
-- **Prefetch** (`basic.qos`) limits how many unacknowledged messages a consumer may hold at once.
+- **Consumer prefetch** (`basic.qos`) limits how many unacknowledged messages a consumer may hold at once.
 
-Prefetch is a crucial knob. With an unlimited classic-queue prefetch, a consumer can buffer a large backlog before others connect. Broker defaults and quorum-queue limits can impose bounds. A prefetch of 1 prevents a consumer holding multiple unacknowledged deliveries, but is not a perfect fairness guarantee and can reduce throughput. Values between roughly 10 and 300 usually balance throughput and fairness; the right number depends on processing time.
+The prefetch limit is a crucial knob. With an unlimited classic-queue prefetch, a consumer can buffer a large backlog before others connect. Broker defaults and quorum-queue limits can impose bounds. A prefetch of 1 prevents a consumer holding multiple unacknowledged deliveries, but is not a perfect fairness guarantee and can reduce throughput. Values between roughly 10 and 300 usually balance throughput and fairness; the right number depends on processing time.
 
-RabbitMQ routes messages via **exchanges** (direct, topic, fanout, headers) into queues. For durability use **quorum queues**, which replicate each queue across nodes using the Raft consensus algorithm. A write is confirmed once a majority of replicas have it, so a 3-replica queue survives one node failure and a 5-replica queue survives two. Lose the majority and the queue stops accepting work rather than risk losing confirmed messages. Quorum queues are always durable and cannot be exclusive or transient.
+Producers publish to a **RabbitMQ exchange**, which routes each message into queues. There are four exchange types: direct exchange, topic exchange, fanout exchange and headers exchange. For durability use **quorum queues**, which replicate each queue across nodes using the Raft consensus algorithm. A write is confirmed once a majority of replicas have it, and the queue keeps working only while a majority is still up. That fixes how many failures it survives:
+
+```formula
+f = ⌊(n − 1) / 2⌋
+n = 3: f = ⌊2 / 2⌋ = 1
+n = 5: f = ⌊4 / 2⌋ = 2
+where
+f: the number of replicas (nodes) that can fail while the queue still accepts and confirms writes
+n: the number of replicas of the queue, usually an odd number such as 3 or 5
+⌊ ⌋: floor: round down to the whole number below, so ⌊1.5⌋ = 1
+In words: a majority must survive, so you can lose just under half the replicas: 3 replicas survive 1 failure and 5 survive 2.
+```
+
+A 4-replica queue still survives only one failure (⌊3 / 2⌋ = 1), which is why replica counts are usually odd. Lose the majority and the queue stops accepting work rather than risk losing confirmed messages. Quorum queues are always durable and cannot be exclusive or transient.
 
 The older alternative, *classic mirrored queues*, was deprecated for years and **removed in RabbitMQ 4.0** (2024). Anything still relying on mirroring must move to quorum queues (or streams) before upgrading.
 
@@ -93,7 +136,7 @@ The older alternative, *classic mirrored queues*, was deprecated for years and *
 
 Some messages will never succeed: malformed JSON, a reference to a deleted customer, a bug triggered by one specific input. Without protection, such a **poison message** is retried forever, wasting capacity and, in FIFO queues, blocking later work in its message group when processing preserves order.
 
-The fix is a **dead-letter queue (DLQ)**: after N failed attempts, move the message aside.
+The fix is a **dead-letter queue (DLQ)**: after a set number of failed attempts (say 5), move the message aside.
 
 ```
 main queue ──fail×5──▶ DLQ

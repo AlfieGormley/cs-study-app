@@ -16,7 +16,7 @@ head
  val next
 ```
 
-That one change flips the trade-offs:
+That one change flips the trade-offs. For a list of n elements:
 
 - You can no longer jump to element `i`; you must walk there. Access becomes **O(n)**.
 - But if you already hold a node, you can insert or remove next to it by rewiring a couple of pointers, with no shifting. That's **O(1)**.
@@ -25,7 +25,7 @@ Linked lists are a staple of interviews and textbooks. In production code they a
 
 ## Singly linked lists
 
-Each node has a value and a `next` pointer. The list itself is just a reference to the first node, the **head**. The last node's `next` is `None`.
+Each node has a value and a `next` pointer. The list itself is just a reference to the first node, the **head node** (or just the head). The last node's `next` is `None`.
 
 ```python
 class Node:
@@ -49,7 +49,7 @@ def find(head, target):
     return None
 ```
 
-Getting the k-th element, or searching for a value, is O(n): you follow k pointers.
+Getting the k-th element means following k pointers, so it costs O(k), which is O(n) in the worst case for a list of n nodes. Searching for a value is O(n) too: you may have to look at every node.
 
 ### Insertion
 
@@ -70,7 +70,7 @@ after:   p -> [x] -> [8] -> [5]
 
 Order matters. Create the new node pointing at `p.next` *first*, then point `p` at it. Do it the other way round and you lose the rest of the list.
 
-Inserting at the tail is O(n) unless you also keep a `tail` pointer, in which case it is O(1).
+Inserting at the tail of an n-node list is O(n), because you must walk to the last node, unless you also keep a `tail` pointer, in which case it is O(1).
 
 ### Deletion
 
@@ -154,11 +154,13 @@ For valid handles belonging to this list, insertion and removal use a constant n
 
 In a **circular** list the last node points back to the first instead of to `None`. Circular singly linked lists are handy for round-robin scheduling: keep a pointer to the current node and advance it forever.
 
-A neat trick: keep only a **tail** pointer. Then `tail.next` is the head, so you get O(1) access to both ends from one pointer.
+A neat trick: keep only a **tail pointer**. Then `tail.next` is the head, so you get O(1) access to both ends from one pointer.
 
 The danger with circular lists is the loop condition. `while cur:` never ends; you must stop when you return to your starting node.
 
 ## Cost summary
+
+For a sequence of n elements:
 
 | Operation | Array | Singly | Doubly |
 |---|---|---|---|
@@ -177,7 +179,7 @@ Big-O makes linked lists look great for insertion-heavy work. Real hardware is l
 - **Memory overhead.** Every node carries one or two pointers plus allocator bookkeeping. A Java `LinkedList` node is an object with three references (item, next, prev); for small elements, the overhead dwarfs the data. A Python node object costs tens of bytes before you even count the value.
 - **Cache misses.** Nodes are scattered around the heap. Walking a list is a chain of dependent loads: the CPU can't fetch node 5 until node 4 tells it where node 5 is. Arrays stream through cache with prefetching.
 - **Allocation.** Separately allocated nodes add allocation/reclamation work; pools and intrusive lists can avoid a per-insertion allocation.
-- **Finding the spot is O(n) anyway.** "Insert in the middle is O(1)" assumes you already hold the node. If you have to search for the position first, that search is O(n), and on an array it is a fast linear scan.
+- **Finding the spot is O(n) anyway** (for n elements). "Insert in the middle is O(1)" assumes you already hold the node. If you have to search for the position first, that search is O(n), and on an array it is a fast linear scan.
 
 > [!example] Why locality can outweigh shifting
 > A vector can beat a linked list when both first perform a linear search for the insertion point: contiguous scanning and shifting may outweigh the cost of moving elements. Actual performance requires measurement.

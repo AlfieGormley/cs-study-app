@@ -152,7 +152,7 @@
       2,
       4
     ],
-    "workedExample": "Baseline, new connection, TLS 1.2: TCP 1 + TLS 2 = **3 RTT = 450 ms** before the request.\n\n- TLS 1.3 → 2 RTT = 300 ms.\n- 0-RTT on resume → 1 RTT (TCP only) = 150 ms.\n- Edge at 10 ms RTT → setup ≈ 20 ms, plus one origin round trip over a warm connection.\n- Connection reuse → 0 ms setup for later requests.\n\nRSA-4096 only adds cost.",
+    "workedExample": "Setup time is round trips times RTT:\n\n```formula\nT = (n_TCP + n_TLS) × RTT\nT_12 = (1 + 2) × 150 ms = 450 ms\nT_13 = (1 + 1) × 150 ms = 300 ms\nT_0rtt = (1 + 0) × 150 ms = 150 ms\nwhere\nT: the setup time before the request can be sent, in milliseconds (ms)\nn_TCP: the round trips for the TCP handshake, 1\nn_TLS: the round trips for TLS: 2 for a full TLS 1.2 handshake, 1 for TLS 1.3, 0 for TLS 1.3 resumption with 0-RTT early data\nRTT: the round-trip time to your region, 150 ms\nT_12: the baseline with TLS 1.2\nT_13: after upgrading to TLS 1.3\nT_0rtt: a resumed connection using 0-RTT\nms: millisecond, one thousandth of a second\nIn words: each round trip removed saves a full 150 ms.\n```\n\n- Baseline, new connection, TLS 1.2: **3 RTT = 450 ms** before the request.\n- TLS 1.3 → 2 RTT = 300 ms.\n- 0-RTT on resume → 1 RTT (TCP only) = 150 ms.\n- Edge at 10 ms RTT → setup ≈ 20 ms, plus one origin round trip over a warm connection.\n- Connection reuse → 0 ms setup for later requests.\n\nRSA-4096 only adds cost.",
     "link": {
       "title": "Introducing 0-RTT (Cloudflare blog)",
       "url": "https://blog.cloudflare.com/introducing-0-rtt/"
@@ -242,7 +242,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Count the round trips:\n\n| Step | RTT |\n|---|---|\n| TCP SYN / SYN-ACK | 1 |\n| ClientHello + PSK / ServerHello + Finished | 1 |\n| Then the request goes out | |\n\n2 × 50 ms = **100 ms**.\n\nWith 0-RTT enabled, the request would ride with the ClientHello: 50 ms. With QUIC and 0-RTT: 0 ms of setup before the request leaves.",
+    "workedExample": "Count the round trips:\n\n| Step | RTT |\n|---|---|\n| TCP SYN / SYN-ACK | 1 |\n| ClientHello + PSK / ServerHello + Finished | 1 |\n| Then the request goes out | |\n\n```formula\nT = (n_TCP + n_TLS) × RTT\nT = (1 + 1) × 50 ms = 100 ms\nwhere\nT: the time before the HTTP request can leave the client, in milliseconds (ms)\nn_TCP: the round trips for the TCP handshake, 1\nn_TLS: the round trips for the resumed TLS 1.3 handshake without early data, 1\nRTT: the round-trip time, 50 ms\nms: millisecond, one thousandth of a second\nIn words: resumption without early data still needs a full TLS round trip after the TCP one.\n```\n\nSo **100 ms**.\n\nWith 0-RTT enabled, the request would ride with the ClientHello: 50 ms. With QUIC and 0-RTT: 0 ms of setup before the request leaves.",
     "link": {
       "title": "RFC 8446: TLS 1.3",
       "url": "https://www.rfc-editor.org/rfc/rfc8446"
@@ -310,7 +310,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The public-TLS maximum becomes 200 days on 15 March 2026, 100 days on 15 March 2027 and 47 days on 15 March 2029.\n2. With a 47-day certificate, renewal at two-thirds of its lifetime is about 31 days.\n3. Frequent manual renewal increases the chance of an operational mistake; an outage is not inevitable.\n4. Use ACME or managed certificates, test renewal and monitor expiry. Private PKI has its own policy.",
+    "workedExample": "1. The public-TLS maximum becomes 200 days on 15 March 2026, 100 days on 15 March 2027 and 47 days on 15 March 2029.\n2. With a 47-day certificate, renewal at two-thirds of its lifetime is about 31 days.\n3. Frequent manual renewal increases the chance of an operational mistake; an outage is not inevitable.\n4. Use ACME or managed certificates, test renewal and monitor expiry. Private PKI has its own policy.\n\nThe arithmetic in step 2:\n\n```formula\nt_renew = 2/3 × L\nt_renew = 2/3 × 47 days ≈ 31 days\nwhere\nt_renew: how long after issuance the certificate is renewed\nL: the certificate's lifetime, 47 days\ndays: the unit of time here, 24 hours each\n≈: approximately equal to\nIn words: renewing at two-thirds of a 47-day lifetime means a renewal roughly every month, far too often to do by hand.\n```",
     "link": {
       "title": "CA/Browser Forum ballot SC081v3",
       "url": "https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/"
@@ -340,7 +340,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. This implementation encrypts resumable state into a stateless ticket; other implementations can use opaque identifiers and server-side state.\n2. A returning client presents its ticket to a uniformly chosen node.\n3. Only the original node has the right key: 1/20 = 5%.\n4. Share a securely distributed, rotated ticket-key set or use another compatible resumption design.\n5. Ticket-key compromise can enable impersonation and expose early data or PSK-only traffic; it does not automatically decrypt past post-handshake traffic protected by fresh (EC)DHE.",
+    "workedExample": "1. This implementation encrypts resumable state into a stateless ticket; other implementations can use opaque identifiers and server-side state.\n2. A returning client presents its ticket to a uniformly chosen node.\n3. Only the original node has the right key:\n\n```formula\nP = 1 / N = 1 / 20 = 0.05 = 5%\nwhere\nP: the probability that a returning client lands on the node that issued its ticket\nN: the number of TLS-terminating nodes, 20, each equally likely\n%: per cent\nIn words: with 20 nodes and 20 different keys, a returning client finds the right key only one time in twenty.\n```\n\nFix: share a securely distributed, rotated ticket-key set or use another compatible resumption design.\nNote that ticket-key compromise can enable impersonation and expose early data or PSK-only traffic; it does not automatically decrypt past post-handshake traffic protected by fresh (EC)DHE.",
     "link": {
       "title": "High Performance Browser Networking: TLS",
       "url": "https://hpbn.co/transport-layer-security-tls/"
@@ -370,7 +370,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Initial congestion window ≈ 10 × 1,460 B ≈ **14 KB**.\n2. Server first flight = ServerHello + extensions + ~18 KB of certificates + CertificateVerify + Finished ≈ 19 KB.\n3. 19 KB > 14 KB → the server sends 14 KB, waits one RTT for ACKs, then sends the remainder.\n4. Fixes:\n  - ECDSA P-256 certificates (far smaller than RSA-4096).\n  - Don't send the root or unneeded cross-signs.\n  - Certificate compression (RFC 8879), when both endpoints negotiate support.",
+    "workedExample": "```formula\nIW = 10 × MSS\nIW = 10 × 1,460 B = 14,600 B ≈ 14 KB\nF ≈ 19 KB > IW\nwhere\nIW: TCP's initial congestion window: how much the server may send before the first ACK comes back\nMSS: the maximum segment size, 1,460 bytes (B) per segment here\nF: the server's first flight: ServerHello, extensions, about 18 KB of certificates, CertificateVerify and Finished, about 19 KB in total\nB: bytes\nKB: kilobytes, thousands of bytes\n≈: approximately equal to\n>: greater than\nIn words: the first flight is bigger than the initial window, so it can't all go in one round trip.\n```\n\nThe server sends about 14 KB, waits one RTT for ACKs, then sends the remainder: an extra round trip.\n\nFixes:\n  - ECDSA P-256 certificates (far smaller than RSA-4096).\n  - Don't send the root or unneeded cross-signs.\n  - Certificate compression (RFC 8879), when both endpoints negotiate support.",
     "link": {
       "title": "High Performance Browser Networking: TLS",
       "url": "https://hpbn.co/transport-layer-security-tls/"

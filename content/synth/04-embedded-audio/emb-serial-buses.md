@@ -33,7 +33,27 @@ The MIDI 1.0 electrical specification (as updated by the MIDI Association's CA-0
 
 > The hardware MIDI interface operates at 31.25 (+/- 1%) Kbaud, asynchronous, with a start bit, 8 data bits (D0 to D7), and a stop bit. This makes a total of 10 bits for a period of 320 microseconds per serial byte.
 
-So a 5-pin DIN MIDI port is an 8-N-1 UART at 31,250 baud. What it costs in time:
+So a 5-pin DIN MIDI port is an 8-N-1 UART at 31,250 baud. What it costs in time: each bit lasts one divided by the baud rate, and a byte is ten bits on the wire.
+
+```formula
+t_bit = 1 / R_baud
+t_bit = 1 / 31250 Bd = 0.000032 s = 32 µs
+t_byte = b × t_bit
+t_byte = 10 × 32 µs = 320 µs
+t_msg = 3 × t_byte = 960 µs
+where
+t_bit: the time one bit occupies on the wire, in seconds (s)
+R_baud: the baud rate, symbols (here bits) per second, in baud (Bd); MIDI uses 31,250
+Bd: baud, one symbol per second; on a UART one symbol is one bit
+t_byte: the time to send one byte, in seconds (s)
+b: bits on the wire per byte; 10 for 8-N-1 (start + 8 data + stop)
+t_msg: the time for a three-byte message such as a note-on
+s: second
+µs: microsecond, one millionth of a second
+In words: a MIDI bit lasts 32 µs, a byte 320 µs, and a three-byte note-on nearly a millisecond.
+```
+
+The same arithmetic in Python, with the byte rate:
 
 ```python
 baud = 31_250
@@ -90,7 +110,24 @@ From TI's *A Basic Guide to I2C* (which also lists a write-only Ultra-Fast mode 
 | Fast-mode Plus | 1 Mbit/s |
 | High-speed mode | 3.4 Mbit/s |
 
-Each byte costs 9 clocks (8 bits plus ACK). A three-byte register write (address, register, value) uses 27 clock pulses: 67.5 µs at 400 kHz, plus START/STOP setup and hold times, any bus-free interval and clock stretching. START and STOP are bus conditions, not two extra clock pulses. That is fine for configuring a codec once at start-up, and far too slow to do repeatedly inside an audio callback.
+Each byte costs 9 clocks (8 bits plus ACK). The time a transfer spends clocking bits follows from the clock rate:
+
+```formula
+t = (n_bytes × 9) / f_SCL
+t = (3 × 9) / 400000 Hz
+t = 27 / 400000 Hz = 0.0000675 s = 67.5 µs
+where
+t: the time spent clocking the bytes, in seconds (s)
+n_bytes: the number of bytes sent, including the address byte; here 3 (address, register, value)
+9: clock pulses per byte: 8 data bits plus the ACK bit
+f_SCL: the I2C clock frequency on the SCL line, in hertz (Hz); here 400 kHz, Fast-mode
+Hz: hertz, cycles per second
+s: second
+µs: microsecond, one millionth of a second
+In words: a three-byte register write needs 27 clock pulses, which at 400 kHz take 67.5 µs.
+```
+
+A three-byte register write (address, register, value) therefore uses 27 clock pulses: 67.5 µs at 400 kHz, plus START/STOP setup and hold times, any bus-free interval and clock stretching. START and STOP are bus conditions, not two extra clock pulses. That is fine for configuring a codec once at start-up, and far too slow to do repeatedly inside an audio callback.
 
 ## SPI: fast, simple, more wires
 
@@ -125,7 +162,33 @@ No ranking of SPI-mode prevalence is given here because reliable survey evidence
 
 ## Which bus for which job?
 
-A worked comparison: a 128×64 monochrome OLED display holds one bit per pixel, so a full frame is 1,024 bytes.
+A worked comparison: a 128×64 monochrome OLED display holds one bit per pixel, so a full frame is 1,024 bytes. I2C spends 9 clocks per byte; SPI spends 8, because it has no ACK bit:
+
+```formula
+n = (W × H) / 8
+n = (128 × 64) / 8 = 1024 bytes
+t_I2C = (n × 9) / f_I2C
+t_I2C = (1024 × 9) / 400000 Hz ≈ 23 ms
+t_SPI = (n × 8) / f_SPI
+t_SPI = (1024 × 8) / 8000000 Hz ≈ 1.02 ms
+where
+n: the number of bytes in one full frame
+W: the display width, in pixels; here 128
+H: the display height, in pixels; here 64
+8: bits per byte (each pixel is one bit)
+bytes: the unit of data size; one byte is 8 bits
+t_I2C: the time to send the frame over I2C, in seconds (s)
+f_I2C: the I2C clock frequency, in hertz (Hz); here 400 kHz
+t_SPI: the time to send the frame over SPI, in seconds (s)
+f_SPI: the SPI clock frequency, in hertz (Hz); here 8 MHz
+Hz: hertz, cycles per second
+s: second
+ms: millisecond, one thousandth of a second
+≈: approximately equal to
+In words: a full redraw of this small display takes about 23 ms over 400 kHz I2C but only about 1 ms over 8 MHz SPI.
+```
+
+Python checks the arithmetic, including Standard-mode I2C:
 
 ```python
 frame = 128 * 64 // 8

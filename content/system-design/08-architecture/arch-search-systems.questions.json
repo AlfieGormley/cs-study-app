@@ -63,7 +63,7 @@
     "id": "arch-search-systems-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A corpus has 1,000,000 documents. The term `wireless` appears in 100,000 of them and `anc` appears in 1,000. Using IDF = log10(N / df), how much more does a single match on `anc` contribute than a single match on `wireless` (same term frequency)?",
+    "prompt": "A corpus has 1,000,000 documents. The term `wireless` appears in 100,000 of them and `anc` appears in 1,000. Use this inverse document frequency (IDF):\n\n```formula\nIDF = log_10(N / df)\nwhere\nIDF: inverse document frequency: how much a term's rarity is worth\nN: total documents in the corpus\ndf: documents containing the term\nlog_10: logarithm to base 10: log_10(1000) = 3 because 10 × 10 × 10 = 1000\nIn words: the rarer the term, the bigger its IDF.\n```\n\nHow much more does a single match on `anc` contribute than a single match on `wireless` (same term frequency)?",
     "options": [
       {
         "text": "The same, because each term appears once in the document.",
@@ -71,11 +71,11 @@
       },
       {
         "text": "About 3×",
-        "explanation": "Correct. IDF(wireless) = log10(10) = 1; IDF(anc) = log10(1,000) = 3. With equal TF, `anc` contributes three times as much."
+        "explanation": "Correct. For wireless, 1,000,000 / 100,000 = 10, whose base-10 logarithm is 1. For anc, 1,000,000 / 1,000 = 1,000, whose base-10 logarithm is 3. With equal TF, `anc` contributes three times as much."
       },
       {
         "text": "About 100×",
-        "explanation": "Wrong. 100 is the ratio of document frequencies. IDF takes a logarithm, which compresses that ratio to 3 / 1."
+        "explanation": "Wrong. 100 is the ratio of document frequencies. IDF takes a logarithm, which compresses that ratio to 3 versus 1."
       },
       {
         "text": "Less, because rarer terms are less reliable.",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. IDF(wireless) = log10(1,000,000 / 100,000) = log10(10) = 1.0.\n2. IDF(anc) = log10(1,000,000 / 1,000) = log10(1,000) = 3.0.\n3. With equal tf, contribution ∝ IDF, so 3.0 / 1.0 = 3×.\n4. Intuition: knowing a document mentions 'wireless' narrows 1M docs to 100k; 'anc' narrows to 1k, which is far more informative.\n5. BM25 uses a smoothed IDF, log(1 + (N − df + 0.5)/(df + 0.5)), but the ordering is the same.",
+    "workedExample": "1. Compute each term's IDF:\n\n```formula\nIDF_w = log_10(1000000 / 100000)\nIDF_w = log_10(10) = 1.0\nIDF_a = log_10(1000000 / 1000)\nIDF_a = log_10(1000) = 3.0\nwhere\nIDF_w: inverse document frequency of wireless\nIDF_a: inverse document frequency of anc\nlog_10: logarithm to base 10: the power of 10 that gives the number (10 = 10^1, 1000 = 10^3)\n^: \"to the power of\"\nIn words: wireless is in a tenth of the corpus and scores 1; anc is in a thousandth and scores 3.\n```\n\n2. With equal term frequency, each match's contribution is proportional to IDF:\n\n```formula\nIDF_a / IDF_w = 3.0 / 1.0 = 3\nwhere\nIDF_a: IDF of anc, 3.0\nIDF_w: IDF of wireless, 1.0\nIn words: a match on anc is worth three matches' worth of wireless.\n```\n\n3. Intuition: knowing a document mentions 'wireless' narrows 1M docs to 100k; 'anc' narrows to 1k, which is far more informative.\n4. BM25 uses a smoothed IDF, but the ordering is the same:\n\n```formula\nx = (N − df + 0.5) / (df + 0.5)\nIDF_BM25 = ln(1 + x)\nwhere\nx: the smoothed ratio of documents without the term to documents with it\nIDF_BM25: the IDF used by Lucene's BM25\nln: natural logarithm (base e ≈ 2.718)\ne: Euler's number, about 2.718\nN: total documents, 1,000,000\ndf: documents containing the term\nIn words: a smoothed version of the same idea; adding 0.5 and 1 keeps it positive and avoids dividing by zero.\n```",
     "link": {
       "title": "Wikipedia: tf–idf",
       "url": "https://en.wikipedia.org/wiki/Tf%E2%80%93idf"
@@ -116,7 +116,7 @@
       0,
       1
     ],
-    "workedExample": "1. BM25 per term ≈ IDF × tf·(k1+1) / (tf + k1·(1 − b + b·len/avglen)).\n2. Saturation: with k1 = 1.2, b = 0 and IDF ignored, tf = 1 gives 1.0, tf = 2 gives about 1.38, tf = 10 gives about 1.96. Going from 1 to 10 occurrences doesn't even double the score.\n3. Length: with b = 0.75, a document twice the average length has a larger denominator, so the same tf scores less.\n4. IDF is still there, and nothing in the formula involves meaning.\n5. Answer: options 0 and 1.\nThese numbers use the classic formula displayed here. Current Lucene omits its constant (k1+1) multiplier, so raw scores differ while this relative saturation behavior remains.",
+    "workedExample": "1. The classic BM25 score for one query term:\n\n```formula\ns = IDF × tf × (k1 + 1) / D\nD = tf + k1 × (1 − b + b × L / L_avg)\nwhere\ns: the term's contribution to the document's score\nIDF: inverse document frequency (rarer term, bigger value)\ntf: term frequency: occurrences in the field\nk1: saturation parameter, default 1.2\nb: length-normalisation strength, 0 to 1, default 0.75\nD: the denominator, split out to fit\nL: this field's length, in terms\nL_avg: average length of that field in the index\nIn words: rarity times a term-frequency factor that levels off and shrinks for long fields.\n```\n\n2. Saturation: with k1 = 1.2, b = 0 and IDF set aside, the length part drops out of the denominator:\n\n```formula\nf(n) = n × 2.2 / (n + 1.2)\nf(1) = 2.2 / 2.2 = 1.0\nf(2) = 4.4 / 3.2 ≈ 1.38\nf(10) = 22 / 11.2 ≈ 1.96\nwhere\nf(n): the term-frequency factor for n occurrences\nn: occurrences of the term (tf): 1, 2 or 10\n≈: approximately equal to\nIn words: going from 1 to 10 occurrences doesn't even double the score.\n```\n\n3. Length: with b = 0.75, a document twice the average length has a larger denominator D, so the same tf scores less.\n4. IDF is still there, and nothing in the formula involves meaning.\n5. Answer: options 0 and 1.\nThese numbers use the classic formula displayed here. Current Lucene omits its constant (k1+1) multiplier, so raw scores differ while this relative saturation behavior remains.",
     "link": {
       "title": "Wikipedia: Okapi BM25",
       "url": "https://en.wikipedia.org/wiki/Okapi_BM25"
@@ -146,7 +146,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Search = query every shard (one copy each) → merge → fetch.\n2. A simplified query-phase model is max(shard response times) + merge; fetch and network work add further cost.\n3. The bad node holds 2 of the 10 shard copies. If copies are picked at random, the chance a search avoids both of its shards is about (1/2) × (1/2) = 25%.\n4. So roughly 75% of searches may touch the slow node. Even if it's only slow during GC pauses, the tail gets very bad.\n5. Mitigations: fix the GC issue (heap sizing), use adaptive replica selection (default in recent versions) to prefer faster copies, and avoid oversharding.",
+    "workedExample": "1. Search = query every shard (one copy each) → merge → fetch.\n2. A simplified query-phase model is:\n\n```formula\nT_q = max(t_1, t_2, ..., t_5) + t_m\nwhere\nT_q: query-phase time for one search, in milliseconds (ms)\nt_1: response time of the copy chosen for shard 1, in ms\nt_2: likewise for shard 2\n...: and so on\nt_5: response time for shard 5\nmax: the largest of the values listed\nt_m: time to merge the shard results\nms: milliseconds\nIn words: a search waits for its slowest shard.\n```\n\n   Fetch and network work add further cost.\n3. The bad node holds 2 of the 10 shard copies, each the primary or replica of a different shard. If copies are picked at random, each of those two shards avoids the slow node half the time:\n\n```formula\nP_avoid = (1/2) × (1/2) = 0.25 = 25 %\nP_hit = 1 − P_avoid = 75 %\nwhere\nP_avoid: probability a search misses the slow node entirely; each 1/2 is the chance of picking the other copy of one affected shard\nP_hit: probability it touches the slow node at least once\n%: per cent\nIn words: a search dodges the slow node only if it dodges it for both affected shards: 1 time in 4.\n```\n\n4. So roughly 75% of searches may touch the slow node. Even if it's only slow during GC pauses, the tail gets very bad.\n5. Mitigations: fix the GC issue (heap sizing), use adaptive replica selection (default in recent versions) to prefer faster copies, and avoid oversharding.",
     "link": {
       "title": "Elasticsearch: Scalability and resilience",
       "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html"
@@ -296,7 +296,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Global top 10,000 requires each shard's top 10,000 (any of them could be in it).\n2. Query phase: up to 20 × 10,000 candidates = 200,000 entries, if enough matches exist.\n3. Fetch phase: only 10 documents.\n4. Default guard: `index.max_result_window` = 10,000 (`from + size`).\n5. Alternative: use supported sort fields with a stable tie-breaker and a point-in-time view, then pass the last hit's sort values as search_after. This avoids the growing offset window but does not guarantee identical page latency.\n6. Product decision: choose a navigation or export limit from actual product needs, rather than an unsupported universal user-behavior claim.",
+    "workedExample": "1. Global top 10,000 requires each shard's top 10,000 (any of them could be in it).\n2. Query phase, if enough matches exist:\n\n```formula\nC = S × (from + size)\nC = 20 × (9990 + 10) = 200000\nwhere\nC: candidate hits the coordinating node must sort\nS: number of shards queried, 20\nfrom: results skipped before the page, 9,990\nsize: results per page, 10\nIn words: 20 shards each send their top 10,000, so 200,000 entries are sorted to keep 10.\n```\n3. Fetch phase: only 10 documents.\n4. Default guard: `index.max_result_window` = 10,000 (`from + size`).\n5. Alternative: use supported sort fields with a stable tie-breaker and a point-in-time view, then pass the last hit's sort values as search_after. This avoids the growing offset window but does not guarantee identical page latency.\n6. Product decision: choose a navigation or export limit from actual product needs, rather than an unsupported universal user-behavior claim.",
     "link": {
       "title": "Elasticsearch: Paginate search results",
       "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html"
@@ -310,7 +310,7 @@
     "options": [
       {
         "text": "A one-word match in a 4-word title tends to score higher than the same match in a 16-word title, because BM25 normalises by field length.",
-        "explanation": "Correct. Shorter-than-average fields get a smaller denominator, so the same tf scores more (with b = 0.75)."
+        "explanation": "Correct. A shorter-than-average field gets a smaller BM25 denominator, so the same term frequency scores more (with the default b of 0.75)."
       },
       {
         "text": "Length is compared with the average length of the *same field*, so titles aren't penalised for being shorter than descriptions.",
@@ -322,7 +322,7 @@
       },
       {
         "text": "Setting `b = 0` on the title field turns off length normalisation for that field.",
-        "explanation": "Correct. With b = 0 the denominator becomes tf + k1, independent of length. Some teams do this for short fields where length carries no signal."
+        "explanation": "Correct. With b set to 0, the field-length part of the BM25 denominator disappears, so the score no longer depends on length. Some teams do this for short fields where length carries no signal."
       },
       {
         "text": "BM25 will match \"earphones\" to documents containing only \"headphones\".",
@@ -334,7 +334,7 @@
       1,
       3
     ],
-    "workedExample": "1. Per-term score ≈ idf × tf(k1+1) / (tf + k1(1 − b + b·len/avg)).\n2. Title, avg 8, tf = 1, k1 = 1.2, b = 0.75:\n   - len 4: 1 + 1.2(0.25 + 0.375) = 1.75 → 2.2/1.75 ≈ 1.26\n   - len 16: 1 + 1.2(0.25 + 1.5) = 3.1 → 2.2/3.1 ≈ 0.71\n3. `avg` is per field, so titles compete with titles.\n4. Cap: as tf → ∞ the fraction → k1 + 1 = 2.2.\n5. No semantics: synonyms need analysis or embeddings.\nThe arithmetic uses the displayed classic BM25 formula, not current Lucene's raw score scale; Lucene omits the constant (k1+1) factor.",
+    "workedExample": "1. Classic per-term BM25 score:\n\n```formula\ns = idf × tf × (k1 + 1) / D\nD = tf + k1 × (1 − b + b × L / L_avg)\nwhere\ns: the term's score contribution\nidf: inverse document frequency of the term\ntf: occurrences of the term in the field\nk1: saturation parameter, 1.2\nb: length-normalisation strength, 0.75\nD: the denominator, written separately\nL: this field's length, in words\nL_avg: average length of the same field\nIn words: a long field makes D bigger and the score smaller.\n```\n\n2. Title field, average 8 words, tf = 1 (idf set aside):\n\n```formula\nD_4 = 1 + 1.2 × (0.25 + 0.75 × 4/8)\nD_4 = 1 + 1.2 × 0.625 = 1.75\nf_4 = 2.2 / 1.75 ≈ 1.26\nD_16 = 1 + 1.2 × (0.25 + 0.75 × 16/8)\nD_16 = 1 + 1.2 × 1.75 = 3.1\nf_16 = 2.2 / 3.1 ≈ 0.71\nwhere\nD_4: denominator for a 4-word title\nf_4: score factor for a 4-word title\nD_16: denominator for a 16-word title\nf_16: score factor for a 16-word title\n≈: approximately equal to\nIn words: half-average length scores about 1.26; double-average length only about 0.71.\n```\n\n3. L_avg is per field, so titles compete with titles.\n4. Cap: as tf grows without limit, the fraction approaches k1 + 1 = 2.2, never more.\n5. No semantics: synonyms need analysis or embeddings.\nThe arithmetic uses the displayed classic BM25 formula, not current Lucene's raw score scale; Lucene omits the constant (k1+1) factor.",
     "link": {
       "title": "Wikipedia: Okapi BM25",
       "url": "https://en.wikipedia.org/wiki/Okapi_BM25"

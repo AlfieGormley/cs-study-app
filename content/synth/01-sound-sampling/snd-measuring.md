@@ -2,7 +2,7 @@
 id: snd-measuring
 title: Measuring audio offline
 level: advanced
-minutes: 16
+minutes: 20
 summary: A Python workbench for checking audio by numbers, not just by ear. Generate test signals, plot them, read a spectrum with numpy's FFT, verify frequency and level, confirm an aliasing prediction, and write a WAV file with a library.
 ---
 
@@ -58,7 +58,7 @@ Each check has a reason:
 
 - **Length:** 1 s at 48 kHz must be 48,000 samples. Off-by-one-block errors show up here.
 - **Peak** 0.5 is −6.02 dBFS, as requested.
-- **RMS** 0.3536 = 0.5/√2, the sine's crest factor.
+- **RMS** 0.3536 is the peak divided by 1.414 (the square root of 2), the sine's crest factor (lesson 5).
 - **DC offset** (the mean) should be essentially zero. A non-zero mean means the waveform is shifted off centre, which wastes headroom and can thump when audio starts and stops.
 
 Other cheap sanity checks are worth wrapping in a function: `np.isfinite(x).all()` (NaN or infinity anywhere means a bug, often a filter blowing up), and the number of samples at or beyond ±1.0.
@@ -115,15 +115,80 @@ print(f"{1 / np.mean(periods):.2f} Hz")
 997.01 Hz
 ```
 
+The frequency is one over the average period, where each period is measured in samples and converted to seconds:
+
+```formula
+f ≈ 1 / T_avg
+T_avg = D_avg / fs
+f ≈ 48000 / 48.144 ≈ 997.0 Hz
+where
+f: the estimated frequency, in hertz (Hz)
+T_avg: the average time between upward zero crossings, in seconds (s)
+D_avg: the average spacing between upward zero crossings, in samples; about 48.144 for 997 Hz at 48 kHz
+fs: the sample rate, in samples per second; here 48,000
+Hz: hertz, cycles per second
+≈: approximately equal to (an estimate, then rounded)
+In words: count the average number of samples between upward crossings, turn it into seconds, and take one over that.
+```
+
 This counts whole samples, so it's only accurate to a fraction of a sample per period (here 0.01 Hz after averaging many periods). It's fooled by noise and by waveforms with several crossings per cycle. For anything richer than a sine, use the spectrum.
 
 ## Read a spectrum with numpy's FFT
 
-The **FFT** (fast Fourier transform) takes N samples and returns how much of each frequency they contain, at N/2 + 1 evenly spaced frequencies from 0 to fs/2 for real input (when N is even). Three facts you need to read it correctly:
+The **FFT** (fast Fourier transform) takes N samples and returns how much of each frequency they contain, at evenly spaced frequencies called **FFT bins**. For real input (ordinary audio), numpy's `rfft` returns the bins from 0 Hz up to the Nyquist frequency:
 
-1. **Bin spacing** is fs/N. One second at 48 kHz gives 1 Hz bins; 0.1 s gives 10 Hz bins. Longer captures give finer frequency resolution.
+```formula
+K = N / 2 + 1
+Δf = fs / N
+f_k = k × Δf
+Δf = 48000 / 48000 = 1 Hz
+where
+K: the number of bins rfft returns (when N is even)
+N: the number of samples analysed (the capture length)
+fs: the sample rate, in samples per second
+Δf: delta f, the bin spacing: the frequency gap between neighbouring bins, in hertz (Hz)
+f_k: the frequency at the centre of bin number k, in hertz (Hz)
+k: the bin index, 0, 1, 2, … up to N/2; bin 0 is 0 Hz (DC) and bin N/2 is the Nyquist frequency
+Hz: hertz, cycles per second
+In words: the bins are spaced by the sample rate divided by the number of samples, which is one over the capture's length in seconds. One second of audio gives 1 Hz bins.
+```
+
+Three facts you need to read it correctly:
+
+1. **Bin spacing** is the sample rate divided by the number of samples. One second at 48 kHz gives 1 Hz bins; 0.1 s gives 10 Hz bins. Longer captures give finer frequency resolution.
 2. **Scaling:** numpy's raw output grows with N. To read a sine's amplitude directly, multiply by 2 and divide by the sum of the window (below).
 3. **Windowing:** multiply the capture by a smooth **window** (Hann is a good default) that tapers its ends to zero. Without it, a frequency that doesn't fit a whole number of cycles in the capture smears energy across the spectrum. That smearing is called **spectral leakage**.
+
+The Hann window numpy uses is a single raised cosine, zero at both ends and 1 (or, for an even number of samples, just under 1) in the middle:
+
+```formula
+w[n] = 0.5 − 0.5 × cos(2 × π × n / (N − 1))
+where
+w[n]: the window value for sample n, between 0 and 1
+n: the sample index, 0 to N − 1
+N: the number of samples in the capture
+cos: the cosine function, taking radians
+π: pi, about 3.14159
+In words: the window rises smoothly from 0 at the first sample to 1 in the middle and falls back to 0 at the last, so the capture has no abrupt start or end.
+```
+
+And the scaling that turns a bin's raw magnitude into a sine's amplitude:
+
+```formula
+A = 2 × |X[k]| / Σ w[n]
+A = 2 × 12000 / 48000 = 0.5
+where
+A: the amplitude of a sine whose frequency sits on bin k
+X[k]: the raw complex FFT output for bin k
+|X[k]|: its magnitude (size), which numpy gives with np.abs
+k: the bin index
+Σ w[n]: the sum of all the window values; N for no window, about N/2 for Hann
+w[n]: the window value for sample n
+n: the sample index
+In words: double the bin's magnitude (half the sine's energy sits in a mirrored negative frequency that rfft doesn't return) and divide by the sum of the window. Here, no window, 48,000 samples and a raw magnitude of 12,000 give an amplitude of 0.5.
+```
+
+The 0 Hz bin and (for even N) the Nyquist bin have no mirror, so they are not doubled; the `spectrum` function below halves them back.
 
 ```python
 import numpy as np
@@ -229,7 +294,7 @@ for hz in (480, 1280, 2240, 3040, 3520):
  3520 Hz   -6.0 dB harmonic
 ```
 
-The predictions were −28.6, −28.9, −28.3 and −29.2 dB for the four aliases (1/k for harmonics 27, 28, 26 and 29), and −6.0 dB for the 2nd harmonic. The measurements agree to about 0.1 dB, and the small differences come from other, much weaker harmonics folding onto the same bins. This is the "compare a deliberately aliased signal with its predicted apparent frequency" exercise from the roadmap. Later, run the same script against a band-limited oscillator from a library and watch those aliases drop.
+The predictions were −28.6, −28.9, −28.3 and −29.2 dB for the four aliases (each harmonic's amplitude is one over its harmonic number, here 27, 28, 26 and 29), and −6.0 dB for the 2nd harmonic. The measurements agree to about 0.1 dB, and the small differences come from other, much weaker harmonics folding onto the same bins. This is the "compare a deliberately aliased signal with its predicted apparent frequency" exercise from the roadmap. Later, run the same script against a band-limited oscillator from a library and watch those aliases drop.
 
 ## Write a WAV file with a library
 
@@ -269,8 +334,8 @@ Reading the file back and comparing is the important habit. The sample rate, for
 
 Notes:
 
-- `sf.read` returns float64 in ±1.0 by default. Pass `dtype="int16"` or `"int32"` to get integers instead. These are scaled to fill the integer type, not the file's raw values: a 16-bit file read as int16 gives its stored samples, but a 24-bit file read as int32 comes back multiplied by 256.
-- Use `subtype="FLOAT"` to keep a 32-bit float file with headroom above 1.0 for analysis. Use `PCM_16` or `PCM_24` for files to share or import into a DAW.
+- `sf.read` returns float64 in ±1.0 by default. Pass an integer type, as in `sf.read(path, dtype="int16")` (or `"int32"`), to get integers instead. These are scaled to fill the integer type, not the file's raw values: a 16-bit file read as int16 gives its stored samples, but a 24-bit file read as int32 comes back multiplied by 256.
+- Use `sf.write(path, x, fs, subtype="FLOAT")` to keep a 32-bit float file with headroom above 1.0 for analysis. Use `PCM_16` or `PCM_24` for files to share or import into a DAW.
 - `soundfile` switches on libsndfile's clipping option whenever it opens a file, so in testing it clipped 1.7 to full scale when writing PCM rather than wrapping it. **Clip explicitly** anyway, so your output never depends on a library setting.
 - The fades matter: a file that starts or ends mid-wave clicks, which is easy to mistake for a synth bug.
 
@@ -282,9 +347,9 @@ Before trusting any experiment's audio, check:
 |---|---|
 | Length and rate | `len(x)`, `sf.info` |
 | Finite values | `np.isfinite(x).all()` |
-| Peak level | `20·log10(max abs)` |
-| RMS and DC | `sqrt(mean(x²))`, `mean(x)` |
-| Clipped samples | count `abs(x) >= 1` |
+| Peak level | `np.max(np.abs(x))`, then dBFS |
+| RMS and DC | `np.sqrt(np.mean(x**2))`, `np.mean(x)` |
+| Clipped samples | `np.sum(np.abs(x) >= 1)` |
 | Frequency | windowed FFT peak |
 | Unwanted content | FFT, compare with prediction |
 
@@ -293,7 +358,7 @@ Then listen at a safe level. Measurement tells you what's there; listening tells
 ## Key takeaways
 - Verify by numbers: length, peak, RMS, DC, finiteness and clipped-sample count are one-liners.
 - Plot short windows with sample dots; lines between dots aren't the real signal.
-- FFT bin spacing is fs/N. Window the capture (Hann), and scale magnitudes by 2/sum(window) to read sine amplitudes.
+- FFT bin spacing is the sample rate divided by the number of samples. Window the capture (Hann), and scale magnitudes by 2 divided by the sum of the window to read sine amplitudes.
 - Leakage from unwindowed, between-bin frequencies can mask low-level components; windowing fixes most of it.
 - Measured aliases matched the lesson 4 predictions to about 0.1 dB, which is the point: predict, then measure.
 - Write WAVs with a library, clip explicitly, add short fades, and read the file back to check it.

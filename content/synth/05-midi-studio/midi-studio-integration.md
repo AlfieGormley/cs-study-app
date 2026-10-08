@@ -101,15 +101,46 @@ For the synth's audio, Ableton Live 12's manual describes the essentials:
 
 1. Create an **audio track**. In its In/Out section, select your interface in Live's Audio settings, then set **Audio From** to **Ext. In** and choose the channel the synth is plugged into.
 2. **Arm** the track and record.
-3. Choose a **monitoring** mode. **Auto** monitors while the track is armed and not playing clips. **In** always monitors. **Off** relies on the interface's direct monitoring or an external mixer.
+3. Choose a **monitoring mode**. **Auto** monitors while the track is armed and not playing clips. **In** always monitors. **Off** relies on the interface's direct monitoring or an external mixer.
 
-If you want Ableton, rather than the Digitakt, to play the synth, the **External Instrument** device sends MIDI out of a chosen port and channel and returns audio from chosen interface inputs. Its **Hardware Latency** slider compensates for delays Live can't detect automatically.
+If you want Ableton, rather than the Digitakt, to play the synth, the **External Instrument** device sends MIDI out of a chosen port and channel and returns audio from chosen interface inputs. Its **Hardware Latency slider** compensates for delays Live can't detect automatically.
 
 **Clock:** pick one master. Either the Digitakt sends clock (CLOCK SEND) and Live follows it (enable the Digitakt as a sync source in Live's Tempo & MIDI settings, then switch on EXT), or Live sends clock and the Digitakt follows (CLOCK RECEIVE). Live can act as a MIDI Clock host or follower.
 
 ## Monitoring and latency
 
-Latency adds up along the chain. Estimate each part:
+Latency adds up along the chain. Two simple formulas cover most of it. First, an audio buffer (or block) delays sound by the time it takes to fill it, which is its length in samples divided by the sample rate:
+
+```formula
+t_buf = N / f_s
+t_buf = 128 / (48000 Hz)
+t_buf ≈ 0.00267 s = 2.67 ms
+where
+t_buf: the time one buffer of audio represents, in seconds (s) or milliseconds (ms)
+N: the buffer size, in samples; 128 here
+f_s: the sample rate, in samples per second (hertz, Hz); 48,000 here
+Hz: hertz, here samples per second
+s: seconds
+ms: milliseconds, thousandths of a second
+≈: approximately equal to (rounded)
+In words: 128 samples at 48 kHz is about 2.7 ms of audio, so each buffer in the path adds at least that much delay.
+```
+
+Second, DIN MIDI delays a message by the time its bytes take on the wire, 0.32 ms per byte:
+
+```formula
+t_MIDI = n × t_byte
+t_MIDI = (1 + 4 × 2) × 0.32 ms
+t_MIDI = 9 × 0.32 ms = 2.88 ms
+where
+t_MIDI: the time to send the messages, in milliseconds (ms)
+n: the number of bytes sent; a four-note chord with running status is 1 status byte plus 2 data bytes per note, 9 bytes
+t_byte: the time per byte on DIN MIDI, 0.32 ms (10 bits at 31,250 bit/s)
+ms: milliseconds, thousandths of a second
+In words: a four-note chord with running status takes about 2.9 ms to send; without running status it is 12 bytes, about 3.8 ms.
+```
+
+Both are minimums: drivers and converters add their own delays, and other MIDI traffic (clock, CCs) queued ahead of a note delays it further. The same estimates in Python:
 
 ```python
 def buffer_ms(samples, rate):
@@ -160,7 +191,7 @@ Gain staging means setting each stage's level so the signal stays well above tha
 
 ## Ground loops in a studio setup
 
-A ground loop forms when two devices are connected by more than one ground path, for example through their mains earths **and** an audio cable shield. Current then flows in the signal ground and is heard as **hum** at the mains frequency (50 Hz in the UK) and its harmonics, often with buzz from digital activity.
+A ground loop forms when two devices are connected by more than one ground path, for example through their mains earths **and** an audio cable shield. Current then flows in the signal ground and is heard as **mains hum** at the mains frequency (50 Hz in the UK) and its harmonics, often with buzz from digital activity.
 
 Common paths in this setup:
 
@@ -174,7 +205,7 @@ Safe remedies:
 
 - Prefer **balanced** connections into the interface (the Digitakt's outputs are impedance balanced; use TRS cables into balanced line inputs).
 - Use **DIN MIDI** rather than USB to connect devices where you can.
-- Insert a **ground loop isolation transformer** in the offending audio line; it passes the signal while breaking the DC ground path.
+- Insert a **ground loop isolator** (an audio isolation transformer) in the offending audio line; it passes the signal while breaking the DC ground path.
 - For a USB-powered dev board, a powered USB isolator (or a separate supply plus DIN MIDI) can break the USB ground path.
 - Keep audio cables short and away from power supplies.
 
@@ -192,7 +223,7 @@ Safe remedies:
 ## Key takeaways
 - Confirm your exact Digitakt model and OS against Elektron's current manual; this lesson's facts were checked against the original Digitakt (OS 1.53) and Digitakt II (OS 1.17) manuals on 4 October 2026.
 - Draw every cable with what it carries and who the USB host is. DIN MIDI from the Digitakt to the synth needs no host and no computer.
-- Drive the synth from a Digitakt MIDI track: OUT PORT FUNC = MIDI, OUTPUT TO = MIDI, CHAN on the SRC page matches the synth, and enable PB/AT/CC slots to match your CC map.
+- Drive the synth from a Digitakt MIDI track: set OUT PORT FUNC and OUTPUT TO to MIDI, set CHAN on the SRC page to match the synth, and enable PB/AT/CC slots to match your CC map.
 - Record on an armed Ableton audio track; use direct monitoring for feel, and rely on Live's latency options to align recordings.
 - Gain-stage from the synth's output to the interface to Ableton, leaving headroom. Hunt ground loops by elimination, prefer balanced audio and DIN MIDI, and never remove a safety earth.
 

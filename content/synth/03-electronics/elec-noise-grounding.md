@@ -2,7 +2,7 @@
 id: elec-noise-grounding
 title: Noise and grounding in audio circuits
 level: advanced
-minutes: 15
+minutes: 16
 summary: Why audio picks up hum and whine, how ground loops form in a studio, shared-impedance coupling and star grounding, keeping digital return currents out of analogue grounds, shielded cable, and why supply noise and decoupling matter.
 ---
 
@@ -13,7 +13,44 @@ A synth that works can still be unusable if it hums, buzzes or whines. Noise pro
 
 ## Why audio is so sensitive
 
-Logic signals have volts of noise margin. Audio has no digital-style logic threshold: added noise can be amplified, but whether it is audible depends on gain, spectrum, masking and the listening system. Consumer line level is −10 dBV (about 0.316 V RMS). A clean system's noise sits tens of decibels below that, so a few hundred microvolts of hum can be clearly audible.
+Logic signals have volts of noise margin. Audio has no digital-style logic threshold: added noise can be amplified, but whether it is audible depends on gain, spectrum, masking and the listening system. Consumer line level is −10 dBV. Converting that level to volts:
+
+```formula
+V = 1 V × 10^{L/20}
+V = 1 V × 10^{−10/20} ≈ 0.316 V
+where
+V: the signal's RMS voltage, in volts (V)
+L: the level in dBV, decibels relative to 1 volt RMS; here −10 dBV
+10^{L/20}: ten raised to the power L ÷ 20, which turns decibels back into a voltage ratio
+dBV: decibels relative to 1 V RMS
+≈: approximately equal to (rounded)
+In words: −10 dBV is about 0.316 volts RMS, roughly a third of a volt.
+```
+
+A clean system's noise sits tens of decibels below that, so a few hundred microvolts of hum can be clearly audible. To see how far below the signal some hum sits, find the hum voltage with Ohm's law, then express the ratio in decibels:
+
+```formula
+V_hum = I_loop × R_shield
+V_hum = 0.001 A × 0.1 Ω = 0.0001 V
+S/H = 20 × log_10(V_sig / V_hum)
+S/H = 20 × log_10(0.316 V / 0.0001 V)
+S/H ≈ 20 × 3.5 = 70 dB
+where
+V_hum: the hum voltage added to the signal, in volts (V); 0.0001 V is 100 µV
+I_loop: the unwanted current flowing in the cable shield, here 1 mA = 0.001 amperes (A)
+R_shield: the shield's resistance, here 100 mΩ = 0.1 ohms (Ω)
+S/H: the signal-to-hum ratio, in decibels (dB)
+V_sig: the signal voltage, here 0.316 V RMS
+log_10: the base-10 logarithm: the power you raise 10 to in order to get the number (log_10(1000) = 3)
+V: volts
+A: amperes
+Ω: ohms
+dB: decibels; 20 dB is a factor of 10 in voltage
+≈: approximately equal to (rounded)
+In words: 1 mA through a 0.1 Ω shield makes 100 µV of hum, which sits about 70 dB below a −10 dBV signal.
+```
+
+The same sums in Python:
 
 ```python
 import math
@@ -55,7 +92,7 @@ A **ground loop** forms when two pieces of equipment are connected to each other
        (loop encloses an area)
 ```
 
-Stray magnetic fields from mains wiring and transformers induce a current around this loop, and the two earth points may also sit at slightly different potentials. As Rane's note puts it, the hum appears "when this current flows through a unit's audio signal ground". In an **unbalanced** cable the shield *is* the signal return, so the voltage drop along it adds straight to the audio.
+Stray magnetic fields from mains wiring and transformers induce a current around this loop, and the two earth points may also sit at slightly different potentials. As Rane's note puts it, the hum appears "when this current flows through a unit's audio signal ground". In an **unbalanced connection** the cable's shield *is* the signal return, so the voltage drop along it adds straight to the audio.
 
 The result is hum at the mains frequency (50 Hz in the UK) and its harmonics. A rectified-supply component at 100 Hz is also common.
 
@@ -83,7 +120,23 @@ DIN MIDI is designed this way already: the receiving end uses an **opto-isolator
 
 ## Shared impedance and star grounding
 
-Ground loops are one mechanism. The other, inside your own circuit, is **shared-impedance coupling**. Every ground wire or track has resistance (and inductance). If a noisy current, such as an LED being multiplexed, a processor, or a display, returns through the same piece of ground wire as an audio signal's reference, its I × R voltage appears in the audio.
+Ground loops are one mechanism. The other, inside your own circuit, is **shared-impedance coupling**. Every ground wire or track has resistance (and inductance). If a noisy current, such as an LED being multiplexed, a processor, or a display, returns through the same piece of ground wire as an audio signal's reference, the voltage that current makes across the shared wire appears in the audio:
+
+```formula
+V_noise = I_noisy × R_shared
+V_noise = 0.1 A × 0.05 Ω = 0.005 V = 5 mV
+where
+V_noise: the voltage added to the audio's ground reference, in volts (V)
+I_noisy: the noisy return current sharing the wire, here 100 mA = 0.1 amperes (A) of LED current
+R_shared: the resistance of the shared stretch of ground wire, here 0.05 ohms (Ω)
+V: volts
+A: amperes
+Ω: ohms
+mV: millivolts; 1 mV = 0.001 V
+In words: 100 mA of LED current through a twentieth of an ohm of shared wire shifts the audio's ground by 5 mV, in step with the LEDs. That is roughly 36 dB below a 0.316 V line-level signal, which is clearly audible.
+```
+
+The figures are illustrative; the fix is to stop the noisy current sharing the wire at all.
 
 ```diagram
  BAD: daisy-chained ground
@@ -136,7 +189,7 @@ Inside the build:
 
 ## Power supply noise and decoupling
 
-A synth's supply often comes from a computer's USB port or a USB charger. Both carry noise: digital load current from the computer, and ripple at the switching frequency of switch-mode chargers and regulators.
+A synth's supply often comes from a computer's USB port or a USB charger. Both carry noise: digital load current from the computer, and supply ripple at the switching frequency of switch-mode chargers and regulators.
 
 How it reaches the audio:
 

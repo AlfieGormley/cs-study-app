@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Think like an attacker:\n\n1. Place an order, don't pay.\n2. Guess or find the webhook URL (it's often `/webhooks/stripe` or appears in client-side code or docs).\n3. `curl -X POST` a JSON body shaped like a real `payment.succeeded` event with your order id.\n4. Unverified endpoint marks your order paid → free goods.\n\nWith verification, step 3 fails: the attacker can't compute `HMAC_SHA256(secret, t + \".\" + body)` without the secret.",
+    "workedExample": "Think like an attacker:\n\n1. Place an order, don't pay.\n2. Guess or find the webhook URL (it's often `/webhooks/stripe` or appears in client-side code or docs).\n3. `curl -X POST` a JSON body shaped like a real `payment.succeeded` event with your order id.\n4. Unverified endpoint marks your order paid → free goods.\n\nWith verification, step 3 fails, because the signature the provider sends is:\n\n```formula\ns = HMAC(k, t + \".\" + b)\nwhere\ns: the signature in the webhook header\nHMAC: HMAC-SHA256, a keyed hash that only someone holding k can compute\nk: the shared webhook secret\nt: the delivery timestamp\nb: the raw request body\n+: joined end to end (concatenation), not addition\nIn words: the signature is a keyed fingerprint of the timestamp and body, and without the secret the attacker cannot produce one that matches.\n```",
     "link": {
       "title": "Stripe docs: Verify webhook signatures",
       "url": "https://docs.stripe.com/webhooks/signature"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Quantify the starvation:\n\n- 200 delivery workers shared by all customers.\n- Big customer emits 10 events/s, each now holding a worker for 25 s.\n- Workers needed for that customer alone = 10 × 25 = **250** > 200.\n\nEvery worker is soon stuck waiting on one slow endpoint, and everyone else's events queue up behind it.\n\nFixes:\n1. Cap concurrency per endpoint (e.g. 10 in flight).\n2. Shard queues by customer so one backlog can't block others.\n3. Lower timeouts (5–10 s) and open a circuit breaker after repeated failures.",
+    "workedExample": "Quantify the starvation:\n\n- 200 delivery workers shared by all customers.\n- Big customer emits 10 events/s, each now holding a worker for 25 s.\n- Workers needed for that customer alone:\n\n```formula\nW = λ × T\nW = 10 per s × 25 s = 250\nwhere\nW: the number of workers busy with this customer at any moment\nλ: lambda, the rate of events for this customer, 10 per second\nT: how long each delivery holds a worker, 25 s\ns: seconds\nIn words: 10 new deliveries a second, each taking 25 s, keep **250** workers busy, more than the 200 in the pool.\n```\n\nEvery worker is soon stuck waiting on one slow endpoint, and everyone else's events queue up behind it.\n\nFixes:\n1. Cap concurrency per endpoint (e.g. 10 in flight).\n2. Shard queues by customer so one backlog can't block others.\n3. Lower timeouts (5–10 s) and open a circuit breaker after repeated failures.",
     "link": {
       "title": "Standard Webhooks specification",
       "url": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md"

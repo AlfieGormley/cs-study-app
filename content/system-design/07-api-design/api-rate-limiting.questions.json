@@ -33,7 +33,7 @@
     "id": "api-rate-limiting-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A token bucket has capacity 20 and refills at 5 tokens/second. It starts full. A client sends 30 requests at t = 0 s, then 10 more at t = 3 s. How many of the 40 requests are allowed?",
+    "prompt": "A token bucket has capacity 20 and refills at 5 tokens/second. It starts full. A client sends 30 requests at once at time t = 0 s (t is seconds since the start), then 10 more at t = 3 s. How many of the 40 requests are allowed?",
     "options": [
       {
         "text": "20",
@@ -49,11 +49,11 @@
       },
       {
         "text": "30",
-        "explanation": "Correct. At t = 0: 20 allowed, 10 rejected, bucket = 0. At t = 3: bucket = min(20, 0 + 3 × 5) = 15, so all 10 are allowed, leaving 5. Total allowed = 20 + 10 = 30."
+        "explanation": "Correct. At t = 0: 20 allowed, 10 rejected, bucket = 0. By t = 3 s the empty bucket has refilled 3 s × 5 tokens/s = 15 tokens (under the cap of 20), so all 10 are allowed, leaving 5. Total allowed = 20 + 10 = 30."
       }
     ],
     "answer": 3,
-    "workedExample": "Step through it:\n\n| Time | Tokens before | Requests | Allowed | Tokens after |\n|---|---|---|---|---|\n| 0 s | 20 | 30 | 20 | 0 |\n| 3 s | 0 + 3×5 = 15 | 10 | 10 | 5 |\n\nAllowed = 20 + 10 = **30**; rejected = 10.\n\nNote how capacity (20) sets the burst size and the refill rate (5/s) sets the long-run average.",
+    "workedExample": "Step through it:\n\n| Time | Tokens before | Requests | Allowed | Tokens after |\n|---|---|---|---|---|\n| 0 s | 20 | 30 | 20 | 0 |\n| 3 s | 15 (refilled) | 10 | 10 | 5 |\n\nThe refill by t = 3 s:\n\n```formula\nb = min(C, b_0 + r × Δt)\nb = min(20, 0 + 5 tokens/s × 3 s)\nb = min(20, 15) = 15\nwhere\nb: the tokens in the bucket when the second batch arrives\nC: the capacity, 20 tokens\nb_0: the tokens left after the first burst, 0\nr: the refill rate, 5 tokens per second\nΔt: delta t, the time since the bucket was emptied, 3 s\nmin: the smaller of the two values\ntokens: the bucket's units; each request spends one\ns: seconds\nIn words: 3 seconds at 5 tokens per second puts 15 tokens back, which is under the capacity, so all 10 late requests fit.\n```\n\nAllowed = 20 + 10 = **30**; rejected = 10.\n\nNote how capacity (20) sets the burst size and the refill rate (5/s) sets the long-run average.",
     "link": {
       "title": "Wikipedia: Token bucket",
       "url": "https://en.wikipedia.org/wiki/Token_bucket"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```\nwindow 12:00  count=0 ... 100 @ :59\nwindow 12:01  count reset to 0\n              100 @ :00\n```\n\n1. 12:00:59.x: 100 requests → counter for 12:00 = 100 ≤ 100. All allowed.\n2. 12:01:00.x: new key, counter starts at 0. 100 requests → 100 ≤ 100. All allowed.\n3. Span covered ≈ 1–2 s. Accepted = **200**, i.e. 2× the intended rate.\n\nA sliding window counter at 12:01:00.6 would already estimate 100 × (1 − 0.01) + 0 = 99, so it would accept only about 1 request of the second burst.",
+    "workedExample": "```\nwindow 12:00  count=0 ... 100 @ :59\nwindow 12:01  count reset to 0\n              100 @ :00\n```\n\n1. 12:00:59.x: 100 requests → counter for 12:00 = 100 ≤ 100. All allowed.\n2. 12:01:00.x: new key, counter starts at 0. 100 requests → 100 ≤ 100. All allowed.\n3. Span covered ≈ 1–2 s. Accepted = **200**, i.e. 2× the intended rate.\n\nA sliding window counter would already block most of the second burst. At 12:01:00.6, just 0.6 s into the new window:\n\n```formula\nestimate = prev × (1 − t / W) + curr\nestimate = 100 × (1 − 0.6 s / 60 s) + 0\nestimate = 100 × 0.99 = 99\nwhere\nestimate: the approximate number of requests in the last W seconds\nprev: the request count for the whole previous fixed window\ncurr: the request count so far in the current window\nt: the time elapsed since the current window started\nW: the window length, 60 s for a per-minute limit\ns: seconds\nIn words: nearly all of the previous minute's 100 requests still count, so only about 1 more request fits under the limit.\n```",
     "link": {
       "title": "Cloudflare blog: Counting things, a lot of different things",
       "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Formula: `estimate = prev × (1 − t/W) + curr`\n\n1. t/W = 36 / 60 = 0.6.\n2. Overlap weight = 1 − 0.6 = **0.4**. (The sliding 60 s window covers the last 24 s of the previous minute, and 24/60 = 0.4.)\n3. Weighted previous = 40 × 0.4 = 16.\n4. Estimate = 16 + 25 = **41**.\n5. 41 < 50 → **allow**.\n\nRoughly 9 more requests could be accepted right now before the estimate reaches 50.",
+    "workedExample": "```formula\nestimate = prev × (1 − t / W) + curr\nestimate = 40 × (1 − 36 s / 60 s) + 25\nestimate = 40 × 0.4 + 25\nestimate = 16 + 25 = 41\nwhere\nestimate: the approximate number of requests in the last W seconds\nprev: the request count for the whole previous fixed window\ncurr: the request count so far in the current window\nt: the time elapsed since the current window started\nW: the window length, 60 s for a per-minute limit\ns: seconds\nIn words: 36 s into the minute, the sliding window still covers the last 24 s of the previous minute, which is 0.4 of it, so 16 of its 40 requests count, plus the 25 so far: **41**.\n```\n\n41 < 50 → **allow**.\n\nRoughly 9 more requests could be accepted right now before the estimate reaches 50.",
     "link": {
       "title": "Cloudflare blog: Counting things, a lot of different things",
       "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Tokens needed: 1 − 0.2 = **0.8**.\n2. Time to accumulate: 0.8 ÷ 0.5 tokens/s = **1.6 s**.\n3. `Retry-After` is an integer number of seconds → **ceil(1.6) = 2**.\n4. Check: after 2 s the bucket holds 0.2 + 2 × 0.5 = 1.2 ≥ 1. ✔\n\nRounding down (1 s) gives 0.7 tokens: rejected again.",
+    "workedExample": "```formula\nW = (1 − b) / r\nW = (1 − 0.2) / 0.5 = 1.6 s\nR = ⌈W⌉ = ⌈1.6 s⌉ = 2 s\nwhere\nW: the exact time until the bucket holds one whole token, in seconds (s)\nb: the tokens in the bucket now, 0.2\nr: the refill rate, 0.5 tokens per second\nR: the Retry-After value, which must be a whole number of seconds\n⌈ ⌉: ceiling: round up to the next whole number\ns: seconds\nIn words: 0.8 of a token is missing and tokens arrive at 0.5 per second, so it takes **1.6 s**; Retry-After must be whole seconds, so round **up** to **2**.\n```\n\nCheck: after 2 s the bucket holds 0.2 + 2 × 0.5 = 1.2 tokens, at least one whole token. ✔\n\nRounding down (1 s) gives 0.7 tokens: rejected again.",
     "link": {
       "title": "MDN: Retry-After",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Constraint is on **instantaneous** rate (≤ 50/s), not just average.\n2. Token bucket and fixed window both allow bursts by design.\n3. Leaky bucket converts a bursty input into a smooth output:\n\n```\nin:  0 200 0 0 0  (per second)\nout: 50 50 50 50  (constant)\n```\n\n4. Queue sizing: with a 200-request burst and 50/s drain, the last request waits 4 s. Size the queue (e.g. 250) so requests beyond that are rejected with 429 rather than waiting indefinitely.",
+    "workedExample": "1. Constraint is on **instantaneous** rate (≤ 50/s), not just average.\n2. Token bucket and fixed window both allow bursts by design.\n3. Leaky bucket converts a bursty input into a smooth output:\n\n```\nin:  0 200 0 0 0  (per second)\nout: 50 50 50 50  (constant)\n```\n\n4. Queue sizing: with a 200-request burst and 50/s drain, the last request waits 4 s:\n\n```formula\nW_max = B / r\nW_max = 200 / 50 = 4 s\nwhere\nW_max: the wait of the last request in the burst, in seconds (s)\nB: the number of requests queued, 200\nr: the drain rate, 50 requests per second\ns: seconds\nIn words: the last of 200 queued requests waits for all the others to drain at 50 a second, which takes 4 s.\n```\n\nSize the queue (e.g. 250) so requests beyond that are rejected with 429 rather than waiting indefinitely.",
     "link": {
       "title": "Wikipedia: Leaky bucket",
       "url": "https://en.wikipedia.org/wiki/Leaky_bucket"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. **Refill rate** = long-run average: 60 per minute ÷ 60 s = **1 token/s**.\n2. **Capacity** = biggest burst: **20**.\n3. First minute from a full bucket:\n\n```\nt=0      20 tokens -> 20 requests\nt=0..60  +1/s      -> 60 requests\ntotal               = 80\n```\n\n4. Every minute after that the bucket is empty on average, so the client gets **60/min**.\n\nThat first-minute overshoot (80 vs 60) is the burst allowance doing its job. If that's unacceptable, use a smaller capacity.",
+    "workedExample": "1. **Refill rate** = long-run average: 60 per minute ÷ 60 s = **1 token/s**.\n2. **Capacity** = biggest burst: **20**.\n3. First minute from a full bucket:\n\n```formula\nA = C + r × T\nA = 20 + 1 token/s × 60 s\nA = 20 + 60 = 80\nwhere\nA: the most requests accepted from t = 0 to t = 60 s\nC: the capacity, 20 tokens, all available at the start\nr: the refill rate, 1 token per second\nT: the length of the period, 60 s\nt: time since the start, in seconds\ntoken: one request's worth of allowance\ns: seconds\nIn words: the client spends the 20 stored tokens at once, then one new token each second for 60 seconds, so 80 in total.\n```\n\n4. Every minute after that the bucket is empty on average, so the client gets **60/min**.\n\nThat first-minute overshoot (80 vs 60) is the burst allowance doing its job. If that's unacceptable, use a smaller capacity.",
     "link": {
       "title": "Wikipedia: Token bucket",
       "url": "https://en.wikipedia.org/wiki/Token_bucket"
@@ -281,7 +281,7 @@
     "id": "api-rate-limiting-q10",
     "level": "advanced",
     "type": "multi",
-    "prompt": "For the sliding-window estimate prev × (1 − t/W) + curr, assume 0<t<W and all previous-window arrivals discussed remain inside the true rolling window. Which statements hold? Select all that apply.",
+    "prompt": "For the sliding-window estimate below, assume 0 < t < W and all previous-window arrivals discussed remain inside the true rolling window.\n\n```formula\nestimate = prev × (1 − t / W) + curr\nwhere\nestimate: the approximate number of requests in the last W seconds\nprev: the request count for the whole previous fixed window\ncurr: the request count so far in the current window\nt: the time elapsed since the current window started\nW: the window length, 60 s for a per-minute limit\n<: less than\nIn words: count this window's requests, plus the share of last window's requests the sliding window still covers.\n```\n\nWhich statements hold? Select all that apply.",
     "options": [
       {
         "text": "It needs only two counters per client, the current and previous windows",
@@ -309,7 +309,7 @@
       1,
       2
     ],
-    "workedExample": "Test the even-spread assumption with numbers. W = 60 s, limit 100, t = 30 s into the current window.\n\n- Previous window: 80 requests, **all** in its last 10 s.\n- Estimate: 80 × (1 − 0.5) + curr = 40 + curr.\n- Truth: the sliding window (last 60 s) contains all 80 of them, so 80 + curr.\n\nThe estimate is 40 too low, so up to 40 extra requests could slip through. This is a counterexample, not the global worst case: later times with sufficiently late previous arrivals can undercount even more. Cloudflare’s reported low misclassification rate describes its historical measured workload, not an adversarial bound.",
+    "workedExample": "Test the even-spread assumption with numbers. W = 60 s, limit 100, t = 30 s into the current window.\n\n- Previous window: 80 requests, **all** in its last 10 s.\n- Estimate:\n\n```formula\nestimate = 80 × (1 − 30 s / 60 s) + curr\nestimate = 40 + curr\nwhere\nestimate: the limiter's approximate count over the last 60 s\ncurr: the requests so far in the current window\ns: seconds\nIn words: only half of the previous window's 80 requests are counted.\n```\n\n- Truth: the sliding window (last 60 s) contains all 80 of them, so 80 + curr.\n\nThe estimate is 40 too low, so up to 40 extra requests could slip through. This is a counterexample, not the global worst case: later times with sufficiently late previous arrivals can undercount even more. Cloudflare’s reported low misclassification rate describes its historical measured workload, not an adversarial bound.",
     "link": {
       "title": "Cloudflare blog: Counting things, a lot of different things",
       "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
@@ -319,7 +319,7 @@
     "id": "api-rate-limiting-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "To avoid a Redis hop, each of your 20 gateways enforces `limit / N` locally: a 1,000/min client limit becomes 50/min per gateway. A partner's SDK holds two long-lived HTTP/2 connections, so all its traffic lands on just 2 gateways. What happens?",
+    "prompt": "To avoid a Redis hop, each of your N = 20 gateways enforces `limit / N` locally (the client's limit divided by the number of gateways): a 1,000/min client limit becomes 50/min per gateway. A partner's SDK holds two long-lived HTTP/2 connections, so all its traffic lands on just 2 gateways. What happens?",
     "options": [
       {
         "text": "It's capped at about 100/min, a tenth of its paid limit, because only 2 of the 20 local limiters ever see its traffic",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Global intent: 1,000/min.\n2. Local share: 1,000 ÷ 20 = 50/min per gateway.\n3. Traffic reaches 2 gateways: 2 × 50 = **100/min**.\n4. The partner hits 429 at 10% of what it pays for.\n\nThis is the trade-off of approximate local limiting: no network hop, but accuracy depends on even load distribution. Mitigations:\n\n- Periodically sync counts between gateways, or rebalance shares based on observed traffic.\n- Use the shared Redis limiter for high-value clients.\n- Use L7 load balancing that spreads individual requests, not connections.",
+    "workedExample": "```formula\nL_local = L / N\nL_local = 1,000 / 20 = 50\nA = g × L_local = 2 × 50 = 100\nwhere\nL_local: the limit each gateway enforces, per minute\nL: the client's global limit, 1,000 per minute\nN: the number of gateways, 20\nA: the most requests per minute the partner can get through\ng: the number of gateways its traffic actually reaches, 2\nIn words: each gateway allows only a twentieth of the limit, and the partner's two connections reach only two gateways, so it gets **100/min**.\n```\n\nThe partner hits 429 at 10% of what it pays for.\n\nThis is the trade-off of approximate local limiting: no network hop, but accuracy depends on even load distribution. Mitigations:\n\n- Periodically sync counts between gateways, or rebalance shares based on observed traffic.\n- Use the shared Redis limiter for high-value clients.\n- Use L7 load balancing that spreads individual requests, not connections.",
     "link": {
       "title": "Stripe blog: Scaling your API with rate limiters",
       "url": "https://stripe.com/blog/rate-limiters"

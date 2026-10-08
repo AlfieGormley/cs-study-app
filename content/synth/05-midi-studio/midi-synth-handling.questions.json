@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "DIN bytes can be 320 µs apart, and an incomplete message can stall indefinitely. The audio callback must finish within N/fs, so it consumes only available queued events with a bounded budget and reads latest control targets. Neither the UART ISR nor callback should block; parsing belongs outside the callback.",
+    "workedExample": "DIN bytes can be 320 µs apart, and an incomplete message can stall indefinitely. The audio callback has a hard deadline: it must finish each block before the converter needs the next one.\n\n```formula\nt_max = N / f_s\nt_max = 48 / (48000 Hz)\nt_max = 0.001 s = 1 ms\nwhere\nt_max: the longest the callback may take to produce one block, in seconds (s)\nN: the number of samples per audio block; 48 in this example\nf_s: the sample rate, in samples per second (hertz, Hz); 48,000 here\nHz: hertz, here samples per second\ns: seconds\nms: milliseconds, thousandths of a second\nIn words: a 48-sample block at 48 kHz lasts 1 ms, so the callback must always finish within that time, whatever MIDI is doing.\n```\n\nSo it consumes only available queued events with a bounded budget and reads latest control targets. Neither the UART ISR nor callback should block; parsing belongs outside the callback.",
     "link": {
       "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
       "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Compare the low end of each mapping:\n\n```\nlinear: 20 + 19980 * v/127\n  v=0  -> 20 Hz\n  v=1  -> 177 Hz (3+ octaves)\n  v=64 -> 10,089 Hz\nexp:   20 * 1000 ** (v/127)\n  v=64 -> 650 Hz\n```\n\nThe exponential curve covers log2(1000) ≈ 9.97 octaves in 127 steps, about 0.94 semitones each, so the whole knob is musically useful.",
+    "workedExample": "Compare the low end of each mapping:\n\nLinear mapping:\n\n```formula\nf = f_lo + (f_hi − f_lo) × v / 127\nf(1) = 20 + 19980 × 1 / 127 ≈ 177 Hz\nf(64) = 20 + 19980 × 64 / 127\nf(64) ≈ 10089 Hz\nwhere\nf: the cutoff for CC value v, in hertz (Hz); f(1) means the value when v is 1\nf_lo: the cutoff at CC 0, 20 Hz\nf_hi: the cutoff at CC 127, 20,000 Hz\nv: the CC value, 0 to 127\nHz: hertz, cycles per second\n≈: approximately equal to (rounded)\nIn words: a linear map adds about 157 Hz per step, so the first step jumps more than three octaves (20 Hz to 177 Hz) and the midpoint is already at 10 kHz.\n```\n\nExponential mapping:\n\n```formula\nf = f_lo × (f_hi / f_lo)^{v / 127}\nf(64) = 20 × 1000^{64 / 127}\nf(64) ≈ 650 Hz\nN_oct = log_2(1000) ≈ 9.97\nΔ = 12 × 9.97 / 127 ≈ 0.94\nwhere\nf: the cutoff for CC value v, in hertz (Hz)\nf_lo: the cutoff at CC 0, 20 Hz\nf_hi: the cutoff at CC 127, 20,000 Hz, so the ratio f_hi / f_lo is 1000\nv: the CC value, 0 to 127\nN_oct: the number of octaves in the range\nlog_2: logarithm base 2: how many doublings make the number\nΔ: the interval per CC step, in semitones (12 per octave)\nHz: hertz, cycles per second\n≈: approximately equal to (rounded)\nIn words: each step multiplies the cutoff by the same ratio, so the 10 octaves are shared evenly at just under a semitone per step.\n```\n\nSo the whole knob is musically useful with the exponential map.",
     "link": {
       "title": "MIDI 1.0 Control Change Messages — MIDI Association",
       "url": "https://midi.org/midi-1-0-control-change-messages"
@@ -339,7 +339,7 @@
       1,
       2
     ],
-    "workedExample": "1. A 7-bit CC gives 128 discrete values. Each change makes the cutoff jump instantly; those discontinuities are the zipper noise.\n2. Smoothing removes the discontinuity: the control code sets `cutoff_target`, and the audio code moves towards it each sample: `cutoff += k * (target - cutoff)`.\n3. More resolution (14-bit pairs) shrinks the jumps at the source.\n4. Sending more often, applying sooner, or using a worse curve don't address the cause.",
+    "workedExample": "1. A 7-bit CC gives 128 discrete values. Each change makes the cutoff jump instantly; those discontinuities are the zipper noise.\n2. Smoothing removes the discontinuity: the control code sets `cutoff_target`, and the audio code moves towards it each sample:\n\n```formula\nc_new = c + k × (c_target − c)\nwhere\nc_new: the cutoff used for this sample, in hertz (Hz)\nc: the cutoff used for the previous sample, in hertz\nc_target: the latest cutoff the control code published from the CC, in hertz\nk: the smoothing coefficient, between 0 and 1; smaller is slower and smoother\nHz: hertz, cycles per second\nIn words: each sample, close a small fixed fraction of the gap between the current cutoff and the target, so a CC jump becomes a smooth glide.\n```\n\n3. More resolution (14-bit pairs) shrinks the jumps at the source.\n4. Sending more often, applying sooner, or using a worse curve don't address the cause.",
     "link": {
       "title": "MIDI 1.0 Control Change Messages — MIDI Association",
       "url": "https://midi.org/midi-1-0-control-change-messages"
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "```\nmax rate = 31250 / 10 = 3125 B/s\nper byte = 1 / 3125   = 0.32 ms\ngap      = 10 ms\nbytes    = 10 / 0.32  = 31.25\n```\n\nSo at least 32 bytes. Add margin for occasional longer gaps (and SysEx bursts), and pick a power of two: 64 or 128 bytes costs almost nothing. Keep counting overflows to confirm it is enough.",
+    "workedExample": "```formula\nr_max = R / N_bits\nr_max = 31250 bit/s / 10 bit\nr_max = 3125 B/s\nn = t_gap × r_max\nn = 0.010 s × 3125 B/s\nn = 31.25 B\nwhere\nr_max: the most bytes per second DIN MIDI can deliver, in bytes per second (B/s)\nR: the DIN MIDI bit rate, 31,250 bits per second (bit/s)\nN_bits: bits per framed byte: 1 start + 8 data + 1 stop = 10\nbit: one binary digit\nB: byte\nt_gap: the longest time between two runs of the control loop, 10 ms = 0.010 s\ns: seconds\nn: the most bytes that can arrive during one gap\nIn words: DIN MIDI delivers at most 3,125 bytes a second (one every 0.32 ms), so in a 10 ms gap up to about 31 bytes can pile up.\n```\n\nSo at least 32 bytes. Add margin for occasional longer gaps (and SysEx bursts), and pick a power of two: 64 or 128 bytes costs almost nothing. Keep counting overflows to confirm it is enough.",
     "link": {
       "title": "MIDI 1.0 Electrical Specification Update CA-033 — MIDI Association",
       "url": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"

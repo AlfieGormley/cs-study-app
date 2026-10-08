@@ -49,6 +49,21 @@ The WAL also feeds **replication** (followers replay it) and **change data captu
 > [!tip] Durability knobs
 > `synchronous_commit = off` (Postgres) or `innodb_flush_log_at_trx_commit = 2` (MySQL) skip the per-commit flush. Throughput rises, but a power loss or OS crash can lose recently acknowledged commits: up to about 3 × `wal_writer_delay` (around 600 ms by default) in Postgres, and about a second in MySQL. Neither corrupts the database; turning off `fsync` entirely is what does that.
 
+The Postgres figure comes from how often the background WAL writer flushes. The PostgreSQL documentation gives the worst case as three of its cycles:
+
+```formula
+t_loss ≤ 3 × d_w
+t_loss ≤ 3 × 200 ms = 600 ms
+where
+t_loss: the longest window of acknowledged commits that a crash can lose, in milliseconds (ms)
+d_w: the WAL writer delay, the `wal_writer_delay` setting: how long the WAL writer sleeps between flushes, 200 ms by default
+≤: less than or equal to
+ms: millisecond, one thousandth of a second
+In words: with asynchronous commit, a crash can lose up to about three WAL-writer cycles of commits, roughly the last 0.6 seconds at the default setting.
+```
+
+Raising `wal_writer_delay` widens the window in proportion. Lost commits are lost cleanly: recovery still ends at a consistent point.
+
 ## LSM trees in more detail
 
 Recap: writes go to the WAL and an in-memory **memtable**; full memtables flush to immutable sorted **SSTables**; reads merge across memtable and SSTables.
@@ -63,6 +78,24 @@ An SSTable contains sorted key/value blocks (say 4–64 KB), a sparse **index** 
 - But a key may exist in many overlapping files (reads check more), and a merge temporarily needs as much free space as its inputs (up to 2× space).
 
 **Leveled** (RocksDB, LevelDB, Cassandra `LCS`): level L1 is, say, 256 MB, and each level is 10× larger. Within a level (other than L0), SSTables don't overlap, so a key is in at most one file per level.
+
+The target size of each level grows geometrically:
+
+```formula
+S_L = S_1 × T^(L − 1)
+S_3 = 256 MB × 10^2 = 25,600 MB = 25.6 GB
+where
+S_L: the target size of level L, in megabytes (MB)
+L: the level number, counting L1 as 1
+S_1: the target size of level L1, here 256 MB
+S_3: the target size of level L3, worked out in the second line
+T: the size ratio between neighbouring levels, here 10
+MB: megabyte, 1,000,000 bytes (RocksDB actually uses 1,048,576-byte mebibytes)
+GB: gigabyte, 1,000 MB
+In words: each level is ten times bigger than the one above, so a few levels hold a huge amount and most data sits in the last level.
+```
+
+Because each level is ten times the previous one, the last level holds roughly 90% of the data, which is why leveled compaction keeps space overhead fairly low.
 
 ```
 L0  [ ][ ][ ]           overlapping
@@ -80,6 +113,25 @@ There's also time-window compaction, which suits time-series data with TTLs: who
 
 **Write amplification**: bytes written to disk ÷ bytes the application wrote. **Read amplification**: disk reads per logical read. **Space amplification**: bytes on disk ÷ size of live data.
 
+```formula
+WA = B_disk / B_app
+RA = R_disk / R_logical
+SA = S_disk / S_live
+where
+WA: write amplification, a ratio with no unit; 1 would mean every byte is written exactly once
+B_disk: the bytes the engine physically writes to storage (pages, WAL, compaction output), in bytes
+B_app: the bytes of data the application asked to write, in bytes
+RA: read amplification, a ratio with no unit
+R_disk: the number of disk reads the engine performs
+R_logical: the number of reads the application asked for, e.g. point lookups
+SA: space amplification, a ratio with no unit
+S_disk: the space the database uses on disk, in bytes
+S_live: the size of the data that is still current (not overwritten or deleted), in bytes
+In words: each amplification measures how much more work or space the engine uses than the bare data needs; lower is better.
+```
+
+For example, if the application writes 1 GB a day and the engine writes 12 GB to disk, the write amplification is 12. Always say what you counted (WAL? compaction? the SSD's own internal copying?) because each choice gives a different number.
+
 | | B-tree | LSM leveled | LSM tiered |
 |---|---|---|---|
 | Write amp | Medium–high | High | Low |
@@ -91,6 +143,19 @@ A B-tree's write amplification comes from writing a whole 8–16 KB page (plus W
 - Sequential inserts or a hot working set that fits in RAM: many changes per page write, so the amplification is modest.
 - Random updates to a table far bigger than RAM: perhaps one 100-byte change per 16 KB page write, which is over 150×, and InnoDB's doublewrite buffer doubles it.
 
+```formula
+WA = 16,384 B / 100 B ≈ 164
+WA_dw = 2 × 164 ≈ 328
+where
+WA: write amplification of the page write alone
+WA_dw: write amplification once InnoDB's doublewrite buffer writes each page twice
+B: bytes; an InnoDB page is 16 KiB = 16,384 bytes
+≈: approximately equal to
+In words: rewriting a whole 16 KiB page to save a 100-byte change writes about 164 times more than the change itself, and doublewrite doubles that.
+```
+
+This is a worst case: it ignores the WAL and assumes no other change lands on the page before it is written.
+
 Leveled LSM amplification comes from compaction overlap and repeated rewriting. No universal 10–30× range or winner is supplied because a matched workload benchmark is absent. Compare measured read/write latency and amplification: an LSM read may check several levels, and background compaction competes for I/O.
 
 The **RUM conjecture** formalises the trade: you can optimise for two of Read, Update and Memory (space) overheads, at the expense of the third. Every engine picks a point; tuning moves it.
@@ -101,7 +166,7 @@ On SSDs, write amplification also matters because flash cells wear out after a l
 
 A **bloom filter** answers "is this key *possibly* in this set?" using very little memory. It never gives a false negative, and gives false positives at a tunable rate.
 
-How it works: a bit array of *m* bits, and *k* hash functions. To add a key, set the *k* bits it hashes to. To check, test those *k* bits: any zero means "definitely not present".
+How it works: an array of bits, all starting at 0, plus a few independent hash functions. To add a key, hash it with each function and set the bits it lands on to 1. To check a key, test the same bits: any zero means "definitely not present". If all are 1, the key is *possibly* present, because other keys may have set those bits.
 
 ```
 add "cat": h1=2 h2=5 h3=9
@@ -110,7 +175,46 @@ check "dog": h1=2 h2=4 h3=9
 bit 4 is 0 → definitely absent
 ```
 
-With about **10 bits per key** and the best *k* (≈7), the false-positive rate is about **1%**. A billion keys need ~1.2 GB of filter, a fraction of the data size.
+With about **10 bits per key** and the best number of hash functions (about 7), the false-positive rate is about **1%**. A billion keys need ~1.2 GB of filter, a fraction of the data size.
+
+The standard approximation for a filter's false-positive rate, and the best number of hash functions, is:
+
+```formula
+p ≈ (1 − e^(−k × n / m))^k
+k_best = (m / n) × ln(2)
+where
+p: the false-positive rate: the chance a key that was never added is reported as possibly present (0.01 = 1%)
+k: the number of hash functions, i.e. bits set per key
+n: the number of keys added to the filter
+m: the number of bits in the filter
+m / n: bits per key, the main tuning knob
+e: Euler's number, about 2.718, the base of natural logarithms
+ln: the natural logarithm (logarithm to base e); ln(2) ≈ 0.693
+k_best: the number of hash functions that gives the lowest p for a given m / n
+≈: approximately equal to
+In words: the more bits you give each key, the lower the false-positive rate, and there's a best number of hash functions (about 0.7 per bit per key) beyond which more hashing makes it worse.
+```
+
+Worked example with 10 bits per key:
+
+```formula
+k_best = 10 × 0.693 ≈ 7
+p ≈ (1 − e^(−7 / 10))^7
+p ≈ (1 − 0.497)^7 ≈ 0.008
+F = 1,000,000,000 × 10 bits
+F = 10^10 bits = 1.25 GB
+where
+k_best: the best number of hash functions
+p: the false-positive rate, about 0.8%, which is "about 1%"
+e: Euler's number, about 2.718
+F: the filter's total size for a billion keys
+bits: binary digits; 8 bits make one byte
+GB: gigabyte, 1,000,000,000 bytes
+≈: approximately equal to
+In words: 10 bits per key and 7 hash functions give a false-positive rate just under 1%, and a filter for a billion keys fits in about 1.25 GB.
+```
+
+The formula assumes the hash functions behave like independent random choices; real implementations come close. Each extra 4.8 or so bits per key cuts the rate about tenfold.
 
 In an LSM tree, each SSTable has a filter. A read for a missing key consults filters for every level and skips almost all of them, so a lookup may need far fewer candidate-file checks. False positives still require checking metadata or cached/disk blocks; there is no guarantee of at most one file read. RocksDB, Cassandra (`bloom_filter_fp_chance`), HBase and Bigtable all do this.
 

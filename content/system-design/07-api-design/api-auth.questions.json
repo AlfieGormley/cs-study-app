@@ -74,7 +74,7 @@
         "explanation": "Codes are short-lived (often around a minute) and single-use, but an attacker can act within that window. Expiry alone isn't the defence PKCE provides."
       },
       {
-        "text": "Exchanging the intercepted code requires the original code_verifier; with S256 the server checks BASE64URL(SHA256(verifier)) against the saved challenge",
+        "text": "Exchanging the intercepted code requires the original code_verifier; with S256 the server hashes the verifier and compares it with the saved challenge",
         "explanation": "Correct. The challenge went out through the browser, but the verifier never did. Without it, the stolen code is useless."
       },
       {
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Legit app generates random `v` (43–128 chars), computes `c = BASE64URL(SHA256(v))`.\n2. Redirect to `/authorize?code_challenge=c&code_challenge_method=S256`.\n3. User logs in; auth server stores `c` with the code.\n4. Attacker intercepts `code=xyz`.\n5. Attacker calls `/token` with `code=xyz` but doesn't know `v`. Without the high-entropy verifier, finding a value whose BASE64URL(SHA256(v')) matches c is computationally infeasible → **rejected**.\n6. Legit app sends `code=xyz&code_verifier=v` → matches → tokens issued.\n\nSHA-256 is one-way, so seeing `c` doesn't reveal `v`.",
+    "workedExample": "1. Legit app generates a random verifier and computes the challenge from it:\n\n```formula\nc = BASE64URL(SHA256(v))\nwhere\nc: the code challenge, sent through the browser\nv: the code verifier, a random string of 43 to 128 characters that stays inside the app\nSHA256: the SHA-256 hash function: a 32-byte fingerprint that cannot feasibly be reversed\nBASE64URL: base64url encoding without padding, which writes the bytes as URL-safe text\nIn words: the challenge is a one-way fingerprint of the verifier.\n```\n\n2. Redirect to `/authorize?code_challenge=c&code_challenge_method=S256`.\n3. User logs in; auth server stores `c` with the code.\n4. Attacker intercepts `code=xyz`.\n5. Attacker calls `/token` with `code=xyz` but doesn't know `v`. Without the high-entropy verifier, finding any other string whose hash matches `c` is computationally infeasible → **rejected**.\n6. Legit app sends `code=xyz&code_verifier=v` → matches → tokens issued.\n\nSHA-256 is one-way, so seeing `c` doesn't reveal `v`.",
     "link": {
       "title": "oauth.net: PKCE",
       "url": "https://oauth.net/2/pkce/"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Token issued 08:30 + 8 h → `exp` = **16:30**.\n2. Account disabled 09:00. Exposure window = 16:30 − 09:00 = **7.5 hours**.\n3. With 10-minute access tokens: worst case the token was issued at 08:59:59, so exposure ≤ **10 minutes**. At 09:10 the client tries to refresh; the auth server sees the account is disabled and refuses.\n\nCost: one auth-server check every 10 minutes per client, instead of one DB lookup per API request. If you need sub-minute revocation (a compromised admin), push the `jti` to a deny-list cached on every gateway.",
+    "workedExample": "```formula\nT_exp = T_iss + L\nT_exp = 08:30 + 8 h = 16:30\nE = T_exp − T_dis\nE = 16:30 − 09:00 = 7.5 h\nwhere\nT_exp: the token's expiry time, its exp claim\nT_iss: the time the token was issued, 08:30\nL: the token's lifetime, 8 hours\nE: the exposure window: how long the token still works after the account is disabled\nT_dis: the time the account was disabled, 09:00\nh: hours\nIn words: the token outlives the account by **7.5 hours**, because nothing checks the account until **16:30**.\n```\n\nWith 10-minute access tokens, the worst case is a token issued just before 09:00, so the exposure is at most the lifetime: ≤ **10 minutes**. At 09:10 the client tries to refresh; the auth server sees the account is disabled and refuses.\n\nCost: one auth-server check every 10 minutes per client, instead of one DB lookup per API request. If you need sub-minute revocation (a compromised admin), push the `jti` to a deny-list cached on every gateway.",
     "link": {
       "title": "RFC 8725: JWT Best Current Practices",
       "url": "https://www.rfc-editor.org/rfc/rfc8725"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Your verifier holds `PUBLIC_KEY_PEM`, which is published at your JWKS endpoint.\n2. The attacker builds header `{\"alg\":\"HS256\"}` and any payload, e.g. `{\"sub\":\"admin\",\"aud\":\"orders-api\"}`.\n3. They compute `HMAC-SHA256(PEM, header.payload)`, since they know the PEM.\n4. A library that honours the header runs HMAC with the same 'secret' and gets a match. **Forged token accepted.**\n\nFix, per RFC 8725: the verifier decides the algorithm, never the token.\n\n```\njwt.decode(token, key,\n  algorithms=[\"RS256\"],\n  audience=\"orders-api\")\n```",
+    "workedExample": "1. Your verifier holds `PUBLIC_KEY_PEM`, which is published at your JWKS endpoint.\n2. The attacker builds header `{\"alg\":\"HS256\"}` and any payload, e.g. `{\"sub\":\"admin\",\"aud\":\"orders-api\"}`.\n3. They compute the HMAC themselves, since they know the PEM:\n\n```formula\ns = HMAC(K, m)\nK = PEM\nwhere\ns: the signature placed in the forged token\nHMAC: HMAC-SHA256, a keyed hash meant to need a secret key\nK: the key the HMAC uses\nPEM: the server's RSA public key written as PEM text, which is published at the JWKS endpoint and so is not secret\nm: the signing input: the base64url header, a dot, then the base64url payload\nIn words: the attacker uses public bytes as the HMAC key, so their signature is exactly what the confused verifier computes.\n```\n\n4. A library that honours the header runs HMAC with the same 'secret' and gets a match. **Forged token accepted.**\n\nFix, per RFC 8725: the verifier decides the algorithm, never the token.\n\n```\njwt.decode(token, key,\n  algorithms=[\"RS256\"],\n  audience=\"orders-api\")\n```",
     "link": {
       "title": "RFC 8725: JWT Best Current Practices",
       "url": "https://www.rfc-editor.org/rfc/rfc8725"

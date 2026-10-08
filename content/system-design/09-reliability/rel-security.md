@@ -176,6 +176,25 @@ Defences, layered:
 > [!example] Amplification maths
 > A memcached reflection attack sends a ~15-byte request with a spoofed source address; the server replies with up to hundreds of kilobytes to the victim. Amplification factors above 10,000× were observed in 2018, which is how attacks passed 1 Tbps. Never expose UDP services like memcached to the internet.
 
+The arithmetic behind amplification: the attacker pays for the small requests, and the victim receives the large replies.
+
+```formula
+A = S_resp / S_req
+B_victim = B_attack × A
+B_victim = 100 Mbps × 10,000 = 1 Tbps
+where
+A: the amplification factor, how many times bigger each reply is than the request that triggered it
+S_resp: the size of the reflected reply, in bytes
+S_req: the size of the spoofed request, in bytes (about 15 for memcached)
+B_victim: the traffic arriving at the victim, in bits per second
+B_attack: the request traffic the attacker actually sends, here 100 megabits per second (Mbps)
+Mbps: megabits per second (1,000,000 bits per second)
+Tbps: terabits per second (1,000,000 Mbps)
+In words: with a 10,000× amplifier, an attacker sending a modest 100 Mbps of requests points 1 Tbps of replies at the victim.
+```
+
+The 100 Mbps is illustrative. Real reflection attacks are limited by how many open reflectors exist and how much each one can send, not just by the factor.
+
 ## Key takeaways
 
 - Layer controls (defence in depth) from edge to data, and treat security incidents as availability incidents too.

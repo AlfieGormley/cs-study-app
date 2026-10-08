@@ -92,7 +92,25 @@ Client                     Server
 
 Without TCP Fast Open, the client waits **one round trip (RTT)** before sending application data. Use 80 ms as an illustrative London–Virginia RTT, not a guaranteed route measurement.
 
-Most of that is physics. Light in fibre travels at roughly 200,000 km/s (about two-thirds of its speed in a vacuum), and London to Virginia is roughly 5,900 km in a straight line. That alone sets a floor of about 60 ms for the round trip; real cables don't follow the great-circle route, and routers add a little queueing. For this assumed fibre path, software cannot beat that propagation floor, which is why putting servers (or CDN edges) close to users matters so much.
+Most of that is physics. Light in fibre travels at roughly 200,000 km/s (about two-thirds of its speed in a vacuum), and London to Virginia is roughly 5,900 km in a straight line. The shortest possible round trip is the distance there and back divided by that speed, which is called the **propagation floor**:
+
+```formula
+RTT_min = 2 × d / v
+RTT_min = 2 × 5,900 km / 200,000 km/s
+RTT_min = 0.059 s ≈ 59 ms
+where
+RTT_min: the propagation floor: the shortest possible round-trip time (RTT) allowed by distance alone, in seconds (s) or milliseconds (ms)
+d: the one-way distance between client and server, in kilometres (km); here about 5,900 km from London to Virginia in a straight line
+v: the speed of the signal in the cable, in kilometres per second (km/s); light in optical fibre travels at about 200,000 km/s
+km: kilometre, 1,000 metres
+km/s: kilometres per second
+s: second
+ms: millisecond, one thousandth of a second
+≈: approximately equal to
+In words: a round trip covers the distance twice, so double the distance and divide by the speed of light in fibre; London to Virginia can never take less than about 60 ms.
+```
+
+The 2 is there because a round trip goes out and comes back. The result is a floor, not a prediction: real cables don't follow the great-circle route (the shortest path over the Earth's surface), and routers add a little queueing, so measured RTTs are higher. For this assumed fibre path, software cannot beat that propagation floor, which is why putting servers (or CDN edges) close to users matters so much.
 
 ## Step 4: the TLS handshake
 
@@ -149,6 +167,22 @@ Let's add up a cold first request from London to a single server in Virginia, wi
 | HTTP request/response | 80 ms + server time |
 | **Total before first byte** | **~340 ms + server** |
 
+The table follows a simple model: one DNS lookup, then a fixed number of round trips to the server, then the server's own work. Adding it up gives the **time to first byte**:
+
+```formula
+T = T_DNS + n × RTT + T_server
+T = 100 ms + 3 × 80 ms + T_server
+T = 340 ms + T_server
+where
+T: the time to first byte: from pressing Enter until the first byte of the response arrives, in milliseconds (ms)
+T_DNS: the time to resolve the name with DNS; about 100 ms here, because nothing is cached
+n: the number of round trips to the server before the first byte arrives: 1 for the TCP handshake, 1 for TLS 1.3 and 1 for the request and response, so 3
+RTT: the round-trip time to the server, here 80 ms from London to Virginia
+T_server: the time the server spends building the response, in ms
+ms: millisecond, one thousandth of a second
+In words: a cold first request pays for the DNS lookup and three full round trips before the server's own work even counts.
+```
+
 Only the last of those round trips actually carries the page; the rest are setup. (The DNS round trips go to resolvers, not to Virginia, which is why that row isn't exactly one RTT.) If the server used TLS 1.2, add another 80 ms.
 
 Now put a CDN edge in London, with an RTT of 10 ms:
@@ -161,7 +195,25 @@ Now put a CDN edge in London, with an RTT of 10 ms:
 | HTTP (cache hit) | 10 ms |
 | **Total** | **~35 ms** |
 
-In these illustrative assumptions the total is about ten times lower, combining a nearer endpoint, a faster DNS lookup and a cache hit. Note the hidden assumption: the edge had the response cached. On a miss, the edge must still fetch from Virginia, adding one 80 ms trip over a connection it keeps warm, so the total is closer to 115 ms. That's still three times better than going direct.
+The same model, with the shorter round trip to the edge and the edge's own trip to the origin on a miss:
+
+```formula
+T_hit = T_DNS + n × RTT_edge
+T_hit = 5 ms + 3 × 10 ms = 35 ms
+T_miss = T_hit + RTT_origin
+T_miss = 35 ms + 80 ms = 115 ms
+where
+T_hit: the time to first byte when the London edge already has the response cached (a cache hit), in milliseconds (ms)
+T_DNS: the DNS lookup time, about 5 ms when the recursive resolver already has the answer cached
+n: the round trips to the edge before the first byte: TCP, TLS 1.3 and the request itself, so 3
+RTT_edge: the round-trip time to the nearby edge, here 10 ms
+T_miss: the time to first byte when the edge doesn't have the response (a cache miss) and must fetch it from the origin
+RTT_origin: the round-trip time from the edge to the origin in Virginia, 80 ms, over a connection the edge already holds open
+ms: millisecond
+In words: a nearby edge makes every handshake cheap, and a miss adds just one long trip because the edge's connection to the origin is already open.
+```
+
+In these illustrative assumptions the total is about ten times lower (340 ms versus 35 ms, ignoring server time), combining a nearer endpoint, a faster DNS lookup and a cache hit. Note the hidden assumption: the edge had the response cached. On a miss, the edge must still fetch from Virginia, adding one 80 ms trip over a connection it keeps warm, so the total is closer to 115 ms. That's still about three times better than going direct.
 
 Most of this module is about techniques that shrink, skip or move these round trips.
 

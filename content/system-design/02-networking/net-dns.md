@@ -45,9 +45,9 @@ App -> Stub -> Recursive resolver
 2. It asks a **`.com`** server, which refers it to `example.com`'s name servers (from the `NS` records registered with the registrar).
 3. It asks the **authoritative** server, which returns the answer.
 
-The recursive resolver does **iterative** queries (it follows referrals itself); the stub makes a single **recursive** query ("give me the final answer"). In practice, the root and TLD referrals are almost always cached, so most lookups need only step 3 or are answered entirely from cache.
+The recursive resolver does **iterative queries** (it follows referrals itself); the stub makes a single **recursive DNS query** ("give me the final answer"). In practice, the root and TLD referrals are almost always cached, so most lookups need only step 3 or are answered entirely from cache.
 
-DNS normally runs over **UDP port 53**: one small packet each way, no handshake. If an answer is too big for the UDP size the client advertised (EDNS(0) lets clients advertise larger buffers; around 1,232 bytes is the common safe default since DNS Flag Day 2020, to avoid IP fragmentation), the server sets the *truncated* flag and the client retries over **TCP**. TCP support is mandatory, not optional (RFC 7766), and matters for DNSSEC-signed answers. DNS is also increasingly carried over TLS (DoT) or HTTPS (DoH) for privacy.
+DNS normally runs over **UDP port 53**: one small packet each way, no handshake. If an answer is too big for the UDP size the client advertised (EDNS(0) lets clients advertise larger buffers; around 1,232 bytes is the common safe default since DNS Flag Day 2020, to avoid IP fragmentation), the server sets the *truncated* flag and the client retries over **TCP**. TCP support is mandatory, not optional (RFC 7766), and matters for DNSSEC-signed answers. DNS is also increasingly carried over TLS (DNS over TLS, DoT) or HTTPS (DNS over HTTPS, DoH) for privacy.
 
 ## Record types you'll actually use
 
@@ -86,9 +86,36 @@ Caching is why DNS scales: a popular resolver answers millions of queries for `g
 | More queries, more latency | Fewer queries, faster |
 | More load on your DNS | Resilient if DNS is down |
 
-**Negative answers are cached too.** If a name doesn't exist (`NXDOMAIN`), resolvers cache that for the zone's negative TTL: the smaller of the `SOA` record's own TTL and its `MINIMUM` field (RFC 2308). If you query a name before creating it, clients may keep getting "doesn't exist" for a while after you add it.
+**Negative answers are cached too.** If a name doesn't exist (`NXDOMAIN`), resolvers cache that for the zone's negative TTL: the smaller of the `SOA` record's own TTL and its `MINIMUM` field (RFC 2308). With an `SOA` TTL of 900 s and a `MINIMUM` of 3,600 s:
 
-**The TTL counts down in caches.** A resolver that cached a 300 s record 200 s ago hands it out with a TTL of 100. So the TTL a client sees is the *remaining* lifetime, and every cache downstream of it expires at the same moment, not 300 s after it asked.
+```formula
+TTL_neg = min(TTL_SOA, MINIMUM)
+TTL_neg = min(900 s, 3,600 s) = 900 s
+where
+TTL_neg: the negative TTL: how long a resolver may cache a "this name doesn't exist" (NXDOMAIN) answer, in seconds (s)
+min: the minimum function: whichever of the values in the brackets is smaller
+TTL_SOA: the TTL of the zone's SOA record itself, in seconds; 900 s in this example
+MINIMUM: the last number stored inside the SOA record, which RFC 2308 uses as the negative-caching limit; 3,600 s in this example
+s: second
+In words: a "no such name" answer is cached for whichever is shorter, the SOA record's own TTL or its MINIMUM field, so 15 minutes here.
+```
+
+If you query a name before creating it, clients may keep getting "doesn't exist" for up to that long after you add it.
+
+**The TTL counts down in caches.** A resolver that cached a 300 s record 200 s ago hands it out with a TTL of 100:
+
+```formula
+TTL_left = TTL − t_age
+TTL_left = 300 s − 200 s = 100 s
+where
+TTL_left: the remaining time to live that the resolver hands out with its cached answer, in seconds (s)
+TTL: the time to live the authoritative server set on the record, in seconds; here 300 s
+t_age: how long ago the resolver cached the record, in seconds; here 200 s
+s: second
+In words: a cache passes on only the time its copy has left, not the original TTL.
+```
+
+So the TTL a client sees is the *remaining* lifetime, and every cache downstream of it expires at the same moment, not 300 s after it asked.
 
 > [!warning] TTLs are a request, not a guarantee
 > Some resolvers enforce a minimum TTL, some clients (old JVMs, some mobile OSes, connection pools) cache much longer than told, and long-lived TCP connections never re-resolve at all. Many resolvers also implement **serve-stale** (RFC 8767): if the authoritative servers are unreachable, they keep answering from expired cache entries rather than failing. That's good for resilience, but it's another way old answers outlive their TTL. Plan for a long tail: after a DNS change, a small percentage of traffic often keeps hitting the old address for hours.
@@ -102,6 +129,21 @@ If you're migrating a service to new IPs:
 3. Change the record. Most clients move within a minute or two.
 4. Keep the old servers running until traffic drains.
 5. Raise the TTL again.
+
+Why step 2 waits the *old* TTL: a cache that fetched the record just before you lowered the TTL keeps its long-lived copy until
+
+```formula
+t_expire = t_fetch + TTL_old
+t_expire = 08:59 + 86,400 s
+t_expire = 08:59 + 24 h
+where
+t_expire: the clock time at which that cached copy finally expires; here 08:59 the next day
+t_fetch: the clock time at which the cache fetched the record; here 08:59, one minute before the TTL was lowered at 09:00
+TTL_old: the TTL the record had when it was fetched, 86,400 seconds (s), which is 24 hours (h)
+s: second
+h: hour, 3,600 seconds
+In words: lowering the TTL doesn't reach copies already cached; each one lives out the old TTL from the moment it was fetched.
+```
 
 Skipping step 2 is a classic mistake: caches still holding the 24-hour record won't look again for up to a day.
 

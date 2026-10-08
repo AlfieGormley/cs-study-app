@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "It removes most of the ~1.1 s of network latency per page, because round trips to a nearby region take a few tens of milliseconds instead of ~280 ms.",
-        "explanation": "Correct. Distance sets a hard floor on round-trip time. 4 × 280 ms ≈ 1.1 s becomes 4 × ~20 ms ≈ 80 ms when served locally."
+        "explanation": "Correct. Distance sets a hard floor on round-trip time. Four 280 ms round trips (about 1.1 s) become four round trips of about 20 ms (about 80 ms) when served locally."
       },
       {
         "text": "It makes the London servers' CPUs faster.",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Use the hypothetical measured path values in the question, not a generic geographic latency claim.\n2. Four serial London trips cost 4 × 280 = 1,120 ms of network wait.\n3. Four local trips cost 4 × 20 = 80 ms.\n4. The modeled saving is 1,040 ms. Remote database calls could erase it.\n5. Also consider fewer serial requests and caching.",
+    "workedExample": "1. Use the hypothetical measured path values in the question, not a generic geographic latency claim.\n2. Serial round trips add up:\n\n```formula\nT = n × RTT\nT_London = 4 × 280 ms = 1120 ms\nT_local = 4 × 20 ms = 80 ms\nΔT = 1120 − 80 = 1040 ms\nwhere\nT: network wait per page, in milliseconds (ms)\nn: sequential round trips per page, 4\nRTT: round-trip time for one request, in ms\nT_London: page wait when served from London\nT_local: page wait from an Australian region\nΔT: the saving; Δ (delta) means \"change in\"\nms: milliseconds\nIn words: four 280 ms trips cost about 1.1 s; four 20 ms trips cost 80 ms, saving about a second per page.\n```\n\n3. The modeled saving is 1,040 ms. Remote database calls could erase it.\n4. Also consider fewer serial requests and caching.",
     "link": {
       "title": "Azure Architecture Center: Geode pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/geodes"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Total load = 2 regions × 70% = 140% of one region's capacity.\n2. After failure, one region must handle 140%, so it overloads and the outage can cascade into the second region.\n3. General rule for N equal regions surviving 1 failure: each region's max normal utilisation = (N − 1) / N.\n   - N = 2: 50%\n   - N = 3: 67%\n   - N = 4: 75%\n4. So more regions mean less wasted headroom, but more complexity.\n5. Also cap traffic shifts and shed load so a failover can't knock over the survivor.",
+    "workedExample": "1. Add up the load the survivor must carry:\n\n```formula\nL = N × u\nL = 2 × 70 % = 140 %\nwhere\nL: total load, as a percentage of one region's capacity\nN: number of regions, 2\nu: each region's normal utilisation, 70 %\n%: per cent of one region's capacity\nIn words: two regions at 70 % is 140 % of one region, more than it has.\n```\n\n2. After failure, one region must handle 140%, so it overloads and the outage can cascade into the second region.\n3. General rule for N equal regions surviving 1 failure:\n\n```formula\nU_max = (N − 1) / N\nU_max = 1/2 = 50 %  (N = 2)\nU_max = 2/3 ≈ 67 %  (N = 3)\nU_max = 3/4 = 75 %  (N = 4)\nwhere\nU_max: highest safe normal utilisation per region\nN: number of equal active regions\n≈: approximately equal to\n%: per cent\nIn words: the N − 1 survivors must carry everything, so each region can be at most (N − 1)/N busy.\n```\n4. So more regions mean less wasted headroom, but more complexity.\n5. Also cap traffic shifts and shed load so a failover can't knock over the survivor.",
     "link": {
       "title": "AWS: Disaster recovery options in the cloud",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
@@ -242,7 +242,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Sync commit = local work + wait for the remote ack ≈ +75 ms.\n2. 4 sequential commits → +300 ms.\n3. Gain: RPO = 0 for London's loss.\n4. Cost: if the link fails, you choose between stopping writes (consistency) or degrading to async (availability). This illustrates a partition-time consistency/availability trade-off; outside partitions, remote coordination also adds latency.\n5. Alternatives: fewer commits per flow, or sync to a nearby region (e.g. a measured lower-latency pair) and async further away.",
+    "workedExample": "1. Each synchronous commit waits for one round trip to Virginia, and the commits run one after another:\n\n```formula\nΔT = n × RTT\nΔT = 4 × 75 ms = 300 ms\nwhere\nΔT: extra latency added to checkout; Δ (delta) means \"change in\"\nn: sequential commits, 4\nRTT: London–Virginia round-trip time, 75 ms\nms: milliseconds\nIn words: four commits each waiting 75 ms for Virginia add about 0.3 s.\n```\n\n2. Gain: a recovery point objective (RPO) of zero for London's loss: every acknowledged commit is already durable in Virginia.\n3. Cost: if the link fails, you choose between stopping writes (consistency) or degrading to async (availability). This illustrates a partition-time consistency/availability trade-off; outside partitions, remote coordination also adds latency.\n4. Alternatives: fewer commits per flow, or sync to a nearby region (e.g. a measured lower-latency pair) and async further away.",
     "link": {
       "title": "AWS: Disaster recovery options in the cloud",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
@@ -272,7 +272,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Total load L spread over 4 regions: L/4 each.\n2. Lose 1 → 3 regions carry L → L/3 each.\n3. Require L/3 ≤ capacity C → L/4 ≤ 0.75 C.\n4. Max normal utilisation = 75%.\n5. N = 2 → 50%; N = 3 → 67%; N = 4 → 75%.\n6. Also leave margin for retry storms and cold caches in the survivors.",
+    "workedExample": "1. Work out the load per region before and after a failure:\n\n```formula\nN_4 = L / 4\nN_3 = L / 3 ≤ C\nL ≤ 3 × C\nN_4 ≤ 3 × C / 4 = 0.75 × C\nwhere\nL: total load across all regions\nC: one region's capacity\nN_4: each region's share with all 4 up\nN_3: each survivor's share with 3 up\n≤: is less than or equal to\nIn words: if 3 survivors must each fit L/3 within C, then normally each region carries at most three-quarters of C.\n```\n\n2. Max normal utilisation = 75%.\n3. The general rule is (N − 1)/N for N equal regions: 50% for 2, about 67% for 3, 75% for 4.\n4. Also leave margin for retry storms and cold caches in the survivors.",
     "link": {
       "title": "AWS: What is a cell-based architecture?",
       "url": "https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html"
@@ -310,7 +310,7 @@
       2,
       3
     ],
-    "workedExample": "1. G-Counter state: `{eu: 40, us: 61}` → value 101.\n2. EU +1 → `{eu: 41, us: 61}`; US +1 → `{eu: 40, us: 62}`.\n3. Merge = slot-wise max → `{eu: 41, us: 62}` → 103. No increment lost.\n4. LWW on an int: both write 102 from 101, one wins, so 102. Lost.\n5. Un-like: PN-Counter = P − N.\n6. Invariant enforcement needs a suitable protocol: atomic ownership/consensus, or bounded local rights where the invariant allows escrow.",
+    "workedExample": "1. G-Counter state: `{eu: 40, us: 61}` → value 101.\n2. EU +1 → `{eu: 41, us: 61}`; US +1 → `{eu: 40, us: 62}`.\n3. Merge each slot by taking the larger value, then sum:\n\n```formula\nm_eu = max(41, 40) = 41\nm_us = max(61, 62) = 62\nV = m_eu + m_us = 103\nwhere\nm_eu: merged EU slot\nm_us: merged US slot\nmax: the larger of the two values\nV: the counter's value after merging\nIn words: keep each region's highest count and add them: 103, with no increment lost.\n```\n4. LWW on an int: both write 102 from 101, one wins, so 102. Lost.\n5. Un-like needs decrements, so use two grow-only counters:\n\n```formula\nV = P − N\nwhere\nV: the PN-Counter's value\nP: a G-Counter of all increments (likes)\nN: a separate G-Counter of all decrements (un-likes)\nIn words: the value is total likes minus total un-likes, and both parts merge safely.\n```\n6. Invariant enforcement needs a suitable protocol: atomic ownership/consensus, or bounded local rights where the invariant allows escrow.",
     "link": {
       "title": "Wikipedia: Conflict-free replicated data type",
       "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
@@ -340,7 +340,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Plain: 25 groups, so a bad customer takes down one group entirely, about 4% of customers if group populations are equal.\n2. Shuffle: number of 4-worker combinations = C(100, 4) = 3,921,225.\n3. The chance another customer has exactly the same 4 workers ≈ 1 in 3.9 million.\n4. Most customers share 0 or 1 workers with the bad one, so they lose at most a quarter of their capacity, and retry elsewhere.\n5. Requires clients to retry across their assigned workers.",
+    "workedExample": "1. Plain: 25 groups, so a bad customer takes down one group entirely: 1/25 = about 4% of customers if group populations are equal.\n2. Shuffle: count the possible 4-worker combinations:\n\n```formula\nC(n, k) = n! / (k! × (n − k)!)\nC(100, 4) = (100 × 99 × 98 × 97) / 24\nC(100, 4) = 3921225\nwhere\nC(n, k): \"n choose k\": the number of ways to pick k items from n, ignoring order\nn: workers in the fleet, 100\nk: workers per customer, 4\n!: factorial: n! = n × (n − 1) × … × 1, e.g. 4! = 24\nIn words: there are about 3.9 million different ways to pick 4 workers out of 100.\n```\n\n3. The chance another customer has exactly the same 4 workers is about 1 in 3.9 million.\n4. Most customers share 0 or 1 workers with the bad one, so they lose at most a quarter of their capacity, and retry elsewhere.\n5. Requires clients to retry across their assigned workers.",
     "link": {
       "title": "AWS Builders' Library: Workload isolation using shuffle-sharding",
       "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"

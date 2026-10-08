@@ -56,7 +56,22 @@ To measure current, the current has to flow **through** the meter. Break the cir
 > [!warning] The classic fuse-blower
 > In current mode the meter is almost a short circuit, by design. Put it *across* a supply (as you would for voltage) and you short the supply through the meter. The meter's fuse is there to blow in that case. Replace it only with the **exact type and rating** the manual specifies. Forgetting to move the red lead back to VΩ is the commonest way to do this.
 
-Meters also have a **burden voltage**: the small voltage the meter drops while measuring current. On sensitive low-voltage circuits it can slightly change what you're measuring.
+Meters also have a **burden voltage**: the small voltage the meter drops while measuring current. It comes from the current flowing through the meter's internal shunt resistor, so Ohm's law gives its size:
+
+```formula
+V_burden = I × R_shunt
+V_burden = 0.010 A × 10 Ω = 0.1 V
+where
+V_burden: the voltage lost across the meter, in volts (V)
+I: the current being measured, here 10 mA = 0.010 amperes (A)
+R_shunt: the meter's internal resistance on that range, in ohms (Ω); 10 Ω is just an illustration, so check your meter's specification
+V: volts
+A: amperes
+Ω: ohms
+In words: the meter steals a little voltage from the circuit, more at higher currents and on more sensitive ranges.
+```
+
+On sensitive low-voltage circuits that stolen voltage can slightly change what you're measuring. Losing 0.1 V from a 5 V LED circuit barely matters; losing it from a 1 V circuit might.
 
 ### Resistance and continuity: only unpowered
 
@@ -81,7 +96,7 @@ Autoranging meters choose for you. On a manual meter:
 A multimeter gives one number: a steady DC value or an RMS summary. An **oscilloscope** draws voltage against time, so you can see what's actually happening:
 
 - the shape of an audio waveform, and whether it clips;
-- noise and ripple riding on a supply rail;
+- noise and supply ripple riding on a rail;
 - logic or PWM signals and their timing;
 - switch bounce lasting a few milliseconds.
 
@@ -89,7 +104,7 @@ Core controls:
 
 - **Vertical (V/div):** volts per grid square.
 - **Horizontal (time/div):** seconds per grid square.
-- **Trigger:** the condition (a level and a rising or falling edge) that starts each sweep at the same point, so a repeating waveform stands still on screen.
+- **Trigger** (the oscilloscope trigger): the condition (a level and a rising or falling edge) that starts each sweep at the same point, so a repeating waveform stands still on screen.
 - **Probe ×1/×10:** ×10 probes load the circuit less and extend bandwidth. Set the scope to match the probe.
 
 > [!warning] Probe ground clips
@@ -144,7 +159,7 @@ Use a **temperature-controlled** iron. SparkFun's through-hole soldering guide s
 
 - **Good:** a smooth, concave "volcano" fillet that wets both the pad and the lead. Shiny with leaded solder, somewhat duller with lead-free.
 - **Cold joint:** dull, grainy or lumpy, often balled up. Either the pad or the lead wasn't hot enough. Reheat with a little fresh flux.
-- **Bridge:** solder joining adjacent pads. Remove it with desoldering braid or by dragging a clean tip.
+- **Bridge** (solder bridge): solder joining adjacent pads. Remove it with desoldering braid or by dragging a clean tip.
 - **Insufficient:** the hole isn't filled or the pad isn't covered.
 - **Overheated:** burnt flux, discoloured board, or a **lifted pad** (the copper peeling off). Use less time and the right tip.
 

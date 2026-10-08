@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Diagnose: this is **head-of-line blocking**. With one FIFO queue, an OTP enqueued after 40M campaign messages waits until they're processed.\n\nQuantify: suppose the SMS provider allows 1,000 msg/s for your account. If 2M of the campaign messages are SMS:\n\n```\n2,000,000 / 1,000 per s\n  = 2,000 s ≈ 33 minutes\n```\n\nAny OTP behind that waits up to 33 minutes. Fix with three layers:\n\n1. `critical` topic + dedicated workers → OTP never queues behind campaigns.\n2. Reserve, say, 20% of provider throughput for critical.\n3. Campaign scheduler emits at a controlled rate so the low queue stays bounded.",
+    "workedExample": "Diagnose: this is **head-of-line blocking**. With one FIFO queue, an OTP enqueued after 40M campaign messages waits until they're processed.\n\nQuantify: suppose the SMS provider allows 1,000 msg/s for your account. If 2M of the campaign messages are SMS:\n\n```formula\nwait = backlog / rate\nwait = 2,000,000 / 1,000/s\nwait = 2,000 s ≈ 33 min\nwhere\nwait: how long the last queued message waits before it is sent\nbacklog: campaign SMS messages ahead in the queue, 2 million\nrate: messages per second the provider accepts, 1,000\ns: seconds; /s means per second\nmin: minutes (2,000 s / 60 ≈ 33)\n≈: approximately equal to\nIn words: two million texts drained at a thousand a second take about 33 minutes, and an OTP stuck behind them waits that long.\n```\n\nAny OTP behind that waits up to 33 minutes. Fix with three layers:\n\n1. `critical` topic + dedicated workers → OTP never queues behind campaigns.\n2. Reserve, say, 20% of provider throughput for critical.\n3. Campaign scheduler emits at a controlled rate so the low queue stays bounded.",
     "link": {
       "title": "Azure Architecture Center: priority queue pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Weigh the outcomes:\n\n| Choice | If SMS was sent | If it wasn't |\n|---|---|---|\n| Don't retry | Fine | User locked out |\n| Retry | Duplicate OTP | Fine |\n\nUnder the explicitly duplicate-tolerant policy, a repeated copy of the same OTP is acceptable. Retry carefully, reconcile provider status where possible, and stop new attempts at expiry; already queued SMS can still arrive:\n\n```\nretry 1: wait ~1 s (rand 0.5-1.5 s)\nretry 2: wait ~2 s\nretry 3: wait ~4 s, secondary provider\n...\nstop when now > created_at + 300 s\n```\n\nJitter spreads thousands of concurrent retries so they don't hit the recovering provider at the same instant.",
+    "workedExample": "Weigh the outcomes:\n\n| Choice | If SMS was sent | If it wasn't |\n|---|---|---|\n| Don't retry | Fine | User locked out |\n| Retry | Duplicate OTP | Fine |\n\nUnder the explicitly duplicate-tolerant policy, a repeated copy of the same OTP is acceptable. Retry carefully, reconcile provider status where possible, and stop new attempts at expiry; already queued SMS can still arrive:\n\n```\nretry 1: wait ~1 s (rand 0.5-1.5 s)\nretry 2: wait ~2 s\nretry 3: wait ~4 s, secondary provider\n...\n```\n\nThe wait roughly doubles each time, and new attempts stop at the TTL:\n\n```formula\nwait_n ≈ b × 2^{n − 1}\nt_stop = t_0 + 300 s\nwhere\nwait_n: the approximate wait before retry n, before random jitter is applied\nb: the base delay, 1 second\nn: the retry number, 1 for the first retry\n2^{n − 1}: 2 multiplied by itself n − 1 times (1, 2, 4...)\nt_0: when the notification was created (created_at)\nt_stop: the time after which no new attempts are made\n300 s: the 5-minute TTL, in seconds\nIn words: wait about 1, 2, 4 seconds and so on between retries, randomised, and give up once five minutes have passed since the code was created.\n```\n\nJitter spreads thousands of concurrent retries so they don't hit the recovering provider at the same instant.",
     "link": {
       "title": "AWS Builders' Library: timeouts, retries and backoff with jitter",
       "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\nSMS/day = 1.2B x 0.03  = 36,000,000\nCost    = 36M x $0.01  = $360,000/day\nYearly  = $360k x 365  ≈ $131M\n```\n\nImplications you'd say out loud:\n\n- **Escalation**: send push; if not opened within 5 minutes, send SMS. Even converting a third of SMS to push saves ~$40M a year.\n- **Dedup matters financially**: a 1% duplicate rate on SMS is ~$1.3M a year.\n- **Clean phone numbers**: invalid numbers cost money and hurt sender reputation.",
+    "workedExample": "```formula\nsms = 1.2B × 0.03 = 36M/day\ndaily = 36M × $0.01 = $360,000\nyearly = $360,000 × 365 ≈ $131M\nwhere\nsms: SMS messages per day, 3% (0.03) of all notifications\ndaily, yearly: SMS spend per day and per year\nB: billion\nM: million\nday: one day; /day means per day\n$: US dollars\n≈: approximately equal to (rounded)\nIn words: 3% of 1.2 billion is 36 million texts a day; at a cent each that is $360,000 a day, about $131 million a year.\n```\n\nImplications you'd say out loud:\n\n- **Channel escalation**: send push; if not opened within 5 minutes, send SMS. Even converting a third of SMS to push saves ~$40M a year.\n- **Dedup matters financially**: a 1% duplicate rate on SMS is ~$1.3M a year.\n- **Clean phone numbers**: invalid numbers cost money and hurt sender reputation.",
     "link": {
       "title": "Twilio: SMS API documentation",
       "url": "https://www.twilio.com/docs/sms/api"
@@ -161,7 +161,7 @@
     "id": "cs1-notification-system-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "A user schedules a weekly digest email. On Tuesday they unsubscribe from marketing. The digest, enqueued on Monday for Wednesday delivery, still arrives. Where is the design flaw?",
+    "prompt": "A user schedules a weekly digest email. On Tuesday they unsubscribe from marketing. The weekly digest, enqueued on Monday for Wednesday delivery, still arrives. Where is the design flaw?",
     "options": [
       {
         "text": "Preferences were checked when the notification was accepted, not when it was sent.",
@@ -172,7 +172,7 @@
         "explanation": "Providers may enforce suppression lists, but the scenario does not establish a provider fault. The application must propagate opt-outs and avoid sending scheduled work using obsolete preferences."
       },
       {
-        "text": "The digest should have been sent by SMS.",
+        "text": "The weekly digest should have been sent by SMS.",
         "explanation": "Wrong. Changing channel doesn't address the stale preference check, and would send marketing via a channel the user might not have consented to either."
       },
       {
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "24M / 20k per second = 1,200 seconds total expansion work. A 3M-user wave takes 150 seconds. Calculate each wave using IANA zone rules for its scheduled date. This is an expansion budget, not a delivery guarantee; re-check suppression immediately before sending and account for provider capacity.",
+    "workedExample": "Expansion time is recipients divided by the expansion rate:\n\n```formula\nt = N / rate\nt_all = 24,000,000 / 20,000/s = 1,200 s\nt_wave = 3,000,000 / 20,000/s = 150 s\nwhere\nt: time to expand a group of recipients into messages\nN: recipients in the group\nrate: messages the scheduler expands per second, 20,000\nt_all: time for all 24 million (20 minutes of total work, spread over the day)\nt_wave: time for one 3-million-user time-zone wave (2.5 minutes)\ns: seconds; /s means per second\nIn words: each time-zone wave takes a couple of minutes to expand, so the whole campaign is 20 minutes of work spread across the day as each time zone reaches 9 am.\n```\n\nCalculate each wave using IANA zone rules for its scheduled date. This is an expansion budget, not a delivery guarantee; re-check suppression immediately before sending and account for provider capacity.",
     "link": {
       "title": "Azure Architecture Center: priority queue pattern",
       "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
@@ -319,7 +319,7 @@
     "id": "cs1-notification-system-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "To save SMS cost, you implement **escalation**: send a push, and send an SMS only if the push isn't opened within 5 minutes. How should the escalation be implemented?",
+    "prompt": "To save SMS cost, you implement **channel escalation**: send a push, and send an SMS only if the push isn't opened within 5 minutes. How should the escalation be implemented?",
     "options": [
       {
         "text": "Have the push sender sleep for 5 minutes, then check whether the push was opened.",

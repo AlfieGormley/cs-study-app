@@ -65,7 +65,20 @@ Fixed size, advancing by a smaller step, so windows overlap. A 5-minute window e
  ─1m─▶
 ```
 
-Use for smoothed moving metrics: "requests in the last 5 minutes, updated every minute". Each event has size ÷ step window memberships when the dimensions divide evenly; actual state and CPU costs depend on incremental aggregation and shared panes.
+Use for smoothed moving metrics: "requests in the last 5 minutes, updated every minute". The number of windows each event lands in is the window size divided by the step, when one divides evenly into the other:
+
+```formula
+m = S / H
+m = 5 min / 1 min = 5
+where
+m: the number of overlapping windows each event belongs to
+S: the window size, here 5 minutes
+H: the hop (step) between window starts, here 1 minute
+min: minutes
+In words: when a new 5-minute window starts every minute, 5 windows are open at any moment, so every event is counted in 5 of them.
+```
+
+A naive implementation therefore does about m times the work of a tumbling window; actual state and CPU costs depend on incremental aggregation and shared panes.
 
 Kafka Streams also has a distinct **sliding window** that is defined by a maximum time difference between records (used for "two events within 10 minutes of each other"), and windows are only created when records arrive.
 
@@ -83,19 +96,27 @@ Use for user behaviour analytics: session length, pages per visit.
 
 ### Global and count windows
 
-A single window for all time (with custom triggers), or windows of N records. Less common in system design discussions.
+A single window for all time (with custom triggers), or windows of a fixed number of records (say every 100 records). Less common in system design discussions.
 
 ## Watermarks
 
-In event time, how does an operator know that the 09:00–09:01 window is complete? It cannot know for sure; an event could always be delayed. A **watermark** is the processor's declaration: "I believe no more events with timestamp ≤ T will arrive." When the watermark passes the end of a window, the window fires.
+In event time, how does an operator know that the 09:00–09:01 window is complete? It cannot know for sure; an event could always be delayed. An **event-time watermark** (usually just called a watermark) is a timestamp the processor attaches to its progress, meaning: "I believe no more events with a timestamp at or before this one will arrive." When the watermark passes the end of a window, the window fires.
 
-The simplest and most common strategy is **bounded out-of-orderness**:
+The simplest and most common strategy is **bounded out-of-orderness**: assume no event arrives more than a fixed delay behind the newest one seen so far.
 
-`watermark ≈ max event time seen − allowed delay`
+```formula
+W ≈ t_max − δ
+W ≈ 09:01:12 − 10 s = 09:01:02
+where
+W: the watermark: the event time up to which the processor believes it has seen everything
+t_max: the largest event timestamp seen so far, here 09:01:12
+δ: delta, the allowed delay (the out-of-orderness bound), here 10 seconds
+≈: approximately equal to; Flink's generator subtracts one more millisecond and emits the value periodically
+s: seconds
+In words: the watermark trails the newest event time by the allowed delay, so events up to 10 seconds out of order still count.
+```
 
-Flink's bounded generator subtracts one additional millisecond and emits periodically, so this is a conceptual formula.
-
-With a 10-second delay, after seeing an event at 09:01:12 the watermark is 09:01:02, so the 09:00–09:01 window can fire.
+Here W has passed 09:01:00, the end of the 09:00–09:01 window, so that window can fire. This is a conceptual formula: Flink's bounded generator actually produces 09:01:01.999.
 
 ```java
 WatermarkStrategy
@@ -109,7 +130,7 @@ WatermarkStrategy
 Two important subtleties:
 
 - **Watermarks are the minimum across inputs.** An operator reading 8 Kafka partitions advances its watermark only as fast as the slowest partition. One **idle partition** with no data holds the watermark back and no window ever fires. `withIdleness` marks such sources idle so they are ignored.
-- **The delay is a trade-off.** Larger delay = more complete results, higher latency. Smaller delay = lower latency, more late events.
+- **The delay is a trade-off.** A larger delay gives more complete results but higher latency. A smaller delay gives lower latency but more late events.
 
 ### Late data
 
@@ -119,7 +140,7 @@ An event that arrives after the watermark has passed its window is **late**. Opt
 2. **Allowed lateness**: keep window state for extra time and emit an **updated result** when a late event arrives. Downstream must handle updates (upserts, not appends).
 3. **Side output**: route late events to a separate stream for correction or auditing.
 
-Kafka Streams expresses this as a window **grace period** (for example `TimeWindows.ofSizeAndGrace(Duration.ofMinutes(1), Duration.ofSeconds(30))`), and by default emits updated results continuously; `suppress(untilWindowCloses)` emits only the final result.
+Kafka Streams expresses this as a **window grace period** (for example `TimeWindows.ofSizeAndGrace(Duration.ofMinutes(1), Duration.ofSeconds(30))`), and by default emits updated results continuously; `suppress(untilWindowCloses)` emits only the final result.
 
 > [!tip] The Dataflow model
 > Google's Dataflow paper frames all of this as four questions: **what** are you computing, **where** in event time (windows), **when** in processing time are results emitted (watermarks and triggers), and **how** do refinements relate (discard or accumulate). Apache Beam implements it directly.
@@ -134,7 +155,7 @@ Stateful operators hold a lot of state: millions of keys, each with a running co
 - Periodically, the JobManager injects **checkpoint barriers** into the sources. In aligned checkpoints, an operator coordinates input barriers and snapshots state to configured durable storage such as S3 or HDFS. Unaligned checkpoints also capture in-flight channel data to reduce alignment delay. This is a variant of the Chandy–Lamport distributed snapshot algorithm.
 - A checkpoint records **state plus source offsets** together. On failure, Flink restores every operator from the last checkpoint and rewinds the sources to the matching offsets.
 - With transactional sinks (for example, the Kafka sink using two-phase commit tied to checkpoints), this gives end-to-end exactly-once.
-- **Savepoints** are manually triggered checkpoints for upgrades and rescaling.
+- **Flink savepoints** are manually triggered checkpoints for upgrades and rescaling.
 
 ### Kafka Streams: changelog topics
 
@@ -166,7 +187,21 @@ Stateful operators hold a lot of state: millions of keys, each with a running co
 4. If distinct countries > 3, emit an alert.
 5. Register an event-time timer to clear state for idle cards, so state does not grow forever.
 
-An illustrative 200 bytes per card would total 10 GB for 50 million cards before storage overhead. The rolling event list is variable-sized; a reliable capacity estimate is absent because event rate, lateness buffers, indexes, compaction and checkpoint costs were not measured.
+A rough state estimate multiplies the number of keys by the state each one holds:
+
+```formula
+M = n × b
+M = 50000000 × 200 B = 10 GB
+where
+M: the total state held across the job
+n: the number of cards with state, here 50 million
+b: an illustrative state size per card, 200 bytes (B)
+B: bytes
+GB: gigabytes, billions of bytes
+In words: 50 million cards at 200 bytes each is about 10 GB of state, before storage overhead.
+```
+
+That figure is only illustrative. The rolling event list is variable-sized; a reliable capacity estimate is absent because event rate, lateness buffers, indexes, compaction and checkpoint costs were not measured.
 
 ## Stream vs batch
 

@@ -6,22 +6,46 @@ minutes: 14
 summary: Why naive saw and square oscillators alias, worked out with real numbers, and the established fixes (additive, mipmapped wavetables, oversampling, BLIT, BLEP and PolyBLEP), with a measured PolyBLEP-versus-naive comparison in Python.
 ---
 
-The previous lesson showed that a sawtooth has harmonics at every multiple of its fundamental, forever. A digital system at sample rate `fs` can only represent frequencies below `fs/2`. Module 1 covered what happens to anything above: it **aliases**, folding back to a different frequency.
+The previous lesson showed that a sawtooth has harmonics at every multiple of its fundamental, forever. A digital system can only represent frequencies below half its sample rate (the **Nyquist frequency**: 24 kHz at a 48 kHz sample rate). Module 1 covered what happens to anything above: it **aliases**, folding back to a different frequency.
 
-The naive oscillator from lesson 2, `2*p - 1`, samples an ideal saw directly. It therefore contains all those impossible harmonics, and they fold back into the audible band. This lesson puts numbers on the problem and shows how real synths solve it.
+The naive oscillator from lesson 2, `2.0 * p - 1.0`, samples an ideal saw directly. It therefore contains all those impossible harmonics, and they fold back into the audible band. This lesson puts numbers on the problem and shows how real synths solve it.
 
 ## Where the harmonics go
 
-Take a high-ish note: `f0 = 1245 Hz` (close to D#6) at `fs = 48 kHz`. Nyquist is 24 kHz, so harmonics 1 to 19 (up to 23,655 Hz) are fine. Harmonic 20 is at 24,900 Hz and folds back:
+Take a high-ish note: 1245 Hz (close to D#6) at a 48 kHz sample rate. Nyquist is 24 kHz, so harmonics 1 to 19 (up to 23,655 Hz) are fine. Harmonic 20 is at 24,900 Hz and folds back. A component above Nyquist lands at its distance from the nearest whole multiple of the sample rate:
 
+```formula
+f_h = h × f_0
+f_a = |f_h − k × f_s|
+h = 20: |24900 − 48000| = 23100 Hz
+h = 21: |26145 − 48000| = 21855 Hz
+h = 31: |38595 − 48000| = 9405 Hz
+h = 38: |47310 − 48000| = 690 Hz
+h = 39: |48555 − 48000| = 555 Hz
+where
+f_h: the frequency of harmonic h, in hertz (Hz)
+h: the harmonic number, 1, 2, 3...
+f_0: the fundamental frequency (the note), here 1245 Hz
+f_a: the alias: the frequency the harmonic actually appears at after sampling, in Hz
+|x|: absolute value: x without its sign, so a distance is never negative
+k: the whole number that makes k × f_s as close as possible to f_h (here k = 1, since all these harmonics lie between 24 and 72 kHz)
+f_s: the sample rate, here 48,000 Hz
+Hz: hertz, cycles per second
+In words: sampling cannot tell a frequency apart from one that is a whole multiple of the sample rate away, so each harmonic above Nyquist shows up at its distance from the nearest multiple of the sample rate.
 ```
-folded = |f - k*fs|  for the nearest k
 
-h20: 24900 -> 48000 - 24900 = 23100
-h21: 26145 -> 48000 - 26145 = 21855
-h31: 38595 -> 48000 - 38595 =  9405
-h38: 47310 -> 48000 - 47310 =   690
-h39: 48555 -> 48555 - 48000 =   555
+The levels in the table below come from the saw's 1/h rule converted to decibels:
+
+```formula
+L = 20 × log_10(1 / h)
+L = 20 × log_10(1 / 31) ≈ −29.8 dB
+where
+L: the level relative to the fundamental, in decibels (dB)
+h: the harmonic number, here 31
+log_10: the base-10 logarithm: the power you raise 10 to to get the number
+dB: decibels
+≈: approximately equal to
+In words: the 31st harmonic of a saw is 1/31 of the fundamental's amplitude, about 30 dB quieter.
 ```
 
 | Harmonic | Lands at | Level (1/n) |
@@ -47,19 +71,39 @@ There is no free lunch. Each method trades CPU, memory, latency or flexibility.
 
 ### 1. Additive synthesis
 
-Sum only the harmonics below Nyquist: for this note, harmonics 1 to 19. The result is perfectly band-limited by construction. The cost is one sine per harmonic per sample: a 50 Hz note at 48 kHz has 479 harmonics below Nyquist. Fine offline, expensive for a polyphonic synth on a microcontroller.
+Sum only the harmonics below Nyquist. How many is that? The largest whole number whose harmonic stays strictly below half the sample rate:
+
+```formula
+H = ⌈(f_s / 2) / f_0⌉ − 1
+H = ⌈24000 / 1245⌉ − 1 = ⌈19.3⌉ − 1 = 19
+H = ⌈24000 / 50⌉ − 1 = 480 − 1 = 479
+where
+H: the number of harmonics that fit below Nyquist (the highest usable harmonic number)
+⌈x⌉: the ceiling of x: x rounded up to the next whole number; a whole number stays as it is
+f_s: the sample rate, here 48,000 Hz
+f_s / 2: the Nyquist frequency, here 24,000 Hz
+f_0: the note's fundamental frequency, in hertz (Hz)
+In words: divide Nyquist by the note's frequency, round up, and subtract one, so that a harmonic landing exactly on Nyquist is excluded.
+```
+
+For this note that is harmonics 1 to 19. The result is perfectly band-limited by construction. The cost is one sine per harmonic per sample: a 50 Hz note at 48 kHz has 479 harmonics below Nyquist. Fine offline, expensive for a polyphonic synth on a microcontroller.
 
 ### 2. Band-limited wavetables (mipmaps)
 
-Precompute single-cycle tables using additive synthesis, offline. Keep several versions: one per octave (say), each containing only the harmonics that stay below Nyquist for the **highest** note that table will play. At playback, choose the table for the current pitch and read it with a phase accumulator and interpolation.
+Precompute single-cycle tables using additive synthesis, offline. Keep several versions: one per octave (say), each containing only the harmonics that stay below Nyquist for the **highest** note that table will play. At playback, choose the table for the current pitch and read it with a phase accumulator and interpolation. The same counting rule sets each table's harmonic limit, using the highest note the table serves:
 
-```
-table for notes up to 2 kHz:
-  harmonics < 24000 / 2000: max 11
-table for notes up to 1 kHz:
-  harmonics < 24: max 23
-table for notes up to 500 Hz:
-  harmonics < 48: max 47
+```formula
+H = ⌈(f_s / 2) / f_top⌉ − 1
+f_top = 2000 Hz: ⌈24000 / 2000⌉ − 1 = 11
+f_top = 1000 Hz: ⌈24000 / 1000⌉ − 1 = 23
+f_top = 500 Hz: ⌈24000 / 500⌉ − 1 = 47
+where
+H: the highest harmonic the table may contain
+⌈x⌉: the ceiling of x: rounded up to a whole number (a whole number stays as it is)
+f_s: the sample rate, 48,000 Hz, so f_s / 2 = 24,000 Hz
+f_top: the highest note the table will play, in hertz (Hz)
+Hz: hertz, cycles per second
+In words: each octave lower, the table can hold about twice as many harmonics.
 ```
 
 This is cheap per sample and works for any waveform, which is why wavetable synths use it. The costs are memory, a slight loss of brightness at the bottom of each table's range, and possible audible switching between tables (crossfading helps). Some designs deliberately allow harmonics that fold back *above* 20 kHz, keeping more brightness at the cost of some inaudible aliasing.
@@ -90,7 +134,25 @@ naive saw          PolyBLEP saw
 
 ## A PolyBLEP saw in Python
 
-The polynomial below is the widely circulated two-sample PolyBLEP (as used in Martin Finke's tutorial). `t` is the phase in `[0, 1)` and `dt` the phase increment:
+The polynomial below is the widely circulated two-sample PolyBLEP (as used in Martin Finke's tutorial). Written as maths first:
+
+```formula
+y = 2 × p − 1 − B
+B = 2 × u − u^2 − 1,  u = p / dt
+B = u^2 + 2 × u + 1,  u = (p − 1) / dt
+where
+y: the corrected saw output sample
+p: the phase, from 0 up to 1, in cycles
+B: the PolyBLEP correction: use the first formula when p < dt (the sample just after the jump), the second when p > 1 − dt (the sample just before it), and B = 0 otherwise
+u: how far the sample is from the jump, measured in samples: between 0 and 1 just after it, between −1 and 0 just before it
+dt: the phase increment per sample (f_0 / f_s), as in the code
+f_0: the note's frequency, in hertz
+f_s: the sample rate, in hertz
+<, >: less than, greater than
+In words: away from the jump the saw is untouched; on the one sample either side of the jump, a small curve is subtracted that replaces the instant drop with a smooth, band-limited one.
+```
+
+For example, with dt = 0.1 and p = 0.05 (half a sample after the jump), u = 0.5, so B = 1 − 0.25 − 1 = −0.25 and the output is −0.9 − (−0.25) = −0.65 instead of the naive −0.9. In the code, `t` is the phase in `[0, 1)` and `dt` the phase increment:
 
 ```python
 import numpy as np
@@ -143,15 +205,38 @@ polyblep 9405 -55.4 -1.9
 
 Reading it: the strongest alias below 10 kHz is at 9,405 Hz in both cases (harmonic 31 folded), but PolyBLEP pushes it from −29.8 dB to −55.4 dB relative to the fundamental, an improvement of about 25 dB. The last column is the 10th harmonic (12,450 Hz) relative to its ideal 1/n level: PolyBLEP softens it by 1.9 dB. In the same run the 19th harmonic (23.7 kHz) was 7.6 dB low. That is PolyBLEP's trade-off: it gently dulls the very top octave while removing most of the audible aliasing.
 
-The saw's jump is downwards (+1 to −1), so the correction is *subtracted*. A square has a rising jump at phase 0 and a falling one at the pulse width `w`, so it needs two corrections:
+The saw's jump is downwards (+1 to −1), so the correction is *subtracted*. A square has a rising jump at phase 0 and a falling one at the pulse width w, so it needs two corrections:
 
+```formula
+y = s + B(p) − B((p − w) mod 1)
+where
+y: the corrected pulse output sample
+s: the naive pulse: +1 while p < w, otherwise −1
+p: the phase, from 0 up to 1
+w: the pulse width, as a fraction of the cycle (0.5 for a square)
+B(x): the PolyBLEP correction above, evaluated at phase x
+mod: modulo, the remainder after division; (p − w) mod 1 is the phase measured from the falling edge, wrapped into 0 to 1
+In words: add a correction at the rising edge and subtract one at the falling edge, each measured from its own jump.
 ```
-y = 1 if p < w else -1
+
+In Python, using the `poly_blep` function above:
+
+```python
+y = 1.0 if p < w else -1.0
 y += poly_blep(p, dt)
-y -= poly_blep((p - w) mod 1, dt)
+y -= poly_blep((p - w) % 1.0, dt)
 ```
 
-A quick check with the same analysis gave −55.4 dB worst alias below 10 kHz for both `w = 0.5` and `w = 0.3` (naive: −29.8 and −28.7 dB). Remember that a pulse with `w ≠ 0.5` also has a DC offset of `2w − 1`, which you may want to remove.
+A quick check with the same analysis gave −55.4 dB worst alias below 10 kHz for both w = 0.5 and w = 0.3 (naive: −29.8 and −28.7 dB). Remember that a pulse with a width other than 0.5 also has a DC offset (a non-zero average), which you may want to remove:
+
+```formula
+DC = w × (+1) + (1 − w) × (−1) = 2 × w − 1
+DC = 2 × 0.3 − 1 = −0.4
+where
+DC: the average value of the pulse over one cycle
+w: the pulse width, the fraction of the cycle spent at +1; the rest, 1 − w, is spent at −1
+In words: the average is the time-weighted mix of +1 and −1, which is zero only for a square (w = 0.5).
+```
 
 Triangle waves have corners, not jumps. They can be corrected with a band-limited *ramp* (BLAMP), or made by integrating a PolyBLEP square with a leaky integrator, which is what DaisySP's `WAVE_POLYBLEP_TRI` does.
 
@@ -179,7 +264,7 @@ For a first subtractive voice on a microcontroller, PolyBLEP is the usual pragma
 ## Key takeaways
 
 - Naive saw and square waves alias because their jumps contain energy above Nyquist; the folded components are inharmonic and move against pitch bends.
-- Fold-back frequency is `|f − k·fs|`; at 1245 Hz and 48 kHz, harmonic 31 lands at 9,405 Hz about 30 dB down.
+- A harmonic above Nyquist folds back to its distance from the nearest multiple of the sample rate; at 1245 Hz and 48 kHz, harmonic 31 lands at 9,405 Hz about 30 dB down.
 - Fixes: additive, mipmapped wavetables, oversampling, BLIT, minBLEP and PolyBLEP.
 - PolyBLEP corrects two samples around each jump; in the test it cut the worst low alias by about 25 dB while softening the top harmonics slightly.
 - Libraries (DaisySP, Teensy Audio) already provide band-limited waveforms; compare them with naive ones as an exercise.

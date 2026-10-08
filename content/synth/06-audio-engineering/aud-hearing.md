@@ -2,7 +2,7 @@
 id: aud-hearing
 title: Hearing and psychoacoustics
 level: basic
-minutes: 16
+minutes: 19
 summary: The range of human hearing, equal-loudness contours (ISO 226), A and C weighting, masking and critical bands, how we localise sound with time and level differences, the precedence (Haas) effect, and the exposure limits that protect your hearing.
 ---
 
@@ -54,6 +54,44 @@ Sound level meters apply a **frequency weighting** to make a single number track
 - **C-weighting** (dB(C)) is nearly flat from about 31.5 Hz to 8 kHz (−3 dB points). It is used for **peak** measurements, and for loud, bass-heavy sound where A-weighting would hide the low end.
 - **Z-weighting** is flat ("zero").
 
+The A-weighting curve is defined by a formula in IEC 61672-1. It describes a set of simple filters: two that cut below about 20 Hz, one each near 108 Hz and 738 Hz that shape the low-mid roll-off, and two that cut above about 12.2 kHz. You don't need to memorise it, but it shows that "dB(A)" is a precisely defined filter, not a vague idea:
+
+```formula
+R_A = 12194^2 × f^4 / D
+D = (f^2 + 20.6^2) × (f^2 + 12194^2)
+  × √((f^2 + 107.7^2) × (f^2 + 737.9^2))
+A = 20 × log_10(R_A) + 2.00
+where
+R_A: the A-weighting response at frequency f, as a plain gain ratio (no unit)
+f: the frequency being weighted, in hertz (Hz)
+D: the denominator, written on its own lines only to keep them short
+20.6, 107.7, 737.9, 12194: the corner frequencies of the weighting's filter stages, in hertz (Hz)
+√: square root
+log_10: the base-10 logarithm: the power you raise 10 to in order to get the number
+2.00: a correction in decibels that makes the weighting exactly 0 dB at 1 kHz
+A: the A-weighting at frequency f, in decibels (dB); negative means the meter reduces that frequency
+In words: a fixed filter shape, turned into decibels and nudged so that 1 kHz is unchanged; it cuts deep bass and extreme treble and slightly lifts 2–4 kHz.
+```
+
+Worked example at 100 Hz:
+
+```formula
+R_A = (1.487 × 10^16) / (1.696 × 10^17)
+R_A ≈ 0.0877
+A = 20 × log_10(0.0877) + 2.00
+A = 20 × (−1.057) + 2.00
+A ≈ −19.1 dB
+where
+R_A: the A-weighting gain ratio at 100 Hz (no unit)
+A: the A-weighting at 100 Hz, in decibels (dB)
+log_10: the base-10 logarithm
+dB: decibels
+≈: approximately equal to (rounded)
+In words: an A-weighted meter reads a 100 Hz tone about 19 dB lower than its true sound pressure level.
+```
+
+The same formula as a program, evaluated at several frequencies:
+
 ```python
 import math
 
@@ -71,7 +109,7 @@ for f in (50, 100, 1000, 4000, 10000):
     print(f"{f:>5} Hz: {a:6.1f} dB")
 ```
 
-```
+```output
    50 Hz:  -30.3 dB
   100 Hz:  -19.1 dB
  1000 Hz:    0.0 dB
@@ -96,11 +134,34 @@ Lossy codecs such as MP3 and AAC exploit masking: they spend fewer bits on what 
 
 The cochlea behaves like a bank of overlapping band-pass filters. Critical-band measurements and auditory-filter bandwidths both describe frequency selectivity, but their numerical widths depend on how they are measured. ERB is the width of an ideal rectangular filter with the same peak gain and integrated response as the actual filter. Two tones inside one band interact strongly: they mask each other, beat or sound rough. Tones in well-separated bands are heard more independently.
 
-The bands are narrow at low frequencies and wider at high frequencies. One standard model, Glasberg and Moore's **equivalent rectangular bandwidth (ERB)**, approximates the bandwidth for young normally hearing listeners at moderate levels as:
+The bands are narrow at low frequencies and wider at high frequencies. One standard model, Glasberg and Moore's **equivalent rectangular bandwidth (ERB)**, gives the width of the auditory filter centred on a given frequency. It was fitted to listening-test data from young, normally hearing listeners at moderate levels:
 
+```formula
+ERB = 24.7 × (4.37 × f / 1000 + 1)
+where
+ERB: the equivalent rectangular bandwidth of the auditory filter, in hertz (Hz)
+f: the centre frequency of the filter, in hertz (Hz)
+24.7: the bandwidth in hertz the formula gives at very low frequencies
+4.37: how fast the bandwidth grows with frequency, per kilohertz of centre frequency
+1000: converts f from hertz to kilohertz
+Hz: hertz, cycles per second
+In words: the auditory filter is about 25 Hz wide at the bottom of the range and gets wider in proportion to frequency, approaching about 11 % of the centre frequency at high frequencies.
 ```
-ERB = 24.7 * (4.37 * f / 1000 + 1)  Hz
+
+Worked example at a centre frequency of 1 kHz (1000 Hz):
+
+```formula
+ERB = 24.7 × (4.37 × 1000 / 1000 + 1)
+ERB = 24.7 × 5.37
+ERB ≈ 133 Hz
+where
+ERB: the equivalent rectangular bandwidth, in hertz (Hz)
+Hz: hertz
+≈: approximately equal to (rounded)
+In words: around 1 kHz, tones within roughly 133 Hz of each other share an auditory filter.
 ```
+
+The formula is an average fit, not a sharp boundary: real filters overlap, and their widths change with level and between listeners.
 
 | Centre | ERB |
 |---|---|
@@ -128,7 +189,20 @@ In a room, you hear the direct sound plus many reflections from other directions
 
 Precedence depends on signal, level, delay, direction and listening conditions. Fusion (hearing one event), localization dominance (hearing it toward the first source), and suppression of information about the reflection are related but distinct; one can persist after another breaks down. There is no universal delay/level boundary guaranteeing all three. Exact Haas-derived limits are absent here because their original experimental conditions were not reliably established in this review.
 
-This has a direct engineering use (lesson 8): a **delay speaker** is aligned using the difference between stage-to-listener and fill-to-listener travel times, plus any deliberately chosen precedence offset. Account for electronic latency, then measure and listen across the coverage area. A large offset can cause audible echoes or comb filtering rather than guarantee stage localization.
+This has a direct engineering use (lesson 8): a **delay speaker** is aligned using the difference between stage-to-listener and fill-to-listener travel times, plus any deliberately chosen precedence offset:
+
+```formula
+t_delay = (d_main − d_fill) / c + t_off
+where
+t_delay: the electronic delay applied to the delay speaker, in seconds (s) or milliseconds (ms)
+d_main: the distance from the main stage speakers to the listener, in metres (m)
+d_fill: the distance from the delay speaker to the listener, in metres (m)
+c: the speed of sound, about 343 metres per second (m/s) at 20 °C
+t_off: a small extra delay you choose so the stage sound arrives first, in milliseconds (ms); an example to evaluate by listening, not a fixed rule
+In words: hold back the delay speaker by the extra time the stage sound needs to reach the listener, plus a little more so the stage wins the race.
+```
+
+For example, if the stage path is 34.3 m longer, the travel-time difference is 34.3 m divided by 343 m/s, which is 100 ms; with a chosen 10 ms offset the starting setting is 110 ms. The formula ignores electronic latency and temperature changes. Account for electronic latency, then measure and listen across the coverage area. A large offset can cause audible echoes or comb filtering rather than guarantee stage localization.
 
 ## Hearing damage and safe exposure
 
@@ -144,7 +218,33 @@ Noise-induced hearing loss is permanent. It depends on **level and time together
 
 At the lower action value the employer must assess the risk, provide information and training, and make hearing protection available to anyone who asks for it; at the upper one, hearing protection and hearing protection zones become mandatory. The exposure limit values take account of the reduction given by hearing protection and must not be exceeded; the action values do not (regulation 4(5)), so they're judged on unprotected exposure.
 
-**NIOSH (US) recommended exposure limit:** **85 dB(A)** averaged over an eight-hour day, with a **3 dB exchange rate**: every 3 dB increase halves the allowed time.
+**NIOSH (US) recommended exposure limit:** **85 dB(A)** averaged over an eight-hour day, with a **3 dB exchange rate**: every 3 dB increase halves the allowed time. A 3 dB increase doubles the sound energy, so halving the time keeps the total energy (the dose) the same:
+
+```formula
+T = 480 / 2^{(L − 85) / 3}
+where
+T: the time to reach the NIOSH reference daily dose, in minutes (min)
+480: eight hours, in minutes
+L: the steady A-weighted exposure level, in dB(A)
+85: the NIOSH recommended exposure limit for eight hours, in dB(A)
+3: the exchange rate, in decibels: each 3 dB step halves the time
+2^{(L − 85) / 3}: 2 raised to the number of 3 dB steps above 85 dB(A)
+In words: start from 8 hours at 85 dB(A) and halve the time for every 3 dB louder.
+```
+
+Worked example at a steady 100 dB(A):
+
+```formula
+T = 480 / 2^{(100 − 85) / 3}
+T = 480 / 2^5
+T = 480 / 32 = 15 min
+where
+T: the time to reach the reference dose, in minutes
+min: minutes
+In words: 100 dB(A) is five 3 dB steps above 85, so the time halves five times, from 480 to 15 minutes.
+```
+
+The same calculation for several levels, as a program:
 
 ```python
 for level in (85, 88, 91, 94, 97, 100):
@@ -153,7 +253,7 @@ for level in (85, 88, 91, 94, 97, 100):
           f"{minutes:5.0f} min")
 ```
 
-```
+```output
 85 dBA:   480 min
 88 dBA:   240 min
 91 dBA:   120 min

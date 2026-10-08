@@ -67,11 +67,11 @@
     "options": [
       {
         "text": "5",
-        "explanation": "Wrong. Adding just one pod would bring average CPU to about 72%, still above the 60% target."
+        "explanation": "Wrong. Adding just one pod spreads the same 360% of total CPU over 5 pods, about 72% each, still above the 60% target."
       },
       {
         "text": "6",
-        "explanation": "Correct. desired = ceil(4 × 90 / 60) = ceil(6.0) = 6. Spreading the same total load over 6 pods gives about 60% each."
+        "explanation": "Correct. 4 pods at 90% scaled to a 60% target is 4 × 90 / 60 = 6.0, which rounds up to 6. Spreading the same total load over 6 pods gives about 60% each."
       },
       {
         "text": "8",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. HPA formula: `desired = ceil(current × currentMetric / targetMetric)`.\n2. Plug in: ceil(4 × 90 / 60) = ceil(360 / 60) = ceil(6) = 6.\n3. Sanity check: total CPU demand = 4 × 90% = 360% of one pod. Over 6 pods that's 60% each, which hits the target.\n4. In practice HPA also applies a tolerance (10% by default) and stabilisation windows to avoid flapping.",
+    "workedExample": "1. The HPA picks the pod count that would bring the average metric back to its target:\n\n```formula\nR_new = ⌈R × M / T⌉\nwhere\nR_new: the replica (pod) count the HPA asks for\nR: the pods running now, here 4\nM: the current average metric, here 90 % CPU\nT: the target metric, here 60 % CPU\n⌈ ⌉: ceiling: round up to a whole number\n%: per cent of each pod's CPU request\nIn words: grow the pod count by how far the metric is over target, rounding up.\n```\n\n2. Plug in the numbers:\n\n```formula\nR_new = ⌈4 × 90 % / 60 %⌉\nR_new = ⌈360 % / 60 %⌉\nR_new = ⌈6.0⌉ = 6\nwhere\nR_new: the replica (pod) count the HPA asks for\n⌈ ⌉: ceiling: round up to a whole number\n%: per cent of one pod's CPU request\nIn words: 4 pods at 90 % become 6 pods.\n```\n\n3. Sanity check: total CPU demand is 4 × 90% = 360% of one pod's request. Over 6 pods that's 60% each, which hits the target.\n4. In practice the HPA also applies a tolerance (10% by default) and stabilisation windows to avoid flapping.",
     "link": {
       "title": "Kubernetes: Horizontal Pod Autoscaling",
       "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Separate the failures:\n   - 0–3 min: not enough capacity because scaling is slower than the spike.\n   - After 3 min: the DB falls over, because new instances each open a connection pool.\n2. Capacity timing: the sale is planned, so use scheduled scaling to have the instances ready beforehand. Pre-provisioned nodes can reduce some startup delay; measure application readiness, image loading and dependencies.\n3. DB: suppose each instance has a 20-connection pool and you go from 20 to 60 instances. That's 400 → 1,200 connections. A pooler like PgBouncer multiplexes them onto, say, 200 real connections.\n4. Residual overflow: return 429/503 quickly, or admit orders into a bounded queue with explicit acceptance, deduplication and inventory semantics, rather than letting latency grow without bound.\n5. Principle: autoscaling is a control loop with lag. Plan for the lag and for the next bottleneck down.",
+    "workedExample": "1. Separate the failures:\n   - 0–3 min: not enough capacity because scaling is slower than the spike.\n   - After 3 min: the DB falls over, because new instances each open a connection pool.\n2. Capacity timing: the sale is planned, so use scheduled scaling to have the instances ready beforehand. Pre-provisioned nodes can reduce some startup delay; measure application readiness, image loading and dependencies.\n3. DB: suppose each instance has a 20-connection pool and you go from 20 to 60 instances:\n\n```formula\nC = N × P\nC = 60 × 20 = 1200\nwhere\nC: total connections the database is asked to hold\nN: app instances, 20 before and 60 after\nP: connections in each instance's pool, 20\nIn words: 20 × 20 = 400 connections becomes 60 × 20 = 1,200.\n```\n\nA pooler like PgBouncer multiplexes them onto, say, 200 real connections.\n4. Residual overflow: return 429/503 quickly, or admit orders into a bounded queue with explicit acceptance, deduplication and inventory semantics, rather than letting latency grow without bound.\n5. Principle: autoscaling is a control loop with lag. Plan for the lag and for the next bottleneck down.",
     "link": {
       "title": "Kubernetes: Horizontal Pod Autoscaling",
       "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Before: 10 × 25 = 250 connections, below the configured ceiling but not necessarily below sustainable query load.\n2. After: 60 × 25 = 1,500 > 500. Connection errors.\n3. Each server connection consumes resources; actual memory and query cost depend on configuration and activity.\n4. Fix: PgBouncer in transaction mode, perhaps 100 real connections shared by all pods; per-pod limits chosen from measured concurrency. Transaction pooling requires application compatibility with session-state restrictions.\n5. General lesson: scaling one tier moves the bottleneck to the next.",
+    "workedExample": "1. Every pod opens its own full pool, so the database sees:\n\n```formula\nC = N × P\nC_before = 10 × 25 = 250\nC_after = 60 × 25 = 1500\nC_after = 1500 > 500\nwhere\nC: total connections requested from Postgres\nC_before: C with 10 pods, before the sale\nC_after: C with 60 pods, during the sale\nN: number of pods, 10 before and 60 after\nP: connections in each pod's pool, 25\n>: is greater than\nIn words: 60 pods × 25 connections asks for 1,500 connections, three times the 500 allowed by max_connections.\n```\n\n2. Before, 250 is below the configured ceiling (though not necessarily below sustainable query load). After, the requests beyond 500 are refused with connection errors.\n3. Each server connection consumes resources; actual memory and query cost depend on configuration and activity.\n4. Fix: PgBouncer in transaction mode, perhaps 100 real connections shared by all pods; per-pod limits chosen from measured concurrency. Transaction pooling requires application compatibility with session-state restrictions.\n5. General lesson: scaling one tier moves the bottleneck to the next.",
     "link": {
       "title": "PostgreSQL connection settings",
       "url": "https://www.postgresql.org/docs/current/runtime-config-connection.html"

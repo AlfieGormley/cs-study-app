@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "For a fixed home replica set,N=3 and one failed replica, requireR+W>3 andR,W<=2. Only(2,2) satisfies both. This establishes overlap, not linearizability. Configure driver consistency explicitly; defaults vary by driver and version. Sloppy quorums can break the fixed-set assumption.",
+    "workedExample": "For a fixed home replica set, two conditions must hold at once: read and write quorums must overlap, and each quorum must still be reachable with one of the three replicas down.\n\n```formula\nR + W > N\nR ≤ N − 1 and W ≤ N − 1\nN = 3: R + W > 3, R ≤ 2, W ≤ 2\nwhere\nR: replicas that must answer a read\nW: replicas that must acknowledge a write\nN: replicas holding the key; here 3\nN − 1: replicas still up when one has failed\n>: is greater than\n≤: is less than or equal to\nIn words: reads and writes must overlap, and neither may need all three replicas.\n```\n\nOnly R = 2, W = 2 satisfies both (2 + 2 = 4 > 3). This establishes overlap, not linearizability. Configure driver consistency explicitly; defaults vary by driver and version. Sloppy quorums can break the fixed-set assumption.",
     "link": {
       "title": "Dynamo: Amazon's highly available key-value store (SOSP 2007)",
       "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "In a simplified balanced single-token primary-ownership ring, removing one of six nodes transfers its 1/6 primary range to one successor, doubling that primary share. Replicated copies and recovery sources complicate actual load. With vnodes, many token successors can belong to the same physical peer: sixteen ranges do not imply sixteen distinct physical successors among five survivors. An ideally balanced redistribution changes each survivor from 1/6 to 1/5, a20% increase, not a guaranteed distribution. The cited Cassandra 5.0 configuration uses 16 tokens.",
+    "workedExample": "In a simplified balanced single-token primary-ownership ring, removing one of six nodes transfers its 1/6 primary range to one successor, doubling that primary share. Replicated copies and recovery sources complicate actual load.\n\nWith vnodes, many token successors can belong to the same physical peer: sixteen ranges do not imply sixteen distinct physical successors among five survivors. In the ideal case the load spreads evenly over the five survivors:\n\n```formula\ns_before = 1 / 6\ns_after = 1 / 5\ns_after / s_before = 6 / 5 = 1.2\nwhere\ns_before: each node's share of the ring with six nodes\ns_after: each survivor's share once five nodes split the ring evenly\nIn words: each survivor goes from a sixth to a fifth of the data, a 20% increase, instead of one node doubling.\n```\n\nThis is an ideal balanced redistribution, not a guaranteed distribution. The cited Cassandra 5.0 configuration uses 16 tokens.",
     "link": {
       "title": "Dynamo architecture (Apache Cassandra docs)",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare the clocks entry by entry (missing = 0):\n\n| | A | B |\n|---|---|---|\n| v1 | 3 | 0 |\n| v2 | 2 | 1 |\n\n- Is v1 >= v2 in every entry? A: 3 >= 2 yes, B: 0 >= 1 **no**.\n- Is v2 >= v1 in every entry? A: 2 >= 3 **no**.\n\nSo they're **concurrent**, and the store returns both.\n\nThe client merges them (a basket union gives {book, pen}) and does `put(value, context=[A:3, B:1])`. The coordinating node increments its own entry, for example `[A:4, B:1]`, which dominates both siblings, so they're discarded.\n\nThe trade-off Amazon accepted: with union merges, a *removed* item can reappear if the removal was concurrent with another change.",
+    "workedExample": "Compare the clocks entry by entry (a missing entry counts as 0):\n\n| | A | B |\n|---|---|---|\n| v1 | 3 | 0 |\n| v2 | 2 | 1 |\n\nOne version descends from another only if each of its counters is at least as big:\n\n```formula\nv1_A > v2_A   as 3 > 2\nv1_B < v2_B   as 0 < 1\nwhere\nv1_A: node A's counter in v1 = [A:3]; here 3\nv1_B: node B's counter in v1; 0, because a missing entry counts as 0\nv2_A: node A's counter in v2 = [A:2, B:1]; here 2\nv2_B: node B's counter in v2; here 1\n>: is greater than\n<: is less than\nIn words: v1 is ahead on node A but behind on node B, so neither clock is greater than or equal to the other in every entry, and neither descends from the other.\n```\n\nSo they're **concurrent**, and the store returns both.\n\nThe client merges them (a basket union gives {book, pen}) and does `put(value, context=[A:3, B:1])`. The coordinating node increments its own entry, for example `[A:4, B:1]`, which dominates both siblings, so they're discarded.\n\nThe trade-off Amazon accepted: with union merges, a *removed* item can reappear if the removal was concurrent with another change.",
     "link": {
       "title": "Vector clock (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Vector_clock"
@@ -161,7 +161,7 @@
       },
       {
         "text": "Merkle trees skip matching subtrees and localize differing key ranges, often reducing comparison traffic substantially.",
-        "explanation": "For an ideal balanced tree with one key per leaf, sparse differences can be localized with roughlyO(k log N) hash comparisons. Cassandra uses range trees: differing leaves can require streaming more data than the changed keys, and building trees scans data."
+        "explanation": "For an ideal balanced tree with one key per leaf, sparse differences can be localised with roughly O(k × log N) hash comparisons, where k is the number of differing keys, N the number of keys, and O(...) means \"grows in proportion to\". Cassandra uses range trees: differing leaves can require streaming more data than the changed keys, and building trees scans data."
       },
       {
         "text": "Read repair alone guarantees all replicas eventually converge",
@@ -173,7 +173,7 @@
       },
       {
         "text": "Gossip guarantees every node learns of a failure within exactly one second",
-        "explanation": "Wrong. Gossip spreads information probabilistically in O(log N) rounds. Failure detection (for example phi accrual) is a suspicion level, not a deterministic deadline."
+        "explanation": "Wrong. Gossip spreads information probabilistically in O(log N) rounds, where N is the number of nodes: the rounds grow with the logarithm of the cluster size. Failure detection (for example phi accrual) is a suspicion level, not a deterministic deadline."
       }
     ],
     "answer": [
@@ -181,7 +181,7 @@
       1,
       3
     ],
-    "workedExample": "A balanced one-key-per-leaf tree over 1M keys has depth about 20, so ten sparse differences suggest order-of-hundreds of hash comparisons, not an exact 200-hash bound. Real repair trees group ranges and can stream unchanged data within differing ranges. Sloppy quorum sets may not overlap: writes acknowledged byA,D can be missed by reads from staleB,C before handoff.",
+    "workedExample": "In a balanced binary tree with one key per leaf, the depth is the base-2 logarithm of the number of keys, and each differing key costs about one comparison per level:\n\n```formula\nd = log_2(n) = log_2(1,000,000) ≈ 20\nc ≈ k × d = 10 × 20 = 200\nwhere\nd: depth of the tree, in levels\nn: keys covered by the tree; here 1 million\nlog_2: logarithm to base 2: how many times you halve n to reach 1\nc: hash comparisons needed, roughly\nk: keys that differ between the two replicas; here 10\n≈: approximately equal to\nIn words: a million keys make a tree about 20 levels deep, so ten scattered differences need on the order of hundreds of comparisons.\n```\n\nThat is an order of magnitude, not an exact 200-hash bound. Real repair trees group ranges and can stream unchanged data within differing ranges. Sloppy quorum sets may not overlap: writes acknowledged by A and D can be missed by reads from stale B and C before handoff.",
     "link": {
       "title": "Merkle tree (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Merkle_tree"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "With hints enabled and the documented 3h window, coordinators stop generating new hints after about 3h of downtime. Some earlier hints may also be unavailable after coordinator failures; hints are best-effort repair help. A5h outage therefore needs repair. Before rejoining a node whose stale data outlived tombstone grace, assess safe rebuild/replacement rather than blindly repairing old data into the cluster.",
+    "workedExample": "With hints enabled and the documented 3h window, coordinators stop generating new hints after about 3h of downtime. Some earlier hints may also be unavailable after coordinator failures; hints are best-effort repair help. A 5 h outage therefore needs repair. Before rejoining a node whose stale data outlived tombstone grace, assess safe rebuild/replacement rather than blindly repairing old data into the cluster.",
     "link": {
       "title": "Dynamo architecture (Apache Cassandra docs)",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
@@ -301,7 +301,7 @@
       },
       {
         "text": "300 nodes",
-        "explanation": "Correct. 200 TB x 3 = 600 TB on disk. 50% of 4 TB is 2 TB usable per node. 600 / 2 = 300."
+        "explanation": "Correct. 200 TB × 3 = 600 TB on disk. 50% of 4 TB is 2 TB usable per node. 600 / 2 = 300."
       },
       {
         "text": "100 nodes",
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "200TB x RF3=600TB. With 2TB usable per 4TB node, capacity-only minimum is 300 nodes before overhead, growth and failure margins. The 50% free-space assumption is chosen for this scenario, not a universal rule. Derive extra capacity from compaction behavior, disk balance and failure-domain size rather than assuming 350–400 nodes always suffice.",
+    "workedExample": "Raw storage is logical data times the replication factor; node count is raw storage divided by usable space per node:\n\n```formula\nD = L × RF = 200 TB × 3 = 600 TB\nu = 4 TB × 50% = 2 TB\nn = D / u = 600 TB / 2 TB = 300\nwhere\nD: raw data on disk across the cluster\nL: logical data, one copy; 200 TB\nRF: replication factor, copies of each key; 3\nu: usable space per node after keeping half free\nn: minimum nodes for capacity alone\nTB: terabytes, 10^12 bytes\nIn words: three copies of 200 TB need 600 TB, and at 2 usable TB a node that is 300 nodes.\n```\n\nThat is the capacity-only minimum, before overhead, growth and failure margins. The 50% free-space assumption is chosen for this scenario, not a universal rule. Derive extra capacity from compaction behaviour, disk balance and failure-domain size rather than assuming 350–400 nodes always suffice.",
     "link": {
       "title": "Compaction (Apache Cassandra docs)",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/index.html"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "The first write receives timestamp 200 while the later write receives 100, so LWW selectsaway once both are reconciled. Clock synchronization reduces risk without proving real-time ordering. Client timestamps help only with a correct monotonic scheme covering relevant writers; wall clocks can move backward and devices differ. Use an appropriate conditional/transactional design when ordering matters.",
+    "workedExample": "The first write receives timestamp 200 while the later write receives 100, so LWW selects `away` once both are reconciled. Clock synchronization reduces risk without proving real-time ordering. Client timestamps help only with a correct monotonic scheme covering relevant writers; wall clocks can move backward and devices differ. Use an appropriate conditional/transactional design when ordering matters.",
     "link": {
       "title": "Vector clock (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Vector_clock"
@@ -376,7 +376,7 @@
       0,
       3
     ],
-    "workedExample": "RF3 limits one key to three replica owners. AtR=1 with balanced routing,200k logical reads/s imply about 67k replica reads/s each; atR=2, about 133k replica contacts/s each before retries. The lesson 23k/node number is an average workload estimate, not a measured capacity ceiling. Coalesced app caching reduces refreshes; subkeys may use up to 30 distinct owners but placement can overlap and updates need consistency handling.",
+    "workedExample": "RF = 3 limits one key to three replica owners. The load on each owner is the read rate times the replicas each read contacts, shared over the three owners:\n\n```formula\np = q × R / RF\np = 200,000/s × 1 / 3 ≈ 67,000/s\np = 200,000/s × 2 / 3 ≈ 133,000/s\nwhere\np: replica reads per second hitting each of the key's replicas\nq: logical reads of the key per second; 200,000\nR: replicas each read contacts (consistency level); 1 or 2\nRF: replication factor, the replicas that own the key; 3\ns: seconds\n≈: approximately equal to\nIn words: at R = 1 each replica takes about 67,000 reads a second; at R = 2, about 133,000, before retries.\n```\n\nThe lesson's 23k/node number is an average workload estimate, not a measured capacity ceiling. Coalesced app caching reduces refreshes; ten subkeys may use up to 30 distinct owners (10 × 3) but placement can overlap and updates need consistency handling.",
     "link": {
       "title": "Consistent hashing (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"

@@ -52,9 +52,25 @@ State-based CRDTs (CvRDTs) define a `merge` function that is:
 
 | Property | Meaning |
 |---|---|
-| Commutative | merge(a, b) = merge(b, a) |
+| Commutative | Order of the two inputs doesn't matter |
 | Associative | Grouping doesn't matter |
-| Idempotent | merge(a, a) = a |
+| Idempotent | Merging something with itself changes nothing |
+
+Written as equations:
+
+```formula
+merge(a, b) = merge(b, a)
+merge(merge(a,b),c) = merge(a,merge(b,c))
+merge(a, a) = a
+where
+merge: the function that combines two replica states into one
+a: one replica's state
+b: another replica's state
+c: a third replica's state
+In words: the first line is commutativity (order doesn't matter), the second associativity (grouping doesn't matter), the third idempotence (repeats don't matter).
+```
+
+For example, if merge is "take the larger number", merging 3 with 5 gives 5 either way round, merging three states in any grouping gives the largest of the three, and merging 5 with 5 gives 5.
 
 Those three properties mean replicas can exchange state in any order, any number of times, via any path (gossip), and still converge. That's **strong eventual consistency**: replicas that have received the same updates are in the same state.
 
@@ -66,9 +82,23 @@ Operation-based CRDTs (CmRDTs) instead broadcast operations. Concurrent operatio
 
 Each replica keeps a vector of counts, one per replica, and only increments its own entry.
 
-- `increment()` on replica i: `P[i] += 1`
-- `value()`: sum of all entries
-- `merge(X, Y)`: element-wise max
+```formula
+P_new[i] = P[i] + 1
+v = Σ_k P[k]
+M[k] = max(X[k], Y[k])
+where
+P: a replica's vector of counts, one whole number per replica
+i: the position of the replica doing the increment (its own entry)
+P_new: the vector after an increment
+v: the counter's value
+k: any position in the vector, one per replica
+Σ_k: sigma: add up the following term for every position k
+X: one replica's vector being merged
+Y: the other replica's vector being merged
+M: the merged vector
+max: the larger of its two inputs
+In words: an increment bumps only your own entry; the value is the sum of all entries; a merge keeps the larger count in each position.
+```
 
 ```
 A: [A:3, B:0, C:0]  (3 local incs)
@@ -83,8 +113,18 @@ Why max and not sum? Because merging the same state twice must not double count 
 
 A G-Counter can't decrement: lowering an entry would be undone by max. So use **two** G-Counters: `P` for increments and `N` for decrements.
 
-- `value() = sum(P) − sum(N)`
-- `merge` merges P and N separately.
+```formula
+v = Σ P − Σ N
+v = (5 + 3) − (1 + 2) = 8 − 3 = 5
+where
+v: the counter's value
+P: the G-Counter of increments, one entry per replica
+N: the G-Counter of decrements, one entry per replica
+Σ: sigma: add up every entry of the vector that follows
+In words: the value is all the increments ever made minus all the decrements ever made; each vector still only grows, so max-merge stays correct.
+```
+
+`merge` merges P and N separately, each by element-wise max. The numbers in the block come from this example:
 
 ```
 A: P=[A:5,B:0] N=[A:1,B:0]
@@ -128,7 +168,7 @@ Concurrent add and remove resolves to **add wins**, which is usually what users 
 
 Costs: metadata grows (tags and tombstones accumulate and need garbage collection). Arbitrary independent updates cannot preserve every invariant; bounded counters can enforce non-negative stock using preallocated rights, as described above.
 
-Garbage collection is the hard part. A tombstone can only be dropped once **every** replica has seen it; otherwise a replica that was offline still holds the old add, and the next merge brings the element back. Knowing that every replica has caught up is itself a coordination problem, the same one behind Cassandra's `gc_grace_seconds` in lesson 4. (Optimised OR-Sets such as Riak's ORSWOT avoid most tombstones by using version vectors, but pay in vector size instead.)
+Garbage-collecting tombstones is the hard part. A tombstone can only be dropped once **every** replica has seen it; otherwise a replica that was offline still holds the old add, and the next merge brings the element back. Knowing that every replica has caught up is itself a coordination problem, the same one behind Cassandra's `gc_grace_seconds` in lesson 4. (Optimised OR-Sets such as Riak's ORSWOT avoid most tombstones by using version vectors, but pay in vector size instead.)
 
 > [!tip] Choosing
 > Use a CRDT when merging is semantically clear (counters, sets, collaborative docs) and availability matters more than invariants. Use consensus when you need invariants.
@@ -146,10 +186,25 @@ round 0: 1 node knows
 round 1: 2
 round 2: 4
 round 3: 8 ...
-~log2(N) rounds to reach most
+doubling: the ideal case
 ```
 
-The doubling picture is the optimistic phase. Because peers are picked at random, more and more messages land on nodes that already know, and the last few uninformed nodes take a while to be hit. For push gossip with fanout 1 the total is about log₂N + ln N rounds: with N = 1,000 that's roughly 10 + 7 ≈ 17 rounds. Push-pull (where uninformed nodes also *ask* random peers) finishes the tail much faster. Either way it's O(log N).
+The doubling picture is the optimistic phase. Because peers are picked at random, more and more messages land on nodes that already know, and the last few uninformed nodes take a while to be hit. For push gossip with fanout 1 (each node tells one peer per round), the expected number of rounds is:
+
+```formula
+r ≈ log_2(N) + ln(N)
+r ≈ log_2(1,000) + ln(1,000)
+r ≈ 10 + 6.9 ≈ 17
+where
+r: the number of gossip rounds until every node knows
+N: the number of nodes in the cluster; here 1,000
+log_2: the base-2 logarithm: how many times you double 1 to reach N; this counts the doubling phase
+ln: the natural logarithm (base e ≈ 2.718); this counts the slow tail of finding the last few nodes
+≈: approximately equal to
+In words: about log₂N rounds to reach most nodes by doubling, plus about ln N more to mop up the stragglers.
+```
+
+With one round per second, a 1,000-node cluster learns a change in about 17 seconds. Push-pull (where uninformed nodes also *ask* random peers) finishes the tail much faster. Either way the number of rounds grows with the logarithm of the cluster size, written O(log N): doubling the cluster adds only about one or two rounds.
 
 Load per node is constant regardless of cluster size, and gossip tolerates node and message loss naturally. CRDT merges pair well with gossip because they're idempotent and order-insensitive.
 
@@ -164,7 +219,38 @@ The simplest detector: if no heartbeat for T seconds, mark dead. Pick T too shor
 Hayashibara et al. (2004), used by Cassandra and Akka, output a **suspicion level φ** instead of a yes/no.
 
 - Each node records recent heartbeat inter-arrival times and models them as a distribution (the original paper uses a normal distribution with the observed mean and variance; Cassandra uses a simpler exponential model).
-- φ = −log₁₀(P(a heartbeat arrives later than now)).
+- From that model it works out how unlikely the current silence is, and turns that into φ:
+
+```formula
+φ = −log_10(P_later(t))
+where
+φ: phi, the suspicion level; a plain number with no unit, higher means more suspicious
+t: the time since the last heartbeat arrived, in seconds (s)
+P_later(t): the probability, according to the model, that a healthy node's next heartbeat would arrive even later than t; between 0 and 1
+log_10: the base-10 logarithm: how many times you multiply 10 to reach a number; log_10(0.001) = −3
+s: second
+In words: φ = 3 means the model gives a healthy node a 1-in-1,000 chance of being this quiet; each extra 1 in φ makes the silence ten times less likely.
+```
+
+In Cassandra's exponential model, the probability of a heartbeat being later than t falls off exponentially with t, and φ reduces to a straight line:
+
+```formula
+P_later(t) = e^{−t/μ}
+φ = (t / μ) × log_10(e)
+φ = (1.1 s / 1 s) × 0.434 ≈ 0.48
+where
+P_later(t): the modelled chance a heartbeat is later than t
+t: the time since the last heartbeat, in seconds (s); here 1.1 s
+μ: mu, the mean interval between heartbeats, in seconds; here 1 s
+e: Euler's number, about 2.718, the base of natural logarithms
+log_10(e): the base-10 logarithm of e, about 0.434
+φ: phi, the suspicion level (no unit)
+s: second
+≈: approximately equal to
+In words: in this model φ grows steadily with silence, at a rate set by the average heartbeat interval; variation in the intervals doesn't enter into it.
+```
+
+With a 1-second mean interval, this model reaches Cassandra's default threshold of 8 after 8 / 0.434 ≈ 18 seconds of silence. A peer with a longer average interval takes proportionally longer to convict.
 
 | φ | Modelled heartbeat tail probability |
 |---|---|
@@ -190,7 +276,7 @@ B is alive (A's path was bad)
 ```
 
 1. Each period, A pings one random member B.
-2. No ack? A asks k other members to **ping-req** B on its behalf (indirect probing), which rules out a problem with A's own link.
+2. No ack? A asks a few other members (k of them; HashiCorp's memberlist uses 3 by default) to **ping-req** B on its behalf (indirect probing), which rules out a problem with A's own link.
 3. Still nothing: B is **suspected**, not dead. Suspicion is gossiped; B can refute it by gossiping an incremented **incarnation number**.
 4. After a suspicion timeout, B is declared **dead**.
 
@@ -202,7 +288,7 @@ Membership updates **piggyback** on ping and ack messages, so there's no separat
 - CRDT merges are commutative, associative and idempotent, and updates only move state upwards in the lattice, giving strong eventual consistency without coordination.
 - G-Counter merges with element-wise max; PN-Counter pairs two G-Counters; OR-Set tags each add so concurrent add and remove resolves to add-wins.
 - CRDTs cannot preserve arbitrary global invariants under unrestricted updates and can accumulate metadata; garbage-collecting tombstones needs every replica to have caught up. Use consensus (or escrow) where invariants matter.
-- Gossip spreads state in O(log N) rounds (about log₂N + ln N for push) with constant per-node load; phi accrual gives adaptive suspicion levels; SWIM adds indirect probes and suspicion with incarnation numbers.
+- Gossip reaches all N nodes of a cluster in O(log N) rounds (about log₂N + ln N for push, roughly 17 rounds for 1,000 nodes) with constant per-node load; phi accrual gives adaptive suspicion levels; SWIM adds indirect probes and suspicion with incarnation numbers.
 
 ## Further reading
 - [Conflict-free replicated data type (Wikipedia)](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type)

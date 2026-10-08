@@ -64,17 +64,39 @@ Matching tells you *which* documents qualify. Ranking tells you which are *best*
 - **Term frequency (TF)**: a document mentioning "headphones" 5 times is probably more about headphones than one mentioning it once.
 - **Inverse document frequency (IDF)**: rare terms are more informative. "the" appears everywhere and means little; "noise-cancelling" is rare and decisive.
 
-```
-tf-idf(t, d) = tf(t,d) * log(N / df(t))
+TF-IDF multiplies those two ideas together, giving one score for how well a term marks out a document:
 
-N = 1,000,000 docs
-"wireless": df = 50,000
-   idf = log10(20)    = 1.30
-"anc":      df = 1,000
-   idf = log10(1,000) = 3.00
+```formula
+w(t, d) = tf(t, d) × idf(t)
+idf(t) = log_10(N / df(t))
+where
+w(t, d): the TF-IDF weight of term t in document d; bigger means the term says more about this document
+t: one search term, e.g. "wireless"
+d: one document, e.g. a product listing
+tf(t, d): term frequency: how many times t appears in d
+idf(t): inverse document frequency: how rare t is across the whole collection
+N: the total number of documents in the collection (the corpus)
+df(t): document frequency: how many documents contain t at least once
+log_10: logarithm to base 10: the power you raise 10 to to get the number, so log_10(1000) = 3 because 10 × 10 × 10 = 1000
+In words: a term scores highly in a document when it appears there often (tf) but appears in few documents overall (idf).
 ```
 
-So a match on the rarer term counts more than twice as much.
+The logarithm squashes the range: a term in 1 document out of a million gets an IDF of 6, not a million. Different engines use slightly different variants (natural log, adding 1 to avoid dividing by zero), but the shape is the same. For a collection of a million documents:
+
+```formula
+idf("wireless") = log_10(1000000 / 50000)
+idf("wireless") = log_10(20) ≈ 1.30
+idf("anc") = log_10(1000000 / 1000)
+idf("anc") = log_10(1000) = 3.00
+where
+idf: inverse document frequency of the quoted term
+log_10: logarithm to base 10 (log_10(1000) = 3, because 10^3 = 1000)
+^: "to the power of"
+≈: approximately equal to (rounded)
+In words: "wireless" is in 50,000 of a million documents and scores 1.30; "anc" (active noise cancelling) is in only 1,000 and scores 3.00.
+```
+
+So a match on the rarer term counts more than twice as much (3.00 / 1.30 ≈ 2.3 times).
 
 **BM25** (Okapi BM25) is the modern default: Lucene switched to it in version 6, Elasticsearch in 5.0, and OpenSearch inherited it. It keeps an IDF factor and improves on TF-IDF in two ways:
 
@@ -83,14 +105,37 @@ So a match on the rarer term counts more than twice as much.
 
 The classic BM25 teaching formula per query term is below. Its constant (k1 + 1) factor is omitted by current Lucene scoring, so the following numerical values explain this formula rather than predict exact Elasticsearch scores:
 
-```
-         tf * (k1 + 1)
-idf * -------------------
-      tf + k1 * (1 - b
-         + b * len/avg)
+```formula
+score(t, d) = idf(t) × tf × (k1 + 1) / D
+D = tf + k1 × (1 − b + b × L / L_avg)
+where
+score(t, d): the BM25 score that query term t contributes to document d
+idf(t): inverse document frequency of t: higher for rarer terms
+tf: term frequency: how many times t appears in the field being scored
+k1: the saturation parameter, default 1.2: lower means repeats stop counting sooner
+b: the length-normalisation parameter, between 0 and 1, default 0.75; 0 turns length normalisation off
+D: the denominator (bottom line) of the fraction, written separately to fit the screen
+L: the length of this document's field, in terms
+L_avg: the average length of that field across all documents in the index
+In words: start from how rare the term is, then multiply by a term-frequency factor that grows with tf but levels off, and is pulled down for longer-than-average fields.
 ```
 
-A document's score is the sum over the query's terms. With `k1 = 1.2` and an average-length field, one occurrence scores 1.0 × IDF, two score about 1.38 × IDF, and ten only about 1.96 × IDF. However many times a term repeats, its contribution can never exceed `(k1 + 1)` × IDF, which is 2.2 × IDF here.
+When the field is exactly average length, the length part of the denominator becomes 1 and the term-frequency factor simplifies:
+
+```formula
+f(n) = n × (k1 + 1) / (n + k1)
+f(1) = 1 × 2.2 / (1 + 1.2) = 1.0
+f(2) = 2 × 2.2 / (2 + 1.2) ≈ 1.38
+f(10) = 10 × 2.2 / (10 + 1.2) ≈ 1.96
+where
+f(n): the term-frequency factor when the term appears n times, for an average-length field with k1 = 1.2
+n: the number of occurrences (tf), here 1, 2 or 10
+k1: the saturation parameter, default 1.2, so k1 + 1 = 2.2
+≈: approximately equal to (rounded)
+In words: the first occurrence is worth 1.0 × IDF, a second adds only 0.38 more, and ten occurrences still score under 2 × IDF.
+```
+
+A document's score is the sum of these per-term scores over the query's terms. However many times a term repeats, the factor can never exceed k1 + 1, so its contribution is capped at 2.2 × IDF here.
 
 BM25 is still purely **lexical**: it scores matching tokens and knows nothing about meaning. "Sofa" won't match "couch" unless an analyser adds the synonym.
 
@@ -131,7 +176,21 @@ So replicas add write cost (every copy indexes every document) while adding read
 
 The query phase waits for participating shards, and end-to-end latency also includes coordinating, fetch and network work, which is why too many small shards hurt and why replicas help: since 7.0, **adaptive replica selection** uses response-time, service-time and queue information to choose shard copies.
 
-Deep pagination is costly for the same reason: page 1,000 at 10 per page (from = 9,990) can require each participating shard to return up to its top 10,000, which the coordinator then sorts. Elasticsearch caps `from + size` at 10,000 by default and offers `search_after` for deep scrolling.
+Deep pagination is costly for the same reason. Each shard must return enough results to cover every page up to the one you asked for:
+
+```formula
+from = (p − 1) × size
+N_shard = from + size
+N_shard = (1000 − 1) × 10 + 10 = 10000
+where
+from: how many results to skip before the page starts (an Elasticsearch search parameter)
+p: the page number requested, here 1,000
+size: results per page, here 10
+N_shard: how many top hits each participating shard must return to the coordinating node
+In words: to show results 9,991 to 10,000, every shard sends its top 10,000 and the coordinator sorts them all to keep 10.
+```
+
+With 5 shards that is 50,000 hits sorted to show 10. Elasticsearch caps `from + size` at 10,000 by default and offers `search_after` for deep scrolling.
 
 ### Near-real-time indexing
 

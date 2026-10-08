@@ -32,25 +32,57 @@ Out of scope: spelling correction, full search results.
 
 Assume **1 billion searches/day**. Users type ~20 characters per query, but clients **debounce** (wait ~100 ms of idle before sending) and stop once they pick a suggestion, so call it **~6 suggestion requests per search**.
 
-```
-Requests: 1B x 6 / 10^5 s   ≈ 60,000/s
-Peak (x3)                   ≈ 180,000/s
+Requests per second are searches per day times requests per search, divided by the seconds in a day:
+
+```formula
+rate = 1B × 6 / 10^5 s ≈ 60,000/s
+peak = 60,000/s × 3 = 180,000/s
+where
+rate: average suggestion requests per second
+peak: requests per second at the busiest time, using an assumed peak factor of 3
+B: billion (10^9) searches per day
+6: suggestion requests per search after debouncing
+10^5: 100,000, the seconds in a day (86,400) rounded up
+s: seconds; /s means per second
+≈: approximately equal to (rounded)
+In words: a billion searches a day at six requests each is about 60,000 requests a second on average, and three times that at peak.
 ```
 
 What to store? Most queries are rare; the long tail is huge and mostly useless for suggestions. Keep the **top ~100 million queries** by frequency.
 
-```
-Queries:   100M x ~25 B      ≈ 2.5 GB
-Prefixes:  100M x 20 = 2B max;
-           shared, assume    ≈ 500M nodes
-Top-10 per node as 4-byte IDs:
-           500M x 40 B       ≈ 20 GB
-Total including overhead: assume 30-50 GB
+Size the three parts of the index: the query strings, the trie nodes (one per distinct prefix), and a top-10 list at every node:
+
+```formula
+strings = 100M × 25 B ≈ 2.5 GB
+max nodes = 100M × 20 = 2 bn
+nodes ≈ 500M
+lists = 500M × 10 × 4 B = 20 GB
+where
+strings: bytes to store the query text itself
+max nodes: the most trie nodes possible, if no two queries shared a prefix
+nodes: the assumed number of trie nodes once shared prefixes are counted once
+lists: bytes for a top-10 list of 4-byte query IDs at every node (40 bytes per node)
+M: million (10^6)
+bn: billion (10^9)
+B: bytes
+GB: gigabyte, 10^9 bytes
+≈: approximately equal to (rounded or assumed)
+In words: the query text is small; the per-node top-10 lists dominate, at about 20 GB, and with overhead the whole index is assumed to be 30–50 GB.
 ```
 
-(The node count is an assumption: with no sharing at all, 100M queries capped at 20 characters would need up to 2 billion nodes, but popular queries share long prefixes heavily. A 4-byte ID is enough because 2^32 ≈ 4.3 billion > 100 million.)
+(The node count is an assumption: with no sharing at all, 100M queries capped at 20 characters would need up to 2 billion nodes, but popular queries share long prefixes heavily.) A 4-byte ID is enough because 4 bytes is 32 bits:
 
-Under these compact-layout assumptions, the index may fit in one large machine's RAM. Measure the built representation: pointers, child maps, strings and allocator overhead can make a naive trie much larger. We'll replicate it rather than shard it, which keeps serving simple. Budget for **two copies** in memory, because a node loads the new snapshot before releasing the old one: a 50 GB index wants a machine with well over 100 GB of RAM.
+```formula
+2^32 ≈ 4.3 × 10^9 > 10^8
+where
+2^32: the number of different values 32 bits can hold, 2 multiplied by itself 32 times
+10^9: a billion; 10^8: a hundred million, the number of queries kept
+>: is greater than
+≈: approximately equal to
+In words: 32 bits can number about 4.3 billion things, far more than the 100 million queries to identify.
+```
+
+Under these compact-layout assumptions, the index may fit in one large machine's RAM. Measure the built representation: pointers, child maps, strings and allocator overhead can make a naive trie much larger. We'll replicate it rather than shard it, which keeps serving simple. Budget for **two copies** in memory, because a node loads the new trie snapshot before releasing the old one: a 50 GB index wants a machine with well over 100 GB of RAM.
 
 ## Step 3: API
 
@@ -92,11 +124,25 @@ A [trie](https://en.wikipedia.org/wiki/Trie) stores strings by their characters,
          l
 ```
 
-A naive lookup walks to the prefix node (`O(length of prefix)`), then searches the entire subtree for the most popular completions. For a short prefix like "s", that subtree contains millions of queries, which is far too slow.
+A naive lookup walks to the prefix node, one step per character, then searches the entire subtree for the most popular completions. For a short prefix like "s", that subtree contains millions of queries, which is far too slow.
 
 ### Precompute top-k at every node
 
-Store the top-k completions **at each node**. Lookup becomes "walk to the node, return its list": `O(prefix length + k)` plus output-string bytes and no subtree search.
+Store the top-k completions **at each node**. Lookup becomes "walk to the node, return its list". Big-O notation describes how the work grows:
+
+```formula
+naive = O(p + S)
+precomputed = O(p + k)
+where
+O(...): Big-O, "grows at most in proportion to" the expression inside, ignoring constant factors
+p: the length of the typed prefix, in characters
+S: the number of nodes in the subtree below the prefix, which can be millions for a one-letter prefix
+k: the number of suggestions returned, here 10
+naive, precomputed: the lookup cost without and with a top-k list stored at each node
+In words: storing the answer at each node turns a search of a possibly huge subtree into a walk of a few characters plus reading k items.
+```
+
+That is, plus output-string bytes, with no subtree search.
 
 ```
 node "how t" -> [how to tie a tie (98k),
@@ -148,10 +194,29 @@ They meet only at the snapshot. The suggest service never writes anything.
 
 1. **Log** every submitted search (not every keystroke; we rank on what people *searched*) with timestamp, locale and a pseudonymous user ID (which is not automatically anonymous). At 1B/day, sampling 1 in 10 still gives plenty of signal for popular queries.
 2. **Aggregate** with a stream processor (Flink, Kafka Streams) into counts per `(query, locale, hour)`. For truly huge streams, approximate structures such as a [count-min sketch](https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch) with a heavy-hitters heap find frequent queries in fixed memory.
-3. **Score** with time decay so last week counts more than last year, for example `score = Σ count_d × 0.9^(age in days)`. With a factor of 0.9 per day, a search's weight halves roughly every 6.6 days (0.9^6.6 ≈ 0.5), so a query popular a month ago keeps only about 4% of its weight.
-4. **Filter**: remove queries on a blocklist (hate, violence, adult), and apply a **privacy threshold**: only consider queries searched by at least N distinct users. This reduces rare-query exposure but does not guarantee privacy: sensitive information can be searched by many people or bots. Add explicit sensitive-data filtering and review.
+3. **Score** with time decay so last week counts more than last year (formula below).
+4. **Filter**: remove queries on a blocklist (hate, violence, adult), and apply a **privacy threshold**: only consider queries searched by at least a minimum number of distinct users. This reduces rare-query exposure but does not guarantee privacy: sensitive information can be searched by many people or bots. Add explicit sensitive-data filtering and review.
 5. **Build** the trie with top-k at every node (Spark job: for every query, emit `(prefix, query, score)` for each of its prefixes, group by prefix, keep the top k). With 100M queries and up to 20 prefixes each, that's up to 2 billion records to shuffle, a substantial batch workload whose duration depends on cluster resources.
-6. **Publish** the serialised trie to object storage with a version number. Serving nodes download it, load it into memory alongside the current one, then publish the new root atomically with suitable synchronization. Retain the old snapshot until all readers using it finish. Roll out to a few nodes first and compare metrics, just like a code deploy.
+6. **Publish** the serialised trie to object storage with a version number. Serving nodes download it, load it into memory alongside the current one, then publish the new root atomically with suitable synchronization. Retain the old trie snapshot until all readers using it finish. Roll out to a few nodes first and compare metrics, just like a code deploy.
+
+The time-decayed score in step 3 weights each day's searches by how old they are:
+
+```formula
+score = Σ count_d × 0.9^{age_d}
+0.9^{6.6} ≈ 0.5
+0.9^{30} ≈ 0.04
+where
+score: the query's ranking score
+Σ: sigma, "add up over every day d" in the history
+d: one day of history
+count_d: how many times the query was searched on day d
+age_d: how many days ago day d was (0 for today)
+0.9^{age_d}: 0.9 multiplied by itself age_d times, the weight for that day; it shrinks by 10% per day of age
+≈: approximately equal to (rounded)
+In words: each day of age multiplies a search's weight by 0.9, so a search's weight halves roughly every 6.6 days and a month-old search keeps only about 4%.
+```
+
+The decay factor sets the trade-off: closer to 1 (say 0.98) keeps long-term favourites; smaller (say 0.7) makes suggestions chase the last few days.
 
 ### Freshness for trending queries
 
@@ -167,7 +232,20 @@ Sometimes a suggestion must disappear *now*: a defamatory phrase, a victim's nam
 
 ## Deep dive 2: Scaling the serving path
 
-If a representative benchmark establishes 1,000 requests/s per core at the target latency, 180,000/s requires 180 fully utilized cores before headroom and cache offload. A 1 ms response time alone does not establish CPU cost or throughput.
+If a representative benchmark establishes 1,000 requests/s per core at the target latency, the core count is the peak rate divided by that:
+
+```formula
+cores = peak / cap
+cores = 180,000/s / 1,000/s = 180
+where
+cores: CPU cores needed if every one runs flat out
+peak: peak suggestion requests per second
+cap: requests per second one core handles, an assumed 1,000
+/s: per second
+In words: 180,000 requests a second at an assumed 1,000 per core needs 180 fully busy cores, before headroom and before the CDN takes its share.
+```
+
+So 180,000/s requires 180 fully utilized cores before headroom and cache offload. A 1 ms response time alone does not establish CPU cost or throughput.
 
 > [!note] Content gap: index and serving benchmarks
 > No reproducible 100-million-query corpus, memory layout or serving benchmark is supplied. The 30–50 GB index size and per-core throughput are hypothetical sizing inputs, not guarantees.
@@ -210,13 +288,29 @@ Facebook's original typeahead took personalisation further: when you focused the
 
 Failure modes to mention:
 
-- **Bad snapshot**: a pipeline bug ships an empty or offensive trie. Validate snapshots (size, sample lookups, blocklist check) before publishing, and keep the previous version for instant rollback.
+- **Bad trie snapshot**: a pipeline bug ships an empty or offensive trie. Validate trie snapshots (size, sample lookups, blocklist check) before publishing, and keep the previous version for instant rollback.
 - **Manipulation**: bots search a phrase repeatedly to make it a suggestion. Count distinct users rather than raw searches and apply anomaly detection.
 - **Slow responses are worse than none**: if the service doesn't answer within ~50 ms, the client should give up; a late suggestion for an old prefix is just noise.
 
 ## At 10x scale
 
-At 10 billion searches/day (~2M suggestion requests/s at peak) with 50 locales:
+At 10 billion searches/day with 50 locales:
+
+```formula
+peak = 10B × 6 / 10^5 s × 3 ≈ 1.8M/s
+where
+peak: peak suggestion requests per second
+B: billion
+M: million
+6: suggestion requests per search
+10^5: 100,000, the seconds in a day rounded
+3: the assumed peak factor
+s: seconds; /s means per second
+≈: approximately equal to
+In words: ten times the searches gives about 1.8 million, call it 2 million, suggestion requests a second at peak.
+```
+
+That is about 2M suggestion requests/s at peak. Then:
 
 - **Edge first**: push the most popular prefixes' responses into CDN workers' memory; the origin sees only the long tail.
 - **Partition by locale and region**, each with its own trie and its own replicas.
@@ -227,12 +321,12 @@ At 10 billion searches/day (~2M suggestion requests/s at peak) with 50 locales:
 ## Key takeaways
 
 - Keep the serving path a pure in-memory lookup; do counting, ranking and filtering offline.
-- Precompute top-k at every trie node so a lookup is `O(prefix length)` with no subtree search.
+- Precompute top-k at every trie node so a lookup costs only the prefix walk plus reading k items, with no subtree search.
 - If the measured index fits with swap/headroom budgets, replication avoids sharding complexity; query count alone does not prove its memory footprint.
 - A batch pipeline rebuilds the trie daily; a small real-time layer adds trending queries within minutes.
 - Short prefixes dominate traffic and are identical for everyone, so cache them at the CDN and in the browser.
 - Filter for safety and privacy (distinct-user thresholds) before anything is suggested, and keep a serve-time blocklist plus CDN purge for urgent removals.
-- Budget RAM for two snapshots during a swap, and validate each snapshot before rollout.
+- Budget RAM for two snapshots during a swap, and validate each trie snapshot before rollout.
 
 ## Further reading
 

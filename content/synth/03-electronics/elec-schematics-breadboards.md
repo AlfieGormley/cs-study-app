@@ -32,7 +32,7 @@ The **reference designator** (R1, C3, U2) links each symbol to the parts list an
 
 ### Nets, not pictures
 
-A schematic is a graph. Each **net** is a set of pins joined together electrically. Wire lengths and positions mean nothing; only connections do.
+A schematic is a graph made of schematic nets. Each **net** is a set of pins joined together electrically. Wire lengths and positions mean nothing; only connections do.
 
 - **Junction dots** mark wires that connect. Two wires crossing *without* a dot don't connect. Many drawing conventions avoid four-way junctions entirely, so a cross is never ambiguous.
 - **Net labels:** two wires with the same label (for example `ADC0` or `+3V3`) are connected even if no line joins them.

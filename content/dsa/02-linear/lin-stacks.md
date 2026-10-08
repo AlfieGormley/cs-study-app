@@ -21,7 +21,7 @@ That restriction sounds limiting, but it is exactly the shape of a huge number o
 | `peek()` | Return the top without removing | O(1) |
 | `is_empty()` | Any items left? | O(1) |
 
-Popping or peeking an empty stack is an error (an **underflow**). Pushing onto a full fixed-size stack is an **overflow**.
+Popping or peeking an empty stack is an error (a **stack underflow**). Pushing onto a full fixed-size stack is a **stack overflow**.
 
 ```
 push 1, push 2, push 3, pop
@@ -51,7 +51,7 @@ if not stack:      # empty check
 
 Push and pop are amortised O(1) in CPython (growth or shrinking can resize the pointer array), and the elements are contiguous, so this is fast in practice.
 
-Putting the top at the *front* (`insert(0, x)` and `pop(0)`) would make every operation O(n). Always grow stacks at the cheap end.
+Putting the top at the *front* (`insert(0, x)` and `pop(0)`) would make every operation O(n) on a stack of n items, because every other item shifts. Always grow stacks at the cheap end.
 
 ### On a linked list
 
@@ -135,7 +135,7 @@ Three ways to fail:
 2. A closer with an empty stack: `())`.
 3. Openers left over at the end: `((`.
 
-O(n) time, O(n) space in the worst case. Compilers, linters, JSON and XML parsers and your editor's bracket matching all use this idea.
+For a string of n characters, that is O(n) time, and O(n) space in the worst case (a string of nothing but openers). Compilers, linters, JSON and XML parsers and your editor's bracket matching all use this idea.
 
 > [!tip] One bracket type?
 > If there's only `(` and `)`, you don't need the stack itself, just a counter: +1 for `(`, −1 for `)`, fail if it goes negative, and require 0 at the end.
@@ -214,7 +214,17 @@ token  output      ops
 end    3 4 2 * +
 ```
 
-The result, `3 4 2 * +`, evaluates to 11, respecting precedence. Associativity matters too: `a - b - c` becomes `a b - c -` (left to right), while exponentiation is right-associative, so `2 ^ 3 ^ 2` becomes `2 3 2 ^ ^`, which is 2⁹ = 512.
+The result, `3 4 2 * +`, evaluates to 11, respecting precedence. Associativity matters too: `a - b - c` becomes `a b - c -` (left to right), while exponentiation is right-associative, so `2 ^ 3 ^ 2` becomes `2 3 2 ^ ^`. Grouping from the right gives a very different answer from grouping from the left:
+
+```formula
+2 ^ 3 ^ 2 = 2 ^ (3 ^ 2) = 2 ^ 9 = 512
+(2 ^ 3) ^ 2 = 8 ^ 2 = 64
+where
+^: raised to the power of: 2 ^ 3 means 2 × 2 × 2 = 8
+In words: a right-associative operator works out the rightmost pair first, so 3 ^ 2 = 9 is computed before 2 is raised to it.
+```
+
+Python's `**` follows the same convention: `2 ** 3 ** 2 == 512`.
 
 ## The monotonic stack
 
@@ -238,7 +248,22 @@ next_greater([2, 1, 2, 4, 3])
 
 The stack holds indices still **waiting** for a bigger value. When `x` arrives, every waiting element smaller than `x` has found its answer and is popped.
 
-There's a `while` inside a `for`, but it's still **O(n)**: each index is pushed once and popped at most once, so the total number of pops over the whole run is at most n. This is an amortised argument, like dynamic array growth.
+There's a `while` inside a `for`, but for n input values it's still **O(n)**. Instead of asking how long one `while` loop can run, count the work over the whole run:
+
+```formula
+work = pushes + pops + exits
+work ≤ n + n + n = 3 × n
+where
+work: the total number of stack operations and loop checks over the whole run
+n: the number of input values
+pushes: exactly n, one per index
+pops: at most n, because each index can be popped only once after being pushed once
+exits: exactly n: each pass of the for loop ends its while loop once, when the check fails
+≤: is less than or equal to
+In words: however the pops are spread out, the grand total can never exceed three operations per input value.
+```
+
+For `[2, 1, 2, 4, 3]` (n = 5): 5 pushes, 3 pops and 5 exits is 13 operations, within 3 × 5 = 15. One step can pop many items, but then other steps pop none. This is an **amortised** argument, like dynamic array growth.
 
 The same pattern answers "how many days until a warmer temperature", stock span problems and the largest rectangle in a histogram.
 
@@ -254,7 +279,7 @@ The same pattern answers "how many days until a warmer temperature", stock span 
 - In Java, use `ArrayDeque`, not the legacy synchronised `Stack`.
 - Function calls run on the call stack; deep recursion overflows it (CPython's default limit is 1,000), so convert to an explicit stack.
 - Balanced brackets and postfix evaluation are single-pass stack algorithms; shunting-yard converts infix to postfix using precedence and associativity.
-- A monotonic stack finds next-greater/next-smaller elements in O(n), because each item is pushed and popped at most once.
+- A monotonic stack finds next-greater/next-smaller elements in O(n) for n items, because each item is pushed and popped at most once.
 
 ## Further reading
 - [Stack (abstract data type) — Wikipedia](https://en.wikipedia.org/wiki/Stack_(abstract_data_type))

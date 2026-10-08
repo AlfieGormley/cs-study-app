@@ -33,10 +33,42 @@ Classic MIDI 1.0 runs over a 5-pin DIN cable as an asynchronous serial link. The
 
 - **31,250 bits per second** (±1%).
 - Each byte is framed as **1 start bit, 8 data bits, 1 stop bit**, no parity (often written 8-N-1).
-- So each byte costs 10 bit-times: 10 / 31,250 s = **320 µs**.
+- So each byte costs 10 bit-times, which works out at **320 µs** (calculated below).
 - Bytes are sent least significant bit first.
 
-A three-byte message takes 3 × 320 µs = **0.96 ms**, roughly a millisecond. That figure matters later when we talk about chords and latency: ten notes "at once" are actually spread over about 10 ms.
+How long does one byte take on the wire? Divide the number of bits in its frame by the number of bits the link sends each second. You use this whenever you need to know how quickly MIDI can deliver something.
+
+```formula
+t_byte = N_bits / R
+t_byte = 10 bit / (31250 bit/s)
+t_byte = 0.00032 s = 320 µs
+where
+t_byte: the time one framed byte occupies the cable, in seconds (s)
+N_bits: the number of bits in one frame: 1 start bit + 8 data bits + 1 stop bit = 10 bits
+R: the bit rate (baud rate) of the link, in bits per second (bit/s); 31,250 bit/s for DIN MIDI
+bit: one binary digit, 0 or 1
+s: seconds
+µs: microseconds, millionths of a second (1 µs = 0.000001 s)
+In words: one MIDI byte takes ten bit-times, and at 31,250 bits per second that is 320 millionths of a second.
+```
+
+A whole message is just its bytes sent one after another, so its time is the byte count times the byte time:
+
+```formula
+t_msg = n × t_byte
+t_msg = 3 × 320 µs
+t_msg = 960 µs ≈ 0.96 ms
+where
+t_msg: the time a complete message occupies the cable, in microseconds (µs) or milliseconds (ms)
+n: the number of bytes in the message; 3 for a Note On (status byte plus two data bytes)
+t_byte: the time per byte, 320 µs on DIN MIDI
+µs: microseconds, millionths of a second
+ms: milliseconds, thousandths of a second (1 ms = 1000 µs)
+≈: approximately equal to
+In words: a three-byte message takes just under one millisecond to send.
+```
+
+So a three-byte message takes about **0.96 ms**, roughly a millisecond. That figure matters later when we talk about chords and latency: ten three-byte notes "at once" are actually 30 bytes, about 9.6 ms of wire time, so they are spread over roughly 10 ms. This assumes the bytes are sent back to back with no gaps; a slower sender only makes it longer.
 
 Your microcontroller's UART (universal asynchronous receiver-transmitter) does this framing for you. You configure it for 31,250 baud, 8-N-1, and it hands you whole bytes.
 
@@ -53,6 +85,19 @@ data   0 v v v v v v v   0x00-0x7F
 - A **status byte** has bit 7 set. It says what kind of message this is. For channel messages, the top four bits (`tttt` above, including the 1) are the message type and the bottom four (`cccc`) are the channel.
 - A **data byte** has bit 7 clear, so it carries a value from **0 to 127** (7 bits).
 
+Why 128 values? Each extra bit doubles the number of patterns, so the count of distinct values is 2 raised to the number of bits:
+
+```formula
+N = 2^b
+N = 2^7 = 128
+where
+N: the number of distinct values the bits can represent (here 0 to 127)
+b: the number of bits available for the value; 7 in a MIDI data byte, because bit 7 is reserved
+In words: seven free bits give 128 possible values, numbered 0 to 127.
+```
+
+With all 8 bits the same formula would give 256 values (0–255); spending one bit on the status/data flag halves that to 128.
+
 This one-bit rule is what makes MIDI robust. If a receiver joins mid-stream or loses a byte, a non-real-time status byte supplies a new message boundary. Real-time bytes also have bit 7 set but may interrupt a message without resetting it. It is also why MIDI values run 0–127 rather than 0–255: the eighth bit is spent on telling status from data.
 
 The specification says each status byte is followed by a fixed number of data bytes (one or two for channel messages), and a receiver must wait for all of them before acting. It also says receivers should ignore data bytes that are not preceded by a valid status byte, apart from one shortcut called running status, which the next lesson covers.
@@ -61,7 +106,22 @@ The specification says each status byte is followed by a fixed number of data by
 
 MIDI 1.0 has **16 channels**. They let one cable address up to 16 independent instruments (or parts of a multitimbral instrument). Each receiver is set to listen on one channel (or all of them, "omni") and ignores channel messages for others.
 
-The channel is in the low nibble of the status byte, numbered 0–15 on the wire. People and manuals number them 1–16. This off-by-one causes real bugs:
+The channel is in the low nibble of the status byte, numbered 0–15 on the wire. People and manuals number them 1–16. To build a channel message's status byte, take the message type's base value (whose low nibble is 0) and put the wire channel number into that empty low nibble:
+
+```formula
+S = T | (ch − 1)
+S = 0x90 | (10 − 1)
+S = 0x90 | 0x09 = 0x99
+where
+S: the status byte that goes on the wire, written in hexadecimal (0x…)
+T: the message type's base value, with its low nibble zero: 0x80 Note Off, 0x90 Note On, 0xB0 Control Change
+ch: the channel as people and manuals number it, 1 to 16; subtracting 1 gives the 0–15 wire number
+|: bitwise OR, which sets every bit that is set in either value; because T's low nibble is all zeros, here it simply drops the channel into that nibble (the same as adding)
+0x: prefix meaning the digits that follow are hexadecimal (base 16), so 0x99 is 153 in decimal
+In words: the status byte is the message type in the top nibble and the channel minus one in the bottom nibble; a Note On on channel 10 is 0x99.
+```
+
+This off-by-one causes real bugs:
 
 ```
 user channel  1  -> nibble 0x0
@@ -83,7 +143,24 @@ The two messages your synth must handle first:
 
 `n` is the channel nibble. The key number identifies the note: the MIDI specification gives **middle C a value of 60**. Each step is a semitone, so 61 is C♯, 72 is the C an octave up.
 
-Converting a key number to a frequency is a convention from the MIDI Tuning Standard and equal temperament: key 69 is A at 440 Hz, and each semitone multiplies frequency by 2^(1/12).
+Converting a key number to a frequency is a convention from the MIDI Tuning Standard and equal temperament: key 69 is A at 440 Hz, and each semitone multiplies the frequency by the same factor, the twelfth root of 2 (about 1.0595), so that twelve semitones exactly double it. Your oscillator needs this conversion every time a note starts:
+
+```formula
+f = 440 Hz × 2^{(n − 69) / 12}
+f = 440 Hz × 2^{(60 − 69) / 12}
+f = 440 Hz × 2^{−0.75}
+f ≈ 261.63 Hz
+where
+f: the frequency the oscillator should play, in hertz (Hz)
+n: the MIDI key number, 0 to 127; 60 is middle C, 69 is the A above it
+440 Hz: the reference pitch, the A above middle C (key 69)
+Hz: hertz, cycles per second
+2^{…}: 2 raised to the power in braces; a power of 1 doubles, −1 halves, 1/12 is one semitone up
+≈: approximately equal to (the result is rounded)
+In words: count semitones away from key 69, divide by 12 to get octaves, and double 440 Hz once per octave up (or halve it once per octave down).
+```
+
+Worked examples: key 81 is 12 semitones above 69, so the power is 1 and the frequency is 880 Hz; key 57 is 12 below, so the power is −1 and it is 220 Hz. This holds only for standard 12-tone equal temperament tuned to A = 440 Hz; a synth with a different tuning reference or a microtonal scale uses a different formula or table. The same calculation in Python:
 
 ```python
 def note_to_hz(n):
@@ -144,7 +221,24 @@ print(note_off(16, 69).hex(" "))
 
 Read the first line: `0x90` is Note On, channel nibble 0 (channel 1); `0x3C` is 60, middle C; `0x64` is velocity 100.
 
-Decoding goes the other way. Split the status byte into its nibbles, and fold velocity-0 note ons into note offs at the earliest point, so the rest of the synth only ever sees one kind of "off":
+Decoding goes the other way. Shift the status byte right by four bits to get the message type, and mask off its top nibble to get the wire channel:
+
+```formula
+M = S >> 4
+ch = (S & 0x0F) + 1
+M = 0x93 >> 4 = 0x9
+ch = (0x93 & 0x0F) + 1 = 3 + 1 = 4
+where
+M: the message type, the status byte's top nibble, in hexadecimal: 8 = Note Off, 9 = Note On, B = Control Change
+S: the received status byte, here 0x93
+ch: the channel as people number it, 1 to 16
+>>: shift right, moving every bit down by the given number of places and discarding the bits that fall off; shifting by 4 keeps just the top nibble
+&: bitwise AND, which keeps only the bits that are set in both values; AND with 0x0F (binary 0000 1111) keeps just the low nibble
+0x: prefix meaning hexadecimal (base 16)
+In words: the top four bits say what kind of message it is, and the bottom four bits plus one say which channel.
+```
+
+Then fold velocity-0 note ons into note offs at the earliest point, so the rest of the synth only ever sees one kind of "off":
 
 ```python
 def describe(msg):

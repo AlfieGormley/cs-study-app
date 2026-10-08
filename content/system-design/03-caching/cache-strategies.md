@@ -2,7 +2,7 @@
 id: cache-strategies
 title: Caching strategies
 level: basic
-minutes: 11
+minutes: 12
 summary: Cache-aside, read-through, write-through, write-back and write-around — how data flows between app, cache and database, and what each costs.
 ---
 
@@ -113,6 +113,20 @@ This is how CPU caches, the operating system page cache, and database buffer poo
 - The database is behind the cache, so anything reading the database directly (reports, other services) sees old data.
 - Ordering and failure handling of the flush are hard to get right.
 
+How much can a crash lose? Everything written since the last successful flush. With writes arriving at a steady rate and flushes on time, the worst case is:
+
+```formula
+L_max = r × t_flush
+where
+L_max: the most acknowledged writes a crash can lose, a count of writes
+r: the write rate, in writes per second (/s)
+t_flush: the time between flushes, in seconds (s)
+s: seconds
+In words: a crash loses up to one flush interval's worth of writes.
+```
+
+For the counter above, 1,000 increments per second flushed every second risks up to 1,000 × 1 = 1,000 increments. Flush every 5 s instead and the risk grows to 5,000. A late or failed flush makes the real window longer than the planned interval, so measure it.
+
 > [!warning] Write-back changes your source of truth
 > With write-back, the cache temporarily *is* the source of truth for recent writes. You need the durability guarantees of a database from it. Use it only where its measured loss window (including delayed or failed flushes) is tolerable (view counters, analytics) or where the cache is genuinely durable.
 
@@ -126,7 +140,20 @@ Strictly, "update the DB then delete the key" in cache-aside is write-around plu
 
 ## Refresh-ahead
 
-A fifth pattern tackles the miss that happens when a popular key expires. With **refresh-ahead**, the cache reloads an entry *before* it expires, once it has been read close to the end of its life. For example, with a 60 s TTL and a refresh factor of 0.8, a read after 48 s returns the current value immediately and triggers a background reload.
+A fifth pattern tackles the miss that happens when a popular key expires. With **refresh-ahead**, the cache reloads an entry *before* it expires, once it has been read close to the end of its life. You choose a **refresh factor**, the fraction of the TTL after which a read triggers a reload:
+
+```formula
+t_refresh = f × TTL
+t_refresh = 0.8 × 60 s = 48 s
+where
+t_refresh: the entry's age, in seconds (s), after which a read starts a background reload
+f: the refresh factor, a fraction between 0 and 1; here 0.8
+TTL: time to live, how long the entry may be served before it expires; here 60 s
+s: seconds
+In words: with a 60-second TTL and a refresh factor of 0.8, any read after the entry is 48 seconds old triggers a reload.
+```
+
+So a read after 48 s returns the current value immediately and triggers a background reload. A lower factor refreshes earlier and more often; a factor close to 1 leaves little time for the reload to finish before expiry.
 
 - Successful timely refreshes hide expiry for hot keys; slow or failed refreshes can still lead to a miss.
 - Keys nobody reads near expiry are left to expire, so cold data is not refreshed for nothing.

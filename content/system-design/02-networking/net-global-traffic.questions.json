@@ -79,11 +79,11 @@
       },
       {
         "text": "The other two go to 105% and overload; to survive one failure, run at most about 66% per region",
-        "explanation": "Correct. Total load is 210 units; over two regions that's 105 each. To fit, per-region load must be ≤ 2/3 of capacity: (N − 1) / N with N = 3."
+        "explanation": "Correct. Total load is 210 units; over two regions that's 105 each. To fit, each region's normal load must be at most 2/3 of its capacity: (number of regions − 1) ÷ number of regions, with three regions."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Total peak load = 3 × 70 = **210** units (capacity 100 per region).\n2. After losing one: 210 / 2 = **105** per region → overloaded.\n3. Condition to survive one loss: N × u ≤ (N − 1) × 100.\n4. For N = 3: u ≤ 200 / 3 ≈ **66.7%**. For N = 2: 50%. For N = 5: 80%.\n5. So more regions mean less wasted headroom per region, one reason large services run in many regions.",
+    "workedExample": "Measure load in units where one region's full capacity is 100 units:\n\n```formula\nL = N × u = 3 × 70 = 210 units\nL_each = L / (N − 1) = 210 / 2\nL_each = 105 units\nN × u ≤ (N − 1) × 100 units\nu ≤ (N − 1) / N × 100 units\nu ≤ 2 / 3 × 100 units ≈ 66.7 units\nwhere\nL: the total peak load across all regions, in units\nN: the number of regions, 3\nu: each region's load before the failure, in units; 70 here, which is also its percentage of capacity\nL_each: the load on each surviving region after one fails\nunits: load units; 100 units is one region's full capacity\n≤: less than or equal to\n≈: approximately equal to\nIn words: the total load must still fit into one region fewer, so each region may normally run at most (N − 1)/N full.\n```\n\n105 units is above the 100-unit capacity, so the survivors overload; the ceiling is about **66.7%**. The same rule gives 50% for N = 2 and 80% for N = 5. So more regions mean less wasted headroom per region, one reason large services run in many regions.",
     "link": {
       "title": "Disaster recovery options in the cloud (AWS whitepaper)",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. B at minimum size might handle, say, 30% of A's peak. Receiving 100% at once → overload.\n2. Cold caches multiply the problem: every request hits B's databases, which were sized for B's normal hit ratio.\n3. Better runbook:\n  - Keep B with enough standing headroom (see the (N−1)/N rule).\n  - Shift 10% → 25% → 50% → 100% over minutes, watching error rates and latency.\n  - Scale B ahead of each step.\n  - Shed or degrade non-critical traffic if B nears its limits.\n4. A partial, controlled shift beats a total, cascading one.",
+    "workedExample": "1. B at minimum size might handle, say, 30% of A's peak. Receiving 100% at once → overload.\n2. Cold caches multiply the problem: every request hits B's databases, which were sized for B's normal hit ratio.\n3. Better runbook:\n  - Keep B with enough standing headroom to absorb what it would inherit (with only two regions, that means running each at 50% or less).\n  - Shift 10% → 25% → 50% → 100% over minutes, watching error rates and latency.\n  - Scale B ahead of each step.\n  - Shed or degrade non-critical traffic if B nears its limits.\n4. A partial, controlled shift beats a total, cascading one.",
     "link": {
       "title": "Weighted routing (Amazon Route 53)",
       "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-weighted.html"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Symmetric, sensitive thresholds (2 fails out, 2 passes back) + a marginal region = **flapping**.\n2. Every flip costs: dropped connections, cold caches, possibly a thundering herd.\n3. Hysteresis:\n  - Fail over after, say, 3 of 5 checks failing from several vantage points.\n  - Fail back only after, say, 15 minutes of continuous health, ideally confirmed by a human.\n4. Also consider sticking with the standby until the next planned window: an unnecessary failback is a second risky event.",
+    "workedExample": "1. Symmetric, sensitive thresholds (2 fails out, 2 passes back) plus a marginal region cause **flapping**.\n2. Every flip costs: dropped connections, cold caches, possibly a thundering herd.\n3. Hysteresis:\n  - Fail over after, say, 3 of 5 checks failing from several vantage points.\n  - Fail back only after, say, 15 minutes of continuous health, ideally confirmed by a human.\n4. Also consider sticking with the standby until the next planned window: an unnecessary failback is a second risky event.",
     "link": {
       "title": "Configuring DNS failover (Amazon Route 53)",
       "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Actual recovery gap in this scenario: 5 seconds. Writes at risk: 5 × 2,000 = 10,000. RPO is a time objective, not a count of writes.\n2. To avoid losing acknowledged writes after this primary-region failure, acknowledgment must depend on durable storage in a surviving failure domain.\n3. A primary that waits for a remote durable acknowledgment adds inter-region coordination to commit latency; pipeline/batching can improve throughput but not remove that dependency.\n4. A zero-loss claim is limited to its failure model. Simultaneous loss of both copies, corruption or a mistaken deletion needs additional controls.\n5. Typical replication lag is not a guaranteed upper bound; monitor actual lag against the RPO.",
+    "workedExample": "1. Actual recovery gap in this scenario: 5 seconds. Writes at risk: 10,000 (worked out below). RPO is a time objective, not a count of writes.\n2. To avoid losing acknowledged writes after this primary-region failure, acknowledgment must depend on durable storage in a surviving failure domain.\n3. A primary that waits for a remote durable acknowledgment adds inter-region coordination to commit latency; pipeline/batching can improve throughput but not remove that dependency.\n4. A zero-loss claim is limited to its failure model. Simultaneous loss of both copies, corruption or a mistaken deletion needs additional controls.\n5. Typical replication lag is not a guaranteed upper bound; monitor actual lag against the RPO.\n\nThe count in step 1:\n\n```formula\nW_risk = t_lag × r\nW_risk = 5 s × 2,000 writes/s\nW_risk = 10,000 writes\nwhere\nW_risk: the acknowledged writes that may not have reached the standby\nt_lag: how far behind the standby is, 5 seconds (s)\nr: the rate of acknowledged writes on the primary, 2,000 writes per second\nwrites: acknowledged write operations\nwrites/s: writes per second\ns: second\nIn words: five seconds of lag at 2,000 writes a second leaves about 10,000 writes only on the lost primary.\n```",
     "link": {
       "title": "Disaster recovery options in the cloud (AWS whitepaper)",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
@@ -349,7 +349,7 @@
     "id": "net-global-traffic-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "Three regions (eu-west, us-east, us-west) each run at 60% at peak, which seems safe under the (N − 1)/N ≈ 66% rule. When eu-west fails, latency-based routing sends about 90% of its traffic to us-east and 10% to us-west. What happens?",
+    "prompt": "Three regions (eu-west, us-east, us-west) each run at 60% at peak, which seems safe under the even-split headroom rule (with three regions, run each at no more than about 66%). When eu-west fails, latency-based routing sends about 90% of its traffic to us-east and 10% to us-west. What happens?",
     "options": [
       {
         "text": "Both survivors go to 90%, safely under 100%",
@@ -365,11 +365,11 @@
       },
       {
         "text": "us-east reaches about 114% and overloads, even though the average across survivors is only 90%; plan headroom per region for the traffic it would actually inherit, or cap and spread failover traffic with weights",
-        "explanation": "Correct. us-east: 60 + 0.9 × 60 = 114%. The (N − 1)/N rule assumes an even redistribution, which proximity-based routing rarely gives you."
+        "explanation": "Correct. us-east: 60 + 0.9 × 60 = 114%. The even-split headroom rule assumes an even redistribution, which proximity-based routing rarely gives you."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Load to redistribute: eu-west's 60 units.\n2. us-east: 60 + 0.9 × 60 = **114%** → overloaded.\n3. us-west: 60 + 0.1 × 60 = **66%** → fine.\n4. Average of survivors = 90%, which hides the problem.\n5. Fixes:\n  - Size us-east for the European traffic it would inherit (if it must absorb 90% of a 60% region, i.e. 54 units, it can run at no more than about 46% itself).\n  - During failover, use weights to send part of the European traffic to us-west deliberately.\n  - Load-shed non-critical traffic.",
+    "workedExample": "1. Load to redistribute: eu-west's 60 units.\n2. us-east: 60 + 0.9 × 60 = **114%** → overloaded.\n3. us-west: 60 + 0.1 × 60 = **66%** → fine.\n4. Average of survivors = 90%, which hides the problem.\n\nThe arithmetic:\n\n```formula\nu_new = u + s × u_fail\nu_east = 60% + 0.9 × 60% = 114%\nu_west = 60% + 0.1 × 60% = 66%\nu_max = 100% − 0.9 × 60% = 46%\nwhere\nu_new: a surviving region's utilisation after the failure, as a percentage of its capacity\nu: its own utilisation before the failure, 60%\ns: the share of the failed region's traffic it inherits: 0.9 for us-east, 0.1 for us-west\nu_fail: the failed region's utilisation, 60%\nu_east: us-east after the failure\nu_west: us-west after the failure\nu_max: the highest normal utilisation us-east could run at and still absorb 90% of a 60% region\n%: per cent of a region's capacity\nIn words: what matters is the share each survivor actually inherits, not the average across survivors.\n```\n\nFixes:\n  - Size us-east for the European traffic it would inherit (if it must absorb 90% of a 60% region, i.e. 54 units, it can run at no more than about 46% itself).\n  - During failover, use weights to send part of the European traffic to us-west deliberately.\n  - Load-shed non-critical traffic.",
     "link": {
       "title": "Latency-based routing (Amazon Route 53)",
       "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-latency.html"

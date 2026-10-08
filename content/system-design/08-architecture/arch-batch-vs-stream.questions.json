@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Map on chunk 1 emits (a,1), (b,1), (a,1); map on chunk 2 emits (b,1), (c,1).\n2. Partition by hash(key) % R reducers: say a → R0, b → R1, c → R2.\n3. Each mapper sends its pairs to the right reducer, which sorts and groups: R0 gets a:[1,1], R1 gets b:[1,1], R2 gets c:[1].\n4. Reduce sums: (a,2), (b,2), (c,1).\n5. Network transfer of all map output is why combiners (pre-aggregating on the mapper) matter.",
+    "workedExample": "1. Map on chunk 1 emits (a,1), (b,1), (a,1); map on chunk 2 emits (b,1), (c,1).\n2. Each pair goes to a reducer chosen from its key:\n\n```formula\nr = hash(k) mod R\nwhere\nr: the reducer number, 0 to R − 1\nhash: a hash function: turns the key into a well-spread number, always the same for the same key\nk: the pair's key, e.g. the word a\nR: the number of reducers, here 3\nmod: modulo: the remainder after dividing by R\nIn words: equal keys always get the same remainder, so they always meet at the same reducer.\n```\n\n   Say a goes to reducer 0, b to reducer 1 and c to reducer 2.\n3. Each mapper sends its pairs to the right reducer, which sorts and groups: reducer 0 gets a:[1,1], reducer 1 gets b:[1,1], reducer 2 gets c:[1].\n4. Reduce sums: (a,2), (b,2), (c,1).\n5. Network transfer of all map output is why combiners (pre-aggregating on the mapper) matter.",
     "link": {
       "title": "Wikipedia: MapReduce",
       "url": "https://en.wikipedia.org/wiki/MapReduce"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The plan confirms skew: 25% × 2 billion = 500 million hot-key rows.\n2. The other 1.5 billion rows would average about 7.5 million over 199 partitions if evenly distributed; actual hashing can add other rows to the hot partition.\n3. For SUM, assign salt buckets, compute partial sums by (customer_id, salt), then sum partials by customer_id.\n4. NULL keys are a legitimate group in aggregation; dropping them changes the result. For an ordinary inner equijoin, NULLs do not match and Spark may already filter them.\n5. AQE skew-join splitting is not a universal automatic fix for every hot-key aggregation.",
+    "workedExample": "1. Compare the hot task with an average one:\n\n```formula\nH = f × N\nH = 0.25 × 2000000000 = 500000000\nA = (N − H) / (P − 1)\nA = 1500000000 / 199 ≈ 7500000\nwhere\nH: rows with the hot key, all in one task\nf: the hot key's share of rows, 25 % = 0.25\nN: total rows, 2 billion\nA: average rows in each of the other tasks\nP: number of shuffle partitions, 200\n≈: approximately equal to\n%: per cent\nIn words: one task gets 500 million rows while the others average about 7.5 million: over 60 times as much.\n```\n\n2. That assumes the other rows spread evenly; actual hashing can add other rows to the hot partition too.\n3. For SUM, assign salt buckets, compute partial sums by (customer_id, salt), then sum partials by customer_id.\n4. NULL keys are a legitimate group in aggregation; dropping them changes the result. For an ordinary inner equijoin, NULLs do not match and Spark may already filter them.\n5. AQE skew-join splitting is not a universal automatic fix for every hot-key aggregation.",
     "link": {
       "title": "Apache Spark: RDD programming guide",
       "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html"
@@ -123,14 +123,14 @@
     "id": "arch-batch-vs-stream-q5",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "Which statements about the **Lambda** and **Kappa** architectures are correct? Select all that apply.",
+    "prompt": "Which statements about the **Lambda architecture** and the **Kappa architecture** are correct? Select all that apply.",
     "options": [
       {
-        "text": "Lambda runs a batch layer and a speed layer in parallel and merges their results at query time.",
+        "text": "The Lambda architecture runs a batch layer and a speed layer in parallel and merges their results at query time.",
         "explanation": "Correct. The batch layer gives accurate recomputed views; the speed layer covers recent data; the serving layer merges them."
       },
       {
-        "text": "Lambda's main drawback is maintaining the same business logic in two systems.",
+        "text": "The Lambda architecture's main drawback is maintaining the same business logic in two systems.",
         "explanation": "Correct. Two codebases with different semantics drift apart, and discrepancies are painful to debug. This was Jay Kreps' central criticism."
       },
       {
@@ -142,7 +142,7 @@
         "explanation": "Wrong. Kappa depends on keeping enough history in the log (or tiered storage) to replay. Without retention you can't recompute."
       },
       {
-        "text": "Lambda is only used for serverless AWS Lambda functions.",
+        "text": "The Lambda architecture is only used for serverless AWS Lambda functions.",
         "explanation": "Wrong. The name is unrelated to AWS Lambda. It refers to the shape of the two data paths."
       }
     ],
@@ -151,7 +151,7 @@
       1,
       2
     ],
-    "workedExample": "1. Lambda = batch + speed + serving merge. Strength: accuracy from batch recomputation. Weakness: duplicated logic.\n2. Kappa = one streaming path; recompute by replay.\n   - Requires retention: e.g. Kafka with tiered storage holding 1 year of events.\n   - Needs a replay/state/output design meeting the application's correctness requirements; built-in exactly-once support alone does not cover arbitrary external systems.\n3. Check each option against these definitions: 0, 1 and 2 match; 3 contradicts Kappa's replay requirement; 4 is a naming confusion.",
+    "workedExample": "1. Lambda architecture: a batch layer plus a speed layer, merged by the serving layer. Strength: accuracy from batch recomputation. Weakness: duplicated logic.\n2. Kappa: one streaming path; recompute by replay.\n   - Requires retention: e.g. Kafka with tiered storage holding 1 year of events.\n   - Needs a replay/state/output design meeting the application's correctness requirements; built-in exactly-once support alone does not cover arbitrary external systems.\n3. Check each option against these definitions: 0, 1 and 2 match; 3 contradicts Kappa's replay requirement; 4 is a naming confusion.",
     "link": {
       "title": "Jay Kreps: Questioning the Lambda Architecture",
       "url": "https://www.oreilly.com/radar/questioning-the-lambda-architecture/"
@@ -309,7 +309,7 @@
       2,
       3
     ],
-    "workedExample": "1. Kappa: batch = replay of the log.\n2. v2: new group, `earliest`, new table.\n3. Catch-up: source-reading concurrency is limited by Kafka partitions, while downstream processing and sink capacity also matter. With a constant live arrival rate, 90 days of backlog processed at 5× that rate catches up in 90/(5−1) = 22.5 days, so size the replay cluster.\n4. Cut-over: repoint `agg` → `agg_v2`.\n5. Clean-up: retire v1 and its output only after the required rollback window and verification.\n6. Limit: data older than retention can't be replayed.",
+    "workedExample": "1. Kappa: a 'batch' recompute is just a replay of the log.\n2. v2: new group, `earliest`, new table.\n3. Catch-up: source-reading concurrency is limited by Kafka partitions, while downstream processing and sink capacity also matter. With a constant live arrival rate, new events keep arriving while v2 replays, so it only gains on the live end at its spare rate:\n\n```formula\nT = D / (k − 1)\nT = 90 days / (5 − 1)\nT = 22.5 days\nwhere\nT: time for v2 to catch up with live traffic, in days\nD: history to replay, 90 days' worth of events\nk: v2's processing speed as a multiple of the live arrival rate, here 5\ndays: the unit of time here\nIn words: at 5× the live rate, v2 gains 4 days of backlog per day, so 90 days takes 22.5 days.\n```\n\n   So size the replay cluster for the cut-over date you need.\n4. Cut-over: repoint `agg` → `agg_v2`.\n5. Clean-up: retire v1 and its output only after the required rollback window and verification.\n6. Limit: data older than retention can't be replayed.",
     "link": {
       "title": "Jay Kreps: Questioning the Lambda Architecture",
       "url": "https://www.oreilly.com/radar/questioning-the-lambda-architecture/"
@@ -377,7 +377,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Row JSON: read everything ≈ 2 TB.\n2. Columnar: 1 of 200 columns → 2 TB / 200 = 10 GB.\n3. Partition pruning: 1 of 365 days → 10 GB / 365 ≈ 27 MB.\n4. Compression 5× → ≈ 5.5 MB.\n5. The ideal ratio is 200 × 365 × 5 = 365,000× fewer payload bytes under these assumptions; actual I/O includes metadata and layout effects. This is why warehouses and lakehouses store columnar data.\n\n```\n2e12 / 200 / 365 / 5\n  ≈ 5.5e6 bytes\n```",
+    "workedExample": "1. Row JSON: read everything, about 2 TB.\n2. Columnar, pruned and compressed: divide by each saving in turn:\n\n```formula\nB = S / C / D / k\nB = 2 TB / 200 = 10 GB\nB = 10 GB / 365 ≈ 27 MB\nB = 27 MB / 5 ≈ 5.5 MB\nwhere\nB: bytes the one-day, one-column query reads\nS: table size, 2 terabytes (TB)\nC: number of columns, 200 (only 1 is read)\nD: days of data, 365 (only 1 is read)\nk: compression ratio, 5\nTB: terabyte, 1,000 GB\nGB: gigabyte, 1,000 MB\nMB: megabyte, a million bytes\n≈: approximately equal to\nIn words: one column out of 200, one day out of 365, compressed 5×: about 5.5 MB instead of 2 TB.\n```\n\n3. The ideal ratio is 200 × 365 × 5 = 365,000× fewer payload bytes under these assumptions; actual I/O includes metadata and layout effects. This is why warehouses and lakehouses store columnar data.\n\n```\n2e12 / 200 / 365 / 5\n  ≈ 5.5e6 bytes\n```",
     "link": {
       "title": "Wikipedia: Column-oriented DBMS",
       "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"

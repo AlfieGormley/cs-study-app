@@ -2,7 +2,7 @@
 id: snd-sampling
 title: Sampling and quantisation
 level: intermediate
-minutes: 14
+minutes: 18
 summary: How a continuous signal becomes a list of numbers. Sample rate, bit depth, quantisation noise and the 6 dB-per-bit rule, integer vs floating-point samples, and the −1..1 convention.
 ---
 
@@ -12,10 +12,22 @@ Two separate settings decide the quality of a digital signal. **Sample rate** se
 
 ## Discrete-time signals
 
-**Sampling** means measuring a continuous signal x(t) at evenly spaced instants. With sample rate fs, the sample period is T = 1/fs and:
+**Sampling a signal** means measuring a continuous signal at evenly spaced instants. The spacing between instants is the sample period, and sample number n is simply the signal's value at n sample periods:
 
-```text
-x[n] = x(n·T),   n = 0, 1, 2, …
+```formula
+T = 1 / fs
+x[n] = x(n × T)
+T = 1 / 48000 s ≈ 20.8 µs
+where
+T: the sample period, the time between one sample and the next, in seconds (s)
+fs: the sample rate, in samples per second (equivalently hertz, Hz); here 48,000
+x(t): the continuous signal: its value at any time t, in seconds
+x[n]: sample number n, a single number; square brackets mean "the sample with index n"
+n: the sample index, a whole number 0, 1, 2, …
+s: seconds
+µs: microseconds, millionths of a second
+≈: approximately equal to (rounded)
+In words: take the continuous signal's value every T seconds; the nth sample is its value at time n × T. At 48 kHz the samples are about 20.8 microseconds apart.
 ```
 
 Picture each sample as a lollipop: a value at an instant, with nothing defined in between.
@@ -43,11 +55,36 @@ Common sample rates:
 
 The sample rate fixes the **highest frequency** you can represent: half the sample rate, as lesson 4 explains. 48 kHz covers up to 24 kHz, above the roughly 20 kHz limit of hearing. Higher rates mostly buy room for processing that creates high frequencies (distortion, sharp waveforms), not extra audible treble.
 
-It also sets your **time budget**. Synths process audio in blocks. Block duration is block size / fs, so 48 samples at 48 kHz is 1 ms. All the work for a block must finish in less time than that, every time.
+It also sets your **time budget**. Synths process audio in blocks (a fixed number of samples handled in one go), and the hardware plays a block in a fixed time:
+
+```formula
+t_b = N_b / fs
+t_b = 48 / 48000 s
+t_b = 0.001 s = 1 ms
+where
+t_b: the duration of one block, in seconds (s)
+N_b: the block size, in samples; here 48
+fs: the sample rate, in samples per second; here 48,000
+s: seconds
+ms: milliseconds, thousandths of a second
+In words: a block lasts its number of samples divided by the sample rate, so 48 samples at 48 kHz is 1 ms.
+```
+
+All the work for a block must finish in less time than that, every time. If it doesn't, the hardware runs out of samples and you hear a click or dropout.
 
 ## Bit depth and quantisation
 
-Each sample must be stored with finite precision. With **N bits**, a signed integer sample has 2^N possible values:
+Each sample must be stored with finite precision. Every extra bit doubles the number of patterns, so with **N bits** a signed integer sample has this many possible values:
+
+```formula
+L = 2^N
+L = 2^16 = 65536
+where
+L: the number of distinct levels (values) a sample can take
+N: the bit depth, the number of bits per sample; here 16
+2^N: 2 multiplied by itself N times
+In words: each bit doubles the number of levels, so 16 bits give 65,536 of them.
+```
 
 | Bits | Levels | Integer range |
 |---|---|---|
@@ -55,15 +92,63 @@ Each sample must be stored with finite precision. With **N bits**, a signed inte
 | 16 | 65,536 | −32,768 to 32,767 |
 | 24 | 16,777,216 | −8,388,608 to 8,388,607 |
 
-Rounding the true value to the nearest level is **quantisation**. The rounding error is at most half a step either way. If full scale spans −1 to +1, the step size is 2/2^N; for 16 bits that's about 0.0000305.
+Rounding the true value to the nearest level is **quantisation**. The levels are evenly spaced, so the step size is the width of the range divided by the number of levels, and rounding to the nearest level is wrong by at most half a step either way:
 
-For a busy signal much larger than one step, the error behaves like a small random noise added to the signal: **quantisation noise**. The standard result, for a full-scale sine wave, is:
-
-```text
-SQNR ≈ 6.02·N + 1.76 dB
+```formula
+Δ = 2 / 2^N
+Δ = 2 / 65536 ≈ 0.0000305
+e_max = Δ / 2 ≈ 0.0000153
+where
+Δ: delta, the quantisation step size: the gap between neighbouring levels, in full-scale units
+2: the width of the range from −1 to +1 (full scale)
+N: the bit depth, in bits; here 16
+e_max: the largest possible rounding error when rounding to the nearest level
+≈: approximately equal to (rounded)
+In words: 16 bits split the range −1 to +1 into steps of about 0.00003, and rounding is never more than half a step out.
 ```
 
-SQNR is the signal-to-quantisation-noise ratio. **Each extra bit adds about 6 dB**, because it halves the step size and halving an amplitude is −6.02 dB (lesson 5 explains decibels). 16 bits gives about 98 dB; 24 bits about 146 dB.
+This assumes the signal stays inside full scale; a value beyond the top or bottom level is clipped, and its error can be much larger.
+
+For a busy signal much larger than one step, the error behaves like a small random noise added to the signal: **quantisation noise**. How far that noise sits below the signal is the **SQNR**, the signal-to-quantisation-noise ratio, measured in decibels (dB, a logarithmic scale for ratios that lesson 5 explains). The standard result, for a full-scale sine wave, is:
+
+```formula
+SQNR ≈ 6.02 × N + 1.76 dB
+SQNR ≈ 6.02 × 16 + 1.76 dB
+SQNR ≈ 98.1 dB
+where
+SQNR: signal-to-quantisation-noise ratio: the RMS (average) level of a full-scale sine compared with the RMS level of the rounding noise, in decibels
+N: the bit depth, in bits; here 16
+dB: decibels; every 6 dB is roughly a factor of 2 in amplitude
+≈: approximately equal to (the formula is an approximation, and the result is rounded)
+In words: each bit adds about 6 dB of distance between a full-scale sine and the quantisation noise, plus a constant 1.76 dB, so 16 bits give about 98 dB.
+```
+
+**Each extra bit adds about 6 dB**, because it halves the step size and halving an amplitude is −6.02 dB. 16 bits gives about 98 dB; 24 bits about 146 dB.
+
+Where do the two numbers come from? The rounding error is spread evenly across one step, which gives it a predictable RMS (root-mean-square, a kind of average size; lesson 5). A full-scale sine spans all the steps, so its peak is half of that span, and a sine's RMS is its peak divided by about 1.414. Putting those together:
+
+```formula
+S = (2^N × Δ / 2) / √2
+E = Δ / √12
+S / E = 2^N × √1.5
+SQNR = 20 × log_10(S / E)
+SQNR = 20 × N × log_10(2)
+     + 20 × log_10(√1.5)
+SQNR ≈ 6.02 × N + 1.76 dB
+where
+S: the RMS size of the full-scale sine, in full-scale units (the same units as Δ)
+SQNR: the signal-to-quantisation-noise ratio, in decibels (dB)
+E: the RMS size of the quantisation error, in the same units, assuming it is spread evenly within ±Δ/2
+Δ: delta, the quantisation step size
+N: the bit depth, in bits
+√: square root
+log_10: the base-10 logarithm, used by the decibel scale; 20 × log_10 of an amplitude ratio gives decibels
+dB: decibels
+≈: approximately equal to (rounded)
+In words: the signal-to-noise ratio is 2^N times a constant; in decibels, the 2^N becomes 6.02 dB per bit and the constant becomes 1.76 dB.
+```
+
+The derivation shows the assumptions: a sine that fills full scale without overloading, and an error that is evenly spread and unrelated to the signal. A quieter signal gets proportionally less SQNR, and very coarse quantisation breaks the second assumption.
 
 You can check this in a few lines:
 
@@ -149,10 +234,28 @@ Three things to notice:
 
 The numbers add up quickly, which matters on a microcontroller:
 
-- One second of mono float32 at 48 kHz: 48,000 × 4 bytes = 192 kB.
-- Stereo 24-bit audio data at 48 kHz: 48,000 × 24 × 2 = 2.304 Mbit/s. On an I²S bus, 24-bit samples often travel in 32-bit slots, so the bit clock runs at 48,000 × 32 × 2 = 3.072 MHz.
+```formula
+M = fs × t × B × C
+M = 48000 × 1 × 4 × 1 = 192000 bytes
+R = fs × b × C
+R = 48000 × 24 × 2 = 2304000 bit/s
+where
+M: the memory needed, in bytes
+R: the data rate, in bits per second (bit/s)
+fs: the sample rate, in samples per second; here 48,000
+t: the length of audio, in seconds; here 1
+B: bytes per sample; 4 for float32
+b: bits per sample; here 24
+C: the number of channels; 1 for mono, 2 for stereo
+bytes: units of 8 bits
+bit/s: bits per second
+In words: multiply samples per second by seconds, by the size of each sample, by the number of channels.
+```
 
-A delay effect with a two-second buffer needs 384 kB per channel in float32. Check this against your board's RAM before designing features.
+- One second of mono float32 at 48 kHz is 192,000 bytes, about 192 kB (kilobytes).
+- Stereo 24-bit audio data at 48 kHz is 2.304 Mbit/s (megabits per second). On an I²S bus, 24-bit samples often travel in 32-bit slots, so the bit clock runs at 48,000 × 32 × 2 = 3.072 MHz.
+
+A delay effect with a two-second buffer needs 48,000 × 2 × 4 = 384,000 bytes (384 kB) per channel in float32. Check this against your board's RAM before designing features.
 
 ## Pitfalls
 
@@ -162,8 +265,8 @@ A delay effect with a two-second buffer needs 384 kB per channel in float32. Che
 - **Denormals.** Float values extremely close to zero (subnormals, or denormals) are much slower to process on some processors: on x86, an operation on one can cost around 100 extra clock cycles. Decaying filters and reverbs can produce them. The usual fixes are to switch on the CPU's flush-to-zero (and denormals-are-zero) mode for the audio thread, as many audio frameworks do, or to add a tiny offset or noise so the values never get that small.
 
 ## Key takeaways
-- x[n] = x(nT): a sample is a value at an instant. Sample rate sets the frequency limit and the time budget per block.
-- N bits give 2^N levels; quantisation noise for a full-scale sine is ≈ 6.02N + 1.76 dB below it, about 6 dB per bit.
+- A sample is the signal's value at one instant. Sample rate sets the frequency limit and the time budget per block.
+- Each bit doubles the number of levels; quantisation noise for a full-scale sine is about 6 dB per bit below it (98 dB at 16 bits, 146 dB at 24).
 - The noise model breaks down for very few bits or very quiet signals; dither restores it when reducing bit depth.
 - Internally, use floats with ±1.0 = full scale. Clip (don't cast) when converting to integers, and use a consistent scale factor.
 - Sample rate, bit depth and playback level are three different things.

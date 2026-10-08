@@ -51,7 +51,7 @@ The parser must cope with everything the specification allows:
 
 - channel messages with one or two data bytes;
 - **running status** (data bytes with no new status byte);
-- **real-time bytes** (`F8`–`FF`) arriving anywhere, even mid-message;
+- **real-time messages** (single bytes `F8`–`FF`) arriving anywhere, even mid-message;
 - SysEx of any length;
 - garbage: data bytes before any status, undefined status bytes, a device plugged in mid-stream.
 
@@ -232,7 +232,26 @@ A CC gives you 0–127. Your synth parameter has a real range and a natural scal
 
 ### 1. Choose the curve
 
-For **frequencies and times**, use an exponential curve, so that equal knob movements give equal musical intervals:
+For **frequencies and times**, use an exponential curve, so that equal knob movements give equal musical intervals. The idea: instead of adding a fixed number of hertz per step, *multiply* by a fixed ratio per step, so every step is the same musical interval.
+
+```formula
+f = f_lo × (f_hi / f_lo)^{v / 127}
+f = 20 Hz × (20000 / 20)^{64 / 127}
+f = 20 Hz × 1000^{0.504}
+f ≈ 649.9 Hz
+where
+f: the parameter value the knob position maps to, here a filter cutoff in hertz (Hz)
+f_lo: the value at CC 0, the bottom of the range; 20 Hz here
+f_hi: the value at CC 127, the top of the range; 20,000 Hz (20 kHz) here
+v: the received CC value, 0 to 127; 64 is the knob's midpoint
+127: the largest CC value, so v / 127 runs from 0 to 1
+Hz: hertz, cycles per second
+x^{…}: raising to the power in braces
+≈: approximately equal to (rounded)
+In words: the knob's position chooses how far along the ratio from 20 Hz to 20 kHz you are; the midpoint lands near the geometric middle (about 650 Hz), not the arithmetic middle (about 10 kHz).
+```
+
+The same mapping in Python, with its values across the knob:
 
 ```python
 def cc_to_cutoff(v, lo=20.0, hi=20000.0):
@@ -252,17 +271,68 @@ for v in (0, 32, 64, 96, 127):
 127 20000.0
 ```
 
-With a linear map over the same range, the step from 0 to 1 jumps from 20 Hz to about 177 Hz (more than three octaves), and half the knob covers 10–20 kHz where little changes audibly. Exponential spreads the ~10 octaves evenly, at about 0.94 semitones per step.
+Compare a linear map over the same range, which adds a fixed number of hertz per step:
+
+```formula
+f = f_lo + (f_hi − f_lo) × v / 127
+f = 20 Hz + 19980 Hz × 1 / 127
+f ≈ 177 Hz
+where
+f: the cutoff the knob position maps to, in hertz (Hz)
+f_lo: the value at CC 0; 20 Hz
+f_hi: the value at CC 127; 20,000 Hz
+v: the CC value; 1 here, the first step above zero
+Hz: hertz, cycles per second
+≈: approximately equal to (rounded)
+In words: a linear map adds about 157 Hz per step, which is a huge musical jump at the bottom and an inaudible one at the top.
+```
+
+So the step from 0 to 1 jumps from 20 Hz to about 177 Hz (more than three octaves), and half the knob covers 10–20 kHz where little changes audibly. How evenly does the exponential map spread its steps? Count the octaves in the range, then divide them between the 127 steps:
+
+```formula
+N_oct = log_2(f_hi / f_lo)
+N_oct = log_2(20000 / 20)
+N_oct = log_2(1000) ≈ 9.97
+Δ = 12 × N_oct / 127
+Δ = 12 × 9.97 / 127 ≈ 0.94
+where
+N_oct: the number of octaves (doublings) between the bottom and top of the range
+log_2: logarithm base 2, which counts how many times you must double to get from 1 to the number; log_2(8) = 3
+f_hi: the top of the range, 20,000 Hz
+f_lo: the bottom of the range, 20 Hz
+Δ: the interval covered by one CC step, in semitones (there are 12 semitones in an octave)
+≈: approximately equal to (rounded)
+In words: 20 Hz to 20 kHz is about 10 octaves, or 120 semitones, so 127 equal steps are just under a semitone each.
+```
+
+These formulas assume f_lo is above zero (an exponential map can never reach 0 Hz) and that the parameter really is perceived on a ratio scale, as pitch and time are. For a parameter you hear linearly, such as a pan position, a linear map is right.
 
 For **mix levels** use a decibel-style curve, and for **switches** use the spec convention (≤63 off, ≥64 on).
 
 ### 2. Use more resolution where it matters
 
-At 128 steps, a slow filter sweep can produce audible stepping. Options: accept 14-bit pairs (CC n with CC n+32) where your controller sends them, and in every case **smooth** the value in the audio callback.
+At 128 steps, a slow filter sweep can produce audible stepping. Options: accept 14-bit pairs (each controller from 0 to 31 paired with the controller 32 higher, such as CC 1 with CC 33) where your controller sends them, and in every case **smooth** the value in the audio callback.
 
 ### 3. Smooth in the audio domain
 
 The control code only sets a *target*. The audio callback moves the real parameter towards it a little each sample (a one-pole smoother is the usual tool, covered with synthesis DSP). That removes zipper noise and makes timing jitter in MIDI arrival less audible.
+
+Each sample, the smoother closes a fixed fraction of the remaining gap:
+
+```formula
+c_new = c + k × (c_target − c)
+c_new = 1000 Hz + 0.01 × (2000 Hz − 1000 Hz)
+c_new = 1010 Hz
+where
+c_new: the parameter value used for this sample, here a cutoff in hertz (Hz)
+c: the value used for the previous sample
+c_target: the latest value the control code published from the CC; 2000 Hz in the example
+k: the smoothing coefficient, a number between 0 and 1; small values (say 0.001 to 0.01) glide slowly, values near 1 jump almost at once
+Hz: hertz, cycles per second
+In words: every sample, move one small fixed fraction of the way from where the parameter is to where the knob says it should be.
+```
+
+Because the remaining gap shrinks by the same fraction each sample, the value approaches the target smoothly and never overshoots (for k between 0 and 1). At 48,000 samples per second with a coefficient of 0.01, the gap shrinks to about 37 % of its starting size in about 100 samples, roughly 2 ms. The pseudocode:
 
 ```
 control code, on CC 74 value v:

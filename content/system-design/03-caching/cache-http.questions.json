@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Age = 90 s, max-age = 60 s → stale.\n2. The stored response has a validator (ETag), so the browser makes a conditional request:\n```\nGET /products/9\nIf-None-Match: \"p9-v3\"\n```\n3. The server computes the current ETag, gets `\"p9-v3\"`, and replies `304 Not Modified`.\n4. Bytes saved ≈ 50 KB; latency paid = one round trip.\n5. The cached copy is fresh again for 60 s.",
+    "workedExample": "1. Check freshness:\n\n```formula\na < L\n90 s ≥ 60 s\nwhere\na: the copy's age, 90 seconds (s)\nL: the freshness lifetime, max-age = 60 s\n<: is less than; the first line is the test for being fresh\n≥: is greater than or equal to; the second line shows the test fails\ns: seconds\nIn words: a copy is fresh only while its age is below its lifetime; at 90 s it is 30 s past its 60 s lifetime, so it is stale.\n```\n2. The stored response has a validator (ETag), so the browser makes a conditional request:\n```\nGET /products/9\nIf-None-Match: \"p9-v3\"\n```\n3. The server computes the current ETag, gets `\"p9-v3\"`, and replies `304 Not Modified`.\n4. Bytes saved ≈ 50 KB; latency paid = one round trip.\n5. The cached copy is fresh again for 60 s.",
     "link": {
       "title": "ETag — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag"
@@ -121,7 +121,7 @@
       2,
       3
     ],
-    "workedExample": "Lay out the timeline:\n\n```\n0 ----- 30 ---------- 150 -------\n fresh   SWR (stale,    must\n         bg refresh)    revalidate\n```\n\n- 20 s → fresh → hit.\n- 100 s → in SWR → serve stale now, refresh async.\n- 200 s → past SWR → synchronous fetch.\n- 1,000 s, origin failing → `stale-if-error` (3,600 s) allows stale.\n\n`public` permits every cache to store it.",
+    "workedExample": "Lay out the timeline:\n\n```\n0 ----- 30 ---------- 150 -------\n fresh   SWR (stale,    must\n         bg refresh)    revalidate\n```\n\nThe boundaries:\n\n```formula\nt_swr = L + W\nt_swr = 30 s + 120 s = 150 s\nwhere\nt_swr: the end of the stale-while-revalidate window, as an age in seconds (s)\nL: the freshness lifetime, max-age = 30 s\nW: the stale-while-revalidate value, 120 s\ns: seconds\nIn words: the background-refresh window starts when freshness ends and lasts 120 s, so it ends at age 150 s.\n```\n\n- 20 s → fresh → hit.\n- 100 s → in SWR → serve stale now, refresh async.\n- 200 s → past SWR → synchronous fetch.\n- 1,000 s, origin failing → `stale-if-error` (3,600 s) allows stale.\n\n`public` permits every cache to store it.",
     "link": {
       "title": "RFC 5861: stale-while-revalidate and stale-if-error",
       "url": "https://www.rfc-editor.org/rfc/rfc5861"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Server 1's ETag for `logo.png`: `\"8f2-12a-...\"` (inode 8f2). Server 4's: `\"3c1-12a-...\"` (inode 3c1).\n2. The browser stores server 1's ETag.\n3. Next request goes to a random server: chance of server 1 = 1/6.\n4. On the other 5/6, the ETag doesn't match → `200` with full body.\n5. Fix: ETag = hash of content (or DB row version). Every server computes the same value, and the 304 rate for unchanged files goes to ~100%.",
+    "workedExample": "1. Server 1's ETag for `logo.png`: `\"8f2-12a-...\"` (inode 8f2). Server 4's: `\"3c1-12a-...\"` (inode 3c1).\n2. The browser stores server 1's ETag.\n3. Next request goes to a random server:\n\n```formula\nP_match = 1 / S\nP_match = 1 / 6 ≈ 0.17\nP_fail = 1 − 1 / 6 = 5 / 6 ≈ 0.83\nwhere\nP_match: chance the request reaches the server whose ETag the browser holds\nP_fail: chance it reaches another server\nS: the number of servers, 6\n≈: approximately equal to\nIn words: with 6 equally likely servers, only 1 request in 6 returns to the original one.\n```\n\n4. On the other 5 in 6, the ETag doesn't match → `200` with full body.\n5. Fix: ETag = hash of content (or DB row version). Every server computes the same value, and the 304 rate for unchanged files goes to ~100%.",
     "link": {
       "title": "ETag — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. No `Cache-Control`, no `Expires`: no explicit freshness lifetime.\n2. A `200` to a `GET` is heuristically cacheable, so the cache may pick its own lifetime.\n3. The typical heuristic is a fraction of the time since last modification:\n\n```\n10% * 30 days = 3 days\n```\n\n4. For up to ~3 days, caches serve the old copy without asking.\n5. Fix: send `Cache-Control: no-cache` for HTML (or a short `max-age`), so caches revalidate and find the new version.",
+    "workedExample": "1. No `Cache-Control`, no `Expires`: no explicit freshness lifetime.\n2. A `200` to a `GET` is heuristically cacheable, so the cache may pick its own lifetime.\n3. The typical heuristic is a fraction of the time since last modification:\n\n```formula\nL_h = k × (t_resp − t_mod)\nL_h = 0.1 × 30 days = 3 days\nwhere\nL_h: the heuristic freshness lifetime\nk: the fraction the cache chooses; RFC 9111 says 10% (0.1) might be a typical setting\nt_resp: when the response was generated\nt_mod: the Last-Modified time, here 30 days before t_resp\nday, days: units of time; 1 day = 24 hours\nIn words: a page unchanged for 30 days may be guessed fresh for a tenth of that, 3 days.\n```\n\n4. For up to ~3 days, caches serve the old copy without asking.\n5. Fix: send `Cache-Control: no-cache` for HTML (or a short `max-age`), so caches revalidate and find the new version.",
     "link": {
       "title": "RFC 9111: HTTP Caching",
       "url": "https://www.rfc-editor.org/rfc/rfc9111"
@@ -326,7 +326,7 @@
       },
       {
         "text": "About 50 seconds",
-        "explanation": "Correct. Freshness is measured from when the origin generated the response. It is already 250 s old, so `300 − 250 = 50` s of freshness remain."
+        "explanation": "Correct. Freshness is measured from when the origin generated the response. It is already 250 s old, so 300 − 250 = 50 s of freshness remain."
       },
       {
         "text": "0 seconds: an `Age` header means the copy is already stale",
@@ -338,7 +338,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Freshness lifetime = `max-age` = 300 s.\n2. Current age on arrival = `Age` header = 250 s (plus any transit time).\n3. Remaining freshness:\n\n```\n300 - 250 = 50 s\n```\n\n4. After ~50 s the browser must revalidate.\n5. This is why a CDN copy fetched late in its life gives browsers only a short window, and why `s-maxage` and `max-age` are often set separately.",
+    "workedExample": "1. Freshness lifetime = `max-age` = 300 s.\n2. Current age on arrival = `Age` header = 250 s (plus any transit time).\n3. Remaining freshness:\n\n```formula\nr = L − a\nr = 300 s − 250 s = 50 s\nwhere\nr: the freshness remaining, in seconds (s)\nL: the freshness lifetime, max-age = 300 s\na: the current age, from the Age header, 250 s\ns: seconds\nIn words: the response has already used 250 of its 300 seconds of freshness upstream, so the browser gets only 50.\n```\n\n4. After ~50 s the browser must revalidate.\n5. This is why a CDN copy fetched late in its life gives browsers only a short window, and why `s-maxage` and `max-age` are often set separately.",
     "link": {
       "title": "HTTP caching — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"

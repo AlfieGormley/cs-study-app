@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Step 1 commits to Postgres: durable.\n2. Crash.\n3. Step 2 never runs; the intent to publish existed only in memory.\n4. On restart there is no trace of the missing event.\n5. **Fix**: write the event to an `outbox` table **in the same transaction** as the order. A relay (polling or CDC) publishes it later, at least once.",
+    "workedExample": "1. Step 1 commits to Postgres: durable.\n2. Crash.\n3. Step 2 never runs; the intent to publish existed only in memory.\n4. On restart there is no trace of the missing event.\n5. **Fix**: write the event to an `outbox` table **in the same transaction** as the order. An outbox relay (polling or CDC) publishes it later, at least once.",
     "link": {
       "title": "Pattern: Transactional outbox",
       "url": "https://microservices.io/patterns/data/transactional-outbox.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Cost today: replay 2,000,000 events. At ~1 µs per apply plus deserialisation, several seconds.\n2. Snapshot every 1,000 events: `snapshot(v=1,999,000, state)`.\n3. Load = read snapshot + replay events 1,999,001 onwards → ≤ 1,000 events, far fewer events; actual load latency still depends on storage, deserialisation and snapshot freshness.\n4. Snapshots are **derived data**: if a snapshot's schema changes, discard it and rebuild from the events.\n5. Also question the model: a stream with 2 million events may indicate an aggregate boundary that is too large (for example, split by month or by sub-account).",
+    "workedExample": "1. Cost today: replay 2,000,000 events. At about 1 µs (one microsecond) per apply that is already 2 seconds, and deserialisation adds more: several seconds.\n2. Snapshot every 1,000 events: `snapshot(v=1,999,000, state)`.\n3. To load, read the snapshot, then replay events 1,999,001 onwards: at most 1,000 events, far fewer; actual load latency still depends on storage, deserialisation and snapshot freshness.\n4. Snapshots are **derived data**: if a snapshot's schema changes, discard it and rebuild from the events.\n5. Also question the model: a stream with 2 million events may indicate an aggregate boundary that is too large (for example, split by month or by sub-account).",
     "link": {
       "title": "Event Sourcing (Martin Fowler)",
       "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
@@ -93,7 +93,7 @@
     "id": "msg-event-driven-architecture-q4",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "You implement a transactional outbox with a single PostgreSQL Debezium connector in its at-least-once mode, stable aggregate-key partitioning and ordered relay processing. Which statements are true? Select all that apply.",
+    "prompt": "You implement a transactional outbox with a single PostgreSQL Debezium connector in its at-least-once mode, stable aggregate-key partitioning and ordered outbox relay processing. Which statements are true? Select all that apply.",
     "options": [
       {
         "text": "Consumers must handle duplicate events, because the relay is at-least-once",
@@ -164,7 +164,7 @@
     "prompt": "With CQRS, a user updates their display name; the command succeeds, and the page reloads from the read model, which still shows the **old** name for about 500 ms. Which approach fixes the user experience **without** giving up the separate read model?",
     "options": [
       {
-        "text": "Have the command return the new version number, and have the client read with 'at least version N', waiting briefly or reading the write side until the projection catches up",
+        "text": "Have the command return the new version number, and have the client read with 'at least that version', waiting briefly or reading the write side until the projection catches up",
         "explanation": "Correct. This gives read-your-own-writes for the user who made the change, while other readers still use the eventually consistent projection. It targets the actual problem with minimal coupling."
       },
       {
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Root cause: projection lag (event → projector → read DB) of ~500 ms.\n2. This question requires read-your-own-writes for the writer; whether other readers can tolerate staleness is a separate product requirement.\n3. Approach:\n   - Command returns `{version: 42}`.\n   - Client sends `GET /profile?minVersion=42`.\n   - Read API checks the projection's version; if < 42, waits up to ~1 s for it or falls back to the write model.\n4. Simpler alternative: the UI applies the change optimistically from the command response.\n5. Result: correct UX, separate models preserved.",
+    "workedExample": "1. Root cause: projection lag (event → projector → read DB) of ~500 ms.\n2. This question requires read-your-own-writes for the writer; whether other readers can tolerate staleness is a separate product requirement.\n3. Approach:\n   - Command returns `{version: 42}`.\n   - Client sends `GET /profile?minVersion=42`.\n   - Read API checks the projection's version; if it is below 42, waits up to ~1 s for it or falls back to the write model.\n4. Simpler alternative: the UI applies the change optimistically from the command response.\n5. Result: correct UX, separate models preserved.",
     "link": {
       "title": "CQRS (Martin Fowler)",
       "url": "https://martinfowler.com/bliki/CQRS.html"
@@ -233,7 +233,7 @@
       },
       {
         "text": "Sequence values are assigned at insert, not commit; a transaction holding a lower seq can commit after the relay has already moved past it",
-        "explanation": "Correct. Transaction A takes seq 41 and B takes 42; B commits first. The relay publishes 42 and sets `:last = 42`. When A commits, row 41 is below the cursor and is never selected."
+        "explanation": "Correct. Transaction A takes seq 41 and B takes 42; B commits first. The outbox relay publishes 42 and sets `:last = 42`. When A commits, row 41 is below the cursor and is never selected."
       },
       {
         "text": "`BIGSERIAL` values wrap around under heavy load",
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Both handlers read version 7 and balance £100. Both validate £80 ≤ £100 ✓.\n2. Handler A: `append(acct-42, expected=7, Withdrew 80)` → stream at 7 ✓ → now version 8.\n3. Handler B: `append(acct-42, expected=7, ...)` → stream is at 8 ✗ → **concurrency conflict**.\n4. B reloads: balance = £100 − £80 = £20. Validate £80 ≤ £20 ✗ → reject: insufficient funds.\n5. This is the same idea as `UPDATE ... WHERE version = 7` in a relational table: no locks are held while the handler thinks, only a check at write time.",
+    "workedExample": "1. Both handlers read version 7 and balance £100. Both check that £80 is no more than £100 ✓.\n2. Handler A: `append(acct-42, expected=7, Withdrew 80)` → stream at 7 ✓ → now version 8.\n3. Handler B: `append(acct-42, expected=7, ...)` → stream is at 8 ✗ → **concurrency conflict**.\n4. B reloads: the balance is now £100 − £80 = £20. £80 is more than £20 ✗ → reject: insufficient funds.\n5. This is the same idea as `UPDATE ... WHERE version = 7` in a relational table: no locks are held while the handler thinks, only a check at write time.",
     "link": {
       "title": "Event Sourcing (Martin Fowler)",
       "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Callbacks = events × subscribers = 200,000 × 40 = **8,000,000**.\n2. Over about 60 seconds: 8,000,000 ÷ 60 ≈ **133,000 requests per second** on the product API.\n3. That is the thundering herd the lesson warns about with event notification.\n4. Fix: event-carried state transfer:\n\n```json\n{\"type\":\"ProductPriceChanged\",\n \"productId\":\"p-9\",\"price\":1299,\n \"currency\":\"GBP\",\"version\":17}\n```\n\n5. Subscribers update local copies with no callback. Include a version so out-of-order or duplicate events can be ignored.",
+    "workedExample": "1. Every event triggers one callback from every subscriber:\n\n```formula\nN = E × k\nN = 200000 × 40 = 8000000 calls\nR = N / T\nR = 8000000 calls / 60 s\nR ≈ 133000 calls/s\nwhere\nN: total callbacks to the product API\nE: the number of ProductUpdated events, 200,000\nk: the number of subscribing services, 40\nR: the request rate the product API must handle\nT: the time the bulk change takes, about 60 seconds (s)\ncalls: GET requests to the product API\ns: seconds; \"/s\" means per second\n≈: approximately equal to\nIn words: 40 subscribers each calling back for 200,000 events is 8 million calls in a minute, about 133,000 a second.\n```\n\n2. That is far more than the product API can sustain.\n3. That is the thundering herd the lesson warns about with event notification.\n4. Fix: event-carried state transfer:\n\n```json\n{\"type\":\"ProductPriceChanged\",\n \"productId\":\"p-9\",\"price\":1299,\n \"currency\":\"GBP\",\"version\":17}\n```\n\n5. Subscribers update local copies with no callback. Include a version so out-of-order or duplicate events can be ignored.",
     "link": {
       "title": "What do you mean by \"Event-Driven\"? (Martin Fowler)",
       "url": "https://martinfowler.com/articles/201701-event-driven.html"

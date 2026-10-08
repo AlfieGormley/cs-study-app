@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "From about 09:00 on Tuesday, 24 hours after the TTL was lowered",
-        "explanation": "Correct. A resolver that cached the old record at 08:59 Monday with TTL 86,400 keeps it until about 08:59 Tuesday. Only then is normally expiring caches stop reusing the old long-TTL entry; they re-query when needed, subject to serve-stale policy."
+        "explanation": "Correct. A resolver that cached the old record at 08:59 Monday with TTL 86,400 keeps it until about 08:59 Tuesday. Only then do normally expiring caches stop reusing the old long-TTL entry; they re-query when needed, subject to serve-stale policy."
       },
       {
         "text": "Around 09:31, one minute after the change",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Worst case: a resolver cached the record at 08:59 with TTL = 86,400 s.\n2. Lowering the TTL at 09:00 doesn't reach that cache; it only affects answers given *after* 09:00.\n3. That cache keeps the old IP until 08:59 + 24 h = **08:59 Tuesday**.\n4. Correct playbook: lower the TTL, **wait the old TTL** (24 h), then make the change. Then caches converge within ~60 s.\n5. Even then, keep the old servers up for a while: some clients ignore TTLs.",
+    "workedExample": "1. Worst case: a resolver cached the record at 08:59 on Monday, with a TTL of 86,400 s.\n2. Lowering the TTL at 09:00 doesn't reach that cache; it only affects answers given *after* 09:00.\n3. That cache keeps the old IP until the old TTL runs out:\n\n```formula\nt_expire = t_fetch + TTL_old\nt_expire = 08:59 + 86,400 s\nt_expire = 08:59 + 24 h\nwhere\nt_expire: the clock time at which the cached copy expires; here 08:59 on Tuesday\nt_fetch: the clock time at which the resolver cached the record, 08:59 on Monday\nTTL_old: the TTL the record had when it was cached, 86,400 seconds (s), which is 24 hours (h)\ns: second\nh: hour, 3,600 seconds\nIn words: a cached copy lives out the TTL it was given, counted from when it was fetched.\n```\n\nSo the old IP can be served until **08:59 Tuesday**. Correct playbook: lower the TTL, **wait the old TTL** (24 h), then make the change. Then caches converge within ~60 s. Even then, keep the old servers up for a while: some clients ignore TTLs.",
     "link": {
       "title": "RFC 1035: Domain names, implementation and specification",
       "url": "https://www.rfc-editor.org/rfc/rfc1035"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Resolvers return all three IPs in rotating order; clients usually take the first.\n2. With one server dead, ~1/3 of fresh lookups put the dead IP first.\n3. Browsers implement fallback (try the next IP after a timeout, often seconds); typical HTTP libraries may just fail.\n4. Recovery: remove the record (manually or via health checks) **and** wait for TTL expiry.\n5. That's why DNS is used for coarse routing, with a health-checking load balancer behind each IP.",
+    "workedExample": "1. Resolvers return all three IPs in rotating order; clients usually take the first.\n2. With one server dead, about a third of fresh lookups put the dead IP first:\n\n```formula\nP_dead = 1 / N = 1 / 3 ≈ 33%\nwhere\nP_dead: the fraction of fresh lookups that put the dead server's IP first, and so the fraction of new connections that try it first\nN: the number of A records being rotated; here 3\n≈: approximately equal to\n%: per cent\nIn words: rotation spreads first places evenly, so the dead IP comes first in one lookup out of three.\n```\n\nBrowsers implement fallback (try the next IP after a timeout, often seconds); typical HTTP libraries may just fail. Recovery: remove the record (manually or via health checks) **and** wait for TTL expiry. That's why DNS is used for coarse routing, with a health-checking load balancer behind each IP.",
     "link": {
       "title": "Configuring DNS failover (Amazon Route 53)",
       "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
@@ -207,7 +207,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The failure is: **authoritative servers unreachable**.\n2. Once cached records expire, clients without usable serve-stale data cannot resolve the name, however healthy your servers are.\n3. Redundancy at that layer = **multiple providers**: e.g. `NS` records for both `ns1.provider-a.net` and `ns1.provider-b.net`.\n4. Supporting moves: moderate TTLs (minutes to hours for stable records) so caches bridge short outages.\n5. Cost: keeping two providers' zones in sync, and advanced features (geo, health checks) may differ between them.",
+    "workedExample": "1. The failure is: **authoritative servers unreachable**.\n2. Once cached records expire, clients without usable serve-stale data cannot resolve the name, however healthy your servers are.\n3. Redundancy at that layer means **multiple providers**: e.g. `NS` records for both `ns1.provider-a.net` and `ns1.provider-b.net`.\n4. Supporting moves: moderate TTLs (minutes to hours for stable records) so caches bridge short outages.\n5. Cost: keeping two providers' zones in sync, and advanced features (geo, health checks) may differ between them.",
     "link": {
       "title": "Domain Name System (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Domain_Name_System"
@@ -237,7 +237,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. The `NXDOMAIN` response includes the zone's `SOA` record.\n2. RFC 2308: negative TTL = min(SOA TTL, SOA MINIMUM) = min(900, 3,600) = **900 s**.\n3. So that resolver may answer 'doesn't exist' for up to 15 minutes after the record is created.\n4. Other resolvers that never cached the miss see the new record immediately.\n5. Lesson: create records *before* anything starts querying them, or keep the negative TTL short.",
+    "workedExample": "1. The `NXDOMAIN` response includes the zone's `SOA` record.\n2. RFC 2308 sets the negative TTL:\n\n```formula\nTTL_neg = min(TTL_SOA, MINIMUM)\nTTL_neg = min(900 s, 3,600 s) = 900 s\nwhere\nTTL_neg: how long a resolver may cache the \"doesn't exist\" (NXDOMAIN) answer, in seconds (s)\nmin: the minimum function: whichever value in the brackets is smaller\nTTL_SOA: the TTL of the zone's SOA record, 900 s\nMINIMUM: the MINIMUM field inside the SOA record, 3,600 s\ns: second\nIn words: the smaller of the two values wins, so 900 s, which is 15 minutes.\n```\n\nSo that resolver may answer 'doesn't exist' for up to 15 minutes after the record is created. Other resolvers that never cached the miss see the new record immediately. Lesson: create records *before* anything starts querying them, or keep the negative TTL short.",
     "link": {
       "title": "RFC 2308: Negative caching of DNS queries",
       "url": "https://www.rfc-editor.org/rfc/rfc2308"
@@ -267,7 +267,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. 10:00:00 the resolver caches the record with 300 s to live → expires at 10:05:00.\n2. 10:04:00 the laptop asks: 240 s have passed, so 300 − 240 = **60 s** remain.\n3. The resolver answers with TTL 60.\n4. The laptop caches it for 60 s → expires at **10:05:00**.\n\nConsequence: after you change a record, the worst-case wait is about one TTL from the most recent fetch of the old answer before the change, not one TTL per layer of caching.",
+    "workedExample": "Work out when the resolver's copy dies and how much life it has left at 10:04:00:\n\n```formula\nt_exp = t_fetch + TTL\nt_exp = 10:00:00 + 300 s = 10:05:00\nTTL_left = TTL − t_age\nTTL_left = 300 s − 240 s = 60 s\nwhere\nt_exp: the clock time at which the resolver's cached copy expires\nt_fetch: the clock time at which the resolver fetched the record, 10:00:00\nTTL: the record's time to live, 300 seconds (s)\nTTL_left: the remaining TTL the resolver hands to the laptop\nt_age: how long the resolver has held the record when the laptop asks: from 10:00:00 to 10:04:00 is 240 s\ns: second\nIn words: the resolver passes on only the 60 s its copy has left, so the laptop's copy expires at the same moment, 10:05:00.\n```\n\nThe resolver answers with TTL 60; the laptop caches it for 60 s, so its copy expires at **10:05:00**.\n\nConsequence: after you change a record, the worst-case wait is about one TTL from the most recent fetch of the old answer before the change, not one TTL per layer of caching.",
     "link": {
       "title": "Time to live (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Time_to_live"

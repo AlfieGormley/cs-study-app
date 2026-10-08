@@ -41,15 +41,52 @@ Fix for time-ordered hot spots: prefix the key with something that spreads load,
 
 Apply a hash function to the key and assign ranges of the *hash* to partitions. A good hash spreads even sequential keys uniformly.
 
+The naive way to turn a hash into a partition number is to take the remainder after dividing by the number of partitions:
+
+```formula
+p = hash(key) mod N
+where
+p: the partition (or node) number the key is sent to, from 0 to N − 1
+hash: a hash function, which turns any key into a large, evenly spread number; the same key always gives the same number
+key: the record's partition key, e.g. a user id
+mod: modulo, the remainder after whole-number division (17 mod 5 = 2)
+N: the number of partitions or nodes
+In words: hash the key, divide by the number of partitions, and the remainder says where the key lives.
 ```
-partition = hash(key) mod N   ← naive
-```
+
+For example, if `hash("user42")` came out as 1,000,003 and N = 10, the remainder is 3, so the key goes to partition 3. This spreads keys evenly, but it has a fatal flaw when N changes, described in the warning below.
 
 - **Pro**: even distribution, no clustering.
 - **Con**: range queries on the key are gone: adjacent keys are scattered. Cassandra's compromise is a *compound* key: hash the partition key, then keep rows sorted by the clustering columns within each partition.
 
 > [!warning] Never use hash mod N directly
-> If N changes from 10 to 11, a key stays put only if `hash mod 10 = hash mod 11`, which is true for about 1 in 11 keys. Adding one node moves ~91% of the data.
+> Going from 10 to 11 nodes, a key stays put only if its hash leaves the same remainder when divided by 10 and by 11, which is true for about 1 in 11 keys. Adding one node moves ~91% of the data.
+
+The general rule, for hash values spread evenly, when you add one node to N:
+
+```formula
+F_stay = 1 / (N + 1)
+F_move = 1 − 1 / (N + 1)
+where
+F_stay: the fraction of keys whose partition number stays the same
+F_move: the fraction of keys that must move to a different node
+N: the number of nodes before you add one
+In words: with modulo placement, adding one node keeps only about one key in N + 1 where it was; almost everything moves.
+```
+
+For 10 nodes growing to 11:
+
+```formula
+F_stay = 1 / (10 + 1) ≈ 0.09
+F_move ≈ 1 − 0.09 = 0.91
+where
+F_stay: the fraction of keys that stay, about 9%
+F_move: the fraction of keys that move, about 91%
+≈: approximately equal to
+In words: adding an eleventh node moves about 91% of the data, when ideally it would move only the new node's share, about 9%.
+```
+
+Why 1 in N + 1: a key stays only when its two remainders match, and over every run of N × (N + 1) consecutive hash values that happens for exactly N of them (the values 0 to N − 1 and their repeats).
 
 ## Consistent hashing
 
@@ -67,7 +104,18 @@ Place both nodes and keys on a ring of hash values (say 0 to 2⁶⁴). Each key 
   k1 → N2, k2 → N3, k3 → N1
 ```
 
-When a node joins, it takes over keys only from its clockwise neighbour; when one leaves, its keys move to the next node. Only about **1/N** of keys move.
+When a node joins, it takes over keys only from its clockwise neighbour; when one leaves, its keys move to the next node. Only about **1/N** of keys move:
+
+```formula
+F_move ≈ 1 / N
+where
+F_move: the fraction of all keys that change node when one node joins or leaves
+N: the number of nodes after the change (for a join) or before it (for a leave)
+≈: approximately equal to; exact only if every node owns an equal share of the ring
+In words: consistent hashing moves only the share of keys the new or departing node owns, which is the minimum any scheme that keeps every node an equal share can move.
+```
+
+Going from 10 to 11 nodes moves about 1/11 ≈ 9% of keys, against about 91% with plain modulo.
 
 Plain consistent hashing gives uneven ranges, and a newly added node only relieves one neighbour. The fix is **virtual nodes**: each physical node owns many small points on the ring (Cassandra historically used 256 per node, now 16 by default with a smarter allocation algorithm). Load evens out, and a new node can take small slices from many existing nodes, rather than necessarily every node.
 
@@ -143,7 +191,7 @@ Something must know which node holds which partition:
 
 Postgres and MySQL don't shard natively, so teams shard at the application layer or use **Vitess** (YouTube, Slack, GitHub), **Citus** (Postgres), or a distributed SQL database (CockroachDB, Spanner, YugabyteDB, TiDB).
 
-Moving from N to 2N shards online usually looks like:
+Doubling the shard count online (say from 8 to 16) usually looks like:
 
 1. Create the new shards and start **backfilling** them from a snapshot.
 2. Capture ongoing changes reliably (for example CDC from the snapshot position), with replay, ordering and reconciliation; unrelated application dual writes can diverge.
@@ -156,7 +204,7 @@ Pick the **shard key** to keep each request on one shard. For a SaaS product, `t
 ## Key takeaways
 - Partition when data or write volume exceeds one machine; the goal is even load, not just even data.
 - Range partitioning keeps range scans fast but risks hot spots; hash partitioning spreads load but loses range queries.
-- Consistent hashing with virtual nodes moves only about 1/N of the keys when membership changes; never use hash mod N.
+- Consistent hashing with virtual nodes moves only about one node's share of the keys when membership changes; never place keys by a plain hash modulo the node count.
 - Local secondary indexes mean scatter-gather reads; global ones mean multi-partition, often asynchronous writes.
 - Choose a shard key that keeps each request on one shard, and treat rebalancing and resharding as careful, observable operations.
 

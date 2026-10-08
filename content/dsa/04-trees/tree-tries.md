@@ -6,7 +6,23 @@ minutes: 12
 summary: Prefix trees for strings, with insert, search and prefix queries in time proportional to the key length, the memory costs, compressed tries and radix trees, and how autocomplete is built on them.
 ---
 
-Hash-table lookup uses expected O(1) probes under suitable hashing assumptions; hashing and equality on uncached strings can cost O(L) for length L. They cannot answer "which words **start with** `inte`?" without scanning every key. Balanced BSTs can, but each comparison is a string comparison, so a lookup costs O(L log n).
+In this lesson L is the length of a key in characters and n is the number of keys stored. Hash-table lookup uses expected O(1) probes (a fixed number on average) under suitable hashing assumptions; hashing and equality on uncached strings can cost O(L), in proportion to the key's length. They cannot answer "which words **start with** `inte`?" without scanning every key. Balanced BSTs can, but each comparison is a string comparison:
+
+```formula
+C_BST ≈ L × log_2(n)
+C_BST ≈ 10 × log_2(10^6) ≈ 10 × 20 = 200
+C_trie ≈ L = 10
+where
+C_BST: the characters compared, in the worst case, to look up one string key in a balanced BST
+C_trie: the characters examined to look up the same key in a trie
+L: the length of the key, in characters; 10 in the example
+n: the number of keys stored; 10^6 (a million) in the example
+log_2(n): the base-2 logarithm of n, about the number of levels a balanced BST search passes; log_2(10^6) ≈ 19.93
+≈: approximately equal to
+In words: a balanced BST makes about log_2(n) string comparisons, each of which may read the whole key, while a trie reads each character of the key once.
+```
+
+So a BST lookup costs O(L log n), and the trie below brings that down to O(L). Real string comparisons often stop at the first differing character, so the BST figure is a worst case.
 
 A **trie** (from re*trie*val, usually pronounced "try") is built for prefix questions. Instead of storing whole keys in nodes, it stores **one character per edge**. A key is a path from the root, and every key that shares a prefix shares the path for that prefix.
 
@@ -74,7 +90,7 @@ With the trie above:
 | `starts_with("ca")` | True | path exists |
 | `search("dot")` | False | no `t` under `do` |
 
-With constant-time child access, insertion, exact lookup and prefix-path lookup take O(L + 1). The dict-backed example uses expected constant-time child lookups. For an empty prefix, starts_with returns True even on an empty trie because the root exists; this tests path existence, not whether any word is stored.
+With constant-time child access, insertion, exact lookup and prefix-path lookup take O(L + 1) for a key or prefix of L characters: one step per character, plus the root (the + 1 covers the empty string, where L = 0). The dict-backed example uses expected constant-time child lookups. For an empty prefix, starts_with returns True even on an empty trie because the root exists; this tests path existence, not whether any word is stored.
 
 > [!note] O(L) is not automatically faster than hashing
 > Hashing a previously unhashed string inspects its characters; some runtimes cache string hashes, and equality costs also matter. Tries directly support prefix navigation and can stop early on a miss. Practical exact-match performance depends on representation and workload.
@@ -110,7 +126,7 @@ def complete(root, prefix, limit=10):
 
 Sorted child traversal produces Python string lexicographic order (code-point order, not locale-aware alphabetical collation). This simple implementation copies path strings and sorts child keys during recursion; enumeration costs include visited nodes, copied characters and output, and deep words can hit Python's recursion limit.
 
-An autocomplete design may rank by popularity. Enumerating and sorting every match can be expensive, so one option is to cache top-k word IDs at selected prefix nodes. Looking up such a cached list costs expected O(L + k) in this representation, excluding retrieval and transmission of the completion text. The trade-off is memory, and slower updates when popularity changes.
+An autocomplete design may rank by popularity. Enumerating and sorting every match can be expensive, so one option is to cache top-k word IDs at selected prefix nodes. Looking up such a cached list of k IDs for a prefix of L characters costs expected O(L + k) in this representation, excluding retrieval and transmission of the completion text. The trade-off is memory, and slower updates when popularity changes.
 
 > [!example] Sizing an autocomplete trie
 > In a hypothetical dataset, 10 million queries with mean length exactly 20 have 200 million characters in total, but shared prefixes typically cut the node count substantially. Storing the top 10 completions at every node as 4-byte IDs adds 40 bytes per node, before container overhead. A design can store these lists only at selected shallow nodes and compute other results on demand; the best policy depends on query traffic.
@@ -119,7 +135,20 @@ An autocomplete design may rank by popularity. Enumerating and sorting every mat
 
 Tries are fast but notoriously **memory-hungry**, because every character of every unshared suffix gets its own node, and each node carries overhead.
 
-Common child representations:
+Common child representations differ in how much they reserve per node. An array of child pointers reserves one slot for every possible character, used or not:
+
+```formula
+M = σ × p
+M = 26 × 8 B = 208 B
+M = 256 × 8 B = 2048 B = 2 KB
+where
+M: the memory for one node's child-pointer array, in bytes (B), excluding object headers
+σ: sigma, the alphabet size: the number of possible characters (26 lowercase English letters, or 256 possible byte values)
+p: the size of one pointer, 8 bytes on a 64-bit machine
+B: byte, 8 bits
+KB: kibibyte as used here, 1,024 bytes
+In words: an array-of-pointers node costs one pointer for every letter of the alphabet, even though most nodes use only one or two of them.
+```
 
 | Children as | Lookup | Memory per node |
 |---|---|---|
@@ -127,7 +156,7 @@ Common child representations:
 | Hash map / dict | O(1) expected | Small, but high constant overhead |
 | Sorted list | O(log σ) | Compact |
 
-Here σ is the alphabet size; pointer-array sizes assume 8-byte pointers and exclude headers. Dictionary and node object sizes vary by interpreter build.
+O(log σ) is the cost of a binary search among at most σ sorted children. Dictionary and node object sizes vary by interpreter build.
 
 > [!note] Evidence gap
 > The claimed CPython dictionary sizes and 100,000-word, 65 MB benchmark are omitted because the pinned build, word list, measurement code and retained-object accounting were unavailable. No measured tenfold memory ratio is established.
@@ -149,9 +178,22 @@ r*  t*         "d"*  "e"*
 d* e*
 ```
 
-- Except possibly the root, every internal node now has at least two children (or marks a word end), so the node count is at most about 2n for n keys, independent of key length.
-- Lookups compare chunks of characters along each edge, with the same O(L) total.
+- Except possibly the root, every internal node now has at least two children (or marks a word end), so the node count is at most about 2n for n keys, independent of key length (the count is below).
+- Lookups compare chunks of characters along each edge, with the same O(L) total for a key of L characters.
 - Inserting can **split** an edge: adding `cab` to the tree above splits nothing because `ca` already exists, but adding `co` would split `ca` into `c` with children `a` and `o`.
+
+The node bound comes from counting the only kinds of node compression leaves behind:
+
+```formula
+N ≤ n + (n − 1) + 1 = 2 × n
+N ≤ 2 × 4 = 8
+where
+N: the number of nodes in the radix tree, including the root
+n: the number of keys stored; 4 (car, card, care, cat) in the example
+In words: at most n nodes mark key ends, fewer than n others can branch, and there is one root, so a radix tree never has more than about 2n nodes.
+```
+
+The radix tree drawn above holds those 4 keys in 5 labelled nodes plus the root, within the bound of 8. A plain trie, by contrast, can need one node per character of every key.
 
 Radix trees are where tries meet production:
 
@@ -164,7 +206,7 @@ Radix trees are where tries meet production:
 ## Other variants, briefly
 
 - **Ternary search trees** store one character per node with less/equal/greater children, like a BST over characters. They use far less memory than array tries and still support prefix search.
-- **Suffix tries and suffix trees** hold every suffix of a text, answering "does pattern P occur anywhere?" in O(|P|). Suffix arrays are the space-efficient alternative.
+- **Suffix tries and suffix trees** hold every suffix of a text, answering "does pattern P occur anywhere?" in time proportional to the length of P, written O(|P|), where |P| is the number of characters in the pattern. Suffix arrays are the space-efficient alternative.
 - **Aho–Corasick** adds failure links to a trie of patterns, finding all occurrences of many patterns in one pass over a text (the original Unix `fgrep` was built on it, and intrusion-detection systems use it to match thousands of signatures).
 - Finite-state transducers can merge equivalent states and share suitable suffix structure as well as prefixes. Compression depends on the vocabulary and outputs.
 
@@ -181,9 +223,9 @@ Avoid one when you only do exact-match lookups (use a hash set), when keys share
 
 ## Key takeaways
 - A trie stores one character per edge; keys sharing a prefix share a path, and an end-of-word flag marks complete keys.
-- Insert, search and prefix checks take O(L + 1) with constant-time child access (expected for dict children), independent of how many keys are stored.
+- Insert, search and prefix checks take O(L + 1) for a key of L characters with constant-time child access (expected for dict children), independent of how many keys are stored.
 - Autocomplete walks to the prefix node and enumerates below it; one possible design caches top-k completion IDs at selected nodes.
-- Plain tries are memory-hungry; radix trees collapse single-child chains into string-labelled edges, bounding nodes to about 2n.
+- Plain tries are memory-hungry; radix trees collapse single-child chains into string-labelled edges, bounding nodes to about 2n for n keys.
 - Radix and Patricia tries power IP longest-prefix routing, HTTP routers and Redis Streams.
 
 ## Further reading

@@ -6,7 +6,7 @@ minutes: 13
 summary: The BST ordering rule, search and insert, the three cases of delete, finding successors, validating a BST correctly, and why sorted input turns a BST into a linked list.
 ---
 
-Binary search on a sorted array finds a key in O(log n), but inserting a key means shifting everything after it: O(n). A **binary search tree** (BST) stores ordered partitions in linked nodes. A step need not halve the remaining keys; search follows a path, after which insertion or deletion relinks nodes.
+Binary search on a sorted array of n keys finds a key in O(log n) steps (it halves the range each time, so about 20 steps for a million keys), but inserting a key means shifting everything after it: O(n), work in proportion to n. A **binary search tree** (BST) stores ordered partitions in linked nodes. A step need not halve the remaining keys; search follows a path, after which insertion or deletion relinks nodes.
 
 When the tree is reasonably balanced, search, insert and delete are all **O(log n)**. When it is not, they degrade to O(n). Most of this lesson is about the operations; the last part is about that failure mode, which lesson 4 fixes.
 
@@ -52,9 +52,20 @@ def search(node, key):
     return node        # None if absent
 ```
 
-Searching for 45: 50 (go left), 30 (go right), 40 (go right), 45. Four nodes visited; the Python code can perform both equality and ordering tests at a node. The cost is O(h + 1), where h is the height.
+Searching for 45: 50 (go left), 30 (go right), 40 (go right), 45. Four nodes visited; the Python code can perform both equality and ordering tests at a node. A search visits one node per level it passes through:
 
-The minimum is the leftmost node and the maximum is the rightmost, also O(h).
+```formula
+V = D + 1 ≤ h + 1
+V = 3 + 1 = 4
+where
+V: the number of nodes a successful search visits
+D: the depth of the key's node: its number of edges below the root (45 is at depth 3)
+h: the height of the tree in edges (3 for the tree above); no node is deeper than h
+≤: is at most
+In words: a search visits each node on the path from the root to the key, which is one more than the key's depth and never more than the height plus one.
+```
+
+So the cost is O(h + 1). The minimum is the leftmost node and the maximum is the rightmost, also O(h).
 
 ## Insert
 
@@ -152,7 +163,7 @@ def successor(root, key):
     return succ
 ```
 
-This also works for keys that are not in the tree (successor of 47 is 50) and returns None for the maximum. It is O(h).
+This also works for keys that are not in the tree (successor of 47 is 50) and returns None for the maximum. It is O(h), where h is the tree's height: one step per level.
 
 ## Validating a BST
 
@@ -183,11 +194,11 @@ def is_bst(node, lo=float('-inf'),
             is_bst(node.right, k, hi))
 ```
 
-Going left tightens the upper bound; going right tightens the lower bound. An equivalent approach does an in-order traversal and checks each key is greater than the previous one. Both are O(n).
+Going left tightens the upper bound; going right tightens the lower bound. An equivalent approach does an in-order traversal and checks each key is greater than the previous one. Both are O(n) for n nodes, since every node must be checked.
 
 ## Degenerate trees
 
-Search and single-key updates cost O(h + 1); full validation costs O(n). With insertion only, order determines shape; deletions also change it.
+Search and single-key updates cost O(h + 1) for a tree of height h; full validation of n nodes costs O(n). With insertion only, order determines shape; deletions also change it.
 
 | Input order | Shape | Height (n = 1,000) |
 |---|---|---|
@@ -195,21 +206,55 @@ Search and single-key updates cost O(h + 1); full validation costs O(n). With in
 | Uniformly random permutation | Random shape | Expected O(log n); no fixed height |
 | Median first, recursively | Perfect-ish | 9 |
 
-Inserting sorted keys into a plain BST produces a linked list with extra pointers: every insert walks the whole chain, so building it costs 0 + 1 + ... + (n − 1) = Θ(n²) visited existing nodes. For a million keys that is about 5 × 10¹¹ steps.
+Inserting sorted keys into a plain BST produces a linked list with extra pointers: every insert walks the whole chain built so far. The first insert visits no existing nodes, the second visits 1, and so on:
 
-Random insertion order is much kinder. For distinct keys inserted in a uniformly random permutation and a uniformly selected stored key, expected depth has leading term 2 ln n ≈ 1.39 log₂ n. Lower-order terms matter for finite sizes. Expected height is also O(log n); this is an expectation, not a bound on every insertion order.
+```formula
+V = 0 + 1 + 2 + … + (n − 1)
+V = n × (n − 1) / 2
+V = 1000 × 999 / 2 = 499500
+V ≈ 10^6 × 10^6 / 2 = 5 × 10^11
+where
+V: the total number of existing nodes visited while building the tree
+n: the number of keys inserted, in ascending order; 1,000 in the third line, a million (10^6) in the fourth
+…: "and so on": the count keeps rising by 1 each insert
+10^6: ten to the power 6, one million
+≈: approximately equal to (rounded)
+In words: the k-th sorted insert walks past all k − 1 earlier keys, and adding those up gives about n²/2, half of n squared.
+```
+
+That total grows like n² (n multiplied by itself), written Θ(n²); the Θ ("theta") means it grows exactly that fast, not just at most that fast. Ten times as many keys costs about a hundred times as much: 1,000 sorted keys cost about half a million node visits, and a million keys about 5 × 10¹¹.
+
+Random insertion order is much kinder. For distinct keys inserted in a uniformly random permutation, the average depth of a stored key grows only logarithmically:
+
+```formula
+D ≈ 2 × ln(n)
+D ≈ 2 × ln(2) × log_2(n)
+D ≈ 1.39 × log_2(n)
+D ≈ 2 × ln(1000) ≈ 2 × 6.91 ≈ 13.8
+where
+D: the expected (average) depth, in edges, of a uniformly chosen key in a BST built from a random insertion order; this is the leading term only
+n: the number of distinct keys in the tree
+ln(n): the natural logarithm of n: the power you raise e ≈ 2.718 to in order to get n; ln(1000) ≈ 6.91
+ln(2): the natural logarithm of 2, about 0.693, which converts natural logs into base-2 logs
+log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n; log_2(1000) ≈ 9.97
+e: Euler's number, about 2.718, the base of the natural logarithm
+≈: approximately equal to
+In words: for large n, a randomly built BST is on average only about 39 % deeper than the best possible shape, because 2 × ln(n) is about 1.39 times log_2(n).
+```
+
+For 1,000 random keys that is an average depth of about 14 by the leading term. Lower-order terms matter for finite sizes: the exact expected average is about 11, against an average depth of about 8 in the best (complete) shape, whose height is 9. Expected height is also O(log n); this is an expectation, not a bound on every insertion order.
 
 But real data is rarely random. Timestamps, auto-increment IDs and alphabetically sorted imports all arrive in order. For workloads requiring worst-case logarithmic access, use a **self-balancing** tree (AVL, red-black; lesson 4), a B-tree (System Design, databases), a skip list, or a sorted sequence implementation. Python sortedcontainers uses a list of sorted lists; Redis can use a skip list plus dictionary or a compact encoding for sorted sets.
 
 > [!tip] Building a balanced BST from sorted data
-> If you have all the keys up front and sorted, pick the **middle** key as the root and recurse on each half. For n > 0 distinct keys, passing index ranges rather than copying slices builds height ⌊log₂ n⌋ in O(n), assuming constant-time node creation.
+> If you have all the keys up front and sorted, pick the **middle** key as the root and recurse on each half. For n > 0 distinct keys, passing index ranges rather than copying slices builds the shortest possible tree (height 3 for the ten keys above, 9 for 1,000 keys) in O(n) time, assuming constant-time node creation.
 
 ## Key takeaways
 - The BST property applies to whole subtrees: everything left is smaller, everything right is larger. In-order traversal gives sorted keys.
-- Search, insert, delete, min, max and successor are all O(h).
+- Search, insert, delete, min, max and successor are all O(h), where h is the tree's height.
 - Delete has three cases: leaf (remove), one child (splice), two children (replace with the in-order successor and delete that instead).
 - Validate with min/max bounds passed down, not by comparing parents with children.
-- Sorted input makes a plain BST a chain of height n − 1, turning O(log n) into O(n). Real systems use balanced trees.
+- Sorted input makes a plain BST of n keys a chain of height n − 1, turning O(log n) into O(n). Real systems use balanced trees.
 
 ## Further reading
 - [Binary search tree — Wikipedia](https://en.wikipedia.org/wiki/Binary_search_tree)

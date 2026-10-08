@@ -8,7 +8,7 @@ summary: Pre-order, in-order, post-order and level-order traversal, recursive an
 
 A list has one natural order: front to back. A tree does not. To visit every node you must decide, at each node, whether to handle the node itself before, between or after its children, and whether to go **deep** first or **wide** first.
 
-Those choices give the four traversals you will use constantly. Each emits every node once; with constant-cost node processing and suitable stack/queue operations, these implementations take O(n) time. Assume finite acyclic binary trees without shared subtrees or concurrent mutation. They differ in the order of visits and in how much extra memory they need.
+Those choices give the four traversals you will use constantly. Each emits every node once; with constant-cost node processing and suitable stack/queue operations, these implementations take O(n) time, where n is the number of nodes: the work grows in direct proportion to the size of the tree. Assume finite acyclic binary trees without shared subtrees or concurrent mutation. They differ in the order of visits and in how much extra memory they need.
 
 ## The running example
 
@@ -71,7 +71,22 @@ A trick for doing them by hand: walk round the outline of the tree anticlockwise
 
 ### Space: the hidden cost
 
-Recursion is not free. Each pending call sits on the call stack, so depth-first traversal uses O(h + 1) working space, excluding the O(n) output, where h is the height: O(log n) for a balanced tree but **O(n) for a degenerate one**.
+Recursion is not free. Each pending call sits on the call stack, and the deepest the recursion goes is one call per level on the longest root-to-leaf path:
+
+```formula
+F_max = h + 1
+F_max = ⌊log_2(1000000)⌋ + 1 = 20
+F_max = (1000000 − 1) + 1 = 1000000
+where
+F_max: the most call frames (pending recursive calls) on the call stack at once
+h: the height of the tree in edges; a path of h edges has h + 1 nodes, each with its own frame
+n: the number of nodes; 1,000,000 in both example lines
+log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n; log_2(1000000) ≈ 19.93
+⌊ ⌋: floor: round down to a whole number
+In words: recursive depth-first traversal needs one stack frame per node on the deepest path, so its memory grows with the height, not with the number of nodes.
+```
+
+The two example lines are a million-node complete tree (height 19, so 20 frames) and a million-node chain (height n − 1, so a million frames). So depth-first traversal uses O(h + 1) working space, excluding the O(n) output: O(log n) for a balanced tree but **O(n) for a degenerate one**.
 
 CPython commonly starts with a recursion limit of 1,000; query sys.getrecursionlimit() for the actual process. A sufficiently deep chain raises RecursionError, accounting for existing call depth. Raising the limit can create resource risks; an iterative traversal avoids recursive call-depth limits but still needs memory.
 
@@ -115,7 +130,7 @@ def inorder_iter(root):
     return out
 ```
 
-This pattern is worth memorising: it is also how you build a **BST iterator** that yields the next key on demand in O(1) amortised advancement over a full traversal and O(h + 1) memory; initialization or an individual next call can cost O(h + 1).
+This pattern is worth memorising: it is also how you build a **BST iterator** that yields the next key on demand. Over a full traversal of n nodes each advance costs O(1) amortised (constant on average, because each node is pushed and popped once in total), and the stack needs O(h + 1) memory for a tree of height h. Initialisation or an individual next call can cost O(h + 1).
 
 ### Post-order
 
@@ -135,7 +150,7 @@ def postorder_iter(root):
     return out[::-1]
 ```
 
-This uses O(n) memory for the output it reverses. If you need to *act* on nodes in post-order as you go (to free them, say), use the single-stack version that remembers the last node visited, so it can tell whether it is returning from the left or the right subtree.
+This uses O(n) memory for the output it reverses, for n nodes. If you need to *act* on nodes in post-order as you go (to free them, say), use the single-stack version that remembers the last node visited, so it can tell whether it is returning from the left or the right subtree.
 
 ## Breadth-first: level-order
 
@@ -167,11 +182,27 @@ def level_order(root):
 Taking `len(q)` at the start of each round processes exactly one level per round. That is the hook for a whole family of problems: right-side view (last of each level), zigzag order, average per level, minimum depth.
 
 > [!warning] Use a deque, not a list
-> `list.pop(0)` shifts every remaining element, so it is O(n) and can make BFS quadratic on wide trees. `deque.popleft()` is O(1).
+> `list.pop(0)` shifts every remaining element, so it is O(n) in the n items still in the list, and can make BFS quadratic (work growing with n², n times n) on wide trees. `deque.popleft()` is O(1), a fixed cost.
 
 ### Space for BFS
 
-The queue can mix the unprocessed part of one level with discovered nodes of the next; its size is O(width). For a perfect tree the last level has (n + 1)/2 nodes, so BFS uses O(n) memory on bushy trees, while DFS needs only O(log n) there. On a degenerate chain it is the other way round: the queue never holds more than one node, but recursive DFS needs O(n) frames. Iterative pre-order can keep only one pending node on a chain.
+The queue can mix the unprocessed part of one level with discovered nodes of the next; its size grows with the tree's **width** (the most nodes on any one level), written O(width). A perfect tree is widest at its last level, which holds just over half of all its nodes:
+
+```formula
+W = 2^h = (n + 1) / 2
+n = 2^(h+1) − 1
+W = (15 + 1) / 2 = 8
+where
+W: the number of nodes on the last (widest) level of a perfect binary tree
+h: the height of the tree in edges; the last level is at depth h
+n: the total number of nodes in the perfect tree
+2^h: 2 multiplied by itself h times
+In words: in a perfect binary tree the bottom level holds (n + 1)/2 nodes, just over half the tree, and BFS's queue fills with all of them.
+```
+
+A perfect tree of 15 nodes has 8 leaves; one of 1,048,575 nodes has 524,288. So BFS uses O(n) memory on bushy trees, while DFS needs only O(log n) there. On a degenerate chain it is the other way round: the queue never holds more than one node, but recursive DFS needs O(n) frames. Iterative pre-order can keep only one pending node on a chain.
+
+For n nodes:
 
 | Shape | Recursive DFS stack | BFS queue |
 |---|---|---|
@@ -213,11 +244,11 @@ def morris_inorder(root):
     return out
 ```
 
-Each edge is walked a constant number of times, so it is still **O(n) time**. The catch is that the tree is temporarily rewired: it is unsafe if another thread is reading the tree concurrently, and if you stop early (say, on finding a key) you must still finish the walk or the threads stay in place. The O(1) bound excludes the output list: the shown function stores O(n) output. Exceptions or early exits also require cleanup of outstanding threads.
+Each edge is walked a constant number of times, so it is still **O(n) time** for n nodes. The catch is that the tree is temporarily rewired: it is unsafe if another thread is reading the tree concurrently, and if you stop early (say, on finding a key) you must still finish the walk or the threads stay in place. The O(1) bound excludes the output list: the shown function stores O(n) output. Exceptions or early exits also require cleanup of outstanding threads.
 
 ## Key takeaways
 - Pre-order (node first) suits copying and serialising; in-order gives sorted keys from a BST; post-order (node last) suits anything that combines subtree results.
-- All traversals are O(n) time. Recursive DFS needs O(h + 1) frames; BFS needs O(width) queue. The shown functions also materialize O(n) output.
+- All traversals are O(n) time for n nodes. Recursive DFS needs O(h + 1) frames for height h; BFS needs a queue as large as the widest level. The shown functions also materialise O(n) output.
 - Iterative versions avoid the process recursion limit on deep trees; push the right child before the left for pre-order.
 - Level-order uses a deque and `len(q)` per round to process one level at a time.
 - Morris traversal achieves O(1) working space excluding output by temporarily threading predecessor pointers.

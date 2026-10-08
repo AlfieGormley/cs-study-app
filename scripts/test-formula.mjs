@@ -20,6 +20,10 @@ test('every symbol must be defined', () => {
   assert.match(checkFormula('v = 3\nwhere\nv: speed').join(), /In words/);
   assert.equal(parseFormula(good).words, 'bigger cones beam lower.');
 });
+test('connective words need no definition and must not be defined', () => {
+  assert.deepEqual(checkFormula('n^2 ≤ c × n   for all n ≥ n_0\nwhere\nn: input size\nc: a constant\nn_0: threshold\nIn words: eventually below.'), []);
+  assert.match(checkFormula('a = b for x\nwhere\na: x\nb: y\nx: z\nfor: for\nIn words: w').join(), /connective/);
+});
 test('formula blocks render equation, definitions and plain reading', () => {
   const html = render('```formula\n' + good + '\n```');
   assert.match(html, /class="formula"/);

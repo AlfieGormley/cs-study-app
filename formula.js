@@ -21,6 +21,11 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const SUB = String.raw`(?:_(?:\{[^}]*\}|[A-Za-z0-9Ͱ-Ͽ]+))?`;
 const TOKEN = new RegExp(String.raw`(?:[Ͱ-Ͽµ]|[A-Za-z][A-Za-z0-9]*)['′]*` + SUB, 'gu');
 
+// Words that join or qualify mathematics ("for all n ≥ 1", "as n → ∞", "n is even") are not symbols and need
+// no definition. Any other word in an equation is a variable name and must be defined.
+export const CONNECTIVES = new Set(('for all some each every any as so when whenever if iff then else otherwise means gives ' +
+  'and or not is are be such that where with to of at in on by until since let per').split(' '));
+
 export function parseFormula(source) {
   const lines = String(source).replace(/\r\n?/g, '\n').split('\n');
   const split = lines.findIndex((l) => /^\s*where:?\s*$/i.test(l));
@@ -57,7 +62,9 @@ export function checkFormula(source) {
   if (!words) p.push(`formula block needs an "In words:" line saying what "${eq[0] ?? ''}" means in plain English`);
   for (const d of defs) if (d.bad || !d.text) p.push(`definition "${d.key}" must be written "symbol: meaning"`);
   const defined = new Set(defs.flatMap((d) => symbols(d.key)));
-  const missing = symbols(eq.join('\n')).filter((s) => !defined.has(s));
+  const missing = symbols(eq.join('\n')).filter((s) => !defined.has(s) && !CONNECTIVES.has(s));
+  const connectiveDefs = defs.filter((d) => CONNECTIVES.has(d.key.trim()));
+  if (connectiveDefs.length) p.push(`"${connectiveDefs[0].key}" is a connective word, not a symbol: remove its definition`);
   if (missing.length) p.push(`undefined symbol(s) ${missing.map((s) => `"${s}"`).join(', ')} in "${eq[0]}"`);
   return p;
 }

@@ -80,6 +80,12 @@ The same symbol appearing in several blocks is defined in **each** block: every 
   first and the code after it.
 - Keep each equation line within **44 characters** in lessons and **40** in questions. Split long derivations over
   several lines (all of them come before `where`).
+- **Connective words need no definition**: `for`, `all`, `some`, `as`, `so`, `when`, `if`, `then`, `means`, `gives`,
+  `and`, `or`, `not`, `is`, `to`, `of`, `at`, `per` and similar (the full list is `CONNECTIVES` in `formula.js`).
+  Write conditions naturally, as in `n^2 ≤ c × n   for all n ≥ n_0` or `1 / n → 0   as n → ∞`. **Never define a
+  connective** in `where`: the build rejects that.
+- A descriptive variable name (`users`, `rate`, `daily_writes`) is fine **if it is defined** like any other
+  symbol. It's often clearer than a single letter in back-of-envelope estimates.
 - **Never use an English word as a symbol** just to get past the checker. Lines like "to: …", "peak: …",
   "null: …" or "cardioid: …" are not allowed. Use proper symbols (`L_peak`, `θ_null`, `t_min`) or split the line
   (`t_min ≈ 127 ms` and `t_max ≈ 137 ms` instead of "(10 to 20) ms"). The verifier rejects word-symbols.

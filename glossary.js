@@ -1,6 +1,6 @@
 import { glossary as core } from './glossary-data.js';
 import moduleTerms from './glossary-terms.js';
-import { aliasKey, isScoped } from './glossary-rules.js';
+import { aliasKey, fallsBack } from './glossary-rules.js';
 // Core terms plus the verified per-module terms the build collects from content/**/glossary.json.
 export const glossary = [...core, ...moduleTerms];
 
@@ -19,7 +19,7 @@ for (const entry of glossary) {
     const map = entry.subject ? (bySubject.get(entry.subject) ?? bySubject.set(entry.subject, new Map()).get(entry.subject)) : coreMap;
     if (map.has(key) && map.get(key).entry.id !== entry.id) throw new Error('Ambiguous glossary alias: ' + alias);
     map.set(key, { entry, alias });
-    if (entry.subject && !isScoped(entry, alias) && !fallback.has(key)) fallback.set(key, { entry, alias });
+    if (fallsBack(entry, alias) && !fallback.has(key)) fallback.set(key, { entry, alias });
   }
 }
 const lookups = (subject) => [bySubject.get(subject), coreMap, fallback].filter(Boolean);

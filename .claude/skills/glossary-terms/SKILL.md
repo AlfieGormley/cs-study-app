@@ -95,7 +95,8 @@ So "DAC" can mean digital-to-analogue converter in Synth Building and discretion
 Security. **Don't drop an acronym** because another subject uses it differently. Inside one subject, an alias
 still maps to one entry.
 
-**Longer words and phrases link app-wide.** For them:
+**Multi-word and hyphenated phrases also act as a fallback in other subjects** that don't define them.
+Single words link only inside their own subject. Even so:
 - **Ambiguity.** When a word means different things in different subjects ("gate", "filter", "key", "voice",
   "bus", "transformer", "table", "flash", "bounce"), don't use the bare word as an alias. Use precise multi-word
   terms instead: "logic gate", "gate signal", "noise gate", "audio transformer", "switch bounce".

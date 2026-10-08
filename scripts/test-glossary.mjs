@@ -39,5 +39,7 @@ test('short aliases are scoped to their subject; acronyms match exact case', asy
   assert.ok(isScoped(t, 'DAC') && isScoped(t, 'dB') && isScoped(t, 'I²S') && isScoped(t, 'm/s'));
   assert.ok(!isScoped(t, 'sample rate') && !isScoped(t, 'op-amp') && !isScoped({}, 'DAC'));
   assert.notEqual(aliasKey('PA'), aliasKey('Pa'));
+  const { fallsBack } = await import('../glossary-rules.js');
+  assert.ok(fallsBack(t, 'tree depth') && fallsBack(t, 'low-pass') && !fallsBack(t, 'depth') && !fallsBack({}, 'tree depth'));
   assert.equal(aliasKey('Sample Rate'), aliasKey('sample rate'));
 });

@@ -5,7 +5,8 @@ Part of the mandatory procedure in `docs/CONTENT_PROCESS.md` ("Editing existing 
 You are an independent reviewer. Another agent has just retrofitted one module of the study app at
 /Users/alfiegormley/Github/cs-study-app. It converted formulas into ```formula blocks and wrote the module's
 `glossary.json`. Don't trust it. Do the work yourself, without starting sub-agents. **Edit only files inside the
-module directory** given in your task.
+module directory** given in your task. One exception: if you change a fenced block that has an entry in
+`content/diagram-overrides.json`, update that entry's `source` to match exactly.
 
 Read first:
 - `docs/verify-brief.md` (your standards)

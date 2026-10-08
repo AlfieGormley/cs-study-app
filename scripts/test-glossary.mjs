@@ -5,7 +5,7 @@ import { glossary, exactTerm, searchGlossary } from '../glossary.js';
 
 test('dictionary entries resolve and searches include aliases', () => {
   assert.ok(glossary.length >= 150);
-  for (const entry of glossary) assert.equal(exactTerm(entry.term)?.id, entry.id);
+  for (const entry of glossary) assert.equal(exactTerm(entry.term, entry.subject)?.id, entry.id);
   assert.ok(searchGlossary('Postgres').some(e => e.term === 'PostgreSQL'));
   assert.equal(searchGlossary('nonexistentxyz').length, 0);
 });
@@ -27,4 +27,13 @@ test('noninteractive content never gains dictionary buttons', () => {
   assert.doesNotMatch(render(source, {interactive:false}), /<button/);
   assert.doesNotMatch(render(source, {terms:false}), /data-term/);
   assert.match(render(source), /data-term="redis"/);
+});
+
+test('short aliases are scoped to their subject; acronyms match exact case', async () => {
+  const { isScoped, aliasKey } = await import('../glossary-rules.js');
+  const t = { subject: 'synth' };
+  assert.ok(isScoped(t, 'DAC') && isScoped(t, 'dB') && isScoped(t, 'I²S') && isScoped(t, 'm/s'));
+  assert.ok(!isScoped(t, 'sample rate') && !isScoped(t, 'op-amp') && !isScoped({}, 'DAC'));
+  assert.notEqual(aliasKey('PA'), aliasKey('Pa'));
+  assert.equal(aliasKey('Sample Rate'), aliasKey('sample rate'));
 });

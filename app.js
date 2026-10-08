@@ -196,7 +196,7 @@ async function homeView() {
         <div class="tile-footer"><span>${p.done ? `${p.done} completed` : 'Ready when you are'}</span><span>${pct(p.done, p.total)}%</span></div><div class="progress" aria-label="${pct(p.done, p.total)}% complete"><div style="width:${pct(p.done, p.total)}%"></div></div></a>`;
     }).join('')}</div>
     <div class="section-label">More</div>
-    <div class="list"><a class="row" href="#/dictionary"><div class="row-main"><div class="row-title">Technical dictionary</div><div class="row-sub">${glossary.length} quick definitions, from Redis to recursion</div></div>${chevron}</a><a class="row" href="#/settings"><div class="row-main"><div class="row-title">Settings</div><div class="row-sub">Text size, progress, offline</div></div>${chevron}</a></div>`;
+    <div class="list"><a class="row" href="#/dictionary"><div class="row-main"><div class="row-title">Technical dictionary</div><div class="row-sub">${glossary.length} plain-language definitions across every subject</div></div>${chevron}</a><a class="row" href="#/settings"><div class="row-main"><div class="row-title">Settings</div><div class="row-sub">Text size, progress, offline</div></div>${chevron}</a></div>`;
 }
 
 async function subjectView(s) {
@@ -271,7 +271,7 @@ async function lessonView(s, m, l) {
       <h1 class="large-title">${esc(lesson.title)}</h1>
     </div>
     <p class="term-help">Tap dotted-underlined terms for a quick definition. <a href="#/dictionary">Browse dictionary</a></p>
-    <article class="prose">${md(lesson.body)}</article>
+    <article class="prose">${md(lesson.body, { subject: s })}</article>
     <div class="section-label">Check your understanding</div>
     <button class="btn" id="practise" ${lesson.questions.length ? '' : 'disabled'}>Practise ${plural(lesson.questions.length, 'question')}</button>
     <div class="btn-row"><button class="btn ${done ? 'plain' : 'secondary'}" id="done">${done ? '✓ Completed' : 'Mark as complete'}</button></div>
@@ -382,7 +382,7 @@ async function quizView(id) {
         <button class="icon-btn" id="bm" aria-pressed="${marked}" aria-label="Bookmark question">${bookmarkIcon(marked)}</button>
       </div>
       <div class="row-meta" style="margin:0 0 10px">${badge(q.level)}<span class="meta">${esc(lesson.title)}</span></div>
-      <div class="quiz-prompt prose">${md(q.prompt)}</div>
+      <div class="quiz-prompt prose">${md(q.prompt, { subject: item.s })}</div>
       ${multi ? '<div class="quiz-hint">Select all that apply.</div>' : ''}
       ${checked ? verdict(right) : ''}
       <div class="options">
@@ -404,13 +404,13 @@ async function quizView(id) {
           // Options nobody needs to look at again stay collapsed, so the right answer stands out.
           if (cls === 'dim') return `<details class="answer-card dim">
             <summary>${option.replace(/<\/?button[^>]*>/g, '').replace('class="key"', `class="key" aria-label="Option ${letters[i]}"`)}<span class="why-toggle">Why not</span></summary>
-            <div class="opt-why prose">${md(o.explanation)}</div></details>`;
+            <div class="opt-why prose">${md(o.explanation, { subject: item.s })}</div></details>`;
           return `<div class="answer-card ${cls}"><div class="opt-ribbon">${isAns ? tick : cross}<span>${tag}</span></div>${option}
-            <div class="opt-why prose">${md(o.explanation)}</div></div>`;
+            <div class="opt-why prose">${md(o.explanation, { subject: item.s })}</div></div>`;
         }).join('')}
       </div>
       ${checked ? `
-        <div class="card worked prose"><h3>Worked example</h3>${md(q.workedExample)}</div>
+        <div class="card worked prose"><h3>Worked example</h3>${md(q.workedExample, { subject: item.s })}</div>
         <a class="link-card" href="${esc(q.link.url)}" target="_blank" rel="noopener">
           <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span><b>Learn more: ${esc(q.link.title)}</b><small>${esc(new URL(q.link.url).hostname)}</small></span></a>
@@ -638,16 +638,31 @@ function dictionaryView(params) {
     <input class="search-input" id="dictionary-query" type="search" placeholder="Try Redis, DNS, or binary search" autocomplete="off" value="${esc(params.get('q') || '')}">
     <p class="meta" id="dictionary-status" role="status"></p><div id="dictionary-results" class="dictionary-results"></div>`;
   const input = $('#dictionary-query');
-  const draw = () => {
-    const results = searchGlossary(input.value);
-    $('#dictionary-status').textContent = `${plural(results.length, 'term')}${input.value.trim() ? ' found' : ' to explore'}`;
-    $('#dictionary-results').innerHTML = results.length ? results.map((entry) => `<article class="card dictionary-entry">
+  const categories = [...new Set(glossary.map((e) => e.category))].sort((a, b) => a.localeCompare(b));
+  input.insertAdjacentHTML('afterend', `<label class="sr-only" for="dictionary-subject">Subject</label><select class="subject-select" id="dictionary-subject" style="margin-top:10px"><option value="">All subjects</option>${categories.map((c) => `<option ${params.get('c') === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`);
+  const subject = $('#dictionary-subject');
+  const PAGE = 100;
+  let shown = PAGE;
+  const card = (entry) => `<article class="card dictionary-entry">
       <div class="term-category">${esc(entry.category)}</div><h2>${esc(entry.term)}</h2>
       <p>${esc(entry.definition)}</p>${entry.example ? `<p class="term-example"><b>Example</b> ${esc(entry.example)}</p>` : ''}
       ${entry.aliases.length ? `<p class="meta">Also called: ${entry.aliases.map(esc).join(', ')}</p>` : ''}
-      ${entry.source ? `<a class="dictionary-source" href="${esc(entry.source)}" target="_blank" rel="noopener">Official documentation ↗</a>` : ''}</article>`).join('') : '<div class="empty"><b>No matching terms</b>Try a shorter term or an abbreviation, such as DNS.</div>';
+      ${entry.source ? `<a class="dictionary-source" href="${esc(entry.source)}" target="_blank" rel="noopener">Source ↗</a>` : ''}</article>`;
+  const draw = () => {
+    const q = input.value.trim().toLowerCase();
+    // Name and alias matches first, then matches inside definitions.
+    const named = (e) => [e.term, ...e.aliases].some((a) => a.toLowerCase().includes(q));
+    const results = searchGlossary(input.value).filter((e) => !subject.value || e.category === subject.value)
+      .sort((a, b) => (q ? named(b) - named(a) : 0));
+    $('#dictionary-status').textContent = `${plural(results.length, 'term')}${q ? ' found' : ' to explore'}`;
+    $('#dictionary-results').innerHTML = results.length
+      ? results.slice(0, shown).map(card).join('') + (results.length > shown ? `<button class="btn secondary" id="dictionary-more">Show more (${results.length - shown} left)</button>` : '')
+      : '<div class="empty"><b>No matching terms</b>Try a shorter term or an abbreviation, such as DNS.</div>';
+    $('#dictionary-more')?.addEventListener('click', () => { shown += PAGE; draw(); });
   };
-  input.addEventListener('input', draw); draw();
+  subject.addEventListener('change', () => { shown = PAGE; draw(); });
+  input.addEventListener('input', () => { shown = PAGE; draw(); });
+  draw();
 }
 
 // ---------- Settings ----------

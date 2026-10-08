@@ -74,8 +74,10 @@ Say what you skipped in your report.
 
 ## Aliases: make sure the word in the text actually matches
 
-Matching is case-insensitive and whole-word, longest phrase first. Exception: **short all-caps acronyms
-(2–7 characters) match exact case only**, so "REST" links but "rest" doesn't.
+- Matching is whole-word, longest phrase first.
+- **Acronyms (2–7 capitals, e.g. `DAC`, `REST`) match exact case only**, so "PA" (public address) and "Pa"
+  (pascal) can both exist.
+- Everything else is case-insensitive.
 
 Add an alias for every form the lessons use:
 - **plurals**: "filters", "capacitors"
@@ -83,12 +85,22 @@ Add an alias for every form the lessons use:
 - **acronym ↔ expansion**: "ADC" and "analogue-to-digital converter"
 - **common short forms**: "op-amp", "op amp", "operational amplifier"
 
-**Ambiguity.** One word maps to one entry across the whole app. When a word means different things in different
-subjects ("gate", "filter", "key", "voice", "bus", "transformer", "table"):
-- don't use the bare word as an alias;
-- use precise multi-word terms instead: "logic gate", "gate signal", "noise gate", "audio transformer".
+**Scope (see `glossary-rules.js`).** Short aliases mean different things in different subjects, so a module term's
+short aliases link **only inside its own subject**:
+- acronyms;
+- anything of 3 characters or fewer;
+- anything containing a symbol or digit (`I²S`, `m/s`, `dB`).
 
-Never alias an ordinary English word ("tries", "set", "note", "rest", "chain") to a specialised term.
+So "DAC" can mean digital-to-analogue converter in Synth Building and discretionary access control in
+Security. **Don't drop an acronym** because another subject uses it differently. Inside one subject, an alias
+still maps to one entry.
+
+**Longer words and phrases link app-wide.** For them:
+- **Ambiguity.** When a word means different things in different subjects ("gate", "filter", "key", "voice",
+  "bus", "transformer", "table", "flash", "bounce"), don't use the bare word as an alias. Use precise multi-word
+  terms instead: "logic gate", "gate signal", "noise gate", "audio transformer", "switch bounce".
+- Never alias an ordinary English word ("tries", "set", "note", "rest", "chain", "atomic", "poll") to a
+  specialised term.
 
 ## Writing a definition
 
@@ -102,7 +114,7 @@ Never alias an ordinary English word ("tries", "set", "note", "rest", "chain") t
 
 ## Clashes between modules
 
-Ids, terms and aliases must be unique app-wide.
+Ids must be unique app-wide; aliases must be unique within their scope (see above).
 
 **Before adding a term, search for it**, and if it already exists, reuse it. It links everywhere automatically,
 so don't duplicate it:

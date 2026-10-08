@@ -1,41 +1,56 @@
 import { glossary as core } from './glossary-data.js';
 import moduleTerms from './glossary-terms.js';
+import { aliasKey, isScoped } from './glossary-rules.js';
 // Core terms plus the verified per-module terms the build collects from content/**/glossary.json.
 export const glossary = [...core, ...moduleTerms];
 
 const esc = (text) => String(text).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const regexEscape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const byId = new Map();
-const aliases = new Map();
+const global = new Map();          // alias key -> { entry }
+const bySubject = new Map();       // subject id -> Map(alias key -> { entry })
 for (const entry of glossary) {
   if (!/^[a-z0-9-]+$/.test(entry.id) || byId.has(entry.id) || !entry.term || !entry.definition || !entry.category) throw new Error('Invalid glossary entry: ' + entry.id);
   if (entry.source && !/^https:\/\//.test(entry.source)) throw new Error('Invalid glossary source: ' + entry.id);
   byId.set(entry.id, entry);
   for (const alias of [entry.term, ...entry.aliases]) {
-    const key = alias.toLowerCase();
-    if (aliases.has(key) && aliases.get(key).entry.id !== entry.id) throw new Error('Ambiguous glossary alias: ' + alias);
-    aliases.set(key, { entry, alias, exactCase: /^[A-Z][A-Z0-9/+.-]{1,6}s?$/.test(alias) });
+    const map = isScoped(entry, alias) ? (bySubject.get(entry.subject) ?? bySubject.set(entry.subject, new Map()).get(entry.subject)) : global;
+    const key = aliasKey(alias);
+    if (map.has(key) && map.get(key).entry.id !== entry.id) throw new Error('Ambiguous glossary alias: ' + alias);
+    map.set(key, { entry, alias });
   }
 }
-const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${[...aliases.keys()].sort((a,b)=>b.length-a.length).map(regexEscape).join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
+// One matcher per subject: every app-wide alias plus that subject's scoped ones, longest first.
+const patterns = new Map();
+const patternFor = (subject = '') => {
+  if (!patterns.has(subject)) {
+    const words = [...new Set([...global.values(), ...(bySubject.get(subject)?.values() ?? [])].map((m) => m.alias.toLowerCase()))];
+    patterns.set(subject, new RegExp(`(?<![\\p{L}\\p{N}_])(?:${words.sort((a,b)=>b.length-a.length).map(regexEscape).join('|')})(?![\\p{L}\\p{N}_])`, 'giu'));
+  }
+  return patterns.get(subject);
+};
 export const getTerm = (id) => byId.get(id);
-export function exactTerm(text) {
-  const match = aliases.get(text.toLowerCase());
-  return match && (!match.exactCase || match.alias === text) ? match.entry : null;
+export function exactTerm(text, subject = '') {
+  const scoped = bySubject.get(subject);
+  for (const key of ['=' + text, text.toLowerCase()]) {
+    const match = scoped?.get(key) ?? global.get(key);
+    if (match) return match.entry;
+  }
+  return null;
 }
 const termButton = (entry, label) => `<button type="button" class="technical-term" data-term="${entry.id}" aria-haspopup="dialog" aria-expanded="false" aria-controls="term-popover" aria-label="Define ${esc(entry.term)}">${label}</button>`;
 
 // Called only on escaped, known-tag inline HTML from our Markdown renderer.
 // Protected tags keep URLs, existing controls and executable examples intact.
 // With a `seen` set, each term is linked only the first time it appears.
-export function linkTerms(html, { interactive = true, terms = true, seen = null } = {}) {
+export function linkTerms(html, { interactive = true, terms = true, seen = null, subject = '' } = {}) {
   if (!interactive || !terms) return html;
   const first = (entry) => !seen || (!seen.has(entry.id) && seen.add(entry.id));
   let protectedDepth = 0;
   const parts = html.split(/(<[^>]*>)/g);
   return parts.map((part, index) => {
     if (!protectedDepth && part === '<code>' && parts[index+2] === '</code>') {
-      const entry = exactTerm(parts[index+1]);
+      const entry = exactTerm(parts[index+1], subject);
       if (entry && first(entry)) {
         const label = `<code>${parts[index+1]}</code>`;
         parts[index+1] = ''; parts[index+2] = '';
@@ -48,8 +63,8 @@ export function linkTerms(html, { interactive = true, terms = true, seen = null 
       return part;
     }
     if (protectedDepth) return part;
-    return part.replace(pattern, (match) => {
-      const entry = exactTerm(match);
+    return part.replace(patternFor(subject), (match) => {
+      const entry = exactTerm(match, subject);
       return entry && first(entry) ? termButton(entry, match) : match;
     });
   }).join('');

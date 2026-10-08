@@ -80,6 +80,9 @@ The same symbol appearing in several blocks is defined in **each** block: every 
   first and the code after it.
 - Keep each equation line within **44 characters** in lessons and **40** in questions. Split long derivations over
   several lines (all of them come before `where`).
+- **Never use an English word as a symbol** just to get past the checker. Lines like "to: …", "peak: …",
+  "null: …" or "cardioid: …" are not allowed. Use proper symbols (`L_peak`, `θ_null`, `t_min`) or split the line
+  (`t_min ≈ 127 ms` and `t_max ≈ 137 ms` instead of "(10 to 20) ms"). The verifier rejects word-symbols.
 - Numbers aren't symbols, so `343`, `1e-3` and `0x1F` need no definitions. Quoted text such as `hash("key")` is
   treated as literal and is skipped too.
 

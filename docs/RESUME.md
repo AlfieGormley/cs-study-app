@@ -1,3 +1,24 @@
+# ACTIVE: formula and glossary retrofit (started 8 October 2026)
+
+The user asked for three things:
+1. Glossary coverage: "too many is better than too little".
+2. A clearer quiz answer reveal: done in commit 7ece17f.
+3. Every formula symbol explained, everywhere.
+
+Tooling is done: formula blocks, per-module glossary.json, the skills in .claude/skills, scripts/lint-formulas.mjs
+and scripts/glossary-coverage.mjs.
+
+The content sweep runs per module:
+- an author sub-agent briefed with docs/sweep-brief.md;
+- then an independent verifier briefed with docs/sweep-verify-brief.md, which re-stamps.
+
+Pilot: the six synth modules. Then the other 70.
+
+A module is done when `node scripts/build.mjs --check <dir>` passes and its verification.json has a "revisions"
+entry with scope "formula + glossary retrofit".
+
+---
+
 # Content audit complete — 5 October 2026
 
 The user resumed after the second pause, and the current-corpus review and final integration are complete. Older pause and active allocations below are historical and superseded.

@@ -11,6 +11,7 @@ import { compileCatalogue } from './diagram-compiler.mjs';
 import { checkVerification, lessonHash, readGlossary } from './verification.mjs';
 import { checkFormula } from '../formula.js';
 import { glossary as coreGlossary } from '../glossary-data.js';
+import { aliasKey, isScoped } from '../glossary-rules.js';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const contentDir = path.join(root, 'content');
@@ -179,7 +180,7 @@ for (const subjectName of dirs(contentDir)) {
     }
 
     try {
-      for (const t of readGlossary(modulePath)) moduleTerms.push({ t, file: path.join(modulePath, 'glossary.json'), category: subject.title, key: `${subject.id}/${mod.id}` });
+      for (const t of readGlossary(modulePath)) moduleTerms.push({ t, file: path.join(modulePath, 'glossary.json'), category: subject.title, subjectId: subject.id, key: `${subject.id}/${mod.id}` });
     } catch (e) {
       err(path.join(modulePath, 'glossary.json'), `invalid JSON (${e.message})`);
     }
@@ -199,10 +200,14 @@ const glossaryTerms = [];
 const glossaryClashes = [];
 {
   const ids = new Map(coreGlossary.map((e) => [e.id, 'glossary-data.js']));
-  const names = new Map(coreGlossary.flatMap((e) => [e.term, ...e.aliases].map((a) => [a.toLowerCase(), `${e.id} (glossary-data.js)`])));
+  // Same namespaces as glossary.js: app-wide aliases, plus per-subject ones for short aliases (glossary-rules.js).
+  const nameKey = (t, a) => (isScoped(t, a) ? t.subject + ':' : '') + aliasKey(a);
+  const names = new Map(coreGlossary.flatMap((e) => [e.term, ...e.aliases].map((a) => [aliasKey(a), `${e.id} (glossary-data.js)`])));
+  const taken = (t, a) => names.get(nameKey(t, a)) ?? (isScoped(t, a) ? names.get(aliasKey(a)) : undefined);
   const order = new Map(index.subjects.flatMap((sub, si) => sub.modules.map((m, mi) => [`${sub.id}/${m.id}`, si * 1000 + mi])));
   moduleTerms.sort((a, b) => (order.get(a.key) ?? 1e9) - (order.get(b.key) ?? 1e9));
-  for (const { t, file, category } of moduleTerms) {
+  for (const { t: raw, file, category, subjectId } of moduleTerms) {
+    const t = raw && { ...raw, subject: subjectId };
     const at = t?.id ?? '(no id)';
     const rel = path.relative(root, file);
     if (!t || !/^[a-z0-9-]+$/.test(t.id ?? '')) { err(file, `glossary term ${at}: id must be lowercase-kebab-case`); continue; }
@@ -211,16 +216,16 @@ const glossaryClashes = [];
     if (t.source !== undefined && !/^https:\/\/\S+$/.test(t.source)) err(file, `glossary term ${at}: source must be an https URL`);
     if (typeof t.term !== 'string') continue;
     if (ids.has(t.id)) { glossaryClashes.push(`${rel}: skipped ${t.id} (id already used in ${ids.get(t.id)})`); continue; }
-    if (names.has(t.term.toLowerCase())) { glossaryClashes.push(`${rel}: skipped ${t.id} ("${t.term}" is already ${names.get(t.term.toLowerCase())})`); continue; }
+    if (taken(t, t.term)) { glossaryClashes.push(`${rel}: skipped ${t.id} ("${t.term}" is already ${taken(t, t.term)})`); continue; }
     ids.set(t.id, rel);
     const aliases = [];
     for (const a of [t.term, ...(t.aliases ?? [])]) {
-      const key = String(a).toLowerCase();
-      if (names.has(key)) { if (names.get(key) !== `${t.id} (${rel})`) glossaryClashes.push(`${rel}: dropped alias "${a}" of ${t.id} (already ${names.get(key)})`); continue; }
-      names.set(key, `${t.id} (${rel})`);
+      const owner = taken(t, a);
+      if (owner) { if (owner !== `${t.id} (${rel})`) glossaryClashes.push(`${rel}: dropped alias "${a}" of ${t.id} (already ${owner})`); continue; }
+      names.set(nameKey(t, a), `${t.id} (${rel})`);
       if (a !== t.term) aliases.push(a);
     }
-    glossaryTerms.push({ id: t.id, term: t.term, category: t.category || category, definition: t.definition,
+    glossaryTerms.push({ id: t.id, term: t.term, category: t.category || category, subject: t.subject, definition: t.definition,
       aliases, ...(t.example ? { example: t.example } : {}), ...(t.source ? { source: t.source } : {}) });
   }
 }
@@ -279,7 +284,7 @@ for (const [rel, obj] of Object.entries(outputs)) {
 }
 
 // App shell + data files for the service worker to precache.
-const shell = ['./', 'index.html', 'styles.css', 'app.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
+const shell = ['./', 'index.html', 'styles.css', 'app.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-rules.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 for (const f of shell.slice(1)) {
   const p = path.join(root, f);

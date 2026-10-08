@@ -4,7 +4,8 @@ Part of the mandatory procedure in `docs/CONTENT_PROCESS.md` ("Editing existing 
 
 Project: /Users/alfiegormley/Github/cs-study-app. A personal iPhone study app; the reader is a beginner aiming for
 expert, reading on a phone with nobody to ask. Your module directory is given in your task. **Edit only files
-inside it.** Other agents are working on other modules at the same time.
+inside it.** One exception: if you change a fenced block that has an entry in `content/diagram-overrides.json`,
+update that entry's `source` to match exactly. Other agents are working on other modules at the same time.
 
 Read first, and follow exactly:
 1. `.claude/skills/writing-formulas/SKILL.md`

@@ -8,6 +8,8 @@ summary: Using DFS structure to detect cycles, order dependencies with Kahn's al
 
 Lesson 2 used DFS just to visit things. Its real power is the **structure** it leaves behind: which vertices are still "open" on the stack, and the order in which vertices finish. That structure answers questions such as "is there a circular dependency?", "in what order should I build these modules?" and "which pages all link to each other?".
 
+Throughout this lesson, n is the number of vertices and m the number of edges, and O(…) is Big O notation: how the running time grows with the graph's size, ignoring constant factors. Every algorithm here runs in O(n + m), the same as one traversal.
+
 ## The three colours
 
 Give every vertex a colour during DFS:
@@ -92,7 +94,18 @@ def has_cycle_undirected(n, adj):
     return False
 ```
 
-Two shortcuts: a connected undirected graph is acyclic exactly when m = n − 1 (it is a tree), and Union-Find (lesson 6) detects a cycle the moment an edge joins two vertices already in the same set. The code is presented for simple undirected graphs. In a recursive multigraph DFS, distinguish the particular parent edge by *edge id*: ignoring every edge to the parent can hide a genuine two-edge cycle.
+Two shortcuts. First, a connected undirected graph with no cycle is a tree, and a tree's edge count is fixed by its vertex count:
+
+```formula
+m = n − 1
+m = 10 − 1 = 9
+where
+n: the number of vertices in a connected undirected graph; 10 in the example
+m: the number of edges
+In words: a connected graph is acyclic exactly when it has one edge fewer than it has vertices; any extra edge must close a cycle.
+```
+
+So a connected graph with 10 vertices and 10 edges must contain a cycle. The test needs the graph to be connected: a triangle plus one separate, isolated vertex has 4 vertices and 3 edges, one fewer than the vertex count, yet it contains a cycle. Second, Union-Find (lesson 6) detects a cycle the moment an edge joins two vertices already in the same set. The code is presented for simple undirected graphs. In a recursive multigraph DFS, distinguish the particular parent edge by *edge id*: ignoring every edge to the parent can hide a genuine two-edge cycle.
 
 ## Topological sort
 
@@ -136,11 +149,11 @@ def kahn(n, adj):
 
 On the example: in-degrees A0, B0, C2, D1, E2. The queue starts [A, B]. Output A (C→1), B (C→0, D→0), C (E→1), D (E→0), E. Order: **A, B, C, D, E**.
 
-If a cycle exists, its vertices never reach in-degree 0, so the output is short. That makes Kahn's a cycle detector for free. Swap the queue for a min-heap to get the lexicographically smallest order.
+If a cycle exists, its vertices never reach in-degree 0, so the output is short. That makes Kahn's a cycle detector for free. Replace the queue with a min-heap to get the lexicographically smallest order.
 
 ### DFS-based
 
-Run DFS and record each vertex when it **finishes**. A vertex finishes only after everything it points to has finished, so reversing the finish order puts every vertex before its successors.
+Run DFS and record each vertex when it **finishes**. A vertex finishes only after everything it points to has finished, so reversing the finish order puts every vertex before every vertex it has an edge to.
 
 ```python
 def topo_dfs(n, adj):
@@ -161,7 +174,7 @@ def topo_dfs(n, adj):
 
 On the example (starting from A): finish order E, C, A, D, B. Reversed: **B, D, A, C, E**. Different from Kahn's, and equally valid. (This version assumes a DAG; combine it with the grey check to detect cycles.)
 
-Both run in **O(n + m)**.
+Both run in **O(n + m)** for n vertices and m edges.
 
 | | Kahn's | DFS-based |
 |---|---|---|
@@ -171,7 +184,7 @@ Both run in **O(n + m)**.
 | Recursion | None | Deep on long chains |
 
 > [!example] Where it is used
-> Make, Bazel and Gradle order build steps topologically. Package managers order installs. Acyclic spreadsheet formulas can be recalculated in dependency order; circular formulas need error handling or an explicitly supported iterative calculation mode. Python ships `graphlib.TopologicalSorter`, a Kahn-style sorter whose `get_ready()` returns every task that can currently run in parallel.
+> GNU Make, Bazel and Gradle order build steps topologically. Package managers order installs. Acyclic spreadsheet formulas can be recalculated in dependency order; circular formulas need error handling or an explicitly supported iterative calculation mode. Python ships `graphlib.TopologicalSorter`, a Kahn-style sorter whose `get_ready()` returns every task that can currently run in parallel.
 
 ## Strongly connected components
 
@@ -197,11 +210,26 @@ Collapse each SCC to a single vertex and discard internal edges; you get the **c
 2. Reverse every edge.
 3. DFS the reversed graph, taking start vertices in **decreasing** finish time. Each tree found is one SCC.
 
-Why it works: the vertex that finishes last lies in a "source" SCC of the condensation. In the reversed graph that SCC becomes a sink, so a DFS from it cannot leak into other components. Two passes, **O(n + m)**, and simple to get right.
+Why it works: the vertex that finishes last lies in a "source" SCC of the condensation. In the reversed graph that SCC becomes a sink, so a DFS from it cannot leak into other components. Two passes, each **O(n + m)** for n vertices and m edges, and simple to get right.
 
 ### Tarjan's algorithm
 
-One DFS pass. Each vertex gets an index `idx` (discovery order) and a `low` value: the smallest index reachable from its subtree using tree edges plus at most one edge to a vertex still on the SCC stack. This separate stack can include vertices whose recursive calls have already returned; it is not the grey recursion stack. Vertices are pushed onto a separate stack as discovered. When a vertex finishes with `low[u] == idx[u]`, it is the root of an SCC: pop the stack down to u.
+One DFS pass. Each vertex gets an index `idx` (discovery order) and a `low` value: the smallest index reachable from its subtree using tree edges plus at most one edge to a vertex still on the SCC stack. This separate stack can include vertices whose recursive calls have already returned; it is not the grey recursion stack. Vertices are pushed onto a separate stack as discovered. When a vertex finishes with `low[u] == idx[u]`, it is the root of an SCC: pop the stack down to u. In symbols, the code updates `low` like this:
+
+```formula
+low(u) = min(idx(u), low(c), idx(w))
+where
+u: the vertex DFS is currently finishing
+idx(u): u's discovery number: 0 for the first vertex DFS reaches, 1 for the next, and so on
+c: any child of u in the DFS tree (reached by a tree edge)
+low(c): the low value already computed for that child
+w: any vertex still on the SCC stack that u has a direct edge to
+low(u): the smallest discovery number u's subtree can reach this way
+min(…): the smallest of the values listed, taken over every child c and every such w
+In words: u's low value is the earliest-discovered vertex that u or its descendants can jump back to while staying inside an unfinished component.
+```
+
+If even that earliest reachable vertex is u itself (low(u) = idx(u)), nothing in u's subtree escapes to an older open vertex, so u and everything above it on the stack form one SCC.
 
 ```python
 def tarjan(n, adj):
@@ -239,7 +267,7 @@ def tarjan(n, adj):
     return sccs
 ```
 
-On the example it returns [5, 4, 3], then [2, 1, 0], then [7, 6]. Tarjan emits SCCs in **reverse topological order** of the condensation: sinks first. Also O(n + m), one pass, no reversed graph, but the `on_stack` check is easy to get wrong.
+On the example it returns [5, 4, 3], then [2, 1, 0], then [7, 6]. Tarjan emits SCCs in **reverse topological order** of the condensation: sinks first. Also O(n + m) for n vertices and m edges, one pass, no reversed graph, but the `on_stack` check is easy to get wrong.
 
 > [!tip] Uses of SCCs
 > **2-SAT** is solved by building an implication graph and checking that no variable sits in the same SCC as its negation. Compilers find mutually recursive functions. Garbage collectors and dependency analysers find reference cycles.
@@ -269,7 +297,19 @@ def is_bipartite(n, adj):
     return True
 ```
 
-BFS colours by layer parity: even layers 0, odd layers 1. A clash means an edge inside one layer, or between two layers of equal parity, which closes an odd cycle. O(n + m), and the outer loop handles disconnected graphs.
+BFS colours by layer parity (whether the layer number is even or odd):
+
+```formula
+colour(v) = dist(v) mod 2
+where
+v: any vertex
+dist(v): v's BFS distance from the start of its component, in edges
+mod 2: the remainder after dividing by 2: 0 for even, 1 for odd
+colour(v): the side v is put on, 0 or 1
+In words: even layers go on one side and odd layers on the other.
+```
+
+For example, a vertex 3 edges from the start gets colour 1. A clash means an edge inside one layer, or between two layers of equal parity, which closes an odd cycle. The check costs O(n + m) for n vertices and m edges, and the outer loop handles disconnected graphs.
 
 ## Pitfalls
 

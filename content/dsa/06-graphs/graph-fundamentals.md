@@ -6,7 +6,25 @@ minutes: 10
 summary: Vertices, edges, direction and weight; adjacency lists, matrices and edge lists; and the implicit graphs hiding in grids and puzzles.
 ---
 
-A **graph** is a set of things and the connections between them. The things are **vertices** (or nodes) and the connections are **edges**. Written formally, a graph is G = (V, E), and by convention n = |V| and m = |E|.
+A **graph** is a set of things and the connections between them. The things are **vertices** (or nodes) and the connections are **edges**. Textbooks write a graph as a pair of two sets, and name the two sizes that every running time in this module is measured in:
+
+```formula
+G = (V, E)
+n = |V|
+m = |E|
+where
+G: the graph
+V: the set of its vertices (the things)
+E: the set of its edges (the connections), each joining two vertices
+|V|: the size of the set V: how many vertices there are
+|E|: the size of the set E: how many edges there are
+n: shorthand for the number of vertices
+m: shorthand for the number of edges
+( , ): a pair: G is made of V and E together
+In words: a graph is its vertices plus its edges; n counts the vertices and m counts the edges.
+```
+
+For example, a map of four towns joined by five roads has n = 4 and m = 5. Every cost in this module, such as O(n + m), is stated in terms of these two numbers.
 
 Graphs are everywhere once you look: road networks, social networks, package dependencies, web links, flight routes, the states of a Rubik's cube. A huge number of problems become easy once you notice "this is a graph" and reach for a standard algorithm.
 
@@ -26,7 +44,22 @@ undirected        directed
 
 In the undirected graph, every vertex can reach every other. In the directed one, A reaches B, D and C, and C reaches A, so here everything is mutually reachable too, but only because the arrows happen to form a loop.
 
-The **degree** counts incident edge ends; a self-loop contributes two. In a digraph we split it into **in-degree** (arrows in) and **out-degree** (arrows out). In an undirected graph the degrees sum to 2m, because every edge has two ends (the *handshake lemma*).
+The **degree** counts incident edge ends; a graph self-loop (an edge from a vertex back to itself) contributes two. In a digraph we split it into **in-degree** (arrows in) and **out-degree** (arrows out).
+
+Adding up every vertex's degree counts each edge twice, once from each end. This is the *handshake lemma*, and it lets you get the edge count from the degrees (or the other way round):
+
+```formula
+Σ_v deg(v) = 2 × m
+m = (3 + 3 + 2 + 2 + 2) / 2 = 6
+where
+v: any one vertex of the graph
+deg(v): the degree of v: how many edge ends touch it
+Σ_v: add up the following quantity over every vertex v
+m: the number of edges in the graph
+In words: in an undirected graph the degrees add up to exactly twice the number of edges, because every edge has two ends.
+```
+
+The worked line is a five-vertex graph with degrees 3, 3, 2, 2 and 2: the sum is 12, so it has 6 edges. A consequence: the degree sum is always even, so no graph has degrees 3, 2, 2. In a directed graph the version is different: the in-degrees add up to m, and so do the out-degrees, because each arrow has one tail and one head.
 
 ### Weighted or unweighted
 
@@ -36,13 +69,40 @@ A **weighted** graph attaches a number to each edge: distance in km, latency in 
 
 - A **walk** follows a sequence of edges and may repeat vertices or edges. A **simple path** repeats no vertex; terminology for “path” varies, so this module states when repetitions matter.
 - A **cycle** is a nonempty closed walk with no repeated vertices except its start/end and no repeated edges. In a simple undirected graph it has at least three edges: going along one edge and immediately back is not a cycle. A graph with no cycles is **acyclic**. A directed acyclic graph is a **DAG**, useful for prerequisite relations without circular dependencies.
-- An undirected graph is **connected** if every vertex can reach every other. A connected acyclic undirected graph is a **tree**, and it always has exactly n − 1 edges.
+- An undirected graph is **connected** if every vertex can reach every other. A connected acyclic undirected graph is a **tree**, and it always has exactly one edge fewer than it has vertices: a tree on 10 vertices has 9 edges.
 
 ### Dense or sparse
 
-A simple undirected graph has at most n(n − 1)/2 edges; a simple digraph at most n(n − 1). A graph is **dense** if m is close to n² and **sparse** if m is closer to n.
+How many edges can a graph have at most? In a **simple** graph (no graph self-loops, no two edges joining the same pair), each edge is a different pair of distinct vertices, so counting pairs gives the ceiling:
 
-For a hypothetical simple undirected graph with one billion vertices and average degree 200, the handshake lemma gives 10¹¹ edges, versus a maximum of about 5 × 10¹⁷. This is sparse.
+```formula
+m_max = n × (n − 1) / 2
+m_max = n × (n − 1)
+m_max = 5 × 4 / 2 = 10
+where
+n: the number of vertices
+m_max: the largest possible number of edges; the first line is for a simple undirected graph, the second for a simple directed graph
+In words: in an undirected graph every unordered pair of vertices can have at most one edge; in a directed graph each pair can have one arrow each way, which doubles the count.
+```
+
+The worked line is a five-vertex undirected graph: at most 10 edges (20 if directed). Both maxima grow like n², n multiplied by itself. A graph is **dense** if its edge count m is close to n² and **sparse** if m is closer to n.
+
+For a hypothetical simple undirected graph with one billion vertices and an average degree of 200, the handshake lemma gives the edge count, which is tiny next to the maximum:
+
+```formula
+m = n × d_avg / 2
+m = 10^9 × 200 / 2 = 10^11
+m_max = 10^9 × (10^9 − 1) / 2 ≈ 5 × 10^17
+where
+n: the number of vertices; 10^9 (one billion) here
+d_avg: the average degree of a vertex; 200 here
+m: the number of edges
+m_max: the largest possible number of edges in a simple undirected graph with n vertices
+≈: approximately equal to
+In words: a billion vertices with 200 edges each has 100 billion edges, only about one in five million of the possible pairs.
+```
+
+This is sparse.
 
 > [!note] Content gap
 > Population-wide claims about typical road or social graph degrees are omitted because no specified dataset and measurement support them here.
@@ -77,15 +137,29 @@ def build_adj(vertices, edges,
 
 Pass every vertex explicitly, including isolates and directed sinks; each edge endpoint must belong to that set. Complexity assumes constant-size labels and expected O(1) dictionary/set operations. For a weighted graph, store pairs: `adj[u].append((v, w))`.
 
+The memory is one slot per vertex plus one list entry per edge end:
+
+```formula
+S = n + 2 × m
+S = 4 + 2 × 4 = 12
+where
+S: the number of stored items (dictionary keys plus list entries) in an undirected adjacency list
+n: the number of vertices
+m: the number of edges; each undirected edge is stored in both endpoints' lists
+In words: the storage grows with the vertex count plus twice the edge count; for a directed graph it is n + m.
+```
+
+The example above has 4 vertices and 4 edges: 4 keys plus 2 + 2 + 3 + 1 = 8 list entries, 12 in all. In the costs below, n is the number of vertices, m the number of edges and deg(u) the degree of vertex u. O(…) is Big O notation: how the cost grows as the graph grows, ignoring constant factors.
+
 - **Space:** O(n + m). Each undirected edge is stored twice, each directed edge once.
 - **Iterate neighbours of u:** O(1 + deg(u)), which is exactly what BFS, DFS and Dijkstra need.
-- **Is there an edge u→v?** O(1 + deg(u)) by scanning. Swap the inner lists for sets to make it O(1) on average.
+- **Is there an edge u→v?** O(1 + deg(u)) by scanning. Replace the inner lists with sets to make it O(1) on average.
 
 This is the default for almost every algorithm in this module.
 
 ## Representation 2: adjacency matrix
 
-For a simple unweighted graph, `M[u][v]` is 1 for an edge and 0 otherwise. For shortest-path weights, use infinity for absence so zero-weight edges remain distinguishable; initialise diagonal distances with the minimum of zero and any self-loop weight. A single cell cannot preserve multiple parallel-edge identities without additional data.
+For a simple unweighted graph, `M[u][v]` is 1 for an edge and 0 otherwise. For shortest-path weights, use infinity for absence so zero-weight edges remain distinguishable; initialise diagonal distances with the minimum of zero and any graph self-loop weight. A single cell cannot preserve multiple parallel-edge identities without additional data.
 
 ```
      0  1  2  3
@@ -95,7 +169,7 @@ For a simple unweighted graph, `M[u][v]` is 1 for an edge and 0 otherwise. For s
  3 [ 0  0  1  0 ]
 ```
 
-An undirected graph gives a symmetric matrix.
+An undirected graph gives a symmetric matrix. The matrix has n rows and n columns, where n is the number of vertices:
 
 - **Space:** O(n²), regardless of how many edges exist.
 - **Edge lookup:** O(1), a single array index.
@@ -106,7 +180,41 @@ An undirected graph gives a symmetric matrix.
 >
 > Content gap: no measured Python-memory footprint or traversal timing is supplied; the packed-array calculation is not a benchmark.
 
-Matrices win for small or dense graphs, for algorithms built around them (Floyd–Warshall), and for linear algebra on graphs: for an unweighted adjacency matrix, the (u, v) entry of A^k counts length-k walks. PageRank instead iterates a normalised transition model with damping and handling for vertices without outgoing edges.
+The two numbers in that warning come from these sums:
+
+```formula
+B_mat = n^2 / 8
+B_mat = (10^6)^2 / 8 B = 1.25 × 10^11 B
+B_csr = 4 × (n + 1) + 4 × 2 × m
+B_csr = (4 × 1000001 + 4 × 10^7) B
+B_csr ≈ 4 MB + 40 MB = 44 MB
+where
+n: the number of vertices; 10^6 (a million) here
+m: the number of undirected edges; 5 × 10^6 here, each stored twice in CSR
+B_mat: bytes for a bit-packed adjacency matrix: one bit per cell, 8 bits per byte
+B_csr: bytes for CSR: an offsets array of n + 1 entries and a neighbours array of 2 × m entries, 4 bytes each
+B: byte, 8 bits
+MB: megabyte, 10^6 bytes
+In words: the matrix grows with the square of the vertex count whatever the edges, while CSR grows with vertices plus edges.
+```
+
+1.25 × 10^11 bytes is about 125 GB (gigabytes, 10^9 bytes each), nearly 3,000 times the CSR figure. The matrix cost does not fall at all if the graph has few edges, which is why it only pays off when the graph is small or dense.
+
+Matrices win for small or dense graphs, for algorithms built around them (Floyd–Warshall), and for linear algebra on graphs. Multiplying an unweighted adjacency matrix by itself counts walks:
+
+```formula
+W_k(u, v) = (A^k)[u][v]
+where
+A: the adjacency matrix: entry [u][v] is 1 if there is an edge u→v, else 0
+k: a walk length, in edges (1, 2, 3, …)
+A^k: A multiplied by itself k times (matrix multiplication)
+u: the start vertex (a row of the matrix)
+v: the end vertex (a column)
+W_k(u, v): the number of different walks of exactly k edges from u to v
+In words: the entry in row u, column v of the k-th power of the adjacency matrix is the number of k-step walks from u to v.
+```
+
+For instance, if 0→1→0 and 0→2→0 are the only two-step round trips from vertex 0, the [0][0] entry of A^2 is 2. PageRank instead iterates a normalised random-surfer model with damping and handling for vertices without outgoing edges.
 
 ## Representation 3: edge list
 
@@ -116,6 +224,8 @@ Just a list of `(u, v)` or `(u, v, w)` tuples.
 edges = [(0, 1, 4), (0, 2, 1), (2, 1, 2)]
 ```
 
+Here m is the number of edges.
+
 - **Space:** O(m) for edges, plus any separately stored vertex set.
 - Requires a full scan for "who are u's neighbours?" (O(m) scan).
 - Perfect when an algorithm processes edges as a whole: **Kruskal's** MST sorts the edges, and **Bellman–Ford** relaxes every edge each round.
@@ -123,6 +233,8 @@ edges = [(0, 1, 4), (0, 2, 1), (2, 1, 2)]
 It is also how graphs usually arrive: a CSV of flights, a table of `follower_id, followee_id` rows. You read the edge list, then build whatever structure the algorithm needs.
 
 ## Comparison
+
+As before, n is the number of vertices, m the number of edges and deg u the degree of vertex u.
 
 | Operation | List | Matrix | Edges |
 |---|---|---|---|
@@ -167,11 +279,26 @@ def neighbours(grid, r, c):
             yield nr, nc
 ```
 
-A wall-free R × C grid has RC vertices and R(C − 1) + C(R − 1) undirected four-neighbour edges. Excluding walls gives at most those counts. Generating neighbours avoids storing predictable edges; precomputing them can still help some repeated workloads.
+You can count a grid's size without building it. Each row has one link fewer than it has cells, and so does each column:
+
+```formula
+n = R × C
+m = R × (C − 1) + C × (R − 1)
+n = 3 × 3 = 9
+m = 3 × 2 + 3 × 2 = 12
+where
+R: the number of rows in the grid
+C: the number of columns
+n: the number of vertices (cells)
+m: the number of undirected edges when you can move up, down, left or right
+In words: a wall-free grid has one vertex per cell, and each row and each column contributes one edge fewer than its length.
+```
+
+The worked lines are the 3 × 3 grid above with its walls removed: 9 cells and 12 edges. Walls only remove vertices and edges, so a grid with walls has at most those counts. Since m is about 2 × n for large grids, grids are sparse. Generating neighbours avoids storing predictable edges; precomputing them can still help some repeated workloads.
 
 ### State spaces
 
-The vertices can be abstract **states**. In a sliding-tile puzzle, a state is a board arrangement and an edge is one legal move. In "word ladder" (turn COLD into WARM one letter at a time), a state is a word and an edge links words differing by one letter. In a lock with four dials, a state is a 4-digit combination with 8 neighbours (each dial up or down).
+The vertices can be abstract **states**. In a sliding-tile puzzle, a state is a board arrangement and an edge is one legal move. In "word ladder" (turn COLD into WARM one letter at a time), a state is a word and an edge links words differing by one letter. In a lock with four dials, a state is a 4-digit code with 8 neighbours (each dial up or down).
 
 State spaces can be astronomically large: the 15-puzzle has about 10¹³ reachable states. Search often generates states as needed; even then exhaustive BFS can be infeasible. BFS, DFS and A* can use a `neighbours(state)` function instead of stored adjacency.
 
@@ -188,12 +315,12 @@ State spaces can be astronomically large: the 15-puzzle has about 10¹³ reachab
 
 - **Forgetting the reverse edge** in an undirected graph: add both `adj[u].append(v)` and `adj[v].append(u)`, or some intended paths may be lost.
 - **Isolated vertices** vanish from an adjacency dict built only from edges. If vertex 7 has no edges, it never appears, and a "count components" loop will undercount. Initialise all n vertices first.
-- **Parallel edges and self-loops.** Real data often contains duplicates. Decide whether they matter (they change degree counts and can break algorithms that assume a simple graph).
+- **Parallel edges and graph self-loops.** Real data often contains duplicates. Decide whether they matter (they change degree counts and can break algorithms that assume a simple graph).
 - **Recursion limits.** Python limits recursion depth (inspect `sys.getrecursionlimit()`); a sufficiently long path can raise `RecursionError`. Prefer iterative versions for large inputs.
 
 ## Key takeaways
-- A graph is G = (V, E); n vertices, m edges. Edges can be directed and/or weighted.
-- Adjacency lists use O(n + m) space and give O(deg u) neighbour iteration: a common choice for sparse graphs.
+- A graph is a set of vertices plus a set of edges; n counts the vertices and m the edges. Edges can be directed and/or weighted.
+- Adjacency lists use O(n + m) space and give O(1 + deg u) neighbour iteration, where deg u is the degree of u: a common choice for sparse graphs.
 - Adjacency matrices use O(n²) space but give O(1) edge lookup: good for small, dense graphs and matrix algorithms.
 - Edge lists suit algorithms that process all edges, such as Kruskal and Bellman–Ford.
 - Many problems use implicit graphs (grids, puzzle states), where neighbours are generated on demand rather than stored.

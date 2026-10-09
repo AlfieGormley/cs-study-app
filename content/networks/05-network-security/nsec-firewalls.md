@@ -8,13 +8,13 @@ summary: Stateless and stateful packet filters, how rule order and connection tr
 
 The previous lesson showed why receiving a packet does not, by itself, establish a trustworthy identity. A **firewall** is the first answer to that: a device or piece of software that sits on a boundary and decides, packet by packet or connection by connection, what is allowed through.
 
-The second answer is to have more boundaries. **Segmentation** splits a network into zones so that a compromise in one zone does not hand over all of them. The third answer, **zero trust**, says that network location alone must not grant implicit trust.
+The second answer is to have more boundaries. **Network segmentation** splits a network into zones so that a compromise in one zone does not hand over all of them. The third answer, **zero trust**, says that network location alone never grants implicit trust.
 
 This lesson works through all three, from the mechanics of a rule table up to architecture.
 
 ## What a firewall decides on
 
-Every firewall matches traffic against a list of **rules**. The more of the packet it understands, the more precise the rules can be:
+Every firewall matches traffic against a list of **firewall rules**. The more of the packet it understands, the more precise the rules can be:
 
 | Type | Looks at | Example rule |
 |---|---|---|
@@ -60,7 +60,7 @@ Swap rules 1 and 3 and internal SSH breaks too, because the broad deny now match
 
 ## Stateless versus stateful
 
-A **stateless** filter judges each packet alone. That causes a problem with replies. When your web server at port 443 answers a client, the reply goes *to* the client's **ephemeral port**, some random number such as 51,812. A stateless filter needs a rule covering the intended return traffic. For general public clients this often includes a range of destination ephemeral ports; source ports, addresses and protocol flags may further constrain a rule, but do not prove connection state.
+A **stateless** filter judges each packet alone. That causes a problem with replies. When your web server at port 443 answers a client, the reply goes *to* the client's **ephemeral port**, some random number such as 51,812. A stateless filter needs a rule covering the intended return traffic. For clients anywhere on the internet this often includes a range of destination ephemeral ports; source ports, addresses and protocol flags may further constrain a rule, but do not prove connection state.
 
 A **stateful** firewall keeps a **connection table**. When it sees an allowed outbound SYN, it records the flow. Connection tracking supplies state that filtering rules can match. A known flow is accepted only when the applicable policy permits it:
 
@@ -87,7 +87,7 @@ table inet filter {
 }
 ```
 
-This is an input-chain fragment, not a complete deployment ruleset: it omits IPv6 neighbour discovery, router advertisements, other required ICMP handling, and forwarding/egress policy. Blindly applying it can break connectivity. UDP and ICMP tracking uses protocol-specific tuples and timeouts; a UDP reply does not establish application-level authentication.
+This is an input-chain fragment, not a complete deployment ruleset: it omits IPv6 neighbour discovery, router advertisements, other required ICMP handling, and forwarding and outbound policy. Blindly applying it can break connectivity. UDP and ICMP tracking uses protocol-specific tuples and timeouts; a UDP reply does not establish application-level authentication.
 
 ### The cost of state
 
@@ -106,7 +106,7 @@ AWS is a good case study because it gives you both kinds side by side:
 
 Because NACLs are stateless, you must explicitly allow return traffic to ephemeral ports (AWS suggests 1024 to 65535). Forgetting the outbound ephemeral rule is a classic cause of "the security group is open but nothing works".
 
-Security groups can also reference *other security groups*: "allow port 5432 from members of `sg-web`". Within supported AWS connectivity arrangements, the reference resolves to associated interfaces' private addresses and follows membership changes. It is a network policy reference, not cryptographic proof of application identity; traffic through a middlebox can require different rules.
+Security groups can also reference *other security groups*: "allow port 5432 from members of `sg-web`". Within supported AWS connectivity arrangements, the reference resolves to associated interfaces' private addresses and updates automatically as interfaces join or leave the group. It is a network policy reference, not cryptographic proof of application identity; traffic through a middlebox can require different rules.
 
 ## Beyond ports: application-layer firewalls
 

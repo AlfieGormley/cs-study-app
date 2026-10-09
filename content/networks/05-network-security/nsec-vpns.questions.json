@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Encapsulation alone = put packet A inside packet B. That is a tunnel.\n2. Add cryptography:\n   - authenticate peers (certs, keys),\n   - encrypt (confidentiality),\n   - authenticate packets and enforce replay state (a MAC alone does not prevent replay).\n3. That combination is a VPN. GRE inside IPsec is a common pairing: GRE for the tunnel interface, IPsec for the security.",
+    "workedExample": "1. Encapsulation alone = put packet A inside packet B. That is a tunnel.\n2. Add cryptography:\n   - authenticate peers (certs, keys),\n   - encrypt (confidentiality),\n   - authenticate packets and enforce replay state (a message authentication code alone does not prevent replay).\n3. That combination is a VPN. GRE inside IPsec is a common pairing: GRE for the tunnel interface, IPsec for the security.",
     "link": {
       "title": "RFC 4301: Security Architecture for IP",
       "url": "https://www.rfc-editor.org/rfc/rfc4301"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The underlay's 1,500 bytes must hold:\n\n```\nouter IPv4      20\nUDP              8\nVXLAN            8\ninner Ethernet  14\ninner IP packet  ?\n```\n\n```\n1500 - 20 - 8 - 8 - 14 = 1450\n```\n\nThe outer Ethernet header (another 14) is on the wire but not counted against the IP MTU. Alternatively, raise the underlay MTU to at least 1,550 (or use jumbo frames) and keep 1,500 inside.",
+    "workedExample": "The underlay's 1,500 bytes must hold:\n\n```\nouter IPv4      20\nUDP              8\nVXLAN            8\ninner Ethernet  14\ninner IP packet  ?\n```\n\n```formula\nM_in = M_link − H_total\nH_total = 20 + 8 + 8 + 14 = 50 B\nM_in = 1500 B − 50 B = 1450 B\nwhere\nM_in: the largest inner IP packet that fits without fragmentation, in bytes\nM_link: the underlay's maximum transmission unit (MTU), here 1,500 bytes\nH_total: the encapsulation overhead: outer IPv4 (20), UDP (8), VXLAN (8) and inner Ethernet (14)\nB: bytes\nIn words: every header VXLAN adds comes out of the 1,500 bytes, leaving 1,450 for the inner IP packet.\n```\n\nThe outer Ethernet header (another 14) is on the wire but not counted against the IP MTU. Alternatively, raise the underlay MTU to at least 1,550 (or use jumbo frames) and keep 1,500 inside.",
     "link": {
       "title": "RFC 7348: VXLAN",
       "url": "https://www.rfc-editor.org/rfc/rfc7348"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Before protecting traffic, the gateways need to agree who they are and which keys to use: **IKEv2** does this, establishing an IKE SA and negotiating an ESP Child-SA pair.\n2. Each SA has an SPI, keys and algorithms.\n3. **ESP** then encrypts and MACs every packet, putting the SPI and a sequence number in its header so the receiver finds the right SA.\n4. IKE re-runs periodically to rekey.",
+    "workedExample": "1. Before protecting traffic, the VPN gateways need to agree who they are and which keys to use: **IKEv2** does this, establishing an IKE SA and negotiating an ESP Child-SA pair.\n2. Each SA has an SPI, keys and algorithms.\n3. **ESP** then encrypts and authenticates every packet, putting the SPI and a sequence number in its header so the receiver finds the right SA.\n4. IKE re-runs periodically to rekey.",
     "link": {
       "title": "RFC 4301: Security Architecture for IP",
       "url": "https://www.rfc-editor.org/rfc/rfc4301"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Pattern: small works, large hangs. That points to size.\n2. Hosts send 1,500-byte packets; the tunnel path can carry only, say, 1,420 inside.\n3. With DF set, a router drops the packet and sends ICMP \"packet too big\".\n4. The firewall drops that ICMP, so the sender never learns, and may repeatedly retransmit until recovery or a connection timeout; packetization-layer PMTU discovery can sometimes recover without ICMP.\n5. Fix:\n   - interface MTU matching the path (1,420 in this example),\n   - IPv4 minimum-header MSS: 1,420 − 40 = 1,380,\n   - allow ICMPv4 3/4 and ICMPv6 type 2.",
+    "workedExample": "1. Pattern: small works, large hangs. That points to size.\n2. Hosts send 1,500-byte packets; the tunnel path can carry only, say, 1,420 inside.\n3. With DF set, a router drops the packet and sends ICMP \"packet too big\".\n4. The firewall drops that ICMP, so the sender never learns, and may repeatedly retransmit until recovery or a connection timeout; packetisation-layer PMTU discovery can sometimes recover without ICMP.\n5. Fix:\n   - interface MTU matching the path (1,420 in this example),\n   - IPv4 minimum-header MSS: 1,420 bytes minus 40 bytes of IPv4 and TCP headers = 1,380 bytes,\n   - allow ICMPv4 3/4 and ICMPv6 type 2.",
     "link": {
       "title": "RFC 4459: MTU and Fragmentation Issues with Tunneling",
       "url": "https://www.rfc-editor.org/rfc/rfc4459"
@@ -123,11 +123,11 @@
     "id": "nsec-vpns-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A receiver uses a replay window of size 4 (accept a sequence number only if it is greater than `top − 4` and has not been seen). It accepts packets 1, 2, 5, 3 in that order. What happens to the next three packets: 5, 1 and 9?",
+    "prompt": "A receiver uses a replay window of size 4 (accept a sequence number only if it is greater than the highest number accepted so far minus 4, and has not been seen). It accepts packets 1, 2, 5, 3 in that order. What happens to the next three packets: 5, 1 and 9?",
     "options": [
       {
         "text": "5 rejected (duplicate), 1 rejected (too old), 9 accepted",
-        "explanation": "Correct. After 5, `top` is 5 and the window is 2..5. 5 was seen; 1 ≤ 5 − 4 = 1 is too old; 9 is new and becomes the new top."
+        "explanation": "Correct. After 5, the highest accepted number is 5 and the window is 2..5. 5 was seen; 1 is not greater than 5 − 4 = 1, so it is too old; 9 is new and becomes the new highest."
       },
       {
         "text": "5 accepted, 1 rejected, 9 accepted",
@@ -135,7 +135,7 @@
       },
       {
         "text": "5 rejected, 1 accepted (never seen in the window), 9 accepted",
-        "explanation": "1 was seen, and anyway 1 ≤ top − size, so it falls off the left of the window and is rejected as too old."
+        "explanation": "1 was seen, and anyway 1 is not greater than 5 − 4 = 1, so it falls off the left of the window and is rejected as too old."
       },
       {
         "text": "All three rejected, because they arrive out of order",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Track `top` and the window (max(1, top − 3) .. top):\n\n```\nseq accept? top window\n1   yes     1    1..1\n2   yes     2    1..2\n5   yes     5    2..5\n3   yes     5    2..5 (3 unseen)\n5   no      5    duplicate\n1   no      5    1 <= 5-4, too old\n9   yes     9    6..9\n```\n\nA packet below the window is rejected even if it was never received, because the receiver no longer remembers whether it was. That is why the window must be large enough for real reordering.",
+    "workedExample": "Apply the acceptance rule to each packet in turn:\n\n```formula\ns > s_top − W   and   s ∉ S\ns_new = max(s_top, s)\nwhere\ns: the arriving packet's sequence number\ns_top: the highest sequence number accepted so far\nW: the window size, here 4 packets\nS: the set of numbers already accepted inside the window\n∉: \"is not a member of\": s has not been accepted before\ns_new: the highest accepted number after this packet\nmax: the larger of the two values\nIn words: accept a packet only if it is above the bottom of the window and new; a higher number slides the window up.\n```\n\nThe window then covers the numbers from s_top − 3 up to s_top (never below 1). Tracking s_top (\"top\") and the window:\n\n```\nseq accept? top window\n1   yes     1    1..1\n2   yes     2    1..2\n5   yes     5    2..5\n3   yes     5    2..5 (3 unseen)\n5   no      5    duplicate\n1   no      5    1 <= 5-4, too old\n9   yes     9    6..9\n```\n\nA packet below the window is rejected even if it was never received, because the receiver no longer remembers whether it was. That is why the window must be large enough for real reordering.",
     "link": {
       "title": "RFC 4303: IP Encapsulating Security Payload",
       "url": "https://www.rfc-editor.org/rfc/rfc4303"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Add the fixed overhead:\n\n```\nouter IPv4        20\nUDP (NAT-T)        8\nESP SPI + seq      8\nIV                 8\npad len + next hdr 2\nICV (GCM tag)     16\ntotal             62\n```\n\n2. Space left: 1,500 − 62 = 1,438 for inner packet + padding.\n3. Alignment: inner + padding + 2 must be a multiple of 4.\n\n```\n1438 + 0 + 2 = 1440 = 4 x 360\n```\n\nSo padding is 0 and the inner packet can be 1,438 bytes. A 1,437-byte packet would also fit (with 1 byte of padding). Without NAT-T the figure rises to 1,446.",
+    "workedExample": "1. Add the fixed overhead:\n\n```\nouter IPv4        20\nUDP (NAT-T)        8\nESP SPI + seq      8\nIV                 8\npad len + next hdr 2\nICV (GCM tag)     16\ntotal             62\n```\n\n2. Subtract it from the link MTU, then check ESP's 4-byte alignment rule:\n\n```formula\nL_max = M_link − O\nL_max = 1500 B − 62 B = 1438 B\n(L_in + P + 2) mod 4 = 0\n1438 + 0 + 2 = 1440 = 4 × 360\nwhere\nL_max: the space left for inner packet plus padding, in bytes\nM_link: the link MTU, here 1,500 bytes\nO: the fixed overhead above, 62 bytes\nL_in: the inner packet length, in bytes\nP: ESP padding, 0 to 3 bytes\nmod: remainder after division; x mod 4 = 0 means x is a multiple of 4\nB: bytes\nIn words: 62 bytes of overhead leave 1,438 bytes, and 1,438 plus the 2 trailer bytes is already a multiple of 4, so no padding is needed.\n```\n\nSo padding is 0 and the inner packet can be 1,438 bytes. A 1,437-byte packet would also fit (with 1 byte of padding). Without NAT-T the figure rises to 1,446.",
     "link": {
       "title": "RFC 4303: IP Encapsulating Security Payload",
       "url": "https://www.rfc-editor.org/rfc/rfc4303"
@@ -284,7 +284,7 @@
     "prompt": "A cloud provider's hypervisors build tenant networks with VXLAN over a shared 1,500-byte IPv4 underlay, using the lesson's untagged header model. Which risks or requirements follow from VXLAN's design? Select all that apply.",
     "options": [
       {
-        "text": "A host that can send UDP 4789 to a VTEP could inject frames into another tenant's segment by setting its VNI",
+        "text": "A host that can send UDP 4789 to a VTEP could inject frames into another tenant's network segment by setting its VNI",
         "explanation": "Correct. VXLAN has no authentication; the VNI is just a number in the header."
       },
       {
@@ -309,7 +309,7 @@
       2,
       3
     ],
-    "workedExample": "1. VXLAN header = flags + **24-bit VNI** + reserved. No MAC, no key.\n\n```\n2^24 = 16,777,216 segments\n2^12 - 2 = 4,094 VLANs\n```\n\n2. Injection: craft UDP/4789 with the victim's VNI and any inner frame. A VTEP accepting that source and configured VNI may decapsulate and deliver it; endpoint policy and underlay filters can block it.\n3. Mitigations: isolate and filter the underlay, accept VXLAN only from known VTEPs, encrypt across untrusted links.\n4. MTU: 50 bytes per frame, hence jumbo underlays.",
+    "workedExample": "1. The VXLAN header holds flags, the 24-bit **VNI** and reserved bits. No authentication code, no key.\n\n```formula\nN_VNI = 2^24 = 16777216\nN_VLAN = 2^12 − 2 = 4094\nwhere\nN_VNI: the number of VXLAN segments a 24-bit VNI can name: 2 multiplied by itself 24 times\nN_VLAN: usable VLAN IDs: a 12-bit field holds 2^12 = 4,096 values, minus the 2 reserved IDs (0 and 4095)\nIn words: 24 bits give about 16.8 million network segments, while the 12-bit VLAN field gives only 4,094.\n```\n\n2. Injection: craft UDP/4789 with the victim's VNI and any inner frame. A VTEP accepting that source and configured VNI may decapsulate and deliver it; endpoint policy and underlay filters can block it.\n3. Mitigations: isolate and filter the underlay, accept VXLAN only from known VTEPs, encrypt across untrusted links.\n4. MTU: 50 bytes per frame, hence jumbo underlays.",
     "link": {
       "title": "RFC 7348: VXLAN",
       "url": "https://www.rfc-editor.org/rfc/rfc7348"
@@ -334,12 +334,12 @@
         "explanation": "The attacker has the credentials, not just the address."
       },
       {
-        "text": "Require MFA and device certificates, put VPN users in their own segment, and give most users per-application access instead of network access",
+        "text": "Require MFA and device certificates, put VPN users in their own network segment, and give most users per-application access instead of network access",
         "explanation": "Correct. This attacks both the entry (stolen password alone no longer works) and the blast radius (even a valid session reaches only what it needs)."
       }
     ],
     "answer": 3,
-    "workedExample": "1. The VPN worked perfectly: it authenticated a valid credential and encrypted the attacker's traffic.\n2. The failure is architectural: \"connected\" meant \"trusted\" (castle and moat).\n3. Reduce the chance of entry: MFA, device certificates, so a password alone fails.\n4. Reduce the blast radius: segment VPN users; allow only needed services.\n5. Long term: per-application access through an identity-aware proxy (zero trust, lesson 2), keeping network VPNs for site-to-site and admins.",
+    "workedExample": "1. The VPN worked perfectly: it authenticated a valid credential and encrypted the attacker's traffic.\n2. The failure is architectural: \"connected\" meant \"trusted\" (castle and moat).\n3. Reduce the chance of entry: MFA, device certificates, so a password alone fails.\n4. Reduce the blast radius: isolate VPN users in their own network segment; allow only needed services.\n5. Long term: per-application access through an identity-aware proxy (zero trust, lesson 2), keeping network VPNs for site-to-site and admins.",
     "link": {
       "title": "RFC 4301: Security Architecture for IP",
       "url": "https://www.rfc-editor.org/rfc/rfc4301"

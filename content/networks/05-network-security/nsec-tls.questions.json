@@ -49,7 +49,7 @@
       },
       {
         "text": "3 in TLS 1.3, because of the extra encrypted messages",
-        "explanation": "EncryptedExtensions, Certificate, CertificateVerify and Finished all travel in the server's single flight."
+        "explanation": "EncryptedExtensions, Certificate, CertificateVerify and Finished all travel together in the server's one flight of messages."
       }
     ],
     "answer": 0,
@@ -97,7 +97,7 @@
     "options": [
       {
         "text": "The server sends only the leaf certificate, not the intermediate",
-        "explanation": "Correct. Browsers often fill the gap from a cache or by fetching the intermediate; behavior in curl and Python depends on their TLS backend and configuration. Configure the server to send leaf plus intermediates."
+        "explanation": "Correct. Browsers often fill the gap from a cache or by fetching the intermediate; behaviour in curl and Python depends on their TLS backend and configuration. Configure the server to send leaf certificate plus intermediates."
       },
       {
         "text": "curl does not support TLS 1.3",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. The error says the client cannot find the **issuer** of a certificate: it cannot build a path to a root.\n2. The client has roots, but the leaf was signed by an intermediate the server did not send.\n3. Chrome succeeds because it may already have the intermediate cached, or fetches it via the AIA URL in the leaf.\n4. Test it:\n\n```\nopenssl s_client -connect api:443 \\\n  -servername api.example\n```\n\nand look for a single `0 s:` entry with no `1 s:`.\n5. Fix: serve the full chain file.",
+    "workedExample": "1. The error says the client cannot find the **issuer** of a certificate: it cannot build a path to a root.\n2. The client has roots, but the leaf certificate was signed by an intermediate the server did not send.\n3. Chrome succeeds because it may already have the intermediate cached, or fetches it via the AIA URL in the leaf certificate.\n4. Test it:\n\n```\nopenssl s_client -connect api:443 \\\n  -servername api.example\n```\n\nand look for a single `0 s:` entry with no `1 s:`.\n5. Fix: serve the full chain file.",
     "link": {
       "title": "The Illustrated TLS 1.3 Connection",
       "url": "https://tls13.xargs.org/"
@@ -183,7 +183,7 @@
     "id": "nsec-tls-q7",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "Which of these does a client check when validating a DNS-named server's leaf and intermediate validation path under the stated Web PKI model (excluding trust-anchor handling)? Select all that apply.",
+    "prompt": "Which of these does a client check when validating a DNS-named server's leaf certificate and intermediate validation path under the stated Web PKI model (excluding trust-anchor handling)? Select all that apply.",
     "options": [
       {
         "text": "The leaf's Subject Alternative Name matches the hostname it connected to",
@@ -191,7 +191,7 @@
       },
       {
         "text": "Every leaf and intermediate certificate in the validation path is within its validity period",
-        "explanation": "Correct. An expired intermediate breaks the chain as surely as an expired leaf."
+        "explanation": "Correct. An expired intermediate breaks the chain as surely as an expired leaf certificate."
       },
       {
         "text": "The server's IP address appears in the certificate",
@@ -211,7 +211,7 @@
       1,
       3
     ],
-    "workedExample": "The core checks:\n\n1. Signatures chain from leaf to a **locally trusted** root.\n2. Dates are valid for the leaf and intermediates; anchor policy is separate.\n3. The hostname matches the leaf's SAN.\n4. Intermediates are CAs; the leaf is allowed for server auth.\n5. Applicable public-trust browser policies also require CT evidence, such as valid SCTs (promises of log inclusion).\n\nIf the server could supply its own root, an attacker could too. Trust has to come from the client's store.",
+    "workedExample": "The core checks:\n\n1. Signatures chain from leaf certificate to a **locally trusted** root.\n2. Dates are valid for the leaf certificate and intermediates; anchor policy is separate.\n3. The hostname matches the leaf certificate's SAN.\n4. Intermediates are CAs; the leaf certificate is allowed for server auth.\n5. Applicable public-trust browser policies also require CT evidence, such as valid SCTs (promises of log inclusion).\n\nIf the server could supply its own root, an attacker could too. Trust has to come from the client's store.",
     "link": {
       "title": "Certificate Transparency — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Security/Certificate_Transparency"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. During TLS 1.3 development, real-world tests showed that some middleboxes dropped or broke connections with unexpected version numbers or message orders.\n2. Fix: put `0x0303` in the legacy field, signal 1.3 inside an extension older boxes ignore, and add dummy ChangeCipherSpec messages (\"middlebox compatibility mode\").\n3. Lesson: anything unencrypted on the wire gets depended on and frozen.\n4. QUIC encrypts payloads and protects selected header bits; several routing and version fields remain exposed.",
+    "workedExample": "1. During TLS 1.3 development, real-world tests showed that some middleboxes dropped or broke connections with unexpected version numbers or message orders.\n2. Fix: put `0x0303` in the legacy field, signal 1.3 inside an extension older boxes ignore, and add dummy ChangeCipherSpec messages (TLS 1.3’s \"middlebox compatibility mode\").\n3. Lesson: anything unencrypted on the wire gets depended on and frozen.\n4. QUIC encrypts payloads and protects selected header bits; several routing and version fields remain exposed.",
     "link": {
       "title": "RFC 8446: TLS 1.3",
       "url": "https://www.rfc-editor.org/rfc/rfc8446"
@@ -327,7 +327,7 @@
       },
       {
         "text": "4 certificates cover the 365-day interval; automated renewal and monitoring help keep coverage continuous",
-        "explanation": "Correct for this fresh 365-day coverage interval: ceil(365/100)=4. Earlier renewal increases issuance frequency; calendar-year counts can differ because of carryover, and one certificate may cover several names."
+        "explanation": "Correct for this fresh 365-day coverage interval: 365 / 100 = 3.65, and a part-certificate is still a whole certificate, so round up to 4. Earlier renewal increases issuance frequency; calendar-year counts can differ because of carryover, and one certificate may cover several names."
       },
       {
         "text": "Only 3 certificates cover the whole 365-day interval",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Lifetime: 100 days.\n\n```\n365 / 100 = 3.65\n-> 4 certificates for this interval\n```\n\n2. Renewing at about two-thirds of lifetime (to leave room for failures):\n\n```\n365 / 67 ≈ 5.4 -> about 6\n```\n\n3. From March 2029 (47 days): 365 / 47 ≈ 7.8, so 8 certificates cover a fresh 365-day interval at that lifetime.\n4. Manual renewal at scale increases the opportunity for missed expiry deadlines. Automate with ACME (Let's Encrypt, or your CA's ACME endpoint) and monitor expiry.",
+    "workedExample": "1. With no overlap, the number of certificates is the period divided by the lifetime, rounded **up** (a partly used certificate still has to be issued):\n\n```formula\nN = ⌈T / L⌉\nN = ⌈365 d / 100 d⌉\nN = ⌈3.65⌉ = 4\nwhere\nN: the number of certificates needed to cover the period\nT: the period to cover, in days; here 365\nL: the maximum lifetime of one certificate, in days; here 100\n⌈ ⌉: ceiling: round up to the next whole number, so ⌈3.65⌉ = 4\nd: days (the unit symbol for a day)\nIn words: 365 days of 100-day certificates needs four certificates, because three only reach day 300.\n```\n\n2. In practice you renew early, at about two-thirds of the lifetime, to leave room for failures. Each certificate then provides about 67 days of cover:\n\n```formula\nL_eff ≈ 2/3 × 100 d ≈ 67 d\nN = ⌈365 d / 67 d⌉\nN = ⌈5.4⌉ = 6\nwhere\nL_eff: the useful cover per certificate when renewing at two-thirds of its lifetime, in days\nN: the number of certificates issued in the period\n⌈ ⌉: ceiling: round up to the next whole number\nd: days (the unit symbol for a day)\n≈: approximately equal to (rounded)\nIn words: renewing at two-thirds of a 100-day lifetime means about six certificates a year, not four.\n```\n\n3. From March 2029 (47-day maximum lifetime), the same formula gives 365 / 47 ≈ 7.8, rounded up to 8 certificates for a fresh 365-day interval.\n4. Manual renewal at scale increases the opportunity for missed expiry deadlines. Automate with ACME (Let's Encrypt, or your CA's ACME endpoint) and monitor expiry.",
     "link": {
       "title": "Ballot SC081v3 — CA/Browser Forum",
       "url": "https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/"

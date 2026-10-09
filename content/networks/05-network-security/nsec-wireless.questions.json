@@ -41,11 +41,11 @@
       },
       {
         "text": "About 8.4 million",
-        "explanation": "For independent uniform sampling with replacement, the expected wait for one specified IV is 2^24, not half that. A first collision among any pair is a different event."
+        "explanation": "For independent uniform random picks (repeats allowed), the expected wait for one specified IV is 2^24, not half that. A first repeat among any pair is a different event."
       },
       {
         "text": "About 4,800",
-        "explanation": "Correct. By the birthday bound, a 50% collision chance arrives after about 1.18 × √(2^24) ≈ 1.18 × 4,096 ≈ 4,800 frames."
+        "explanation": "Correct. By the birthday bound, a 50% chance of a repeated IV arrives after about 1.18 times the square root of 2^24, which is 1.18 × 4,096 ≈ 4,800 frames."
       },
       {
         "text": "About 24",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Number of IVs: N = 2^24 = 16,777,216.\n2. Birthday bound: 50% chance of any collision after about √(2 ln 2 · N) samples.\n\n```\nsqrt(N) = 4,096\nx 1.1774 = ~4,823 frames\n```\n\n3. At a hypothetical 1,000 independent random-IV frames per second, 4,823 frames take about 4.8 seconds; real IV selection and traffic rates vary.\n4. Two frames with the same IV and key share a keystream; XOR them and the keystream cancels, exposing the XOR of the plaintexts; known or predictable content can help recover data.",
+    "workedExample": "1. Count the possible IVs, then apply the birthday approximation for a 50 % chance that *any* two frames share one:\n\n```formula\nN = 2^24 = 16777216\nn_50 ≈ √(2 × ln(2) × N)\nn_50 ≈ 1.1774 × √N\nn_50 ≈ 1.1774 × 4096 ≈ 4823\nwhere\nN: the number of possible 24-bit IVs: 2 multiplied by itself 24 times\nn_50: frames after which the chance of at least one repeated IV reaches 50 %\n√: square root\nln: natural logarithm (base e ≈ 2.718); ln(2) ≈ 0.693, so √(2 × ln(2)) ≈ 1.1774\n≈: approximately equal to (rounded)\nIn words: a repeat becomes an even bet after only about 1.18 times the square root of the number of IVs, about 4,800 frames.\n```\n\n2. It is far fewer than 16.8 million because every pair of frames is a chance to collide, and the number of pairs grows with the square of the number of frames.\n3. At a hypothetical 1,000 independent random-IV frames per second, 4,823 frames take about 4.8 seconds; real IV selection and traffic rates vary.\n4. Two frames with the same IV and key share a keystream; XOR them and the keystream cancels, exposing the XOR of the plaintexts; known or predictable content can help recover data.",
     "link": {
       "title": "Birthday problem — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Birthday_problem"
@@ -79,11 +79,11 @@
       },
       {
         "text": "It is the salt for PBKDF2, so the same passphrase gives different PMKs on differently named networks",
-        "explanation": "Correct. PMK = PBKDF2(HMAC-SHA1, passphrase, SSID, 4096, 256 bits). Common SSIDs therefore share precomputed tables."
+        "explanation": "Correct. The PMK is PBKDF2 with HMAC-SHA1 over the passphrase, with the SSID as salt, 4,096 iterations and a 256-bit output. Common SSIDs therefore share precomputed tables."
       }
     ],
     "answer": 3,
-    "workedExample": "```\nPMK = PBKDF2(HMAC-SHA1,\n             passphrase,\n             salt = SSID,\n             4096 iterations,\n             256 bits)\n```\n\n1. The salt stops one big precomputed table working for every network.\n2. But the salt is the SSID, which is public and often a default (`linksys`, `NETGEAR`), so attackers precompute tables for popular SSIDs.\n3. Changing a default SSID helps a little; a strong passphrase helps a lot.",
+    "workedExample": "```formula\nPMK = PBKDF2(HMAC-SHA1, P, SSID,\n             4096, 256)\nwhere\nPMK: Pairwise Master Key, the 256-bit key all WPA2-Personal session keys come from\nPBKDF2: Password-Based Key Derivation Function 2; its inputs, in order, are the hash function, the password, the salt, the iteration count and the output length in bits\nHMAC-SHA1: the keyed hash that PBKDF2 repeats: HMAC built on SHA-1\nP: the passphrase\nSSID: the network name, used as the salt\nIn words: the PMK is the passphrase hashed 4,096 times with the network name as salt, giving 256 bits.\n```\n\n1. The salt stops one big precomputed table working for every network.\n2. But the salt is the SSID, which is public and often a default (`linksys`, `NETGEAR`), so attackers precompute tables for popular SSIDs.\n3. Changing a default SSID helps a little; a strong passphrase helps a lot.",
     "link": {
       "title": "Wi-Fi Protected Access — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access"
@@ -101,7 +101,7 @@
       },
       {
         "text": "Every input to the PTK except the PMK is in the captured frames, so each guess can be tested by recomputing the MIC on message 2",
-        "explanation": "Correct. ANonce, SNonce and MACs are in clear. For each guess: PMK → PTK → MIC, compare with the captured MIC. No lockout is possible."
+        "explanation": "Correct. ANonce, SNonce and both MAC addresses are in clear. For each guess: PMK → PTK → MIC, compare with the captured MIC. No lockout is possible."
       },
       {
         "text": "The AP sends the PMK in message 3",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Captured: ANonce (M1), SNonce + MIC (M2), both MACs.\n2. For a guess g:\n\n```\npmk = PBKDF2(g, ssid, 4096)\nptk = PRF(pmk, nonces, macs)\nmic = MIC(ptk, M2)\n```\n\n3. A matching MIC provides strong evidence for the guess. The real computation uses the PTK key-confirmation portion and the specified EAPOL-Key MIC calculation, with the MIC field zeroed.\n4. All offline: no AP lockout applies; throughput depends on hardware, software and resources.\n5. Correctly implemented SAE is designed to prevent this passive offline-verifier attack; implementation flaws and downgrade paths require separate consideration.",
+    "workedExample": "1. Captured: ANonce (M1), SNonce + MIC (M2), both MAC addresses.\n2. For a guess g:\n\n```formula\nPMK_g = PBKDF2(g, SSID, 4096)\nPTK_g = PRF(PMK_g, N_A, N_S, MACs)\nMIC_g = MIC(PTK_g, M2)\nMIC_g = MIC_seen ⇒ g = P\nwhere\ng: the guessed passphrase\nPMK_g: the Pairwise Master Key the guess would produce\nPBKDF2: the key-stretching function, run here for 4,096 iterations with the SSID as salt\nSSID: the network name\nPTK_g: the Pairwise Transient Key the guess would produce\nPRF: the pseudo-random function that expands the PMK into the PTK\nN_A: ANonce, the AP's random number from M1\nN_S: SNonce, the client's random number from M2\nMACs: the AP's and client's MAC addresses\nMIC: message integrity code, a keyed checksum computed with part of the PTK\nM2: the second handshake message, with its MIC field zeroed for the calculation\nMIC_g: the MIC the guess predicts\nMIC_seen: the MIC actually captured in M2\nP: the network's real passphrase\n⇒: implies: if the left side holds, the right side (almost certainly) does too\nIn words: for each guess, recompute the keys and the MIC from the captured public values; if the MIC matches the captured one, the guess is almost certainly the passphrase.\n```\n\n3. A matching MIC provides strong evidence for the guess. The real computation uses the PTK key-confirmation portion and the specified EAPOL-Key MIC calculation, with the MIC field zeroed.\n4. All offline: no AP lockout applies; throughput depends on hardware, software and resources.\n5. Correctly implemented SAE is designed to prevent this passive offline-verifier attack; implementation flaws and downgrade paths require separate consideration.",
     "link": {
       "title": "Wi-Fi Protected Access — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "```\n26^8 = 208,827,064,576\n     ≈ 2.09 x 10^11\n2.09e11 / 1e6 = 208,827 s\n208,827 / 3600 ≈ 58 hours\nexpected = 58 / 2 ≈ 29 hours\n```\n\nContrast with five random words from a 7,776-word list:\n\n```\n7776^5 ≈ 2.8 x 10^19\n```\n\nThat is about 10^8 times larger, so hundreds of thousands of years at the same rate.",
+    "workedExample": "The keyspace is the number of possible characters raised to the length; divide by the guessing rate for the full search, and halve it for the average:\n\n```formula\nK = c^L = 26^8\nK = 208827064576 ≈ 2.09 × 10^11\nt_full = K / r\nt_full = 2.09 × 10^11 / (10^6 s^−1)\nt_full ≈ 208827 s ≈ 58 h\nt_avg = t_full / 2 ≈ 29 h\nwhere\nK: the number of possible passphrases (the keyspace)\nc: possible characters per position, 26 lowercase letters\nL: the passphrase length, 8 characters\nr: the guessing rate, 10^6 (one million) guesses per second\nt_full: the time to try every candidate\nt_avg: the expected time to hit a uniformly chosen passphrase, half the full search\ns: seconds; s^−1 means \"per second\"\nh: hours; 1 h = 3,600 s\n≈: approximately equal to (rounded)\nIn words: 26 to the power 8 is about 209 billion candidates; a million a second takes about 58 hours for all of them and 29 hours on average.\n```\n\nContrast with five words chosen uniformly at random from a 7,776-word list:\n\n```formula\nK_w = W^n = 7776^5 ≈ 2.8 × 10^19\nK_w / K ≈ 1.4 × 10^8\nwhere\nK_w: the number of possible five-word passphrases\nW: the size of the word list, 7,776 words\nn: the number of words chosen, 5\nK: the 8-lowercase-letter keyspace from above, about 2.09 × 10^11\n≈: approximately equal to (rounded)\nIn words: five random words give about a hundred million times more possibilities than eight random lowercase letters.\n```\n\nThat is about 10^8 times larger, so hundreds of thousands of years at the same rate.",
     "link": {
       "title": "Wi-Fi Protected Access — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Wi-Fi_Protected_Access"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. The attacker positions as a MITM on a different channel.\n2. They block message 4, so the AP retransmits message 3.\n3. A vulnerable client installs the PTK again on the retransmitted M3.\n4. Installing resets the transmit packet number (a component of the CCMP nonce) to its initial value.\n5. New frames reuse nonces already used under the same key → identical keystream → XOR of the two ciphertexts reveals the XOR of their plaintexts; predictable content can support decryption.\n6. Fix: never reinstall a key already in use. This client-side fix is compatible with existing APs, but any separately vulnerable AP behavior must also be patched.",
+    "workedExample": "1. The attacker positions as a MITM on a different channel.\n2. They block message 4, so the AP retransmits message 3.\n3. A vulnerable client installs the PTK again on the retransmitted M3.\n4. Installing resets the transmit packet number (a component of the CCMP nonce) to its initial value.\n5. New frames reuse nonces already used under the same key → identical keystream → XOR of the two ciphertexts reveals the XOR of their plaintexts; predictable content can support decryption.\n6. Fix: never reinstall a key already in use. This client-side fix is compatible with existing APs, but any separately vulnerable access-point code must also be patched.",
     "link": {
       "title": "Key Reinstallation Attacks (KRACK)",
       "url": "https://www.krackattacks.com/"
@@ -309,7 +309,7 @@
       1,
       2
     ],
-    "workedExample": "1. Per-user keys: the EAP/AAA key hierarchy supplies pairwise keying material; key caching and shared group keys are separate considerations.\n2. Revocation: per account, not per network.\n3. Role-based VLANs: staff, contractors and devices land in different segments.\n4. Costs: RADIUS, directory integration, certificate management, client configuration.\n5. The flow is still: EAP → PMK → four-way handshake → PTK.",
+    "workedExample": "1. Per-user keys: the EAP/AAA key hierarchy supplies pairwise keying material; key caching and shared group keys are separate considerations.\n2. Revocation: per account, not per network.\n3. Role-based VLANs: staff, contractors and devices land in different network segments.\n4. Costs: RADIUS, directory integration, certificate management, client configuration.\n5. The flow is still: EAP → PMK → four-way handshake → PTK.",
     "link": {
       "title": "IEEE 802.1X — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/IEEE_802.1X"
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. RC4 is a stream cipher: ciphertext = plaintext ⊕ keystream.\n2. Flip bit i of ciphertext → bit i of plaintext flips.\n3. CRC is linear: CRC(a ⊕ b) = CRC(a) ⊕ CRC(b) ⊕ c, for a constant c depending only on the length.\n4. So for a desired change Δ, the attacker XORs Δ into the data and CRC(Δ) ⊕ c into the encrypted ICV.\n5. The frame still checks out.\n\nLesson: integrity needs a keyed MAC (CCMP authenticates protected data frames, not every management/control frame).",
+    "workedExample": "1. RC4 is a stream cipher, so encryption is an XOR, bit by bit, with a keystream, and a CRC-32 checksum obeys an affine XOR rule:\n\n```formula\nC = M ⊕ K_s\nCRC(a ⊕ b) = CRC(a) ⊕ CRC(b) ⊕ c\nwhere\nC: the ciphertext\nM: the plaintext message (data plus its CRC-32 ICV)\nK_s: the RC4 keystream\n⊕: XOR (exclusive OR), bit by bit: 1 where the inputs differ, 0 where they match\nCRC: the CRC-32 checksum function\na: a message, as bits\nb: another message of the same length\nc: a constant depending only on the length: the CRC-32 of an all-zero message\nIn words: flipping a ciphertext bit flips the same plaintext bit, and the checksum of a changed message can be computed from the old checksum and the change alone.\n```\n\n2. Flip bit i of the ciphertext and bit i of the plaintext flips.\n3. So for a desired change Δ (a pattern of bits to flip), the attacker XORs Δ into the encrypted data and CRC(Δ) ⊕ c into the encrypted ICV.\n4. The decrypted frame's new checksum matches its new data, so the frame still checks out.\n\nLesson: integrity needs a keyed MAC (CCMP authenticates protected 802.11 data frames, not every management/control frame).",
     "link": {
       "title": "Wired Equivalent Privacy — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Wired_Equivalent_Privacy"

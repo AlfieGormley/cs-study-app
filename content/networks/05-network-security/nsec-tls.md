@@ -34,7 +34,7 @@ TLS 1.3 (RFC 8446, 2018) took a hard line:
 |---|---|
 | RSA key transport, static DH | No forward secrecy |
 | CBC modes, RC4 | Padding and bias attacks |
-| SHA-1, MD5 in signatures | Collisions |
+| SHA-1, MD5 in signatures | Hash collisions |
 | Compression | CRIME attack |
 | Renegotiation | Complex, attacked |
 
@@ -68,8 +68,8 @@ Step by step:
 2. **ServerHello.** The server picks the options and sends its own key share. Both sides can now compute a shared secret, and subsequent handshake messages in this flow are encrypted; record headers and optional compatibility ChangeCipherSpec records are exceptions.
 3. **EncryptedExtensions**: the rest of the server's choices, such as the agreed ALPN.
 4. **Certificate**: the server's certificate chain. In TLS 1.2 this went in clear; now a passive observer cannot see which certificate was presented.
-5. **CertificateVerify**: a signature using the certificate's private key over a context-bound transcript value (including a fixed prefix, role-specific context string and transcript hash). This proves the server holds the key *right now*, and binds the key exchange to that identity, which is what defeats a man-in-the-middle.
-6. **Finished**: a MAC over the whole transcript. If an attacker altered any earlier message (say, deleted the strongest cipher suites to force a weak one), the transcripts differ and Finished fails.
+5. **CertificateVerify**: a signature using the certificate's private key over a context-bound transcript value (including a fixed prefix, role-specific context string and transcript hash). This proves the server holds the key *right now*, and ties the key exchange to that identity, which is what defeats a man-in-the-middle.
+6. **Finished message**: a message authentication code over the whole transcript, computed with a key derived from the handshake. If an attacker altered any earlier message (say, deleted the strongest cipher suites to force a weak one), the transcripts differ and Finished fails.
 
 The client sends its own Finished and can send application data immediately in this successful flow: one TLS round trip versus two for the conventional full TLS 1.2 flow.
 
@@ -94,9 +94,9 @@ This is lesson 1's replay attack again, accepted deliberately in exchange for sp
 
 ## Certificate chains
 
-A certificate binds a public key to names, and is signed by a **certificate authority** (CA). Clients use configured **trust anchors**, often from a browser, operating system or application root store. Store membership varies. Root private keys can be kept offline while intermediate CAs perform routine issuance; this is an operational design, not a property of every CA.
+A certificate ties a public key to names, and is signed by a **certificate authority** (CA). Clients use configured **trust anchors**, often from a browser, operating system or application root store. Store membership varies. Root private keys can be kept offline while intermediate CAs perform routine issuance; this is an operational design, not a property of every CA.
 
-The following chain-shaped example illustrates a leaf, intermediate and cross-signed root. It is not a live assertion of what `www.rfc-editor.org` currently serves:
+The following chain-shaped example illustrates a leaf certificate, intermediate and cross-signed root. It is not a live assertion of what `www.rfc-editor.org` currently serves:
 
 ```
 0 leaf:  CN=rfc-editor.org
@@ -107,19 +107,19 @@ The following chain-shaped example illustrates a leaf, intermediate and cross-si
          issued by GlobalSign Root CA
 ```
 
-The server sends its leaf and needed intermediates. A client must independently trust a suitable anchor. Item 2 illustrates a **cross-signed certificate** for the same subject/key, with a different issuer and potentially different constraints, enabling an alternate path where supported.
+The server sends its leaf certificate and needed intermediates. A client must independently trust a suitable anchor. Item 2 illustrates a **cross-signed certificate** for the same subject/key, with a different issuer and potentially different constraints, enabling an alternate path where supported.
 
 Certificate validation includes the following checks (this is not an exhaustive validation algorithm; path-length/name constraints and unsupported critical extensions also matter):
 
 1. Each signature verifies with the issuer's public key, up to a root it trusts.
-2. The leaf and intermediate certificates in the validation path are within their validity dates; trust-anchor handling is a separate client-policy input.
-3. The leaf's **Subject Alternative Name** matches the hostname. (Browsers ignore the old Common Name field.)
+2. The leaf certificate and intermediate certificates in the validation path are within their validity dates; trust-anchor handling is a separate client-policy input.
+3. The leaf certificate's **Subject Alternative Name** matches the hostname. (Browsers ignore the old Common Name field.)
 4. Intermediates are marked as CAs (`basicConstraints CA:TRUE`) and allowed to issue.
-5. The leaf is allowed for server authentication (extended key usage).
+5. The leaf certificate is allowed for server authentication (extended key usage).
 6. Applicable browser policies require **Certificate Transparency** evidence for publicly trusted certificates. A signed certificate timestamp is a log's promise to include the certificate, not itself an inclusion proof; SCTs need not be embedded in the certificate. Monitoring helps detect misissuance.
 
 > [!example] "It works in Chrome but not in curl"
-> The server sends only its leaf, not the intermediate. Desktop browsers often cope, because they cache intermediates or fetch them from a URL in the certificate. Other clients may fail with "unable to get local issuer certificate"; fetching and caching depend on the TLS backend, trust store and configuration, not just the application name. The fix is on the server: serve the full chain (leaf plus intermediates).
+> The server sends only its leaf certificate, not the intermediate. Desktop browsers often cope, because they cache intermediates or fetch them from a URL in the certificate. Other clients may fail with "unable to get local issuer certificate"; fetching and caching depend on the TLS backend, trust store and configuration, not just the application name. The fix is on the server: serve the full chain (leaf certificate plus intermediates).
 
 ### Revocation and short lifetimes
 
@@ -188,16 +188,16 @@ Trade-offs and pitfalls:
 
 - You usually run a **private CA**, and must issue, rotate and revoke certificates for every client. Automation is the whole game.
 - A certificate proves **who** the caller is, not **what** they may do. You still need authorisation: "service `checkout` may call `POST /charge`".
-- TLS terminated at a load balancer ends the mTLS there; the backend must trust the balancer to pass on the verified identity, usually in a header that clients must not be able to set themselves.
+- TLS terminated at a load balancer ends the mTLS there; the backend must trust the balancer to pass on the verified identity, usually in a header that clients must be prevented from setting themselves.
 
 > [!note] Content omitted after review
 > A universal trusted-root count, live endpoint chain/output, certificate-outage frequency and current key-exchange adoption percentages are not asserted: no reproducible dated measurements were available for those claims in this review. The handshake and chain examples are explanatory models.
 
 ## Key takeaways
 - The illustrated TLS 1.3 certificate handshake provides confidentiality, integrity and authentication in one TLS round trip. Forward secrecy depends on the negotiated mode and secret handling; PSK-only and early data are important exceptions.
-- CertificateVerify binds proof of the private key to the transcript. Finished authenticates the negotiated transcript, and downgrade sentinels protect relevant cross-version cases.
+- CertificateVerify ties proof of the private key to the transcript. Finished authenticates the negotiated transcript, and downgrade sentinels protect relevant cross-version cases.
 - 0-RTT early data is replayable; require application-specific replay-safe semantics and correct intermediary handling.
-- Clients validate the chain up to a trusted root, check names and dates, and need the server to send its intermediates; revocation behavior varies, and the public Web PKI lifetime schedule reaches 47 days in 2029.
+- Clients validate the chain up to a trusted root, check names and dates, and need the server to send its intermediates; revocation behaviour varies, and the public Web PKI lifetime schedule reaches 47 days in 2029.
 - ECH encrypts the ClientHello, hiding SNI behind a provider's public name; mTLS authenticates clients with certificates and underpins service-to-service zero trust.
 
 ## Further reading

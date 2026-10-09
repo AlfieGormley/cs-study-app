@@ -22,6 +22,40 @@ Every tunnel adds headers. The physical link's MTU (usually 1,500 bytes for Ethe
 +--------+-------+-----+---------------+
 ```
 
+Because the outer packet still has to fit the link, the room left for the inner packet is the link MTU minus every header the tunnel adds:
+
+```formula
+MTU_inner = MTU_link − H_total
+H_total = H_1 + H_2 + … + H_k
+where
+MTU_inner: the largest inner IP packet that fits without fragmentation, in bytes
+MTU_link: the maximum transmission unit (MTU) of the underlying link or path, in bytes; usually 1,500 for Ethernet
+H_total: the total overhead the tunnel adds, in bytes
+H_1: the size of the first added header, in bytes (for example, an outer IPv4 header, 20 bytes)
+H_2: the size of the second added header, in bytes
+H_k: the size of the last added header, in bytes
+k: the number of headers the tunnel adds
+…: and so on, for every header in between
+In words: every byte of tunnel header comes straight out of the space available for the packet inside.
+```
+
+Applying it to three common tunnels, with the header sizes used in the code below:
+
+```formula
+M_GRE = 1500 − (20 + 4) = 1476 B
+M_WG = 1500 − (40 + 8 + 32) = 1420 B
+M_VX = 1500 − (20 + 8 + 8 + 14)
+M_VX = 1500 − 50 = 1450 B
+where
+M_GRE: inner MTU for GRE over IPv4: a 20-byte outer IPv4 header plus a 4-byte basic GRE header
+M_WG: inner MTU for WireGuard over IPv6: a 40-byte outer IPv6 header, an 8-byte UDP header, and 32 bytes of WireGuard data overhead (a 16-byte header plus a 16-byte authentication tag)
+M_VX: inner MTU for VXLAN over IPv4: outer IPv4 (20), UDP (8), the VXLAN header (8) and the inner Ethernet header it carries (14)
+B: bytes
+In words: on a 1,500-byte link, these tunnels leave 1,476, 1,420 and 1,450 bytes for the inner IP packet.
+```
+
+The same arithmetic as code, with a header-size table you can extend:
+
 ```python
 HDR = {"ipv4": 20, "ipv6": 40, "udp": 8,
        "wg": 32, "vxlan": 8, "eth": 14,
@@ -52,8 +86,24 @@ Firewalls that block all ICMP break it. The result is a **PMTU black hole**: the
 The usual fixes:
 
 - Set the tunnel interface MTU correctly (using the actual underlay budget; wg-quick can infer an initial value).
-- **Clamp the TCP MSS** at the tunnel edge to advertise an appropriate data budget. With minimum IPv4/TCP headers, MSS = MTU − 40, giving 1,380 for this 1,420-byte example; senders must account for options, and an MSS clamp does not fix UDP or later path changes.
+- **Clamp the TCP MSS** at the tunnel edge to advertise an appropriate data budget. The maximum segment size (MSS) is how much TCP data fits in one packet once the IP and TCP headers are taken out (the formula follows this list). Senders must account for options, and an MSS clamp does not fix UDP or later path changes.
 - Allow ICMP "packet too big" (ICMPv4 type 3 code 4, ICMPv6 type 2) through firewalls.
+
+The MSS to clamp to, with minimum-size IPv4 and TCP headers:
+
+```formula
+MSS = MTU − (H_IP + H_TCP)
+MSS = 1420 B − (20 B + 20 B) = 1380 B
+where
+MSS: maximum segment size: the most TCP payload in one segment, in bytes
+MTU: the maximum transmission unit of the tunnel interface, in bytes; here 1,420
+H_IP: the IPv4 header without options, 20 bytes (an IPv6 header is 40)
+H_TCP: the TCP header without options, 20 bytes
+B: bytes
+In words: inside a 1,420-byte tunnel, each TCP segment can carry at most 1,380 bytes of data once the 40 bytes of IPv4 and TCP headers are subtracted.
+```
+
+Over IPv6 the subtraction is 60 bytes instead of 40, and TCP options such as timestamps reduce the data further.
 
 ## GRE: a plain tunnel
 
@@ -85,7 +135,25 @@ Tunnel mode:
 
 For these confidentiality-enabled ESP examples, **tunnel mode** encrypts the original IP packet, including its inner addresses, and is suitable for site-to-site VPNs. **Transport mode** leaves the original IP header outside encryption. The ESP trailer is encrypted; the ESP header and authentication tag are not. Actual protection follows the negotiated algorithms.
 
-With a 16-byte tag, no extra options or traffic-flow padding, ESP tunnel mode using AES-GCM adds 54 to 57 bytes over IPv4: new IP header (20), ESP header (SPI and sequence number, 8), IV (8), padding (0 to 3), pad length and next header (2), and a 16-byte integrity tag (ICV).
+With a 16-byte tag, no extra options or traffic-flow padding, ESP tunnel mode using AES-GCM adds 54 to 57 bytes over IPv4. Padding varies because ESP must make the encrypted part end on a 4-byte boundary:
+
+```formula
+O_ESP = H_IP + H_ESP + IV + P + T + ICV
+O_min = 20 + 8 + 8 + 0 + 2 + 16 = 54 B
+O_max = 20 + 8 + 8 + 3 + 2 + 16 = 57 B
+where
+O_ESP: the total bytes ESP tunnel mode adds to each packet
+O_min: the overhead with no padding needed
+O_max: the overhead with the most padding (3 bytes)
+H_IP: the new outer IPv4 header, 20 bytes
+H_ESP: the ESP header: SPI (4 bytes) and sequence number (4 bytes), 8 bytes
+IV: initialisation vector sent with each packet for AES-GCM, 8 bytes
+P: padding, 0 to 3 bytes, so the encrypted part ends on a 4-byte boundary
+T: the trailer's pad-length and next-header fields, 1 byte each, 2 bytes
+ICV: integrity check value: the 16-byte authentication tag
+B: bytes
+In words: AES-GCM ESP tunnel mode over IPv4 costs between 54 and 57 bytes per packet, depending on how much padding the inner packet needs.
+```
 
 ### NAT traversal
 
@@ -94,6 +162,24 @@ ESP has no TCP/UDP ports, complicating port-based NAT multiplexing; some devices
 ### Anti-replay
 
 Each ESP packet carries a sequence number. The receiver keeps a **sliding window** (RFC 4303 recommends 64 packets) so that it tolerates packets arriving slightly out of order but rejects duplicates and anything too old. WireGuard and DTLS use the same idea.
+
+The receiver accepts an authenticated packet only when both conditions on the first line hold, and then updates its highest-seen number:
+
+```formula
+s > s_top − W   and   s ∉ S
+s_new = max(s_top, s)
+where
+s: the sequence number of the arriving packet
+s_top: the highest sequence number accepted so far
+W: the window size, in packets; RFC 4303 recommends 64
+S: the set of sequence numbers already accepted inside the window
+∉: "is not a member of": s has not been accepted before
+s_new: the highest accepted sequence number after this packet
+max: the larger of the two values
+In words: a packet is accepted only if it is newer than the bottom of the window and has not been seen before; a new highest number slides the window forward.
+```
+
+For example, with *W* = 4 and *s_top* = 5, the window covers 2 to 5: packet 3 is accepted if unseen, packet 1 is rejected because it is not greater than 5 − 4 = 1, and packet 9 is accepted and moves *s_top* to 9.
 
 ```python
 class ReplayWindow:
@@ -135,7 +221,7 @@ Trace it with a window of 4:
 | 9 | 5 | accept | new top |
 | 6 | 9 | accept | in window (6..9), unseen |
 
-This toy handles already authenticated positive sequence numbers for one SA, without wrapping. Never update replay state before integrity verification: a forged high counter could otherwise evict legitimate packets. Its set pruning costs O(window size) per accepted packet. Efficient implementations can use bitmaps. The window size is a trade-off: too small and legitimate reordering (common with multi-core senders or ECMP paths) causes drops; too large costs memory per SA.
+This toy handles already authenticated positive sequence numbers for one SA, without wrapping. Never update replay state before integrity verification: a forged high counter could otherwise evict legitimate packets. Its set pruning takes time proportional to the window size for every accepted packet. Efficient implementations can use bitmaps. The window size is a trade-off: too small and legitimate reordering (common with multi-core senders or ECMP paths) causes drops; too large costs memory per SA.
 
 ## WireGuard
 
@@ -173,11 +259,22 @@ PersistentKeepalive = 25
 
 This laptop uses a **split tunnel**: only the two internal ranges go through the VPN. With suitable OS routes, `AllowedIPs = 0.0.0.0/0, ::/0` supports a **full tunnel** for ordinary IPv4/IPv6 destinations. Endpoint, local and policy-route exceptions still need handling. `PersistentKeepalive = 25` enables periodic authenticated empty packets when needed during idle periods, intended to keep a NAT mapping open when its timeout and policy permit (lesson 2's idle timeouts again).
 
-WireGuard avoids replies to random invalid probes. This is not absolute invisibility: under load, a packet with a valid MAC derived from the responder's public key can elicit a cookie reply before full peer authentication. Other network behavior can also leak information.
+WireGuard avoids replies to random invalid probes. This is not absolute invisibility: under load, a packet with a valid MAC derived from the responder's public key can elicit a cookie reply before full peer authentication. Other network behaviour can also leak information.
 
 ## VXLAN and overlays
 
-Data centres and clouds need far more isolated layer 2 segments than VLANs allow (a 12-bit ID gives 4,094 usable). **VXLAN** (RFC 7348) carries whole Ethernet frames in UDP (port 4789), with a 24-bit **VNI**, about 16 million segments:
+Data centres and clouds need far more isolated layer 2 segments than VLANs allow. **VXLAN** (RFC 7348) carries whole Ethernet frames in UDP (port 4789), with a 24-bit **VNI** (VXLAN network identifier). The number of network segments an ID field can name doubles with every bit:
+
+```formula
+N_VLAN = 2^12 − 2 = 4094
+N_VNI = 2^24 = 16777216
+where
+N_VLAN: usable VLAN IDs: a 12-bit field holds 2^12 (2 multiplied by itself 12 times) = 4,096 values, and IDs 0 and 4095 are reserved
+N_VNI: possible VXLAN network identifiers in a 24-bit field: 2 multiplied by itself 24 times
+In words: a 12-bit VLAN ID allows about four thousand network segments, while VXLAN's 24-bit VNI allows about 16.8 million.
+```
+
+The VXLAN encapsulation looks like this:
 
 ```
 [outer Eth][outer IP][UDP 4789][VXLAN]
@@ -185,14 +282,14 @@ Data centres and clouds need far more isolated layer 2 segments than VLANs allow
 [inner Eth frame ...]
 ```
 
-For the inner IP budget, subtract outer IPv4 (20), UDP (8), VXLAN (8), and inner Ethernet (14): 50 bytes. The outer Ethernet header shown above is outside the underlay IP MTU. Under these assumptions, either the underlay MTU is raised (data centres often run 9,000-byte jumbo frames) or the overlay MTU drops to 1,450. The devices that wrap and unwrap are **VTEPs**, usually hypervisors or top-of-rack switches. Fabrics can use **BGP EVPN** to distribute MAC reachability, reducing flood-based learning; broadcast, unknown-unicast and multicast handling may still involve replication or flooding. **Geneve** (RFC 8926, UDP 6081) is a more extensible successor, used for example by AWS Gateway Load Balancer.
+For the inner IP budget, subtract outer IPv4 (20), UDP (8), VXLAN (8), and inner Ethernet (14): 50 bytes, which is the 1,500 − 50 = 1,450 calculation at the start of this lesson. The outer Ethernet header shown above is outside the underlay IP MTU. Under these assumptions, either the underlay MTU is raised (data centres often run 9,000-byte jumbo frames) or the overlay MTU drops to 1,450. The devices that wrap and unwrap are **VTEPs**, usually hypervisors or top-of-rack switches. Fabrics can use **BGP EVPN** to distribute MAC reachability, reducing flood-based learning; broadcast, unknown-unicast and multicast handling may still involve replication or flooding. **Geneve** (RFC 8926, UDP 6081) is a more extensible successor, used for example by AWS Gateway Load Balancer.
 
 > [!warning] VXLAN has no security
 > VXLAN has no authentication and no encryption; RFC 7348 says so explicitly. An untrusted sender may inject frames if a VTEP accepts its packets and the selected VNI is configured. The VNI alone is not authentication; underlay filtering and endpoint policy can reject the traffic. Keep the underlay private and filtered, never expose VTEPs to the internet, and run VXLAN over IPsec or WireGuard if it must cross untrusted links.
 
 ## VPNs in a security architecture
 
-A remote-access VPN puts a device "on the network", which is exactly the location-based trust lesson 2 warned about. Stolen VPN credentials or vulnerabilities in exposed gateways can provide an entry point. Internet-facing gateways therefore require restricted administration, monitoring and timely fixes.
+A remote-access VPN puts a device "on the network", which is exactly the location-based trust lesson 2 warned about. Stolen VPN credentials or vulnerabilities in exposed VPN gateways can give attackers a way in. Internet-facing VPN gateways therefore require restricted administration, monitoring and timely fixes.
 
 > [!note] Content gap
 > A vendor-by-vendor list of recently exploited VPN vulnerabilities and an incident-frequency claim are omitted here because the individual advisories and a comparable incident dataset were not verified.
@@ -200,7 +297,7 @@ A remote-access VPN puts a device "on the network", which is exactly the locatio
 Good practice:
 
 - MFA for remote access, and certificate-based device authentication.
-- Prioritize fixes for known exploitation and high-risk exposed vulnerabilities; follow the applicable vendor advisory and incident response process.
+- Prioritise fixes for known exploitation and high-risk exposed vulnerabilities; follow the applicable vendor advisory and incident response process.
 - Treat VPN users as a separate, segmented zone, not as the office LAN.
 - Prefer per-application access (identity-aware proxies) for most users, and keep network-level VPNs for site-to-site links and administrators.
 

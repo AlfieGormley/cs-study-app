@@ -69,7 +69,7 @@ A **man-in-the-middle (MITM)** attacker sits between two parties, relaying and p
 
 Ways to get in the middle:
 
-- **ARP spoofing** on a LAN: tell the victim "the gateway's IP is at my MAC".
+- **ARP spoofing** on a LAN: tell the victim "the gateway's IP is at my MAC address".
 - **Rogue Wi-Fi access points** ("evil twins", lesson 5).
 - **DNS spoofing**: make the domain resolve to the attacker's IP.
 - **BGP hijacking**: an unauthorised announcement may redirect traffic in networks that accept and select it.
@@ -85,13 +85,13 @@ In a **replay attack** the attacker captures a valid message and sends it again 
 
 The signature is valid every time, because it is the same message. The defence is to make each message usable **once**:
 
-- **Nonces**: bind a unique value to the authenticated request; atomically reject reuse in the relevant session or account.
+- **Nonces**: include a unique value in the authenticated request; atomically reject reuse in the relevant session or account.
 - **Timestamps**: an authenticated timestamp can limit the acceptance window, but a replay inside that window still needs duplicate detection. Clock and expiry rules must be defined.
 - **Sequence numbers**: authenticate counters and track accepted values. An ordered channel can require the next counter; an IPsec-style sliding window can accept unseen out-of-order packets while rejecting duplicates and packets that are too old. TLS early data has separate replay caveats (lesson 3).
 
 ## Denial of service
 
-A **denial-of-service (DoS)** attack makes a service unavailable to legitimate users. A **distributed** DoS (DDoS) uses many sources, typically a **botnet** of compromised machines. The Mirai botnet of 2016, built from hacked cameras and routers, disrupted DNS resolution at Dyn and access to many customer websites.
+A **denial-of-service (DoS)** attack stops a service working for its legitimate users. A **distributed** DoS (DDoS) uses many sources, typically a **botnet** of compromised machines. The Mirai botnet of 2016, built from hacked cameras and routers, disrupted DNS resolution at Dyn and access to many customer websites.
 
 DDoS attacks are classified by the resource they exhaust:
 
@@ -119,7 +119,7 @@ Send requests that look legitimate but are expensive: searches, logins, uncached
 
 ## Amplification attacks
 
-One important family of volumetric attacks combines spoofing with **reflection** and **amplification**:
+One important family of volumetric attacks combines spoofing with **reflection and amplification**:
 
 ```
  Attacker            Reflectors       Victim
@@ -139,13 +139,19 @@ UDP is used because there is no handshake to verify the source. The reflectors a
 
 ### The amplification factor
 
-The **bandwidth amplification factor (BAF)** is:
+To compare reflectors, and to estimate how big an attack can get, you need one number: how many bytes come back for every byte the attacker sends. That ratio is the **bandwidth amplification factor (BAF)**:
 
+```formula
+BAF = B_resp / B_req
+where
+BAF: the bandwidth amplification factor, a plain ratio with no unit; 1 means no amplification
+B_resp: the size of the response the reflector sends to the victim, in bytes (B)
+B_req: the size of the request the attacker sends to the reflector, in bytes (B)
+B: bytes; one byte is 8 bits
+In words: the amplification factor is how many times bigger the reflected response is than the spoofed request that triggered it.
 ```
-       bytes of response
-BAF = -------------------
-       bytes of request
-```
+
+For example, a 40-byte request that triggers a 1,400-byte response has a BAF of 1,400 / 40 = 35. The ratio depends on which bytes you count (payload only, or headers too; see below) and on the particular query and server, so published figures are measurements, not constants.
 
 The following historical examples use UDP-payload ratios. Rossow's 2014 measurements report sample means for particular queries and servers; GitHub's 2018 incident report cites an upper memcached example. They are not fixed protocol constants or current guarantees:
 
@@ -157,14 +163,40 @@ The following historical examples use UDP-payload ratios. Rossow's 2014 measurem
 | CharGEN | 358.8 |
 | Memcached | Up to 51,000 in the cited 2018 report |
 
-The attack bandwidth is then:
+If every reflector answers every request, the traffic arriving at the victim is the attacker's sending rate multiplied by the BAF. The attacker's sending rate is in turn the number of bots times each bot's upload rate:
 
-```
-victim traffic = attacker upload x BAF
+```formula
+R_send = N_bots × r_bot
+R_victim = R_send × BAF
+where
+R_send: the attacker's total sending rate, in megabits per second (Mbps)
+N_bots: the number of compromised devices (bots) sending spoofed requests
+r_bot: the upload rate of each bot, in megabits per second (Mbps)
+R_victim: the traffic rate arriving at the victim, in the same unit as R_send
+BAF: the bandwidth amplification factor of the reflectors used, a plain ratio
+Mbps: megabits per second; 1,000 Mbps = 1 gigabit per second (Gbps)
+In words: the flood hitting the victim is the attackers' combined upload multiplied by how much each reflector amplifies it.
 ```
 
-> [!example] Working it out
-> A botnet has 2,000 devices, each able to send 5 Mbps. Under a payload-rate model with sufficient reflector capacity and no loss, total sending capacity is 2,000 × 5 = 10,000 Mbps = 10 Gbps. Reflected through open DNS resolvers with a BAF of 50, the victim receives about 10 × 50 = **500 Gbps**. Through exposed memcached servers even a 1 Gbps attacker could, in principle, generate tens of Tbps; in practice the reflectors' own links cap it. In 2018 GitHub absorbed a 1.35 Tbps memcached attack.
+This assumes a payload-rate model: reflectors have enough capacity, nothing is lost on the way, and every request is answered. Real attacks fall short of it, because reflectors' own links and rate limits cap what they can send.
+
+**Working it out.** A botnet has 2,000 devices, each able to send 5 Mbps, reflected through open DNS resolvers with a BAF of 50:
+
+```formula
+R_send = 2000 × 5 Mbps = 10000 Mbps
+R_send = 10 Gbps
+R_victim = 10 Gbps × 50 = 500 Gbps
+where
+R_send: the botnet's total sending rate
+R_victim: the traffic rate arriving at the victim
+Mbps: megabits per second, millions of bits per second
+Gbps: gigabits per second; 1 Gbps = 1,000 Mbps
+In words: 2,000 bots at 5 Mbps send 10 Gbps in total, and a fifty-fold reflector turns that into about 500 Gbps at the victim.
+```
+
+Through exposed memcached servers even a 1 Gbps attacker could, in principle, generate tens of Tbps (terabits per second; 1 Tbps = 1,000 Gbps); in practice the reflectors' own links cap it. In 2018 GitHub absorbed a 1.35 Tbps memcached attack.
+
+The same calculation as Python code:
 
 ```python
 def attack_gbps(bots, mbps_each, baf):
@@ -178,8 +210,23 @@ This prints `500.0`.
 
 Two subtleties:
 
-- **Headers dilute the factor in this unfragmented example.** A UDP datagram carried in one IPv4 packet with no options has 28 bytes of IP and UDP headers; link-layer overhead is additional. For a 40-byte request and 1,400-byte response, the payload BAF is 35, but counting only IP and UDP headers the ratio is (1,400 + 28) / (40 + 28) = 21. A full link-level ratio also needs framing and packetisation.
-- **Packet amplification** matters too. One request producing many response packets multiplies the packets per second, which stresses routers and firewalls as well as links.
+**Headers dilute the factor in this unfragmented example.** A UDP datagram carried in one IPv4 packet with no options has 28 bytes of IP and UDP headers (20 for IPv4, 8 for UDP); link-layer overhead is additional. For a 40-byte request and 1,400-byte response, the payload BAF is 35, but counting the IP and UDP headers too gives a lower ratio:
+
+```formula
+BAF_IP = (B_resp + H) / (B_req + H)
+BAF_IP = (1400 + 28) / (40 + 28)
+BAF_IP = 1428 / 68 = 21
+where
+BAF_IP: the amplification factor counting IP and UDP headers as well as payload, a plain ratio
+B_resp: the response payload, in bytes; here 1,400
+B_req: the request payload, in bytes; here 40
+H: the IPv4 header (20 bytes) plus the UDP header (8 bytes), 28 bytes per packet
+In words: adding the same 28 header bytes to both sides shrinks the ratio, and shrinks it most when the request is small: 35 on payload alone becomes 21 at the IP level.
+```
+
+A full link-level ratio also needs link-layer framing and packetisation, which dilute it further.
+
+**Packet amplification** matters too. One request producing many response packets multiplies the packets per second, which stresses routers and firewalls as well as links.
 
 ### Defending against amplification
 

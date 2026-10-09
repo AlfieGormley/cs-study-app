@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "```\nsent = 1,000 x 2 Mbps\n     = 2,000 Mbps = 2 Gbps\nvictim = 2 Gbps x 50\n       = 100 Gbps\n```\n\nEvery byte the botnet sends becomes about 50 bytes at the victim. This is the ideal payload-rate result under the stated assumptions. A physical-link rate needs packet sizes, framing, packetisation and loss/capacity limits; its correction is not necessarily small.",
+    "workedExample": "The traffic at the victim is the botnet's total sending rate multiplied by the amplification factor:\n\n```formula\nR_send = N_bots × r_bot\nR_send = 1000 × 2 Mbps = 2000 Mbps\nR_send = 2 Gbps\nR_victim = R_send × BAF\nR_victim = 2 Gbps × 50 = 100 Gbps\nwhere\nR_send: the botnet's total sending rate\nN_bots: the number of bots, here 1,000\nr_bot: each bot's upload rate, here 2 Mbps\nR_victim: the payload rate arriving at the victim\nBAF: bandwidth amplification factor: response bytes divided by request bytes, here 50\nMbps: megabits per second, millions of bits per second\nGbps: gigabits per second; 1 Gbps = 1,000 Mbps\nIn words: 1,000 bots at 2 Mbps send 2 Gbps, and a fifty-fold reflector turns that into 100 Gbps at the victim.\n```\n\nEvery byte the botnet sends becomes about 50 bytes at the victim. This is the ideal payload-rate result under the stated assumptions. A physical-link rate needs packet sizes, link-layer framing, packetisation and loss/capacity limits; its correction is not necessarily small.",
     "link": {
       "title": "UDP-Based Amplification Attacks — CISA",
       "url": "https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Payload BAF:\n\n```\n1,200 / 36 = 33.3\n```\n\n2. IP-packet sizes add 20 (IPv4) + 8 (UDP):\n\n```\nrequest  = 36 + 28    = 64\nresponse = 1,200 + 28 = 1,228\nIP BAF = 1,228 / 64 ≈ 19.2\n```\n\n3. The 28 bytes nearly double the small request but barely change the large response, so the real multiplier drops a lot. Rossow's cited measurements use UDP payload bytes. These computed sizes exclude link-layer overhead and assume one unfragmented packet in each direction.",
+    "workedExample": "1. Payload BAF is the response payload divided by the request payload:\n\n```formula\nBAF = B_resp / B_req\nBAF = 1200 / 36 ≈ 33.3\nwhere\nBAF: bandwidth amplification factor, a plain ratio with no unit\nB_resp: the response payload, in bytes; here 1,200\nB_req: the request payload, in bytes; here 36\n≈: approximately equal to (rounded)\nIn words: each payload byte the attacker sends brings back about 33 payload bytes.\n```\n\n2. At the IP-packet level, each packet also carries 20 bytes of IPv4 header and 8 of UDP header:\n\n```formula\nBAF_IP = (B_resp + H) / (B_req + H)\nBAF_IP = (1200 + 28) / (36 + 28)\nBAF_IP = 1228 / 64 ≈ 19.2\nwhere\nBAF_IP: the amplification factor counting IP and UDP headers, a plain ratio\nB_resp: the response payload, 1,200 bytes\nB_req: the request payload, 36 bytes\nH: IPv4 header (20 bytes) plus UDP header (8 bytes) = 28 bytes per packet\n≈: approximately equal to (rounded)\nIn words: adding 28 header bytes to each side nearly doubles the small request but barely changes the big response, so the ratio drops from 33.3 to about 19.2.\n```\n\n3. The 28 bytes nearly double the small request but barely change the large response, so the real multiplier drops a lot. Rossow's cited measurements use UDP payload bytes. These computed sizes exclude link-layer overhead and assume one unfragmented packet in each direction.",
     "link": {
       "title": "UDP-Based Amplification Attacks — CISA",
       "url": "https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks"
@@ -194,7 +194,7 @@
     "options": [
       {
         "text": "It drops every SYN from an address it has not seen before",
-        "explanation": "That would block every new legitimate client. Cookies allow eligible new attempts without retaining a half-open entry; filtering and resource limits may still drop SYNs."
+        "explanation": "That would block every new legitimate client. Cookies allow eligible new attempts without retaining a half-open entry; filtering and capacity limits may still drop SYNs."
       },
       {
         "text": "It allocates a larger half-open queue",
@@ -210,7 +210,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Normal TCP: on SYN, store a half-open entry and send a SYN-ACK. Each entry waits for an ACK until timeout.\n2. Spoofed SYNs never send that ACK, so entries pile up until the queue is full.\n3. For a cookie-handled SYN the server does not retain a per-request half-open entry. It picks its ISN as a keyed hash of the 4-tuple plus a time counter and an encoded MSS.\n4. When an ACK arrives with `ack = ISN + 1`, the server checks the hash and recreates the state.\n5. Cost: some TCP options are lost or squeezed in, Linux tcp_syncookies=1 uses overflow fallback; value 2 requests unconditional cookie generation.",
+    "workedExample": "1. Normal TCP: on SYN, store a half-open entry and send a SYN-ACK. Each entry waits for an ACK until timeout.\n2. Spoofed SYNs never send that ACK, so entries pile up until the queue is full.\n3. For a cookie-handled SYN the server does not retain a per-request half-open entry. It picks its ISN as a keyed hash of the 4-tuple plus a time counter and an encoded MSS.\n4. When the client's ACK arrives, its acknowledgment number should be the cookie plus one:\n\n```formula\nack = ISN + 1\nwhere\nack: the acknowledgment number in the client's final ACK of the handshake, a 32-bit number\nISN: initial sequence number: here, the SYN cookie the server put in its SYN-ACK\nIn words: the client acknowledges the server's sequence number plus one, so the server subtracts one to get its cookie back and checks the hash.\n```\n\n   If the hash checks out, the server recreates the connection state.\n5. Cost: some TCP options are lost or have to be squeezed into the cookie. On Linux, the setting `tcp_syncookies=1` uses cookies only when the SYN queue overflows; value 2 makes the server use cookies for every SYN.",
     "link": {
       "title": "RFC 4987: TCP SYN Flooding Attacks and Common Mitigations",
       "url": "https://www.rfc-editor.org/rfc/rfc4987"
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. QUIC runs over UDP, so a spoofed Initial is possible.\n2. The server's handshake (certificate chain and all) can be several kilobytes, which would be an amplifier.\n3. RFC 9000 §8: before address validation the server must not send more than **3×** the bytes received.\n4. Clients must pad Initials to at least 1,200 bytes, which raises the cost of each probe:\n\n```\nlimit = 3 x 1,200 = 3,600 bytes\n```\n\n5. If the handshake needs more, the server waits for more client packets or sends a Retry. Only receiving and validating the returned token establishes that the client could receive it; merely sending a Retry proves nothing.",
+    "workedExample": "1. QUIC runs over UDP, so a spoofed Initial is possible.\n2. The server's handshake (certificate chain and all) can be several kilobytes, which would let a small spoofed packet trigger a much larger reply.\n3. RFC 9000 §8: before address validation the server must not send more than **3×** the bytes received.\n4. Clients must pad Initials to at least 1,200 bytes, which raises the cost of each probe:\n\n```formula\nL_max = 3 × B_recv\nL_max = 3 × 1200 B = 3600 B\nwhere\nL_max: the most the server may send before the client's address is validated, in bytes\nB_recv: the bytes the server has received from that address, here one 1,200-byte datagram\nB: bytes; one byte is 8 bits\nIn words: until it validates the address, a QUIC server may send at most three times what it has received, so 1,200 bytes in allows 3,600 bytes out.\n```\n\n5. If the handshake needs more, the server waits for more client packets or sends a Retry packet. Only receiving and validating the returned token establishes that the client could receive it; merely sending a Retry proves nothing.",
     "link": {
       "title": "RFC 9000: QUIC, section 8 (address validation)",
       "url": "https://www.rfc-editor.org/rfc/rfc9000#section-8"
@@ -349,7 +349,7 @@
     "id": "nsec-threats-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "An attacker wants to forge a full TCP connection from a spoofed IP address and cannot see the server's replies. Roughly what is the chance that one guess of the server's initial sequence number, modeled as uniformly random across 32 bits for an ordinary no-data handshake is correct?",
+    "prompt": "An attacker wants to forge a full TCP connection from a spoofed IP address and cannot see the server's replies. Roughly what is the chance that one guess of the server's initial sequence number, modelled as uniformly random across 32 bits for an ordinary no-data handshake, is correct?",
     "options": [
       {
         "text": "1 in 65,536",
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. To complete the handshake blind, the attacker's ACK must acknowledge `server ISN + 1`.\n2. They never see the SYN-ACK, so they must guess.\n3. Under the stated ideal uniform model there are:\n\n```\n2^32 = 4,294,967,296\n```\n\n4. So a single guess succeeds about once in 4.3 billion.\n5. Historically, predictable ISNs made this practical, which is why RFC 6528 recommends an unpredictable sequence-number generation method.",
+    "workedExample": "1. To complete the handshake blind, the attacker's ACK must acknowledge `server ISN + 1`.\n2. They never see the SYN-ACK, so they must guess.\n3. Under the stated ideal uniform model, every one of the possible 32-bit values is equally likely:\n\n```formula\nN = 2^32 = 4294967296\nP = 1 / N ≈ 1 / (4.3 × 10^9)\nwhere\nN: the number of possible values of a 32-bit sequence number: 2 multiplied by itself 32 times (written 2^32), because each of the 32 bits can be 0 or 1\nP: the probability that one random guess is exactly right\n≈: approximately equal to (rounded)\nIn words: there are about 4.3 billion possible sequence numbers, so one blind guess is right about once in 4.3 billion tries.\n```\n\n4. So a single guess succeeds about once in 4.3 billion.\n5. Historically, predictable ISNs made this practical, which is why RFC 6528 recommends an unpredictable sequence-number generation method.",
     "link": {
       "title": "RFC 4987: TCP SYN Flooding Attacks and Common Mitigations",
       "url": "https://www.rfc-editor.org/rfc/rfc4987"

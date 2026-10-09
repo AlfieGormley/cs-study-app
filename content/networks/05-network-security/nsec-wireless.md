@@ -18,16 +18,45 @@ The history of Wi-Fi security is a tour of how to get these wrong, and it is wor
 
 ## WEP: what not to do
 
-**WEP**, introduced with the original 802.11 standard, encrypted protected data-frame payloads with the RC4 stream cipher, using a key built from a shared 40- or 104-bit secret plus a 24-bit **initialisation vector** (IV) sent in clear. Integrity came from a CRC-32 checksum.
+**WEP**, introduced with the original 802.11 standard, encrypted the payloads of protected 802.11 data frames with the RC4 stream cipher, using a key built from a shared 40- or 104-bit secret plus a 24-bit **initialisation vector** (IV) sent in clear. Integrity came from a CRC-32 checksum.
 
 Its flaws compound:
 
-1. **IV reuse.** Stream ciphers must never reuse a keystream. With only 2^24 (about 16.8 million) IVs, collisions come fast: under independent uniform random IV selection with replacement, the birthday approximation gives a 50% collision chance after about 4,800 frames. Counter-based choices have different collision behavior until wraparound. For equal IVs under the same WEP key, XORing the encrypted payloads cancels their keystream and reveals the XOR of the plaintexts; recovering either plaintext needs further information.
+1. **IV reuse.** Stream ciphers must never reuse a keystream. A 24-bit IV has only about 16.8 million possible values, and repeats come much sooner than that. If each frame picks an IV independently and uniformly at random (repeats allowed), the **birthday approximation** says when the chance that *some* two frames share an IV reaches 50 %:
+
+```formula
+N = 2^24 = 16777216
+n_50 ≈ √(2 × ln(2) × N)
+n_50 ≈ 1.18 × √N = 1.18 × 4096
+n_50 ≈ 4800
+where
+N: the number of possible IVs: 2 multiplied by itself 24 times, because the IV is 24 bits long
+n_50: the number of frames after which the chance of at least one repeated IV reaches 50 %
+√: square root
+ln: the natural logarithm (logarithm to base e ≈ 2.718); ln(2) ≈ 0.693
+≈: approximately equal to (rounded)
+In words: because any pair of frames can collide, a repeat becomes an even bet after only about the square root of the number of IVs, roughly 4,800 frames, not after 16.8 million.
+```
+
+   This is why it is called the birthday problem: in a room of just 23 people, two probably share a birthday. Counter-based IV choices have different repeat behaviour until wraparound. For equal IVs under the same WEP key, XORing the encrypted payloads cancels their keystream and reveals the XOR of the plaintexts; recovering either plaintext needs further information.
 2. **Weak RC4 key scheduling.** The Fluhrer–Mantin–Shamir attack (2001), and the much faster PTW attack (2007), recover the key from captured traffic. The 2007 PTW paper reports recovery of a 104-bit WEP key with fewer than 40,000 frames in half its cases, using an active attack. Its sub-minute collection result involved reinjection on an 802.11g network; this is an experiment-specific result, not a guarantee for any busy network.
-3. **CRC-32 is not a MAC.** Its algebraic structure permits predictable checksum adjustments when bits are flipped; CRC-32 conventions include fixed initial/final terms, so the general relation is affine rather than simply CRC(a XOR b) = CRC(a) XOR CRC(b). It is not a keyed authenticator.
+3. **CRC-32 is not a keyed MAC.** A message authentication code (keyed MAC) is a checksum computed with a secret key, so only key holders can produce a valid one. CRC-32 has no key, and its algebraic structure permits predictable checksum adjustments when bits are flipped. For two messages of the same length:
+
+```formula
+CRC(a ⊕ b) = CRC(a) ⊕ CRC(b) ⊕ C_0
+where
+CRC: the CRC-32 checksum function, which turns a message into a 32-bit value
+a: one message, as a string of bits
+b: another message of the same length; in an attack, a pattern of bits to flip
+⊕: XOR (exclusive OR), bit by bit: 1 where the two inputs differ, 0 where they match
+C_0: the CRC-32 of an all-zero message of that length; it appears because CRC-32 uses fixed initial and final values, which makes the relation affine rather than purely linear
+In words: the checksum of a message with flipped bits can be calculated from the old checksum and the flip pattern alone, without knowing the message.
+```
+
+   So an attacker who flips chosen bits of a WEP frame (RC4 encryption is XOR with a keystream, so flipping ciphertext bits flips the same plaintext bits) can also fix up the encrypted checksum. CRC-32 has no key, so it cannot prove that the frame is genuine.
 4. **Shared-key management** makes individual revocation and safe rotation difficult; WEP does not require that operators literally never change keys.
 
-WEP is obsolete and should not be used. The lessons: never reuse a nonce, use a real MAC, and derive fresh per-session keys.
+WEP is obsolete; never use it. The lessons: never reuse a nonce, use a real MAC, and derive fresh per-session keys.
 
 ## WPA2
 
@@ -38,13 +67,21 @@ WEP is obsolete and should not be used. The lessons: never reuse a nonce, use a 
 | Personal (PSK) | Shared passphrase | Homes, small offices |
 | Enterprise | 802.1X / EAP per user | Companies, eduroam |
 
-In Personal mode the passphrase is stretched into a 256-bit **Pairwise Master Key** (PMK):
+In Personal mode the passphrase is stretched into a 256-bit **Pairwise Master Key** (PMK). Stretching means deliberately repeating a hash thousands of times, so that each guess an attacker tries costs thousands of hash computations too:
 
+```formula
+PMK = PBKDF2(HMAC-SHA1, P, SSID,
+             4096, 256)
+where
+PMK: Pairwise Master Key, the 256-bit key that all later WPA2-Personal keys are derived from
+PBKDF2: Password-Based Key Derivation Function 2: applies a keyed hash many times to turn a password into a key; its inputs are, in order, the hash function, the password, the salt, the iteration count and the output length in bits
+HMAC-SHA1: the keyed hash PBKDF2 repeats here: HMAC built on the SHA-1 hash function
+P: the passphrase, 8 to 63 printable ASCII characters
+SSID: the network name, used as the salt so that the same passphrase gives different keys on differently named networks
+In words: the PMK is the passphrase hashed 4,096 times with the network name mixed in, giving a 256-bit key.
 ```
-PMK = PBKDF2(HMAC-SHA1, passphrase,
-             salt = SSID,
-             4096 iterations, 256 bits)
-```
+
+The same derivation in Python:
 
 ```python
 import hashlib
@@ -83,9 +120,19 @@ The PMK is never used to encrypt traffic directly. Instead, after association, t
  AP installs PTK
 ```
 
-```
-PTK = PRF(PMK, ANonce, SNonce,
-          AP MAC, client MAC)
+Both sides then derive the session key from the PMK and values exchanged in the clear:
+
+```formula
+PTK = PRF(PMK, N_A, N_S, MAC_AP, MAC_C)
+where
+PTK: Pairwise Transient Key, the session's set of keys for protecting unicast traffic between this client and AP
+PRF: pseudo-random function: a keyed function (built on HMAC in WPA2) that expands a key and inputs into as many key bits as needed; 802.11i also feeds it a fixed label and puts the addresses and nonces in sorted order
+PMK: Pairwise Master Key, from the passphrase (Personal) or from 802.1X (Enterprise)
+N_A: ANonce, the random number the AP sends in M1
+N_S: SNonce, the random number the client sends in M2
+MAC_AP: the AP's MAC address
+MAC_C: the client's MAC address
+In words: the session key mixes the long-term PMK with two fresh random numbers and both addresses, so every handshake gives a new PTK.
 ```
 
 - Fresh nonces separate PTK derivations for distinct handshakes under the same PMK; secure nonce generation and correct key-installation state are required.
@@ -94,7 +141,7 @@ PTK = PRF(PMK, ANonce, SNonce,
 
 ### The offline cracking problem
 
-Look at what an eavesdropper captures: ANonce, SNonce, both MAC addresses, and a MIC computed from a PTK that depends only on those values and the PMK. So they can test passphrase guesses **offline**:
+Look at what an eavesdropper captures: ANonce, SNonce, both MAC addresses, and a MIC computed from a PTK that depends only on those values and the PMK. So they can mount an **offline guessing** attack, testing passphrase guesses on their own hardware:
 
 ```
 for guess in wordlist:
@@ -103,10 +150,46 @@ for guess in wordlist:
         found!
 ```
 
-No further contact with the network is needed, so there is no lockout. The 4,096 PBKDF2 iterations add work per guess. The rate depends on hardware and implementation; the next example uses a hypothetical rate. In some configurations, a captured **PMKID**, derived using the PMK, a fixed label and both MAC addresses, supplies another offline verifier without a victim client handshake.
+No further contact with the network is needed, so there is no lockout. The 4,096 PBKDF2 iterations add work per guess. The rate depends on hardware and implementation; the next example uses a hypothetical rate. In some configurations, a captured **PMKID**, derived using the PMK, a fixed label and both MAC addresses, supplies another offline verifier without a victim client handshake:
 
-> [!example] How long does a password last?
-> An 8-character all-lowercase passphrase has 26^8 ≈ 2.1 × 10^11 possibilities. At an assumed constant 10^6 distinct guesses a second, exhausting them takes about 2.1 × 10^5 seconds, roughly 58 hours, and on average half that. Human choices can be nonuniform and vulnerable to dictionary order. Uniformly choosing five words from a specified large list gives a much larger finite search space (calculated in the quiz); security still depends on the list, selection process and attacker resources.
+```formula
+PMKID = HMAC-SHA1-128(PMK,
+          L ‖ MAC_AP ‖ MAC_C)
+where
+PMKID: PMK identifier, a 128-bit value an AP may send in the first handshake message
+HMAC-SHA1-128: HMAC using SHA-1, cut down to its first 128 bits
+PMK: Pairwise Master Key, derived from the passphrase
+L: the fixed text label "PMK Name"
+‖: concatenation: joining byte strings end to end
+MAC_AP: the AP's MAC address
+MAC_C: the client's MAC address
+In words: the PMKID is a fingerprint of the PMK and the two addresses, so an attacker can test a guessed passphrase by recomputing it.
+```
+
+**How long does a password last?** The search space is the number of choices per position raised to the number of positions, and the time to search it all is that space divided by the guessing rate:
+
+```formula
+K = c^L
+K = 26^8 ≈ 2.1 × 10^11
+t_full = K / r
+t_full = 2.1 × 10^11 / (10^6 s^−1)
+t_full ≈ 2.1 × 10^5 s ≈ 58 h
+t_avg = t_full / 2 ≈ 29 h
+where
+K: the number of possible passphrases (the keyspace)
+c: the number of possible characters per position; 26 for lowercase letters only
+L: the passphrase length in characters; here 8
+r: the guessing rate; an assumed constant 10^6 (one million) guesses per second
+t_full: the time to try every possibility
+t_avg: the average time to find a uniformly chosen passphrase: half the full search
+s: seconds; s^−1 means "per second"
+h: hours; 1 h = 3,600 s
+^: "to the power of": 26^8 is 26 multiplied by itself 8 times, and 10^11 is 1 followed by 11 zeros
+≈: approximately equal to (rounded)
+In words: an 8-letter lowercase passphrase has about 210 billion possibilities, which a million guesses a second exhausts in about 58 hours, finding it on average in about 29.
+```
+
+This assumes the passphrase was chosen uniformly at random. Human choices are often not, and a dictionary ordered by popularity finds them far sooner. Uniformly choosing five words from a specified large list gives a much larger finite search space (calculated in the quiz); security still depends on the list, selection process and attacker resources.
 
 WPA2-Personal's resistance to this offline guessing attack depends on passphrase strength. An observer who knows the shared passphrase and captures the needed handshake can derive another client's link-layer keys; application TLS can still protect the application payload. Implementation and management-frame security also matter.
 
@@ -123,11 +206,11 @@ The handshake has a reliability feature: if the AP does not receive M4, it retra
  -> packet-number component resets
 ```
 
-Reinstalling the key reset the **packet number**, which forms part of the CCMP nonce. Now the client encrypted new frames with a nonce, and therefore keystream, it had already used: the same mistake that killed WEP. Nonce reuse can expose relationships between plaintexts and enable decryption with additional known or predictable data; the exact capability depends on cipher and traffic. KRACK also enabled forgery in affected TKIP/GCMP cases.
+Reinstalling the key reset the **CCMP packet number**, which forms part of the CCMP nonce. Now the client encrypted new frames with a nonce, and therefore keystream, it had already used: the same mistake that killed WEP. Nonce reuse can expose relationships between plaintexts and enable decryption with additional known or predictable data; the exact capability depends on cipher and traffic. KRACK also enabled forgery in affected TKIP/GCMP cases.
 
 Worst hit were Linux and Android devices using affected `wpa_supplicant` versions 2.4 and later before fixes, which installed an **all-zero key** after the reinstall, making traffic trivially decryptable.
 
-Fixes ensure keys are not reinstalled in a way that resets their security state. Patch every affected device: client patches do not fix vulnerable AP-side Fast BSS Transition behavior, nor do ordinary AP patches automatically fix clients. Patched and unpatched devices interoperate, so no new protocol was needed. KRACK showed that even a protocol with a formal security proof can fail where the proof's model (a single key installation) does not match the state machine engineers actually built.
+Fixes ensure keys are not reinstalled in a way that resets their security state. Patch every affected device: client patches do not fix vulnerable AP-side Fast BSS Transition behaviour, nor do ordinary AP patches automatically fix clients. Patched and unpatched devices interoperate, so no new protocol was needed. KRACK showed that even a protocol with a formal security proof can fail where the proof's model (a single key installation) does not match the key-installation logic engineers actually built.
 
 ## WPA3
 

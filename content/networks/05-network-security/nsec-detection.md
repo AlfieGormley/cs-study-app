@@ -57,22 +57,47 @@ alert http any any -> $HOME_NET any ( \
   sid:1000001; rev:1;)
 ```
 
-The header (`alert http any any -> $HOME_NET any`) says what traffic to consider; the options say what to look for. `flow:established,to_server` selects traffic towards the server in a flow the engine considers established. This is connection tracking, not cryptographic peer authentication or a guarantee against forged traffic; midstream handling also depends on configuration. `http.uri` selects the normalized URI buffer. The string match is only a teaching example, not a complete SQL-injection detector.
+The header (`alert http any any -> $HOME_NET any`) says what traffic to consider; the options say what to look for. `flow:established,to_server` selects traffic towards the server in a flow the engine considers established. This is connection tracking, not cryptographic peer authentication or a guarantee against forged traffic; midstream handling also depends on configuration. `http.uri` selects the normalised URI buffer. The string match is only a teaching example, not a complete SQL-injection detector.
 
 Signatures match specified patterns, which can occur in both known and previously unseen attacks, or in benign traffic. **Anomaly-based** detection learns a baseline (normal hosts, ports, volumes and times) and alerts on deviations: a workstation suddenly talking SMB to fifty others, a server uploading gigabytes at 3 a.m. It can flag previously unseen behaviour, but deviations can be legitimate. Relative false-positive rates depend on the detector, data and threshold.
 
 ### The base-rate problem
 
-Even a small false-positive rate can overwhelm true alerts when malicious events are rare. If prevalence is p, sensitivity is t and the false-positive rate is f, expected alert precision is t × p / (t × p + f × (1 − p)), when the denominator is nonzero.
+Even a small false-positive rate can overwhelm true alerts when malicious events are rare. The question an analyst cares about is: when an alert fires, how likely is it to be real? That fraction is the detector's **alert precision**, and it depends on how common attacks are (the base rate) as well as on the detector:
 
-> [!example] Working it out
-> A network sees 10,000,000 connections a day, of which 100 are malicious. A detector catches 99% of attacks and flags only 0.1% of benign connections.
->
-> - Expected true alerts: 100 × 0.99 = **99**
-> - Expected false alerts: 9,999,900 × 0.001 ≈ **10,000**
-> - Precision: 99 / (99 + 10,000) ≈ **1%**
->
-> About 99% of alerts are false in this model. That workload can make triage difficult; it does not prove that every analyst will miss the true alerts.
+```formula
+precision = (t × p) / (t × p + f × (1 − p))
+where
+precision: the fraction of alerts that are real attacks, from 0 to 1 (also called positive predictive value)
+p: prevalence (the base rate): the fraction of all events that are malicious
+t: sensitivity (true-positive rate): the fraction of malicious events the detector flags
+f: false-positive rate: the fraction of benign events the detector wrongly flags
+In words: real alerts are the detected share of the rare bad events; false alerts are the wrongly flagged share of the huge number of good events; precision is real alerts divided by all alerts.
+```
+
+This is Bayes' theorem applied to alerts. It assumes the rates are constant across events, and it is undefined if the detector never alerts (the bottom line is zero).
+
+**Working it out.** A network sees 10,000,000 connections a day, of which 100 are malicious. A detector catches 99 % of attacks and flags only 0.1 % of benign connections:
+
+```formula
+A_true = N_bad × t = 100 × 0.99 = 99
+A_false = N_good × f
+A_false = 9999900 × 0.001 ≈ 10000
+precision = A_true / (A_true + A_false)
+precision = 99 / (99 + 10000) ≈ 0.01
+where
+A_true: expected alerts on malicious connections per day
+A_false: expected alerts on benign connections per day
+N_bad: malicious connections per day, here 100
+N_good: benign connections per day, here 10,000,000 − 100 = 9,999,900
+t: sensitivity, here 0.99 (99 %)
+f: false-positive rate, here 0.001 (0.1 %)
+precision: the fraction of alerts that are real
+≈: approximately equal to (rounded)
+In words: about 99 real alerts are buried among about 10,000 false ones, so only about 1 % of alerts are real.
+```
+
+About 99 % of alerts are false in this model. That workload can make triage difficult; it does not prove that every analyst will miss the true alerts.
 
 This is why mature teams tune aggressively, suppress noisy rules, correlate network alerts with host and identity signals in a SIEM, and measure precision in their own environment. Malware-domain and honeypot alerts can be useful, but shared infrastructure, research traffic and mistakes can still create false positives.
 
@@ -117,7 +142,7 @@ The flags are the quickest way to read a conversation:
 | `[F.]` | FIN, closing |
 | `[R]` | RST, refused or aborted |
 
-SYNs to many ports can indicate a scan, but may also be authorized diagnostics. A reset indicates active rejection or abort somewhere along the path, possibly by a middlebox. Silence could reflect filtering, loss, an unavailable host or an unseen return path; it does not identify a firewall by itself.
+SYNs to many ports can indicate a scan, but may also be authorised diagnostics. A reset indicates active rejection or abort somewhere along the path, possibly by a middlebox. Silence could reflect filtering, loss, an unavailable host or replies travelling by a path the sensor cannot see; it does not identify a firewall by itself.
 
 ### Wireshark
 
@@ -140,8 +165,28 @@ Useful display filters for investigations:
 > [!warning] Capture pitfalls
 > - **Offloads.** Depending on the capture hook and enabled offloads, host captures can show large buffers before transmit segmentation or after receive coalescing, and outbound checksums before hardware fills them in. Such apparent errors need not occur on the wire.
 > - **Drops.** A busy capture can drop packets; tcpdump reports "dropped by kernel" on exit.
-> - **Storage.** Recording bytes at a constant 1 Gbps is 125 MB/s, or 10.8 decimal TB/day before capture-file overhead. A physical link rate is not identical to recorded packet bytes because framing and gaps also consume capacity. Choose retention from measured volume and budget.
+> - **Storage.** Recording bytes at a constant 1 Gbps is 125 MB/s, or 10.8 decimal TB/day before capture-file overhead (calculated below). A physical link rate is not identical to recorded packet bytes because link-layer framing and gaps also consume capacity. Choose retention from measured volume and budget.
 > - **Privacy and law.** Captures contain personal data and credentials; handle them as sensitive.
+
+The storage a full capture needs is the recorded rate, converted from bits to bytes, multiplied by how long you record:
+
+```formula
+V = (R / 8) × T
+V = (10^9 bit/s / 8) × 86400 s
+V = 1.25 × 10^8 B/s × 86400 s
+V = 1.08 × 10^13 B = 10.8 TB
+where
+V: the storage needed, in bytes (B)
+R: the recorded data rate, in bits per second; here 1 Gbps = 10^9 bit/s. Dividing it by 8 converts bits to bytes, because a byte is 8 bits
+T: the recording time, in seconds (s); one day = 86,400 s
+bit: one binary digit
+B: bytes; 1 B = 8 bits
+s: seconds
+TB: terabytes, in decimal units: 1 TB = 10^12 bytes
+In words: a fully used 1 Gbps link fills 125 megabytes every second, which is about 10.8 terabytes a day.
+```
+
+Keeping 30 days of that is about 324 TB, which is why full capture usually has short retention or is triggered only when needed.
 
 ## Encrypted traffic
 
@@ -154,15 +199,15 @@ When traffic is encrypted, a passive sensor without decryption keys cannot inspe
 
 The alternative is **TLS interception** at a proxy, which restores payload visibility at the cost of the risks described in lesson 2. Any interception policy must define which traffic it can inspect and which traffic it exempts.
 
-**Zeek** sits in between: it parses traffic into structured logs (`conn.log`, `dns.log`, `http.log`, `ssl.log`, `files.log`) whose record units depend on the log type. These logs retain selected metadata; encrypted application contents remain unavailable without decryption. Storage and usefulness depend on the enabled analyzers and traffic.
+**Zeek** sits in between: it parses traffic into structured logs (`conn.log`, `dns.log`, `http.log`, `ssl.log`, `files.log`) whose record units depend on the log type. These logs retain selected metadata; encrypted application contents remain unavailable without decryption. Storage and usefulness depend on the enabled analysers and traffic.
 
 ## Flow records
 
-A **flow record** summarizes packets grouped by selected attributes within an observation interval. Common fields include a 5-tuple, timestamps, counters and TCP flags, but templates and aggregation policies vary. One TCP connection can produce multiple records.
+A **flow record** summarises packets grouped by selected attributes within an observation interval. Common fields include a 5-tuple, timestamps, counters and TCP flags, but templates and the rules for grouping packets into records vary. One TCP connection can produce multiple records.
 
 - **NetFlow** (Cisco, v5 and v9) and its IETF standard successor **IPFIX** (RFC 7011): routers or probes export flow records to a collector.
-- **sFlow** statistically samples packets at a configured average rate and exports sampled packet-header data plus counters. This is not necessarily every Nth packet; sampled header bytes can include some payload.
-- Where flow export uses **sampling** (for example an average of 1 in 1,000 packets), it reduces observation volume but can miss short flows and introduces uncertainty into estimates.
+- **sFlow** statistically samples packets at a configured average rate and exports sampled packet-header data plus counters. This is not necessarily a strict count such as exactly every 1,000th packet; sampled header bytes can include some payload.
+- Where flow export uses **packet sampling** (for example an average of 1 in 1,000 packets), it reduces observation volume but can miss short flows and introduces uncertainty into estimates.
 
 In AWS, **VPC Flow Logs** record traffic on network interfaces. A default-format record looks like this (shown one field per line):
 
@@ -182,7 +227,7 @@ action        REJECT
 log-status    OK
 ```
 
-`action` reports ACCEPT or REJECT. A rejection can arise from security groups, NACLs or packets arriving after connection closure; this field alone does not identify a particular rule. They have blind spots: traffic to the Amazon-provided DNS resolver, DHCP and the instance metadata service is not logged, so DNS-based activity needs Route 53 Resolver query logs instead. The default maximum aggregation interval is 10 minutes, with a 1-minute option; Nitro interfaces use at most 1 minute regardless. Publication adds delay, and SKIPDATA records disclose some logging gaps.
+`action` reports ACCEPT or REJECT. A rejection can arise from security groups, NACLs or packets arriving after connection closure; this field alone does not identify a particular rule. They have blind spots: traffic to the Amazon-provided DNS resolver, DHCP and the instance metadata service is not logged, so DNS-based activity needs Route 53 Resolver query logs instead. The default maximum time window for each record is 10 minutes, with a 1-minute option; Nitro interfaces use at most 1 minute regardless. Publication adds delay, and SKIPDATA records disclose some logging gaps.
 
 A simple scan detector over simplified flow records (source, destination, port, action):
 
@@ -213,7 +258,7 @@ for src in sorted(targets):
     print(src, n, r, flag)
 ```
 
-This prints `10.0.2.7 1 0` and `203.0.113.9 5 4 SCAN?`. The app server's two connections go to one `(host, port)` pair; the external address probes five pairs, mostly rejected. Real detectors add a time window, thresholds tuned to the environment and allow-lists for legitimate scanners, and distinct destination pairs per source are one useful heuristic, not proof of a malicious scan.
+This prints `10.0.2.7 1 0` and `203.0.113.9 5 4 SCAN?`. The app server's two connections go to one `(host, port)` pair; the external address probes five pairs, mostly rejected. Real detectors add a time window, thresholds tuned to the environment and allowlists for legitimate scanners, and distinct destination pairs per source are one useful heuristic, not proof of a malicious scan.
 
 Within its coverage, flow data can help investigate questions such as: which hosts did this compromised machine talk to? Did anything inside send unusual volumes to the internet (exfiltration)? When did this start? Retention depends on record volume, cost and policy; small individual records do not guarantee months of affordable storage.
 
@@ -223,18 +268,18 @@ A practical network-detection stack for a medium organisation:
 
 1. **Flow logs at relevant observation points** (budgeted retention) for investigation and anomaly detection.
 2. **DNS and proxy logs** for destinations.
-3. **Zeek and Suricata** at key choke points (internet edge, between major segments).
+3. **Zeek and Suricata** at key choke points (internet edge, between major network segments).
 4. **Short-retention or triggered full capture** where the detail is worth the storage.
 5. Everything into a **SIEM**, correlated with host (EDR) and identity logs, with detections tuned for precision.
 
-Segmentation (lesson 2) helps detection too: a denied cross-segment connection can merit investigation, but configuration errors and legitimate discovery can also produce it.
+Segmentation (lesson 2) helps detection too: a denied connection between network segments can merit investigation, but configuration errors and legitimate discovery can also produce it.
 
 ## Key takeaways
 - An IDS watches a copy of traffic and alerts; an IPS sits inline and blocks, forcing a fail-open or fail-closed choice.
 - Both signature and anomaly detectors can miss attacks and raise false alerts; measure precision using the actual prevalence and operating threshold.
 - tcpdump uses BPF capture filters and Wireshark uses a different display-filter syntax; read TCP flags to follow a conversation, and beware offload artefacts.
 - For encrypted traffic, visible metadata can support detection, but ECH, encrypted certificate messages and missing observations limit visibility.
-- Flow records can support communication analysis within their sampling, aggregation and coverage limits; retention costs depend on volume.
+- Flow records can support communication analysis within their sampling, time-window and coverage limits; retention costs depend on volume.
 
 ## Further reading
 - [Suricata rules format — Suricata docs](https://docs.suricata.io/en/latest/rules/intro.html)

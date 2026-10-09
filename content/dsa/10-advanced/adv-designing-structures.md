@@ -8,6 +8,21 @@ summary: How to combine a hash map with a linked list or an array to get O(1) op
 
 Most "design a data structure" problems share one idea: **no single structure gives you every operation cheaply, so you glue two together**. Each structure covers the other's weakness, and the hard part is keeping them in sync.
 
+Costs in this lesson are written in big-O notation, which says how the number of steps grows as the structure fills up. The card below defines the notation and shows what the gap means for a million items:
+
+```formula
+s_map = O(1)
+s_walk = O(n)
+s_walk ≈ n = 10^6
+where
+n: the number of items currently stored in the structure, e.g. the keys in a cache; here one million (10^6)
+s_map: the steps for one hash-map lookup by key (expected, on average)
+s_walk: the steps to find an item by walking a linked list, or to shift every later element along when deleting from the middle of an array (up to n in the worst case)
+O(f): big-O notation: the step count grows no faster than f as n grows, ignoring constant factors; O(1) means a fixed number of steps however large n gets
+≈: approximately equal to
+In words: a hash-map lookup takes about the same few steps whether it holds ten keys or a million, while a walk or a shift can take about a million steps when there are a million items.
+```
+
 A hash map offers expected O(1) lookup but does not automatically maintain sorted-key or access-recency order. Python dictionaries do preserve insertion order. A linked list keeps order and can splice in O(1), but finding a node is O(n). An array gives O(1) access by position, but deleting from the middle is O(n). Combine them and you can often get O(1) for everything.
 
 The method:
@@ -35,7 +50,7 @@ head <-> [B] <-> [A] <-> [C] <-> tail
  MRU                              LRU
 ```
 
-Why **doubly** linked? To unlink a node you must update its predecessor's `next`. With only `next` pointers, finding the predecessor is O(n). The `prev` pointer makes removal O(1).
+Why **doubly** linked? To unlink a node you must update its predecessor's `next`. With only `next` pointers, finding the predecessor is O(n), where n is the number of nodes in the list, because you must walk from the head. The `prev` pointer makes removal O(1).
 
 Why store the **key in the node**? When you evict the tail you must also delete it from the map, and the node is all you have.
 
@@ -98,7 +113,21 @@ In practice you rarely write this by hand. Python's `OrderedDict` (with `move_to
 
 An LFU (least frequently used) cache evicts the key with the fewest accesses, breaking ties by evicting the least recently used of those. Again, `get` and `put` should be O(1).
 
-A heap keyed by frequency would give O(log n). The O(1) trick is to notice that **a frequency only ever goes up by one**. So instead of sorting, keep a bucket for each frequency:
+The obvious design is a min-heap of keys ordered by count, so the least-used key sits at the top. The catch is that every `get` raises a count, and the heap must then sift that key to its new place:
+
+```formula
+s_heap = O(log_2(n))
+s_heap ≈ log_2(10^6) ≈ 20
+where
+s_heap: the steps (parent–child swaps) to restore heap order after one key's count changes
+n: the number of keys in the cache; here one million (10^6)
+log_2(n): the base-2 logarithm of n: how many times n can be halved before reaching 1, which is about the height of the heap
+O(f): big-O notation: the step count grows no faster than f as n grows, ignoring constant factors
+≈: approximately equal to
+In words: with a heap, every access costs a number of swaps that grows with the logarithm of the cache size, about 20 for a million keys, instead of a fixed handful.
+```
+
+Twenty swaps is not much, but it is not O(1), and it is paid on every hit. The O(1) trick is to notice that **a frequency only ever goes up by one**. So instead of sorting, keep a bucket for each frequency:
 
 - `val`: key to value.
 - `freq`: key to its access count.
@@ -113,7 +142,24 @@ by_f[5]: A -> C
 evict: oldest in by_f[min_f] = D
 ```
 
-When a key is touched, it moves from bucket `f` to bucket `f + 1`. If bucket `f` empties and `f` was the minimum, the new minimum is `f + 1`, because the key we just moved has exactly that count. When a new key is inserted, `min_f` resets to 1. That is why we never need to search for the minimum.
+When a key is touched, its count goes up by exactly one, so it moves to the next bucket up. Two update rules keep `min_f` correct without ever searching:
+
+```formula
+c_k ← f + 1
+min_f ← f + 1   if |B_f| = 0 and min_f = f
+min_f ← 1       if f = 0
+where
+k: the key being touched (read or written)
+f: k's access count just before this touch; 0 for a key that is being inserted for the first time
+c_k: k's access count after the touch (1 for a newly inserted key)
+B_f: the bucket of keys whose count is exactly f, oldest first
+|B_f|: the number of keys left in bucket B_f after k has moved out
+min_f: the smallest access count any key in the cache currently has
+←: "is set to": the left side takes the value on the right
+In words: a touched key moves up one bucket; if that empties the lowest bucket, the new lowest is the bucket the key just moved into, and a brand-new key (count 1) always makes 1 the lowest.
+```
+
+Worked example, using the bucket picture above: touch D, whose count f is 1. D moves to bucket 2, but bucket 1 still holds E, so `min_f` stays 1. Now touch E: bucket 1 empties and `min_f` was 1, so `min_f` becomes 2, and bucket 2 is guaranteed non-empty because E has just landed in it. No smaller bucket can be non-empty, because `min_f` was the smallest. The rules rely on counts only rising by one at a time; a design that could decrement or reset counts would need a real search.
 
 ```python
 from collections import defaultdict
@@ -174,7 +220,7 @@ Production caches seldom use exact LFU. Counts never decay in this design, so a 
 Design a set supporting `insert(x)`, `remove(x)` and `get_random()` (each element equally likely), all in O(1) average.
 
 - A hash set gives O(1) insert and remove, but no way to pick a uniform random element without walking it.
-- An array gives O(1) uniform random choice (`items[randrange(n)]`), but removing from the middle is O(n).
+- An array gives O(1) uniform random choice (`items[randrange(n)]`), but removing from the middle is O(n), where n is the number of elements, because every later element shifts left.
 
 Combine them: an array of values plus a map from **value to index**. The clever step is deletion. Instead of shifting everything left, **move the last element into the hole** and pop the end, which is O(1).
 
@@ -223,7 +269,21 @@ The order of the last two map operations matters. If `x` is itself the last elem
 
 The array does not preserve insertion order after a removal. That is fine here because a set has no order, but it is the price of O(1) deletion.
 
-**With duplicates** (a multiset), map each value to a *set of indices*. Removal picks any index of `x`, moves the last element there, and updates the last element's index set. Now `get_random` returns each value with probability proportional to its count, which is usually what is wanted.
+**With duplicates** (a multiset), map each value to a *set of indices*. Removal picks any index of `x`, moves the last element there, and updates the last element's index set. `get_random` still picks one array slot uniformly, so a value that fills more slots comes up more often:
+
+```formula
+P(v) = c_v / n
+P(1) = 2 / 3 ≈ 0.67
+where
+v: one of the values stored in the multiset
+P(v): the probability that get_random returns v, from 0 (never) to 1 (always)
+c_v: the number of copies of v in the array
+n: the total number of elements in the array, counting every copy
+≈: approximately equal to
+In words: each value's chance of being picked is its share of the array's slots.
+```
+
+For `items = [1, 1, 2]`, the value 1 has 2 copies out of 3 slots, so it is returned about two times in three and 2 about one time in three. Returning each value with probability proportional to its count is usually what is wanted from a multiset; if you need each *distinct* value equally often, you need a separate array of distinct values to sample from.
 
 ## Recognising the pattern
 
@@ -238,7 +298,7 @@ The array does not preserve insertion order after a removal. That is fine here b
 Other classics built the same way:
 
 - **Min stack**: a stack of `(value, min so far)` pairs gives O(1) `get_min`.
-- **Time-based key-value store**: map from key to a list of `(timestamp, value)` appended in time order, then binary search, for O(log n) "value at time t".
+- **Time-based key-value store**: map from key to a list of `(timestamp, value)` appended in time order, then binary search, for O(log n) "value at time t", where n is the number of timestamps stored for that key and t is the time asked about.
 - **All O(1) data structure** (increment, decrement, get max key, get min key): the LFU bucket idea, with a doubly linked list of count buckets.
 
 ## Pitfalls
@@ -252,7 +312,7 @@ Other classics built the same way:
 - When no single structure supports every operation cheaply, combine two and keep an explicit invariant between them.
 - LRU: hash map to nodes of a doubly linked list; the `prev` pointer makes unlinking O(1), and nodes store their key so eviction can clean the map.
 - LFU in O(1): buckets keyed by frequency plus a `min_f` that only resets to 1 on insert or moves up by one.
-- O(1) delete from an array: swap the last element into the hole and pop, updating its index in the map.
+- O(1) removal from an array: swap the last element into the hole and pop, updating its index in the map.
 - Test the edge cases: capacity 0, updating when full, and removing the last element.
 
 ## Further reading

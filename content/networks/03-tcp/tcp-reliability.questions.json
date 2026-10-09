@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. TCP sequence numbers count **bytes**.\n2. First byte = 5001. With 1,200 bytes:\n\n```\nlast = 5001 + 1200 - 1 = 6200\nnext = 6200 + 1        = 6201\n```\n\n3. The receiver will ACK this segment with `ack=6201` (the next byte it wants).",
+    "workedExample": "1. TCP sequence numbers count **bytes**.\n2. First byte = 5001. With 1,200 bytes:\n\n```formula\nB_last = S + L − 1\nB_last = 5001 + 1200 − 1 = 6200\nS_next = B_last + 1 = 6201\nwhere\nB_last: the number of the segment's last byte\nS: the segment's sequence number, its first byte, 5001\nL: the number of data bytes, 1,200\nS_next: where the next segment starts\nIn words: 1,200 bytes starting at 5001 end at 6200, because the first byte counts too.\n```\n\n3. The receiver will ACK this segment with `ack=6201` (the next byte it wants).",
     "link": {
       "title": "RFC 9293: Transmission Control Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9293"
@@ -123,7 +123,7 @@
     "id": "tcp-reliability-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A connection currently has SRTT = 100 ms and RTTVAR = 50 ms. A new RTT sample of 120 ms arrives. Using RFC 6298 (α = 1/8, β = 1/4, ignoring clock granularity and minimums), what is the new RTO?",
+    "prompt": "A connection currently has a smoothed RTT (SRTT) of 100 ms and an RTT variation (RTTVAR) of 50 ms. A new RTT sample of 120 ms arrives. Using RFC 6298's estimator (gains of 1/8 for SRTT and 1/4 for RTTVAR, ignoring clock granularity and minimums), what is the new RTO?",
     "options": [
       {
         "text": "120 ms",
@@ -131,7 +131,7 @@
       },
       {
         "text": "272.5 ms",
-        "explanation": "Correct. RTTVAR = 0.75 × 50 + 0.25 × 20 = 42.5; SRTT = 0.875 × 100 + 0.125 × 120 = 102.5; RTO = 102.5 + 4 × 42.5 = 272.5 ms."
+        "explanation": "Correct. The variation becomes 0.75 × 50 + 0.25 × 20 = 42.5 ms, the smoothed RTT 0.875 × 100 + 0.125 × 120 = 102.5 ms, and the timeout 102.5 + 4 × 42.5 = 272.5 ms."
       },
       {
         "text": "300 ms",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Update RTTVAR first, using the **old** SRTT:\n\n```\n|SRTT - R| = |100 - 120| = 20\nRTTVAR = 0.75*50 + 0.25*20\n       = 37.5 + 5 = 42.5\n```\n\nThen SRTT:\n\n```\nSRTT = 0.875*100 + 0.125*120\n     = 87.5 + 15 = 102.5\n```\n\nThen the timeout:\n\n```\nRTO = 102.5 + 4*42.5\n    = 102.5 + 170 = 272.5 ms\n```\n\nA configured 200 ms floor would not change this estimate; the RFC’s recommended one-second floor would. The question explicitly omits those bounds, and this arithmetic does not reproduce every implementation’s estimator.",
+    "workedExample": "Update RTTVAR first, using the **old** SRTT, then SRTT, then the timeout:\n\n```formula\nRTTVAR_2 = (1 − β) × RTTVAR + β × D\nD = |SRTT − R| = |100 − 120| = 20\nRTTVAR_2 = 0.75 × 50 + 0.25 × 20\nRTTVAR_2 = 37.5 + 5 = 42.5 ms\nSRTT_2 = (1 − α) × SRTT + α × R\nSRTT_2 = 0.875 × 100 + 0.125 × 120\nSRTT_2 = 87.5 + 15 = 102.5 ms\nRTO = SRTT_2 + 4 × RTTVAR_2\nRTO = 102.5 + 4 × 42.5\nRTO = 102.5 + 170 = 272.5 ms\nwhere\nRTTVAR: the old RTT variation, 50 ms\nSRTT: the old smoothed RTT, 100 ms\nR: the new RTT sample, 120 ms\nD: how far the sample is from the old average\n|SRTT − R|: the absolute value: the size of the difference, ignoring its sign\nα: alpha, 1/8 = 0.125, the share of the new sample blended into SRTT\nβ: beta, 1/4 = 0.25, the share of the new deviation blended into RTTVAR\nRTTVAR_2: the updated variation\nSRTT_2: the updated smoothed RTT\nRTO: the retransmission timeout\nms: milliseconds\nIn words: the sample is 20 ms off, which shrinks the variation to 42.5 ms and nudges the average to 102.5 ms; the timeout is the average plus four variations.\n```\n\nA configured 200 ms floor would not change this estimate; the RFC’s recommended one-second floor would. The question explicitly omits those bounds, and this arithmetic does not reproduce every implementation’s estimator.",
     "link": {
       "title": "RFC 6298: Computing TCP's Retransmission Timer",
       "url": "https://www.rfc-editor.org/rfc/rfc6298"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Two copies of the same bytes are in flight: the original (sent at t = 0) and the retransmission (sent at t = 300 ms).\n2. The ACK arrives at t = 350 ms. It carries only an ACK number, which is identical for either copy.\n3. Candidate RTTs: 350 ms (original) or 50 ms (copy).\n4. Picking 50 ms when the truth is 350 ms makes the RTO too short, causing more timeouts; the reverse makes it too long.\n5. Karn: **discard samples from retransmitted data**, and keep the backed-off RTO until a clean sample arrives. The timestamp option permits RTT sampling when its echo rules disambiguate the measurement; it is not simply a universal echo of the latest arrival.",
+    "workedExample": "1. Two copies of the same bytes are in flight: the original (sent at t = 0) and the retransmission (sent at t = 300 ms).\n2. The ACK arrives at t = 350 ms. It carries only an ACK number, which is identical for either copy.\n3. Candidate RTTs:\n\n```formula\nR_orig = t_ACK − t_orig\nR_orig = 350 ms − 0 ms = 350 ms\nR_copy = t_ACK − t_copy\nR_copy = 350 ms − 300 ms = 50 ms\nwhere\nR_orig: the RTT if the ACK was for the original\nR_copy: the RTT if the ACK was for the retransmission\nt_ACK: when the ACK arrived, 350 ms\nt_orig: when the original was sent, 0 ms\nt_copy: when the retransmission was sent, 300 ms\nms: milliseconds\nIn words: the same ACK implies either a 350 ms or a 50 ms round trip, and nothing in it says which.\n```\n\n4. Picking 50 ms when the truth is 350 ms makes the RTO too short, causing more timeouts; the reverse makes it too long.\n5. Karn: **discard samples from retransmitted data**, and keep the backed-off RTO until a clean sample arrives. The timestamp option permits RTT sampling when its echo rules disambiguate the measurement; it is not simply a universal echo of the latest arrival.",
     "link": {
       "title": "RFC 6298: Computing TCP's Retransmission Timer",
       "url": "https://www.rfc-editor.org/rfc/rfc6298"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Lay out the six segments and mark what the receiver reports:\n\n```\n1001 2001 3001 4001 5001 6001\n  ?   ok   ok   ?    ok   ok\n```\n\n1. `ACK 1001`: everything before 1001 received; 1001 is the next byte needed. **Missing.**\n2. `SACK 2001-4001`: segments 2001 and 3001 held.\n3. `SACK 5001-7001`: segments 5001 and 6001 held.\n4. Uncovered: 4001–5000. **Missing.**\n\nGiven the explicit loss-detection and complete-report assumptions, retransmit 1001 and 4001. A SACK report alone does not prove every omitted range is lost or must be retransmitted immediately.",
+    "workedExample": "Lay out the six segments and mark what the receiver says it holds:\n\n```\n1001 2001 3001 4001 5001 6001\n  ?   ok   ok   ?    ok   ok\n```\n\n1. `ACK 1001`: everything before 1001 received; 1001 is the next byte needed. **Missing.**\n2. `SACK 2001-4001`: segments 2001 and 3001 held.\n3. `SACK 5001-7001`: segments 5001 and 6001 held.\n4. Uncovered: 4001–5000. **Missing.**\n\nGiven the explicit loss-detection and complete-report assumptions, retransmit 1001 and 4001. A SACK report alone does not prove every omitted range is lost or must be retransmitted immediately.",
     "link": {
       "title": "RFC 2018: TCP Selective Acknowledgment Options",
       "url": "https://www.rfc-editor.org/rfc/rfc2018"
@@ -251,11 +251,11 @@
     "id": "tcp-reliability-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A connection has an RTO of 300 ms when the peer's network cable is pulled. The sender keeps retransmitting the same segment with exponential backoff. How long after the **original** transmission is the 4th retransmission sent? Assume the RTO timer starts with that original transmission, no ACK restarts it, no probe or early retry intervenes, and no floor/cap or application timeout changes the stated waits.",
+    "prompt": "A connection has an RTO of 300 ms when the peer's network cable is pulled. The sender keeps retransmitting the same segment with exponential RTO backoff. How long after the **original** transmission is the 4th retransmission sent? Assume the RTO timer starts with that original transmission, no ACK restarts it, no probe or early retry intervenes, and no floor/cap or application timeout changes the stated waits.",
     "options": [
       {
         "text": "1.2 s",
-        "explanation": "This is 4 × 300 ms, a linear backoff. TCP doubles the timeout each time."
+        "explanation": "This is 4 × 300 ms, a linear increase, not a doubling. TCP doubles the timeout each time."
       },
       {
         "text": "2.4 s",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Each expiry doubles the RTO for the next attempt.\n\n| Event | Wait | Elapsed |\n|---|---|---|\n| Original | – | 0 s |\n| Retx 1 | 0.3 s | 0.3 s |\n| Retx 2 | 0.6 s | 0.9 s |\n| Retx 3 | 1.2 s | 2.1 s |\n| Retx 4 | 2.4 s | 4.5 s |\n\nLinux’s actual abort timing depends on its configured limits and retry policy. An entirely idle connection with no outstanding data has no retransmission waiting to fail; use suitable keepalives, application heartbeats or operation deadlines when detection is required.",
+    "workedExample": "Each expiry doubles the RTO for the next attempt.\n\n| Event | Wait | Elapsed |\n|---|---|---|\n| Original | – | 0 s |\n| Retx 1 | 0.3 s | 0.3 s |\n| Retx 2 | 0.6 s | 0.9 s |\n| Retx 3 | 1.2 s | 2.1 s |\n| Retx 4 | 2.4 s | 4.5 s |\n\nAs a formula, the waits form a doubling series:\n\n```formula\nT_k = RTO_0 × (2^k − 1)\nT_4 = 0.3 s × (16 − 1) = 4.5 s\nwhere\nT_k: the time from the original send to the k-th retransmission, in seconds (s)\nRTO_0: the starting timeout, 0.3 s\nk: which retransmission, 4 here\nT_4: the time to the fourth retransmission\ns: seconds\nIn words: 0.3 + 0.6 + 1.2 + 2.4 is 0.3 times 15, which is 4.5 seconds.\n```\n\nLinux’s actual abort timing depends on its configured limits and retry policy. An entirely idle connection with no outstanding data has no retransmission waiting to fail; use suitable keepalives, application heartbeats or operation deadlines when detection is required.",
     "link": {
       "title": "RFC 6298: Computing TCP's Retransmission Timer",
       "url": "https://www.rfc-editor.org/rfc/rfc6298"
@@ -334,7 +334,7 @@
       0,
       1
     ],
-    "workedExample": "1. With SRTT 40 ms and the stated two-segment flight, the baseline probe interval is 80 ms.\n2. Since no new data is available and eligibility checks pass, the probe retransmits segment 10.\n3. Its arrival elicits an ACK with a SACK block for that later range while 9 remains missing.\n4. RACK uses transmission/delivery times and its reordering window to decide when to mark 9 lost.\n5. No fixed total repair time follows: scheduling, path delay, further loss and recovery state still matter.",
+    "workedExample": "1. With SRTT 40 ms and the stated two-segment flight, the baseline probe interval is 80 ms:\n\n```formula\nPTO = 2 × SRTT = 2 × 40 ms = 80 ms\nwhere\nPTO: the probe timeout, in milliseconds (ms)\nSRTT: the smoothed round-trip time, 40 ms\nms: milliseconds\nIn words: probe after about two round trips without progress.\n```\n\n2. Since no new data is available and eligibility checks pass, the probe retransmits segment 10.\n3. Its arrival elicits an ACK with a SACK block for that later range while 9 remains missing.\n4. RACK uses transmission/delivery times and its reordering window to decide when to mark 9 lost.\n5. No fixed total repair time follows: scheduling, path delay, further loss and recovery state still matter.",
     "link": {
       "title": "RFC 8985: The RACK-TLP Loss Detection Algorithm",
       "url": "https://www.rfc-editor.org/rfc/rfc8985"
@@ -364,7 +364,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. One sequence-space cycle is 2^32 data bytes.\n2. 40 Gbit/s of payload is 5 × 10^9 bytes/s.\n3. 2^32 / (5 × 10^9) = 0.8589934592 seconds.\n4. PAWS uses negotiated timestamps, maintained recent-timestamp state and serial-number comparisons to reject stale segments. It includes rules for timestamp wrap, idle state and validation; it is not “reject anything older than any timestamp ever seen”.",
+    "workedExample": "1. One sequence-space cycle is 2^32 data bytes.\n2. 40 Gbit/s of payload is 5 × 10^9 bytes/s.\n3. Divide the space by the rate:\n\n```formula\nR = 40 Gbit/s / 8 = 5 × 10^9 B/s\nT_wrap = 2^32 B / R\nT_wrap = 4,294,967,296 / (5 × 10^9) s\nT_wrap ≈ 0.859 s\nwhere\nR: the payload rate in bytes per second (B/s)\nGbit/s: gigabits per second; / 8 converts bits to bytes\nT_wrap: the time to use every 32-bit sequence number once, in seconds (s)\nB: bytes; 2^32 bytes = 4,294,967,296 bytes\ns: seconds\n≈: approximately equal to\nIn words: at 40 Gbit/s the 4 GiB sequence space is used up in under a second.\n```\n\n4. PAWS uses negotiated timestamps, maintained recent-timestamp state and serial-number comparisons to reject stale segments. It includes rules for timestamp wrap, long idle periods and validation; it is not “reject anything older than any timestamp ever seen”.",
     "link": {
       "title": "RFC 7323: TCP Extensions for High Performance",
       "url": "https://www.rfc-editor.org/rfc/rfc7323"

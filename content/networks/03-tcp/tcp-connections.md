@@ -3,7 +3,7 @@ id: tcp-connections
 title: TCP connection management
 level: intermediate
 minutes: 14
-summary: The three-way handshake with real sequence numbers, SYN floods and SYN cookies, the four-way close, why TIME_WAIT lasts 2×MSL, the TCP state machine and when connections are reset.
+summary: The three-way handshake with real sequence numbers, SYN floods and SYN cookies, the four-way close, why TIME_WAIT lasts twice the maximum segment lifetime, the TCP state machine and when connections are reset.
 ---
 
 TCP offers a **reliable, ordered byte stream** between two endpoints. Normal establishment synchronises sequence spaces and checks bidirectional reachability; this is not cryptographic peer authentication. Data can accompany handshake segments, and extensions such as TCP Fast Open can allow early application delivery. Graceful closure acknowledges the byte stream in each direction, not application processing or durable storage of those bytes. That bookkeeping is **connection management**.
@@ -20,7 +20,21 @@ The fields that matter for connection management:
 - **Window** (16 bits): flow control (lesson 4).
 - **Options**: MSS, window scale, SACK-permitted, timestamps. MSS, window scale and SACK permission are exchanged on SYN segments. Negotiated timestamps accompany later segments, and SACK blocks can appear on later ACKs.
 
-The header is 20 bytes without options and at most 60 with them.
+The header is 20 bytes without options and at most 60 with them. The limit comes from the 4-bit **data offset** field, which gives the header length in 4-byte words:
+
+```formula
+H_max = D_max × 4 B = 15 × 4 B = 60 B
+O_max = H_max − H_min = 60 B − 20 B = 40 B
+where
+H_max: the largest possible TCP header, in bytes (B)
+D_max: the largest value a 4-bit field can hold, 15 (binary 1111)
+O_max: the most space left for TCP options
+H_min: the fixed part of the header, 20 bytes
+B: bytes; one byte is 8 bits
+In words: the header can be at most 15 four-byte words (60 bytes); 20 of those are fixed fields, so options get at most 40 bytes.
+```
+
+That 40-byte option budget is small, and options compete for it (lesson 3 shows SACK running into it).
 
 ## The three-way handshake
 
@@ -42,7 +56,33 @@ Client                       Server
 Two rules make the numbers work:
 
 1. **SYN and FIN each consume one sequence number**, independently of any data carried in the same segment. That is why the server acknowledges 1001, not 1000.
-2. The cumulative ACK identifies the next expected sequence-space position in that direction, modulo 2^32. It acknowledges contiguous received stream data/control positions, not successful application processing.
+2. The cumulative ACK identifies the next expected sequence-space position in that direction, going back to 0 after 2^32 values ("modulo 2^32", explained below). It acknowledges contiguous received stream data/control positions, not successful application processing.
+
+Applied to the trace above, rule 1 gives the numbers each side uses next:
+
+```formula
+N_c = ISN_c + 1 = 1000 + 1 = 1001
+N_s = ISN_s + 1 = 5000 + 1 = 5001
+where
+N_c: the client's next sequence number after its SYN: the number of its first data byte, and the ACK number the server sends
+ISN_c: the client's initial sequence number, 1000 in the trace
+N_s: the server's next sequence number after its SYN+ACK, and the ACK number the client sends
+ISN_s: the server's initial sequence number, 5000 in the trace
+In words: a SYN uses up one sequence number, so each side's data starts one after its ISN, and that is the number the other side acknowledges.
+```
+
+Rule 2's "modulo 2^32" is because the sequence number is a 32-bit field. Arithmetic on it wraps round like a clock: after the largest 32-bit value comes 0 again.
+
+```formula
+N_next = (N + L) mod 2^32
+(4,294,967,295 + 1) mod 2^32 = 0
+where
+N_next: the sequence number just after a segment: the ACK number that acknowledges it
+N: the segment's sequence number (its first position)
+L: how many sequence numbers the segment uses: its data bytes, plus 1 for a SYN and 1 for a FIN
+mod: modulo, the remainder after dividing; "mod 2^32" divides by 4,294,967,296 (32 twos multiplied together) and keeps the remainder, so totals wrap back into the range 0 to 4,294,967,295
+In words: add the segment's length to its first number; if the total passes the largest 32-bit value, wrap round to 0 and keep counting.
+```
 
 So the client's first data byte will be numbered 1001, and the server's 5001. The final ACK may carry data itself; clients often send the HTTP request or TLS ClientHello right behind it.
 
@@ -63,7 +103,20 @@ If ISNs were predictable (say, always 0), two problems arise:
 
 ## SYN floods and SYN cookies
 
-When a server receives a SYN, normal stateful Linux processing creates **request-socket** state associated with the listener and sends SYN+ACK. Exact memory use depends on kernel/configuration. It retransmits the SYN+ACK if no ACK comes back: the Linux documentation retrieved here specifies five SYN+ACK retries by default, with a one-second initial timeout and a final timeout near 63 seconds. This is a documented default, not a universal timing guarantee.
+When a server receives a SYN, normal stateful Linux processing creates **request-socket** state associated with the listener and sends SYN+ACK. Exact memory use depends on kernel/configuration. It retransmits the SYN+ACK if no ACK comes back: the Linux documentation retrieved here specifies five SYN+ACK retries by default, with a one-second initial timeout that doubles after each try, and a final timeout near 63 seconds:
+
+```formula
+T_last = 1 s + 2 s + 4 s + 8 s + 16 s
+T_last = 31 s
+T_final = T_last + 32 s = 63 s
+where
+T_last: the time from the first SYN+ACK to its fifth and last retransmission, in seconds (s)
+T_final: when the kernel gives up on the half-open attempt: one more doubled wait after the last retry
+s: seconds
+In words: waits of 1, 2, 4, 8 and 16 seconds put the fifth retry at 31 s; one final 32-second wait means the attempt is abandoned at about 63 s.
+```
+
+This is a documented default, not a universal timing guarantee. It also shows why half-open state is costly: each spoofed SYN can hold an entry for about a minute.
 
 A **SYN flood** attempts to exhaust connection-establishment resources with SYN traffic, often using spoofed addresses. The final ACKs never arrive, the SYN queue fills with half-open entries, and real clients' SYNs are dropped. The attacker needs no completed connections and can hide behind random sources.
 
@@ -89,7 +142,18 @@ validate freshness/authenticator
 create established-connection state
 ```
 
-The exact encoding is implementation-specific. Recovering the acknowledged server sequence number uses `ack - 1` modulo 2^32, followed by the implementation's validation rules. An off-path attacker that cannot observe the SYN+ACK must guess a valid value; finite cookie authenticators do not make guessing mathematically impossible.
+The exact encoding is implementation-dependent. The client's ACK acknowledges the cookie plus one (a SYN uses one sequence number), so the server first subtracts one (0 minus one becomes the largest 32-bit value):
+
+```formula
+S_cookie = (A − 1) mod 2^32
+where
+S_cookie: the cookie sequence number the server sent in its SYN+ACK
+A: the acknowledgement number in the client's returning ACK
+mod: modulo, the remainder after dividing by 2^32 = 4,294,967,296; it makes 0 − 1 wrap round to 4,294,967,295 instead of going negative
+In words: take the client's acknowledgement number, step back one, and wrap round if needed; that recovers the cookie, which the server then checks.
+```
+
+The implementation's validation rules follow. An off-path attacker that cannot observe the SYN+ACK must guess a valid value; finite cookie authenticators do not make guessing mathematically impossible.
 
 Costs:
 
@@ -126,14 +190,25 @@ B often combines its ACK and FIN into one segment, giving three segments in tota
 
 ## TIME_WAIT and 2×MSL
 
-In the ordinary sequential graceful close above, the active closer ends in **TIME_WAIT**, and stays there for twice the **maximum segment lifetime** (MSL), the longest a segment is assumed to survive in the network.
+In the ordinary sequential graceful close above, the active closer ends in **TIME_WAIT**, and stays there for twice the **maximum segment lifetime** (MSL), the longest a segment is assumed to survive in the network:
+
+```formula
+T_TW = 2 × MSL
+T_TW = 2 × 120 s = 240 s = 4 min
+where
+T_TW: how long the active closer stays in TIME_WAIT, in seconds (s)
+MSL: maximum segment lifetime, the longest a segment is assumed to survive in the network; RFC 793 suggested 2 minutes (120 s)
+s: seconds
+min: minutes
+In words: with RFC 793's suggested two-minute MSL, TIME_WAIT lasts four minutes; real stacks often use a shorter fixed value (Linux: 60 s).
+```
 
 Simultaneous close can put both endpoints in TIME_WAIT; aborts and special reuse cases follow different rules. Two purposes of TIME_WAIT are:
 
 1. **A retransmitted FIN may need another ACK.** Keeping connection state lets the endpoint acknowledge a repeated FIN if the peer missed the final ACK. The TIME_WAIT timer can restart when the FIN is received again. MSL is a segment-lifetime assumption, not the peer's retransmission timeout, so adding two presumed network delays is not a proof of the retransmission schedule.
 2. **Old duplicates must expire.** Retaining the connection incarnation for the specified interval reduces confusion if the same endpoint tuple is reused. The guarantee relies on the MSL/sequence-number assumptions; TCP also specifies constrained early-reuse cases.
 
-RFC 793 suggested an MSL of 2 minutes (so 4 minutes of TIME_WAIT). Linux v6.12 defines its ordinary TIME_WAIT interval as **60 seconds**; reuse, retransmitted segments and resource handling can affect an observed entry’s lifetime.
+RFC 793 suggested an MSL of 2 minutes, which is where the 4 minutes above comes from. Linux v6.12 defines its ordinary TIME_WAIT interval as **60 seconds**; reuse, retransmitted segments and resource handling can affect an observed entry’s lifetime.
 
 ### TIME_WAIT in production
 
@@ -146,7 +221,7 @@ Possible approaches, chosen for the application and deployment:
 
 1. **Reuse connections**: HTTP keep-alive, connection pools.
 2. Changing which endpoint performs the sequential active close moves TIME_WAIT ownership; it does not create spare ports or solve the problem universally.
-3. `net.ipv4.tcp_tw_reuse`: enables reuse subject to Linux’s protocol-safety checks; timestamps are not a cryptographic proof. The retrieved Linux documentation lists default 2 (loopback only) and a separate reuse delay. Do not treat this as a universal replacement for pooling.
+3. `net.ipv4.tcp_tw_reuse`: enables reuse subject to Linux’s checks that reuse is safe for the protocol; timestamps are not a cryptographic proof. The retrieved Linux documentation lists default 2 (loopback only) and a separate reuse delay. Do not treat this as a universal replacement for pooling.
 
 > [!warning] Never use tcp_tw_recycle
 > The old `tcp_tw_recycle` option dropped SYNs whose timestamps went backwards, which broke clients behind NAT whose clocks differ. It was removed in Linux 4.12. Advice to enable it is outdated.
@@ -199,8 +274,8 @@ A forged valid RST can abort a connection. For synchronized connections, [RFC 59
 ## Key takeaways
 - The three-way handshake exchanges and acknowledges both initial sequence numbers; SYN and FIN each consume one sequence number.
 - ISNs are randomised to reject stale segments and resist spoofed injection.
-- SYN floods can exhaust establishment resources; SYN cookies avoid an ordinary per-attempt half-open entry while retaining shared state and consuming processing resources. Valid cookie acknowledgements are a return-path check, not cryptographic client identity.
-- Each direction of an ordinary graceful close uses its own FIN. In the sequential close model, the active closer ends in TIME_WAIT for 2×MSL (60 s in Linux v6.12) to ACK a retransmitted FIN and let old duplicates expire.
+- SYN floods can exhaust establishment resources; SYN cookies avoid an ordinary per-attempt half-open entry while still relying on server-wide secrets and consuming processing resources. A valid cookie acknowledgement only shows the client can receive packets at its address; it is not cryptographic client identity.
+- Each direction of an ordinary graceful close uses its own FIN. In the sequential close model, the active closer ends in TIME_WAIT for twice the MSL (60 s in Linux v6.12) to ACK a retransmitted FIN and let old duplicates expire.
 - TIME_WAIT is normal; unexplained CLOSE_WAIT growth warrants investigation of application lifecycle and descriptor ownership.
 - An accepted valid RST normally aborts the connection; invalid resets may be ignored or challenged. Refused attempts, unknown connections and some close paths can generate resets.
 
@@ -213,6 +288,6 @@ A forged valid RST can abort a connection. For synchronized connections, [RFC 59
 - [RFC 6528: Defending against Sequence Number Attacks](https://www.rfc-editor.org/rfc/rfc6528)
 
 > [!note] Content omitted after review
-> A universal request-socket byte size, original cookie bit layout, historical attacker attribution and unconditional timeout/option guarantees are omitted because this pass did not establish adequate implementation-specific evidence. Cookie handling and state diagrams here are teaching models, not an exhaustive TCP implementation.
+> A universal request-socket byte size, original cookie bit layout, historical attacker attribution and unconditional timeout/option guarantees are omitted because this pass did not establish adequate implementation-dependent evidence. Cookie handling and state diagrams here are teaching models, not an exhaustive TCP implementation.
 
 - [Linux TCP configuration defaults](https://kernel.org/doc/html/latest/networking/ip-sysctl.html)

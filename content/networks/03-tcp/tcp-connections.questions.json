@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Each direction has its own sequence space. The client's ISN is 1000; the server's is 5000.\n2. **A SYN consumes one sequence number**, even with no data. So the client's SYN occupies number 1000, and the client's next number is **1001**. That matches the server's `ack=1001`.\n3. The server's SYN occupies 5000. The client has received it, so the next server byte it wants is **5001**.\n4. The final segment is therefore:\n\n```\nACK seq=1001 ack=5001\n```\n\nIf the client puts data in this segment (say a TLS ClientHello), the first data byte is numbered 1001.",
+    "workedExample": "1. Each direction has its own sequence space. The client's ISN is 1000; the server's is 5000.\n2. **A SYN consumes one sequence number**, even with no data. So the client's SYN occupies number 1000, and the client's next number is **1001**. That matches the server's `ack=1001`.\n3. The server's SYN occupies 5000. The client has received it, so the next server byte it wants is **5001**.\nIn numbers:\n\n```formula\nN_c = ISN_c + 1 = 1000 + 1 = 1001\nN_s = ISN_s + 1 = 5000 + 1 = 5001\nwhere\nN_c: the client's next sequence number, used as seq in its final ACK\nISN_c: the client's initial sequence number, 1000\nN_s: the next server sequence number the client expects, used as ack\nISN_s: the server's initial sequence number, 5000\nIn words: each SYN uses one number, so both sides move on by one.\n```\n\n4. The final segment is therefore:\n\n```\nACK seq=1001 ack=5001\n```\n\nIf the client puts data in this segment (say a TLS ClientHello), the first data byte is numbered 1001.",
     "link": {
       "title": "RFC 9293: Transmission Control Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9293"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. A valid RST to the opening SYN rejects the attempt and can produce ECONNREFUSED.\n2. No response leaves retry/timeout handling to the stack and application.\n3. Neither observation alone identifies the exact device or failure cause.\n4. Do not infer a universal Linux timeout from a 1, 2, 4… series: retrieved kernel documentation includes configurable linear initial SYN timeouts as well as exponential backoff.",
+    "workedExample": "1. A valid RST to the opening SYN rejects the attempt and can produce ECONNREFUSED.\n2. No response leaves retry/timeout handling to the stack and application.\n3. Neither observation alone identifies the exact device or failure cause.\n4. Do not infer a universal Linux timeout from a 1, 2, 4… series: retrieved kernel documentation includes configurable linear initial SYN timeouts as well as exponential timer backoff.",
     "link": {
       "title": "RFC 9293: Transmission Control Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9293"
@@ -70,7 +70,7 @@
         "explanation": "The browser is the passive closer here. It goes CLOSE_WAIT, then LAST_ACK, then CLOSED when its FIN is acknowledged."
       },
       {
-        "text": "Both sides, for 2×MSL each",
+        "text": "Both sides, for twice the MSL each",
         "explanation": "Both can enter TIME_WAIT on a simultaneous close. The question instead specifies a sequential close with the server active first."
       },
       {
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. The server calls `close()` and sends FIN. It is the **active closer**: ESTABLISHED to FIN_WAIT_1.\n2. The browser ACKs (server moves to FIN_WAIT_2) and enters CLOSE_WAIT.\n3. The browser closes and sends its FIN (LAST_ACK).\n4. The server ACKs that FIN and enters **TIME_WAIT** for 2×MSL (60 s on Linux).\n5. The browser receives the ACK and goes straight to CLOSED.\n\nIn this specified sequential close, the server enters TIME_WAIT. A simultaneous close can put both peers there.",
+    "workedExample": "1. The server calls `close()` and sends FIN. It is the **active closer**: ESTABLISHED to FIN_WAIT_1.\n2. The browser ACKs (server moves to FIN_WAIT_2) and enters CLOSE_WAIT.\n3. The browser closes and sends its FIN (LAST_ACK).\n4. The server ACKs that FIN and enters **TIME_WAIT** for twice the maximum segment lifetime (MSL); Linux uses a fixed 60 s.\n5. The browser receives the ACK and goes straight to CLOSED.\n\nIn this specified sequential close, the server enters TIME_WAIT. A simultaneous close can put both peers there.",
     "link": {
       "title": "Coping with the TCP TIME-WAIT state on busy Linux servers",
       "url": "https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux"
@@ -93,7 +93,7 @@
     "id": "tcp-connections-q4",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "Why does the active closer wait in TIME_WAIT for 2×MSL instead of going straight to CLOSED? Select all that apply.",
+    "prompt": "Why does the active closer wait in TIME_WAIT for twice the maximum segment lifetime (MSL) instead of going straight to CLOSED? Select all that apply.",
     "options": [
       {
         "text": "If its final ACK is lost, the peer will retransmit its FIN, and someone must be there to ACK it again",
@@ -120,7 +120,7 @@
       0,
       1
     ],
-    "workedExample": "1. If the peer missed the final ACK, retained state can acknowledge a retransmitted FIN; receiving the FIN can restart the TIME_WAIT timer.\n2. The specified waiting interval also protects later connection incarnations from old duplicates under the assumed maximum segment lifetime.\n3. The peer’s retransmission timeout is separate from MSL, so “one MSL until an ACK vanishes plus one for the FIN” is not a valid timer derivation.\n4. Standards and implementations define constrained reuse cases; this is not an unconditional prohibition on any earlier tuple reuse.",
+    "workedExample": "1. If the peer missed the final ACK, retained state can acknowledge a retransmitted FIN; receiving the FIN can restart the TIME_WAIT timer.\n2. The waiting interval is:\n\n```formula\nT_TW = 2 × MSL\nT_TW = 2 × 120 s = 240 s\nwhere\nT_TW: the TIME_WAIT duration, in seconds (s)\nMSL: maximum segment lifetime, the longest a segment is assumed to survive in the network; RFC 793 suggested 120 s\ns: seconds\nIn words: two of RFC 793's two-minute lifetimes make four minutes; Linux instead uses a fixed 60 s.\n```\n\nThe specified waiting interval also protects later connection incarnations from old duplicates under the assumed maximum segment lifetime.\n3. The peer’s retransmission timeout is separate from MSL, so “one MSL until an ACK vanishes plus one for the FIN” is not a valid timer derivation.\n4. Standards and implementations define constrained reuse cases; this is not an unconditional prohibition on any earlier tuple reuse.",
     "link": {
       "title": "RFC 9293: Transmission Control Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9293"
@@ -180,7 +180,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Data: 300 bytes starting at 1001.\n\n```\nfirst byte = 1001\nlast byte  = 1001 + 300 - 1 = 1300\n```\n\n2. The server ACKs the data with `ack=1301`.\n3. The FIN uses the next number: **seq=1301**.\n4. Like a SYN, a FIN **consumes one sequence number**, so the server acknowledges it with **ack=1302**.\n\nThis is why a peer can tell 'I have all your data' (ack=1301) apart from 'I have all your data **and** your FIN' (ack=1302).",
+    "workedExample": "1. Data: 300 bytes starting at 1001.\n\n```formula\nB_last = S + L − 1\nB_last = 1001 + 300 − 1 = 1300\nS_FIN = B_last + 1 = 1301\nA_FIN = S_FIN + 1 = 1302\nwhere\nB_last: the number of the last data byte\nS: the first data byte's sequence number, 1001\nL: the number of data bytes, 300\nS_FIN: the FIN's sequence number, the next one after the data\nA_FIN: the ACK number that acknowledges the FIN\nIn words: the data fills 1001 to 1300, the FIN takes 1301, and acknowledging the FIN means asking for 1302.\n```\n\n2. The server ACKs the data with `ack=1301`.\n3. The FIN uses the next number: **seq=1301**.\n4. Like a SYN, a FIN **consumes one sequence number**, so the server acknowledges it with **ack=1302**.\n\nThis is why a peer can tell 'I have all your data' (ack=1301) apart from 'I have all your data **and** your FIN' (ack=1302).",
     "link": {
       "title": "RFC 9293: Transmission Control Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9293"
@@ -210,7 +210,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Normal stateful processing would retain a half-open attempt.\n2. Under overflow-triggered cookie mode, the server instead generates a checkable sequence number without keeping that ordinary entry.\n3. A responding client acknowledges the sequence number, modulo 2^32.\n4. The server validates the acknowledgement according to its implementation and reconstructs supported state.\n5. An off-path spoofer lacking the response has to guess; a finite authenticator is not impossible to guess, and other server resources can still be exhausted.",
+    "workedExample": "1. Normal stateful processing would retain a half-open attempt.\n2. Under overflow-triggered cookie mode, the server instead generates a checkable sequence number without keeping that ordinary entry.\n3. A responding client acknowledges the cookie sequence number plus one, going back to 0 past the 32-bit limit:\n\n```formula\nA = (S_cookie + 1) mod 2^32\nwhere\nA: the acknowledgement number in the client's ACK\nS_cookie: the cookie sequence number the server sent\nmod: modulo, the remainder after dividing by 2^32 = 4,294,967,296, so the largest value plus one wraps round to 0\nIn words: the client's ACK is the cookie plus one, wrapping round to 0 after the largest 32-bit value.\n```\n\n4. The server validates the acknowledgement according to its implementation and reconstructs supported state.\n5. An off-path spoofer lacking the response has to guess; a cookie check value of finite length is not impossible to guess, and other server resources can still be exhausted.",
     "link": {
       "title": "RFC 4987: TCP SYN flooding and mitigations",
       "url": "https://www.rfc-editor.org/rfc/rfc4987"
@@ -240,7 +240,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Four tuple fields are fixed; only source port varies.\n2. The restricted range contains 60999 − 32768 + 1 = 28,232 ports.\n3. The desired steady state would require 600 × 60 = 36,000 occupied tuples, beyond capacity.\n4. Starting empty, the model reaches capacity after about 28,232 / 600 = 47.05 seconds, before any 60-second occupancy expires.\n5. Connection reuse or more usable endpoint tuples can help. Actual Linux results depend on allocation, binds, reserved ports and safe-reuse rules; this model deliberately excludes them.",
+    "workedExample": "1. Four tuple fields are fixed; only source port varies.\n2. The restricted range contains 60999 − 32768 + 1 = 28,232 ports.\n3. The desired steady state would need more tuples than exist, and the pool runs out before any port is freed:\n\n```formula\nN = 60,999 − 32,768 + 1 = 28,232\nN_need = R × T = 600 /s × 60 s = 36,000\nT_full = N / R = 28,232 / 600 /s\nT_full ≈ 47.05 s\nwhere\nN: the number of source ports in the range\nN_need: the ports occupied at once in steady state\nR: the attempted connection rate, 600 per second (/s)\nT: how long each closed connection holds its tuple, 60 seconds (s)\nT_full: how long until every port is in TIME_WAIT\ns: seconds\n≈: approximately equal to\nIn words: 600 a second, each held for a minute, needs 36,000 ports but only 28,232 exist, so the pool is empty after about 47 seconds.\n```\n\n4. Starting empty, the model reaches capacity after about 47 seconds, before any 60-second occupancy expires.\n5. Connection reuse or more usable endpoint tuples can help. Actual Linux results depend on allocation, binds, reserved ports and safe-reuse rules; this model deliberately excludes them.",
     "link": {
       "title": "Coping with the TCP TIME-WAIT state on busy Linux servers",
       "url": "https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux"
@@ -254,7 +254,7 @@
     "options": [
       {
         "text": "MSS may need to be represented by one of a limited set of supported values",
-        "explanation": "Correct for the stated design. The size and contents of that set are implementation-specific; a universal eight-value table is not assumed."
+        "explanation": "Correct for the stated design. The size and contents of that set are implementation-dependent; a universal eight-value table is not assumed."
       },
       {
         "text": "Option negotiation can be restricted unless additional recoverable state is encoded, for example using timestamp fields",
@@ -300,7 +300,7 @@
       },
       {
         "text": "FIN_WAIT_1 → CLOSING → TIME_WAIT → CLOSED",
-        "explanation": "Correct. Each side is in FIN_WAIT_1 when the other's FIN arrives, ACKs it and moves to CLOSING; when its own FIN is ACKed it enters TIME_WAIT. Both sides wait 2×MSL."
+        "explanation": "Correct. Each side is in FIN_WAIT_1 when the other's FIN arrives, ACKs it and moves to CLOSING; when its own FIN is ACKed it enters TIME_WAIT. Both sides wait twice the MSL."
       },
       {
         "text": "FIN_WAIT_1 → CLOSED, skipping TIME_WAIT because neither side was the active closer",
@@ -308,7 +308,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Follow side A (B is symmetric):\n\n1. A calls `close()`, sends FIN: **FIN_WAIT_1**.\n2. Before A's FIN is acknowledged, B's FIN arrives. A ACKs it. The state table says FIN_WAIT_1 + recv FIN goes to **CLOSING**.\n3. B's ACK of A's FIN arrives: CLOSING + recv ACK goes to **TIME_WAIT**.\n4. After 2×MSL: **CLOSED**.\n\n```\nFIN_WAIT_1 -FIN-> CLOSING\nCLOSING    -ACK-> TIME_WAIT\nTIME_WAIT  -2MSL-> CLOSED\n```\n\nBoth sides end up in TIME_WAIT.",
+    "workedExample": "Follow side A (B is symmetric):\n\n1. A calls `close()`, sends FIN: **FIN_WAIT_1**.\n2. Before A's FIN is acknowledged, B's FIN arrives. A ACKs it. The lesson’s state-transition table says FIN_WAIT_1 + recv FIN goes to **CLOSING**.\n3. B's ACK of A's FIN arrives: CLOSING + recv ACK goes to **TIME_WAIT**.\n4. After 2×MSL: **CLOSED**.\n\n```\nFIN_WAIT_1 -FIN-> CLOSING\nCLOSING    -ACK-> TIME_WAIT\nTIME_WAIT  -2MSL-> CLOSED\n```\n\nBoth sides end up in TIME_WAIT.",
     "link": {
       "title": "RFC 9293: Transmission Control Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9293"
@@ -338,7 +338,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The older in-window test accepted a range of possible sequence values. In a simplified stationary 65,536-byte window, a uniform random 32-bit guess hits that range with probability 1/65,536.\n2. RFC 5961’s established-state rule accepts an exact RCV.NXT match as a reset; an in-window nonmatch triggers a challenge ACK, subject to limiting; out-of-window resets are discarded.\n3. In an idealised stationary state with no feedback, guessing one exact 32-bit value is harder. Real state motion, rate limits, side channels and deployment details prevent interpreting this as a measured attack cost or complete authentication.",
+    "workedExample": "1. The older in-window test accepted any sequence number within a range. In a simplified stationary 65,536-byte window, a uniform random 32-bit guess hits that range with this probability:\n\n```formula\nP_win = W / 2^32\nP_win = 65,536 / 4,294,967,296\nP_win = 1 / 65,536 ≈ 0.0000153\nwhere\nP_win: the chance that one random guess lands inside the window\nW: the receive window, 65,536 sequence numbers; it is divided by 2^32 = 4,294,967,296, the count of all possible 32-bit sequence numbers\n≈: approximately equal to\nIn words: one guess in 65,536 lands in the window, so a blind attacker needs only about 65,536 forged resets to cover the whole sequence space.\n```\n\n2. RFC 5961’s established-state rule accepts an exact RCV.NXT match as a reset; an in-window nonmatch triggers a challenge ACK, subject to limiting; out-of-window resets are discarded.\n3. In an idealised stationary state with no feedback, guessing one exact 32-bit value is harder. Real state motion, rate limits, side channels and deployment details prevent interpreting this as a measured attack cost or complete authentication.",
     "link": {
       "title": "RFC 5961: Improving TCP's Robustness to Blind In-Window Attacks",
       "url": "https://www.rfc-editor.org/rfc/rfc5961"

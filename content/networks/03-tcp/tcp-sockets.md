@@ -6,7 +6,7 @@ minutes: 15
 summary: How Berkeley socket calls map onto TCP's states and queues, why TCP has no message boundaries and how to frame messages, partial sends and EOF, SO_REUSEADDR, and building a correct Python server with threads and with an event loop.
 ---
 
-Python's **socket API** wraps operating-system networking interfaces. Similar concepts appear in other languages, but high-level runtimes, platforms and socket modes differ in their errors, buffering and lifetime rules.
+Python's **socket API** wraps the operating system's networking calls. Similar concepts appear in other languages, but high-level runtimes, platforms and socket modes differ in their errors, buffering and lifetime rules.
 
 This lesson separates byte-stream framing from connection setup and demonstrates bounded-message helpers. The servers remain teaching examples; the selector example is deliberately faulty for a debugging exercise.
 
@@ -128,7 +128,24 @@ def send_msg(sock, data):
     sock.sendall(hdr + data)
 ```
 
-`"!I"` is a 4-byte unsigned integer in network byte order (big-endian). Combining header and body avoids an application-created pause between two small writes, but one `sendall()` is not one packet and cannot guarantee freedom from Nagle, queueing or other delays.
+`"!I"` is a 4-byte unsigned integer in network byte order (big-endian). Big-endian means the first byte on the wire is the most significant, so the receiver rebuilds the length like this:
+
+```formula
+n = b_0 × 2^24 + b_1 × 2^16
+  + b_2 × 2^8 + b_3
+n = 0 + 0 + 1 × 256 + 0 = 256
+n_max = 2^32 − 1 = 4,294,967,295
+where
+n: the message length the prefix encodes, in bytes
+b_0: the first byte received (most significant), 0 to 255
+b_1: the second byte
+b_2: the third byte
+b_3: the fourth byte (least significant)
+n_max: the largest length 4 bytes can express
+In words: each byte is worth 256 times the byte after it, so the prefix 00 00 01 00 means 256; MAX_MSG then rejects anything above 1 MiB, far below the 4 GiB the field could claim.
+```
+
+Combining header and body avoids an application-created pause between two small writes, but one `sendall()` is not one packet and cannot guarantee freedom from Nagle, queueing or other delays.
 
 Then the server, one thread per connection:
 
@@ -168,7 +185,7 @@ Details that make this correct:
 
 - `with conn:` closes this socket when the handler exits. It cannot force a handler that never exits to finish; duplicated references and wrappers also affect lifetime.
 - The helpers cap each body at 1 MiB. The handler has a per-operation timeout, not a total-message deadline: a trickling peer can keep a message in progress. Production code needs total deadlines, connection/thread limits and a deliberate error policy.
-- `socket.create_server` sets **`SO_REUSEADDR`** on POSIX systems. Without suitable reuse settings, retained connection state can prevent immediate rebinding. This is not an inevitable outcome of every restart; address, platform and old/new socket options matter.
+- `socket.create_server` sets **`SO_REUSEADDR`** on POSIX systems. Without suitable reuse settings, retained connection state can stop the port being bound again immediately. This is not an inevitable outcome of every restart; address, platform and old/new socket options matter.
 
 > [!note] SO_REUSEADDR vs SO_REUSEPORT
 > `SO_REUSEADDR` relaxes platform-specific bind rules; it does not grant arbitrary sharing with an active listener. Linux generally requires the reuse option on both the previous and new sockets for the relevant reuse case. `SO_REUSEPORT` (Linux 3.9+) supports multiple eligible listeners at the same address/port, each with its own queue. Sockets must set it before binding; Linux requires matching effective user IDs. Default selection and optional BPF policies do not guarantee perfectly balanced work.
@@ -177,7 +194,7 @@ Details that make this correct:
 
 A thread per connection is simple, but stack reservations, task limits and scheduling costs constrain scale. Exact limits and stack sizes depend on the runtime and platform. Many mostly idle connections motivate multiplexing rather than one native thread each.
 
-The alternative is **non-blocking sockets** and a **readiness API**: `select`/`poll`, `epoll` (Linux) or `kqueue` (BSD, macOS). Availability differs by platform: Python exposes `poll` on Unix, while Windows `select` handles sockets only. In the usual scanning-cost model, `select` scales with the highest descriptor number and `poll` with the number of supplied descriptors. One thread asks the kernel "which of these sockets can I read or write without blocking?" and handles only those. Python's `selectors` module chooses an available backend according to its platform policy. Readiness can become stale: non-blocking operations must still handle `BlockingIOError`.
+The alternative is **non-blocking sockets** and a **readiness API**: `select`/`poll`, `epoll` (Linux) or `kqueue` (BSD, macOS). Availability differs by platform: Python exposes `poll` on Unix, while Windows `select` handles sockets only. In the usual scanning-cost model, `select` scales with the highest descriptor number and `poll` with the number of supplied descriptors. One thread asks the kernel "which of these sockets can I read or write without blocking?" and handles only those. Python's `selectors` module chooses an available backend according to its platform policy. Readiness can become stale: operations on non-blocking sockets must still handle `BlockingIOError`.
 
 **Deliberately faulty debugging example:** the next loop ignores partial writes and can exit on an unhandled would-block error. It is the subject of quiz question 10, not a correct echo-server template:
 

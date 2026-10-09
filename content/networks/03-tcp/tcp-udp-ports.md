@@ -22,9 +22,23 @@ A port is a 16-bit number, so 0 to 65,535. IANA splits the range into three band
 | 1024–49151 | User (registered) | 3306 MySQL, 5432 Postgres |
 | 49152–65535 | Dynamic (ephemeral) | Client-side ports |
 
-A server often **binds** to a known service port; discovery mechanisms can also advertise dynamically chosen ports. Port zero is reserved in the IANA registry, and asking a socket API to bind port zero typically requests automatic allocation. A client usually lets the OS pick a temporary **ephemeral port** for its end. Operating systems don't all follow the IANA range: Linux picks ephemeral ports from **32768–60999** by default (`net.ipv4.ip_local_port_range`), which spans 28,232 numbers before reserved ports, existing uses and configuration changes are considered.
+A server often **binds** to a known service port; discovery mechanisms can also advertise dynamically chosen ports. Port zero is reserved in the IANA registry, and asking a socket API to bind port zero typically requests automatic allocation. A client usually lets the OS pick a temporary **ephemeral port** for its end. Operating systems don't all follow the IANA range: Linux picks ephemeral ports from **32768–60999** by default (`net.ipv4.ip_local_port_range`).
 
-On Unix, binding to ports below 1024 traditionally needs root (on Linux, typically `CAP_NET_BIND_SERVICE`, with the privileged-port threshold configurable per network namespace). That rule is a historical trust signal, not security.
+How many ports is that? To count the numbers in a range that includes both ends, subtract the ends and add one (the range 1–3 holds three numbers, not two):
+
+```formula
+N = P_high − P_low + 1
+N = 60,999 − 32,768 + 1 = 28,232
+where
+N: how many port numbers the range contains (a plain count)
+P_high: the highest port number in the range; 60,999 in Linux's default
+P_low: the lowest port number in the range; 32,768 in Linux's default
+In words: Linux's default ephemeral range holds 28,232 port numbers; the "+ 1" counts both end points.
+```
+
+That is the most a client can draw on before reserved ports, ports already in use and configuration changes are considered.
+
+On Unix, binding to ports below 1024 traditionally needs root, the all-powerful administrator account (on Linux, typically `CAP_NET_BIND_SERVICE`, with the privileged-port threshold configurable per network namespace). That rule is a historical trust signal, not security.
 
 ## The UDP header
 
@@ -41,6 +55,18 @@ UDP ([RFC 768](https://www.rfc-editor.org/rfc/rfc768), 1980) is three pages long
 +-----------------------------------+
 ```
 
+Four 16-bit fields make up the whole header:
+
+```formula
+H_UDP = 4 × 16 bit = 64 bit
+H_UDP = 64 bit / 8 = 8 B
+where
+H_UDP: the size of the UDP header
+bit: binary digit, the smallest unit of data (a 0 or a 1)
+B: bytes; one byte is 8 bits
+In words: four 16-bit fields (source port, destination port, length, checksum) add up to 64 bits, which is 8 bytes.
+```
+
 - **Source port**: a reply-port hint when supplied; RFC 768 permits zero when unused. Application protocols can impose additional requirements.
 - **Destination port**: which socket on the receiver gets this datagram.
 - **Length**: header plus data, in bytes; at least 8 for an ordinary datagram. IPv6 jumbograms use the exception described below.
@@ -48,7 +74,24 @@ UDP ([RFC 768](https://www.rfc-editor.org/rfc/rfc768), 1980) is three pages long
 
 The checksum is optional over IPv4 (a value of 0 means "not computed") and normally **required over IPv6**. RFC 6935/6936 permit narrowly constrained zero-checksum tunnel modes; ordinary IPv6 applications cannot simply disable it.
 
-For ordinary UDP, the 16-bit length field bounds header plus payload at 65,535 bytes. IPv6 jumbograms are a specified exception (RFC 2675), using UDP length zero when required. Over IPv4, with a 20-byte IP header, the largest payload is 65,535 − 20 − 8 = **65,507 bytes**. An IP packet larger than the path MTU may be fragmented where allowed, rejected locally, or dropped with an ICMP error. Linux UDP normally uses PMTU discovery and can return `EMSGSIZE`. IPv6 routers do not fragment. Reassembly needs all fragments, so UDP applications should manage payload sizes using path and protocol constraints rather than assume one universal safe size.
+For ordinary UDP, the length field (16 bits) bounds header plus payload at 65,535 bytes. IPv6 jumbograms are a specified exception (RFC 2675), using UDP length zero when required.
+
+Over IPv4 there is a second, tighter limit: the IPv4 header's own 16-bit total-length field counts the whole packet, IP header included. So the IP header and the UDP header both come out of the same 65,535 bytes:
+
+```formula
+P_max = L_IP − H_IP − H_UDP
+P_max = 65,535 B − 20 B − 8 B
+P_max = 65,507 B
+where
+P_max: the largest UDP payload (application data) one IPv4 datagram can carry, in bytes (B)
+L_IP: the largest IPv4 total length, 65,535 bytes: the biggest number a 16-bit field can hold
+H_IP: the IPv4 header size; 20 bytes when it carries no options (up to 60 bytes with options)
+H_UDP: the UDP header size, always 8 bytes
+B: bytes; one byte is 8 bits
+In words: an IPv4 packet is at most 65,535 bytes, and the IP and UDP headers use 28 of them, leaving at most 65,507 bytes of data.
+```
+
+That is a protocol maximum, not a sensible size to send. An IP packet larger than the path MTU may be fragmented where allowed, rejected locally, or dropped with an ICMP error. Linux UDP normally uses PMTU discovery and can return `EMSGSIZE`. IPv6 routers do not fragment. Reassembly needs all fragments, so UDP applications should manage payload sizes using path and protocol constraints rather than assume one universal safe size.
 
 > [!note] What UDP does not do
 > Base UDP provides no handshake, acknowledgements, retransmission, ordering, flow control or congestion control. Datagrams may be lost, duplicated or reordered. Ordinary datagram socket calls preserve message boundaries; a too-small receive buffer can truncate a message and discard its remainder. A successful send is not proof of remote delivery.
@@ -107,11 +150,40 @@ TCP gives you reliability and ordering, but you pay in **latency** (a normal new
 
 A DNS lookup is usually a single small query and a single small response. With UDP the whole exchange takes **one round trip**. A fresh ordinary TCP connection adds a handshake; an already open connection can be reused, and TCP Fast Open can alter setup timing. Total resolution latency also includes DNS processing and any upstream queries.
 
-Reliability is handled by the application: if no reply arrives within a timeout, the resolver asks again or tries another server. If a response is too big for UDP, the server sets the **TC (truncated)** flag and the client retries over TCP. EDNS(0) allows UDP responses bigger than the original 512-byte limit; DNS Flag Day 2020 recommended a 1,232-byte UDP payload limit (IPv6 minimum MTU 1,280 minus 40-byte base IPv6 and 8-byte UDP headers). This reduces fragmentation risk under those assumptions rather than proving every path can carry it.
+Reliability is handled by the application: if no reply arrives within a timeout, the resolver asks again or tries another server. If a response is too big for UDP, the server sets the **TC (truncated)** flag and the client retries over TCP. EDNS(0) allows UDP responses bigger than the original 512-byte limit; DNS Flag Day 2020 recommended a 1,232-byte UDP payload limit. The number comes from the smallest packet every IPv6 link must carry:
 
-### Real-time games and voice: stale data is useless
+```formula
+P_DNS = MTU_min − H_IPv6 − H_UDP
+P_DNS = 1,280 B − 40 B − 8 B = 1,232 B
+where
+P_DNS: the recommended largest DNS message over UDP, in bytes (B)
+MTU_min: the minimum MTU that every IPv6 link must support, 1,280 bytes
+H_IPv6: the fixed base IPv6 header, 40 bytes
+H_UDP: the UDP header, 8 bytes
+B: bytes
+In words: a 1,232-byte DNS message plus its base IPv6 and UDP headers exactly fills the smallest packet IPv6 guarantees, so it fits without fragmentation when no extra headers or tunnels are added.
+```
 
-Consider a game sending independent full-state position snapshots at 60 Hz, about 16.7 ms apart. A new snapshot can supersede a lost one; delta updates and important game events can have different reliability requirements. TCP would **hold back** every later update until the lost one was retransmitted, delaying delivery of later bytes until the gap is repaired. The delay depends on detection, retransmission and buffering; the whole game loop need not freeze. That is **head-of-line blocking**, and independent deadline-sensitive updates can prefer skipping stale data to waiting for that gap.
+This reduces fragmentation risk under those assumptions rather than proving every path can carry it.
+
+### Live games and voice: old data is useless
+
+Consider a game sending independent full-state position snapshots at 60 Hz. The gap between snapshots is one divided by the rate:
+
+```formula
+T = 1 / f
+T = 1 / 60 Hz ≈ 0.0167 s ≈ 16.7 ms
+where
+T: the time between two snapshots, in seconds (s) or milliseconds (ms)
+f: how many snapshots are sent each second, in hertz (Hz)
+Hz: hertz, the unit for "times per second"; 60 Hz is 60 times a second
+s: seconds
+ms: milliseconds, thousandths of a second
+≈: approximately equal to (the result is rounded)
+In words: sending 60 updates a second leaves about 16.7 ms between them, so a 100 ms stall spans about six updates.
+```
+
+A new snapshot can supersede a lost one; delta updates and important game events can have different reliability requirements. TCP would **hold back** every later update until the lost one was retransmitted, delaying delivery of later bytes until the gap is repaired. The delay depends on detection, retransmission and buffering; the whole game loop need not freeze. That is **head-of-line blocking**, and independent deadline-sensitive updates can prefer skipping out-of-date data to waiting for that gap.
 
 Voice and video calls (RTP over UDP) work the same way: a late frame may be concealed or discarded, but timely retransmission and forward error correction can also help. RFC 4588 specifies RTP retransmission; media deadlines determine its usefulness.
 

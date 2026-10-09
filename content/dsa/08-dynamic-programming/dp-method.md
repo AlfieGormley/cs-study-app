@@ -2,7 +2,7 @@
 id: dp-method
 title: A method for solving DP problems
 level: basic
-minutes: 12
+minutes: 15
 summary: A five-step recipe (state, recurrence, base cases, evaluation order, reconstruction) applied to word break and a stock-trading state machine.
 ---
 
@@ -47,7 +47,7 @@ Ask: **what is the first (or last) decision**, and what are the options? Each op
 
 ## Step 3: base cases
 
-The smallest states, where no decision is left: an empty string, zero capacity, a single element. Also decide what an **impossible** state returns: `0` for counting, `False` for feasibility, `+∞` for minimisation, `−∞` for maximisation.
+The smallest states, where no decision is left: an empty string, a zero weight limit, a single element. Also decide what an **impossible** state returns: `0` for counting, `False` for feasibility, `+∞` (positive infinity, a value worse than any real cost) for minimisation, and `−∞` (negative infinity, worse than any real profit) for maximisation. In Python these are `float('inf')` and `-float('inf')`. A `min` never picks `+∞` when a real option exists, and a `max` never picks `−∞`, so impossible options drop out automatically.
 
 ## Step 4: evaluation order
 
@@ -75,6 +75,25 @@ Following stored choices takes time proportional to the number of reconstruction
 **State.** `ok[i]` is True if the suffix `s[i:]` can be split into words.
 
 **Recurrence.** The first decision is which word starts at position i. For each word `w`, if `s` has `w` at position i and the rest can be split, we're done:
+
+```formula
+ok[i] = OR of ok[i + |w|]
+  for each w with m(w, i)
+ok[n] = True
+where
+ok[i]: True if the suffix of s starting at position i can be split into dictionary words, False otherwise
+i: a position in s, from 0 (the start) to n (just past the end)
+w: one dictionary word
+m(w, i): True if the word w appears in s starting exactly at position i (s.startswith(w, i) in Python)
+|w|: the length of w, in characters
+OR: logical or, True if at least one of the values is True (False if there are none)
+s: the input string
+n: the length of s, in characters
+True: the Boolean value "yes"
+In words: the suffix from i can be split if some dictionary word matches at i and the rest after that word can also be split.
+```
+
+The same rule in Python:
 
 ```
 ok[i] = any(s.startswith(w, i)
@@ -125,9 +144,24 @@ i  suffix       ok   via
 0  "catsanddog" T    cat -> 3
 ```
 
-(Positions 1, 2, 5, 8 and 9 are False.) Following `nxt` from 0 gives `["cat", "sand", "dog"]`. With "cats" listed first you'd get `["cats", "and", "dog"]`; both are valid.
+(Positions 1, 2, 5, 8 and 9 are False.) Following `nxt[i]` from i = 0 gives `["cat", "sand", "dog"]`. With "cats" listed first you'd get `["cats", "and", "dog"]`; both are valid.
 
-**Complexity.** n + 1 states, each trying W words of length up to L: O(n · W · L + n + W) worst-case character/transition work and O(n + W) auxiliary slots for nonempty words, including materialising the dictionary references; reconstruction copies at most n characters. Compare with brute force, which can explore exponentially many splits of a string like `"aaaa...ab"`.
+**Complexity.** Count states and the work per state:
+
+```formula
+T = O(n × W × L + n + W)
+M = O(n + W)
+where
+T: the worst-case running time, counting character comparisons and table steps
+M: the extra memory used, in slots (table entries and word references)
+n: the length of the string s, in characters; there are n + 1 states
+W: the number of words in the dictionary
+L: the length of the longest dictionary word, in characters
+O(...): Big-O, growing at most in proportion to the expression inside
+In words: each of the n + 1 positions tries all W words, and checking a word costs up to L character comparisons.
+```
+
+For example, a 1,000-character string with 500 words of up to 10 characters costs at most about 1,000 × 500 × 10 = 5 million character comparisons. The `+ n + W` terms cover setting up the table and copying the word list; reconstruction copies at most n characters. Compare with brute force, which can explore exponentially many splits of a string like `"aaaa...ab"`.
 
 ## Worked example 2: when the state needs more than an index
 
@@ -142,7 +176,41 @@ Try `dp[i]` = best profit from day i onwards. It doesn't work: whether you can s
 - Holding: either keep it (`f(i+1, True)`) or sell (`price[i] + f(i+2, False)`; the `+2` skips the cooldown day).
 - Not holding: either wait (`f(i+1, False)`) or buy (`−price[i] + f(i+1, True)`).
 
-**Domain and base case.** Prices are nonnegative integers. All bought shares must be sold: for i ≥ n, `f(i, False) = 0` and `f(i, True) = −∞`. This explicitly excludes unfinished transactions, including zero-price ties.
+```formula
+f(i, True) = max(f(i + 1, True),
+  p_i + f(i + 2, False))
+f(i, False) = max(f(i + 1, False),
+  −p_i + f(i + 1, True))
+where
+f(i, h): the best profit obtainable from day i onwards, where h says whether we hold a share at the start of day i
+i: the day number, starting at 0
+h: the holding flag, True or False
+True: we hold a share
+False: we hold no share
+p_i: the price of the share on day i (price[i] in the code), in money units
+max: the larger of the two options
+In words: on each day, either do nothing and move to the next day, or act (sell, then skip a cooldown day; or buy, paying today's price), and keep whichever gives more profit.
+```
+
+Selling adds the price to the profit; buying subtracts it, which is why the buy option has −p_i.
+
+**Domain and base case.** Prices are nonnegative integers. All bought shares must be sold, so once the days run out (i is n or more, where n is the number of days):
+
+```formula
+f(i, False) = 0   for i ≥ n
+f(i, True) = −∞   for i ≥ n
+where
+f(i, h): the best profit from day i onwards with holding flag h
+i: the day number
+n: the number of days with a price
+True: still holding a share
+False: holding nothing
+−∞: negative infinity, a value worse than any real profit, so this state is never chosen
+≥: greater than or equal to
+In words: after the last day, finishing empty-handed adds nothing, and finishing while still holding a share is forbidden.
+```
+
+The `−∞` explicitly excludes unfinished transactions, including zero-price ties.
 
 ```python
 from functools import cache
@@ -171,7 +239,7 @@ def max_profit(prices):
 
 For prices `[1, 2, 3, 0, 2]` this returns 3. The tempting plan, buy at 1 and sell at 3 (+2), forces a cooldown on the day priced 0, leaving only one day: total 2. The better plan is buy at 1, sell at 2 (+1), cool down on the day priced 3, buy at 0, sell at 2 (+2): total 3. Spotting that by hand is fiddly, which is exactly why you let the recurrence try every option.
 
-**Complexity.** O(n + 1) states with O(1) arithmetic operations each. The shown version keeps O(n) cached states, prices and recursion frames. An iterative hold/sold/rest version can use O(1) value slots; integer bit costs remain additional.
+**Complexity.** With n days, there are O(n + 1) states (two per day, plus the end) with O(1) arithmetic operations each, so O(n) time. The shown version keeps O(n) cached states, prices and recursion frames. An iterative hold/sold/rest version can use O(1) value slots; integer bit costs remain additional.
 
 > [!tip] The state machine view
 > Many "sequence with modes" problems are DP over (position, mode). Draw the modes as boxes and the allowed moves between them as arrows; each arrow is a term in the recurrence.
@@ -196,7 +264,7 @@ Both work for most sequence problems. Pick whichever makes the recurrence read n
 1. **Under-specified state.** The stock problem without `holding`. Symptom: a recurrence that needs to "remember" something it can't see.
 2. **Over-specified state.** Including the full path or a list in the key. It explodes the number of states and usually means you haven't found what really matters.
 3. **Double counting.** In "how many ways" problems the options must be disjoint. Counting coin combinations versus orderings is the classic trap (lesson 3).
-4. **Wrong sentinel.** Using `0` for "impossible" in a minimisation makes impossible states look free. Use `float('inf')`.
+4. **Wrong sentinel value.** Using `0` for "impossible" in a minimisation makes impossible states look free. Use `float('inf')`.
 5. **Order bugs.** Bottom-up code that reads a cell before it's filled. If unsure, write it top-down first and convert.
 
 ## Key takeaways

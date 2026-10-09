@@ -2,7 +2,7 @@
 id: dp-intro
 title: What dynamic programming is
 level: basic
-minutes: 11
+minutes: 14
 summary: Overlapping subproblems and optimal substructure, how Fibonacci goes from exponential to linear, and the difference between memoisation and tabulation.
 ---
 
@@ -31,7 +31,21 @@ The property depends on the chosen state. The **longest simple path** between tw
 
 ## Fibonacci: the classic example
 
-The Fibonacci numbers are defined by `F(0) = 0`, `F(1) = 1`, and `F(n) = F(n-1) + F(n-2)`. The definition translates directly into code:
+The Fibonacci numbers start 0, 1, 1, 2, 3, 5, 8, 13, ...: each one after the first two is the sum of the two before it. Written as a **recurrence** (a rule that defines each value from earlier values of the same sequence):
+
+```formula
+F(0) = 0
+F(1) = 1
+F(n) = F(n − 1) + F(n − 2)   for n ≥ 2
+where
+F(n): the nth Fibonacci number, counting from F(0) = 0
+n: the position in the sequence, a whole number 0, 1, 2, ...
+F(n − 1), F(n − 2): the two Fibonacci numbers just before position n
+≥: greater than or equal to
+In words: the first two values are 0 and 1; every later value is the sum of the previous two.
+```
+
+So F(2) = 1 + 0 = 1, F(3) = 1 + 1 = 2, F(4) = 2 + 1 = 3 and F(5) = 3 + 2 = 5. The first two lines are the **base cases**: without them the rule would never stop asking for smaller values. The definition translates directly into code:
 
 ```python
 def fib(n):
@@ -56,7 +70,38 @@ For nonnegative integer n it is correct, but becomes expensive as n grows. Look 
 
 `fib(3)` is computed twice, `fib(2)` three times, `fib(1)` five times. These are the overlapping subproblems.
 
-The total number of calls is `2·F(n+1) − 1`. For `fib(5)` that is 15 calls; for `fib(30)` it is 2,692,537; for `fib(40)` it is about 331 million. The running time grows like φⁿ, where φ ≈ 1.618 is the golden ratio. It's exponential, even though there are only `n + 1` distinct subproblems.
+How many calls does `fib(n)` make in total? Each call makes one call for itself plus all the calls of its two children, and the total turns out to be tied to the Fibonacci numbers themselves:
+
+```formula
+calls(n) = 1 + calls(n − 1) + calls(n − 2)
+calls(n) = 2 × F(n + 1) − 1
+calls(5) = 2 × F(6) − 1 = 2 × 8 − 1 = 15
+where
+calls(n): the total number of calls made by the naive fib(n), including the first one
+n: the Fibonacci position asked for
+F(n + 1): the Fibonacci number at position n + 1 (F(6) = 8)
+In words: one call for the current value, plus every call made while computing the two smaller values; this works out to twice the next Fibonacci number, minus one.
+```
+
+The second line holds because calls(0) = calls(1) = 1 match 2 × F(1) − 1 and 2 × F(2) − 1, and both sides then obey the same "add the previous two, plus one" rule. For `fib(30)` it is 2,692,537 calls; for `fib(40)` it is about 331 million.
+
+The Fibonacci numbers themselves grow by a factor of about 1.618 at each step, so the call count does too:
+
+```formula
+calls(n) ≈ c × φ^n
+φ = (1 + √(5)) / 2 ≈ 1.618
+where
+calls(n): the number of calls made by the naive fib(n)
+c: a constant that does not depend on n (about 1.45 here, which is 2 × φ / √5)
+φ: phi, the golden ratio, about 1.618
+φ^n: φ multiplied by itself n times
+n: the Fibonacci position asked for
+√(5): the square root of 5, about 2.236
+≈: approximately equal to
+In words: each step up in n multiplies the work by about 1.6, so adding 10 to n multiplies it by about 120.
+```
+
+Check with the numbers above: going from n = 30 to n = 40 multiplies the calls by 331 million / 2.69 million ≈ 123, and 1.618^10 ≈ 123. That is **exponential** growth, even though there are only n + 1 distinct subproblems (F(0) up to F(n)).
 
 ### Fix 1: memoisation (top-down)
 
@@ -90,7 +135,7 @@ def fib(n):
     return fib(n - 1) + fib(n - 2)
 ```
 
-In a cold, single-threaded `@cache` call with n ≥ 2, each body executes once for k = 0..n; later requests hit the cache. The manual version does not cache its constant-time base cases. Counting integer additions and dictionary operations as unit cost gives **O(n) work and O(n) stored numbers**, plus recursive stack space.
+In a cold-cache (initially empty), single-threaded `@cache` call with n of 2 or more, the body runs once for each value from 0 up to n; later requests hit the cache. The manual version does not cache its constant-time base cases. Counting integer additions and dictionary operations as unit cost gives **O(n) work and O(n) stored numbers**, plus recursive stack space.
 
 The call tree collapses into a chain:
 
@@ -145,8 +190,24 @@ The table counts unit-cost arithmetic and integer slots rather than bits.
 | Tabulated | O(n) | O(n) |
 | Two variables | O(n) | O(1) |
 
-> [!tip] The cost formula
-> Sum the work over evaluated states. **(Number of states) × (maximum work per state)** is a useful upper bound; include preprocessing, reconstruction and operand-bit costs when relevant.
+This gives the rule of thumb for the cost of any DP. The exact cost is the work summed over every state you evaluate; multiplying the number of states by the most work any one state needs gives a quick upper bound:
+
+```formula
+T ≤ S × w_max
+T_fib ≤ (n + 1) × 1 = O(n)
+where
+T: the total running time of the DP, in basic steps
+S: the number of distinct states (subproblems) evaluated
+w_max: the most work any single state does, not counting the states it looks up
+≤: less than or equal to
+T_fib: the running time of memoised or tabulated Fibonacci
+n: the Fibonacci position asked for, so there are n + 1 states F(0) to F(n), each doing one addition (the × 1)
+O(n): Big-O of n, growing at most in proportion to n
+In words: count the subproblems, multiply by the work each one does on its own, and you have an upper bound on the running time.
+```
+
+> [!tip] What the formula leaves out
+> Add any preprocessing, the work to reconstruct the chosen solution, and the cost of arithmetic on very large numbers (operand bits) when they matter.
 
 ## Memoisation vs tabulation
 
@@ -209,9 +270,9 @@ DP is not just an interview topic. A few systems that are DP at their core:
 ## Key takeaways
 - DP = solve each subproblem once, store it, reuse it.
 - Choose sufficient states and a valid combination rule; overlap is what makes caching save repeated work.
-- Naive Fibonacci makes `2·F(n+1) − 1` calls; memoising or tabulating needs O(n) additions; two variables use O(1) integer slots, whose bit sizes grow with n.
+- Naive Fibonacci for position n makes `2·F(n+1) − 1` calls; memoising or tabulating needs O(n) additions; two variables use O(1) integer slots, whose bit sizes grow with n.
 - Memoisation is top-down and on demand; tabulation is bottom-up in an order you choose. The same recurrence may be evaluated on different subsets of states.
-- Running time ≈ number of states × work per state.
+- Running time is at most the number of states times the work per state.
 
 ## Further reading
 - [Dynamic programming — Wikipedia](https://en.wikipedia.org/wiki/Dynamic_programming)

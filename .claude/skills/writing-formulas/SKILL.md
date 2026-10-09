@@ -89,6 +89,9 @@ The same symbol appearing in several blocks is defined in **each** block: every 
 - **Never use an English word as a symbol** just to get past the checker. Lines like "to: …", "peak: …",
   "null: …" or "cardioid: …" are not allowed. Use proper symbols (`L_peak`, `θ_null`, `t_min`) or split the line
   (`t_min ≈ 127 ms` and `t_max ≈ 137 ms` instead of "(10 to 20) ms"). The verifier rejects word-symbols.
+- **Explain non-obvious constants too.** A number that isn't self-explanatory (the 0.161 in Sabine's formula, the 20
+  in 20 × log_10, a safety factor of 2) may have its own `where` line saying where it comes from. Obvious numbers
+  from the problem ("100 requests") need none.
 - Numbers aren't symbols, so `343`, `1e-3` and `0x1F` need no definitions. Quoted text such as `hash("key")` is
   treated as literal and is skipped too.
 

@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. In ext4, for inode N and I inodes per group, group = (N − 1) // I and index = (N − 1) % I. Its byte offset within that group's inode table is index × inode_size.\n2. LFS writes changed inodes to new log locations instead.\n3. The inode map records the current location of each inode.\n4. Imap pieces are logged too, and checkpoint information provides the recovery starting point.",
+    "workedExample": "1. In ext4, an inode's position is computed from its number:\n\n```formula\ng = ⌊(N − 1) / I⌋\ni = (N − 1) mod I\no = i × s\ng = ⌊9,999 / 8,192⌋ = 1\ni = 9,999 mod 8,192 = 1,807\no = 1,807 × 256 B = 462,592 B\nwhere\ng: the block group holding the inode (groups count from 0)\nN: the inode number; here 10,000 (inode numbers start at 1, hence the − 1)\nI: inodes per block group, fixed when the file system is made; here an illustrative 8,192\n⌊ ⌋: the floor: round down to a whole number\ni: the inode's index within its group's inode table\nmod: the remainder after division, e.g. 10 mod 4 = 2\no: the inode's byte offset within that group's inode table\ns: the inode size; 256 bytes by default on ext4\nB: byte\nIn words: divide the inode number by the group size to find its group, and the remainder says how far into that group's table it sits; no lookup is needed.\n```\n\n2. LFS writes changed inodes to new log locations instead.\n3. The inode map records the current location of each inode.\n4. Imap pieces are logged too, and checkpoint information provides the recovery starting point.",
     "link": {
       "title": "OSTEP: Log-structured File Systems (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-lfs.pdf"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "One possible execution is:\n\n1. A writes into its local dirty cache.\n2. A has not closed or fsynced; background writeback has not sent these bytes yet.\n3. B opens and revalidates against the server, which still has the old data.\n4. B reads old contents. Other timings can expose the new data sooner.\n\nApplications coordinating through close-to-open must successfully flush/close before signalling the reader, check errors, and account for other concurrent writers.",
+    "workedExample": "One possible execution is:\n\n1. A writes into its local dirty cache.\n2. A has not closed or fsynced; background writeback has not sent these bytes yet.\n3. B opens and revalidates against the server, which still has the old data.\n4. B reads old contents. Other timings can expose the new data sooner.\n\nApplications coordinating through close-to-open must successfully flush/close before notifying the reader, check errors, and account for other concurrent writers.",
     "link": {
       "title": "OSTEP: Sun's Network File System (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
@@ -123,7 +123,7 @@
     "id": "fs-modern-distributed-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "For an explicitly simplified arithmetic model, assume **150 bytes** per file object and per block object, ignoring all other heap costs. An HDFS namespace has **100 million nonempty files**, each using one block. What modeled heap cost results?",
+    "prompt": "For an explicitly simplified arithmetic model, assume **150 bytes** per file object and per block object, ignoring all other JVM heap costs. An HDFS namespace has **100 million nonempty files**, each using one block. What modeled JVM heap cost results?",
     "options": [
       {
         "text": "About 15 GB",
@@ -139,11 +139,11 @@
       },
       {
         "text": "Almost nothing, because metadata lives on the DataNodes",
-        "explanation": "The NameNode keeps namespace and block-management metadata in memory. DataNodes also keep local block information and checksums, but that does not eliminate NameNode heap use."
+        "explanation": "The NameNode keeps file system namespace and block-management metadata in memory. DataNodes also keep local block information and checksums, but that does not eliminate NameNode JVM heap use."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Model objects: 100 million file objects + 100 million block objects = 200 million.\n2. Assumed cost: 200,000,000 × 150 bytes = 30,000,000,000 bytes = 30 GB (decimal).\n3. Packing small payloads into fewer larger files reduces the modeled file/block object count. Actual memory also depends on directories, replicas, strings, JVM representation and Hadoop version.\n\nThe 150-byte figure is a teaching assumption. No measured heap profile is provided, so this is not a production sizing estimate.",
+    "workedExample": "```formula\nO = F + K\nO = 10^8 + 10^8 = 2 × 10^8\nM = O × m\nM = 2 × 10^8 × 150 B = 3 × 10^10 B\nM = 30 GB\nwhere\nO: the number of metadata objects in the model\nF: file objects; here 100 million (10^8)\nK: block objects; one per file here, so also 10^8\nM: the modelled NameNode JVM heap memory\nm: the assumed memory per object; here 150 bytes (B)\nB: byte\nGB: gigabyte, 10^9 bytes (decimal)\nIn words: 100 million files plus their 100 million blocks make 200 million objects, and at 150 bytes each that is 30 GB of JVM heap.\n```\n\nPacking small payloads into fewer larger files reduces the modeled file/block object count. Actual memory also depends on directories, replicas, strings, JVM representation and Hadoop version.\n\nThe 150-byte figure is a teaching assumption. No measured JVM heap profile is provided, so this is not a production sizing estimate.",
     "link": {
       "title": "HDFS Architecture — Apache Hadoop",
       "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html"
@@ -153,11 +153,11 @@
     "id": "fs-modern-distributed-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An eligible writer DataNode on rack R1 writes a replicated HDFS block with replication factor 3. Assume the default policy, enough eligible nodes on R1 and another rack, and a healthy completed pipeline. Where are replicas placed and how many cross-rack payload hops are used?",
+    "prompt": "An eligible writer DataNode on rack R1 writes a replicated HDFS block with replication factor 3. Assume the default policy, enough eligible nodes on R1 and another rack, and a healthy completed write pipeline. Where are replicas placed and how many cross-rack payload hops are used?",
     "options": [
       {
-        "text": "One on the writer's node in R1, and two on different nodes in one other rack; one cross-rack transfer in the pipeline",
-        "explanation": "Correct. The pipeline goes R1 → R2 (crossing once), then R2 → R2 within the remote rack. Losing any one rack still leaves a replica."
+        "text": "One on the writer's node in R1, and two on different nodes in one other rack; one cross-rack transfer in the write pipeline",
+        "explanation": "Correct. The write pipeline goes R1 → R2 (crossing once), then R2 → R2 within the remote rack. Losing any one rack still leaves a replica."
       },
       {
         "text": "All three replicas on R1; zero cross-rack transfers",
@@ -169,7 +169,7 @@
       },
       {
         "text": "Two on R1 and one on another rack; two cross-rack transfers",
-        "explanation": "The policy puts two replicas on the *remote* rack, so that the second hop of the pipeline stays inside that rack."
+        "explanation": "The policy puts two replicas on the *remote* rack, so that the second hop of the write pipeline stays inside that rack."
       }
     ],
     "answer": 0,
@@ -236,7 +236,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Cleaning one segment copies 0.8 segment and yields 0.2 segment of net capacity.\n2. Clean 1 / 0.2 = 5 segments to make room for one segment of new payload.\n3. Copying writes total 5 × 0.8 = 4 segments; add one new segment: total writes = 5.\n4. Thus write amplification is 1 / (1 − u) = 5 in this model. Cleaner reads are additional I/O, excluded from this write-only measure. Age and utilization both affect LFS cleaning policy.",
+    "workedExample": "1. Cleaning one segment copies 0.8 segment and yields 0.2 segment of net capacity.\n2. Clean 1 / 0.2 = 5 segments to make room for one segment of new payload.\n3. Count the writes:\n\n```formula\nn = 1 / (1 − u) = 1 / 0.2 = 5\nW_copy = n × u = 5 × 0.8 = 4\nW = W_copy + 1 = 4 + 1 = 5\nwhere\nn: the segments that must be cleaned to free one segment's worth of space\nu: the live fraction of each cleaned segment; here 0.8\nW_copy: segments of live data the cleaner rewrites\nW: total segments written per segment of new data, which works out to 1 / (1 − u)\nIn words: at 80% live, freeing one segment means cleaning five and copying four segments of live data, so each segment of new data costs five segment writes.\n```\n\n4. Thus write amplification is 5 in this model. Cleaner reads are additional I/O, excluded from this write-only measure. Segment age and how full segments are both affect LFS cleaning policy.",
     "link": {
       "title": "OSTEP: Log-structured File Systems (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-lfs.pdf"
@@ -296,7 +296,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Replication stores 600 × 3 = 1,800 TB of payload copies. Each block remains available with two lost replicas if its third survives.\n2. RS-6-3 stores nine cells for six data cells: 600 × 9 / 6 = 900 TB in this full-stripe model.\n3. Any six of a stripe's nine cells suffice; three missing cells are recoverable. This is a per-stripe condition, not a promise about arbitrary rack topology.\n4. Access to missing data requires reconstruction reads and CPU. Healthy cells can still be read directly; not every read after a node failure requires decoding.\n5. Short files and metadata affect actual storage use. The cited Hadoop 3.3.5 documentation also restricts append/truncate and sync behavior for striped files.",
+    "workedExample": "```formula\nS_rep = D × r = 600 TB × 3 = 1,800 TB\nS_EC = D × (k + m) / k\nS_EC = 600 TB × 9 / 6 = 900 TB\nwhere\nS_rep: raw storage used by replication\nD: the payload; here 600 TB\nr: the replication factor; here 3 copies\nS_EC: raw storage used by RS-6-3 erasure coding in the full-stripe model\nk: data cells per stripe; 6 in RS-6-3\nm: parity cells per stripe; 3 in RS-6-3\nTB: terabyte, 10^12 bytes\nIn words: three copies store three times the payload, while 6 data plus 3 parity cells store only 1.5 times it.\n```\n\n1. Replication: each block remains available with two lost replicas if its third survives.\n2. RS-6-3: nine cells are stored for every six data cells.\n3. Any six of a stripe's nine cells suffice; three missing cells are recoverable. This is a per-stripe condition, not a promise about arbitrary rack topology.\n4. Access to missing data requires reconstruction reads and CPU. Healthy cells can still be read directly; not every read after a node failure requires decoding.\n5. Short files and metadata affect actual storage use. The cited Hadoop 3.3.5 documentation also restricts append/truncate and sync behavior for striped files.",
     "link": {
       "title": "HDFS Erasure Coding — Apache Hadoop",
       "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HDFSErasureCoding.html"
@@ -306,7 +306,7 @@
     "id": "fs-modern-distributed-q11",
     "level": "advanced",
     "type": "multi",
-    "prompt": "A GFS client uses **record append** to add log records to a shared file that many producers write at once. Which statements about what readers may encounter are true? Select all that apply.",
+    "prompt": "A GFS client uses **record append** to add log records to a shared file that many clients write at once. Which statements about what readers may encounter are true? Select all that apply.",
     "options": [
       {
         "text": "Each record that was reported successful appears at least once, written atomically as a contiguous unit",
@@ -321,8 +321,8 @@
         "explanation": "True. Failed attempts and chunk-boundary padding leave inconsistent regions, so readers use checksums and record IDs to skip them."
       },
       {
-        "text": "Records appear exactly once and in the order producers called append",
-        "explanation": "False. Exactly-once and producer invocation order are not promised. The primary does assign a consistent mutation order for its chunk, which differs from ordering by when distributed producers called append."
+        "text": "Records appear exactly once and in the order clients called append",
+        "explanation": "False. Exactly-once and client invocation order are not promised. The primary does assign a consistent mutation order for its chunk, which differs from ordering by when distributed clients called append."
       },
       {
         "text": "All record data passes through the master, which assigns offsets",

@@ -49,7 +49,7 @@
       },
       {
         "text": "fsck is single-threaded and can't use the RAID array",
-        "explanation": "Parallelism would help a little, but the core problem is the total amount of metadata it has to read."
+        "explanation": "Parallelism would help a little, but the real problem is the total amount of metadata it has to read."
       }
     ],
     "answer": 1,
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\nmode      journal  in place  total\njournal   ~1 GB    ~1 GB     ~2 GB\nordered   meta     ~1 GB     ~1 GB\nwriteback meta     ~1 GB     ~1 GB\n```\n\n1. `data=journal`: data and metadata are logged, committed, then checkpointed to their final location.\n2. `data=ordered`: data goes straight to its final location *first*, then the metadata transaction commits.\n3. Extent metadata can be compact for long runs; fragmentation and allocation metadata add work.\n\nThe model illustrates additional traffic, not an exact throughput ratio or measured hardware write amplification.",
+    "workedExample": "```\nmode      journal  in place  total\njournal   ~1 GB    ~1 GB     ~2 GB\nordered   meta     ~1 GB     ~1 GB\nwriteback meta     ~1 GB     ~1 GB\n```\n\n```formula\nW_journal ≈ 2 × D = 2 × 1 GB = 2 GB\nW_ordered ≈ D = 1 GB\nwhere\nW_journal: bytes written to the device in data=journal mode, small metadata aside\nW_ordered: bytes written in data=ordered mode, small metadata aside\nD: the new file data the application writes; here 1 GB\n≈: approximately equal to\nGB: gigabyte, 10^9 bytes\nIn words: journaling the data writes every byte twice, once to the journal and once to its home; ordered mode writes it once.\n```\n\n1. `data=journal`: data and metadata are logged, committed, then checkpointed to their final location.\n2. `data=ordered`: data goes straight to its final location *first*, then the metadata transaction commits.\n3. Extent metadata can be compact for long runs; file fragmentation and allocation metadata add work.\n\nThe model illustrates additional traffic, not an exact throughput ratio or measured hardware write amplification.",
     "link": {
       "title": "ext4 mount options — kernel.org",
       "url": "https://www.kernel.org/doc/html/latest/admin-guide/ext4.html"
@@ -259,11 +259,11 @@
       },
       {
         "text": "Possibly lost: the failed pages may have been marked clean and dropped, and the retry's success doesn't mean they were written",
-        "explanation": "Correct. Writeback-error handling does not guarantee failed data remains available for retry. Use error-aware recovery; PostgreSQL normally PANICs for data-file sync failure and relies on surviving WAL."
+        "explanation": "Correct. Writeback-error handling does not guarantee failed data remains available for retry. Use error-aware recovery; PostgreSQL normally raises PANIC for data-file sync failure and relies on surviving WAL."
       },
       {
         "text": "Safe, as long as the kernel is newer than 4.13",
-        "explanation": "Improved errseq_t tracking is about reporting, not guaranteeing dirty-data retention. Descriptor sampling and error coalescing also matter."
+        "explanation": "Improved errseq_t tracking is about reporting, not guaranteeing dirty-data retention. Descriptor sampling and the merging of repeated errors also matter."
       },
       {
         "text": "Lost, and the second fsync should have returned EIO again",
@@ -289,7 +289,7 @@
       },
       {
         "text": "After a write-back failure, Linux could mark the unwritten pages clean, so a later fsync reported success",
-        "explanation": "Correct. That's the core of the problem: the error was reported once, and then the dirty data was effectively forgotten."
+        "explanation": "Correct. That's the heart of the problem: the error was reported once, and then the dirty data was effectively forgotten."
       },
       {
         "text": "PostgreSQL's fix was to PANIC on fsync failure and recover by replaying its write-ahead log",
@@ -327,7 +327,7 @@
       },
       {
         "text": "CoW writes each updated page to a new location, so a once-contiguous file fragments into many small extents; mitigate with `chattr +C` (nodatacow) on the database directory, or by defragmenting",
-        "explanation": "CoW updates can fragment layout. NOCOW must be configured on empty/new files or inherited by newly created files; it disables data checksums and compression for that data. Snapshot-shared extents still require COW when modified. Measure layout and I/O before changing policy."
+        "explanation": "CoW updates can fragment layout. NOCOW must be configured on empty/new files or inherited by newly created files; it disables data checksums and compression for that data. Snapshot-shared extents still require CoW when modified. Measure layout and I/O before changing policy."
       },
       {
         "text": "Btrfs checksums make reads slower as the file ages",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Random CoW updates can replace adjacent logical blocks with scattered extents, but measure fragmentation and storage behavior before attributing slowdown. A directory NOCOW attribute affects newly created files; it does not convert existing populated files. NOCOW disables data checksums/compression and still needs COW for shared extents. Defragmentation may unshare extents and increase space use. Filesystem migration and database-record-size tuning require workload-specific validation; database WAL does not replace all filesystem integrity features. No measured seek latency or universal tuning value is supplied.",
+    "workedExample": "Random CoW updates can replace adjacent logical blocks with scattered extents, but measure file fragmentation and storage behavior before attributing slowdown. A directory NOCOW attribute affects newly created files; it does not convert existing populated files. NOCOW disables data checksums/compression and still needs CoW for shared extents. Defragmentation may break extent sharing and increase space use. Moving to another filesystem and database-record-size tuning require workload-specific validation; database WAL does not replace all filesystem integrity features. No measured seek latency or universal tuning value is supplied.",
     "link": {
       "title": "Btrfs documentation",
       "url": "https://btrfs.readthedocs.io/en/latest/"

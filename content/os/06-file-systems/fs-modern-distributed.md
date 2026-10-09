@@ -15,7 +15,7 @@ Then we leave the single machine. NFS makes a remote disk look local; GFS and HD
 | | ext4 | XFS | Btrfs | ZFS |
 |---|---|---|---|---|
 | Consistency | journal | journal | CoW | CoW |
-| Checksums | metadata by configuration | metadata by format | data and metadata, with exceptions | data and metadata, configurable |
+| Checksums | metadata by configuration | metadata by format | data and metadata, with exclusions | data and metadata, configurable |
 | Native filesystem snapshots | no | no | yes | yes |
 | Built-in RAID | no | no | yes | yes |
 
@@ -42,7 +42,7 @@ Designed by SGI for large files and parallel I/O.
 
 A copy-on-write B-tree file system in the mainline kernel.
 
-- Checksums metadata and, by default, file data. NOCOW/nodatasum files have exceptions; repair needs a valid redundant copy.
+- Checksums metadata and, by default, file data. NOCOW/nodatasum files are excluded; repair needs a valid redundant copy.
 - **Subvolumes** and cheap **snapshots**, which is how openSUSE rolls back failed upgrades.
 - Transparent compression (zstd, lzo, zlib), reflinks, send/receive for incremental backup.
 - Offers several redundancy profiles. Its official status documentation lists limitations for RAID 5/6; check those documented restrictions before choosing a profile.
@@ -74,7 +74,7 @@ Developed at Sun and released in 2005, now maintained as **OpenZFS**. It merges 
 
 In their early-1990s LFS work, Mendel Rosenblum and John Ousterhout considered two trends. RAM was growing, so the page cache would absorb most **reads**. That left disk traffic dominated by **writes**, and small writes to scattered inodes, bitmaps and data blocks were dreadful on a disk whose random I/O is limited by seek and rotation.
 
-Their answer, **LFS**, was radical: treat the whole disk as a log. Buffer every change (data, inodes, directory blocks) in memory, then write it out as one large sequential **segment** of several hundred KiB to a few MiB.
+Their answer, **LFS**, was radical: treat the whole disk as a log. Buffer every change (data, inodes, directory blocks) in memory, then write it out as one large sequential **log segment** of several hundred KiB to a few MiB.
 
 ```
  disk: |seg 1  |seg 2  |seg 3  | free ...
@@ -88,16 +88,28 @@ Nothing is overwritten in place, which raises two problems.
 
 **Finding inodes.** An inode's location changes every time it's written. LFS adds an **inode map (imap)**: inode number → current disk address. The imap is itself written into the log in pieces, and a **checkpoint region** at a fixed place on disk points at the latest pieces. Recovery reads the checkpoint, then rolls forward through segments written after it.
 
-**Reclaiming space.** Old versions of blocks become garbage, scattered through old segments. A **cleaner** reads partly-dead segments, writes their live blocks into a new segment, and frees the old ones. Each segment has a summary block recording which inode and offset every block belongs to, so the cleaner can check whether a block is still live.
+**Reclaiming space.** Old versions of blocks become garbage, scattered through old segments. A **segment cleaner** reads partly-dead segments, writes their live blocks into a new segment, and frees the old ones. Each segment has a summary block recording which inode and offset every block belongs to, so the cleaner can check whether a block is still live.
 
-Cleaning a segment that is a fraction *u* live requires reading it and rewriting its live fraction to reclaim (1 − *u*) of capacity. In a steady-state model excluding metadata, total writes per unit of new data are 1/(1 − *u*); counting reads as well is a different I/O-cost measure. LFS's **cost-benefit** policy balances segment age and utilization to favor reclaimed space likely to remain useful.
+How expensive is cleaning? It depends on how full the cleaned segments still are. Cleaning a segment means rewriting its live blocks elsewhere, and only the dead part becomes free for new data:
+
+```formula
+W = (u + (1 − u)) / (1 − u)
+W = 1 / (1 − u)
+W = 1 / (1 − 0.8) = 5
+where
+W: total segment writes per segment of new data, counting the copied live blocks (cleaner reads not counted)
+u: the fraction of a cleaned segment that is still live, from 0 to just under 1; here 0.8 (80%)
+In words: each cleaned segment frees only 1 − u of a segment and costs u of a segment in copying, so writing one segment of new data costs 1 / (1 − u) segments of writes: five when segments are 80% live.
+```
+
+This is a steady-state model excluding metadata; counting the cleaner's reads as well is a different I/O-cost measure. It is the same formula as SSD write amplification in the previous lesson, because an FTL is a log-structured cleaner too. LFS's **cost-benefit** policy balances segment age and how full each segment is to favor reclaimed space likely to remain useful.
 
 ### Where the idea lives now
 
 - **SSD firmware.** The FTL in the previous lesson is a log-structured system with a mapping table and a cleaner.
 - **F2FS** (Flash-Friendly File System), from Samsung and merged in Linux 3.8, is log-structured and designed for flash. It separates hot and cold data into different logs and uses a **node address table** so that moving one block doesn't force rewrites all the way up the tree (the "wandering tree" problem).
 - **Copy-on-write file systems** (ZFS, Btrfs, NetApp's WAFL) share the never-overwrite principle.
-- **LSM trees** in RocksDB, Cassandra and LevelDB apply it to key-value stores: append-only sorted files plus compaction, which similarly reclaims obsolete versions but follows different structures and correctness rules.
+- **LSM trees** in RocksDB, Cassandra and LevelDB apply it to key-value stores: append-only sorted files that are merged in the background, which similarly reclaims obsolete versions but follows different structures and correctness rules.
 
 ## NFS: a remote file system that looks local
 
@@ -105,7 +117,7 @@ Sun's **Network File System** (1984) lets a client mount a directory exported by
 
 ### NFSv3: a stateless server
 
-NFSv2 and v3 were designed so the core file-access protocol avoids per-client **open-file state**. Caches, unstable writes and separate locking services can still involve state. Every request carries everything needed to execute it:
+NFSv2 and v3 were designed so the basic file-access protocol avoids per-client **open-file state**. Caches, unstable writes and separate locking services can still involve state. Every request carries everything needed to execute it:
 
 ```
 READ(fh, offset=8192, count=4096)
@@ -115,7 +127,7 @@ READ(fh, offset=8192, count=4096)
 - There's no `open` or file position on the server. The client tracks offsets.
 - Operations such as reading or writing a fixed byte range support simple retry models, but concurrent changes can alter read results or be overwritten by a repeated write. Lost replies require attention to operation semantics and duplicate handling.
 
-Avoiding core open-file state simplifies crash recovery. A default **hard** mount retries timed-out requests indefinitely, subject to other error and interruption behavior; this does not mean the server has no persistent state to recover. A **soft** mount gives up after retries and returns an error, which the nfs(5) man page warns can cause silent data corruption.
+Avoiding open-file state in the basic protocol simplifies crash recovery. A default **hard** mount retries timed-out requests indefinitely, subject to other error and interruption behavior; this does not mean the server has no persistent state to recover. A **soft** mount gives up after retries and returns an error, which the nfs(5) man page warns can cause silent data corruption.
 
 Non-idempotent operations are the awkward edge: if a `REMOVE` succeeds but the reply is lost, re-executing it can return "no such file" when nobody recreates the name. Servers keep a duplicate request cache to paper over this.
 
@@ -129,7 +141,7 @@ Sending every `read` over the network would be painfully slow, so clients cache 
 With close-to-open behavior enabled, successful writeback/close and no intervening writer, B's later open revalidates A's changes. Applications must check write, fsync and close errors. Between those points there are no promises. Attributes are cached for 3–60 seconds by default (`acregmin`/`acregmax`; 30–60 s for directories), so `ls` on one client can show stale sizes from another.
 
 > [!warning] Classic NFS pitfalls
-> - Two clients appending to the same log file interleave unpredictably; `O_APPEND` isn't atomic across clients in v3.
+> - Two clients appending to the same log file intermix unpredictably; `O_APPEND` isn't atomic across clients in v3.
 > - Lock files and `flock` behave differently than on local disks; v3 needs the separate NLM lock protocol.
 > - A file handle that no longer identifies a valid server object can produce `ESTALE`; deletion and client-side open-file handling have implementation-dependent details.
 > - SQLite and similar databases warn against running on NFS for these reasons.
@@ -138,7 +150,7 @@ With close-to-open behavior enabled, successful writeback/close and no interveni
 
 NFSv4 (RFC 3530, now RFC 7530) abandoned statelessness where it hurt:
 
-- Explicit `OPEN` and `CLOSE`, with **leases**: the client must renew within the lease period, or the server reclaims its state. After a server reboot there's a **grace period** for clients to reclaim locks.
+- Explicit `OPEN` and `CLOSE`, with **leases**: the client must renew within the lease period, or the server reclaims its state. After a server reboot there's an **NFS grace period** for clients to reclaim locks.
 - Locking built into the protocol, one well-known port, and **COMPOUND** requests that batch several operations into one round trip.
 - **Delegations**: the server can grant a read or write delegation, so it can cache aggressively until the server recalls the delegation.
 - NFSv4.1 added sessions (duplicate-request handling within session, slot and replay-cache rules) and **pNFS**, where clients read data directly from storage nodes in parallel.
@@ -173,33 +185,65 @@ By 2003 Google was storing web crawls on thousands of cheap machines where disk 
 | Unit | 64 MiB chunk in the paper | commonly 128 MiB block; configurable |
 | Replicas | 3 | 3 (default) |
 
-How it works:
+How it works (the block count for big blocks is worked out after the list):
 
-- **A master serves each namespace**: it holds the namespace, file-to-block mappings and reported replica locations in memory. Namespace mutations are logged and checkpointed. HDFS reconstructs block locations from DataNode reports rather than persisting every location in its edit log.
+- **A master serves each file system namespace**: it holds the directory tree, file-to-block mappings and reported replica locations in memory. Namespace mutations are logged and checkpointed. HDFS reconstructs block locations from DataNode reports rather than persisting every location in its edit log.
 - **Data never flows through the master.** The client asks the master where blocks are, then reads or writes DataNodes directly. One master can then coordinate thousands of nodes.
-- **Big blocks** keep the metadata small (a 1 TiB file is exactly 8,192 blocks of 128 MiB) and make each read a long sequential stream.
-- **Writes are pipelined**: the client sends data to the first replica, which forwards it to the second, which forwards to the third, so one payload copy travels along each pipeline hop; intermediate nodes receive and forward data, and acknowledgements travel back.
+- **Big blocks** keep the metadata small (a 1 TiB file is exactly 8,192 blocks of 128 MiB, worked out below) and make each read a long sequential stream.
+- **Writes are pipelined**: the client sends data to the first replica, which forwards it to the second, which forwards to the third, so one payload copy travels along each hop; intermediate nodes receive and forward data, and acknowledgements travel back.
 - **Rack-aware placement.** With replication 3 and enough eligible nodes across racks, the default policy puts one replica on the writer's node (or a random node in its rack), and two on different nodes in one other rack. That survives a whole rack failing while sending only one copy across racks.
 - When a DataNode stops sending heartbeats, the NameNode re-replicates its blocks from the surviving copies.
+
+The block count is the file size divided by the block size, rounded up:
+
+```formula
+n = ⌈S / B_blk⌉
+n = 2^40 B / 2^27 B = 2^13 = 8,192
+where
+n: the number of HDFS blocks the file is split into
+S: the file size; here 1 TiB = 2^40 bytes (2^40 means 2 multiplied by itself 40 times)
+B_blk: the HDFS block size; here 128 MiB = 2^27 bytes
+⌈ ⌉: the ceiling: round up, because a part-filled last block is still a block
+B: byte
+TiB: tebibyte, 2^40 bytes
+MiB: mebibyte, 2^20 bytes
+In words: a 1 TiB file in 128 MiB blocks needs only 8,192 block records in the NameNode's memory; with 4 KiB blocks it would need 268 million.
+```
 
 GFS's consistency model was deliberately relaxed. Its **record append** operation guarantees each record is written atomically **at least once**, so readers can see duplicates and padding and must use checksums and record IDs to filter them. HDFS uses a single-writer model, with supported append and truncate operations rather than arbitrary in-place byte updates.
 
 The weak points follow from the single master:
 
-- **Memory.** Namespace entries and blocks consume NameNode memory, with size depending on Hadoop version, JVM and metadata. A large small-file population can exhaust heap despite modest payload size. This is the **small-files problem**, and why HDFS wants big files.
-- **Availability.** Early HDFS had a single point of failure. HDFS can use active/standby NameNodes with shared edits; a JournalNode quorum is one documented approach, and ZooKeeper supports automatic failover when configured. Federation splits the namespace across several NameNodes.
-- **Cost of replication.** Three copies is 200% overhead. Hadoop 3 added **erasure coding**: the default RS-6-3 policy stores 6 data and 3 parity cells, can reconstruct any three missing cells in a stripe and has 50% ideal payload overhead for full stripes. Short files, metadata and placement affect actual capacity; reading missing data requires reconstruction work. In the cited Hadoop 3.3.5 documentation, striped EC files do not support append or truncate, and `hflush`/`hsync` do not provide ordinary replicated-file sync behavior.
+- **Memory.** File system namespace entries and blocks consume NameNode memory, with size depending on Hadoop version, JVM and metadata. A large small-file population can exhaust the JVM heap despite modest payload size. This is the **small-files problem**, and why HDFS wants big files.
+- **Availability.** Early HDFS had a single point of failure. HDFS can use active/standby NameNodes with shared edits; a JournalNode quorum is one documented approach, and ZooKeeper supports automatic failover when configured. Federation splits the file system namespace across several NameNodes.
+- **Cost of replication.** Three copies is 200% overhead (worked out below). Hadoop 3 added **erasure coding**: the default RS-6-3 policy stores 6 data and 3 parity cells, can reconstruct any three missing cells in a stripe and has 50% ideal payload overhead for full stripes. Short files, metadata and placement affect actual capacity; reading missing data requires reconstruction work. In the cited Hadoop 3.3.5 documentation, striped EC files do not support append or truncate, and `hflush`/`hsync` do not provide ordinary replicated-file sync behavior.
 
-Object stores can separate storage from compute, but their APIs are not interchangeable with POSIX filesystems. Capabilities depend on product and bucket type: S3 Express One Zone directory buckets support object append, and Cloud Storage hierarchical-namespace buckets support folder rename. Check the actual API instead of assuming every object store requires copying a whole prefix to rename it.
+Storage overhead is the extra space spent on redundancy, as a share of the payload:
+
+```formula
+O = (S_raw − D) / D
+O_rep = (3 × D − D) / D = 2 = 200%
+O_EC = (9 / 6 × D − D) / D = 0.5 = 50%
+where
+O: the storage overhead, extra bytes stored per byte of payload
+S_raw: the raw bytes actually stored, payload plus redundancy
+D: the payload (the data itself)
+O_rep: the overhead of three-way replication, which stores 3 copies of everything
+O_EC: the overhead of RS-6-3 erasure coding, which stores 9 cells (6 data + 3 parity) for every 6 cells of data
+%: per cent; 2 = 200%
+In words: three replicas store three times the data, 200% extra, while RS-6-3 stores 1.5 times, only 50% extra, and still survives three lost cells per stripe.
+```
+
+Object stores can separate storage from compute, but their APIs are not interchangeable with POSIX filesystems. Features depend on product and bucket type: S3 Express One Zone directory buckets support object append, and Cloud Storage hierarchical-namespace buckets support folder rename. Check the actual API instead of assuming every object store requires copying a whole prefix to rename it.
 
 > [!note] Deployment evidence gap
-> No measured NameNode heap profile or identified storage benchmark accompanies this lesson. Fixed bytes-per-object and guaranteed filesystem/SLOG latency claims are omitted. Quiz numbers explicitly marked as assumptions are arithmetic models, not observed deployments.
+> No measured NameNode JVM heap profile or identified storage benchmark accompanies this lesson. Fixed bytes-per-object and guaranteed filesystem/SLOG latency claims are omitted. Quiz numbers explicitly marked as assumptions are arithmetic models, not observed deployments.
 
 ## Key takeaways
 - ext4 and XFS journal metadata. XFS uses allocation groups for parallel allocation and has limited, version-dependent shrink support; their ordinary metadata checksums do not protect mutable file payload.
 - ZFS and Btrfs offer CoW, configurable integrity protection, snapshots and integrated redundancy. ZFS adds a pool model, ARC and an intent log that may use separate log devices.
 - LFS turns all writes into sequential segment writes, using an inode map and a cleaner; its ideas live on in SSD FTLs, F2FS, CoW file systems and LSM trees.
-- NFSv3 avoids core open-file state and uses retries with duplicate handling, with close-to-open consistency; NFSv4 adds state, leases, locking and delegations.
+- NFSv3's basic protocol avoids open-file state and uses retries with duplicate handling, with close-to-open consistency; NFSv4 adds state, leases, locking and delegations.
 - GFS and HDFS separate a single in-memory metadata master from data nodes, use huge blocks, pipelined triple replication and rack awareness, and pay for it with the small-files problem.
 
 ## Further reading

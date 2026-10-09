@@ -61,7 +61,7 @@ The protocol for one transaction:
 
 1. **Journal write**: write the begin block (TxB) and copies of the blocks to be changed.
 2. **Journal commit**: once those are on disk, write the commit block (TxE). The transaction is now durable.
-3. **Checkpoint**: write the blocks to their real locations.
+3. **Checkpointing**: write the blocks to their real locations.
 4. **Free**: after checkpointing, mark that journal space reusable.
 
 On recovery, the file system scans the journal. A transaction with a valid commit block gets **replayed** (its blocks rewritten to their final locations; doing this twice is harmless). One without a commit block is **discarded**, as if it never happened.
@@ -76,7 +76,24 @@ Ordinary journal replay works over recoverable log transactions rather than perf
 
 ### Data journaling vs metadata journaling
 
-In the simple full-data-journaling model, payload is written to the journal and later home locations. This increases write traffic; achieved throughput is not necessarily halved because batching, layout and device behavior matter. So most systems journal **only metadata**, and the question becomes: when is the data block written?
+In the simple full-data-journaling model, payload is written to the journal and later to its home location, so every byte is written twice:
+
+```formula
+W_journal ≈ 2 × D + m
+W_ordered ≈ D + m
+W_journal ≈ 2 × 1 GB = 2 GB
+W_ordered ≈ 1 GB
+where
+W_journal: total bytes written to the device when data is journaled too, in gigabytes (GB)
+W_ordered: total bytes written when only metadata is journaled
+D: the amount of new file data the application writes; here 1 GB
+m: the extra metadata traffic (journal blocks for inodes, bitmaps and extents), small next to D for large sequential writes and left out of the numeric lines
+≈: approximately equal to
+GB: gigabyte, 10^9 bytes
+In words: journaling the data doubles the payload traffic, because each block goes to the journal first and then to its real place; journaling only metadata writes the payload once.
+```
+
+This is a traffic model, not a speed measurement: achieved throughput is not necessarily halved, because batching, layout and device behavior matter. Still, the doubling is why most systems journal **only metadata**, and the question becomes: when is the data block written?
 
 ext4's three modes (the `data=` mount option):
 
@@ -86,7 +103,7 @@ ext4's three modes (the `data=` mount option):
 | `ordered` (default) | metadata only | Data on disk before its metadata commits |
 | `writeback` | metadata only | No ordering; files can show old garbage |
 
-In **ordered mode**, before committing a transaction that points an inode at new blocks, ext4 forces those data blocks to their final location. This ordering prevents exposing stale contents of newly allocated blocks through a committed metadata update, assuming a correctly functioning storage stack. It does not make arbitrary multi-block application writes atomic or guarantee only a complete old/new application state.
+In **ordered mode**, before committing a transaction that points an inode at new blocks, ext4 forces those data blocks to their final location. This ordering prevents exposing stale contents of newly allocated blocks through a committed metadata update, assuming correctly functioning storage hardware and drivers. It does not make arbitrary multi-block application writes atomic or guarantee only a complete old/new application state.
 
 By default ext4 commits a transaction every **5 seconds** (`commit=5`). This controls transaction scheduling, not an application-level maximum loss window; delayed allocation, I/O delays and configuration matter. Use explicit synchronization for acknowledged durability.
 
@@ -95,7 +112,7 @@ By default ext4 commits a transaction every **5 seconds** (`commit=5`). This con
 
 ## Fix 3: copy-on-write (ZFS, Btrfs)
 
-The other approach: **never overwrite live data**. To change a block, write a new copy somewhere free, then update the pointer to it. That pointer lives in a parent block, which also gets copied, and so on up to the root.
+The other approach, used by **copy-on-write file systems**: **never overwrite live data**. To change a block, write a new copy somewhere free, then update the pointer to it. That pointer lives in a parent block, which also gets copied, and so on up to the root.
 
 ```
  before          after modifying D
@@ -117,7 +134,7 @@ ZFS block-pointer checksums and Btrfs checksums can detect silent corruption wit
 
 The costs:
 
-- **Fragmentation.** Overwriting the middle of a file moves that block elsewhere, so databases doing random updates on CoW file systems see files scatter. Btrfs allows NOCOW for newly created/empty files, or inheritance from a directory via chattr +C; existing populated files are not retroactively converted. Shared snapshot extents still require COW on modification.
+- **File fragmentation.** Overwriting the middle of a file moves that block elsewhere, so databases doing random updates on CoW file systems see files scatter. Btrfs allows NOCOW for newly created/empty files, or inheritance from a directory via chattr +C; existing populated files are not retroactively converted. Shared snapshot extents still require CoW on modification.
 - **Write amplification.** One small change rewrites a path of blocks up to the root. Both systems batch many changes into each transaction (ZFS, every few seconds) to spread the cost, and ZFS adds an intent log (the ZIL) so `fsync` doesn't have to wait for a full transaction.
 
 ## Durability: what fsync really promises
@@ -135,7 +152,7 @@ Three pitfalls catch nearly everyone.
 
 ### Pitfall 2: atomic replacement needs the whole dance
 
-To replace `config.json` so a crash leaves either the old or the new version, never a half-written one:
+To replace `settings.json` so a crash leaves either the old or the new version, never a half-written one:
 
 ```python
 import os
@@ -171,14 +188,14 @@ def atomic_write(path, data):
 
 This example assumes a trusted stable directory, no concurrent replacement, a previously durable old file, and filesystem/device support for the synchronization contract. It creates a mode-0600 replacement; preserving ownership, ACLs and other metadata needs explicit handling before fsync. If an error occurs after rename, the visible result may already be new even though durability is uncertain.
 
-`rename` within one file system is atomic for namespace visibility: anyone looking sees the old file or the new one. But without step 1, the rename can reach disk *before* the data does.
+`rename` within one file system is atomic as far as name lookups are concerned: anyone looking sees the old file or the new one. But without step 1, the rename can reach disk *before* the data does.
 
 > [!example] The ext4 zero-length file saga
 > In 2009, ext4's delayed allocation exposed applications that skipped step 1. After crashes, users found config files that were zero bytes long: the rename had committed, but the new file's data blocks had never been allocated. Developers argued that POSIX never promised more. ext4 added the `auto_da_alloc` heuristic, which spots replace-via-rename and replace-via-truncate and forces the data out before the rename commits. Portable code still shouldn't rely on it.
 
 ### Pitfall 3: a failed fsync can't simply be retried
 
-This was the core of **fsyncgate**. In 2018, Craig Ringer reported that PostgreSQL could silently lose data on Linux after a storage error.
+This was the heart of **fsyncgate**. In 2018, Craig Ringer reported that PostgreSQL could silently lose data on Linux after a storage error.
 
 PostgreSQL writes dirty pages with plain `write()`. Its checkpointer later calls `fsync()` on each file. If that succeeded, it considered the data durable and could recycle the write-ahead log (WAL) that would otherwise let it redo those changes.
 
@@ -190,7 +207,7 @@ What actually happened on Linux when write-back hit an I/O error (for example, a
 4. The retried `fsync` had nothing dirty to flush, so it returned **success**.
 5. PostgreSQL recycled the WAL. Recovery data could then be lost despite an earlier error having been reported.
 
-Older kernels (before 4.13) could also lose the error altogether, or report it to a different descriptor than the one PostgreSQL later used. Linux 4.13 introduced improved writeback-error tracking using errseq_t. Relevant open file descriptions can observe newly recorded errors, but this is not an unbounded queue of every failure; sampling/coalescing and filesystem attribution matter. Improved reporting does not guarantee preservation of failed dirty data for a retry.
+Older kernels (before 4.13) could also lose the error altogether, or report it to a different descriptor than the one PostgreSQL later used. Linux 4.13 introduced improved writeback-error tracking using errseq_t. Relevant open file descriptions can observe newly recorded errors, but this is not an unbounded queue of every failure; sampling, merging of repeated errors and filesystem attribution matter. Improved reporting does not guarantee preservation of failed dirty data for a retry.
 
 PostgreSQL changed the default to **PANIC on data-file synchronization failure**, documented in release 11.2 (14 February 2019), with data_sync_retry controlling the behavior. Restart and WAL recovery avoid blindly trusting a retry, subject to surviving WAL and storage. Unverified claims about other databases making the same change are omitted.
 

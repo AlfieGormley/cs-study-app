@@ -43,7 +43,7 @@ $ free -h   (some columns omitted)
 Mem:   31Gi  6.2G  1.1G   24Gi   24Gi
 ```
 
-The number to watch is **available**: free memory plus cache that can be dropped on demand. Reclaimable clean pages can be discarded without writing their file payload back, but locking, references, scanning and other constraints mean reclamation is not instantaneous or guaranteed for every page. Reclaim uses LRU-style active and inactive lists (or MGLRU on newer kernels).
+The number to watch is **available**: free memory plus cache that can be dropped on demand. Reclaimable clean pages can be discarded without writing their file payload back, but locking, references, scanning and other constraints mean reclaim is not instantaneous or guaranteed for every page. Reclaim uses LRU-style active and inactive lists (or MGLRU on newer kernels).
 
 > [!tip] Cold vs warm benchmarks
 > A run with cold file pages may need storage reads; a subsequent run can benefit from cached data and metadata if they remain resident. Benchmark honestly by saying which you measured, or empty the cache first with `sync; echo 3 > /proc/sys/vm/drop_caches` (as root, never in production).
@@ -74,7 +74,7 @@ Applications can give hints with `posix_fadvise`:
 
 ## Write-back and dirty pages
 
-A typical buffered write initially updates cached data, but the call can also trigger allocation, read-modify-write work, writeback or throttling. It does not promise durability on ordinary completion:
+A typical buffered write initially updates cached data, but the call can also trigger allocation, read-modify-write work, writeback or write throttling. It does not promise durability on ordinary completion:
 
 1. Copy the bytes into the page cache (reading the page in first if the write covers only part of it).
 2. Mark the page **dirty**.
@@ -82,7 +82,7 @@ A typical buffered write initially updates cached data, but the call can also tr
 
 The kernel's flusher threads write dirty pages back later. This is **write-back caching**. It makes writes fast, merges repeated writes to the same page into one I/O, and lets the file system allocate blocks in large runs (delayed allocation). The cost is that a crash loses whatever was still dirty, unless you called `fsync`.
 
-When does write-back happen? These `vm` sysctls control it (illustrative configured values shown; inspect the running system):
+When does write-back happen? These `vm` sysctls control it (illustrative configured values shown; inspect the running system). The two `_centisecs` settings are in **centiseconds**, hundredths of a second, and the two `_ratio` settings are percentages:
 
 | Setting | Example value | Meaning |
 |---|---|---|
@@ -91,14 +91,56 @@ When does write-back happen? These `vm` sysctls control it (illustrative configu
 | `dirty_background_ratio` | 10 | Start background flush at 10% |
 | `dirty_ratio` | 20 | Writers blocked at 20% |
 
+Converting the timer settings to seconds and the ratios to amounts of memory:
+
+```formula
+t = c / 100
+t_expire = 3000 / 100 = 30 s
+t_wake = 500 / 100 = 5 s
+D_limit = (r / 100) × M
+D_limit = (20 / 100) × 64 GiB = 12.8 GiB
+where
+t: a time setting converted to seconds (s)
+c: the setting's value in centiseconds (hundredths of a second)
+t_expire: how old dirty data must be before periodic write-back picks it up (`dirty_expire_centisecs`)
+t_wake: how often the flusher threads wake up (`dirty_writeback_centisecs`)
+D_limit: the amount of dirty data at which a threshold kicks in, in gibibytes (GiB)
+r: a `dirty_*_ratio` setting, as a percentage (here `dirty_ratio` = 20)
+M: the dirtyable memory the kernel counts (see below); here assumed to be 64 GiB
+s: second
+GiB: gibibyte, 1,024^3 bytes, about 1.074 billion bytes
+In words: 3000 centiseconds is 30 seconds, and a 20% ratio on 64 GiB of dirtyable memory lets about 12.8 GiB of unwritten data pile up before write throttling starts.
+```
+
 The ratios apply to the kernel's dirtyable-memory accounting (free/reclaimable memory with exclusions), not simply installed RAM or the displayed MemAvailable value. Per-device and cgroup writeback also affect behavior. In practice:
 
-- Expiry controls eligibility for periodic writeback, not a minimum delay or durability deadline; other triggers can write earlier and congestion can delay completion.
+- Expiry controls when data becomes due for periodic writeback, not a minimum delay or durability deadline; other triggers can write earlier and congestion can delay completion.
 - If dirty data passes `dirty_background_ratio`, flushing starts at once, in the background.
-- If it reaches `dirty_ratio`, the **writing process itself is throttled** and has to wait for write-back.
+- If it reaches `dirty_ratio`, the writing process itself is subject to **write throttling**: it has to wait for write-back.
 
 > [!example] The stall
-> In a hypothetical workload, a machine with 64 GiB of RAM and the illustrated ratios can accumulate several gigabytes of dirty data. A job writes 20 GiB to a USB disk that manages 30 MB/s. `cp` races ahead while pages fill RAM, then hits `dirty_ratio` and stalls. When you unmount, `umount` waits minutes for the backlog to drain. Servers often set `dirty_background_bytes` and `dirty_bytes` to fixed, smaller values so that write-back is steadier.
+> In a hypothetical workload, a machine with 64 GiB of RAM and the illustrated ratios can accumulate several gigabytes of dirty data. A job writes 20 GiB to a USB disk that manages 30 MB/s. `cp` races ahead while pages fill RAM, then hits `dirty_ratio` and stalls. When you unmount, `umount` waits minutes for the backlog to drain.
+
+How long is "minutes"? Once the backlog is fixed, draining it is just size divided by speed:
+
+```formula
+t_drain = D / R
+D = 12.8 GiB ≈ 13.7 × 10^9 B
+t_drain ≈ 13.7 × 10^9 B / (30 × 10^6 B/s)
+t_drain ≈ 458 s ≈ 7.6 min
+where
+t_drain: the time to write the whole dirty backlog to the disk, in seconds (s)
+D: the dirty backlog, in bytes (B); here the 12.8 GiB `dirty_ratio` limit from above, converted with 1 GiB ≈ 1.074 × 10^9 B
+R: the disk's sustained write rate, in bytes per second (B/s); here 30 MB/s = 30 × 10^6 B/s
+GiB: gibibyte, 1,024^3 bytes
+B: byte
+s: second
+min: minute, 60 s
+≈: approximately equal to
+In words: 13.7 billion bytes at 30 million bytes a second takes about 460 seconds, so unmounting can hang for around seven and a half minutes.
+```
+
+This assumes no new writes and a constant drain rate. It also shows a unit pitfall: GiB are binary (1,024^3 bytes) while disk speeds are quoted in decimal MB (10^6 bytes). Servers often set `dirty_background_bytes` and `dirty_bytes` to fixed, smaller values so that write-back is steadier and the backlog can never grow this large.
 
 `cat /proc/meminfo | grep -E 'Dirty|Writeback'` shows how much is pending right now.
 
@@ -195,12 +237,12 @@ The catch: the kernel sends the bytes as they are. If you need to compress or en
 
 ## Where async I/O fits
 
-Buffered hits can avoid payload-storage latency. Writes can block on throttling, allocation or I/O, and synchronous read misses can wait for data. Thread pools, `epoll` (for sockets) and `io_uring` (for files and sockets) exist to overlap many such operations. They're the subject of the next module.
+Buffered hits can avoid payload-storage latency. Writes can block on write throttling, allocation or I/O, and a read miss has to wait for its data. Thread pools, `epoll` (for sockets) and `io_uring` (for files and sockets) exist to overlap many such operations. They're the subject of the next module.
 
 ## Key takeaways
 - The page cache holds file pages in otherwise-unused RAM; reads that hit it need no I/O, and "available" memory includes cache that can be dropped.
 - Read-ahead detects sequential access and fetches pages early; `posix_fadvise` lets programs steer it.
-- Buffered writes initially update cached pages but can block or trigger I/O; expiry is writeback eligibility, not a durability deadline. Dirty thresholds influence throttling.
+- Buffered writes initially update cached pages but can block or trigger I/O; expiry only makes data due for periodic writeback, not a durability deadline. Dirty thresholds influence write throttling.
 - `O_DIRECT` bypasses the cache for databases with their own buffer pools; it needs aligned I/O and still isn't a durability guarantee.
 - mmap can avoid read-buffer copies but needs fault/error handling and a design that accounts for shared-page writeback.
 - `sendfile` sends file data to a socket without passing through user space, the basis of Kafka's and nginx's efficiency.

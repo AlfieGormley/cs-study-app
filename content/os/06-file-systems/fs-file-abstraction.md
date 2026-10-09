@@ -29,7 +29,7 @@ Other file systems (a USB stick, a network share) are attached into the tree at 
 
 ## The system call interface
 
-Programs use files through a handful of system calls. The core four:
+Programs use files through a handful of system calls. The essential four:
 
 | Call | Does |
 |---|---|
@@ -134,7 +134,7 @@ Descriptors are a limited resource. `ulimit -n` shows the per-process limit (the
 
 ## The VFS: one interface, many file systems
 
-Linux supports dozens of file systems: ext4, XFS, Btrfs, FAT, NFS, and in-memory ones like `tmpfs` and `procfs`. Many common operations work across them, although capabilities and semantics still vary, because of the **Virtual File System** (VFS) layer.
+Linux supports dozens of file systems: ext4, XFS, Btrfs, FAT, NFS, and in-memory ones like `tmpfs` and `procfs`. Many common operations work across them, although features and semantics still vary, because of the **Virtual File System** (VFS) layer.
 
 ```
   read(fd, buf, n)       user space

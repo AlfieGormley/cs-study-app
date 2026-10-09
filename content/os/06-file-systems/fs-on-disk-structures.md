@@ -27,7 +27,20 @@ $ stat -c '%s bytes, %b blocks' tiny.txt
 1 bytes, 8 blocks
 ```
 
-`%b` counts 512-byte units, so 8 of them is one 4 KiB block.
+`stat`'s `%b` field counts allocated space in 512-byte units, whatever the file system's own block size. To turn it into bytes, multiply by 512:
+
+```formula
+A = b × 512 B
+A = 8 × 512 B = 4,096 B = 4 KiB
+where
+A: the space actually allocated to the file on disk, in bytes (B)
+b: the number `stat` prints for `%b`: allocated 512-byte units (here 8)
+B: byte, 8 bits
+KiB: kibibyte, 1,024 bytes, so 4 KiB = 4,096 B
+In words: eight 512-byte units is exactly one 4 KiB block, so a 1-byte file still occupies a whole block.
+```
+
+The file's *size* (`%s`, 1 byte) and its *allocation* (4,096 bytes) are different numbers; the gap is the internal fragmentation.
 
 ## The overall layout
 
@@ -47,7 +60,23 @@ A simple Unix-style file system (as in OSTEP's teaching example, and roughly ext
 - **Inode table**: a fixed array of inodes, created when you run `mkfs`.
 - **Data blocks**: file contents and directory contents.
 
-A common ext4 configuration organizes these structures in **block groups** (128 MiB with 4 KiB blocks and one-block bitmaps); flex_bg, meta_bg, bigalloc and other features modify layout and allocation so that a file's inode and data can sit close together, which mattered a lot on spinning disks.
+A common ext4 configuration organizes these structures in **block groups**. The group size comes from the bitmap: one bitmap block has one bit for each data block in its group.
+
+```formula
+G = 8 × B_blk
+S_group = G × B_blk
+G = 8 × 4,096 = 32,768
+S_group = 32,768 × 4 KiB = 128 MiB
+where
+G: the number of blocks one block group can hold: one per bit of a one-block bitmap (a byte has 8 bits, hence the 8)
+B_blk: the block size, in bytes (here 4 KiB = 4,096 bytes)
+S_group: the size of one block group
+KiB: kibibyte, 1,024 bytes
+MiB: mebibyte, 1,024 KiB = 1,048,576 bytes
+In words: a 4 KiB bitmap has 32,768 bits, each tracking one 4 KiB block, so one group spans 128 MiB.
+```
+
+Grouping lets a file's inode and data sit close together, which mattered a lot on spinning disks. The 128 MiB figure assumes plain one-block bitmaps; flex_bg, meta_bg, bigalloc and other features modify layout and allocation.
 
 ## Inodes
 
@@ -89,7 +118,7 @@ In this Unix-style on-disk model, a directory contains entries mapping names to 
  +-----------+--------+
 ```
 
-A linear list makes looking up a name O(n), which is painful with 100,000 entries. ext4 uses **htree**, a hashed B-tree-like index on the names, so lookups in big directories are roughly O(log n). XFS and Btrfs use B+trees.
+Let n be the number of entries in a directory. A linear list makes looking up a name O(n) in Big-O notation: the work grows in proportion to n, because the lookup may have to compare against every entry. That is painful with 100,000 entries. ext4 uses **htree**, a hashed B-tree-like index on the names, so lookups in big directories are roughly O(log n): the work grows with the logarithm of n, the number of tree levels, which stays small even for millions of entries. XFS and Btrfs use B+trees.
 
 ### Walking a path
 
@@ -145,8 +174,20 @@ After `a` is removed, `b` still works (it names the inode directly) but `c` is *
 
 Hard links can't cross file systems because inode numbers are only unique within one. They aren't allowed to directories (except the special `.` and `..`) because that could create cycles in the tree and confuse tools like `find` and `fsck`.
 
-> [!note] Directory link counts
-> A new empty directory on ext4 has link count 2: its name in the parent, and its own `.` entry. Each subdirectory adds 1, because the child's `..` points back. So an ordinary small directory with three subdirectories has link count five. With dir_nlink and sufficiently large directory counts, ext4 can use one as an unknown-count marker.
+### Directory link counts
+
+Directories have link counts too, and they follow a simple rule. A new empty directory on ext4 has link count 2: its name in the parent, and its own `.` entry. Each subdirectory adds 1, because the subdirectory's `..` points back. Ordinary files inside the directory add nothing, because their entries point at their own inodes.
+
+```formula
+L_dir = 2 + d
+L_dir = 2 + 3 = 5
+where
+L_dir: the link count of a directory: how many directory entries point at its inode
+d: the number of immediate subdirectories it contains (here 3)
+In words: two links for the directory's own name and its "." entry, plus one for each subdirectory's ".." entry.
+```
+
+So an ordinary small directory with three subdirectories has link count five. With dir_nlink and sufficiently large directory counts, ext4 can use one as an unknown-count marker, and some file systems (Btrfs) always report 1 for directories, so scripts shouldn't rely on the rule.
 
 ext4 stores short symlink targets (under 60 bytes) inside the inode itself, a **fast symlink**, so following them costs no extra block read.
 
@@ -192,24 +233,60 @@ The inode holds an array of block pointers. ext2 and ext3 use 15: **12 direct** 
  [14] -> 3 levels of 1024 ptrs -> data
 ```
 
-With 4 KiB blocks and 4-byte pointers, one block holds 1,024 pointers. The maximum number of addressable blocks is:
+How big a file can this tree describe? Each indirect block is just an array of pointers, so first work out how many pointers fit in one block. Each extra level of indirection multiplies the reach by that number:
 
+```formula
+k = B_blk / p
+N_max = 12 + k + k^2 + k^3
+S_max = N_max × B_blk
+k = 4,096 B / 4 B = 1,024
+k^2 = 1,048,576
+k^3 = 1,073,741,824
+N_max = 1,074,791,436 ≈ 1.07 × 10^9
+S_max ≈ 1.07 × 10^9 × 4 KiB ≈ 4 TiB
+where
+k: the number of block pointers that fit in one indirect block
+B_blk: the block size, in bytes; here 4 KiB = 4,096 B
+p: the size of one block pointer, in bytes; here 4 B (a 32-bit block number)
+N_max: the most data blocks one inode can reach: 12 direct, k through the single-indirect block, k^2 through the double-indirect tree and k^3 through the triple-indirect tree
+k^2, k^3: k squared (k × k) and k cubed (k × k × k)
+S_max: the largest file the pointer tree can describe, in bytes
+B: byte, 8 bits
+KiB: kibibyte, 1,024 bytes
+TiB: tebibyte, 1,024^4 bytes, about 1.1 trillion bytes
+≈: approximately equal to
+In words: a 4 KiB block holds 1,024 four-byte pointers, so each level of indirection multiplies the reach by 1,024, and three levels reach about a billion blocks, roughly 4 TiB.
 ```
-direct    12
-single    1,024
-double    1,024^2 = 1,048,576
-triple    1,024^3 = 1,073,741,824
-total   ~ 1.07 billion blocks
-        x 4 KiB ~ 4 TiB
-```
+
+The levels cover consecutive ranges of file block numbers (block 0 is the first 4 KiB of the file): blocks 0–11 use direct pointers, 12–1,035 go through the single-indirect block, 1,036–1,049,611 through the double-indirect tree, and everything after that through the triple-indirect tree.
 
 (Ext3's 32-bit allocated-sector accounting imposes a separate limit around 2 TiB in the traditional model; mapping metadata and kernel/filesystem limits must also be considered. The pointer-tree capacity alone is not the implemented maximum.)
 
-This design is fast for small files: anything up to 48 KiB needs only direct pointers. But a large file needs one pointer *per block*. A 1 GiB file needs 262,144 pointers, about 1 MiB of indirect blocks, and near its end the double-indirect path adds two metadata-block reads if uncached. The triple-indirect range in a larger file can add three.
+This design is fast for small files: anything up to 12 × 4 KiB = 48 KiB needs only direct pointers. But a large file needs one pointer *per block*, so its mapping metadata grows in step with its size:
+
+```formula
+n = S / B_blk
+M = n × p
+n = 1 GiB / 4 KiB = 262,144
+M = 262,144 × 4 B = 1,048,576 B = 1 MiB
+where
+n: the number of data blocks in the file, which is also the number of block pointers it needs
+S: the file size, in bytes; here 1 GiB
+B_blk: the block size; here 4 KiB
+M: the space taken by those pointers, in bytes
+p: the size of one pointer; here 4 bytes (B)
+GiB: gibibyte, 1,024^3 bytes
+KiB: kibibyte, 1,024 bytes
+MiB: mebibyte, 1,024^2 bytes
+B: byte, 8 bits
+In words: a 1 GiB file is 262,144 blocks, so it needs 262,144 four-byte pointers: a whole mebibyte of indirect blocks just to say where the data is.
+```
+
+The file's last block is number 262,143, well inside the double-indirect range, so reading near its end adds two metadata-block reads if they are uncached. The triple-indirect range in a larger file can add three.
 
 ### Extents (ext4, XFS, Btrfs, NTFS)
 
-An **extent** says "logical blocks *L* through *L + n − 1* live at physical blocks *P* through *P + n − 1*". A contiguous run can use far fewer extent records than per-block pointers, subject to the maximum extent length.
+An **extent** is one record describing a whole run of blocks: "this many logical blocks of the file, starting here, live in consecutive physical blocks on the device, starting there". A contiguous run can use far fewer extent records than per-block pointers, subject to the maximum extent length.
 
 ```
  extent: logical 0, len 3000,
@@ -217,9 +294,43 @@ An **extent** says "logical blocks *L* through *L + n − 1* live at physical bl
  -> blocks 81920..84919
 ```
 
-In ext4, an initialized extent covers up to 32,768 blocks (128 MiB with 4 KiB blocks). The inode has room for **four** extents directly. Files with more extents grow an **extent tree**, a shallow B-tree whose leaves are extents.
+To find where any block of the file lives, check which extent covers it, then add its distance into the extent to the extent's physical start:
 
-So a contiguous initialized 1 GiB file can be represented with eight maximum-sized extents (1 GiB ÷ 128 MiB), stored in a tree only one level deep, rather than a megabyte of indirect pointers.
+```formula
+b_phys = P + (l − L)
+for L ≤ l ≤ L + n − 1
+b_phys = 81,920 + (2,999 − 0) = 84,919
+where
+b_phys: the physical block number on the device that holds logical block l
+P: the extent's first physical block (here 81,920)
+l: the logical block number within the file: byte offset ÷ block size, counting from 0 (here 2,999, the extent's last block)
+L: the extent's first logical block (here 0)
+n: the extent's length in blocks (here 3,000)
+≤: less than or equal to
+In words: an extent maps a run of n consecutive file blocks onto n consecutive disk blocks, so one addition finds any block inside it.
+```
+
+In ext4, an initialized extent covers up to 32,768 blocks. The inode has room for **four** extents directly. Files with more extents grow an **extent tree**, a shallow B-tree whose leaves are extents. How many extents does a large contiguous file need?
+
+```formula
+E_max = 32,768 × B_blk
+e = ⌈S / E_max⌉
+E_max = 32,768 × 4 KiB = 128 MiB
+e = 1,024 MiB / 128 MiB = 8
+where
+E_max: the most data one ext4 extent can map
+B_blk: the block size; here 4 KiB
+e: the number of extents a perfectly contiguous file needs
+S: the file size; here 1 GiB = 1,024 MiB
+⌈ ⌉: the ceiling: round up to the next whole number, because a part-filled last extent is still a record
+KiB: kibibyte, 1,024 bytes
+MiB: mebibyte, 1,024 KiB
+In words: one extent maps at most 128 MiB with 4 KiB blocks, so a contiguous 1 GiB file needs just eight extent records.
+```
+
+So a contiguous initialized 1 GiB file can be represented with eight maximum-sized extents, stored in a tree only one level deep, rather than a megabyte of indirect pointers.
+
+The table compares how much work it takes to find one block at a random position in a file. It uses Big-O notation: n is the number of blocks in the file (for extents, the number of extents), O(1) means a fixed amount of work whatever n is, O(n) means work that grows in proportion to n, and O(log n) means work that grows with the logarithm of n, the depth of a tree.
 
 | Strategy | Random access | Grows easily | Used by |
 |---|---|---|---|

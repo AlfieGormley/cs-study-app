@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "The file's size in bytes",
-        "explanation": "Size is core inode metadata; `stat` reads it from the inode."
+        "explanation": "Size is basic inode metadata; `stat` reads it from the inode."
       },
       {
         "text": "The link count",
@@ -75,11 +75,11 @@
       },
       {
         "text": "The configured inode slots may be exhausted by many small files even while data blocks remain free",
-        "explanation": "Correct. Confirm inode usage with df -i. Cleanup, migration, filesystem growth where supported, or recreating with a different inode density are possible approaches."
+        "explanation": "Correct. Confirm inode usage with df -i. Cleanup, moving data to another filesystem, filesystem growth where supported, or recreating with a different inode density are possible approaches."
       },
       {
         "text": "The partition needs defragmenting",
-        "explanation": "Fragmentation can constrain particular allocations, but inode exhaustion is the specific resource checked by df -i. Defragmentation does not create more inode slots in existing groups."
+        "explanation": "Free-space fragmentation can constrain particular allocations, but inode exhaustion is the specific resource checked by df -i. Defragmentation does not create more inode slots in existing groups."
       },
       {
         "text": "The directory has hit its maximum number of entries",
@@ -87,7 +87,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Creation needs an inode and may need directory/data metadata blocks; a newly empty regular file need not allocate a payload block. df -h and df -i report different resources. In fixed-size ext4, inode density comes from format/configuration, so many small files can exhaust slots first. Existing groups do not grow arbitrary inode tables; filesystem expansion can add groups and inodes. Verify actual counters before selecting cleanup, growth or migration.",
+    "workedExample": "Creation needs an inode and may need directory/data metadata blocks; a newly empty regular file need not allocate a payload block. df -h and df -i report different resources. In fixed-size ext4, inode density comes from format/configuration, so many small files can exhaust slots first. Existing groups do not grow arbitrary inode tables; filesystem expansion can add groups and inodes. Verify actual counters before selecting cleanup, growth or a move to another filesystem.",
     "link": {
       "title": "inode(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/inode.7.html"
@@ -147,7 +147,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Pointers per block = block size ÷ pointer size = 1024 ÷ 4 = **256**.\n2. Count the data blocks each level reaches:\n\n```\ndirect          12\nsingle-indirect 256\ndouble-indirect 256 x 256 = 65,536\ntotal           65,804 blocks\n```\n\n3. Multiply by the block size: 65,804 KiB ≈ 64.3 MiB.\n\nThe double-indirect level dominates. Each extra level of indirection multiplies capacity by 256 here (by 1,024 with 4 KiB blocks), which is why ext2/3 needed a triple level to reach terabytes.",
+    "workedExample": "1. Work out how many pointers fit in one block, then add up the data blocks each level reaches:\n\n```formula\nk = B_blk / p = 1,024 B / 4 B = 256\nN_max = 12 + k + k^2\nN_max = 12 + 256 + 65,536 = 65,804\nS_max = N_max × B_blk\nS_max = 65,804 × 1 KiB ≈ 64.3 MiB\nwhere\nk: the number of block pointers in one indirect block\nB_blk: the block size; here 1 KiB = 1,024 bytes\np: the size of one pointer; here 4 bytes (B)\nN_max: the most data blocks one inode can reach: 12 direct, k through the single-indirect block, k^2 through the double-indirect tree\nk^2: k squared, k × k\nS_max: the largest file the inode can describe\nB: byte\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\n≈: approximately equal to\nIn words: a 1 KiB block holds 256 four-byte pointers, so the double-indirect level alone reaches 65,536 blocks, and the whole inode about 64 MiB.\n```\n\n2. The double-indirect level dominates. Each extra level of indirection multiplies capacity by 256 here (by 1,024 with 4 KiB blocks), which is why ext2/3 needed a triple level to reach terabytes.",
     "link": {
       "title": "ext4: the inode block map — kernel.org",
       "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
@@ -177,7 +177,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. File block number = 100 KiB ÷ 4 KiB = **25** (blocks are numbered from 0).\n2. Map it to the pointer level:\n\n```\nblocks 0..11       direct\nblocks 12..1035    single-indirect\nblocks 1036..      double-indirect\n```\n\n3. Block 25 is in the single-indirect range.\n4. Reads: the indirect block (to get pointer 25 − 12 = 13), then the data block. That's **2**.\n\nAn extent-mapped ext4 file whose extents fit in the inode needs just 1 read here.",
+    "workedExample": "1. Find which file block holds the byte, and which pointer in the indirect block names it:\n\n```formula\ni = ⌊x / B_blk⌋\ni = 100 KiB / 4 KiB = 25\nj = i − 12 = 25 − 12 = 13\nwhere\ni: the file block number holding the byte, counting from 0\nx: the byte offset; here 100 KiB\nB_blk: the block size; here 4 KiB\n⌊ ⌋: the floor: round down to a whole number\nj: the position of the pointer inside the single-indirect block (the 12 direct pointers cover blocks 0 to 11 first)\nKiB: kibibyte, 1,024 bytes\nIn words: byte 100 KiB sits in file block 25, which is the 14th block past the 12 direct ones, so it is pointer number 13 in the single-indirect block.\n```\n\n2. Map it to the pointer level:\n\n```\nblocks 0..11       direct\nblocks 12..1035    single-indirect\nblocks 1036..      double-indirect\n```\n\n3. Block 25 is in the single-indirect range.\n4. Reads: the indirect block (to get pointer 13), then the data block. That's **2**.\n\nAn extent-mapped ext4 file whose extents fit in the inode needs just 1 read here.",
     "link": {
       "title": "ext4: the inode block map — kernel.org",
       "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
@@ -207,7 +207,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Count every directory entry whose inode number is `proj`'s:\n\n```\nentry               points to\nparent/proj         proj\nproj/.              proj\nproj/src/..         proj\nproj/docs/..        proj\nproj/README         README's inode\n```\n\nThat's 4. For the small ordinary directory here, the count is 2 plus subdirectories. Large ext4 directories using dir_nlink can instead report an unknown-count marker of 1. (Some file systems, such as Btrfs, report 1 for directories instead, so don't rely on this in scripts.)",
+    "workedExample": "Count every directory entry whose inode number is `proj`'s:\n\n```\nentry               points to\nparent/proj         proj\nproj/.              proj\nproj/src/..         proj\nproj/docs/..        proj\nproj/README         README's inode\n```\n\nThat's 4. For the small ordinary directory here, the count is 2 plus subdirectories:\n\n```formula\nL_dir = 2 + d = 2 + 2 = 4\nwhere\nL_dir: the directory's link count\nd: its number of immediate subdirectories; here 2 (src and docs)\nIn words: two links for the directory's name and its \".\" entry, plus one for each subdirectory's \"..\" entry.\n```\n\nLarge ext4 directories using dir_nlink can instead report an unknown-count marker of 1. (Some file systems, such as Btrfs, report 1 for directories instead, so don't rely on this in scripts.)",
     "link": {
       "title": "inode(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/inode.7.html"
@@ -255,7 +255,7 @@
     "id": "fs-on-disk-structures-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A perfectly contiguous 10 GiB file is written on ext4 with 4 KiB blocks. Each extent covers at most 32,768 blocks, the inode holds 4 extents, and a 4 KiB tree block holds about 340 extents. Assume the initialized data is coalesced into maximum-length extent records. What compact mapping suffices?",
+    "prompt": "A perfectly contiguous 10 GiB file is written on ext4 with 4 KiB blocks. Each extent covers at most 32,768 blocks, the inode holds 4 extents, and a 4 KiB tree block holds about 340 extents. Assume the initialized data is merged into maximum-length extent records. What compact mapping suffices?",
     "options": [
       {
         "text": "One extent stored in the inode",
@@ -275,7 +275,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Maximum extent size: 32,768 blocks × 4 KiB = **128 MiB**.\n2. Extents needed: 10 GiB ÷ 128 MiB = 10,240 MiB ÷ 128 MiB = **80**.\n3. The inode's 60-byte `i_block` area holds a 12-byte header plus 4 × 12-byte entries, so 80 won't fit.\n4. ext4 turns the inode's entries into index entries pointing at leaf blocks. One 4 KiB leaf holds (4096 − 12) ÷ 12 ≈ 340 extents.\n5. So: inode → 1 index entry → 1 leaf → 80 extents. Depth 1.\n\nCompare with ext3: 2.6 million 4-byte pointers, about 10 MiB of metadata, against one 4 KiB leaf.",
+    "workedExample": "1. Work out the extent count, and how many extents one tree leaf can hold:\n\n```formula\nE_max = 32,768 × B_blk\nE_max = 32,768 × 4 KiB = 128 MiB\ne = ⌈S / E_max⌉\ne = 10,240 MiB / 128 MiB = 80\nc = ⌊(4,096 B − 12 B) / 12 B⌋ = 340\nwhere\nE_max: the most data one ext4 extent can map\nB_blk: the block size; here 4 KiB\ne: the number of extents the file needs\nS: the file size; here 10 GiB = 10,240 MiB\n⌈ ⌉: the ceiling: round up to a whole number\nc: the extents one 4 KiB leaf block holds: a 12-byte header, then 12-byte extent entries\n⌊ ⌋: the floor: round down to a whole number\nB: byte\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nGiB: gibibyte, 1,024 MiB\nIn words: one extent maps at most 128 MiB, so 10 GiB needs 80 of them, and one leaf block has room for 340.\n```\n\n2. The inode's 60-byte `i_block` area holds a 12-byte header plus 4 × 12-byte entries, so 80 won't fit.\n3. ext4 turns the inode's entries into index entries pointing at leaf blocks; one leaf holds the 80 extents with room to spare.\n4. So: inode → 1 index entry → 1 leaf → 80 extents. Depth 1.\n\nCompare with ext3: 2.6 million 4-byte pointers, about 10 MiB of metadata, against one 4 KiB leaf.",
     "link": {
       "title": "ext4: the inode block map — kernel.org",
       "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
@@ -331,7 +331,7 @@
       },
       {
         "text": "Extents always need less metadata than block pointers, even for a badly fragmented file",
-        "explanation": "For a file fragmented into single-block pieces, each 12-byte extent maps only one block, so it costs more than a 4-byte pointer. Extents win only when runs are long."
+        "explanation": "For a file split into single-block pieces, each 12-byte extent maps only one block, so it costs more than a 4-byte pointer. Extents win only when runs are long."
       },
       {
         "text": "The indirect-pointer scheme makes small files slow, because every block access goes through an indirect block",

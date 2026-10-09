@@ -25,7 +25,7 @@ Email is one of the oldest application protocols still in heavy use, and it show
 ```
 
 - A **mail user agent** (MUA) is the client: Outlook, Apple Mail, Thunderbird.
-- **Submission** (port **587** with STARTTLS, or **465** with implicit TLS) is where your client hands mail to your provider, after authenticating. [RFC 8314](https://www.rfc-editor.org/rfc/rfc8314) now recommends implicit TLS on 465.
+- **Mail submission** (port **587** with STARTTLS, or **465** with implicit TLS) is where your client hands mail to your provider, after authenticating. [RFC 8314](https://www.rfc-editor.org/rfc/rfc8314) now recommends implicit TLS on 465.
 - **Relay** between providers uses port **25**. Some access networks restrict outbound port 25 to reduce abuse; availability depends on the provider.
 - The receiving server stores the message, and Bob's client fetches it with **IMAP** or **POP3**. SMTP is push-only; retrieval is a separate protocol.
 
@@ -79,11 +79,11 @@ The first digit of each reply code is what matters:
 | Code | Meaning | Sender should |
 |---|---|---|
 | 2xx | Success | Carry on |
-| 3xx | Positive intermediate reply | Continue as requested (354 requests DATA) |
+| 3xx | Positive intermediate reply | Continue as requested (354 asks for the message text after the DATA command) |
 | 4xx | Temporary failure | Retry the affected delivery later |
 | 5xx | Permanent failure | Do not repeat the unchanged failed request |
 
-A transient recipient failure such as `451` leaves that delivery eligible for retry. RFC 5321 recommends a give-up time generally at least 4–5 days, with retry spacing; local policy and failure conditions matter. A permanent delivery failure, or expiration after temporary failures, can produce a delivery-status notification for previously accepted mail. No such notification is sent to a null reverse path. **Greylisting** temporarily rejects unfamiliar deliveries to distinguish senders that retry; it does not reliably separate all legitimate mail from spam.
+A transient recipient failure such as `451` leaves that delivery eligible for retry. RFC 5321 recommends a give-up time generally at least 4–5 days, with retry spacing; local policy and failure conditions matter. A permanent delivery failure, or expiration after temporary failures, can produce a delivery-status notification for previously accepted mail. No such notification is sent to a null reverse path. **Greylisting** temporarily rejects unfamiliar deliveries to distinguish senders that retry; it does not reliably separate all legitimate messages from spam.
 
 Python's `smtplib` drives the same dialogue. This function submits through a configured provider, explicitly verifies the TLS certificate and hostname, and fails if STARTTLS is unavailable. Supply credentials separately; debug logging can expose authentication data and message contents. The example is not executed against a real provider here.
 
@@ -119,8 +119,8 @@ Notice that `from_addr` and `to_addrs` are passed separately from the message he
 
 There are **two** sets of addresses:
 
-- The **envelope**: `MAIL FROM` (the *return path*, where bounces go) and `RCPT TO` (who actually receives it). These are SMTP commands.
-- The **header**: the `From:`, `To:` and `Cc:` lines inside the message ([RFC 5322](https://www.rfc-editor.org/rfc/rfc5322)). These are what your mail client displays.
+- The **SMTP envelope**: `MAIL FROM` (the *return path*, where bounces go) and `RCPT TO` (who actually receives it). These are SMTP commands.
+- The **message header**: the `From:`, `To:` and `Cc:` lines inside the message ([RFC 5322](https://www.rfc-editor.org/rfc/rfc5322)). These are what your mail client displays.
 
 They need not match. In a common Bcc implementation, the recipient appears in `RCPT TO` while the Bcc header is removed before delivery. RFC 5322 also permits other Bcc-header handling for separate copies. Mailing lists set the envelope sender to the list's bounce address. And a spammer can put *anything* in `From:`, which is the core spoofing problem SPF, DKIM and DMARC address.
 
@@ -128,16 +128,16 @@ Bounces are sent with an empty envelope sender, `MAIL FROM:<>`, so conforming se
 
 ### Dot-stuffing and SMTP smuggling
 
-The message ends with a line containing just `.`. A body line that starts with `.` is sent with an extra dot (`..`), which the receiver strips. That is **dot-stuffing**.
+The message ends with a line containing just `.`. A body line that starts with `.` is sent with an extra `.` (as `..`), which the receiver strips. That is **dot-stuffing**.
 
 In 2023, researchers showed **SMTP smuggling**: some servers accepted a bare `\n.\n` as end of data while others required `\r\n.\r\n`. An attacker could hide a second, forged message inside the first, which the receiving server then treated as a separate message from the sending provider. Same lesson as HTTP request smuggling: when two parsers disagree on framing, attackers live in the gap.
 
 ### TLS between servers
 
-With **opportunistic** STARTTLS on port 25 and no policy requiring authenticated TLS, stripping the offer can induce plaintext delivery. Enforcing senders instead defer or fail delivery. Two policy mechanisms are:
+With **opportunistic STARTTLS** on port 25 and no policy requiring authenticated TLS, stripping the offer can induce plaintext delivery. Enforcing senders instead defer or fail delivery. Two policy mechanisms are:
 
 - **MTA-STS** (RFC 8461): an HTTPS policy in `enforce` mode requires authenticated TLS to approved MX hosts. Cached policies protect against stripping; initial DNS policy discovery can still be suppressed before a sender has a policy.
-- **DANE** (RFC 7672): DNSSEC-authenticated TLSA records bind acceptable certificates or keys, including supported trust-anchor forms, to the SMTP service.
+- **DANE** (RFC 7672): DNSSEC-authenticated TLSA records associate acceptable certificates or keys, including supported trust-anchor forms, to the SMTP service.
 
 ## Retrieval: IMAP and POP3
 
@@ -145,7 +145,7 @@ With **opportunistic** STARTTLS on port 25 and no policy requiring authenticated
 
 **IMAP** (port 143, or **993** with TLS; current version IMAP4rev2, [RFC 9051](https://www.rfc-editor.org/rfc/rfc9051)) keeps mail **on the server** and lets many clients view and modify it. Folders, read and flagged states, and moves all sync between devices.
 
-IMAP commands use client-chosen **tags** to match responses. Some commands can be outstanding concurrently, subject to protocol ordering rules. This abbreviated transcript assumes TLS is already established; the FETCH response body and other required SELECT responses are omitted:
+Each IMAP command starts with a client-chosen label, an **IMAP tag**, used to match responses. Some commands can be outstanding concurrently, subject to protocol ordering rules. This abbreviated exchange assumes TLS is already established; the FETCH response body and other required SELECT responses are omitted:
 
 ```
 C: a1 LOGIN bob secret
@@ -159,9 +159,9 @@ S: * 172 FETCH (UID 4827 FLAGS ...
 S: a3 OK FETCH completed
 ```
 
-Lines starting with `*` are **untagged** responses: data or notifications. Key ideas:
+Lines starting with `*` are **untagged responses**: data or notifications. Key ideas:
 
-- **Sequence numbers** (1 to 172 here) are positions in the mailbox and shift when earlier messages are **expunged**, not merely marked `\Deleted`.
+- **Message sequence numbers** (1 to 172 here) are positions in the mailbox and shift when earlier messages are **expunged**, not merely marked `\Deleted`.
 - **UIDs** increase with message assignment and remain stable within a mailbox's UIDVALIDITY generation. A cache identity includes the server/account, mailbox, UIDVALIDITY and UID; mutable flags still need synchronisation.
 - **UIDVALIDITY** says whether cached UIDs are still meaningful. If it changes (the mailbox was rebuilt), the client must invalidate the old UID mappings and resynchronise, rather than assume a reused number identifies the same message.
 - **Flags** such as `\Seen`, `\Flagged`, `\Deleted` record state. Deleting is two steps: set `\Deleted`, then `EXPUNGE`.
@@ -188,7 +188,7 @@ alice.example. TXT "v=spf1
 
 SPF's limits:
 
-- It checks the **envelope**, not the visible `From:` header. A spammer can pass SPF for their own domain while showing your domain in `From:`.
+- It checks the **SMTP envelope**, not the visible `From:` header. A spammer can pass SPF for their own domain while showing your domain in `From:`.
 - It **can fail on forwarding**: when `bob@uni.example` forwards to Gmail, Gmail sees the university's IP, which may not be authorised by alice.example's record.
 - Evaluation permits at most **10 evaluated DNS-query-causing terms** across the recursive check: `include`, `a`, `mx`, `ptr`, `exists` and `redirect`. Exceeding that limit gives *permerror*. This is not a cap of ten individual DNS packets: some terms cause several queries, and additional per-mechanism and void-lookup limits apply. Evaluation stops when a mechanism matches.
 
@@ -204,11 +204,11 @@ DKIM-Signature: v=1; a=rsa-sha256;
   b=AuUoFEfDxTDkHlLXSZEpZj79LICEps6e...
 ```
 
-- `d=` is the signing domain and `s=` the **selector**. The receiver fetches the public key from `mail2026._domainkey.alice.example` (TXT).
+- `d=` is the signing domain and `s=` the **DKIM selector**. The receiver fetches the public key from `mail2026._domainkey.alice.example` (TXT).
 - `bh=` hashes the canonicalised body (or the prefix selected by optional `l=`); `b=` signs the selected canonicalised headers and the DKIM-Signature field with its `b=` value empty.
 - `c=relaxed/relaxed` canonicalisation normalises specified whitespace and header **field-name** case. It does not make arbitrary changes to header values or body text harmless.
 
-Selectors let a domain have several keys at once: one per provider, and new ones for rotation. DKIM can survive forwarding when the signed content remains valid and the key/signature remains usable. A change to a signed subject or covered body content invalidates it; an unsigned header or content outside an `l=` prefix is a different case.
+DKIM selectors let a domain have several keys at once: one per provider, and new ones for rotation. DKIM can survive forwarding when the signed content remains valid and the key/signature remains usable. A change to a signed subject or covered body content invalidates it; an unsigned header or content outside an `l=` prefix is a different case.
 
 ### DMARC: tie it to the visible From
 
@@ -216,6 +216,21 @@ Neither SPF nor DKIM on its own protects the `From:` header the user sees. **DMA
 
 - SPF passes **and** the envelope domain aligns with the `From:` domain, **or**
 - DKIM passes **and** the `d=` domain aligns with the `From:` domain.
+
+Written as a logical rule, where each symbol is either true or false:
+
+```formula
+R = (S_p and S_a) or (K_p and K_a)
+where
+R: the DMARC result for the message: true means pass, false means fail
+S_p: SPF passed for the envelope sender's domain
+S_a: the envelope sender's domain aligns with the domain in the visible From: header
+K_p: at least one DKIM signature verified
+K_a: the d= domain of that verifying signature aligns with the From: domain
+In words: DMARC passes if SPF passes with an aligned domain, or DKIM passes with an aligned domain; one aligned pass is enough, and an unaligned pass counts for nothing.
+```
+
+For example, a phisher's own SPF pass for `phish.example` gives S_p true but S_a false, so it cannot make R true for a message showing `From: it@alice.example`.
 
 "Aligned" by default (relaxed mode) means the same organisational domain, so `mail.alice.example` aligns with `alice.example` when both have organisational domain `alice.example`. RFC 9989 discovers that boundary through DNS tree walks; do not assume every two-label suffix is an organisation. Strict mode (`aspf=s`, `adkim=s`) requires an exact match.
 
@@ -248,7 +263,7 @@ Google's published bulk-sender rules for personal Gmail accounts require SPF, DK
 
 ## Key takeaways
 - Clients submit on 587/465 with authentication; servers relay on 25 to the lowest-preference MX; clients retrieve with IMAP (993) or POP3.
-- SMTP replies: 4xx indicates a temporary failure; 5xx means the failed request should not be repeated unchanged. Delivery notifications depend on the transaction and reverse path. Queued retries for days make email resilient.
+- SMTP replies: 4xx indicates a temporary failure; 5xx means the failed request should not be repeated unchanged. Delivery notifications depend on the SMTP transaction and reverse path. Queued retries for days make email resilient.
 - The envelope (`MAIL FROM`, `RCPT TO`) and header (`From:`, `To:`) are separate, which enables Bcc, lists and spoofing.
 - IMAP keeps state on the server; UIDs plus UIDVALIDITY let clients cache safely.
 - SPF authorises IPs for the envelope domain, DKIM signs the content, and DMARC requires one of them to pass and align with the visible From.

@@ -63,7 +63,7 @@ print(head.split(b"\r\n")[0])
 # Actual status depends on the server.
 ```
 
-`Connection: close` asks the server to close the TCP connection after the response, so EOF can end this inspection loop when the peer complies. EOF alone does not establish a valid or complete response. Without it, HTTP/1.1 connections are **persistent** by default, so a read-until-close loop can wait after the response is complete. Timeouts and server policy still apply. That is exactly why message framing matters.
+`Connection: close` asks the server to close the TCP connection after the response, so EOF can end this inspection loop when the peer complies. EOF alone does not establish a valid or complete response. Without it, HTTP/1.1 uses **persistent connections** by default, so a read-until-close loop can wait after the response is complete. Timeouts and server policy still apply. That is exactly why message framing matters.
 
 ## Where does the body end?
 
@@ -85,7 +85,7 @@ Close-delimited responses are supported for compatibility and are fragile: an ap
 
 `Content-Length` must be known *before* the first body byte is sent. That is a problem for anything generated on the fly: a streamed template, a database export, a proxied upstream, a long-poll. Without a length, the server could only signal the end by closing the connection, losing persistence.
 
-**Chunked encoding** solves this. The body is sent as a sequence of chunks, each prefixed by its size **in hexadecimal**, and a zero-size chunk marks the end:
+**Chunked encoding** solves this. The body is sent as a sequence of chunks, each prefixed by its size in **hexadecimal**, and a zero-size chunk marks the end:
 
 ```
 HTTP/1.1 200 OK\r\n
@@ -99,7 +99,24 @@ Developer Network\r\n
 \r\n
 ```
 
-`11` is hex, so that chunk is 17 bytes ("Developer Network"). The decoded body is `MozillaDeveloper Network`, 24 bytes. The CRLF after each chunk's data is framing, not content.
+`11` is hex, so that chunk is 17 bytes ("Developer Network"). In hexadecimal each digit is worth 16 times the digit to its right, so converting a chunk-size line to an ordinary decimal byte count works like this:
+
+```formula
+S = d_1 × 16 + d_0
+S = 1 × 16 + 1 = 17 B
+L = S_1 + S_2 = 7 B + 17 B = 24 B
+where
+S: the chunk size in bytes, as an ordinary decimal number
+d_1: the left (sixteens) digit of a two-digit hexadecimal size line; here 1
+d_0: the right (units) digit; here 1. The hex digits A to F stand for 10 to 15
+S_1: the size of the first chunk, hex 7 = 7 bytes ("Mozilla")
+S_2: the size of the second chunk, hex 11 = 17 bytes ("Developer Network")
+L: the length of the decoded body in bytes
+B: bytes
+In words: the size line "11" means one sixteen plus one, so 17 bytes; the two chunks together give a 24-byte body.
+```
+
+The decoded body is `MozillaDeveloper Network`, 24 bytes. The CRLF after each chunk's data is framing, not content, so it is not counted. Reading `11` as decimal eleven would cut the chunk short and desynchronise the parser.
 
 A deliberately restricted decoder for an already-buffered, bounded message with **no extensions or trailers**. It rejects those unsupported forms and returns any following bytes separately. Production receivers must handle the full grammar and incremental input.
 
@@ -132,9 +149,9 @@ def read_chunked(buf):
 
 Details worth knowing:
 
-- **Trailers.** After the `0` chunk, the sender may add header fields before the final blank line, for example a checksum computed while streaming. gRPC relies on trailers to send its status (lesson 5). Many HTTP/1.1 clients and browsers ignore them.
+- **Trailer fields.** After the `0` chunk, the sender may add header fields before the final blank line, for example a checksum computed while streaming. gRPC relies on trailers to send its status (lesson 5). Many HTTP/1.1 clients and browsers ignore them.
 - **Chunk extensions** (`7;name=value`) can carry per-chunk metadata. A conforming receiver ignores unrecognised extensions after parsing their syntax and imposing suitable limits.
-- Chunks have nothing to do with TCP segments. A 7-byte chunk may arrive split across two `recv` calls, and ten chunks may arrive in one. A real parser is a state machine fed arbitrary slices.
+- Chunks have nothing to do with TCP segments. A 7-byte chunk may arrive split across two `recv` calls, and ten chunks may arrive in one. A real parser is a finite-state machine fed arbitrary slices.
 - HTTP/2 and HTTP/3 **forbid** `Transfer-Encoding`. Both have length-delimited DATA frames. HTTP/2 signals message completion with END_STREAM; HTTP/3 uses the end of its underlying QUIC stream, not a DATA-frame END_STREAM flag.
 
 ## Request smuggling: when framing disagrees
@@ -154,11 +171,25 @@ Transfer-Encoding: chunked
 SMUGGLED
 ```
 
+The attacker chose `Content-Length: 13` by counting every byte after the blank line, CRLFs included:
+
+```formula
+L_CL = 3 B + 2 B + 8 B = 13 B
+L_TE = 3 B + 2 B = 5 B
+L_left = L_CL − L_TE = 8 B
+where
+L_CL: the body length the front end uses, from Content-Length: the line "0" plus its CRLF (3 bytes), the empty line's CRLF (2 bytes) and the 8 letters of SMUGGLED
+L_TE: the body length the back end uses when it decodes chunked framing: the "0" chunk line and the blank line that ends it
+L_left: the bytes the back end has not consumed, which stay in its buffer
+B: bytes
+In words: the two hops disagree by 8 bytes, and those 8 bytes become the start of whatever the back end reads next.
+```
+
 1. The front end reads 13 body bytes (`0\r\n\r\nSMUGGLED`) and forwards everything as one request.
 2. The back end decodes chunked: the `0` chunk ends the body after 5 bytes.
 3. `SMUGGLED` is left in the back end's buffer on the shared, persistent connection. It becomes the **start of the next request**, which may belong to a different user.
 
-Attackers use this to poison caches, bypass front-end access controls and capture other users' requests. Defences:
+Attackers use this to poison caches, bypass front-end access controls and hijack other users' requests. Defences:
 
 - Reject requests with both framing fields, invalid transfer-coding syntax, repeated chunked coding or a final coding other than chunked. Whitespace permitted by the grammar is not inherently malformed.
 - Make every hop use the same parser rules, and close the connection after any framing error.
@@ -177,7 +208,7 @@ One more mechanism: a client uploading a large body can send `Expect: 100-contin
 
 ## Cookies: state on a stateless protocol
 
-HTTP semantics are stateless; applications and connections can still maintain state. **Cookies** ([RFC 6265](https://www.rfc-editor.org/rfc/rfc6265), being revised as "6265bis") add state: the server sets a name/value pair, and the browser sends it back on later requests.
+HTTP is a stateless protocol at the level of its semantics; applications and connections can still maintain state. **HTTP cookies** ([RFC 6265](https://www.rfc-editor.org/rfc/rfc6265), being revised as "6265bis") add state: the server sets a name/value pair, and the browser sends it back on later requests.
 
 ```
 HTTP/1.1 200 OK
@@ -211,11 +242,11 @@ One quirk: combining repeated field lines is allowed only when the field definit
 
 **Path** limits which URLs receive the cookie, but it is **not a security boundary**: same-origin script may access a matching-path document, subject to framing policy. Path does not isolate mutually distrustful applications on one origin; HttpOnly separately restricts script cookie access.
 
-**Secure** normally requires HTTPS; browsers may treat localhost as a trusted exception. **HttpOnly** prevents direct access through document.cookie and similar non-HTTP APIs. It does not guarantee that XSS cannot expose a token through another vulnerable application feature, and injected script can still make authenticated requests.
+**Secure** normally requires HTTPS; browsers may treat localhost as a trusted exception. **HttpOnly** stops script from reading the cookie through document.cookie and similar non-HTTP APIs. It does not guarantee that XSS cannot expose a token through another vulnerable application feature, and injected script can still make authenticated requests.
 
 ### SameSite and the meaning of "site"
 
-For these ordinary domain URLs, a schemeful **site** is the scheme plus the *registrable domain* (eTLD+1): `https://shop.example.co.uk` and `https://api.example.co.uk` are the **same site**, though different origins.
+For these ordinary domain URLs, a **schemeful site** is the scheme plus the *registrable domain* (eTLD+1): `https://shop.example.co.uk` and `https://api.example.co.uk` are the **same site**, though different origins.
 
 - `Strict`: sent only on same-site requests. On a cross-site navigation, that cookie is withheld from the initial request; what the user sees depends on application behaviour.
 - `Lax`: also sent on **top-level navigations** with safe methods (clicking a link, a GET form). Not sent on cross-site `POST`s, iframes, images or `fetch`.
@@ -235,7 +266,22 @@ Supporting browsers enforce cookie-name prefixes:
 
 ### Limits
 
-RFC 6265 asks browsers to support **at least** 4096 bytes per cookie, 50 cookies per domain and 3000 in total, as recommended minimum capabilities in that RFC, not universal current limits. Cookie inclusion also depends on path, security, SameSite, credentials mode and browser policy. For 80 actual HTTP/1.1 requests each carrying 3,000 cookie bytes, the repeated values total 240,000 bytes before other overhead. Cache hits can avoid requests; HTTP/2 or HTTP/3 compression savings depend on encoder/table decisions.
+RFC 6265 asks browsers to support **at least** 4096 bytes per cookie, 50 cookies per domain and 3000 in total, as recommended minimum capabilities in that RFC, not universal current limits. Cookie inclusion also depends on path, security, SameSite, credentials mode and browser policy.
+
+Because HTTP/1.1 repeats the `Cookie` header on every request, large cookies multiply. To estimate the upload cost, multiply the request count by the cookie bytes each request carries:
+
+```formula
+C = N × c
+C = 80 × 3,000 B = 240,000 B
+where
+C: the total repeated cookie bytes uploaded, in bytes (B)
+N: the number of actual HTTP/1.1 requests that carry the cookies; here 80
+c: the cookie bytes in each request's Cookie header; here 3,000
+B: bytes
+In words: 80 requests each carrying 3,000 bytes of cookies upload 240,000 bytes of cookie values, before any other header overhead.
+```
+
+This assumes every request is eligible to carry the cookies and that nothing compresses them. Cache hits can avoid requests; HTTP/2 or HTTP/3 compression savings depend on encoder/table decisions.
 
 > [!note] Content omitted after review
 > A current browser-by-browser cookie limit, prefix-support and eviction-policy matrix is absent because those version-specific implementations were not tested here.

@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "A response with recursion available, RCODE 3: NXDOMAIN (the name does not exist)",
-        "explanation": "Correct. `0x8183` = QR 1, RD 1, RA 1, RCODE 3."
+        "explanation": "Correct. `0x8183` = `QR 1, RD 1, RA 1`, RCODE 3."
       },
       {
         "text": "A successful recursive answer",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Write `0x8183` in binary and split it:\n\n```\n1 0000 0 0 1  1 000 0011\nQR Op  AA TC RD RA Z  RCODE\n```\n\n- QR = 1: response.\n- RD = 1, RA = 1: recursion requested and available.\n- RCODE = 0011 = 3: **NXDOMAIN**.",
+    "workedExample": "Write `0x8183` in binary and split it:\n\n```\n1 0000 0 0 1  1 000 0011\nQR Op  AA TC RD RA Z  RCODE\n```\n\n```formula\nQR = 1\nRD = 1\nRA = 1\nRCODE = 0b0011 = 3\nwhere\nQR: the query/response bit; 1 means this message is a response\nRD: recursion desired, copied from the query; 1 means the client asked the server to resolve the name fully\nRA: recursion available; 1 means the server offers recursive resolution\nRCODE: the 4-bit response code in the lowest bits; 0b0011 is binary (base 2) for 3, which means NXDOMAIN\nIn words: this is a response from a recursive server saying the name does not exist.\n```\n\nSo the answer is RCODE 3: **NXDOMAIN**.",
     "link": {
       "title": "RFC 1035: Domain Names, Implementation and Specification — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc1035"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. `c0` = `11000000`. Top two bits `11` → pointer.\n2. Offset = `0xc00c & 0x3fff` = `0x000c` = 12.\n3. Bytes 0 to 11 are the header, so offset 12 is the first byte of the question name.\n4. The record's name is therefore the same as the question, e.g. `example.com`, in 2 bytes instead of 13.",
+    "workedExample": "1. `c0` = `11000000`. Top two bits `11` → pointer.\n2. Remove the two marker bits, worth 0xc000 together:\n\n```formula\no = P − 0xc000\no = 0xc00c − 0xc000 = 0x000c = 12\nwhere\no: the offset, in bytes from the start of the DNS message\nP: the two pointer bytes read as one 16-bit number, 0xc00c. Numbers starting 0x are hexadecimal (base 16)\nIn words: after dropping the top two bits, the pointer says \"continue reading the name at byte 12\".\n```\n\nIn code this is usually written as a bitwise AND, `0xc00c & 0x3fff`.\n3. Bytes 0 to 11 are the header, so offset 12 is the first byte of the question name.\n4. The record's name is therefore the same as the question, e.g. `example.com`, in 2 bytes instead of 13.",
     "link": {
       "title": "RFC 1035: Domain Names, Implementation and Specification — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc1035"
@@ -135,7 +135,7 @@
       },
       {
         "text": "About 230",
-        "explanation": "Correct. p = 200 / 65,536 ≈ 0.0031 per attempt. Solving 1 − (1 − p)^n = 0.5 gives n ≈ ln 2 / p ≈ 227."
+        "explanation": "Correct. Each attempt succeeds with probability 200 in 65,536, about 0.31%. About 227 independent attempts give a 50% overall chance; the worked example solves for that number."
       },
       {
         "text": "Impossible, because a cached name can only be attacked once per TTL",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "p = 200 / 65,536. The exact threshold is ceil(log(0.5) / log(1−p)) = 227 independent attempts, approximately 230. Fresh query names avoid waiting for a particular cached positive answer in this simplified vulnerable-resolver model. This does not establish wall-clock duration or effectiveness against modern caching/validation. With P independent uniformly selected ports also unknown, p becomes 200 / (65,536P).",
+    "workedExample": "The chance that n independent attempts all fail is (1 − p) multiplied by itself n times, so solve for the n that makes overall success one half:\n\n```formula\np = g / 2^16 = 200 / 65,536\np ≈ 0.00305\n1 − (1 − p)^n = 0.5\nn = ln(0.5) / ln(1 − p)\nn ≈ 226.8\n⌈n⌉ = 227\nwhere\np: the probability that one attempt succeeds\ng: distinct forged IDs per attempt, 200\nn: the number of independent attempts for a 50% overall chance\n^: \"to the power of\"; 2^16 = 65,536 possible IDs\nln: the natural logarithm, used to bring n down from the exponent\n⌈ ⌉: ceiling, round up to a whole number of attempts\n≈: approximately equal to\nIn words: at about 0.3% per attempt, 227 fresh attempts give an even chance of a successful cache poisoning, roughly 230.\n```\n\nFresh query names avoid waiting for a particular cached positive answer in this simplified vulnerable-resolver model. This does not establish wall-clock duration or effectiveness against modern caching/validation. With randomised source ports also unknown, the denominator grows:\n\n```formula\np_port = g / (2^16 × P)\nwhere\np_port: the per-attempt success probability when the port must also be guessed\ng: distinct forged responses per attempt, 200 here\nP: the number of source ports chosen from independently and uniformly\n^: \"to the power of\"; 2^16 = 65,536\nIn words: each extra port in the pool divides the attacker's per-attempt chance further.\n```",
     "link": {
       "title": "An illustrated guide to the Kaminsky DNS vulnerability — Unixwiz.net",
       "url": "http://unixwiz.net/techtips/iguide-kaminsky-dns-vuln.html"
@@ -153,11 +153,11 @@
     "id": "app-dns-wire-q6",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "Consider poisoning an unsigned answer in a recursive resolver through forged replies to its UDP authoritative-server queries. Which checks can make the stated off-path attack harder? Assume case-preserving servers for the case-randomisation option. Select all that apply.",
+    "prompt": "Consider cache poisoning of an unsigned answer in a recursive resolver through forged replies to its UDP authoritative-server queries. Which checks can make the stated off-path attack harder? Assume case-preserving servers for the case-randomisation option. Select all that apply.",
     "options": [
       {
         "text": "Randomising the UDP source port of each query",
-        "explanation": "Correct. If P ports are chosen independently and uniformly, they add log2(P) bits to the guessing model. Predictability, NAT and the actual pool can reduce that benefit."
+        "explanation": "Correct. If ports are chosen independently and uniformly from a pool, the guessing space is multiplied by the number of ports in the pool; every doubling of the pool adds one bit. Predictability, NAT and the actual pool can reduce that benefit."
       },
       {
         "text": "Randomising the letter case of query names (0x20 encoding)",
@@ -169,7 +169,7 @@
       },
       {
         "text": "Using DoH between laptop and resolver",
-        "explanation": "DoH protects the stub-to-resolver hop. Poisoning targets the resolver's queries to authoritative servers, which DoH does not cover."
+        "explanation": "DoH protects the stub-to-resolver hop. Cache poisoning targets the resolver's queries to authoritative servers, which DoH does not cover."
       },
       {
         "text": "Lowering every record's TTL to 5 seconds",
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "The authenticated parent DS binds the old child DNSKEY; under the assumptions, no remaining key matches it. The validator therefore classifies the fresh signed data as bogus and normally returns SERVFAIL with checking enabled. Non-validating clients or CD requests can behave differently. A real rollover must coordinate DNSKEYs, signatures and parent DS with overlap/cache timing; replacing the DS before its new key is available can also cause an outage. Follow a documented rollover method rather than treating one ordering rule as sufficient.",
+    "workedExample": "The authenticated parent DS identifies the old child DNSKEY; under the assumptions, no remaining key matches it. The validator therefore classifies the fresh signed data as bogus and normally returns SERVFAIL with checking enabled. Non-validating clients or CD requests can behave differently. A real rollover must coordinate DNSKEYs, signatures and parent DS with overlap and cache-expiry timing; replacing the DS before its new key is available can also cause an outage. Follow a documented rollover method rather than treating one ordering rule as sufficient.",
     "link": {
       "title": "RFC 4033: DNS Security Introduction and Requirements — IETF",
       "url": "https://www.rfc-editor.org/rfc/rfc4033"
@@ -297,7 +297,7 @@
       },
       {
         "text": "To reduce fragmentation risk: 1,232 + 40 bytes of basic IPv6 header + 8 bytes of UDP equals the 1,280-byte IPv6 minimum",
-        "explanation": "Correct. Fragments are often dropped by firewalls and can be spoofed for poisoning. Keeping UDP answers unfragmented and falling back to TCP for larger ones is more reliable."
+        "explanation": "Correct. Fragments are often dropped by firewalls and can be spoofed for cache poisoning. Keeping UDP answers unfragmented and falling back to TCP for larger ones is more reliable."
       },
       {
         "text": "Because the DNS header's length field is limited to 1,232",
@@ -309,7 +309,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "With a basic 40-byte IPv6 header and 8-byte UDP header, 1,280 − 40 − 8 = 1,232 bytes remain for DNS. Extension headers, encapsulation and IPv4 path constraints can require a different budget, so this is not a never-fragment guarantee. Larger required answers can use truncation and TCP fallback. Forged noninitial fragments can evade checks placed in the initial fragment, but successful injection also depends on reassembly identifiers, checksums, timing and cache rules.",
+    "workedExample": "```formula\nD = M − H_IPv6 − H_UDP\nD = 1,280 B − 40 B − 8 B = 1,232 B\nwhere\nD: the DNS payload that fits in one unfragmented packet\nM: the IPv6 minimum MTU, 1,280 bytes, which every IPv6 link must carry\nH_IPv6: the basic IPv6 header, 40 bytes\nH_UDP: the UDP header, 8 bytes\nB: bytes\nIn words: subtracting the IPv6 and UDP headers from the smallest guaranteed IPv6 packet leaves 1,232 bytes for DNS.\n```\n\nExtension headers, encapsulation and IPv4 path constraints can require a different budget, so this is not a never-fragment guarantee. Larger required answers can use truncation and TCP fallback. Forged noninitial fragments can evade checks placed in the initial fragment, but successful injection also depends on reassembly identifiers, checksums, timing and cache rules.",
     "link": {
       "title": "DNS Flag Day 2020",
       "url": "https://www.dnsflagday.net/2020/"

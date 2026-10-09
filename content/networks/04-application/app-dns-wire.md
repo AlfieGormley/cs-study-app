@@ -10,7 +10,7 @@ The System Design subject covered DNS from the outside: the resolution chain, re
 
 ## The message format
 
-Queries and responses share one format: a 12-byte **header** followed by four sections.
+Queries and responses share one format: a 12-byte **DNS header** followed by four sections.
 
 ```
 +---------------------------+
@@ -38,8 +38,8 @@ NSCOUNT, ARCOUNT
 ```
 
 - **ID**: chosen by the client and copied into the response. It is how a client matches answers to questions over connectionless UDP.
-- **QR**: 0 query, 1 response. **Opcode** is almost always 0 (standard query).
-- **AA**: authoritative answer. **TC**: truncated. **RD**: recursion desired (set by stub clients). **RA**: recursion available.
+- **QR**: 0 query, 1 response. The **DNS opcode** is almost always 0 (standard query).
+- **AA**: authoritative answer. **TC**: truncated. **RD**: recursion desired (set by stub clients). The **RA bit**: recursion available.
 - The Z bits now include **AD** (authenticated data) and **CD** (checking disabled) for DNSSEC.
 - **RCODE**: 0 NOERROR, 1 FORMERR, 2 SERVFAIL, 3 NXDOMAIN, 5 REFUSED.
 
@@ -53,11 +53,20 @@ www.example.com  becomes
 03 63 6f 6d 00
 ```
 
-A label is at most 63 bytes (the top two bits of the length must be `00`), and a whole name at most 255 bytes.
+A label is at most 63 bytes (the top two bits of the length must be `00`), and a whole name at most 255 bytes. The 63 comes from the six bits left for the length:
+
+```formula
+L_max = 2^6 − 1 = 63 B
+where
+L_max: the longest label, in bytes (B)
+^: "to the power of": 2^6 means 2 multiplied by itself 6 times, which is 64
+B: bytes
+In words: with two of the length byte's eight bits reserved, six bits remain, and six bits count from 0 to 63.
+```
 
 ### Building a query by hand
 
-This builds an ordinary ASCII-label question, not a full resolver. It accepts an optional final dot, checks wire-length bounds, and uses a random transaction ID unless a test ID is supplied. Internationalised presentation names require a suitable IDNA conversion before this restricted encoder.
+This builds an ordinary ASCII-label question, not a full resolver. It accepts an optional trailing `.`, checks wire-length bounds, and uses a random DNS transaction ID unless a test ID is supplied. Internationalised presentation names require a suitable IDNA conversion before this restricted encoder.
 
 ```python
 import secrets, struct
@@ -95,7 +104,22 @@ print(len(q))  # 29
 print(q[:4].hex(" "))  # ab cd 01 00
 ```
 
-29 bytes: 12 of header, 13 of name (`07 example 03 com 00`) and 4 of type and class. A hypothetical reply with flags `0x8180` would decode as QR=1, RD=1, RA=1 and RCODE 0.
+The length adds up from the three parts:
+
+```formula
+Q = H + N + T
+Q = 12 B + 13 B + 4 B = 29 B
+N = (1 + 7) B + (1 + 3) B + 1 B = 13 B
+where
+Q: the total query length, in bytes (B)
+H: the fixed header: six 16-bit fields, 12 bytes
+N: the encoded name: a length byte plus "example" (7 letters), a length byte plus "com" (3 letters), then the zero byte for the root
+T: QTYPE and QCLASS, two 16-bit fields, 4 bytes
+B: bytes
+In words: 12 bytes of header, 13 bytes of length-prefixed name and 4 bytes of type and class make the 29 bytes printed above.
+```
+
+Note that the encoded name is two bytes longer than the dotted text `example.com` (11 characters): one length byte per label replaces each `.` separator, plus the leading length and the root byte. A hypothetical reply with flags `0x8180` would decode as `QR=1, RD=1, RA=1` and RCODE 0.
 
 ### Resource records and compression
 
@@ -112,15 +136,42 @@ c0 0c  name: pointer to offset 12
 xx xx xx xx  IPv4 address
 ```
 
+The 14-bit offset is what remains after removing the two `11` marker bits, which are worth `0xc000` together:
+
+```formula
+o = P − 0xc000
+o = 0xc00c − 0xc000 = 0x0c = 12
+where
+o: the offset, counted in bytes from the first byte of the DNS message, where the rest of the name is stored
+P: the two pointer bytes read as one 16-bit number, here 0xc00c. Numbers starting 0x are hexadecimal (base 16); 0x0c is 12
+In words: drop the top two marker bits and the remaining number is the byte position to jump to.
+```
+
+The TTL bytes decode the same way, as one big-endian number: `00 00 01 0e` is 1 × 256 + 14 = 270 seconds.
+
 Offset 12 is where the question's name starts, straight after the header, so `c0 0c` means "example.com". Parsers must guard against pointer loops; a self-referential pointer can otherwise cause an infinite loop or resource exhaustion. Parsers also need bounds and expanded-name-length checks.
 
 ## Size limits, EDNS and TCP
 
-Classic DNS over UDP limits messages to **512 bytes**. If required response data does not fit, the server sets **TC** and a resolver can retry over **TCP** (port 53, with each message prefixed by a 2-byte length).
+Classic DNS over UDP limits messages to **512 bytes**. If required response data does not fit, the server sets the **TC bit** and a resolver can retry over **TCP** (port 53, with each message prefixed by a 2-byte length).
 
 **EDNS(0)** ([RFC 6891](https://www.rfc-editor.org/rfc/rfc6891)) extends DNS without changing the header. The client adds an **OPT** pseudo-record to the additional section that advertises a larger UDP buffer size and carries flags such as **DO** ("DNSSEC OK", please include signatures) and options such as cookies and client subnet.
 
-UDP datagrams exceeding path capacity can be fragmented, dropped or trigger an error, depending on IP version, flags and path. Fragment handling can create reliability and spoofing risks. The 2020 **DNS Flag Day** recommended an EDNS buffer of **1,232 bytes**, because 1,232 + 40 bytes of basic IPv6 header + 8 bytes of UDP equals 1,280. This reduces fragmentation risk with those assumptions; extension headers, tunnels and IPv4 paths can require different budgets. Larger required answers can fall back to TCP.
+UDP datagrams exceeding path capacity can be fragmented, dropped or trigger an error, depending on IP version, flags and path. Fragment handling can create reliability and spoofing risks. The 2020 **DNS Flag Day** recommended an EDNS buffer of **1,232 bytes**, so that a full UDP packet fits the smallest MTU every IPv6 link must support:
+
+```formula
+D = M − H_IPv6 − H_UDP
+D = 1,280 B − 40 B − 8 B = 1,232 B
+where
+D: the largest DNS message that fits without fragmentation, in bytes (B)
+M: the IPv6 minimum MTU: every IPv6 link must carry packets of 1,280 bytes
+H_IPv6: the basic IPv6 header, 40 bytes, with no extension headers
+H_UDP: the UDP header, 8 bytes
+B: bytes
+In words: take the smallest packet IPv6 guarantees and subtract the two headers; 1,232 bytes are left for DNS.
+```
+
+This reduces fragmentation risk with those assumptions; extension headers, tunnels and IPv4 paths can require different budgets. Larger required answers can fall back to TCP.
 
 ## Cache poisoning
 
@@ -132,11 +183,21 @@ For ordinary outstanding UDP queries, necessary response-matching checks include
 - the transaction **ID**,
 - the source IP and port it sent to, arriving at the **source port** it sent from.
 
-An off-path attacker cannot see the query, so they must guess. With a fixed source port, if all other checked fields are known and the ID is uniform, the ID-match probability is **1 in 65,536** per distinct guess. Acceptance also depends on racing the real response and passing other checks.
+An off-path attacker cannot see the query, so they must guess. With a fixed source port, if all other checked fields are known and the ID is uniform, each distinct guess has the same small chance of matching:
+
+```formula
+p_1 = 1 / 2^16 = 1 / 65,536
+where
+p_1: the probability that one forged response carries the right DNS transaction ID
+^: "to the power of": 2^16 is 2 multiplied by itself 16 times
+In words: a 16-bit ID has 65,536 possible values, so one blind guess matches once in 65,536 tries.
+```
+
+Acceptance also depends on racing the real response and passing other checks.
 
 ### The Kaminsky attack (2008)
 
-The old wisdom was that a poisoning attempt only worked when the target name was not already cached, so an attacker got one try per TTL. Dan Kaminsky removed that limit:
+The old wisdom was that a cache-poisoning attempt only worked when the target name was not already cached, so an attacker got one try per TTL. Dan Kaminsky removed that limit:
 
 1. Make the resolver look up a fresh random name unlikely to have a cached answer: `x71.bank.example`.
 2. Race the real answer with a flood of forged responses with guessed IDs.
@@ -144,13 +205,56 @@ The old wisdom was that a poisoning attempt only worked when the target name was
 4. If one wins, the resolver caches the attacker's server as authoritative for the whole zone.
 5. If none wins, try `x72.bank.example` immediately. There is no TTL to wait for.
 
-In a simplified model with 100 distinct guesses and only a uniform 16-bit ID unknown, p = 100 / 65,536 ≈ 0.153% per attempt. Independent attempts need about 454 trials for 50% success. This is probability arithmetic, not a measured attack duration; resolver caching and checks can change feasibility.
+How many attempts does this take? Each attempt either succeeds or fails independently, so the chance that *every* attempt fails is the per-attempt failure chance multiplied by itself once per attempt. Setting the overall success chance to one half and solving for the number of attempts gives:
+
+```formula
+p = g / 2^16
+p = 100 / 65,536 ≈ 0.00153
+1 − (1 − p)^n = 0.5
+n = ln(0.5) / ln(1 − p)
+n ≈ 453.9 ≈ 454
+n ≈ 0.693 / p ≈ 454
+where
+p: the probability that one attempt succeeds, about 0.153%
+g: the number of distinct forged IDs the attacker races in per attempt; here 100
+n: the number of independent attempts needed for a 50% overall chance of success
+^: "to the power of"; (1 − p)^n is (1 − p) multiplied by itself n times
+ln: the natural logarithm, which turns "to the power of n" into "times n" so n can be solved for. For small p, ln(1 − p) is very close to −p, and ln(0.5) ≈ −0.693, which gives the quick estimate n ≈ 0.693 / p
+≈: approximately equal to
+In words: with a 0.15% chance per attempt, about 454 fresh attempts give an even chance of a successful cache poisoning.
+```
+
+This is probability arithmetic, not a measured attack duration; resolver caching and checks can change feasibility.
 
 ### Defences
 
-- **Source port randomisation.** The emergency fix: pick a random UDP source port per query. For a hypothetical 28,000 independent uniformly selected ports and 16-bit ID, the joint space is 1,835,008,000 combinations. Actual resolver pools, NAT behaviour and predictability determine effective entropy; they need not equal the OS ephemeral range.
+- **Source port randomisation.** The emergency fix: pick a random UDP source port per query. Because the attacker must now guess the port *and* the ID, the possibilities multiply:
+
+```formula
+S = P × 2^16
+S = 28,000 × 65,536 = 1,835,008,000
+where
+S: the number of equally likely (port, ID) combinations
+P: the number of source ports the resolver picks from, independently and uniformly; here a hypothetical 28,000
+^: "to the power of"; 2^16 = 65,536 possible IDs
+In words: 28,000 ports times 65,536 IDs gives about 1.8 billion combinations, so each guess is 28,000 times less likely to hit.
+```
+
+Actual resolver pools, NAT behaviour and predictability determine effective entropy; they need not equal the OS ephemeral range.
 - **Bailiwick checking.** Restrict which supplied records can update cache entries under the responding server’s authority and the resolver’s delegation context. A response about `x71.bank.example` must not set records for `google.com`.
-- **0x20 encoding.** Randomise the letter case of the query (`wWw.ExAmPlE.cOm`). With compatible servers that preserve question case and a resolver that checks it, randomising each independently chosen ASCII letter adds a bit to the guessing model. Not every server preserves case, and fallback policies matter.
+- **0x20 encoding.** Randomise the letter case of the query (`wWw.ExAmPlE.cOm`). With compatible servers that preserve question case and a resolver that checks it, randomising each independently chosen ASCII letter adds one bit to the guessing model:
+
+```formula
+S_case = S × 2^ℓ
+where
+S_case: the guessing space with case randomisation
+S: the guessing space from the ID and source port alone
+ℓ: the number of ASCII letters in the query name whose case is randomised; www.example.com has 13
+^: "to the power of": each letter doubles the space
+In words: every letter whose case is chosen at random doubles the number of possibilities an off-path attacker must cover.
+```
+
+Not every server preserves case, and fallback policies matter.
 - **DNS cookies** (RFC 7873) and TCP make some off-path spoofing harder, but do not provide DNSSEC’s signed-data chain or protect against every on-path attacker.
 - **DNSSEC** cryptographically authenticates covered RRsets through a configured trust chain. Other authenticated transports protect their own endpoints and hops; these guarantees are different.
 
@@ -169,7 +273,7 @@ New record types:
 | DS | Key tag, algorithm and digest fields binding a child owner name and DNSKEY, in the parent |
 | NSEC / NSEC3 | RRsets used with signatures for authenticated denial of a name/type or delegation properties |
 
-Signatures cover an **RRset** (records with the same owner name, class and type) and have an inception and expiry time, so signatures must be renewed before they expire; affected data becomes bogus for validators enforcing the chain if no valid signatures remain.
+Signatures cover an **RRset** (records with the same owner name, class and type) and have an inception and expiry time, so signatures must be renewed before they expire; affected data becomes bogus for validating resolvers enforcing the chain if no valid signatures remain.
 
 A split-key design uses a **KSK** to authenticate the DNSKEY RRset and a **ZSK** for other signed RRsets. These are operational roles, not mandatory two-key enforcement; a combined signing key is possible. A parent DS authenticates a selected child DNSKEY, which then authenticates the child DNSKEY set.
 
@@ -184,7 +288,7 @@ configured root trust anchor
   child key verifies A RRset RRSIG
 ```
 
-A validating resolver walks this chain. AD can signal that the relevant answer/authority data was validated, subject to request flags and response rules. With checking enabled, bogus data normally produces SERVFAIL; an authenticated unsigned delegation is **insecure**, not automatically bogus. CD can request data without that rejection. A non-validating stub must trust the resolver and protected path for its AD assertion; a validating stub can check signatures itself.
+A validating resolver walks this chain. AD can signal that the relevant answer/authority data was validated, subject to request flags and response rules. With checking enabled, bogus data normally produces SERVFAIL; an authenticated unsigned delegation is an **insecure delegation**, not automatically bogus. CD can request data without that rejection. A non-validating stub must trust the resolver and protected path for its AD assertion; a validating stub can check signatures itself.
 
 ### Proving non-existence
 
@@ -192,7 +296,7 @@ An attacker could also forge "this name does not exist". To sign a negative answ
 
 ### Costs and pitfalls
 
-- **Bigger answers.** Signatures and keys make responses much larger, which means more truncation, TCP fallback and fragmentation, and makes signed zones more attractive for **amplification** DDoS. ECDSA P-256 (algorithm 13) has far smaller signatures than RSA-2048 in the compared algorithms (64-byte ECDSA signatures versus 256-byte RSA-2048 signatures). No deployment-prevalence claim is made here.
+- **Bigger answers.** Signatures and keys make responses much larger, which means more truncation, TCP fallback and fragmentation, and makes signed zones more attractive for **amplification attacks** (a form of DDoS). ECDSA P-256 (algorithm 13) has far smaller signatures than RSA-2048 in the compared algorithms (64-byte ECDSA signatures versus 256-byte RSA-2048 signatures). No deployment-prevalence claim is made here.
 - **Operational fragility.** Expired signatures or a key rollover with a stale DS record can make affected signed data fail validation once usable cached data and overlapping valid chains are exhausted.
 - **Validator DoS.** The 2024 KeyTrap vulnerability showed that crafted key-tag collisions and many candidate signatures can force excessive validation work in vulnerable implementations. This refers to key-tag matching, not a break of signature cryptography; no universal CPU duration is asserted here.
 - **Last mile.** DNSSEC authenticates signed data to whichever endpoint performs validation, through intervening caches or transports. It does nothing about who can *see* your queries.
@@ -223,7 +327,7 @@ An independently selected DoH resolver can bypass policies implemented only in t
 - A DNS message is a 12-byte header (ID, flags, four counts) plus question, answer, authority and additional sections.
 - Names are length-prefixed labels; pointers with top bits `11` compress repeated names, as in `c0 0c`.
 - UDP DNS is limited to 512 bytes without EDNS; TC signals truncation and can prompt a TCP retry. The 1,232-byte recommendation assumes a basic IPv6+UDP budget and is not a universal path guarantee.
-- Off-path poisoning is a guessing game on ID and source port; Kaminsky made it repeatable, and randomisation, bailiwick rules and DNSSEC defend against it.
+- Off-path cache poisoning is a guessing game on ID and source port; Kaminsky made it repeatable, and randomisation, bailiwick rules and DNSSEC defend against it.
 - DNSSEC signs RRsets in a chain from the root's key via DS records; it gives integrity, not privacy. Authenticated DoT/DoH protect confidentiality and integrity on the client-resolver transport. They do not replace independent DNSSEC validation of authoritative data.
 
 ## Further reading

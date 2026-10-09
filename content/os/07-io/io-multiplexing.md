@@ -24,7 +24,7 @@ The interesting question is how much work each API does per call, and whether th
 
 ## select
 
-`select` (4.2BSD, 1983) takes three **bitmaps** (`fd_set`): descriptors to watch for reading, writing and exceptional conditions. Bit *k* represents descriptor *k*.
+`select()` (4.2BSD, 1983) takes three **bitmaps** (`fd_set`): descriptors to watch for reading, writing and exceptional conditions. Bit *k* represents descriptor *k*.
 
 ```c
 fd_set rfds;
@@ -58,14 +58,25 @@ What happens on each call:
 4. The kernel **overwrites** the bitmaps with the ready set and copies them back.
 5. User code scans all N descriptors to find the set bits.
 
-So every call costs O(maxfd), even if only one connection is active. It has two more problems:
+So the work per call grows with the highest descriptor number, not with how many descriptors are busy:
 
-- **Hard limit.** `fd_set` is a fixed-size bitmap of `FD_SETSIZE` bits, which is **1024** on Linux glibc. Calling `FD_SET` on descriptor 1024 or above writes past the end of the structure: undefined behaviour, often memory corruption.
+```formula
+W_select = O(maxfd)
+where
+W_select: the work one select() call does (copying, checking and scanning bitmap bits)
+maxfd: the highest descriptor number being watched; the kernel checks bits 0 to maxfd
+O(...): Big-O notation, "grows at most in proportion to" the quantity in brackets, ignoring constant factors
+In words: one select() call costs time in proportion to the highest descriptor number, even if only one connection is active.
+```
+
+For example, if a server's descriptors reach number 900, every call walks about 900 bits even when a single connection has data. It has two more problems:
+
+- **Fixed descriptor limit.** `fd_set` is a fixed-size bitmap of `FD_SETSIZE` bits, which is **1024** on Linux glibc. Calling `FD_SET` on descriptor 1024 or above writes past the end of the structure: undefined behaviour, often memory corruption.
 - **Destructive.** Because the kernel overwrites the sets, you must rebuild them before every call (hence the `FD_ZERO` loop above).
 
 ## poll
 
-`poll` (System V, mid-1980s) replaces bitmaps with an array of structures:
+`poll()` (System V, mid-1980s) replaces bitmaps with an array of structures:
 
 ```c
 struct pollfd p[MAXCONN];
@@ -87,11 +98,38 @@ This removes the fixed fd_set bitmap limit (process and resource limits still ap
 
 ## Why scanning idle descriptors can be costly
 
-Suppose 10,000 connections, of which 10 are active at any moment, and the server calls `poll` 10,000 times a second.
+Suppose 10,000 connections, of which 10 are active at any moment, and the server calls `poll()` 10,000 times a second. Because `poll()` checks every entry on every call, the work per second is the number of registered entries times the call rate, while the useful work is only the ready entries times the call rate:
 
-- Entries examined per call: 10,000.
-- Entries examined per second: 10,000 × 10,000 = **100 million**, to find about 100,000 events.
-- With an 8-byte struct pollfd, the input array is 80,000 bytes. In Linux v6.12, the output path writes each 2-byte revents field rather than copying the whole structure back: 20,000 result bytes. These counts exclude other access and scan costs.
+```formula
+E_scan = N × r
+E_scan = 10,000 × 10,000 /s
+E_scan = 100,000,000 /s
+E_ready = R × r = 10 × 10,000 /s
+E_ready = 100,000 /s
+where
+E_scan: entries the kernel examines per second
+E_ready: events actually found per second
+N: registered connections (entries in the pollfd array), here 10,000
+R: connections that are ready on each call, here 10
+r: poll() calls per second, here 10,000
+s: second; "/s" means per second
+In words: poll examines a thousand entries for every event it finds, because its work follows the number of connections rather than the number that are active.
+```
+
+The bytes copied per call follow the same pattern:
+
+```formula
+B_in = N × 8 B = 80,000 B
+B_out = N × 2 B = 20,000 B
+where
+B_in: bytes copied into the kernel per call, in bytes (B)
+B_out: bytes written back per call, in bytes (B)
+N: entries in the array, here 10,000
+B: byte, 8 bits
+In words: each call copies the whole 80,000-byte array in and writes 20,000 bytes of results back, however few connections are busy.
+```
+
+The 8 bytes are the size of one `struct pollfd` on Linux (a 4-byte descriptor plus two 2-byte event fields). In Linux v6.12, the output path writes each 2-byte `revents` field rather than copying the whole structure back. These counts exclude other access and scan costs.
 
 The model performs much more scanning than useful event delivery; how much CPU time that consumes requires measurement. The cost is proportional to *connections*, when it should be proportional to *activity*.
 
@@ -145,6 +183,27 @@ When you add a descriptor, epoll hooks a **callback** onto that file's wait queu
 
 `epoll_wait` processes ready-list candidates and rechecks readiness, returning up to maxevents results. It avoids an obligatory full interest-set scan. **O(ready)** is a useful simplified model, not an exact bound based only on returned events: stale candidates, contention and device callbacks add work. The `data` field is yours: most servers store a pointer to their per-connection struct rather than the fd.
 
+The three APIs can be compared with one simplified cost model per wait call:
+
+```formula
+W_select = O(maxfd)
+W_poll = O(N)
+W_epoll ≈ O(R)
+C_ctl = O(log_2(N))
+where
+W_select, W_poll, W_epoll: the work one wait call does with each API
+maxfd: the highest descriptor number passed to select()
+N: the number of registered descriptors (connections being watched)
+R: the number of ready candidates on epoll's ready list, the "O(ready)" of the text
+C_ctl: the tree part of one epoll_ctl() change (insert, modify or delete in the red-black tree)
+log_2: logarithm base 2, the number of times you can halve a number before reaching 1
+O(...): Big-O notation, "grows at most in proportion to" the quantity in brackets, ignoring constant factors
+≈: approximately; epoll's real cost also includes stale candidates, locking and callbacks
+In words: select and poll pay for every watched descriptor on every call, epoll pays roughly for the ready ones, and epoll moves the per-descriptor cost into a logarithmic registration step.
+```
+
+With 10,000 connections of which 10 are ready, poll checks 10,000 entries per call while epoll handles about 10 candidates; registering one more descriptor in a tree of 10,000 takes about 13 tree steps, because log₂(10,000) ≈ 13.3. The model ignores constant factors, so for a handful of descriptors poll can be just as fast.
+
 | API | Per-wait cost | FD limit | State kept |
 |---|---|---|---|
 | select | Scan model O(maxfd) | fd numbers < 1024 in glibc fd_set | No persistent interest set |
@@ -158,7 +217,7 @@ There is a trade-off. Every change of interest (say, starting to watch for `EPOL
 epoll offers two notification modes. The names come from electronics: a level-triggered signal reacts to the *state* being high; an edge-triggered one reacts to the *transition*.
 
 - **Level-triggered (default)**: a ready descriptor remains eligible for reporting until the condition clears; maxevents, other ready descriptors and races affect which call returns it. If 4 KB is waiting and you read 1 KB, the next `epoll_wait` reports it again. This is how `select` and `poll` behave.
-- **Edge-triggered (`EPOLLET`)**: notifications arise from activity/readiness changes, and multiple events can coalesce. It is not a promise of exactly one notification per empty-to-nonempty transition. If you leave data unread, another reminder is not guaranteed; a connection can stall.
+- **Edge-triggered (`EPOLLET`)**: notifications arise from activity/readiness changes, and multiple events can be merged into one report. It is not a promise of exactly one notification per empty-to-nonempty transition. If you leave data unread, another reminder is not guaranteed; a connection can stall.
 
 With edge-triggered mode, the rule is: **use non-blocking descriptors and read (or write) until `EAGAIN`**.
 
@@ -218,7 +277,7 @@ Differences from epoll:
 - **Extra information.** For `EVFILT_READ` on a socket, the returned `data` field says how many bytes are available.
 - **Edge-like behavior** can use EV_CLEAR, with filter-specific semantics. EV_ONESHOT deletes the event after delivery; EV_DISPATCH disables it for later re-enabling, closer to epoll's one-shot rearm model.
 
-Windows takes a different path: IOCP is completion-based (previous lesson). Solaris has event ports. Libraries such as libuv, libevent and Rust's mio wrap all of these behind one interface.
+Windows takes a different approach: IOCP is completion-based (previous lesson). Solaris has event ports. Libraries such as libuv, libevent and Rust's mio wrap all of these behind one interface.
 
 ## C10K, and after
 

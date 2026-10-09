@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "About 67 ns",
-        "explanation": "Correct. 84 bytes × 8 = 672 bits; 10^10 / 672 ≈ 14.88 M packets/s, so 1 / 14.88 M ≈ 67 ns."
+        "explanation": "Correct. 84 bytes is 672 bits; at 10 billion bits per second that is about 14.88 million packets per second, or one every 67 ns."
       },
       {
         "text": "About 6.7 ns",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Using the supplied occupancy model, 84 × 8 =672 bit-times. At10^10 bits/s, spacing is672/10^10 seconds =67.2 ns, corresponding to about14.88 million frames/s. This is aggregate arrival spacing; memory-level parallelism, batching, offloads and multiple cores determine processing capacity. No fixed DRAM/syscall latency is implied.",
+    "workedExample": "Using the supplied occupancy model:\n\n```formula\nL = 84 B × 8 bit/B = 672 bit\nT = L / C\nT = 672 bit / 10^10 bit/s\nT = 6.72 × 10^−8 s = 67.2 ns\nP = 1 / T ≈ 14.88 × 10^6 /s\nwhere\nL: wire occupancy of one minimum frame, in bits\nC: link rate, 10 Gbit/s = 10^10 bit/s\nT: time between back-to-back frames\nP: maximum frames per second\nB: byte; bit/B means 8 bits per byte\nbit: binary digit, the unit of data\ns: second; \"/s\" means per second\nns: nanosecond, 10^−9 s\n≈: approximately equal to\nIn words: each minimum frame occupies 672 bit-times, which at 10 Gbit/s is 67.2 ns, about 14.88 million frames a second.\n```\n This is aggregate arrival spacing; memory-level parallelism, batching, offloads and multiple cores determine processing capacity. No fixed DRAM/syscall latency is implied.",
     "link": {
       "title": "NAPI — Linux kernel documentation",
       "url": "https://docs.kernel.org/networking/napi.html"
@@ -41,11 +41,11 @@
       },
       {
         "text": "The user-space buffer passed to `recv()`",
-        "explanation": "That's your buffer; `recv()` copies data out of skbs into it."
+        "explanation": "That's your buffer; `recv()` copies the data from skbs into it."
       },
       {
         "text": "The kernel's packet structure: metadata plus pointers to headers and data, passed between the network layers",
-        "explanation": "Correct for the conventional skb-based stack. Drivers may build, reuse or allocate these structures as appropriate, while native XDP drops can occur before that path."
+        "explanation": "Correct for the conventional skb-based stack. Drivers may build, reuse or allocate these structures as appropriate, while native XDP drops can occur before that point in the receive path."
       },
       {
         "text": "A socket's send buffer limit",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Path of one packet:\n\n```\nRX ring buffer (DMA)\n  -> driver builds skb\n  -> GRO -> IP -> TCP\n  -> socket receive queue (skbs)\n  -> recv() copies to user\n```\n\nThe skb is the unit of work in the stack. XDP is fast partly because it runs *before* the skb is allocated.",
+    "workedExample": "Route of one packet through the kernel:\n\n```\nRX ring buffer (DMA)\n  -> driver builds skb\n  -> GRO -> IP -> TCP\n  -> socket receive queue (skbs)\n  -> recv() copies to user\n```\n\nThe skb is the unit of work in the network stack. XDP is fast partly because it runs *before* the skb is allocated.",
     "link": {
       "title": "NAPI — Linux kernel documentation",
       "url": "https://docs.kernel.org/networking/napi.html"
@@ -123,18 +123,18 @@
     "id": "io-network-stack-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume stable conventional RSS across8 queues, balanced mapping for many independent flows, fixed IRQ affinity and no RPS/RFS. Why can one TCP backup flow still concentrate receive processing on one CPU?",
+    "prompt": "Assume stable conventional Receive Side Scaling (RSS) across 8 queues, balanced mapping for many independent flows, fixed IRQ affinity and no RPS/RFS. Why can one TCP backup flow still concentrate receive processing on one CPU?",
     "options": [
       {
-        "text": "RSS is disabled for TCP",
-        "explanation": "RSS hashes TCP flows by default; that's its main use."
+        "text": "Receive Side Scaling is disabled for TCP",
+        "explanation": "Receive Side Scaling hashes TCP flows by default; that's its main use."
       },
       {
         "text": "The NIC's indirection table only has one entry",
         "explanation": "Possible in a misconfiguration, but then *all* flows would hit one CPU. Here only the one big flow does."
       },
       {
-        "text": "RSS hashes per flow, so every packet of one connection maps to the same queue and CPU",
+        "text": "Receive Side Scaling hashes per flow, so every packet of one connection maps to the same queue and CPU",
         "explanation": "Correct. That keeps packets in order and caches warm, but a single elephant flow can't spread across queues. Use multiple parallel streams."
       },
       {
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. A stable flow tuple hashes to one table bucket and RX queue.\n2. In the stated configuration, that queue is handled on one CPU.\n3. Additional independent streams can hash to other queues, but collisions are possible. Eight streams do not imply eight distinct queues.\n4. In an ideal independent uniform model, eight streams across eight queues occupy on average8 × (1 − (7/8)^8) ≈5.25 queues; real hashes/configuration can differ.",
+    "workedExample": "1. A stable flow tuple hashes to one table bucket and RX queue.\n2. In the stated configuration, that queue is handled on one CPU.\n3. Additional independent streams can hash to other queues, but collisions are possible. Eight streams do not imply eight distinct queues.\n4. In an ideal model where each stream lands on a uniformly random queue, independently:\n\n```formula\nQ = n × (1 − (1 − 1/n)^k)\nQ = 8 × (1 − (7/8)^8)\nQ ≈ 8 × (1 − 0.344) ≈ 5.25\nwhere\nQ: expected number of queues used\nn: number of RX queues, here 8\nk: number of parallel streams, here 8\n≈: approximately equal to\nIn words: each queue stays empty with probability (7/8)^8, about 34 %, so eight streams use only about 5.25 of the eight queues on average.\n```\n\nReal hashes and configuration can differ.",
     "link": {
       "title": "Scaling in the Linux Networking Stack — kernel documentation",
       "url": "https://docs.kernel.org/networking/scaling.html"
@@ -169,7 +169,7 @@
       },
       {
         "text": "RPS requires hardware support in the NIC",
-        "explanation": "That's RSS. RPS is purely software, which is the point."
+        "explanation": "That's Receive Side Scaling. RPS is purely software, which is the point."
       }
     ],
     "answer": [
@@ -177,7 +177,7 @@
       1,
       2
     ],
-    "workedExample": "| Mechanism | Where | What |\n|---|---|---|\n| RSS | NIC | hash → RX queue |\n| RPS | kernel | hash → CPU backlog |\n| RFS | kernel | flow → consumer's CPU |\n| XPS | kernel | CPU → TX queue |\n\nOnly RSS (and accelerated RFS) need NIC support.",
+    "workedExample": "| Mechanism | Where | What |\n|---|---|---|\n| Receive Side Scaling | NIC | hash → RX queue |\n| RPS | kernel | hash → CPU backlog |\n| RFS | kernel | flow → consumer's CPU |\n| XPS | kernel | CPU → TX queue |\n\nOnly Receive Side Scaling (and accelerated RFS) need NIC support.",
     "link": {
       "title": "Scaling in the Linux Networking Stack — kernel documentation",
       "url": "https://docs.kernel.org/networking/scaling.html"
@@ -237,7 +237,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Verdicts:\n\n- `DROP`: free the buffer.\n- `PASS`: build an skb, continue the normal path.\n- `TX`: send back out the same port.\n- `REDIRECT`: another NIC, CPU or AF_XDP socket.\n- `ABORTED`: drop and fire a trace event (program error).",
+    "workedExample": "Verdicts:\n\n- `XDP_DROP`: free the buffer.\n- `XDP_PASS`: build an skb, continue the normal path.\n- `XDP_TX`: send back out the same port.\n- `XDP_REDIRECT`: another NIC, CPU or AF_XDP socket.\n- `XDP_ABORTED`: drop and fire a trace event (program error).",
     "link": {
       "title": "The eXpress Data Path (XDP paper and data)",
       "url": "https://github.com/tohojo/xdp-paper"
@@ -267,7 +267,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Normal netfilter drops occur later than native XDP receive classification. Native XDP can discard matched unwanted packets before normal skb/stack work while returning PASS for legitimate traffic. Benchmark the actual classifier, driver, packet mix and mode; this is a path-cost argument, not proof of a particular packet rate or current vendor deployment.",
+    "workedExample": "Normal netfilter drops occur later than native XDP receive classification. Native XDP can discard matched unwanted packets before normal skb/stack work while returning PASS for legitimate traffic. Benchmark the actual classifier, driver, packet mix and mode; this is an argument about per-packet cost, not proof of a particular packet rate or current vendor deployment.",
     "link": {
       "title": "How to drop 10 million packets per second — Cloudflare blog",
       "url": "https://blog.cloudflare.com/how-to-drop-10-million-packets/"
@@ -285,7 +285,7 @@
       },
       {
         "text": "The NIC is unbound from the kernel, so `tcpdump`, `ss` and iptables no longer see its traffic",
-        "explanation": "Correct in the stated exclusive data-path model: ordinary kernel-stack packet tools do not see that bypassed traffic. The kernel still manages the VFIO device; DPDK-specific capture and other modes can differ."
+        "explanation": "Correct in the stated exclusive data path model: ordinary kernel-stack packet tools do not see that bypassed traffic. The kernel still manages the VFIO device; DPDK-specific capture and other modes can differ."
       },
       {
         "text": "You need your own TCP/IP stack if you want TCP on that NIC",
@@ -301,7 +301,7 @@
       1,
       2
     ],
-    "workedExample": "The stated design avoids ordinary per-packet syscall/skb processing and dedicates CPU polling time. Its bypassed traffic is outside normal kernel-stack tooling, and TCP requires an appropriate stack/integration. DPDK does not universally require these choices: bifurcated drivers, alternative PMDs and power-management modes change the tradeoffs.",
+    "workedExample": "The stated design avoids ordinary per-packet syscall/skb processing and dedicates CPU polling time. Its bypassed traffic is outside normal kernel-stack tooling, and TCP requires an appropriate TCP/IP stack or integration. DPDK does not universally require these choices: bifurcated drivers, alternative PMDs and power-management modes change the tradeoffs.",
     "link": {
       "title": "About DPDK — dpdk.org",
       "url": "https://www.dpdk.org/about/"
@@ -311,27 +311,27 @@
     "id": "io-network-stack-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A Linux TCP sender uses ordinary copied send() with TSO enabled and supported. Which description best captures segmentation of the bytes accepted by send(), assuming a conventional qdisc path?",
+    "prompt": "A Linux TCP sender uses ordinary copied send() with TCP segmentation offload enabled and supported. Which description best captures TCP segmentation of the bytes accepted by send(), assuming the packets pass through a conventional qdisc?",
     "options": [
       {
         "text": "The kernel splits the data into 1,500-byte packets in `send()` and queues each to the NIC",
-        "explanation": "With TSO, segmentation is deferred. TCP passes large skbs down and the NIC cuts them."
+        "explanation": "With segmentation offload, TCP segmentation is deferred. TCP passes large skbs down and the NIC cuts them."
       },
       {
         "text": "The NIC DMAs the 1 MB straight from the application's buffer with no copy",
         "explanation": "Plain `send()` copies into kernel memory. Zero-copy needs `MSG_ZEROCOPY` or `sendfile`."
       },
       {
-        "text": "The qdisc is bypassed whenever TSO is enabled",
-        "explanation": "TSO doesn't bypass queueing; packets still go through the qdisc (e.g. fq_codel or fq)."
+        "text": "The qdisc is bypassed whenever TCP segmentation offload is enabled",
+        "explanation": "Segmentation offload doesn't bypass queueing; packets still go through the qdisc (e.g. fq_codel or fq)."
       },
       {
         "text": "Accepted bytes enter the socket send queue; larger skbs pass through queueing, and the NIC performs supported TCP segmentation",
-        "explanation": "Correct. TSO/GSO keep per-packet costs low by processing big chunks in the stack and segmenting as late as possible."
+        "explanation": "Correct. TSO/GSO keep per-packet costs low by processing big chunks in the network stack and segmenting as late as possible."
       }
     ],
     "answer": 3,
-    "workedExample": "1. send may accept fewer bytes than requested; the application handles the remainder.\n2. In the ordinary copied path, accepted bytes are queued in kernel memory.\n3. Supported TSO lets the stack submit larger aggregates; allowed size varies by kernel/device features.\n4. Queueing and driver submission lead to DMA, and the NIC segments according to TCP/MTU constraints.\n5. TX completion releases resources when safe; it is not proof that the remote application read the data.",
+    "workedExample": "1. send may accept fewer bytes than requested; the application handles the remainder.\n2. In the ordinary copied path, accepted bytes are queued in kernel memory.\n3. Supported segmentation offload lets the network stack submit larger aggregates; allowed size varies by kernel/device features.\n4. Queueing and driver submission lead to DMA, and the NIC segments according to TCP/MTU constraints.\n5. TX completion releases resources when safe; it is not proof that the remote application read the data.",
     "link": {
       "title": "Scaling in the Linux Networking Stack — kernel documentation",
       "url": "https://docs.kernel.org/networking/scaling.html"

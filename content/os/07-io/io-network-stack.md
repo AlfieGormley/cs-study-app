@@ -3,16 +3,39 @@ id: io-network-stack
 title: The kernel network stack, NAPI, RSS, DPDK, eBPF/XDP
 level: advanced
 minutes: 15
-summary: The path a packet takes from the NIC to your recv() and back, how NAPI, GRO and RSS keep up with millions of packets a second, and when to bypass the kernel with DPDK or program it with eBPF and XDP.
+summary: The route a packet takes from the NIC to your recv() and back, how NAPI, GRO and Receive Side Scaling keep up with millions of packets a second, and when to bypass the kernel with DPDK or program it with eBPF and XDP.
 ---
 
 Everything in this module so far ends at a socket: epoll says it's readable, `recv()` returns bytes. This lesson opens up what happens underneath, between the wire and the socket buffer.
 
-It matters because at high packet rates kernel per-packet work can become a bottleneck, depending on the application and workload. Knowing the path tells you where packets get dropped, which knobs to turn, and when it's worth leaving the kernel out altogether.
+It matters because at high packet rates kernel per-packet work can become a bottleneck, depending on the application and workload. Knowing the code path tells you where packets get dropped, which knobs to turn, and when it's worth leaving the kernel out altogether.
 
 ## The budget
 
 Start with the numbers. For the standard untagged minimum-frame calculation, use 64 frame bytes including FCS, plus 8 bytes of preamble/SFD and a 12-byte-time inter-frame gap: 84 byte-times, or 672 bit-times. This is link occupancy, not all payload or frame bytes.
+
+The table below comes from two short calculations: how many bits one minimum frame occupies on the wire, then how many such slots fit into one second at the link's bit rate.
+
+```formula
+L = (64 + 8 + 12) B × 8 bit/B = 672 bit
+P = C / L
+P = 10^10 bit/s / 672 bit ≈ 14.88 × 10^6 /s
+T = 1 / P = L / C
+T = 672 bit / 10^10 bit/s = 67.2 ns
+where
+L: the wire occupancy of one minimum-size frame, in bits (bit): 64 bytes of frame including the FCS, 8 bytes of preamble and SFD, and a 12-byte inter-frame gap
+B: byte, 8 bits; bit/B means bits per byte
+bit: binary digit, the unit of data on the wire
+C: the link's bit rate, in bits per second (bit/s); here 10 Gbit/s = 10^10 bit/s
+P: the maximum packet rate, in packets per second (/s)
+T: the time budget per packet, in nanoseconds (ns)
+s: second; "/s" means per second
+ns: nanosecond, one billionth (10^−9) of a second
+≈: approximately equal to (the result is rounded)
+In words: a minimum frame occupies 672 bit-times, so a 10 Gbit/s link can deliver about 14.88 million of them a second, one every 67.2 nanoseconds.
+```
+
+The same arithmetic at 1 Gbit/s gives 672 ns per packet, and at 100 Gbit/s 6.72 ns. It assumes untagged minimum frames back to back; larger frames or VLAN tags lower the packet rate.
 
 | Link | Max packets/s | Time per packet |
 |---|---|---|
@@ -83,7 +106,7 @@ A rising squeeze count indicates the budget/time condition was reached, not a co
 
 One RX queue handled by one core caps you at what one core can do. Modern NICs have many queues.
 
-### RSS: Receive Side Scaling
+### Receive Side Scaling (RSS)
 
 The NIC hashes each packet's flow (typically source and destination IP and port; the Toeplitz hash is common) and uses the hash to pick an RX queue. Queue interrupt mappings and affinity determine which CPUs handle them; one dedicated pinned CPU per queue is a possible configuration, not automatic.
 
@@ -95,7 +118,7 @@ The NIC hashes each packet's flow (typically source and destination IP and port;
                CPU0 CPU1 CPU2 CPU3
 ```
 
-With a stable RSS configuration, a flow generally maps to one RX queue. IRQ affinity and software steering can move later processing to other CPUs. That keeps packets in order and caches warm. The downside: one huge flow (an elephant flow) can't use more than one queue.
+With a stable Receive Side Scaling configuration, a flow generally maps to one RX queue. IRQ affinity and software steering can move later processing to other CPUs. That keeps packets in order and caches warm. The downside: one huge flow (an elephant flow) can't use more than one queue.
 
 Useful commands:
 
@@ -108,28 +131,28 @@ cat /proc/interrupts    # IRQs per CPU
 
 ### RPS, RFS and XPS
 
-- **RPS** (Receive Packet Steering) is RSS in software: for NICs with too few queues, the kernel hashes the packet in softirq and hands it to another CPU's backlog queue.
+- **RPS** (Receive Packet Steering) is Receive Side Scaling done in software: for NICs with too few queues, the kernel hashes the packet in softirq and hands it to another CPU's backlog queue.
 - **RFS** (Receive Flow Steering) goes further: it steers a flow to the CPU where the application thread that reads it last ran, so the socket data is hot in that core's cache. Accelerated RFS asks the NIC to do the steering.
 - **XPS** (Transmit Packet Steering) can select transmit queues using CPU or receive-queue mappings, avoiding contention on a shared TX queue.
 
-> [!tip] Line up the whole path
-> Alignment can improve locality, but RSS, reuseport selection, IRQ affinity and worker affinity are separate mechanisms. A worker pinned to CPU N does not automatically receive flows from RX queue N; verify steering and NUMA behavior before claiming no cross-core traffic. `irqbalance` can undo careful manual pinning, so check `/proc/interrupts`.
+> [!tip] Line up the whole receive path
+> Alignment can improve locality, but Receive Side Scaling, reuseport selection, IRQ affinity and worker affinity are separate mechanisms. A worker pinned to CPU N does not automatically receive flows from RX queue N; verify steering and NUMA behavior before claiming no cross-core traffic. `irqbalance` can undo careful manual pinning, so check `/proc/interrupts`.
 
 ## The transmit path
 
 Sending is the mirror image:
 
 1. `send()` copies your bytes into the socket's **send buffer** (or blocks / returns `EAGAIN` if it's full).
-2. TCP builds segments as the congestion and receive windows allow. With **TSO/GSO** it hands down larger skbs (size limits depend on supported offload features) and the NIC (TSO) or the kernel just before the driver (GSO) cuts it into MTU-sized frames.
+2. TCP builds segments as the congestion and receive windows allow. With **TSO/GSO** it hands down larger skbs (size limits depend on supported offload features) and the NIC (TCP segmentation offload) or the kernel just before the driver (generic segmentation offload, GSO) cuts it into MTU-sized frames.
 3. The packet passes through a **queueing discipline** (qdisc). The configured/default qdisc depends on kernel build, distribution, interface and administrator settings. Inspect the actual qdisc and choose it for the congestion-control and latency goals.
-4. The driver puts descriptors on a TX ring and rings the NIC's doorbell. The NIC DMAs the frame out.
-5. TX completion lets the driver reclaim resources when ownership/reference rules allow it. Polling, interrupts and NAPI participation depend on the driver; completion is not necessarily an acknowledgement from the remote application.
+4. The driver puts descriptors on a TX ring and writes the NIC's doorbell register. The NIC DMAs the frame out.
+5. TX completion lets the driver free or reuse resources when ownership/reference rules allow it. Polling, interrupts and NAPI participation depend on the driver; completion is not necessarily an acknowledgement from the remote application.
 
 ## Where per-packet costs accumulate
 
-Even with NAPI, GRO and RSS, each packet costs: skb allocation, netfilter rules, routing lookup, socket lookup, locks, and finally a copy to user space plus a syscall. Whether those costs exceed the budget depends on packet mix, offloads, hardware and configuration; a link-speed label alone does not decide the architecture.
+Even with NAPI, GRO and Receive Side Scaling, each packet costs: skb allocation, netfilter rules, routing lookup, socket lookup, locks, and finally a copy to user space plus a syscall. Whether those costs exceed the budget depends on packet mix, offloads, hardware and configuration; a link-speed label alone does not decide the architecture.
 
-Two escape routes exist: take the kernel out of the path (**DPDK**), or run your code inside it before the expensive parts (**XDP**).
+Two ways out exist: take the kernel out of the data path (**DPDK**), or run your code inside it before the expensive parts (**XDP**).
 
 ## DPDK: kernel bypass
 
@@ -149,7 +172,7 @@ DPDK is used in several packet-processing domains. Bifurcated drivers can coexis
 
 ## eBPF and XDP: program the kernel
 
-**eBPF** lets you load small programs into the kernel and attach them to hooks: sockets, tracepoints, cgroups, the traffic-control layer and more. A **verifier** checks permitted control flow, pointer types and memory access before execution. Packet accesses must have provable bounds; this does not mean every access needs its own runtime check. Programs may be JIT-compiled to native code depending on architecture/configuration and share data with user space through **maps** (hash tables, arrays, ring buffers).
+**eBPF** lets you load small programs into the kernel and attach them to hooks: sockets, tracepoints, cgroups, the traffic-control layer and more. The **eBPF verifier** checks permitted control flow, pointer types and memory access before execution. Packet accesses must have provable bounds; this does not mean every access needs its own runtime check. Programs may be JIT-compiled to native code depending on architecture/configuration and share data with user space through **BPF maps** (hash tables, arrays, ring buffers).
 
 **Native XDP** (eXpress Data Path) runs early in a supporting driver's receive path, before the normal skb-based stack path. Generic XDP operates after skb allocation, and hardware offload runs elsewhere. The program returns a verdict:
 
@@ -161,7 +184,7 @@ DPDK is used in several packet-processing domains. Bifurcated drivers can coexis
 | `XDP_REDIRECT` | Other NIC, CPU or AF_XDP |
 | `XDP_ABORTED` | Drop, with a trace event |
 
-This parsing fragment classifies untagged, unfragmented IPv4 UDP destination port 9999. It deliberately passes other formats, fragments and malformed lengths onward; it is not a complete firewall or fragment-reassembly policy. Supply Linux/BPF headers, a loader and license declaration:
+This parsing fragment classifies untagged, unfragmented IPv4 UDP destination port 9999. It deliberately passes other formats, fragments and malformed lengths onward; it is not a complete firewall or fragment-reassembly policy. Supply Linux/BPF headers, a BPF loader program and license declaration:
 
 ```c
 SEC("xdp")
@@ -213,13 +236,13 @@ Why XDP is attractive compared with DPDK:
 Modes: **native** (in the driver, needs driver support), **generic** (after skb allocation, with broader support but retaining allocation costs) and **offloaded** (runs on SmartNICs that support it).
 
 > [!example] In production
-> Published examples include Cloudflare's XDP packet-filtering work and Meta's XDP-based **Katran** layer-4 load balancer. **Cilium** supports eBPF Kubernetes networking and a kube-proxy replacement. Its exact use of iptables depends on configuration and kernel capabilities; these examples do not guarantee a particular deployment's throughput.
+> Published examples include Cloudflare's XDP packet-filtering work and Meta's XDP-based **Katran** layer-4 load balancer. **Cilium** supports eBPF Kubernetes networking and a kube-proxy replacement. Its exact use of iptables depends on configuration and kernel features; these examples do not guarantee a particular deployment's throughput.
 
 ## Choosing
 
 | Need | Use |
 |---|---|
-| Normal server | Kernel + RSS/RFS tuning |
+| Normal server | Kernel + Receive Side Scaling and RFS tuning |
 | Early packet filtering/load balancing | Evaluate supported XDP mode |
 | Full custom data plane | DPDK |
 | Observability | eBPF tracing |
@@ -228,7 +251,7 @@ Modes: **native** (in the driver, needs driver support), **generic** (after skb 
 - At 10 Gbit/s with minimum-size frames you get about 67 ns per packet, which is an aggregate link occupancy budget, not a guarantee about a particular core's execution time.
 - Receive path: NIC DMAs into an RX ring, an interrupt schedules NAPI, the poll builds skbs, GRO merges them, IP and TCP deliver to the socket queue and wake epoll, and `recv()` copies to user space.
 - NAPI switches from interrupts to budgeted polling under load; `/proc/net/softnet_stat` shows drops and time squeezes.
-- RSS hashes flows to hardware RX queues; IRQ affinity and software steering determine CPU placement. RPS, RFS and XPS help tune locality and distribution.
+- Receive Side Scaling hashes flows to hardware RX queues; IRQ affinity and software steering determine CPU placement. RPS, RFS and XPS help tune locality and distribution.
 - Exclusive DPDK polling can bypass the normal kernel packet path, trading CPU/resources and tooling for a different processing model; bifurcated modes differ. Native XDP can reject packets before the normal skb path or pass them onward.
 
 > [!note] Implementation and measurement gaps

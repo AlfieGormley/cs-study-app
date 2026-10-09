@@ -15,7 +15,7 @@
       },
       {
         "text": "An error occurred; check `errno`",
-        "explanation": "Errors are signalled by a return of -1. A return of 0 is a normal, successful result meaning EOF."
+        "explanation": "Errors are reported by a return of -1. A return of 0 is a normal, successful result meaning EOF."
       },
       {
         "text": "The buffer passed in was too small",
@@ -206,12 +206,12 @@
         "explanation": "It doesn't block during the wait; that's its one advantage. The process runs until the signal arrives."
       },
       {
-        "text": "Standard SIGIO notifications can coalesce, the application must re-check socket state, and signal handlers have safety restrictions",
-        "explanation": "Correct. Linux extensions can supply descriptor/event information and queue real-time signals, but queue limits and fallback to SIGIO must still be handled."
+        "text": "Standard SIGIO notifications can be merged into one, the application must re-check socket state, and signal handlers have safety restrictions",
+        "explanation": "Correct. Linux-specific features can supply descriptor/event information and queue real-time signals, but queue limits and fallback to SIGIO must still be handled."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Standard SIGIO signals can coalesce; one delivered signal is not one counted socket event.\n2. The application must inspect current descriptor state.\n3. Handler code must obey async-signal-safety rules.\n4. F_SETSIG plus SA_SIGINFO can provide descriptor/event details, and real-time signals can queue up to resource limits. Overflow can revert to SIGIO.\n5. Readiness multiplexing can simplify collecting per-descriptor events, though events still require correct state handling.",
+    "workedExample": "1. Standard SIGIO signals can be merged into one; one delivered signal is not one counted socket event.\n2. The application must inspect current descriptor state.\n3. Handler code must obey async-signal-safety rules.\n4. F_SETSIG plus SA_SIGINFO can provide descriptor/event details, and real-time signals can queue up to resource limits. Overflow can revert to SIGIO.\n5. Readiness multiplexing can simplify collecting per-descriptor events, though events still require correct state handling.",
     "link": {
       "title": "fcntl(2) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man2/fcntl.2.html"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. 20,000 × 8 MiB = 160,000 MiB = 156.25 GiB.\n2. Reserved virtual space and physical residency differ; neither this arithmetic nor the thread count determines actual resident memory.\n3. If one additionally assumes 32 KiB resident per stack, the model gives 625 MiB, but no measured stack profile is supplied.\n4. Thread limits, kernel metadata, guards and wakeup patterns add costs. Event loops reduce the need for a dedicated waiting thread per connection, not all scheduling/memory costs.",
+    "workedExample": "1. Multiply the thread count by the stack reservation, then convert to GiB:\n\n```formula\nV = T × S\nV = 20,000 × 8 MiB = 160,000 MiB\nV = 160,000 / 1,024 GiB = 156.25 GiB\nwhere\nV: total virtual stack reservation, first in mebibytes (MiB), then converted to gibibytes (GiB)\nT: number of threads, here 20,000\nS: stack reservation per thread, here 8 MiB\nMiB: mebibyte, 1,048,576 bytes\nGiB: gibibyte, 1,024 MiB\nIn words: twenty thousand 8 MiB stacks reserve about 156 GiB of address space, which is not the same as using that much RAM.\n```\n\n2. Reserved virtual space and physical residency differ; neither this arithmetic nor the thread count determines actual resident memory.\n3. If one additionally assumes 32 KiB resident per stack, the model gives a much smaller figure:\n\n```formula\nM = T × S_res\nM = 20,000 × 32 KiB = 640,000 KiB\nM = 640,000 / 1,024 MiB = 625 MiB\nwhere\nM: modelled resident stack memory, first in kibibytes (KiB), then converted to MiB\nT: number of threads, here 20,000\nS_res: assumed resident (touched) stack per thread, here 32 KiB\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nIn words: if each thread only touches 32 KiB of its stack, 20,000 threads hold about 625 MiB of RAM for stacks.\n```\n\nNo measured stack profile is supplied, so 32 KiB is an assumption.\n4. Thread limits, kernel metadata, guards and wakeup patterns add costs. Event loops reduce the need for a dedicated waiting thread per connection, not all scheduling/memory costs.",
     "link": {
       "title": "Asynchronous I/O — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
@@ -251,7 +251,7 @@
     "id": "io-models-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "With CPython's default selector-based asyncio loop on Linux, suppose a stream coroutine awaits data that is not yet buffered. Which description matches the readiness path?",
+    "prompt": "With CPython's default selector-based asyncio loop on Linux, suppose a stream coroutine awaits data that is not yet buffered. Which description matches the readiness-based design?",
     "options": [
       {
         "text": "asyncio submits the read to io_uring and the kernel copies the data asynchronously",
@@ -259,14 +259,14 @@
       },
       {
         "text": "asyncio runs each socket read on a thread in its default executor",
-        "explanation": "Explicit blocking work can use an executor, and some built-in operations such as name resolution also use it. In this default selector socket-read path, receiving data occurs through readiness handling."
+        "explanation": "Explicit blocking work can use an executor, and some built-in operations such as name resolution also use it. In this default selector-based socket read, receiving data occurs through readiness handling."
       },
       {
         "text": "asyncio uses POSIX `aio_read` for sockets",
         "explanation": "POSIX AIO isn't used by asyncio for sockets, and glibc implements it with threads anyway."
       },
       {
-        "text": "The event loop registers the socket with epoll, suspends the coroutine, and when epoll reports it readable, performs a synchronous non-blocking `recv()` and resumes the coroutine with the bytes",
+        "text": "The event loop adds the socket to epoll, suspends the coroutine, and when epoll reports it readable, performs a synchronous non-blocking `recv()` and resumes the coroutine with the bytes",
         "explanation": "Correct. It's readiness-based multiplexing. The copy happens synchronously in the event-loop thread; 'async' describes the programming model, not the kernel I/O model."
       }
     ],
@@ -285,7 +285,7 @@
     "options": [
       {
         "text": "A naive design that keeps one pending receive per idle connection must retain each supplied buffer until that operation finishes",
-        "explanation": "Correct. If each of 100,000 requests retains an assumed 16 KiB buffer, their buffer capacity totals 1,562.5 MiB. This is not automatically all resident or pinned. Provided buffers can reduce dedicated per-connection retention, but a shared pool still consumes resources."
+        "explanation": "Correct. If each of 100,000 requests retains an assumed 16 KiB buffer, their buffer capacity totals 1,562.5 MiB. This is not automatically all resident or page-pinned. Provided buffers can reduce dedicated per-connection retention, but a shared pool still consumes resources."
       },
       {
         "text": "With readiness, a buffer can be allocated only when a socket is reported readable",
@@ -304,7 +304,7 @@
       0,
       1
     ],
-    "workedExample": "1. A pending receive using a supplied buffer requires that buffer to remain valid until completion.\n2. Assumed capacity: 100,000 × 16 KiB = 1,638,400,000 bytes = 1,562.5 MiB. Residency and pinning depend on API/setup.\n3. A readiness design can obtain a buffer when attempting the read.\n4. io_uring provided-buffer groups share a pool; availability, ownership and replenishment must be handled. Pool memory is still allocated.\n5. Ordinary regular-file readiness on Linux is not storage completion; worker or completion mechanisms can avoid blocking the loop for file I/O.",
+    "workedExample": "1. A pending receive using a supplied buffer requires that buffer to remain valid until completion.\n2. Assumed capacity:\n\n```formula\nM = C × b\nM = 100,000 × 16 KiB = 1,600,000 KiB\nM = 1,600,000 / 1,024 MiB = 1,562.5 MiB\nwhere\nM: total buffer capacity held by pending receives, first in KiB, then converted to MiB\nC: number of connections with a pending receive, here 100,000\nb: buffer size per receive, here 16 KiB\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB (1,048,576 bytes)\nIn words: one 16 KiB buffer for each of 100,000 idle connections ties up about 1.5 GiB of buffer capacity.\n```\n\nThat is 1,638,400,000 bytes. Residency and pinning depend on API/setup.\n3. A readiness design can obtain a buffer when attempting the read.\n4. io_uring provided-buffer groups share a pool; availability, ownership and replenishment must be handled. Pool memory is still allocated.\n5. Ordinary regular-file readiness on Linux is not storage completion; worker or completion mechanisms can avoid blocking the loop for file I/O.",
     "link": {
       "title": "Ringing in a new asynchronous I/O API — LWN.net",
       "url": "https://lwn.net/Articles/776703/"

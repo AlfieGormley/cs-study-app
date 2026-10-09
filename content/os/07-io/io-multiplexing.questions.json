@@ -10,12 +10,12 @@
         "explanation": "`EMFILE` comes from the per-process open-file limit, raised by `accept()` or `open()`, not from `select`. And an error wouldn't corrupt memory."
       },
       {
-        "text": "`FD_SET` on a descriptor ≥ 1024 writes past the end of the fixed-size `fd_set` bitmap, which is undefined behaviour",
+        "text": "`FD_SET` on a descriptor of 1024 or above writes past the end of the fixed-size `fd_set` bitmap, which is undefined behaviour",
         "explanation": "Correct. On Linux glibc `FD_SETSIZE` is 1024. `FD_SET(1050, &set)` sets a bit beyond the structure, scribbling on neighbouring memory. Use poll or epoll."
       },
       {
-        "text": "The kernel's TCP stack can't handle more than 1,024 connections",
-        "explanation": "The TCP stack is not capped at 1024 sockets by this API; actual capacity depends on resources and configuration."
+        "text": "The kernel's TCP/IP stack can't handle more than 1,024 connections",
+        "explanation": "The TCP/IP stack is not capped at 1024 sockets by this API; actual capacity depends on resources and configuration."
       },
       {
         "text": "`select` scans too slowly and the kernel kills the process",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. `fd_set` is a bitmap of `FD_SETSIZE` bits = 1024 bits = 128 bytes.\n2. Descriptor k sets bit k. Valid k: 0 to 1023.\n3. At ~1,100 connections, new sockets get numbers above 1023.\n4. `FD_SET(1050, &s)` touches byte 1050 / 8 = 131, past the 128-byte struct, typically on the stack.\n5. That's a silent buffer overflow. glibc's fortify checks can catch it, but the real fix is `poll` or `epoll`.",
+    "workedExample": "1. Size the bitmap and find the byte that descriptor 1050 would touch:\n\n```formula\nS = F / 8 = 1,024 / 8 = 128 B\nj = ⌊k / 8⌋ = ⌊1,050 / 8⌋ = 131\nwhere\nS: size of the fd_set bitmap, in bytes (B)\nF: FD_SETSIZE, the number of bits, 1,024 on Linux glibc\nk: the descriptor number passed to FD_SET, here 1,050\nj: the index of the byte holding bit k (bytes 0 to 127 exist)\n⌊ ⌋: floor, round down to a whole number\nB: byte, 8 bits\nIn words: the bitmap has 128 bytes, numbered 0 to 127, but descriptor 1050 needs byte 131, which lies past the end.\n```\n\n2. Descriptor k sets bit k, so valid descriptors are 0 to 1023.\n3. At about 1,100 connections, new sockets get numbers above 1023.\n4. `FD_SET(1050, &s)` therefore writes byte 131, past the 128-byte struct, typically on the stack.\n5. That's a silent buffer overflow. glibc's fortify checks can catch it, but the real fix is `poll` or `epoll`.",
     "link": {
       "title": "select(2) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man2/select.2.html"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. poll scan model: 50,000 × 2,000 = 100,000,000 entries/s.\n2. epoll candidate model: 50 × 2,000 = 100,000 entries/s.\n3. The modeled entry-count ratio is 1,000; it is not a measured CPU-speedup ratio.\n4. Assuming an 8-byte pollfd and Linux v6.12 copying behavior: 400,000 input bytes per call → 800 MB/s of input at this rate. The kernel writes 2-byte revents fields, totaling 100,000 output bytes per call → 200 MB/s of result fields, not 800 MB/s each way.",
+    "workedExample": "1. Entries handled per second in each model:\n\n```formula\nE_poll = N × r\nE_poll = 50,000 × 2,000 /s = 10^8 /s\nE_epoll = R × r\nE_epoll = 50 × 2,000 /s = 10^5 /s\nwhere\nE_poll: pollfd entries scanned per second\nE_epoll: ready candidates processed per second\nN: registered connections, here 50,000\nR: ready candidates per wake, here 50\nr: wake-ups (wait calls) per second, here 2,000\ns: second; \"/s\" means per second\nIn words: poll scans every connection on every wake, epoll handles only the ready ones, a thousand times fewer here.\n```\n\n2. The modeled entry-count ratio is 1,000; it is not a measured CPU-speedup ratio.\n3. Bytes copied by poll, assuming an 8-byte pollfd and Linux v6.12 copying behaviour:\n\n```formula\nD_in = N × 8 B × r\nD_in = 400,000 B × 2,000 /s\nD_in = 8 × 10^8 B/s = 800 MB/s\nD_out = N × 2 B × r = 200 MB/s\nwhere\nD_in: pollfd array bytes copied into the kernel per second\nD_out: revents bytes written back per second\nN: registered connections, here 50,000\nr: calls per second, here 2,000\nB: byte, 8 bits\nMB: megabyte, 10^6 bytes\ns: second; \"/s\" means per second\nIn words: the input array costs 800 MB/s of copying, and the 2-byte results 200 MB/s, not 800 MB/s each way.\n```",
     "link": {
       "title": "epoll(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The interest index distinguishes the pair of open file description and descriptor number.\n2. Balanced red-black-tree search/insertion takes O(log N) comparisons.\n3. log2(1,000,000) is about 20, indicating scale, not an exact count of comparisons or a bound on total syscall time.\n4. Registration includes additional work, and epoll_wait may inspect candidates that no longer produce returned events.",
+    "workedExample": "1. The interest index distinguishes the pair of open file description and descriptor number.\n2. Balanced red-black-tree search/insertion takes O(log N) comparisons.\n3. For scale:\n\n```formula\nh ≈ log_2(N)\nh ≈ log_2(1,000,000) ≈ 20\nwhere\nh: tree levels visited, roughly the comparisons per insert or search\nN: registered descriptors, here 1,000,000\nlog_2: logarithm base 2, how many times N can be halved before reaching 1\n≈: approximately equal to\nIn words: a balanced tree of a million entries needs only about 20 comparisons per insert or lookup (a red-black tree can be up to twice that deep, so at most about 40).\n```\n\nThis indicates scale, not an exact count of comparisons or a bound on total syscall time.\n4. Registration includes additional work, and epoll_wait may inspect candidates that no longer produce returned events.",
     "link": {
       "title": "epoll_ctl(2) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
@@ -183,10 +183,10 @@
     "id": "io-multiplexing-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A level-triggered epoll server registers every connection for `EPOLLIN | EPOLLOUT` from the start. CPU sits at 100% even when clients are idle. Why, and what's the fix?",
+    "prompt": "A level-triggered epoll server adds every connection to epoll with `EPOLLIN | EPOLLOUT` from the start. CPU sits at 100% even when clients are idle. Why, and what's the fix?",
     "options": [
       {
-        "text": "A socket with free send-buffer space is writable almost all the time, so level-triggered `EPOLLOUT` fires on every `epoll_wait`; only register `EPOLLOUT` while there is unsent output",
+        "text": "A socket with free send-buffer space is writable almost all the time, so level-triggered `EPOLLOUT` fires on every `epoll_wait`; only watch for `EPOLLOUT` while there is unsent output",
         "explanation": "Correct. The loop spins handling 'writable' events with nothing to write. Add `EPOLLOUT` with `EPOLL_CTL_MOD` when a write returns `EAGAIN`, and remove it once the backlog drains."
       },
       {
@@ -229,7 +229,7 @@
       },
       {
         "text": "ET can reduce redundant wake-ups compared with LT",
-        "explanation": "Correct. ET can avoid repeated reports solely because a condition remains true; notification counts and performance still depend on workload and event coalescing."
+        "explanation": "Correct. ET can avoid repeated reports solely because a condition remains true; notification counts and performance still depend on workload and how events are merged."
       },
       {
         "text": "LT is incompatible with non-blocking descriptors",
@@ -241,7 +241,7 @@
       1,
       3
     ],
-    "workedExample": "1. LT keeps a nonempty socket eligible for reporting; each result batch is limited by maxevents.\n2. ET is activity-driven and can coalesce events. It does not promise exactly one event per empty-to-nonempty transition.\n3. Leaving unread data may not generate another reminder. Drain to EAGAIN, EOF or error, or keep your own unfinished-work queue.\n4. Non-blocking descriptors prevent the drain loop from sleeping when no more bytes are available.",
+    "workedExample": "1. LT keeps a nonempty socket eligible for reporting; each result batch is limited by maxevents.\n2. ET is activity-driven and can merge several events into one report. It does not promise exactly one event per empty-to-nonempty transition.\n3. Leaving unread data may not generate another reminder. Drain to EAGAIN, EOF or error, or keep your own unfinished-work queue.\n4. Non-blocking descriptors prevent the drain loop from sleeping when no more bytes are available.",
     "link": {
       "title": "epoll(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
@@ -251,7 +251,7 @@
     "id": "io-multiplexing-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A server registers socket fd 9 with epoll, then calls `dup(9)`, getting fd 10, and hands fd 10 to a logging subsystem. Later it calls `close(9)` without `EPOLL_CTL_DEL`. What happens when data arrives on that socket?",
+    "prompt": "A server adds socket fd 9 to an epoll instance, then calls `dup(9)`, getting fd 10, and hands fd 10 to a logging subsystem. Later it calls `close(9)` without `EPOLL_CTL_DEL`. What happens when data arrives on that socket?",
     "options": [
       {
         "text": "Nothing; closing fd 9 removed it from the epoll set",
@@ -288,7 +288,7 @@
         "explanation": "Edge-triggered reduces duplicate reports, but a new edge (more data arriving) can still wake a second thread while the first is mid-read. It doesn't guarantee exclusive ownership."
       },
       {
-        "text": "Register connections with `EPOLLONESHOT` and re-arm with `EPOLL_CTL_MOD` after the handling thread finishes",
+        "text": "Add connections with `EPOLLONESHOT` and rearm with `EPOLL_CTL_MOD` after the handling thread finishes",
         "explanation": "Correct when one registration and a proper ownership protocol cover the connection. Finish processing before rearming; other I/O paths and duplicate registrations still require coordination."
       },
       {
@@ -365,7 +365,7 @@
       1,
       2
     ],
-    "workedExample": "Both APIs maintain registrations, but the mapping is conceptual:\n\n| epoll concept | kqueue counterpart |\n|---|---|\n| create instance | kqueue |\n| modify interest | kevent changelist |\n| retrieve events | kevent eventlist |\n| readable socket | EVFILT_READ |\n| edge-like handling | EV_CLEAR, filter-dependent |\n| disable after delivery | EV_DISPATCH |\n| remove after delivery | EV_ONESHOT |\n\nEPOLLONESHOT disables until MOD rearms; EV_ONESHOT deletes and must be added again. EVFILT_READ is readiness, not a completed socket read.",
+    "workedExample": "Both APIs maintain registrations, but the mapping is conceptual:\n\n| epoll concept | kqueue counterpart |\n|---|---|\n| create instance | kqueue |\n| modify interest | kevent changelist |\n| retrieve events | kevent eventlist |\n| readable socket | EVFILT_READ |\n| edge-like handling | EV_CLEAR, filter-dependent |\n| disable after delivery | EV_DISPATCH |\n| remove after delivery | EV_ONESHOT |\n\nEPOLLONESHOT disables until EPOLL_CTL_MOD rearms; EV_ONESHOT deletes and must be added again. EVFILT_READ is readiness, not a completed socket read.",
     "link": {
       "title": "Kqueue: A generic and scalable event notification facility (PDF)",
       "url": "https://people.freebsd.org/~jlemon/papers/kqueue.pdf"

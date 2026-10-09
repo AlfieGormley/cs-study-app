@@ -10,7 +10,7 @@ epoll reduces repeated interest-set scanning, but applications still perform I/O
 
 In 2019, Jens Axboe (maintainer of the Linux block layer) merged **io_uring** into Linux 5.1. It is a general-purpose, **completion-based** interface: you describe operations, the kernel performs them, and you collect the results. It covers files, sockets, timers and, by now, a growing, version-dependent set of I/O operations.
 
-## The core idea: two rings in shared memory
+## The core idea: two ring buffers in shared memory
 
 An io_uring instance is a pair of **ring buffers** that both the application and the kernel can see, because they are `mmap`ped into the process:
 
@@ -28,7 +28,22 @@ An io_uring instance is a pair of **ring buffers** that both the application and
   +-----------+  CQEs  +-----------+
 ```
 
-Each ring has a **head** and a **tail**. One side only ever writes the tail (producer), the other only ever advances the head (consumer). In a single-user-producer/consumer design, index publication uses the required memory ordering rather than a userspace mutex. Multiple application threads must coordinate ring access, and kernel completion producers require their own synchronization; this is not a claim that the entire subsystem is lock-free. Ring sizes are powers of two, so the index of entry *i* is `i & (entries - 1)`.
+Each ring has a **head** and a **tail**. One side only ever writes the tail (producer), the other only ever advances the head (consumer). In a single-user-producer/consumer design, index publication uses the required memory ordering rather than a userspace mutex. Multiple application threads must coordinate ring access, and kernel completion producers require their own synchronization; this is not a claim that the entire subsystem is lock-free. Ring sizes are powers of two. The head and tail are free-running counters that only ever increase, so each side turns a counter into an array slot by taking the remainder after dividing by the ring size, which for a power of two is a single bitwise AND:
+
+```formula
+k = i mod E
+k = i & (E − 1)
+k = 1,000 mod 256 = 232
+where
+k: the array slot (0 to E − 1) where entry number i lives
+i: the free-running counter value (head or tail), here 1,000
+E: the number of entries in the ring, a power of two, here 256
+mod: modulo, the remainder after whole-number division
+&: bitwise AND, keeping only the bits set in both numbers; E − 1 is a mask of all-ones low bits
+In words: the counter just keeps counting, and the low bits of it pick the slot, so the ring wraps round with no division.
+```
+
+With 256 entries the mask is 255 (binary 11111111), so counter 1,000 lands in slot 232, because 1,000 = 3 × 256 + 232. The AND trick only works when E is a power of two; for other sizes the low bits would not equal the remainder.
 
 This is the same descriptor-ring-plus-doorbell design that NICs and NVMe drives use (lesson 1), applied between user space and the kernel.
 
@@ -52,13 +67,13 @@ A CQE gives the result:
 | `res` | Like a syscall return; `-errno` on error |
 | `flags` | Extra info (e.g. buffer id) |
 
-`user_data` is how you match completions to requests: typically a pointer to your request struct. Completions can arrive **out of order**: a cached read finishes before an earlier one that hit the disk.
+`user_data` is how you match completions to requests: typically a pointer to your request struct. Completions can arrive **out of order**: a read served from the page cache finishes before an earlier one that hit the disk.
 
 ## The three system calls
 
-- `io_uring_setup(entries, params)` creates the instance and returns a file descriptor; you `mmap` the rings from it.
+- `io_uring_setup(entries, params)` creates the instance and returns a file descriptor; you `mmap` the ring buffers from it.
 - `io_uring_enter(fd, to_submit, min_complete, flags)` tells the kernel "I've added *n* SQEs" and optionally waits for at least *m* completions.
-- `io_uring_register(...)` registers long-lived resources: files, buffers, eventfds, restrictions.
+- `io_uring_register(...)` sets up long-lived resources: files, buffers, eventfds, restrictions.
 
 Applications commonly use the **liburing** wrappers; direct use requires following the ABI and memory-ordering rules. A minimal single-request liburing fragment follows (supply fd, a 4096-byte buffer, request data and error callbacks):
 
@@ -104,7 +119,20 @@ Note that errors come back as **negative errno values** in `res`, not via the gl
 
 ### 1. Batching amortises syscalls
 
-With epoll, serving 100 ready sockets is 1 `epoll_wait` plus 100 `read` calls: 101 syscalls. With io_uring you can queue 100 receive SQEs and submit them in **one** `io_uring_enter`, which can also wait for completions in the same call.
+With epoll, every ready socket still needs its own `read` call after the wait. With io_uring the receives go into the ring and one `io_uring_enter` submits them all:
+
+```formula
+S_epoll = 1 + R
+S_epoll = 1 + 100 = 101
+S_uring = 1
+where
+S_epoll: system calls to serve one batch with epoll (one epoll_wait plus one read per socket)
+S_uring: system calls to submit and wait for the same batch with io_uring (one io_uring_enter)
+R: the number of ready sockets in the batch, here 100
+In words: epoll needs one extra system call per ready socket, while io_uring can submit a whole batch and wait for its completions in a single call.
+```
+
+So 100 ready sockets cost 101 syscalls with epoll and, in the best case, 1 with io_uring. The model assumes all 100 SQEs fit in the ring and that one wait collects every completion; real loops sometimes need extra waits or retries.
 
 Batching amortises syscall overhead. Mitigations, CPU architecture and workload affect the size of the saving; this lesson supplies no universal measured syscall-cost increase.
 
@@ -116,7 +144,7 @@ The cost: a kernel thread spinning on a CPU. It goes to sleep after an idle time
 
 ### 3. Registered files and buffers
 
-Ordinary descriptor resolution and resource management have costs, though optimized paths can avoid some reference work. Page pinning is required by some I/O paths, not every buffered copy into user memory. With `io_uring_register` you can pre-register:
+Ordinary descriptor resolution and resource management have costs, though optimized paths can avoid some reference work. Page pinning is required by some I/O paths, not every buffered copy into user memory. With `io_uring_register` you can set up in advance:
 
 - **Fixed files**: refer to them by index; avoid ordinary per-operation descriptor-table resolution while retaining registration/resource bookkeeping.
 - **Fixed buffers**: pages pinned once, reused for every `READ_FIXED` and `WRITE_FIXED`.
@@ -147,7 +175,7 @@ Newer kernels add features that cut per-operation overhead further:
 
 ## Pitfalls
 
-- **Buffer lifetime.** Keep ordinary read/receive buffers valid until the matching operation completes. For zero-copy send, the first CQE may not release the buffer: if MORE is set, await the notification CQE. Multishot operations and provided-buffer ownership have their own rules.
+- **Buffer lifetime.** Keep ordinary read/receive buffers valid until the matching operation completes. For zero-copy send, the first CQE may not release the buffer: if IORING_CQE_F_MORE is set, await the notification CQE. Multishot operations and provided-buffer ownership have their own rules.
 - **SQE consumption and referenced data lifetimes differ.** Follow each opcode's rules and SUBMIT_STABLE feature behavior; SQPOLL submission return does not necessarily prove the kernel already consumed the SQE. Payload buffers generally live through operation completion.
 - **CQ overflow.** If you submit faster than you reap, the CQ can fill. With IORING_FEAT_NODROP, the kernel normally backlogs overflowed CQEs, at a memory/performance cost. Allocation failure can still lose events; NODROP is not an absolute no-loss guarantee. The CQ is twice the SQ size by default for this reason.
 - **Cancellation** is asynchronous too (`IORING_OP_ASYNC_CANCEL`); the original operation may still complete.
@@ -158,23 +186,23 @@ io_uring is a large, fast-moving subsystem that runs complex code on behalf of u
 
 - In June 2023, Google reported that **60% of the Linux kernel exploits** submitted to its kCTF vulnerability reward programme in the previous year used io_uring, accounting for about **$1 million** of payouts. The same June 2023 post described then-current restrictions on ChromeOS, production servers and Android apps. This is historical reporting, not proof of every current Google deployment policy.
 - The inspected upstream **Moby default seccomp profile** uses an allowlist that omits io_uring syscalls, denying them under that profile. Actual Docker/container policy depends on version, capabilities and the selected profile.
-- **Visibility.** A monitor limited to ordinary syscall-entry events does not automatically see one read/open/send syscall per SQE. It may see setup/enter/register calls, while SQPOLL can process submissions without an enter call. Other hooks, audit support and io_uring-aware instrumentation may observe operations; syscall-entry visibility alone is not a complete security model.
+- **Visibility.** A monitoring tool limited to ordinary syscall-entry events does not automatically see one read/open/send syscall per SQE. It may see io_uring_setup, io_uring_enter and io_uring_register calls, while SQPOLL can process submissions without an enter call. Other hooks, audit support and io_uring-aware instrumentation may observe operations; syscall-entry visibility alone is not a complete security model.
 
 Mitigations:
 
-- `sysctl kernel.io_uring_disabled` (Linux 6.6): `0` allows everyone, `1` limits creation to privileged processes or members of the `kernel.io_uring_group` group, and `2` disables new ring creation for everyone. Existing rings remain usable under either restrictive value.
-- `IORING_REGISTER_RESTRICTIONS` lets a process constrain opcodes/flags on a ring created with IORING_SETUP_R_DISABLED, before enabling and handing it to less trusted code. It is an allowlist, not a complete sandbox by itself.
+- `sysctl kernel.io_uring_disabled` (Linux 6.6): `0` allows everyone, `1` limits creation to privileged processes or members of the `kernel.io_uring_group` group, and `2` disables new ring creation for everyone. Existing io_uring instances remain usable under either restrictive value.
+- `IORING_REGISTER_RESTRICTIONS` lets a process constrain opcodes/flags on a ring created with IORING_SETUP_R_DISABLED, before enabling and handing it to less trusted code. It is an allowlist, not a complete isolation mechanism by itself.
 - Seccomp can block `io_uring_setup` altogether.
 
 > [!warning] Know your deployment target
 > If you build on io_uring, check that your production environment allows it. Many container platforms and hardened kernels do not, so keep an epoll or thread-pool fallback.
 
 ## Key takeaways
-- io_uring is completion-based: the application writes SQEs into a shared submission ring and reaps CQEs from a shared completion ring, matched by `user_data`.
+- io_uring is completion-based: the application writes SQEs into a shared submission ring and collects CQEs from a shared completion ring, matched by `user_data`.
 - Shared rings can reduce submission/completion transfer overhead; correct ordering and concurrent-access coordination remain necessary. Payload copying is a separate issue.
 - Gains come from batching, SQPOLL (no syscalls in steady state), registered files and buffers, completion-based file I/O and multishot operations.
 - Errors arrive as negative errno in `cqe->res`, completions can be out of order, and buffer lifetime follows the operation, including zero-copy-send notification and multishot rules.
-- Historical vulnerabilities motivated deployment restrictions. Check actual container policy and instrumentation; kernel.io_uring_disabled controls new ring creation rather than revoking existing rings.
+- Historical vulnerabilities motivated deployment restrictions. Check actual container policy and instrumentation; kernel.io_uring_disabled controls new ring creation rather than revoking existing io_uring instances.
 
 ## Further reading
 - [io_uring(7) — Linux manual page](https://man7.org/linux/man-pages/man7/io_uring.7.html)

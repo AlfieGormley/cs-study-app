@@ -49,11 +49,11 @@
       },
       {
         "text": "The CQ overflowed and 2 completions were lost",
-        "explanation": "Overflow is signalled through ring flags and the kernel's backlog, not through a single CQE's `res`."
+        "explanation": "Overflow is reported through ring flags and the kernel's backlog, not through a single CQE's `res`."
       }
     ],
     "answer": 2,
-    "workedExample": "1. `res` behaves like a syscall return value.\n2. Success: `res >= 0` (bytes read, new fd, etc.).\n3. Failure: `res = -errno`.\n4. -2 → errno 2 → `ENOENT` (no such file or directory).\n\nSo `report(r, -cqe->res)` turns it back into a positive errno for `strerror`.",
+    "workedExample": "1. `res` behaves like a syscall return value.\n2. Success: `res >= 0` (bytes read, new fd, etc.).\n3. Failure: the kernel stores the error number negated:\n\n```formula\nres = −e\n−2 = −e, so e = 2\nwhere\nres: the cqe->res field of the completion entry\ne: the errno value, a positive error number\nIn words: a negative res is an error number with its sign flipped, so −2 means error number 2.\n```\n\n4. errno 2 is `ENOENT` (no such file or directory).\n\nSo `report(r, -cqe->res)` turns it back into a positive errno for `strerror`.",
     "link": {
       "title": "io_uring(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Submit three reads A, B, C in order. A misses the page cache and goes to disk; B and C are cached.\n\n```\nCQ order: B, C, A\n```\n\nWithout a tag you couldn't tell which result belongs to which buffer. Set `user_data = (u64)req` on submit and read it back with `io_uring_cqe_get_data(cqe)`.",
+    "workedExample": "Submit three reads A, B, C in order. A misses the page cache and goes to disk; B and C are already in the page cache.\n\n```\nCQ order: B, C, A\n```\n\nWithout a tag you couldn't tell which result belongs to which buffer. Set `user_data = (u64)req` on submit and read it back with `io_uring_cqe_get_data(cqe)`.",
     "link": {
       "title": "Lord of the io_uring (tutorial)",
       "url": "https://unixism.net/loti/"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Stated epoll path: one wait plus 100 reads = 101 syscalls.\n2. Stated io_uring path: publish 100 SQEs, then one io_uring_enter requesting submission and waiting for 100 completions.\n3. Reap the 100 CQEs from shared memory.\n4. Waiting for only one completion does not guarantee all 100 are ready; real paths may require more waits, handle partial submissions, interruptions or other progress work. This is a syscall-count model, not a benchmark.",
+    "workedExample": "1. Count the system calls in each design:\n\n```formula\nS_epoll = 1 + R = 1 + 100 = 101\nS_uring = 1\nwhere\nS_epoll: syscalls with epoll (one epoll_wait plus one read per socket)\nS_uring: syscalls with io_uring (one io_uring_enter)\nR: ready sockets in the batch, here 100\nIn words: epoll pays one system call per ready socket plus the wait; io_uring submits and waits for the whole batch in one call.\n```\n\n2. Stated io_uring path: publish 100 SQEs, then one io_uring_enter requesting submission and waiting for 100 completions.\n3. Collect the 100 CQEs from shared memory.\n4. Waiting for only one completion does not guarantee all 100 are ready; real paths may require more waits, handle partial submissions, interruptions or other progress work. This is a syscall-count model, not a benchmark.",
     "link": {
       "title": "Ringing in a new asynchronous I/O API — LWN.net",
       "url": "https://lwn.net/Articles/776703/"
@@ -131,7 +131,7 @@
       },
       {
         "text": "The SQ is full and the entry was dropped",
-        "explanation": "An idle ring isn't full. And a full SQ means `io_uring_get_sqe` returns NULL; it doesn't drop silently."
+        "explanation": "An idle ring isn't full. And a full SQ means `io_uring_get_sqe` returns no free entry; it doesn't drop silently."
       },
       {
         "text": "The kernel polling thread went to sleep after `sq_thread_idle`; the app must check `IORING_SQ_NEED_WAKEUP` and call `io_uring_enter` to wake it",
@@ -164,8 +164,8 @@
         "explanation": "Correct. Registration retains file resources and permits indexed use, reducing ordinary descriptor resolution/reference overhead; it does not eliminate all bookkeeping."
       },
       {
-        "text": "Registered buffers are pinned once rather than per operation",
-        "explanation": "Correct for supported fixed-buffer operations. Registration can amortize pinning/mapping work; ordinary buffered copies do not universally pin pages per operation."
+        "text": "Registered buffers are page-pinned once rather than per operation",
+        "explanation": "Correct for supported fixed-buffer operations. Registration can amortize page-pinning and mapping work; ordinary buffered copies do not universally pin pages per operation."
       },
       {
         "text": "The kernel skips the copy from kernel to user space for every read",
@@ -182,7 +182,7 @@
       2,
       4
     ],
-    "workedExample": "Batching can amortize submission costs; registered resources can amortize appropriate lookup/pinning costs; SQPOLL can remove steady-state submission syscalls when its thread remains active. These are mechanisms, not guaranteed speedups. An ordinary buffered read still copies payload, whereas direct I/O or specific zero-copy features follow different paths.",
+    "workedExample": "Batching can amortize submission costs; registered resources can amortize appropriate lookup and page-pinning costs; SQPOLL can remove steady-state submission syscalls when its thread remains active. These are mechanisms, not guaranteed speedups. An ordinary buffered read still copies payload, whereas direct I/O or specific zero-copy features follow different code paths.",
     "link": {
       "title": "Ringing in a new asynchronous I/O API — LWN.net",
       "url": "https://lwn.net/Articles/776703/"
@@ -208,11 +208,11 @@
       },
       {
         "text": "Regular files are always 'ready' for readiness APIs, so epoll can't tell you a read would block; io_uring is completion-based and can hand blocking work to its io-wq workers",
-        "explanation": "Correct in principle. A completion request can finish inline, through supported asynchronous paths or through io-wq workers. The path varies with opcode, flags, filesystem and kernel version."
+        "explanation": "Correct in principle. A completion request can finish inline, through supported asynchronous paths or through io-wq workers. The code path varies with opcode, flags, filesystem and kernel version."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Readiness model: 'tell me when a read won't block'. A disk file is always considered readable, even if the page isn't cached, so the read can still block.\n2. Completion model: 'do this read and tell me when it's done'.\n3. io_uring's path: try non-blocking inline → if it would block on a pollable fd, arm poll → otherwise queue to io-wq → post a CQE when done.\n\nThat's why Node.js historically needed a thread pool for files.",
+    "workedExample": "1. Readiness model: 'tell me when a read won't block'. A disk file is always considered readable, even if the data isn't in the page cache, so the read can still block.\n2. Completion model: 'do this read and tell me when it's done'.\n3. io_uring's code path: try non-blocking inline → if it would block on a pollable fd, wait for readiness with a poll → otherwise queue to io-wq → post a CQE when done.\n\nThat's why Node.js historically needed a thread pool for files.",
     "link": {
       "title": "Lord of the io_uring (tutorial)",
       "url": "https://unixism.net/loti/"
@@ -264,7 +264,7 @@
       },
       {
         "text": "Provided buffer rings, so the kernel picks a buffer from a shared pool only when data actually arrives",
-        "explanation": "Correct. Provided buffers decouple dedicated buffer ownership from every idle receive. Size the pool for outstanding data and processing lifetime, and handle exhaustion/replenishment; pending receives do not inherently mean every byte is physically pinned."
+        "explanation": "Correct. Provided buffers decouple dedicated buffer ownership from every idle receive. Size the pool for outstanding data and processing lifetime, and handle exhaustion/replenishment; pending receives do not inherently mean every byte is physically page-pinned."
       },
       {
         "text": "Registered files",
@@ -272,7 +272,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. 50,000 × 16 KiB = 819,200,000 bytes = 781.25 MiB of capacity, not necessarily the same RSS.\n2. An illustrative shared pool of 1,024 such buffers uses 16 MiB.\n3. Receive completion flags identify selected buffers. Recycle only after application processing and kernel-use rules allow it.\n4. The smaller pool can exhaust during bursts; handle ENOBUFS/termination behavior and replenish/rearm as the operation requires.",
+    "workedExample": "1. Compare dedicated buffers with a shared pool:\n\n```formula\nM = C × b\nM = 50,000 × 16 KiB = 781.25 MiB\nM_pool = P × b\nM_pool = 1,024 × 16 KiB = 16 MiB\nwhere\nM: memory for one dedicated buffer per pending receive\nM_pool: memory for a shared provided-buffer pool\nC: pending receives, here 50,000\nP: buffers in the shared pool, here 1,024\nb: size of one buffer, here 16 KiB\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nIn words: dedicated 16 KiB buffers for 50,000 idle receives need about 781 MiB, while a 1,024-buffer shared pool needs 16 MiB.\n```\n\n2. 781.25 MiB is 819,200,000 bytes of capacity, not necessarily the same resident memory.\n3. Receive completion flags identify selected buffers. Recycle only after application processing and kernel-use rules allow it.\n4. The smaller pool can run out during traffic spikes; handle ENOBUFS/termination behavior and replenish/rearm as the operation requires.",
     "link": {
       "title": "Lord of the io_uring (tutorial)",
       "url": "https://unixism.net/loti/"
@@ -290,7 +290,7 @@
       },
       {
         "text": "Monitoring only ordinary syscall-entry events does not automatically expose every SQE as a separate read/open/send syscall",
-        "explanation": "Correct. Ring operations require suitable instrumentation; setup/register/enter can be visible, and other hooks may observe operations. SQPOLL need not enter once per submission."
+        "explanation": "Correct. Ring operations require suitable instrumentation; io_uring_setup, io_uring_register and io_uring_enter calls can be visible, and other hooks may observe operations. SQPOLL need not enter once per submission."
       },
       {
         "text": "In its June 2023 post, Google reported about 60% of prior-year kCTF exploit submissions used io_uring",
@@ -298,7 +298,7 @@
       },
       {
         "text": "io_uring requires root, so containers would need privileged mode",
-        "explanation": "By default unprivileged processes can create rings. Linux 6.6's `kernel.io_uring_disabled=1` can restrict it, but that's opt-in."
+        "explanation": "By default unprivileged processes can create io_uring instances. Linux 6.6's `kernel.io_uring_disabled=1` can restrict it, but only if an administrator sets it."
       }
     ],
     "answer": [
@@ -306,7 +306,7 @@
       1,
       2
     ],
-    "workedExample": "1. Check the actual profile: the inspected Moby allowlist does not include io_uring setup/enter/register calls.\n2. A syscall-entry-only monitor does not automatically see one syscall for every ring operation; other instrumentation may.\n3. The 60% statistic belongs to Google's June 2023 historical report, not a current universal rate.\n4. Unprivileged ring creation is possible when policy permits; kernel settings and seccomp can restrict it.",
+    "workedExample": "1. Check the actual profile: the inspected Moby allowlist does not include the io_uring_setup, io_uring_enter or io_uring_register calls.\n2. A syscall-entry-only monitoring tool does not automatically see one syscall for every ring operation; other instrumentation may.\n3. The 60% statistic belongs to Google's June 2023 historical report, not a current universal rate.\n4. Unprivileged ring creation is possible when policy permits; kernel settings and seccomp can restrict it.",
     "link": {
       "title": "Learnings from kCTF VRP's 42 Linux kernel exploits — Google Security Blog",
       "url": "https://security.googleblog.com/2023/06/learnings-from-kctf-vrps-42-linux.html"
@@ -336,7 +336,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. With default sizing, CQ capacity is twice SQ capacity; custom sizing is possible.\n2. NODROP normally stores completions internally while the CQ is full, then flushes them as space becomes available.\n3. Memory exhaustion can still cause loss and overflow/error indications. Older kernels can return EBUSY on submission when overflow cannot flush; exact behavior is version-dependent.\n4. Reap promptly and apply backpressure. A larger CQ adds headroom, not unlimited capacity.",
+    "workedExample": "1. With default sizing, CQ capacity is twice SQ capacity; custom sizing is possible.\n2. NODROP normally stores completions internally while the CQ is full, then flushes them as space becomes available.\n3. Memory exhaustion can still cause loss and overflow/error indications. Older kernels can return EBUSY on submission when overflow cannot flush; exact behavior is version-dependent.\n4. Collect completions promptly and apply backpressure. A larger CQ adds headroom, not unlimited capacity.",
     "link": {
       "title": "io_uring_setup(2) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man2/io_uring_setup.2.html"

@@ -50,7 +50,7 @@ The classic answer is **one thread (or process) per connection**, as in Apache's
 
 ## 2. Non-blocking I/O
 
-Set `O_NONBLOCK` on the descriptor and `read()` never sleeps in phase 1. For supported socket operations with no available data, EOF or other result, it reports `EAGAIN` or `EWOULDBLOCK`. Portable code checks both; these constants need not be equal on every platform.
+Set `O_NONBLOCK` on the descriptor and `read()` never sleeps during phase 1. For supported socket operations with no available data, EOF or other result, it reports `EAGAIN` or `EWOULDBLOCK`. Portable code checks both; these constants need not be equal on every platform.
 
 ```c
 int fl = fcntl(fd, F_GETFL, 0);
@@ -117,7 +117,7 @@ fcntl(fd, F_SETFL, fl | O_ASYNC);
 
 The process carries on running; the signal handler (or a main loop it nudges) then calls `read()`. Phase 1 doesn't block; phase 2 still does.
 
-Standard SIGIO notifications can coalesce, so programs must re-check descriptor state rather than count signals as events. Signal handlers have async-signal-safety restrictions. Linux `F_SETSIG` with `SA_SIGINFO` can include descriptor/event information, and real-time signals can queue subject to resource limits; fallback to SIGIO is possible. Multiplexing often makes per-descriptor event handling easier.
+Standard SIGIO notifications can be merged into one, so programs must re-check descriptor state rather than count signals as events. Signal handlers have async-signal-safety restrictions. Linux `F_SETSIG` with `SA_SIGINFO` can include descriptor/event information, and real-time signals can queue subject to resource limits; fallback to SIGIO is possible. Multiplexing often makes per-descriptor event handling easier.
 
 ## 5. Asynchronous I/O
 
@@ -144,7 +144,7 @@ ssize_t n = aio_return(&cb);
 /* status: completion error, or 0. */
 ```
 
-The catch on Linux: glibc's POSIX AIO is implemented in user space with a pool of threads doing ordinary blocking calls. Linux native AIO (`io_submit`) has operation/filesystem limitations, and submission can block even with direct I/O in some paths. **io_uring**, introduced in Linux 5.1 in 2019, provides a broader completion interface; it can also use worker threads and has operation-specific support rules (lesson 4). Windows has had it for decades as **I/O completion ports (IOCP)**.
+The catch on Linux: glibc's POSIX AIO is implemented in user space with a pool of threads doing ordinary blocking calls. Linux native AIO (`io_submit`) has operation/filesystem limitations, and submission can block even with direct I/O in some code paths. **io_uring**, introduced in Linux 5.1 in 2019, provides a broader completion interface; it can also use worker threads and has operation-specific support rules (lesson 4). Windows has had it for decades as **I/O completion ports (IOCP)**.
 
 ## The models side by side
 
@@ -197,7 +197,7 @@ For Node.js on a typical Unix libuv backend, asynchronous JavaScript APIs can si
 - **Implementation matters**: glibc POSIX AIO has asynchronous completion semantics even though workers perform the I/O; signal-driven designs require careful state and signal handling.
 
 ## Key takeaways
-- The two-phase socket-read model separates waiting for readiness from copying; it is a teaching model, not every possible I/O path.
+- The two-phase model of socket reads separates waiting for readiness from copying; it is a teaching model, not every possible I/O path.
 - In the first four models, the caller performs a read and receives its result when that call finishes. Completion interfaces separate submission from result collection.
 - Readiness models (epoll, kqueue) tell you when you can act; completion models (IOCP, io_uring) tell you when the kernel has acted.
 - `O_NONBLOCK` has no effect on regular files, which is why event loops use thread pools for disk I/O.

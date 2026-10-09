@@ -26,7 +26,7 @@ while running:
 Three ideas carry the whole design:
 
 1. **One thread, many connections.** Each connection is a small state object (a parser state, a buffer), rather than requiring a dedicated waiting thread and stack for each connection.
-2. **Callbacks run to completion.** While a callback runs, nothing else on that loop runs. Other threads can still run and the OS can preempt this thread. Data exclusively owned by the loop often needs no inter-thread lock, but reentrant callbacks and shared state require care.
+2. **Callbacks run to completion.** While a callback runs, nothing else on that loop runs. Other threads can still run and the OS can preempt this thread. Data exclusively owned by the loop often needs no inter-thread lock, but callbacks that re-enter the loop and shared state require care.
 3. **Keep blocking work off the dispatch thread.** If anything waits, the whole loop waits, and every connection stalls.
 
 ## A small buffered echo loop in Python
@@ -108,7 +108,7 @@ finally:
     sel.close()
 ```
 
-`key.data` is whatever you stored at registration: here, the callback. That's the **dispatch** step: an event on a descriptor maps to the handler for it.
+`key.data` is whatever you stored at registration: here, the callback. That's the **dispatch step**: an event on a descriptor maps to the handler for it.
 
 > [!warning] Preserve partial writes
 > Non-blocking sendall can raise after sending some bytes without exposing a usable partial count. The loop above uses send, retains the unsent suffix, enables write interest while output remains and pauses reading at HIGH. That is a per-connection payload bound, not a total process memory bound.
@@ -128,9 +128,27 @@ The `selectors` example is a reactor. Windows IOCP and io_uring are proactors. L
 
 Servers need timeouts: idle connections, retries, `setTimeout`. A loop keeps pending timers in a **min-heap** keyed by expiry time (libuv uses a binary min-heap; nginx uses a red-black tree).
 
-- Insert a timer: O(log n).
-- Next expiry: O(1), the root.
-- The wait timeout is `next_expiry - now`, so the loop requests a wait no longer than the time to the next expiry; interruption, timer granularity and scheduling can alter actual wakeup time.
+A min-heap keeps the earliest expiry at its root, which gives these costs and the wait timeout:
+
+```formula
+C_insert = O(log_2(n))
+C_next = O(1)
+t_wait = t_next − t_now
+t_wait = 120 ms − 100 ms = 20 ms
+where
+C_insert: the work to add one timer to the min-heap
+C_next: the work to find the earliest expiry (read the root)
+n: the number of pending timers in the min-heap
+log_2: logarithm base 2, how many times n can be halved before reaching 1
+O(...): Big-O notation, "grows at most in proportion to" the quantity in brackets; O(1) means constant, independent of n
+t_wait: the timeout the loop passes to its wait call (for example epoll_wait), in milliseconds (ms)
+t_next: the expiry time of the earliest pending timer, here 120 ms on the loop's clock
+t_now: the current time on the same clock, here 100 ms
+ms: millisecond, one thousandth of a second
+In words: adding a timer costs about one extra step each time the timer count doubles, finding the next one is instant, and the loop asks to sleep until the next timer is due unless I/O wakes it sooner.
+```
+
+With a million pending timers an insert takes at most about 20 min-heap steps, since log₂(1,000,000) ≈ 20. The loop requests a wait no longer than the time to the next expiry; interruption, timer granularity and scheduling can alter actual wakeup time, and the loop must re-read the clock after every wait rather than reuse the old t_now.
 
 A timer establishes a scheduling threshold, not an exact deadline. Long callbacks can delay it substantially. Runtime clock granularity and rounding mean a nominal millisecond value is not a precision timing contract.
 
@@ -161,7 +179,7 @@ libuv uses a shared **thread pool** for several asynchronous APIs, with results 
 
 The pool has **4 threads by default**, set with `UV_THREADPOOL_SIZE` (up to 1,024). That small default is a classic production surprise: four slow NFS reads or four `pbkdf2` calls and every `dns.lookup` queues behind them, so outbound HTTP requests appear to hang.
 
-Ordinary asynchronous network socket readiness/completion uses the platform backend rather than a blocked pool worker per socket. Unix often uses epoll/kqueue; Windows uses IOCP. DNS lookup can still use the pool.
+Ordinary network socket readiness/completion for asynchronous APIs uses the platform backend rather than a blocked pool worker per socket. Unix often uses epoll/kqueue; Windows uses IOCP. DNS lookup can still use the pool.
 
 ## nginx
 
@@ -176,9 +194,21 @@ nginx uses one loop per process rather than one process overall:
 ```
 
 - worker_processes auto attempts to detect available CPUs; inspect the actual count under affinity/cgroup constraints. Each worker has its own event loop, with platform-specific backends and optional worker threads.
-- `worker_connections` caps connections per worker (the default is 512; production configs often raise it to thousands). Workers × worker_connections is an aggregate connection-slot ceiling, not a guarantee of that many clients: upstream connections and descriptor/resource limits also consume capacity.
+- `worker_connections` caps connections per worker (the default is 512; production configs often raise it to thousands). Multiplying the two gives the most connection slots nginx can hold at once:
+
+```formula
+C_max = W × C_w
+C_max = 4 × 512 = 2,048
+where
+C_max: the aggregate connection-slot ceiling for the whole nginx instance
+W: the number of worker processes, here 4
+C_w: the worker_connections setting, the slot limit per worker, here the default 512
+In words: four workers with the default 512 slots each can hold at most 2,048 connections between them.
+```
+
+This is a ceiling, not a guarantee of that many clients: when nginx proxies, each client also uses a slot for the upstream connection, so if every client has a request in flight to an upstream server, 2,048 slots serve only about 1,024 clients at once. Descriptor and resource limits can cap it lower still.
 - Workers share the listening sockets. With `listen ... reuseport`, each worker gets its own `SO_REUSEPORT` socket and the kernel spreads new connections between them, avoiding the thundering herd and lock contention on a shared accept queue.
-- Per-worker connections reduce shared-state contention, but shared-memory zones, caches and other coordination can still use locks.
+- Per-worker connections reduce shared-state contention, but shared-memory zones and other coordination can still use locks.
 
 Because each worker is a loop, a blocking disk read stalls every connection on that worker. nginx added **thread pools** (`aio threads`, version 1.7.11) to offload reads that miss the page cache. Performance depends on storage, files, concurrency and configuration; no benchmark reproduction is included here.
 
@@ -190,7 +220,7 @@ Redis illustrates serial command execution combined with event-driven I/O and ba
 
 - Its own small event library, **ae**, picks epoll, kqueue, evport or select at build time.
 - Commands execute one at a time on the main thread. Serial command execution avoids interleaving ordinary command handlers on one instance; it does not make all server code lock-free or turn multi-command client workflows into transactions.
-- Command cost depends on command complexity, data size, persistence, networking and hardware. Pipelining can amortize round trips without removing command work.
+- Command cost depends on command complexity, data size, persistence, networking and hardware. Redis pipelining can amortize round trips without removing command work.
 
 The flip side is the cardinal rule in action:
 
@@ -216,7 +246,7 @@ Seastar (behind ScyllaDB) takes "loop per core" to the limit: a **shard-per-core
 ## Pitfalls
 
 - **Blocking the loop.** A synchronous file read, a CPU-heavy JSON parse, a regex with catastrophic backtracking or a `time.sleep()` freezes every connection. Measure **event-loop lag** (how late a periodic timer fires) as a health metric.
-- **Unfairness.** One connection sending a flood can monopolise the loop. Cap the work per wake-up, e.g. read at most N bytes before moving on.
+- **Unfairness.** One connection sending a flood can monopolise the loop. Cap the work per wake-up, e.g. read at most a fixed budget (say 64 KiB) from one connection before moving on.
 - **No backpressure.** If you read faster than you can write, per-connection buffers grow without bound. Stop reading from the source (unregister `EVENT_READ`) while the outgoing buffer is above a high-water mark.
 - **Callback hell and lost errors.** `async`/`await` (Python asyncio, JavaScript, Rust) is syntax over the same loop: an await can suspend, but an already-completed operation may continue immediately (for example in Python); language/runtime behavior differs.
 
@@ -226,7 +256,7 @@ Seastar (behind ScyllaDB) takes "loop per core" to the limit: a **shard-per-core
 ## Key takeaways
 - An event loop is one thread that waits for I/O or the next timer, then runs callbacks to completion; callbacks should avoid blocking the dispatch thread.
 - Reactors dispatch readiness (epoll, kqueue); proactors dispatch completions (IOCP, io_uring).
-- Timers live in a heap or tree; the next expiry sets the wait timeout, and timer thresholds do not guarantee exact wakeup time.
+- Timers live in a min-heap or tree; the next expiry sets the wait timeout, and timer thresholds do not guarantee exact wakeup time.
 - libuv runs fixed phases and sends files, DNS and some crypto to a 4-thread pool by default; nginx runs one loop per worker process; ordinary Redis commands execute serially, while background/I/O work has separate synchronization.
 - Scale across cores with one loop per core, and measure event-loop lag to catch anything that blocks.
 

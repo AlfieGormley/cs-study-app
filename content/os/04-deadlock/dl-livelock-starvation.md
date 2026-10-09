@@ -58,9 +58,31 @@ Scheduling variation may break this pattern, but it supplies no progress guarant
 
 For this symmetric retry pattern, useful ways to improve progress include:
 
-- **Randomised back-off.** Sleep a random time before retrying. Ethernet's original CSMA/CD did exactly this: after the nth collision a station waits a random number of slot times between 0 and 2^min(n, 10) − 1, and gives up after 16 attempts.
+- **Randomised back-off.** Sleep a random time before retrying, so the two sides stop moving in step. Ethernet's original CSMA/CD did exactly this (below).
 - **Ordering.** If both threads take `a` before `b`, the problem disappears entirely (lesson 2).
 - **Priority or tie-breaking.** Let the older or lower-id contender win.
+
+On the original shared-cable Ethernet, two stations that transmit at once garble each other's frames: an **Ethernet collision**. CSMA/CD (carrier-sense multiple access with collision detection) makes each station pick a random wait from a range that doubles after every collision, up to a limit:
+
+```formula
+k = min(c, 10)
+r ∈ {0, 1, …, 2^k − 1}
+t_wait = r × t_slot
+t_max = (2^3 − 1) × 51.2 µs = 358.4 µs
+where
+c: how many times this frame has collided so far (1 after the first collision)
+min(c, 10): the smaller of c and 10, so the range stops growing after the 10th collision
+k: the back-off exponent
+r: a whole number of slot times, chosen at random with every value equally likely
+∈ {…}: "is one of"; … stands for the whole numbers in between
+t_wait: how long the station waits before trying again
+t_slot: the slot time, 512 bit times: 51.2 microseconds (µs) on 10 Mb/s Ethernet
+t_max: the longest wait after the 3rd collision (c = 3, k = 3), in the example
+µs: microseconds, millionths of a second
+In words: after each collision the station waits a random number of slot times, and the range of possible waits doubles each time, up to 1,024 possible values (0 to 1,023 slots).
+```
+
+So after a third collision a station waits 0 to 7 slots, at most 358.4 µs at 10 Mb/s. After 16 failed attempts it gives up and reports an error. Two stations that collided keep colliding only if they keep drawing the same r, and the chance of that halves with every round until the range stops growing at the 10th collision.
 
 Raft uses the same trick for leader elections. If two followers time out together, they split the vote and both have to retry. Raft draws each election timeout at random (150–300 ms in the paper), so one candidate almost always gets in first.
 
@@ -68,9 +90,30 @@ Raft uses the same trick for leader elections. If two followers time out togethe
 
 The same pattern appears wherever things retry:
 
-- **Retry storms.** A service slows down; every client times out and retries at once, doubling the load; it slows further. The fix is exponential back-off with **jitter**, for example `sleep = random(0, min(cap, base * 2**attempt))`, which AWS calls "full jitter".
+- **Retry storms.** A service slows down; every client times out and retries at once, doubling the load; it slows further. The fix is exponential back-off with **jitter** (below).
 - **Receive livelock.** Mogul and Ramakrishnan (1996) showed that an interrupt-driven kernel under a packet flood can spend all its time taking receive interrupts and none delivering packets to applications. Throughput collapses to near zero while the CPU is fully busy. Linux's NAPI uses interrupt-triggered, budgeted polling to mitigate receive livelock (module 7); it does not guarantee application progress under every overload or configuration.
 - **Optimistic concurrency.** Two transactions that keep conflicting, aborting and restarting together can livelock. Back-off can reduce collisions; timestamp protocols need fair execution and finite transactions for eventual completion.
+
+AWS's "full jitter" back-off picks each sleep at random between zero and an exponentially growing ceiling:
+
+```formula
+b = min(t_cap, t_base × 2^a)
+t_sleep = random(0, b)
+b = min(2 s, 100 ms × 2^4) = 1.6 s
+where
+a: the attempt number, starting at 0
+t_base: the base delay, 100 milliseconds (ms) in the example
+t_cap: the largest ceiling allowed, 2 seconds (s) in the example
+min(…): the smaller of the two values
+b: the ceiling for this attempt
+random(0, b): a number drawn uniformly at random between 0 and b
+t_sleep: how long the client actually sleeps before retrying
+ms: milliseconds
+s: seconds
+In words: the ceiling doubles with each attempt until it hits the cap, and the actual sleep is a random point below the ceiling, so clients that failed together spread out.
+```
+
+With these numbers the ceilings run 100, 200, 400, 800 and 1,600 ms, then stay at 2 s. In Python the same rule is `random.uniform(0, min(cap, base * 2**attempt))`. Doubling alone would keep synchronised clients synchronised; the randomness is what spreads them out.
 
 ## Starvation
 

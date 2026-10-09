@@ -39,7 +39,7 @@ Wait-for graph:
       +-------- T3
 ```
 
-With single-instance resources, **a cycle in the wait-for graph is a deadlock**, and every deadlock is a cycle. So detection is just cycle detection, which a depth-first search does in O(V + E).
+With single-instance resources, **a cycle in the wait-for graph is a deadlock**, and every deadlock is a cycle. So detection is just cycle detection, which a depth-first search (DFS) does in O(V + E), where V is the number of vertices (here, waiting or holding transactions) and E the number of wait-for edges.
 
 ```python
 def find_cycle(waits_for):
@@ -90,6 +90,26 @@ With several units per resource type, a cycle is no longer proof (lesson 1). The
 1. Compare each process's **current request**, not its maximum `Need`. Detection asks "can everyone finish given what they're asking for right now?", not "in the worst case".
 2. A process holding no units cannot sustain a resource deadlock in this model, so mark it finished. It may still be blocked behind the deadlocked holders.
 
+As in the safety check, a scratch vector `Work` (one number per resource type) starts equal to the free units, and two rules drive the loop:
+
+```formula
+Request[i] ≤ Work
+Work_new = Work + Allocation[i]
+(2, 0, 2) ≤ (3, 1, 3)
+Work_new = (3, 1, 3) + (2, 0, 0)
+Work_new = (5, 1, 3)
+where
+i: the unfinished process being checked
+Request[i]: the units of each resource type process i is blocked asking for right now; (2, 0, 2) in the example
+Work: the units the check treats as free; it starts equal to Available, the units free right now; (3, 1, 3) in the example
+Allocation[i]: the units process i holds; (2, 0, 0) in the example
+Work_new: Work after process i is treated as finished
+≤: less than or equal to, for every resource type
+In words: if what a process is waiting for fits in the free pool, assume it finishes and returns everything it holds; whoever is left unfinished when nothing more fits is deadlocked.
+```
+
+The example numbers come from the worked example below (P1's step).
+
 ```python
 def deadlocked(avail, alloc, request):
     # Nonnegative, matching shapes.
@@ -117,7 +137,7 @@ The optimistic step is "assume a process whose request fits will finish and rele
 
 ### Worked example
 
-Five processes, totals A = 7, B = 2, C = 6 (another Silberschatz example):
+Five processes; totals 7 units of A, 2 of B and 6 of C (another Silberschatz example):
 
 ```
       Alloc    Request
@@ -131,7 +151,21 @@ P4    0 0 2    0 0 2
 Available: 0 0 0
 ```
 
-Nothing is free, which looks alarming. Run the algorithm:
+Every unit is allocated:
+
+```formula
+Available = Total − Σ Allocation
+Available = (7, 2, 6) − (7, 2, 6)
+Available = (0, 0, 0)
+where
+Total: the units of each resource type that exist: (7, 2, 6)
+Σ Allocation: the column sums of Alloc, the units held across all processes: (7, 2, 6)
+Σ: add up over every process
+Available: the units free now
+In words: everything that exists is held by someone, so nothing is free.
+```
+
+Nothing is free, which looks alarming. Run the algorithm, starting `Work` at (0, 0, 0):
 
 ```
 Work     Run   +Alloc
@@ -145,11 +179,22 @@ Work     Run   +Alloc
 
 (P0 and P2 request nothing, so they go first. The order shown is one valid choice.) No deadlock: everyone can finish.
 
-Now P2 asks for one more C, so `Request[P2] = (0, 0, 1)`. Rerun: P0 finishes, giving Work = (0, 1, 0). Now P1 needs A, P2 needs C, P3 needs A and P4 needs C, and Work has neither. **P1, P2, P3 and P4 are deadlocked.**
+Now P2 asks for one more C. Rerun from nothing free:
+
+```formula
+Request[P2] = (0, 0, 1)
+Work = (0, 0, 0) + (0, 1, 0) = (0, 1, 0)
+where
+Request[P2]: what P2 is now blocked asking for: one unit of C
+Work: the units the check treats as free; it starts at (0, 0, 0) and P0 (requesting nothing) finishes first, returning its (0, 1, 0)
+In words: after P0 finishes, only one unit of B is free.
+```
+
+Now P1 needs A, P2 needs C, P3 needs A and P4 needs C, and `Work` has neither. **P1, P2, P3 and P4 are deadlocked.**
 
 ## How often to look
 
-Detection costs O(V + E) for the graph, or O(m·n²) for the matrix version. You choose when to pay:
+Detection costs O(V + E) for the graph (V transactions, E wait-for edges), or O(m·n²) for the matrix version (n processes, m resource types). You choose when to pay:
 
 | Trigger | Trade-off |
 |---|---|
@@ -166,7 +211,7 @@ Once you've found a cycle, someone has to give something up. There are two broad
 
 **Abort processes.** Either abort every member of the cycle (simple, wasteful) or abort one at a time and rerun detection until the cycle is gone. Aborting one can discard less work, which raises the question of *which* one.
 
-**Preempt resources.** Take a resource from a victim, roll the victim back to a point before it acquired it, and restart it from there. This needs **checkpoints** or an undo log. Database recovery mechanisms can undo or invalidate a victim's transactional changes before releasing its transaction-scoped locks. The details differ: PostgreSQL uses MVCC tuple visibility rather than a general InnoDB-style undo log, and session-scoped locks need not be released by transaction rollback.
+**Preempt resources.** Take a resource from a victim, roll the victim back to a point before it acquired it, and restart it from there. This needs saved **process checkpoints** or an undo log. Database recovery mechanisms can undo or invalidate a victim's transactional changes before releasing its transaction-scoped locks. The details differ: PostgreSQL uses MVCC tuple visibility rather than a general InnoDB-style undo log, and session-scoped locks need not be released by transaction rollback.
 
 ### Choosing a victim
 
@@ -195,6 +240,24 @@ These three engines detect deadlocks, but they differ in when they look and whom
 ## Your side: retry the whole transaction
 
 Detection turns a hang into an error. If retrying is appropriate, roll back and rerun the *entire* logical transaction with a retry limit. The example assumes no enclosing transaction or savepoint and no irreversible effects in the retried work.
+
+The pause before each retry grows exponentially but is drawn at random below a cap, so two victims that collided are unlikely to retry at the same instant:
+
+```formula
+cap_n = 0.05 s × 2^n
+pause_n = U × cap_n
+cap_3 = 0.05 s × 2^3 = 0.4 s
+where
+n: the number of failed attempts so far minus one: 0 after the first failure, 1 after the second, and so on
+cap_n: the longest pause allowed after failure n + 1, in seconds (s)
+U: a random number between 0 and 1, drawn fresh each time (Python's random.random(), which can return 0 but never 1)
+pause_n: the actual pause, in seconds, somewhere between 0 and cap_n
+cap_3: the ceiling after the fourth failure, the largest one with the default five tries
+s: seconds
+In words: each failure doubles the ceiling on the wait, starting from 50 ms, and the actual wait is a random fraction of it.
+```
+
+So the ceilings run 50 ms, 100 ms, 200 ms and 400 ms, and with the default `tries=5` there are at most four pauses. On average a pause is half its ceiling. In the code below, `n` is the loop counter, `cap` is cap_n and `pause` is pause_n:
 
 ```python
 import random
@@ -234,7 +297,7 @@ Pitfalls:
 
 ## Prevention inside the database: wait-die and wound-wait
 
-Some databases, especially distributed ones where building a global wait-for graph is hard, prevent deadlock instead, using transaction **timestamps** (older = smaller). When transaction Ti requests a lock held by Tj:
+Some databases, especially distributed ones where building a global wait-for graph is hard, prevent deadlock instead, using transaction **timestamps**: each transaction gets one when it starts, so an older transaction has a smaller timestamp. When transaction Ti requests a lock held by Tj:
 
 | Scheme | Ti older than Tj | Ti younger than Tj |
 |---|---|---|

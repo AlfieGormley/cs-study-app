@@ -72,7 +72,20 @@ Databases do preemption at a larger scale: they abort and roll back a transactio
 
 This is the workhorse. Put all locks in a **total order** and require every thread to acquire them in increasing order. Then a cycle is impossible.
 
-Why: suppose there were a cycle T1 → T2 → ... → Tn → T1. Each thread holds a lock and waits for a higher-numbered one held by the next thread. Going around the cycle the lock numbers strictly increase at every step, yet we come back to where we started. A number can't be greater than itself, so no such cycle exists.
+Why: suppose there were a cycle T1 → T2 → ... → Tn → T1. Each thread holds a lock and waits for a higher-numbered one held by the next thread. Write down the locks' positions in the order, going round the cycle:
+
+```formula
+r(L_1) < r(L_2) < … < r(L_k) < r(L_1)
+where
+L_1, L_2, …, L_k: the locks held by the threads around the supposed cycle: thread 1 holds L_1 and waits for L_2, which thread 2 holds, and so on; the last thread waits for L_1
+k: the number of threads (and locks) in the cycle, at least 2 (k = n for the cycle above)
+r(L): the rank of lock L: its position in the agreed total order, 1 for the lock that must be taken first
+<: is less than
+…: the steps in between
+In words: going round the cycle the rank rises at every step, yet it ends at the lock it started from, which would make r(L_1) smaller than itself.
+```
+
+A number can't be less than itself, so no such cycle exists. For example, with account locks ranked by id, a thread holding account 17 may wait for account 42, but no thread holding 42 ever waits for 17, so the chain of waits can never come back round. The argument needs every acquisition to obey the order, and the order to be *strict*: two locks with the same rank would break it.
 
 Applied to the transfer bug:
 
@@ -127,7 +140,20 @@ Five philosophers sit around a table with one fork between each pair; each needs
 
 ## Lock hierarchies
 
-On a large codebase, a global ordering over *every* lock instance is impractical. Instead, assign each lock a **level** and require that a thread only acquires locks at a strictly higher level than any it already holds. Locks at the same level must never be held together (or need their own ordering rule, such as by id).
+On a large codebase, a global ordering over *every* lock instance is impractical. Instead, assign each lock a **level** and require that a thread only acquires locks at a strictly higher level than any it already holds:
+
+```formula
+lvl(L_new) > lvl(L_top)
+30 > 20
+where
+L_new: the lock the thread is about to take
+L_top: the most recently taken lock the thread still holds, which has the highest level it holds
+lvl(L): the level number assigned to lock L, such as 20 for an account lock and 30 for a ledger lock
+>: is greater than
+In words: each new lock must sit strictly higher in the hierarchy than everything the thread already holds.
+```
+
+So a thread holding an account lock (20) may take the ledger lock (30), but a thread holding the ledger may not then take an account, because 20 is not greater than 30. This is the lock-ordering argument applied to levels rather than individual locks. Locks at the same level must never be held together (or need their own ordering rule, such as by id).
 
 A typical layering:
 

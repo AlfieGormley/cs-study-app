@@ -54,7 +54,7 @@ Found one Java-level deadlock:
 Python's `threading.Lock` doesn't record its owner, so a dump shows where threads wait but not who holds the lock. You infer the holder from which thread's stack is inside the matching `with` block.
 
 - `py-spy dump --pid <pid>` prints every thread's Python stack from outside the process, without terminating it. Sampling may briefly pause threads; `--nonblocking` avoids pausing at the cost of potentially inconsistent samples.
-- `faulthandler` can dump all threads from inside, on a signal or after a timeout:
+- `faulthandler` can dump all threads from inside, on a Unix signal or after a timeout:
 
 ```python
 import faulthandler
@@ -112,7 +112,7 @@ Some kernel waits leave tasks in state `D` (uninterruptible sleep), while spinni
 
 Databases detect deadlocks for you (lesson 4), but you still need to find out *which code* causes them.
 
-- **PostgreSQL** logs each deadlock with the processes, the locks and the statements involved (`Process 123 waits for ShareLock on transaction 456; blocked by process 789.`). Turn on `log_lock_waits` (off by default) to also log any wait longer than `deadlock_timeout`. For live blocking:
+- **PostgreSQL** logs each deadlock with the processes, the locks and the statements involved (`Process 123 waits for ShareLock on transaction 456; blocked by process 789.`). Turn on `log_lock_waits` (off by default up to PostgreSQL 18; PostgreSQL 19, in beta as of October 2026, turns it on by default) to also log any wait longer than `deadlock_timeout`. For live blocking:
 
 ```sql
 SELECT pid,
@@ -209,7 +209,7 @@ Others in the same family:
 Order checkers only see what runs. To find bugs on paths that are hard to reach by chance, **model checkers** run a concurrent test under every (or many) possible interleavings:
 
 - **loom** for Rust replaces `std::sync` types in tests and systematically explores schedules.
-- A model checker such as **TLC** checks a design written in **TLA+** before you write implementation code; AWS has used it for S3 and DynamoDB internals.
+- A model checker such as the **TLC model checker** checks a design written in **TLA+** before you write implementation code; AWS has used it for S3 and DynamoDB internals.
 
 ## Designing deadlock out
 
@@ -225,7 +225,7 @@ Tools catch mistakes. Design makes mistakes rare. Useful rules include:
 8. **Databases**: short transactions, touch rows in a consistent order (`ORDER BY id ... FOR UPDATE`), use `NOWAIT` or `SKIP LOCKED` for queue-like workloads, and use bounded, safe whole-transaction retries when appropriate. A timeout needs explicit cleanup; InnoDB normally leaves earlier transaction locks held after a statement timeout.
 
 > [!example] An illustrative failure pattern
-> A cache calls an `on_evict` callback while holding its internal lock. A team registers a callback that writes to a metrics registry, which takes its own lock. Elsewhere, the metrics exporter, holding the registry lock, reads cache stats, which takes the cache lock. Cache → registry and registry → cache: a deadlock under load. The fix is rule 2: collect evicted entries under the lock, release it, *then* run callbacks.
+> A cache calls an `on_evict` callback while holding its internal lock. A team adds a callback that writes to a metrics registry, which takes its own lock. Elsewhere, the metrics exporter, holding the registry lock, reads cache stats, which takes the cache lock. Cache → registry and registry → cache: a deadlock under load. The fix is rule 2: collect evicted entries under the lock, release it, *then* run callbacks.
 
 ## Key takeaways
 - Use multiple dumps and progress measurements to investigate; confirm a dependency cycle rather than diagnosing from CPU use alone.

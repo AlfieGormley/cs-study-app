@@ -19,11 +19,11 @@
       },
       {
         "text": "A data race",
-        "explanation": "A data race can also cause hangs or undefined behavior. The specific repeated acquire/release pattern makes livelock the best answer here."
+        "explanation": "A data race can also cause hangs or undefined behavior. The specific repeated acquire-and-release pattern makes livelock the best answer here."
       }
     ],
     "answer": 1,
-    "workedExample": "High CPU alone does not distinguish livelock from a spinning deadlock or other bug. Here the threads repeatedly acquire/release and change state without completing work, which points to livelock. Compare multiple stacks and progress counters, then inspect the retry protocol.",
+    "workedExample": "High CPU alone does not distinguish livelock from a spinning deadlock or other bug. Here the threads repeatedly acquire and release locks and change state without completing work, which points to livelock. Compare multiple stacks and progress counters, then inspect the retry protocol.",
     "link": {
       "title": "Deadlock (computer science) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
@@ -93,7 +93,7 @@
     "id": "dl-livelock-starvation-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A client retries with \"full jitter\": `sleep = random(0, min(cap, base * 2**attempt))`, with `base = 100 ms`, `cap = 2 s` and `attempt` starting at 0. What is the **longest** possible sleep before attempt 4 and before attempt 6?",
+    "prompt": "A client retries with \"full jitter\": before each attempt it sleeps for a random time between 0 and a ceiling b:\n\n```formula\nb = min(t_cap, t_base × 2^a)\nwhere\na: the attempt number, starting at 0\nt_base: the base delay: 100 milliseconds (ms)\nt_cap: the largest ceiling allowed: 2 seconds (s)\nmin(…): the smaller of the two values\nb: the ceiling on the sleep before attempt a\nms: milliseconds\ns: seconds\nIn words: the ceiling doubles with each attempt until it reaches the cap.\n```\n\nWhat is the **longest** possible sleep before attempt 4 and before attempt 6?",
     "options": [
       {
         "text": "1.6 s and 2 s",
@@ -105,7 +105,7 @@
       },
       {
         "text": "0.8 s and 3.2 s",
-        "explanation": "That uses 2^(attempt − 1). With attempt starting at 0, attempt 4 multiplies base by 2⁴ = 16."
+        "explanation": "That uses one doubling fewer than the attempt number (2³ for attempt 4). With attempts counted from 0, attempt 4 multiplies the base by 2⁴ = 16."
       },
       {
         "text": "2 s and 2 s",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Bound = min(cap, base × 2^attempt).\n\n```\nattempt  base*2^a   bound\n0        100 ms     100 ms\n1        200 ms     200 ms\n2        400 ms     400 ms\n3        800 ms     800 ms\n4        1600 ms    1600 ms\n5        3200 ms    2000 ms\n6        6400 ms    2000 ms\n```\n\n2. The actual sleep is uniform in [0, bound], so on average it's half the bound.\n3. The randomness matters as much as the growth: if a thousand clients all slept exactly 1.6 s, they'd retry together and recreate the storm.",
+    "workedExample": "1. Work out the ceiling for each attempt:\n\n```formula\nb = min(t_cap, t_base × 2^a)\nb_4 = min(2 s, 100 ms × 2^4)\nb_4 = min(2 s, 1.6 s) = 1.6 s\nb_6 = min(2 s, 100 ms × 2^6)\nb_6 = min(2 s, 6.4 s) = 2 s\nwhere\na: the attempt number, starting at 0\nt_base: the base delay, 100 ms\nt_cap: the cap, 2 s\nmin(…): the smaller of the two values\nb: the ceiling on the sleep before attempt a\nb_4, b_6: the ceilings before attempts 4 and 6\nms: milliseconds\ns: seconds\nIn words: the uncapped value doubles from 100 ms; by attempt 5 it passes 2 s, so from then on the cap applies.\n```\n\nEvery attempt:\n\n```\nattempt  uncapped   ceiling\n0        100 ms     100 ms\n1        200 ms     200 ms\n2        400 ms     400 ms\n3        800 ms     800 ms\n4        1600 ms    1600 ms\n5        3200 ms    2000 ms\n6        6400 ms    2000 ms\n```\n\n2. The actual sleep is uniform between 0 and the ceiling, so on average it's half the ceiling.\n3. The randomness matters as much as the growth: if a thousand clients all slept exactly 1.6 s, they'd retry together and recreate the storm.",
     "link": {
       "title": "Exponential Backoff And Jitter — AWS Architecture Blog",
       "url": "https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Each reader holds for 50 ms, and one arrives every 10 ms, so about 50 / 10 = 5 readers hold the lock at any moment.\n2. A reader-preferring lock admits a new reader whenever readers already hold it.\n3. The reader count therefore never drops to zero, and the writer, which needs zero readers, waits indefinitely.\n4. The system is progressing (readers are served), so this is **starvation**, not deadlock.\n5. Fix: once a writer is waiting, queue new readers behind it. Readers already inside finish within 50 ms, then the writer runs, then the queued readers.",
+    "workedExample": "1. Each reader holds for 50 ms, and one arrives every 10 ms:\n\n```formula\nN = t_hold / t_gap\nN = 50 ms / 10 ms = 5\nwhere\nN: how many readers hold the lock at any moment, on average\nt_hold: how long each reader holds the lock: 50 milliseconds (ms)\nt_gap: the time between reader arrivals: 10 ms\nms: milliseconds\nIn words: a new reader arrives five times during each reader's hold, so about five overlap at once and the count never reaches zero.\n```\n\n2. A reader-preferring lock admits a new reader whenever readers already hold it.\n3. The reader count therefore never drops to zero, and the writer, which needs zero readers, waits indefinitely.\n4. The system is progressing (readers are served), so this is **starvation**, not deadlock.\n5. Fix: once a writer is waiting, queue new readers behind it. Readers already inside finish within 50 ms, then the writer runs, then the queued readers.",
     "link": {
       "title": "Readers–writer lock — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock"
@@ -191,7 +191,7 @@
     "id": "dl-livelock-starvation-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "One CPU, strict priorities H > M > L, no priority inheritance. At t = 0 L locks `m`; its critical section needs 3 ms of CPU. At t = 1 ms H wakes and blocks on `m`. At t = 2 ms M becomes runnable and needs 100 ms of CPU, using no locks. When does H acquire `m`? And when would it with priority inheritance?",
+    "prompt": "One CPU, strict priorities: H highest, then M, then L. No priority inheritance. Times are t, in milliseconds (ms) after L locks `m`. At t = 0 L locks `m`; its critical section needs 3 ms of CPU. At t = 1 ms H wakes and blocks on `m`. At t = 2 ms M becomes runnable and needs 100 ms of CPU, using no locks. When does H acquire `m`? And when would it with priority inheritance?",
     "options": [
       {
         "text": "103 ms without inheritance; 3 ms with it",
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Without inheritance:\n\n```\n0-1    L runs (1 ms of CS done)\n1      H wakes, blocks on m\n1-2    L runs (2 ms done)\n2-102  M runs (preempts L)\n102-103 L runs (3 ms), unlocks\n103    H acquires m\n```\n\nWith inheritance:\n\n```\n0-1    L runs (1 ms done)\n1      H blocks; L inherits H\n1-3    L runs (3 ms done); M can't\n       preempt at t = 2\n3      L unlocks, drops back to L;\n       H acquires m\n```\n\nH's wait goes from 102 ms (and unbounded in general, since any M-level work extends it) to 2 ms, bounded by L's critical section.",
+    "workedExample": "Without inheritance:\n\n```\n0-1    L runs (1 ms of CS done)\n1      H wakes, blocks on m\n1-2    L runs (2 ms done)\n2-102  M runs (preempts L)\n102-103 L runs (3 ms), unlocks\n103    H acquires m\n```\n\nWith inheritance:\n\n```\n0-1    L runs (1 ms done)\n1      H blocks; L inherits H\n1-3    L runs (3 ms done); M can't\n       preempt at t = 2\n3      L unlocks, drops back to L;\n       H acquires m\n```\n\nH's wait is the time it acquires `m` minus the time it blocked:\n\n```formula\nw = t_acq − t_block\nw_none = 103 ms − 1 ms = 102 ms\nw_PI = 3 ms − 1 ms = 2 ms\nwhere\nt_block: when H blocked on m: 1 ms\nt_acq: when H acquires m\nw: how long H waits\nw_none: H's wait without priority inheritance\nw_PI: H's wait with priority inheritance (PI)\nms: milliseconds\nIn words: inheritance cuts H's wait from 102 ms to the 2 ms L still needed in its critical section.\n```\n\nWithout inheritance the wait is unbounded in general, since any M-level work extends it; with inheritance it is bounded by L's critical section.",
     "link": {
       "title": "Priority inversion — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Priority_inversion"

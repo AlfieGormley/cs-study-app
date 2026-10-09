@@ -207,6 +207,21 @@ const glossaryClashes = [];
   // A subject's own term may reuse a core term's name or alias: inside that subject it wins (glossary.js looks up
   // the subject first), and everywhere else the core definition still applies.
   const taken = (t, a) => names.get(nameKey(t, a));
+  const entries = new Map(); // "id (file)" -> output entry, so a skipped duplicate can donate its spare aliases
+  // A same-subject duplicate is the same concept written twice. Its verified aliases that nothing else claims
+  // (often plurals and spellings) are added to the earlier entry instead of being lost.
+  const donate = (t, owner, rel) => {
+    const winner = entries.get(owner);
+    if (!winner) return;
+    let n = 0;
+    for (const a of [t.term, ...(t.aliases ?? [])]) {
+      if (taken(t, a)) continue;
+      names.set(nameKey(t, a), owner);
+      winner.aliases.push(a);
+      n++;
+    }
+    if (n) glossaryClashes.push(`${rel}: ${n} spare alias(es) of ${t.id} added to ${owner}`);
+  };
   const order = new Map(index.subjects.flatMap((sub, si) => sub.modules.map((m, mi) => [`${sub.id}/${m.id}`, si * 1000 + mi])));
   moduleTerms.sort((a, b) => (order.get(a.key) ?? 1e9) - (order.get(b.key) ?? 1e9));
   for (const { t: raw, file, category, subjectId } of moduleTerms) {
@@ -223,10 +238,19 @@ const glossaryClashes = [];
     if (ids.has(t.id)) {
       const owner = ids.get(t.id);
       const sameSubject = owner.startsWith(`content/${rel.split('/')[1]}/`);
-      if (sameSubject || ids.has(`${t.subject}--${t.id}`)) { glossaryClashes.push(`${rel}: skipped ${t.id} (id already used in ${owner})`); continue; }
+      if (sameSubject || ids.has(`${t.subject}--${t.id}`)) {
+        glossaryClashes.push(`${rel}: skipped ${t.id} (id already used in ${owner})`);
+        if (sameSubject) donate(t, `${t.id} (${owner})`, rel);
+        continue;
+      }
       t.id = `${t.subject}--${t.id}`;
     }
-    if (taken(t, t.term)) { glossaryClashes.push(`${rel}: skipped ${t.id} ("${t.term}" is already ${taken(t, t.term)})`); continue; }
+    if (taken(t, t.term)) {
+      const owner = taken(t, t.term);
+      glossaryClashes.push(`${rel}: skipped ${t.id} ("${t.term}" is already ${owner})`);
+      donate(t, owner, rel);
+      continue;
+    }
     ids.set(t.id, rel);
     const aliases = [];
     for (const a of [t.term, ...(t.aliases ?? [])]) {
@@ -235,8 +259,10 @@ const glossaryClashes = [];
       names.set(nameKey(t, a), `${t.id} (${rel})`);
       if (a !== t.term) aliases.push(a);
     }
-    glossaryTerms.push({ id: t.id, term: t.term, category: t.category || category, subject: t.subject, definition: t.definition,
-      aliases, ...(t.example ? { example: t.example } : {}), ...(t.source ? { source: t.source } : {}) });
+    const out = { id: t.id, term: t.term, category: t.category || category, subject: t.subject, definition: t.definition,
+      aliases, ...(t.example ? { example: t.example } : {}), ...(t.source ? { source: t.source } : {}) };
+    entries.set(`${t.id} (${rel})`, out);
+    glossaryTerms.push(out);
   }
 }
 

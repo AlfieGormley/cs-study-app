@@ -6,9 +6,9 @@ minutes: 14
 summary: The handful of bit tricks that keep coming up, such as x & (x-1), x & -x and XOR cancellation, plus bitmasks for subsets and DP, counting set bits, and the traps of Python's unbounded integers.
 ---
 
-A fixed-width machine word is a row of bits. Many CPUs provide AND, OR, XOR and shifts on a native word with one instruction; width, latency and available instructions depend on the architecture. Python integers can span many machine words, so their bitwise operations are not constant-time for arbitrarily large values. Bit manipulation problems exploit that: they treat a number as a tiny set or a packed array of booleans, and use identities that turn loops into one-liners.
+A fixed-width machine word is a row of bits. Many CPUs provide bitwise AND, bitwise OR, XOR and shifts on a native word with one instruction; width, latency and available instructions depend on the architecture. Python integers can span many machine words, so their bitwise operations are not constant-time for arbitrarily large values. Bit manipulation problems exploit that: they treat a number as a tiny set or a packed array of booleans, and use identities that turn loops into one-liners.
 
-In interviews the cues are "without extra space", "every element appears twice except one", "n ≤ 20" (subsets as masks), "power of two" or "count the 1 bits". In production the same tricks show up in permission flags, Bloom filters, bitmap indexes, chess engines and network masks.
+In interviews the cues are "without extra space", "every element appears twice except one", "`n <= 20`" (at most 20 items, so subsets fit in masks), "power of two" or "count the 1 bits". In production the same tricks show up in permission flags, Bloom filters, bitmap indexes, chess engines and network masks.
 
 ## The operators
 
@@ -22,7 +22,36 @@ a << k  times 2^k        0011 << 2 = 1100
 a >> k  floor div 2^k    1100 >> 2 = 0011
 ```
 
-Python bitwise operations behave **as if** integers had infinitely many two’s-complement sign bits: `-x == ~x + 1`. This specifies the result, not Python’s internal storage representation. In Python, `>>` on a negative number is arithmetic (it rounds towards −∞): `-5 >> 1 == -3`.
+The two shift rows are arithmetic in disguise. For a nonnegative integer:
+
+```formula
+a << k = a × 2^k
+a >> k = ⌊a / 2^k⌋
+3 << 2 = 3 × 4 = 12
+12 >> 2 = ⌊12 / 4⌋ = 3
+where
+a: a nonnegative integer
+k: the shift distance, a nonnegative whole number of bit positions
+<<: left shift: move every bit k places towards the high end, filling with zeros
+>>: right shift: move every bit k places towards the low end, dropping the bits that fall off
+2^k: 2 multiplied by itself k times
+⌊ ⌋: floor, rounding down to the nearest whole number
+In words: shifting left by k multiplies by 2 to the k, and shifting right by k divides by 2 to the k and throws away the remainder, just as moving a decimal number one place multiplies or divides by 10; 0011 shifted left 2 is 1100.
+```
+
+The `~` row is two's complement, explained next:
+
+```formula
+~x = −x − 1
+−x = ~x + 1
+~5 = −6
+where
+x: an integer
+~: bitwise NOT, flipping every bit of x
+In words: flipping all the bits of x gives minus x minus one in two's complement, so negating a number is "flip every bit, then add 1"; flipping 5 gives −6.
+```
+
+Python bitwise operations behave **as if** integers had infinitely many two’s-complement sign bits: `-x == ~x + 1`. This specifies the result, not Python’s internal storage representation. In Python, `>>` on a negative number is arithmetic (it rounds down, towards minus infinity): `-5 >> 1 == -3`.
 
 ## Single-bit operations
 
@@ -69,7 +98,7 @@ Python provides `x.bit_count()` (3.10+), which counts the ones in `abs(x)`; the 
 
 ### `x & -x` isolates the lowest set bit
 
-Since `-x == ~x + 1`, the bits above the lowest 1 are flipped and the bits from there down match. AND keeps only that one bit.
+Since `-x == ~x + 1`, the bits above the lowest 1 are flipped and the bits from there down match. Bitwise AND keeps only that one bit.
 
 ```
 x      = 0110 1000   (104)
@@ -83,12 +112,20 @@ That is the step a **Fenwick tree** uses to advance update indices (`i += i & -i
 
 XOR has three properties that make it look like magic:
 
+```formula
+x ⊕ x = 0
+x ⊕ 0 = x
+x ⊕ y = y ⊕ x
+(x ⊕ y) ⊕ z = x ⊕ (y ⊕ z)
+where
+x: any integer (y and z likewise)
+y: a second integer
+z: a third integer
+⊕: XOR (written `^` in Python), bit by bit: 1 where the two bits differ, 0 where they match
+In words: a value XOR-ed with itself vanishes, XOR with 0 changes nothing, and neither the order nor the grouping matters, so in a long chain each pair of equal values cancels wherever they sit.
 ```
-x ^ x == 0          (self-inverse)
-x ^ 0 == x          (identity)
-order doesn't matter (commutative,
-                      associative)
-```
+
+The four lines are self-inverse, identity, commutative and associative.
 
 So XOR-ing a list together **cancels every value that appears an even number of times**.
 
@@ -104,7 +141,23 @@ def single(nums):
 # [4, 1, 2, 1, 2] -> 4
 ```
 
-**Missing number.** `nums` contains n distinct values from `0..n` with one missing. XOR all indices `0..n` with all values; everything present cancels, leaving the missing one. No overflow risk, unlike summing.
+**Missing number.** `nums` contains n distinct values from `0..n` with one missing. XOR all indices `0..n` with all values; everything present cancels, leaving the missing one:
+
+```formula
+m = (0 ⊕ 1 ⊕ … ⊕ n) ⊕ (v_1 ⊕ … ⊕ v_n)
+m = (0 ⊕ 1 ⊕ 2 ⊕ 3) ⊕ (3 ⊕ 0 ⊕ 1)
+m = 2
+where
+m: the missing number
+n: the length of nums; the values come from 0 to n
+v_1: the first value in nums (v_n the last)
+v_n: the last value in nums
+⊕: XOR (`^` in Python); equal values cancel to 0
+…: "and so on", continuing the pattern
+In words: every value that is present appears once in each bracket and cancels, so only the missing one survives; for nums = [3, 0, 1], the missing number is 2.
+```
+
+No integer overflow risk, unlike summing.
 
 ### Two single numbers
 
@@ -129,6 +182,22 @@ For `[1, 2, 1, 3, 2, 5]`: `xy = 3 ^ 5 = 0b110`, `low = 0b010`. Numbers with that
 
 For this code, input is a reusable sequence of signed 32-bit integers, with every value occurring three times except one occurring once. XOR does not cancel triples. Instead, count each bit position modulo 3: the bits of the tripled values contribute multiples of 3, so the remainder is the single number's bit.
 
+```formula
+s_b = c_b mod 3
+c_b = 3 × t_b + s_b
+c_0 = 3 × 1 + 1 = 4 → s_0 = 1
+where
+s_b: bit b of the single number, 0 or 1
+c_b: how many numbers in the input have bit b set
+t_b: how many of the tripled values have bit b set
+b: a bit position, from 0 (lowest) to 31
+c_0: the count for bit 0
+s_0: bit 0 of the single number
+mod: "modulo", the remainder after division
+→: "so", the conclusion drawn from the line
+In words: each tripled value adds 0 or 3 to a bit's count, so dividing the count by 3 leaves exactly the single number's bit; for [5, 5, 5, 3], bit 0 is set in all four numbers, 4 mod 3 = 1, and the single number 3 does have bit 0 set.
+```
+
 ```python
 def single_thrice(nums):
     res = 0
@@ -145,7 +214,21 @@ O(32n) time, O(1) space. The last two lines convert the 32-bit pattern back to a
 
 ## Bitmasks as subsets
 
-With n items, an integer `mask` from `0` to `2ⁿ − 1` represents a subset: bit `i` set means item `i` is in. This enumerates all subsets of item positions with no recursion (equal item values can therefore produce equal-looking lists). The returned nested lists take Θ(n·2ⁿ) element references for n ≥ 1; enumeration also takes Θ(n·2ⁿ) tests in the unit-cost mask model:
+With n items, an integer `mask` from `0` to `2ⁿ − 1` represents a subset: bit `i` set means item `i` is in.
+
+```formula
+N_sub = 2^n
+0 ≤ mask ≤ 2^n − 1
+N_sub = 2^3 = 8
+where
+N_sub: the number of subsets of n items
+n: the number of items
+mask: an integer whose bit i says whether item i is in the subset
+≤: "is less than or equal to"
+In words: each item is either in or out, two choices per item, so n items give 2^n subsets, numbered by the integers 0 to 2^n − 1; 3 items give 8 subsets, masks 0 to 7, and mask 5 = 101 in binary means items 0 and 2.
+```
+
+This enumerates all subsets of item positions with no recursion (equal item values can therefore produce equal-looking lists). The returned nested lists take Θ(n·2ⁿ) element references for n of at least 1, and enumeration also takes Θ(n·2ⁿ) tests in the unit-cost mask model. Θ (big-Theta) means the cost grows exactly at that rate, up to constant factors: here n bit tests for each of the 2ⁿ masks.
 
 ```python
 def subsets(items):
@@ -160,10 +243,28 @@ def subsets(items):
 
 Union is `a | b`, intersection `a & b`, "is `a` a subset of `b`?" is `a & b == a`.
 
-**Bitmask DP** uses the mask as a DP state. The Held–Karp travelling-salesman algorithm stores `dp[mask][last]` = shortest path from a fixed start visiting exactly the cities in `mask`, ending at `last` (add the edge back to the start to complete a tour): O(2ⁿ · n²) time instead of O(n!). For n = 20, n²2ⁿ ≈ 4.2 × 10⁸ is an upper-work expression, not an exact transition count; fixing the start also reduces naive tour permutations to (n − 1)!.
+**Bitmask DP** uses the mask as a DP state. The Held–Karp algorithm for the travelling salesman problem stores `dp[mask][last]` = shortest path from a fixed start visiting exactly the cities in `mask`, ending at `last` (add the edge back to the start to complete a tour): O(2ⁿ · n²) time instead of O(n!), where n is the number of cities:
+
+```formula
+W_HK = 2^n × n^2
+W_HK = 2^20 × 20^2 ≈ 4.2 × 10^8
+(n − 1)! = 19! ≈ 1.2 × 10^17
+where
+W_HK: the upper-work expression for Held–Karp: 2^n subsets, times n choices of last city, times n choices of the city before it
+n: the number of cities; here 20
+2^n: the number of subsets of the n cities
+n^2: n squared, n × n
+(n − 1)!: the number of tour orders with a fixed start city, (n − 1) × (n − 2) × … × 1
+!: factorial, the product of all whole numbers from 1 up to the given one
+…: "and so on", continuing the pattern
+≈: approximately equal to
+In words: for 20 cities, dynamic programming over subsets faces about 420 million units of work, while trying every tour order from a fixed start faces about 120 million billion.
+```
+
+The 4.2 × 10⁸ figure is an upper-work expression, not an exact transition count.
 
 > [!note] Content gap
-> A C++ feasibility promise and universal practical size limit are omitted because no implementation, hardware, deadline or benchmark supports them.
+> A C++ promise that this runs in time and a universal practical size limit are omitted because no implementation, hardware, deadline or benchmark supports them.
 
 For nonnegative `mask`, iterate over every **nonzero submask**:
 
@@ -174,13 +275,37 @@ while s:
     s = (s - 1) & mask
 ```
 
-Over all n-bit masks, there are 3ⁿ pairs including zero submasks, since each element is in the submask, in the mask only, or in neither. This loop omits one zero submask per mask, so it executes 3ⁿ − 2ⁿ visits: O(3ⁿ) in the unit-cost mask model.
+Over all n-bit masks, there are 3ⁿ (mask, submask) pairs including zero submasks, since each element is in the submask, in the mask only, or in neither. This loop omits one zero submask per mask:
+
+```formula
+V = 3^n − 2^n
+n = 3: V = 27 − 8 = 19
+where
+V: the total number of loop visits, summed over all 2^n masks
+n: the number of bits (items)
+3^n: 3 multiplied by itself n times, the number of (mask, submask) pairs including empty submasks
+2^n: the number of masks, each of which has one empty submask that the loop skips
+In words: three choices per bit give 3^n pairs, and dropping the empty submask of each of the 2^n masks leaves 3^n − 2^n visits; for 3 bits, 19.
+```
+
+That is O(3ⁿ) in the unit-cost mask model.
 
 ## Counting bits for 0..n
 
 **Problem.** Return the number of 1 bits in every integer from 0 to n.
 
 Calling a bit-at-a-time or set-bit-clearing routine on every integer through n takes O(n log n) word operations overall; a constant-time native-word popcount changes that comparison. The following DP uses O(n) table operations and O(n) entries: `i >> 1` is `i` with its last bit dropped, and we've already computed it.
+
+```formula
+B(i) = B(⌊i / 2⌋) + (i mod 2)
+B(7) = B(3) + 1 = 2 + 1 = 3
+where
+B(i): the number of 1 bits in i (`bits[i]` in the code); B(0) = 0
+i: an integer from 1 to n
+⌊ ⌋: floor, rounding down; ⌊i / 2⌋ is `i >> 1`
+mod: "modulo", the remainder; i mod 2 is the last bit, `i & 1`
+In words: i has the same 1 bits as i with its last bit dropped, plus one more if its last bit is 1; 7 is 111, 3 is 11, so 7 has one more 1 bit than 3.
+```
 
 ```python
 def count_bits(n):
@@ -212,15 +337,15 @@ The alternative recurrence `bits[i] = bits[i & (i - 1)] + 1` reuses the lowest-b
 | "power of two" | `x > 0 and (x & (x - 1)) == 0` |
 | "count 1 bits" | Kernighan / DP |
 | Lowest set bit | `x & -x` |
-| n ≤ 20, choose a subset | Masks 0..2ⁿ−1 |
-| Visit all of n ≤ 20 nodes | Bitmask DP |
+| At most 20 items, choose a subset | Masks 0 to 2ⁿ − 1 |
+| Visit all of at most 20 nodes | Bitmask DP |
 | Many boolean flags | Pack into an int |
 
 ## Key takeaways
-- `x & (x - 1)` clears the lowest set bit (powers of two, popcount); `x & -x` isolates it (Fenwick trees).
+- `x & (x - 1)` clears the lowest set bit (powers of two, popcount); `x & -x` picks it out (Fenwick trees).
 - XOR cancels pairs: single number and missing number in O(n) time and O(1) space; split by a differing bit for two singles.
 - An n-bit mask is a subset: enumerate all 2ⁿ, use it as a DP state, or walk submasks in O(3ⁿ) total.
-- `bits[i] = bits[i >> 1] + (i & 1)` counts bits for 0..n in O(n).
+- `bits[i] = bits[i >> 1] + (i & 1)` counts bits for 0..n in O(n), where n is the largest number.
 - Mind the language: Python ints are unbounded, and `&` vs `==` precedence differs between Python and C-family languages.
 
 ## Further reading

@@ -6,7 +6,7 @@ minutes: 12
 summary: Using two indices that move through an array to replace a nested loop with a single pass, in three flavours (opposite ends, same direction and partitioning), with pair sum, container with most water, remove duplicates and the Dutch flag.
 ---
 
-Many brute-force solutions look at every pair `(i, j)`: O(n²). The **two-pointer** pattern keeps two indices and moves each one only forwards (or only backwards), so each pointer makes O(n) moves and together they make O(n) moves. Two same-direction pointers can make nearly 2n moves. Costs below assume constant-time numeric operations and indexing.
+Many brute-force solutions look at every pair of positions `(i, j)` in an array of n elements: about n²/2 pairs, which is O(n²) work (the work grows with the square of n). The **two-pointer** pattern keeps two indices and moves each one only forwards (or only backwards), so each pointer makes O(n) moves and together they make O(n) moves. Two same-direction pointers can make nearly 2n moves. Costs below assume constant-time numeric operations and indexing.
 
 It works when there is a rule that tells you, after looking at the current pair, which pointer can safely move: that some whole set of pairs can be discarded without checking them. Usually that rule comes from the array being **sorted**, or from an invariant you maintain about the region each pointer has passed.
 
@@ -59,7 +59,20 @@ Each step discards one element for good, so at most n − 1 steps: O(n) time, O(
 
 ## Opposite ends: container with most water
 
-**Problem.** `h[i]` is a nonnegative height of a vertical line at position `i`. Choose two lines that, with the x-axis, hold the most water. Area = `(j - i) * min(h[i], h[j])`.
+**Problem.** `h[i]` is a nonnegative height of a vertical line at position `i`. Choose two lines that, with the x-axis, hold the most water. The water a pair of lines can hold is limited by the shorter line:
+
+```formula
+A = (j − i) × min(h[i], h[j])
+where
+A: the area of water held between lines i and j, in square units (width × height)
+i: the position (index) of the left line, counting from 0
+j: the position of the right line, with j > i
+h[i]: the height of the line at position i
+min: the smaller of its two inputs, so min(8, 7) = 7
+In words: the container is as wide as the distance between the lines and as tall as the shorter line; water above the shorter line would spill over it.
+```
+
+The formula assumes the lines are thin and the water's surface is flat, so only the shorter line matters; it holds for any nonnegative heights.
 
 The array isn't sorted, so why do two pointers work? Start with the widest container (`lo = 0`, `hi = n - 1`). Suppose `h[lo] < h[hi]`. Any other container using `lo` with a partner inside the range:
 
@@ -83,7 +96,20 @@ def max_area(h):
     return best
 ```
 
-For `[1, 8, 6, 2, 5, 4, 8, 3, 7]` the answer is 49: lines at positions 1 and 8, width 7, height `min(8, 7) = 7`.
+For `[1, 8, 6, 2, 5, 4, 8, 3, 7]` the answer is 49, from the lines at positions 1 and 8:
+
+```formula
+A = (j − i) × min(h[i], h[j])
+A = (8 − 1) × min(8, 7)
+A = 7 × 7 = 49
+where
+A: the area of water held, in square units
+i: the left line's position; here 1
+j: the right line's position; here 8
+h[i]: the height at position i; here h[1] = 8 and h[8] = 7
+min: the smaller of its two inputs
+In words: the best pair is 7 positions apart and 7 tall (the shorter of 8 and 7), giving 49.
+```
 
 > [!note] The proof is the pattern
 > Two pointers are only correct when you can argue that the move discards nothing useful. If you can't say *why* a move is safe, you don't yet have a two-pointer solution; you have a guess.
@@ -165,7 +191,7 @@ Each step either advances `mid` or shrinks `hi`, so the unknown region shrinks e
 | Pick two ends to maximise | Opposite ends |
 | In place, O(1) space, filter | Read/write |
 | Linked list middle or cycle | Fast/slow |
-| Group by category in place | Partition |
+| Gather by category in place | Partition |
 | Merge two sorted arrays | One pointer each |
 
 ## Pitfalls

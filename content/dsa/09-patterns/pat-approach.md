@@ -29,8 +29,8 @@ One possible allocation for a 45-minute practice session is: 5 minutes clarifyin
 
 Restate the problem in your own words, then ask about anything that would change the algorithm.
 
-- **Input size.** "How large can `n` be?" Use the answer to compare growth against the resource budget (see the table below).
-- **Value ranges.** Negative numbers? Zeros? Can values overflow 32 bits?
+- **Input size.** "How large can `n` be?" Here, and throughout this module, n means the number of elements in the input (the length of the array or string) unless a problem says otherwise. Use the answer to compare growth against the resource budget (see the table below).
+- **Value ranges.** Negative numbers? Zeros? Can values cause integer overflow in 32 bits?
 - **Sortedness and duplicates.** Is the array sorted? Can values repeat?
 - **Output shape.** Indices or values? One answer or all? What if there is no answer: return `-1`, `None`, raise?
 - **Mutability.** May I modify the input in place?
@@ -67,13 +67,38 @@ def two_sum_brute(a, target):
     return None
 ```
 
-That is O(n²) time and O(1) extra space. You don't always need to code the brute force; saying it and its cost is usually enough.
+The two loops look at every pair of positions once. The number of pairs tells you the cost:
+
+```formula
+N_pairs = n × (n − 1) / 2
+N_pairs = 4 × 3 / 2 = 6
+where
+N_pairs: the number of different (i, j) pairs with i before j, which is how many times the `if` line runs in the worst case
+n: the number of elements in the array; here 4
+i: the index (position, counting from 0) of the first number in a pair
+j: the index of the second number in a pair, always greater than i
+In words: each of the n elements is paired with each of the n − 1 others, and halving removes the double count of (i, j) and (j, i); 4 elements give 6 pairs, and 100,000 elements give about 5 billion.
+```
+
+That is O(n²) time and O(1) extra space: the work grows with the square of n, while the memory used beyond the input stays fixed. You don't always need to code the brute force; saying it and its cost is usually enough.
 
 ## Step 4: optimise
 
 Look for wasted work. Three useful questions are:
 
-1. **What is the bottleneck?** In two sum, the inner loop: for each `a[i]`, we search the rest of the array for `target - a[i]`.
+1. **What is the bottleneck?** In two sum, the inner loop: for each `a[i]`, we search the rest of the array for `target - a[i]`, the one value that would complete the pair:
+
+```formula
+y = T − x
+y = 6 − 2 = 4
+where
+y: the complement, the value that must already be in the array to pair with x
+T: the target sum (`target` in the code); here 6
+x: the current element (`a[i]` or `x` in the code); here 2
+In words: once you know the target and the current number, only one partner can work, so the question becomes "have I seen 4?" rather than "which pair works?".
+```
+
+That single partner is what makes a lookup structure useful in the next question.
 2. **Is there a data structure that answers that inner question faster?** "Have I seen value v?" is a hash-set lookup: O(1) on average.
 3. **Am I recomputing something?** Running totals, window contents and "best so far" values can usually be carried forward instead of recomputed.
 
@@ -94,10 +119,37 @@ Now it is expected O(n) time under constant-cost, well-distributed hashing and O
 
 ## Let the constraints choose the complexity
 
-Interview and contest problems state limits like `1 <= n <= 10^5`. That is a heavy hint. Input size helps compare growth, but feasibility also depends on the algorithm’s constants, operation types, numeric sizes, memory, hardware and deadline.
+Interview and contest problems state limits like `1 <= n <= 10^5`, written in code style. In maths notation that constraint reads:
+
+```formula
+1 ≤ n ≤ 10^5
+where
+n: the number of elements in the input; its upper limit 10^5 is ten to the power 5, a 1 followed by five zeros: 100,000
+≤: "is less than or equal to"
+In words: the input holds at least one element and at most 100,000 of them.
+```
+
+That is a heavy hint. Input size helps compare growth, but whether an approach is fast enough also depends on the algorithm’s constants, operation types, numeric sizes, memory, hardware and deadline.
 
 > [!note] Content gap
 > Generic C++/Python operations-per-second figures and universal pass/fail thresholds are omitted because no pinned benchmark or judge configuration establishes them.
+
+The table uses a few growth expressions you may not have met. Each one describes how the work grows with n:
+
+```formula
+n! = n × (n − 1) × … × 2 × 1
+2^n = 2 × 2 × … × 2
+4! = 4 × 3 × 2 × 1 = 24
+2^4 = 2 × 2 × 2 × 2 = 16
+where
+n: the number of elements in the input
+n!: "n factorial", the number of different orders (permutations) of n distinct items
+2^n: 2 multiplied by itself n times, the number of subsets of n items (each item is either in or out)
+…: "and so on", continuing the same pattern
+In words: factorial counts orderings and grows fastest of all; 2^n counts in-or-out choices and doubles with every extra item.
+```
+
+The table also uses Big-O notation: O(f) means "the work grows no faster than f, ignoring constant factors", and log n is the base-2 logarithm of n, the number of times you can halve n before reaching 1 (about 17 for 100,000).
 
 The table lists growth expressions to investigate for illustrative input sizes, not guaranteed feasible limits.
 
@@ -110,7 +162,22 @@ The table lists growth expressions to investigate for illustrative input sizes, 
 | ≤ 10⁶ | O(n log n) | Sort, heap |
 | > 10⁶ | O(n), O(log n) | One pass, math |
 
-For n = 10⁵, n² = 10¹⁰ while n log₂n ≈ 1.66 × 10⁶. These are work expressions, not exact operation counts inferred from big-O. Compare them with the actual resource budget before choosing.
+Plugging the largest allowed n into two of these expressions shows the gap:
+
+```formula
+n^2 = (10^5)^2 = 10^10
+n × log_2(n) = 10^5 × log_2(10^5)
+n × log_2(n) ≈ 10^5 × 16.6
+n × log_2(n) ≈ 1.66 × 10^6
+where
+n: the number of elements in the input; here 10^5 = 100,000
+n^2: n squared, n × n
+log_2: the base-2 logarithm: log_2(n) is the power you raise 2 to in order to get n, so log_2(1024) = 10
+≈: approximately equal to (the result is rounded)
+In words: a quadratic algorithm faces about 10 billion units of work at 100,000 elements, while an n log n algorithm faces about 1.7 million, roughly 6,000 times less.
+```
+
+These are work expressions, not exact operation counts inferred from big-O. Compare them with the actual resource budget before choosing.
 
 ## Spotting the pattern
 
@@ -133,7 +200,7 @@ Once you understand the problem, match its shape against the patterns in this mo
 Other modules cover the rest of the toolkit: binary search, BFS/DFS, backtracking and dynamic programming.
 
 > [!warning] Patterns are hypotheses
-> A cue suggests a pattern; it doesn't prove it fits. "Longest subarray with sum ≤ k" looks like a sliding window, but if values can be negative the window logic breaks. Check the pattern's preconditions before you commit.
+> A cue suggests a pattern; it doesn't prove it fits. "Longest subarray with sum at most k", where k is a limit the problem gives you, looks like a sliding window, but if values can be negative the window logic breaks. Check the pattern's preconditions before you commit.
 
 ## Step 5: test
 
@@ -174,7 +241,7 @@ Hints are not failure. Take them, acknowledge them and build on them.
 ## Key takeaways
 - Run the same routine every time: clarify, examples, brute force, optimise, test.
 - Ask about input size, value ranges, sortedness and duplicates; each changes the algorithm.
-- Use constraints to compare growth and resource needs; n ≈ 10⁵ makes a quadratic scan a significant concern, not a universal impossibility.
+- Use constraints to compare growth and resource needs; an input of about 100,000 elements makes a quadratic scan a significant concern, not a universal impossibility.
 - Optimise by finding the bottleneck, then asking which data structure answers it faster.
 - Narrate your reasoning, get agreement before coding, and test by tracing, not by hoping.
 

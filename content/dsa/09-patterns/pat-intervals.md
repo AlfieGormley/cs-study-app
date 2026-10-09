@@ -6,22 +6,43 @@ minutes: 13
 summary: Sorting intervals to merge and insert them, choosing the most non-overlapping ones greedily, and counting the rooms a schedule needs with a min-heap or a sweep line.
 ---
 
-Interval problems describe things that occupy a range: meetings, bookings, reservations, IP ranges, genome regions, time-series gaps. Each interval is a pair `[start, end]`. The questions are variations on "which ones overlap?", "how many at once?" and "how do I combine them?"
+Interval problems describe things that occupy a range: meetings, bookings, reservations, IP ranges, genome regions, time-series gaps. Each interval is a pair `[start, end]`. Throughout this lesson, n is the number of intervals. The questions are variations on "which ones overlap?", "how many at once?" and "how do I combine them?"
 
 Many interval algorithms begin with **sorting**. For merging, tracking the current merged block makes a linear scan sufficient. Individual intervals can overlap non-neighbours even after sorting (a long interval may contain many others). Other tasks need heaps, trees or even quadratic output when listing every overlapping pair.
 
 ## Overlap, precisely
 
-For valid closed intervals (`a ≤ b`, `c ≤ d`), `[a, b]` and `[c, d]` overlap if and only if
+For valid closed intervals `[a, b]` and `[c, d]` (each start no later than its end), the overlap test is:
 
-```
-a <= d and c <= b
+```formula
+a ≤ d and c ≤ b
+1 ≤ 6 and 2 ≤ 3
+where
+a: the start of the first interval
+b: the end of the first interval, with a ≤ b
+c: the start of the second interval
+d: the end of the second interval, with c ≤ d
+≤: "is less than or equal to"
+In words: two closed intervals overlap exactly when both conditions hold, that is, when each one starts no later than the other ends; the worked line checks [1, 3] against [2, 6], which pass both tests, so they overlap.
 ```
 
-i.e. each starts before the other ends. It's easier to remember the negation: they *don't* overlap if one ends before the other starts (`b < c` or `d < a`).
+That is, each starts before (or when) the other ends. The test only needs four comparisons, whatever the interval lengths, and works for any ordered values: integers, times or real numbers. It's easier to remember the negation: they *don't* overlap if one ends before the other starts (`b < c` or `d < a`).
 
 > [!warning] Closed or half-open?
-> Do `[1, 3]` and `[3, 5]` overlap? For closed intervals (both ends included), yes: they share the point 3. For meetings, usually no: a meeting ending at 3:00 frees the room for one starting at 3:00. That's a **half-open** interval `[start, end)`, and for nonempty intervals (`a < b`, `c < d`) the test becomes `a < d and c < b`. The meeting and scheduling code below assumes positive duration and finite, consistently ordered numeric endpoints. Empty intervals require separate handling. Endpoint semantics affect overlap tests and event ties; merging adjacent half-open intervals is a separate policy, since their union can be contiguous even though they do not overlap.
+> Do `[1, 3]` and `[3, 5]` overlap? Under the closed interval convention (both ends included), yes: they share the point 3. For meetings, usually no: a meeting ending at 3:00 frees the room for one starting at 3:00. That's a **half-open** interval `[start, end)`, and for nonempty intervals the test becomes strict (see the formula below). The meeting and scheduling code below assumes positive duration and finite, consistently ordered numeric endpoints. Empty intervals require separate handling. Endpoint semantics affect overlap tests and event ties; merging adjacent half-open intervals is a separate policy, since their union can be contiguous even though they do not overlap.
+
+For half-open intervals the touching case no longer counts:
+
+```formula
+a < d and c < b
+where
+a: the start of the first interval [a, b), included
+b: the end of the first interval, excluded, with a < b
+c: the start of the second interval [c, d), included
+d: the end of the second interval, excluded, with c < d
+<: "is strictly less than"
+In words: half-open intervals overlap exactly when both conditions hold, that is, only when each starts strictly before the other ends, so a meeting ending at 3:00 and one starting at 3:00 do not clash: for [1, 3) and [3, 5), the check 3 < 3 fails.
+```
 
 ## Merging overlapping intervals
 
@@ -190,7 +211,7 @@ Sorting by start instead fails: `[[1, 100], [2, 3], [4, 5]]` would keep `[1, 100
 | Cue | Approach |
 |---|---|
 | Merge / union of ranges | Sort by start, extend |
-| Insert into sorted list | Three-phase O(n) |
+| Insert in a sorted list | Three-phase O(n) |
 | Any overlap at all? | Sort, compare neighbours |
 | Max simultaneous / rooms | Heap of ends or sweep |
 | Keep most / remove fewest | Sort by end, greedy |
@@ -207,7 +228,7 @@ Sorting by start instead fails: `[[1, 100], [2, 3], [4, 5]]` would keep `[1, 100
 ## Key takeaways
 - Sort first: after sorting by start, overlaps involve only the current merged block, so one pass suffices.
 - Merging extends the last block's end with `max`; insertion into a sorted list is O(n) in three phases.
-- Minimum rooms = peak concurrency: a min-heap of end times or a sweep over +1/−1 events.
+- Minimum rooms equals peak concurrency: a min-heap of end times or a sweep over +1/−1 events.
 - Keep the most non-overlapping intervals by sorting on end time and choosing greedily.
 - Pin down closed vs half-open intervals; it decides every comparison and tie-break.
 

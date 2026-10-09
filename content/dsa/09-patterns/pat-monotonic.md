@@ -10,7 +10,7 @@ A **monotonic stack** is an ordinary stack with one rule: its contents stay sort
 
 The magic is in the pops. In the left-to-right next-element scan, a pop can identify the first later value satisfying the chosen strict or non-strict comparison. Other scan directions and previous-element variants use different invariants. Questions of the form "for each element, find the nearest element to the left/right that is greater/smaller" all fall to this.
 
-Each element is pushed once and popped at most once, so the whole scan is **O(n)**, even though there's a `while` inside the `for`.
+Each element is pushed once and popped no more than once, so the whole scan of n elements is **O(n)**, even though there's a `while` inside the `for`.
 
 ## Next greater element
 
@@ -57,9 +57,9 @@ Note `a[2] = 2` doesn't pop `a[0] = 2`: the problem says *strictly* greater, so 
 
 For "previous" variants, the answer for `x` is whatever is left on top of the stack *after* popping (or none if empty).
 
-**Circular arrays** (the element after the last is the first): loop `i` over `range(2 * n)` and use `a[i % n]`, only pushing during the first pass.
+**Circular arrays** (the element after the last is the first): loop `i` over `range(2 * n)` and use `a[i % n]`, only pushing during the first pass. Here `%` is Python's remainder operator, so `i % n` wraps index n back to 0, n + 1 to 1, and so on.
 
-**Daily temperatures** ("how many days until a warmer day?") is the same algorithm storing `i - j` instead of the value. **Stock span** is the previous-greater variant.
+**Daily temperatures** ("how many days until a warmer day?") is the same algorithm storing `i - j` instead of the value, where `j` is the index being popped (the colder day) and `i` the index of the warmer day that pops it. **Stock span** is the previous-greater variant.
 
 ## Largest rectangle in a histogram
 
@@ -80,11 +80,25 @@ For `h = [2, 1, 5, 6, 2, 3]` the answer is 10: height 5 across the bars of heigh
 
 **Insight.** The best rectangle uses some bar `i` as its *shortest* bar, and then extends as far as possible on both sides: until the previous smaller bar on the left and the next smaller bar on the right. So for each bar:
 
+```formula
+w_i = R_i − L_i − 1
+A_i = h[i] × w_i
+w_2 = 4 − 1 − 1 = 2
+A_2 = 5 × 2 = 10
+where
+w_i: the width of the widest rectangle in which bar i is the shortest bar, in bars
+R_i: the index of the next smaller bar to the right of i (or n, one past the end, if none)
+L_i: the index of the previous smaller bar to the left of i (or −1 if none)
+A_i: the area of that rectangle, in square units
+h[i]: the height of bar i
+i: the index of the bar being measured, counting from 0
+n: the number of bars
+w_2: the width for the bar at index 2 (height 5)
+A_2: the area for the bar at index 2
+In words: the rectangle stretches over every bar strictly between the two smaller neighbours, so its width is the gap between them minus one; for the bar of height 5 at index 2, the neighbours are at 1 and 4, giving width 2 and area 10.
 ```
-width = next_smaller(i)
-        - prev_smaller(i) - 1
-area  = h[i] * width
-```
+
+The answer is the largest A_i over all bars. Every rectangle under the histogram has some shortest bar, so checking each bar as "the shortest" covers every candidate.
 
 The code below uses strictly increasing stack heights and pops on `>=`. Its left boundary is the previous strictly smaller bar; its right boundary is the first smaller-or-equal bar (or the end sentinel). An equal bar therefore takes ownership of a span from an earlier equal bar. This asymmetric tie rule still measures a maximum-area representative for every possible height.
 
@@ -117,7 +131,7 @@ pop 2 (h=5): left=1  width=4-1-1=2  area 10
 h[1]=1 < 2: stop, push 4
 ```
 
-O(n) time, O(n) space. It's also the core of **maximal rectangle in a binary matrix**: treat each row as the base of a histogram of consecutive 1s above, and run this per row for O(R·C).
+O(n) time, O(n) space. It's also the core of **maximal rectangle in a binary matrix**: treat each row as the base of a histogram of consecutive 1s above, and run this per row for O(R × C), where R is the number of rows and C the number of columns.
 
 > [!note] `>=` versus `>` here
 > With equal heights, popping on `>=` means an earlier equal bar is measured with a too-short right boundary. That's fine: the last equal bar in the run gets the full width, so the maximum is still correct.
@@ -167,7 +181,19 @@ i  x   deque (values)   out
 7  7   [7]              7
 ```
 
-Result `[3, 3, 5, 5, 6, 7]`. Each index enters and leaves the deque once: O(n) time, O(k) auxiliary space, plus O(n − k + 1) output space.
+Result `[3, 3, 5, 5, 6, 7]`, one value per full window:
+
+```formula
+W = n − k + 1
+W = 8 − 3 + 1 = 6
+where
+W: the number of windows of size k, which is the length of the output
+n: the length of the array; here 8
+k: the window size; here 3
+In words: the first window ends at index k − 1 and the last at index n − 1, so there are n − k + 1 windows; 8 values in windows of 3 give 6 maxima.
+```
+
+Each index enters and leaves the deque once: O(n) time, O(k) auxiliary space, plus O(n − k + 1) output space.
 
 The same structure powers DP optimisations where `dp[i]` depends on the max or min of `dp` over a sliding range (for example "jump game VI"). A related dominance argument solves "shortest subarray with sum at least k" with negative values, using a deque of increasing prefix sums; that is not simply the same fixed-range DP recurrence.
 
@@ -176,7 +202,7 @@ The same structure powers DP optimisations where `dp[i]` depends on the max or m
 Count operations per element rather than per loop iteration:
 
 - each index is pushed exactly once: n pushes;
-- each index is popped at most once: at most n pops.
+- each index is popped no more than once: at most n pops.
 
 So there are at most 2n pushes and pops; loop tests, comparisons and output writes add O(n) more work. A single step may pop many elements, but then those elements are gone and can't be popped again.
 
@@ -200,7 +226,7 @@ So there are at most 2n pushes and pops; loop tests, comparisons and output writ
 
 ## Key takeaways
 - A monotonic stack keeps elements sorted; each pop reveals a "next greater/smaller" relationship.
-- Every element is pushed and popped at most once, so the scan is O(n) amortised.
+- Every element is pushed and popped no more than once, so the scan is O(n) amortised.
 - Largest rectangle uses smaller-height boundaries; the code assigns equal heights asymmetrically (previous strictly smaller, next smaller-or-equal) to cover their full span.
 - A monotonic deque gives the max or min of every sliding window in O(n), beating a heap's O(n log n).
 - Store indices, choose strict or non-strict comparisons deliberately, and flush leftovers.

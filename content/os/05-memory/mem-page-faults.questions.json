@@ -6,12 +6,12 @@
     "prompt": "On x86-64 Linux, an actual user-mode load instruction accesses virtual address 0x10, which has no mapping or VMA. What normally happens?",
     "options": [
       {
-        "text": "The kernel allocates a zeroed frame and the read returns 0",
+        "text": "The kernel allocates a fresh frame filled with zeros and the read returns 0",
         "explanation": "Demand-zero allocation only happens for addresses inside an anonymous VMA. Outside every VMA the process has no right to that memory, so there is nothing to allocate."
       },
       {
         "text": "The CPU raises a page fault, the kernel finds no VMA, and the process gets SIGSEGV",
-        "explanation": "Correct for this non-present canonical address. Not every invalid access starts with #PF: non-canonical addresses and other exceptions can follow different paths."
+        "explanation": "Correct for this non-present canonical address. Not every invalid access starts with #PF: non-canonical addresses and other exceptions can follow different kernel paths."
       },
       {
         "text": "The MMU sends SIGSEGV directly without involving the kernel",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The load executes; the MMU walks the page tables and finds no present mapping for page 0.\n2. It raises **#PF**, putting `0x10` in CR2 and an error code (user-mode read, not present).\n3. Linux looks up the VMA containing `0x10`. The prompt states that no mapping covers it; low mappings are normally restricted but are not universally impossible.\n4. With no VMA, there is nothing lazy to do: the access is illegal, so the kernel sends **SIGSEGV**.\n\nKeep the split clear: *page fault* is the hardware event; *segmentation fault* is one possible kernel verdict on it.",
+    "workedExample": "1. The load executes; the MMU walks the page tables and finds no present mapping for page 0.\n2. It raises **#PF**, putting `0x10` in CR2 and a page-fault error code (user-mode read, not present).\n3. Linux looks up the VMA containing `0x10`. The prompt states that no mapping covers it; low mappings are normally restricted but are not universally impossible.\n4. With no VMA, there is nothing lazy to do: the access is illegal, so the kernel sends **SIGSEGV**.\n\nKeep the split clear: *page fault* is the hardware event; *segmentation fault* is one possible kernel verdict on it.",
     "link": {
       "title": "Page fault — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Page_fault"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. `mmap` records a 32 MiB VMA; no PTEs are filled.\n2. Number of pages:\n\n```\n32 MiB / 4 KiB\n= 2^25 / 2^12\n= 2^13 = 8,192\n```\n\n3. Each first write faults; the kernel allocates and zeroes one frame and maps it. That is a **minor** fault, as no I/O is involved.\n4. So roughly **8,192** faults (plus a handful from the program's own startup). With THP enabled, each fault could map 2 MiB, giving about 16.",
+    "workedExample": "1. `mmap` records a 32 MiB VMA; no PTEs are filled.\n2. Number of pages:\n\n```formula\nN = S / P = 32 MiB / 4 KiB\nN = 2^25 B / 2^12 B = 2^13 = 8,192\nwhere\nN: the number of 4 KiB pages in the region\nS: the region size, 32 MiB = 2^25 bytes\nP: the page size, 4 KiB = 2^12 bytes\nMiB: mebibyte, 2^20 bytes\nKiB: kibibyte, 2^10 bytes\nB: bytes\nIn words: dividing powers of two subtracts exponents: 2^25 / 2^12 = 2^13, so the region has 8,192 pages.\n```\n\n3. Each first write faults; the kernel allocates and zeroes one frame and maps it. That is a **minor** fault, as no I/O is involved.\n4. So roughly **8,192** faults (plus a handful from the program's own startup). With THP enabled, each fault could map 2 MiB, giving about 16.",
     "link": {
       "title": "mmap(2) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man2/mmap.2.html"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Convert units: 10 ms = **10,000,000 ns**.\n2. p = 1 / 100,000 = 10^-5.\n3. Apply the formula:\n\n```\nEAT = (1-p)*200 + p*10,000,000\n    = 199.998 + 100\n    ≈ 300 ns\n```\n\n4. A fault rate of 0.001% makes memory **50% slower**. To keep the slowdown below 10% (EAT < 220 ns) you would need p < 20 / 9,999,800 ≈ 2.00004 × 10^-6, approximately fewer than one fault per 500,000 accesses.",
+    "workedExample": "1. Convert units: 10 ms = **10,000,000 ns**.\n2. The fault rate is one in 100,000, which is 10^-5.\n3. Apply the effective-access-time formula:\n\n```formula\nEAT = (1 − p) × t_mem + p × t_fault\nEAT = 0.99999 × 200 ns\n  + 0.00001 × 10,000,000 ns\nEAT = 199.998 ns + 100 ns ≈ 300 ns\nwhere\nEAT: the effective access time: the average time of one access\np: the page-fault rate, 1 / 100,000 = 0.00001\nt_mem: an ordinary memory access, 200 ns\nt_fault: an access that takes a major fault, 10 ms = 10,000,000 ns\nns: nanosecond, a billionth of a second\nms: millisecond, a thousandth of a second\n≈: approximately equal to\nIn words: one access in 100,000 costing 10 ms adds 100 ns to the average, so memory becomes 50 % slower.\n```\n\n4. To keep the slowdown below 10% the average must stay under 220 ns:\n\n```formula\n200 ns + p × 9,999,800 ns < 220 ns\np < 20 / 9,999,800 ≈ 2.00004 × 10^-6\nwhere\np: the page-fault rate\nns: nanosecond\n≈: approximately equal to\n10^-6: one millionth\nIn words: the fault penalty (10 ms minus the normal 200 ns) times the rate must add less than 20 ns, which allows fewer than about one fault per 500,000 accesses.\n```",
     "link": {
       "title": "OSTEP: Beyond Physical Memory: Mechanisms (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-beyondphys.pdf"
@@ -161,7 +161,7 @@
     "id": "mem-page-faults-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A process with **4 GiB** of private, resident heap forks. Afterwards the parent writes to 50 MiB worth of distinct pages and the child writes to a *different* 30 MiB worth of pages. Neither process exits. Roughly how much extra RAM do the two processes use compared with before the fork (ignoring page tables)? Assume ordinary 4 KiB COW backing, no pinned/special mappings, no new allocations or reclaim, and unchanged pages remain shared.",
+    "prompt": "A process with **4 GiB** of private, resident heap forks. Afterwards the parent writes to 50 MiB worth of distinct pages and the child writes to a *different* 30 MiB worth of pages. Neither process exits. Roughly how much extra RAM do the two processes use compared with before the fork (ignoring page tables)? Assume ordinary 4 KiB COW backing, no pinned pages or special mappings, no new allocations or reclaim, and unchanged pages remain shared.",
     "options": [
       {
         "text": "About 4 GiB, because fork copies the address space",
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Each first read of a page faults (not present).\n2. The VMA is anonymous and the access is a read, so the kernel maps the single global **zero page**, read-only, instead of allocating a frame.\n3. All 262,144 PTEs point at the same frame. RSS accounting does not charge the zero page as the process's own memory, so RSS stays small for data, while roughly 2 MiB of leaf page tables plus upper tables still consume kernel memory for this populated 1 GiB base-page mapping.\n4. A later write to any of those pages faults again (read-only PTE) and gets a private zeroed frame.\n\nThis is why reading a huge freshly allocated array is cheap in RAM but still costs a fault per page.",
+    "workedExample": "1. Each first read of a page faults (not present).\n2. The VMA is anonymous and the access is a read, so the kernel maps the single global **zero page**, read-only, instead of allocating a frame.\n3. All 262,144 PTEs point at the same frame. RSS accounting does not charge the zero page as the process's own memory, so RSS stays small for data, while roughly 2 MiB of leaf page tables plus upper tables still consume kernel memory for this populated 1 GiB base-page mapping.\n4. A later write to any of those pages faults again (read-only PTE) and gets a private frame filled with zeros.\n\nThis is why reading a huge freshly allocated array is cheap in RAM but still costs a fault per page.",
     "link": {
       "title": "OSTEP: Complete Virtual Memory Systems (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-complete.pdf"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Under the explicit full-unit-copy model, 10,000 × 4 KiB = 40,000 KiB = 39.0625 MiB. For 2 MiB units, 10,000 × 2 MiB = 20,000 MiB = 19.53125 GiB. Linux may split mappings or reuse exclusive backing, so these numbers do not follow merely from THP=always. Redis documents potential THP costs; actual amplification must be measured.",
+    "workedExample": "Under the explicit full-unit-copy model, multiply the writes by the unit size:\n\n```formula\nC_s = 10,000 × 4 KiB = 40,000 KiB\nC_s = (40,000 / 1,024) MiB ≈ 39.06 MiB\nC_h = 10,000 × 2 MiB = 20,000 MiB\nC_h = (20,000 / 1,024) GiB ≈ 19.53 GiB\nwhere\nC_s: bytes copied with 4 KiB units\nC_h: bytes copied with 2 MiB units\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nGiB: gibibyte, 1,024 MiB\n≈: approximately equal to\nIn words: the same 10,000 writes copy 512 times as much with 2 MiB units: about 39 MiB versus about 19.5 GiB.\n```\n\nLinux may split mappings or reuse exclusive backing, so these numbers do not follow merely from THP=always. Redis documents potential THP costs; actual amplification must be measured.",
     "link": {
       "title": "Diagnosing latency issues — Redis docs",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/"
@@ -349,11 +349,11 @@
     "id": "mem-page-faults-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "You trace a page fault on x86-64. The error code is **0x7** (bits P, W and U set). The faulting address lies in a VMA marked `rw-p` (private, writable heap). The process forked a child a moment ago. What kind of fault is this, and how will Linux resolve it? Assume an ordinary present, read-only 4 KiB COW page with no other protection mechanism or resource failure.",
+    "prompt": "You trace a page fault on x86-64. The page-fault error code is **0x7** (bits P, W and U set). The faulting address lies in a VMA marked `rw-p` (private, writable heap). The process forked a child a moment ago. What kind of fault is this, and how will Linux resolve it? Assume an ordinary present, read-only 4 KiB COW page with no other protection mechanism or resource failure.",
     "options": [
       {
-        "text": "A demand-zero fault on a never-touched page; the kernel allocates a zeroed frame",
-        "explanation": "A never-touched page has no present PTE, so bit P would be 0 (error code 0x6). Here P = 1, meaning the page *is* present."
+        "text": "A demand-zero fault on a never-touched page; the kernel allocates a fresh frame filled with zeros",
+        "explanation": "A never-touched page has no present PTE, so the P bit would be 0 (error code 0x6). Here the P bit is 1, meaning the page *is* present."
       },
       {
         "text": "A genuine protection violation; the kernel sends SIGSEGV",
@@ -361,15 +361,15 @@
       },
       {
         "text": "A copy-on-write fault: the PTE was made read-only at fork, so the kernel copies the page (or reuses it if no longer shared) and makes it writable",
-        "explanation": "Correct. P = 1 and W = 1 means a write hit a present but read-only page. The VMA allows writes and is private, which is exactly the COW signature after fork."
+        "explanation": "Correct. The P and W bits both being 1 means a write hit a present but read-only page. The VMA allows writes and is private, which is exactly the COW signature after fork."
       },
       {
         "text": "A major fault; the kernel reads the page from swap",
-        "explanation": "A swapped-out page has a not-present PTE (P = 0). P = 1 tells you the page is in RAM."
+        "explanation": "A swapped-out page has a not-present PTE (P bit 0). A P bit of 1 tells you the page is in RAM."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Decode 0x7 = binary 111:\n\n```\nbit 0 P = 1  page present\nbit 1 W = 1  write access\nbit 2 U = 1  from user mode\n```\n\n2. So a user-mode write hit a **present, read-only** PTE.\n3. Check the VMA: `rw-p` means writes are allowed and the mapping is private.\n4. A writable VMA with a read-only PTE is the COW pattern. `fork` made the parent's private pages read-only in both processes.\n5. The kernel checks the page's sharing: if still shared, it copies 4 KiB to a new frame; if the child has already exited or copied it, it simply re-enables write. Then it retries the instruction.",
+    "workedExample": "1. Decode 0x7 = binary 111, since 7 = 1 + 2 + 4:\n\n| Bit | Flag | Value | Meaning |\n|---|---|---|---|\n| 0 | P | 1 | page present |\n| 1 | W | 1 | write access |\n| 2 | U | 1 | from user mode |\n\n2. So a user-mode write hit a **present, read-only** PTE.\n3. Check the VMA: `rw-p` means writes are allowed and the mapping is private.\n4. A writable VMA with a read-only PTE is the COW pattern. `fork` made the parent's private pages read-only in both processes.\n5. The kernel checks the page's sharing: if still shared, it copies 4 KiB to a new frame; if the child has already exited or copied it, it simply re-enables write. Then it retries the instruction.",
     "link": {
       "title": "Page fault — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Page_fault"

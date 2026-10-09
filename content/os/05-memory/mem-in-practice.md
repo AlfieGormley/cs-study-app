@@ -31,37 +31,70 @@ Mode 0 applies a heuristic, not a guarantee that each request below RAM succeeds
 > [!example] Promises versus reality
 > A box has 16 GiB of RAM and no swap. A program calls `malloc(8 GiB)` ten times. Assume all ten allocations succeed under the current limits and heuristic. They request 80 GiB, far more than the available backing.
 >
-> Nothing goes wrong until the program writes to the memory. If those pages must remain backed and reclaim cannot satisfy demand, allocation can fail or trigger OOM handling before the requested 80 GiB is populated. Other memory consumers and policy determine when and what happens.
+> Nothing goes wrong until the program writes to the memory. If those pages must remain backed and reclaim cannot satisfy demand, allocation can fail or trigger OOM handling before the requested 80 GiB is populated. Other users of memory and policy determine when and what happens.
 
 Why would anyone want this? Because most programs reserve far more than they use: large mostly unused thread-stack reservations and mostly untouched, sparse arrays, JVM heaps reserved up front, and above all `fork`. An ordinary fork can share private writable data through copy-on-write. Strict accounting reserves for eligible writable private mappings that the child could copy; it does not simply duplicate VSZ or RSS, and special mappings have exceptions. Overcommit lets that `fork` succeed.
 
 ### Strict mode
 
-In mode 2 the kernel tracks **Committed_AS** (total promised) and refuses allocations that would push it over **CommitLimit**:
+In mode 2 the kernel tracks **Committed_AS** (total promised) and refuses allocations that would push it over **CommitLimit**. The limit counts all of swap but only a percentage of RAM:
 
-```
-CommitLimit = swap + usable_RAM
-              * overcommit_ratio / 100
+```formula
+CommitLimit = S_swap + R × r / 100
+Committed_AS + A ≤ CommitLimit
+where
+CommitLimit: the most memory the kernel will promise in strict mode, shown in /proc/meminfo
+S_swap: the total swap space
+R: the usable RAM: physical RAM minus pages reserved for HugeTLB
+r: vm.overcommit_ratio, the percentage of RAM that counts; 50 by default
+Committed_AS: the memory already promised to all processes, also shown in /proc/meminfo
+A: the size of the new commitment being requested
+≤: less than or equal to; a request that would break this fails with ENOMEM
+In words: strict mode adds all of swap to a fixed percentage of RAM, and refuses any allocation that would take the total promised past that limit.
 ```
 
-Here usable_RAM excludes reserved HugeTLB pages. The ratio defaults to 50; a nonzero `vm.overcommit_kbytes` supplies an absolute RAM contribution instead. Per-user/admin reserves can further restrict admission.
+A nonzero `vm.overcommit_kbytes` supplies an absolute RAM contribution instead of the ratio. Per-user/admin reserves can further restrict admission.
 
 > [!example] Calculating the limit
 > 64 GiB of RAM, 8 GiB of swap, ratio 50, no HugeTLB reservation and overcommit_kbytes zero.
->
-> CommitLimit = 8 + 64 × 0.5 = **40 GiB**. Even with 30 GiB of RAM physically free, an allocation that pushes the committed total past 40 GiB fails with `ENOMEM`.
 
-Both numbers are visible in `/proc/meminfo`. Strict admission can make insufficient commitment visible as an allocation error, but does not rule out cgroup OOM or every later failure. RAM outside the commit budget is not necessarily wasted: file-backed cache and kernel users can use it. Large forks can fail admission. Redis recommends mode 1 to avoid this particular overcommit rejection; fork can still fail for other reasons and COW still needs real headroom.
+```formula
+CommitLimit = 8 GiB + 64 GiB × 50 / 100
+CommitLimit = 8 GiB + 32 GiB = 40 GiB
+where
+CommitLimit: the strict-mode commit limit
+GiB: gibibyte, 2^30 bytes
+In words: all 8 GiB of swap plus half of the 64 GiB of RAM gives a 40 GiB limit.
+```
+
+Even with 30 GiB of RAM physically free, an allocation that pushes the committed total past 40 GiB fails with `ENOMEM`.
+
+Both numbers are visible in `/proc/meminfo`. Strict admission can make insufficient commitment visible as an allocation error, but does not rule out cgroup OOM or every later failure. RAM outside the commit limit is not necessarily wasted: file-backed cache and kernel users can use it. Large forks can fail admission. Redis recommends mode 1 to avoid this particular overcommit rejection; fork can still fail for other reasons and COW still needs real headroom.
 
 ## The OOM killer
 
-Some allocation failures invoke the **OOM killer** after permitted reclaim paths are exhausted. Others return failure, retry or follow configured panic policy. The ordinary victim-selection path compares eligible tasks within the relevant scope and sends SIGKILL; special cases such as killing the allocating task or an existing exiting victim can change the path.
+Some allocation failures invoke the **OOM killer** after permitted reclaim paths are exhausted. Others return failure, retry or follow configured panic policy. The ordinary victim-selection path compares eligible tasks within the relevant scope and sends SIGKILL; special cases such as killing the allocating task or an existing exiting victim can change the code path.
 
 The score (`oom_badness`) is roughly the process's memory footprint as a share of what is available: its **RSS, swap usage and page tables**. Then the admin's bias is added:
 
 - `/proc/<pid>/oom_score_adj` ranges from **−1000 to +1000**. In the simplified score, each unit adds one-thousandth of the applicable memory allowance; scope can be system-wide, cpuset/NUMA constrained or cgroup limited. +500 adds half that allowance, not necessarily half physical RAM.
 - **−1000** exempts a process entirely. Service policies can set negative values to influence relative selection; verify the actual unit and process settings.
-- `/proc/<pid>/oom_score` shows the current result.
+- `/proc/<pid>/oom_score` shows a rescaled form of the current score, including the adjustment.
+
+In simplified form, with memory measured as a share of the allowance in thousandths:
+
+```formula
+S ≈ 1000 × M / T + a
+where
+S: the badness score; the eligible process with the highest score is killed
+≈: approximately equal to (the kernel works in pages and rounds)
+M: the process's memory: resident pages (RSS) plus swap entries plus page-table pages
+T: the memory allowance for the scope: RAM plus swap system-wide, or the limit of the cgroup or cpuset
+a: oom_score_adj, from −1000 to +1000 (−1000 instead exempts the process entirely)
+In words: a process's share of the allowance, scaled to 0–1000, plus the admin's adjustment; +500 is worth half of the allowance.
+```
+
+For example, with a 16 GiB allowance, a 6 GiB process with no adjustment scores about 1000 × 6 / 16 = 375, while a 2 GiB process with +500 scores about 125 + 500 = 625 and is killed first.
 
 The kill leaves a trail in the kernel log:
 
@@ -73,7 +106,7 @@ anon-rss:7340032kB, file-rss:0kB,
 oom_score_adj:0
 ```
 
-Badness is not simply largest RSS: swap, page tables, adjustments and eligibility matter. User-space tools can act on pressure before kernel OOM. **systemd-oomd** can target cgroups using configured pressure policy; **earlyoom** normally selects processes using available-memory/swap thresholds and process scores. Neither guarantees an earlier kill in every workload.
+Badness is not simply largest RSS: swap, page tables, adjustments and which tasks are eligible all matter. User-space tools can act on pressure before kernel OOM. **systemd-oomd** can target cgroups using configured pressure policy; **earlyoom** normally selects processes using available-memory/swap thresholds and process scores. Neither guarantees an earlier kill in every workload.
 
 ## Reading memory numbers
 
@@ -93,9 +126,38 @@ Badness is not simply largest RSS: swap, page tables, adjustments and eligibilit
 
 > [!example] PSS by hand
 > Four Gunicorn workers each have 40 MiB private memory and share 100 MiB of resident copy-on-write pages. Assume only these four workers still map them; the master has exited or unmapped that region.
-> - RSS of each: 140 MiB. Sum of RSS: **560 MiB**.
-> - PSS of each: 40 + 100 / 4 = 65 MiB. Sum of PSS: **260 MiB**, the real cost.
-> - USS of each: 40 MiB.
+
+When a group of processes share the same pages, the three per-process metrics are:
+
+```formula
+RSS = U + S
+PSS = U + S / N
+USS = U
+where
+RSS: resident set size of one process
+U: the process's private resident memory
+S: the resident memory it shares with the others
+PSS: proportional set size: shared pages divided among the sharers
+N: the number of processes sharing those pages
+USS: unique set size: private resident memory only
+In words: RSS charges every sharer the whole shared amount, PSS charges each an equal slice, and USS ignores shared pages entirely.
+```
+
+The real formula applies page by page, since different pages can have different numbers of sharers. For the four workers:
+
+```formula
+RSS = 40 MiB + 100 MiB = 140 MiB
+PSS = 40 MiB + 100 MiB / 4 = 65 MiB
+T_RSS = 4 × 140 MiB = 560 MiB
+T_PSS = 4 × 65 MiB = 260 MiB
+where
+RSS: each worker's resident set size
+PSS: each worker's proportional set size
+T_RSS: the sum of RSS over the four workers
+T_PSS: the sum of PSS over the four workers
+MiB: mebibyte, 2^20 bytes
+In words: summing RSS counts the shared 100 MiB four times (560 MiB), while summing PSS counts it once (260 MiB), the real cost. Each worker's USS is its 40 MiB of private memory.
+```
 
 Linux gives the breakdown directly:
 
@@ -134,13 +196,24 @@ What happens as usage rises:
 So a container can be OOM-killed while the host has plenty of free RAM. `memory.events` will show `oom_kill` incrementing, and `memory.stat` breaks usage into anon, file, kernel and more.
 
 > [!warning] Page cache counts
-> A container reading a large file can accumulate a page-cache charge, depending on ownership, readahead and reclaim. Clean unpinned cache is reclaimable, but the file counter alone does not prove that usage is safe or all reclaim can succeed. But dirty pages and tmpfs (`/dev/shm`, `emptyDir` with `medium: Memory`) cannot simply be dropped, and tmpfs counts against the limit like anonymous memory.
+> A container reading a large file can accumulate a page-cache charge, depending on ownership, readahead and reclaim. Clean cache that is not pinned in place is reclaimable, but the file counter alone does not prove that usage is safe or all reclaim can succeed. But dirty pages and tmpfs (`/dev/shm`, `emptyDir` with `medium: Memory`) cannot simply be dropped, and tmpfs counts against the limit like anonymous memory.
 
 ### Kubernetes
 
 A container's `resources.limits.memory` becomes its cgroup's `memory.max`. `requests.memory` is used by the scheduler to place pods (and, with the optional MemoryQoS feature, to set protection).
 
-A limit-related OOM can kill a container process, commonly reported as **OOMKilled** with code **137** (the usual 128+SIGKILL convention). Code 137 alone does not prove OOM, and OOMKilled alone does not prove the container's own limit was the cause: node/global OOM is possible. **Kubelet eviction** is separate; memory-pressure ranking considers whether usage exceeds requests, Pod Priority, and usage relative to requests.
+A limit-related OOM can kill a container process, commonly reported as **OOMKilled** with code **137**, following the usual shell convention for a process killed by a signal:
+
+```formula
+c = 128 + s
+c = 128 + 9 = 137
+where
+c: the exit code reported for a process killed by a signal
+s: the signal number; SIGKILL is 9 and SIGTERM is 15 (giving 143)
+In words: an exit code above 128 means "killed by signal number code minus 128", so 137 means SIGKILL.
+```
+
+ Code 137 alone does not prove OOM, and OOMKilled alone does not prove the container's own limit was the cause: node/global OOM is possible. **Kubelet eviction** is separate; memory-pressure ranking considers whether usage exceeds requests, Pod Priority, and usage relative to requests.
 
 ### Runtimes in containers
 
@@ -150,7 +223,7 @@ Managed runtimes must size themselves to the cgroup, not the host:
 - **Go**: `GOMEMLIMIT` (Go 1.19+) sets a soft budget for memory managed by the Go runtime; it excludes some external memory and may be exceeded to avoid excessive GC.
 - **Node.js**: `--max-old-space-size` limits V8 old-space, not the entire heap or total process RSS.
 
-Budget measured non-heap peaks, cache and allocation bursts below the container limit. A fixed 20–30% margin is not a guarantee for every runtime or workload.
+Budget measured non-heap peaks, cache and allocation spikes below the container limit. A fixed 20–30% margin is not a guarantee for every runtime or workload.
 
 ## Finding leaks
 
@@ -190,7 +263,20 @@ print(top[0])
 # Output varies with Python and platform.
 ```
 
-The payload is 10,000,000 bytes, about **9.54 MiB** (9,765.625 KiB), plus object and list overhead. Snapshot attribution and exact counts vary by Python version and allocator. In garbage-collected languages the usual "leak" is exactly this: a reachable collection, cache or listener list that only ever grows.
+The payload size works out as:
+
+```formula
+D = 1,000 × 10,000 B = 10,000,000 B
+D = (10,000,000 / 2^20) MiB ≈ 9.54 MiB
+where
+D: the total payload bytes appended to the cache
+B: bytes
+MiB: mebibyte, 2^20 = 1,048,576 bytes
+≈: approximately equal to
+In words: a thousand 10,000-byte objects is 10 million bytes, about 9.54 MiB (9,765.625 KiB), plus object and list overhead.
+```
+
+Python reports in binary units, so expect about 9.5 MiB, not 10. Snapshot attribution and exact counts vary by Python version and allocator. In garbage-collected languages the usual "leak" is exactly this: a reachable collection, cache or listener list that only ever grows.
 
 ## A debugging checklist
 
@@ -198,12 +284,12 @@ When a service's memory looks wrong:
 
 1. **Which number?** VSZ, RSS, PSS or `memory.current`? Each answers a different question.
 2. **Anon or file?** RssAnon includes anonymous mappings beyond the heap. RssFile and cgroup file counters cover different scopes; inspect dirty, writeback, shmem, reclaim and pressure before calling growth harmless.
-3. **Killed by whom?** `dmesg` for the kernel OOM killer, `memory.events` for a cgroup limit, kubelet events for eviction, journal for systemd-oomd.
+3. **Killed by whom?** `dmesg` for the kernel OOM killer, `memory.events` for a cgroup limit, kubelet events for eviction, the systemd journal for systemd-oomd.
 4. **Leak or retention?** Compare the allocator's statistics or a heap profile with RSS.
 5. **Is the limit right?** Heap cap plus non-heap overhead plus headroom must fit under `memory.max`.
 
 ## Key takeaways
-- Linux defaults to heuristic overcommit; allocation may fail immediately or later. Strict commit accounting uses ratio/absolute-budget settings and applicable reservations.
+- Linux defaults to heuristic overcommit; allocation may fail immediately or later. Strict overcommit accounting uses ratio/absolute-budget settings and applicable reservations.
 - Ordinary OOM selection scores eligible tasks in its scope using resident, swapped and page-table usage plus adjustment; context and policies add exceptions.
 - VSZ counts address space, RSS double-counts shared pages, PSS apportions shared resident mappings, USS measures private resident pages rather than guaranteed exit savings; for the machine, read MemAvailable.
 - cgroup v2 charges page cache to the group; memory.high throttles, memory.max reclaims then OOM-kills inside the group; Kubernetes cgroup-v2 limits commonly map to memory.max; exit 137 alone does not identify OOM.

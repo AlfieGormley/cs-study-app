@@ -11,7 +11,7 @@
       },
       {
         "text": "0x12ABC",
-        "explanation": "Correct. Offset = low 12 bits = 0xABC; VPN = 0x5 maps to PFN 0x12; physical = 0x12 followed by 0xABC."
+        "explanation": "Correct. Offset = low 12 bits = 0xABC; VPN = 0x5 maps to PFN 0x12; so the physical address is 0x12 followed by 0xABC."
       },
       {
         "text": "0x17ABC",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. 4 KiB = 2^12, so the offset is the low **12 bits**: three hex digits.\n2. 0x5ABC → VPN = 0x5, offset = 0xABC.\n3. Look up VPN 0x5 → PFN 0x12.\n4. Physical = (PFN << 12) | offset = 0x12000 | 0xABC = **0x12ABC**.\n\nShortcut: with 4 KiB pages, write the PFN and then append the last three hex digits of the virtual address.",
+    "workedExample": "1. 4 KiB = 4,096 = 2^12 bytes, so the offset is the low **12 bits**: three hex digits.\n2. 0x5ABC → VPN = 0x5, offset = 0xABC.\n3. Look up VPN 0x5 → PFN 0x12.\n4. Put the frame number above the offset:\n\n```formula\nPA = PFN × 2^12 + off\nPA = 0x12 × 0x1000 + 0xABC\nPA = 0x12000 + 0xABC = 0x12ABC\nwhere\nPA: the physical address\nPFN: the physical frame number from the page table; here 0x12\n2^12: 4,096, the page size, which is 0x1000 in hex\noff: the offset inside the page, the low 12 bits of the virtual address; here 0xABC\nIn words: multiplying the frame number by 0x1000 appends three hex zeros, and the offset fills them in.\n```\n\nShortcut: with 4 KiB pages, write the PFN and then append the last three hex digits of the virtual address.",
     "link": {
       "title": "OSTEP: Paging: Introduction (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Offset bits = log2(page size). 16 KiB = 16 × 1024 = 16,384 = **2^14**, so 14 bits.\n2. VPN bits = address bits − offset bits = 48 − 14 = **34**.\n3. Sanity check: 2^34 pages × 2^14 bytes per page = 2^48 bytes, the whole address space.\n\n16 KiB is a supported ARM64 translation granule; this question explicitly assumes a 48-bit virtual address width.",
+    "workedExample": "The offset needs enough bits to number every byte in a page, and the page number gets whatever is left:\n\n```formula\nk = log_2(P) = log_2(16,384) = 14\nv = n − k = 48 − 14 = 34\n2^v × 2^k = 2^34 × 2^14 = 2^48\nwhere\nk: the number of offset bits\nlog_2: the base-2 logarithm: the power of 2 that gives the number; 2^14 = 16,384\nP: the page size in bytes; 16 KiB = 16 × 1,024 = 16,384\nv: the number of virtual-page-number (VPN) bits\nn: the number of virtual-address bits, 48\n2^v: the number of virtual pages\n2^k: the bytes per page\nIn words: 14 bits pick a byte inside a 16 KiB page, the other 34 bits pick the page, and together they cover all 2^48 bytes.\n```\n\n16 KiB is a supported ARM64 translation granule; this question explicitly assumes a 48-bit virtual address width.",
     "link": {
       "title": "OSTEP: Paging: Introduction (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Number of virtual pages = 2^32 / 2^12 = 2^20 = 1,048,576.\n2. A flat table needs one entry per page, used or not.\n3. Size = 2^20 × 4 bytes = 2^22 bytes = **4 MiB** per process.\n4. With 200 processes that is 800 MiB just for page tables, which is why even 32-bit x86 used a two-level table (a page directory of 1,024 entries pointing to page tables of 1,024 entries).",
+    "workedExample": "A flat table has one entry for every possible virtual page, used or not:\n\n```formula\nE = 2^32 / 2^12 = 2^20 = 1,048,576\nS = E × 4 B = 2^22 B = 4 MiB\nwhere\nE: the number of virtual pages, and so of table entries\n2^32: the size of the 32-bit address space in bytes\n2^12: the page size, 4,096 bytes (4 KiB)\nS: the size of the flat page table\nB: bytes; each entry is 4 bytes\nMiB: mebibyte, 2^20 bytes\nIn words: about a million pages at 4 bytes each is 4 MiB per process, however little memory the process uses.\n```\n\nWith 200 processes that is 800 MiB just for page tables, which is why even 32-bit x86 used a two-level table (a page directory of 1,024 entries pointing to page tables of 1,024 entries).",
     "link": {
       "title": "OSTEP: Paging: Introduction (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Do it with shifts:\n\n```\nva = 0x4020123456\noff  = va & 0xFFF          = 0x456\npt   = (va >> 12) & 0x1FF  = 0x123\n                           = 291\npd   = (va >> 21) & 0x1FF  = 256\npdpt = (va >> 30) & 0x1FF  = 256\npml4 = (va >> 39) & 0x1FF  = 0\n```\n\nCheck one: `0x4020123456 >> 30` = 0x100 = 256, and 256 & 511 = 256.\n\nOr think in binary: 0x40_2012_3456 has bit 38 set (giving PDPT 256, since 2^38 / 2^30 = 256) and bit 29 set (PD 2^29 / 2^21 = 256).",
+    "workedExample": "Each index is a 9-bit field: divide by 2 to the power of the field's starting bit, then keep the remainder after dividing by 512:\n\n```formula\ni = ⌊VA / 2^s⌋ mod 512\ni_PML4 = ⌊VA / 2^39⌋ mod 512 = 0\ni_PDPT = ⌊VA / 2^30⌋ mod 512 = 256\ni_PD = ⌊VA / 2^21⌋ mod 512 = 256\ni_PT = ⌊VA / 2^12⌋ mod 512 = 291\noff = VA mod 2^12 = 0x456\nwhere\ni: one level's table index, from 0 to 511\nVA: the virtual address, 0x4020123456\ns: the bit where that level's field starts: 39, 30, 21 or 12\n⌊ ⌋: floor: round down to a whole number\nmod: the remainder after division; mod 512 keeps 9 bits\ni_PML4: the PML4 index (bits 47 to 39)\ni_PDPT: the PDPT index (bits 38 to 30)\ni_PD: the PD index (bits 29 to 21)\ni_PT: the PT index (bits 20 to 12); 291 is 0x123\noff: the 12-bit page offset\nIn words: shift the address down past each field and keep 9 bits to get the four indices; the low 12 bits are the offset.\n```\n\nIn code this is `(va >> s) & 0x1FF`, because shifting right by s divides by 2^s and masking with 0x1FF keeps 9 bits.\n\nCheck one: 0x4020123456 divided by 2^30 is 0x100 = 256 (rounded down), and 256 is already below 512, so the PDPT index is 256.\n\nOr think in binary: 0x40_2012_3456 has bit 38 set (giving PDPT 256, since 2^38 / 2^30 = 256) and bit 29 set (PD 2^29 / 2^21 = 256).",
     "link": {
       "title": "Page tables — Linux kernel docs",
       "url": "https://www.kernel.org/doc/html/latest/mm/page_tables.html"
@@ -212,7 +212,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Each PTE maps 4 KiB. One PT has 512 entries, so it maps 512 × 4 KiB = **2 MiB**.\n2. Number of PTs for 1 GiB: 1,024 MiB / 2 MiB = **512**.\n3. PT memory: 512 × 4 KiB = **2 MiB**.\n4. Upper levels: one PD (its 512 entries point to those 512 PTs), one PDPT entry, one PML4 entry. About 3 more pages = 12 KiB.\n5. Total ≈ **2 MiB**, about 0.2% overhead.\n\nWith 2 MiB pages, the leaf PTs vanish and one 4 KiB PD covers the region, plus the required upper tables. With a 1 GiB page, one PDPT entry covers it, still within allocated upper tables. Existing tables may be reused.",
+    "workedExample": "1. Each PTE maps 4 KiB. One PT has 512 entries, so it maps 512 × 4 KiB = **2 MiB**.\n2. Count the tables and their size:\n\n```formula\nN = M / C_PT = 1,024 MiB / 2 MiB = 512\nS = N × 4 KiB = 512 × 4 KiB = 2 MiB\nwhere\nN: the number of leaf page tables (PTs) needed\nM: the mapped region, 1 GiB = 1,024 MiB\nC_PT: the memory one full PT maps, 2 MiB\nS: the memory used by those PTs\nKiB: kibibyte, 1,024 bytes; each PT is one 4 KiB page\nMiB: mebibyte, 1,024 KiB\nIn words: 512 leaf tables of 4 KiB each, 2 MiB in all, about 0.2 % of the 1 GiB they map.\n```\n\n3. Upper levels: one PD (its 512 entries point to those 512 PTs), one PDPT entry, one PML4 entry. About 3 more pages = 12 KiB.\n4. Total ≈ **2 MiB**, about 0.2% overhead.\n\nWith 2 MiB pages, the leaf PTs vanish and one 4 KiB PD covers the region, plus the required upper tables. With a 1 GiB page, one PDPT entry covers it, still within allocated upper tables. Existing tables may be reused.",
     "link": {
       "title": "OSTEP: Paging: Smaller Tables (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
@@ -222,7 +222,7 @@
     "id": "mem-paging-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A process uses a **2 MiB huge page**. The PD entry for virtual address **0x7f0012345678** has PS = 1 and points to the 2 MiB frame starting at physical **0x40000000**. What is the physical address?",
+    "prompt": "A process uses a **2 MiB huge page**. The PD entry for virtual address **0x7f0012345678** has its PS (page size) bit set and points to the 2 MiB frame starting at physical **0x40000000**. What is the physical address?",
     "options": [
       {
         "text": "0x40000678",
@@ -230,7 +230,7 @@
       },
       {
         "text": "0x40345678",
-        "explanation": "This keeps 24 bits (six hex digits) as the offset. 21 bits is 0x1FFFFF, so bit 21 (the 0x2 in 0x345678) belongs to the PD index."
+        "explanation": "This keeps 24 bits (six hex digits) as the offset. A 21-bit offset runs up to 0x1FFFFF, so bit 21 (the 0x2 in 0x345678) belongs to the PD index."
       },
       {
         "text": "0x7f0012345678",
@@ -238,11 +238,11 @@
       },
       {
         "text": "0x40145678",
-        "explanation": "Correct. A 2 MiB page has a 21-bit offset: 0x7f0012345678 & 0x1FFFFF = 0x145678. Add it to the frame base: 0x40145678."
+        "explanation": "Correct. A 2 MiB page has a 21-bit offset: Keeping the low 21 bits of 0x7f0012345678 gives 0x145678. Add it to the frame base: 0x40145678."
       }
     ],
     "answer": 3,
-    "workedExample": "1. 2 MiB = 2^21, so the offset is the low **21 bits**: mask with `0x1FFFFF`.\n2. The low five hex digits, 0x45678, are bits 0 to 19. Bit 20 is the lowest bit of the next digit, 0x3 = `0011`. Keep that bit (1) and drop the rest (bit 21 belongs to the PD index), so the sixth digit becomes 0x1.\n\n```\n0x345678 & 0x1FFFFF = 0x145678\n```\n\n3. The walk stops at the PD (PS = 1), so there is no PT lookup.\n4. Physical = 0x40000000 + 0x145678 = **0x40145678**.",
+    "workedExample": "1. 2 MiB = 2^21, so the offset is the low **21 bits**.\n2. The low five hex digits, 0x45678, are bits 0 to 19. Bit 20 is the lowest bit of the next digit, 0x3 = `0011`. Keep that bit (1) and drop the rest (bit 21 belongs to the PD index), so the sixth digit becomes 0x1.\n3. The walk stops at the PD (its PS bit is set), so there is no PT lookup.\n4. Add the offset to the frame's start:\n\n```formula\noff = VA mod 2^21 = 0x145678\nPA = F + off\nPA = 0x40000000 + 0x145678\nPA = 0x40145678\nwhere\noff: the offset inside the 2 MiB page\nVA: the virtual address, 0x7f0012345678\nmod: the remainder after division; mod 2^21 keeps the low 21 bits\n2^21: 2,097,152 bytes = 2 MiB (0x200000)\nPA: the physical address\nF: the start of the 2 MiB frame, 0x40000000, from the PD entry\nIn words: with a 2 MiB page the low 21 bits are the offset, and they are added to the 2 MiB frame's start address.\n```\n\nIn code the offset is `va & 0x1FFFFF`, a mask that keeps 21 bits.",
     "link": {
       "title": "Transparent Hugepage Support — Linux kernel docs",
       "url": "https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html"
@@ -260,7 +260,7 @@
       },
       {
         "text": "3",
-        "explanation": "Correct. Offset = 16 bits, each table has 65,536 / 8 = 8,192 = 2^13 entries, so each level covers 13 bits. 48 − 16 = 32 bits need ceil(32 / 13) = 3 levels."
+        "explanation": "Correct. Offset = 16 bits, each table has 65,536 / 8 = 8,192 = 2^13 entries, so each level covers 13 bits. The 48 − 16 = 32 page-number bits need 32 / 13 ≈ 2.46 levels, rounded up to 3."
       },
       {
         "text": "4",
@@ -272,7 +272,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Offset bits = log2(64 KiB) = **16**.\n2. Entries per table = page size / entry size = 65,536 / 8 = 8,192 = 2^13, so each level resolves **13 bits**.\n3. Bits to translate = 48 − 16 = **32**.\n4. Levels = ceil(32 / 13) = ceil(2.46) = **3**. The top level is only partly used (32 − 26 = 6 bits).\n\nThis matches ARM64 with the 64 KiB granule, which uses 3 levels for 48-bit addresses (and 2 levels for 42-bit). Bigger pages mean shallower trees and fewer memory accesses per TLB miss, at the cost of more internal fragmentation.",
+    "workedExample": "Find the offset size, the bits each table resolves, then how many tables the remaining bits need:\n\n```formula\nk = log_2(P) = log_2(65,536) = 16\ne = P / s_PTE = 65,536 / 8 = 8,192\nb = log_2(e) = log_2(8,192) = 13\nL = ⌈(n − k) / b⌉ = ⌈(48 − 16) / 13⌉\nL = ⌈2.46⌉ = 3\nwhere\nk: the number of offset bits\nlog_2: the base-2 logarithm: the power of 2 that gives the number (2^16 = 65,536, 2^13 = 8,192)\nP: the page size in bytes; 64 KiB = 65,536\ne: the entries in one table, which fills one page\ns_PTE: the size of one page table entry, 8 bytes\nb: the address bits each level resolves\nL: the number of levels\nn: the number of virtual-address bits, 48\n⌈ ⌉: ceiling: round up to a whole number\nIn words: 16 offset bits leave 32 page-number bits, and at 13 bits per level that takes 3 levels, the top one only partly used.\n```\n\nThe top level uses only 32 − 26 = 6 bits.\n\nThis matches ARM64 with the 64 KiB granule, which uses 3 levels for 48-bit addresses (and 2 levels for 42-bit). Bigger pages mean shallower trees and fewer memory accesses per TLB miss, at the cost of more internal fragmentation.",
     "link": {
       "title": "OSTEP: Paging: Smaller Tables (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
@@ -336,7 +336,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "For 4 KiB mappings, each backend needs 64 GiB / 2 MiB = 32,768 leaf PTs. At 4 KiB each that is 128 MiB per backend; 50 × 128 MiB = 6,400 MiB = 6.25 GiB. For 2 MiB mappings, 64 PDs × 4 KiB = 256 KiB per backend; 50 copies total 12.5 MiB. These are leaf-table estimates under the stated no-sharing assumption. Linux HugeTLB may share PMD tables for eligible mappings, and actual memory also depends on population, alignment and upper levels. PostgreSQL documents reduced table overhead as a benefit of huge_pages.",
+    "workedExample": "Each backend has its own tables, so compute one backend and multiply by 50:\n\n```formula\nN = 64 GiB / 2 MiB = 32,768\nS_s = N × 4 KiB = 128 MiB\nT_s = 50 × S_s = 6,400 MiB = 6.25 GiB\nS_h = 64 × 4 KiB = 256 KiB\nT_h = 50 × S_h = 12,800 KiB = 12.5 MiB\nwhere\nN: leaf page tables (PTs) per backend with 4 KiB pages; each PT maps 2 MiB\nS_s: one backend's leaf-table memory with 4 KiB pages\nT_s: the total for 50 backends with 4 KiB pages\nS_h: one backend's leaf-table memory with 2 MiB pages: 64 PDs, since each PD maps 1 GiB\nT_h: the total for 50 backends with 2 MiB pages\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nGiB: gibibyte, 1,024 MiB\nIn words: small pages cost 128 MiB of tables per backend (6.25 GiB in all); huge pages cut that 512-fold to 256 KiB each (12.5 MiB in all).\n```\n\nThese are leaf-table estimates under the stated no-sharing assumption. Linux HugeTLB may share PMD tables for eligible mappings, and actual memory also depends on population, alignment and upper levels. PostgreSQL documents reduced table overhead as a benefit of huge_pages.",
     "link": {
       "title": "HugeTLB pages — Linux kernel docs",
       "url": "https://www.kernel.org/doc/html/latest/admin-guide/mm/hugetlbpage.html"
@@ -346,7 +346,7 @@
     "id": "mem-paging-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "The scheduler switches between tasks with different userspace memory contexts on x86-64. Which hardware register selects the new address-space root?",
+    "prompt": "The scheduler switches from process A to process B, which have different userspace memory contexts, on x86-64. What does the kernel do so that the hardware starts translating with B's address space?",
     "options": [
       {
         "text": "Copies B's page tables into a fixed kernel location that the MMU always reads",

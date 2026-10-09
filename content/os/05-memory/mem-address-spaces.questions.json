@@ -3,7 +3,7 @@
     "id": "mem-address-spaces-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "A process runs under base-and-bounds translation with **base = 40,000** and **bounds = 8,000**. The program loads from virtual address **5,000**. Which physical address is accessed?",
+    "prompt": "A process runs under base-and-bounds translation with a **base of 40,000** and a **bounds of 8,000**. The program loads from virtual address **5,000**. Which physical address is accessed?",
     "options": [
       {
         "text": "5,000",
@@ -11,7 +11,7 @@
       },
       {
         "text": "45,000",
-        "explanation": "Correct. 5,000 is less than the bounds of 8,000, so the access is legal, and physical = 5,000 + 40,000 = 45,000."
+        "explanation": "Correct. 5,000 is less than the bounds of 8,000, so the access is legal, and the physical address is 5,000 + 40,000 = 45,000."
       },
       {
         "text": "48,000",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Base and bounds does two things on every access:\n\n1. **Check**: is virtual < bounds? 5,000 < 8,000, so yes, the access is allowed.\n2. **Relocate**: physical = virtual + base = 5,000 + 40,000 = **45,000**.\n\nThe process's legal physical range is therefore 40,000 to 47,999. It can never reach anything outside that range, which is how the scheme provides protection.",
+    "workedExample": "Base and bounds does two things on every access: a check against the bounds, then an add of the base.\n\n```formula\nVA = 5,000 < 8,000 = bounds\nPA = VA + base\nPA = 5,000 + 40,000 = 45,000\nwhere\nVA: the virtual address the program used; here 5,000\nbounds: the bounds register, the size of the region in bytes; here 8,000, so legal virtual addresses are 0 to 7,999\n<: strictly less than\nPA: the physical address actually accessed\nbase: the base register, where the region starts in physical memory; here 40,000\nIn words: 5,000 passes the bounds check, so the hardware adds the base and the access goes to physical 45,000.\n```\n\nThe process's legal physical range is therefore 40,000 to 47,999. It can never reach anything outside that range, which is how the scheme provides protection.",
     "link": {
       "title": "OSTEP: Address Translation (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-mechanism.pdf"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. `fork()` creates a child whose address space is a duplicate of the parent's: the same regions at the same virtual addresses.\n2. So `&x` is identical in both, for example `0x55e4c3a1b010`.\n3. The child writes `x = 2`. That write goes through the *child's* page tables to the child's copy of the page.\n4. The parent waits, then reads `x` through its own page tables and gets its own copy, still 1.\n\n```\nc 0x55e4c3a1b010 2\np 0x55e4c3a1b010 1\n```\n\nThe lesson: a virtual address is only meaningful inside one address space.",
+    "workedExample": "1. `fork()` creates a child whose address space is a duplicate of the parent's: the same regions at the same virtual addresses.\n2. So `&x` is identical in both, for example `0x55e4c3a1b010`.\n3. The child runs `x = 2;`. That write goes through the *child's* page tables to the child's copy of the page.\n4. The parent waits, then reads `x` through its own page tables and gets its own copy, still 1.\n\n```\nc 0x55e4c3a1b010 2\np 0x55e4c3a1b010 1\n```\n\nThe lesson: a virtual address is only meaningful inside one address space.",
     "link": {
       "title": "OSTEP: Address Spaces (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
@@ -101,11 +101,11 @@
     "id": "mem-address-spaces-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A process has **base = 100,000** and **bounds = 8,000**. It accesses virtual address **8,000**. What happens?",
+    "prompt": "A process has a **base of 100,000** and a **bounds of 8,000**. It accesses virtual address **8,000**. What happens?",
     "options": [
       {
         "text": "Physical address 108,000 is accessed",
-        "explanation": "This is an off-by-one error. Legal virtual addresses are 0 to bounds − 1, so 8,000 is one past the end."
+        "explanation": "This is an off-by-one error. Legal virtual addresses are 0 to 7,999 (one less than the bounds), so 8,000 is one past the end."
       },
       {
         "text": "Physical address 8,000 is accessed",
@@ -113,7 +113,7 @@
       },
       {
         "text": "The hardware raises a fault and the OS typically kills the process",
-        "explanation": "Correct. The check is virtual < bounds. 8,000 is not less than 8,000, so the access is out of range."
+        "explanation": "Correct. The hardware checks that the virtual address is less than the bounds. 8,000 is not less than 8,000, so the access is out of range."
       },
       {
         "text": "The OS automatically grows the bounds to 8,001",
@@ -121,7 +121,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Bounds is the **size** of the address space: 8,000 bytes means virtual addresses 0 to 7,999.\n2. The hardware check is `virtual < bounds`.\n3. 8,000 < 8,000 is false, so the MMU raises an exception before any memory is touched.\n4. The OS's handler sees an illegal access by a user process and terminates it (the ancestor of today's SIGSEGV).\n\nOff-by-one at the boundary is a classic exam trap, so always check whether the limit is a size or a last valid address. On real hardware it varies; in this model it is the size.",
+    "workedExample": "1. Bounds is the **size** of the address space: 8,000 bytes means virtual addresses 0 to 7,999.\n2. The hardware checks that the virtual address is strictly less than the bounds:\n\n```formula\nVA_max = bounds − 1 = 8,000 − 1 = 7,999\nVA = 8,000 > VA_max\nwhere\nVA_max: the highest legal virtual address\nbounds: the bounds register, the size of the region in bytes; here 8,000\nVA: the virtual address accessed; here 8,000\n>: greater than\nIn words: a region of 8,000 bytes covers addresses 0 to 7,999, so address 8,000 is one past the end.\n```\n\n3. The check fails, so the MMU raises an exception before any memory is touched.\n4. The OS's handler sees an illegal access by a user process and terminates it (the ancestor of today's SIGSEGV).\n\nOff-by-one at the boundary is a classic exam pitfall, so always check whether the limit is a size or a last valid address. On real hardware it varies; in this model it is the size.",
     "link": {
       "title": "OSTEP: Address Translation (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-mechanism.pdf"
@@ -135,7 +135,7 @@
     "options": [
       {
         "text": "0x9A40",
-        "explanation": "Correct. 0x1A40 is `01 1010 0100 0000`: segment 01 (heap), offset 0xA40. 0xA40 < 0xC00, so physical = 0x9000 + 0xA40 = 0x9A40."
+        "explanation": "Correct. 0x1A40 is `01 1010 0100 0000`: segment 01 (heap), offset 0xA40. 0xA40 < 0xC00, so the physical address is 0x9000 + 0xA40 = 0x9A40."
       },
       {
         "text": "0xAA40",
@@ -151,7 +151,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Write 0x1A40 in binary: `0001 1010 0100 0000`.\n2. Keep the low 14 bits: `01 1010 0100 0000`.\n3. Top two bits `01` select the **heap**.\n4. Low 12 bits `1010 0100 0000` = **0xA40** = 2,624.\n5. Bounds check: 0xA40 < 0xC00 (3,072). Legal.\n6. Physical = base + offset = 0x9000 + 0xA40 = **0x9A40**.\n\nNotice the hex trick: with a 12-bit offset, the last three hex digits *are* the offset, and the leading digit 1 here means segment 01.",
+    "workedExample": "1. Write 0x1A40 in binary: `0001 1010 0100 0000`.\n2. Keep the low 14 bits: `01 1010 0100 0000`.\n3. Top two bits `01` select the **heap**.\n4. Low 12 bits `1010 0100 0000` = **0xA40** = 2,624.\n5. Bounds check, then add the base:\n\n```formula\nseg = ⌊0x1A40 / 2^12⌋ = 1\noff = 0x1A40 mod 2^12 = 0xA40\noff = 2,624 < 3,072 = size_1\nPA = base_1 + off\nPA = 0x9000 + 0xA40 = 0x9A40\nwhere\nseg: the segment number, the top 2 bits of the 14-bit address; 1 (binary 01) is the heap\noff: the offset inside the segment, the low 12 bits\n2^12: 4,096 (0x1000); dividing by it removes the 12 offset bits\n⌊ ⌋: floor: round down to a whole number\nmod: the remainder after division\nsize_1: the heap segment's size, 0xC00 = 3,072 bytes\nbase_1: the heap segment's base, 0x9000\nPA: the physical address\nIn words: 0x1A40 is 0xA40 bytes into the heap, which fits inside its 0xC00 bytes, so it lands at 0x9000 + 0xA40.\n```\n\nNotice the hex trick: with a 12-bit offset, the last three hex digits *are* the offset, and the leading digit 1 here means segment 01.",
     "link": {
       "title": "OSTEP: Segmentation (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Total free: 30 + 25 + 40 = 95 MiB, which exceeds the 60 MiB needed.\n2. A segment must be contiguous in physical memory. The largest hole is 40 MiB, so the request fails.\n3. Free space split into unusable pieces *between* allocations is **external fragmentation**.\n4. Fixes:\n   - **Compaction**: stop processes, copy their segments together, update base registers. This leaves one 95 MiB hole but costs a lot of copying.\n   - **Paging**: split memory into fixed-size frames. A 60 MiB region becomes 15,360 pages of 4 KiB that can go in any free frames.",
+    "workedExample": "1. Total free: 30 + 25 + 40 = 95 MiB, which exceeds the 60 MiB needed.\n2. A segment must be contiguous in physical memory. The largest hole is 40 MiB, so the request fails.\n3. Free space split into unusable pieces *between* allocations is **external fragmentation**.\n4. Fixes:\n   - **Compaction**: stop processes, copy their segments together, update base registers. This leaves one 95 MiB hole but costs a lot of copying.\n   - **Paging**: split memory into fixed-size frames. A 60 MiB region becomes 15,360 pages of 4 KiB (60 × 1,024 KiB divided by 4 KiB) that can go in any free frames.",
     "link": {
       "title": "OSTEP: Segmentation (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
@@ -229,7 +229,7 @@
       },
       {
         "text": "The FS and GS segment bases are still honoured, and are used for thread-local storage",
-        "explanation": "Correct. glibc points FS at each thread's TLS block, and the kernel uses GS for per-CPU data."
+        "explanation": "Correct. glibc points FS at each thread's thread-local storage block, and the kernel uses GS for per-CPU data."
       },
       {
         "text": "Segment limits are checked on every data access, so Linux uses them to isolate processes",
@@ -244,7 +244,7 @@
       0,
       1
     ],
-    "workedExample": "8086 real mode computed segment×16+offset with 20-bit addressing. The 286 added protected segmentation; the 386 added paging. Later 32-bit Linux largely used flat code/data segments, with exceptions. Native 64-bit mode ignores CS/DS/ES/SS bases and ordinary segment limits, while FS/GS bases remain useful for TLS and per-CPU data. Compatibility mode has different segmentation semantics.",
+    "workedExample": "8086 real mode multiplied the segment value by 16 and added the offset, giving 20-bit addresses. The 286 added protected segmentation; the 386 added paging. Later 32-bit Linux largely used flat code/data segments, with exceptions. Native 64-bit mode ignores CS/DS/ES/SS bases and ordinary segment limits, while FS/GS bases remain useful for thread-local storage and per-CPU data. Compatibility mode has different segmentation semantics.",
     "link": {
       "title": "Memory segmentation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Memory_segmentation"

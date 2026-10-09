@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Add the header: 30 + 8 = **38** bytes needed.\n2. Round up to a multiple of 16: **48**.\n3. Usable = 48 − 8 = **40** bytes.\n\n```\nmalloc(24) -> 32 chunk, 24 usable\nmalloc(25) -> 48 chunk, 40 usable\nmalloc(30) -> 48 chunk, 40 usable\n```\n\nSo 10 of the 40 usable bytes are internal fragmentation, plus the 8-byte header.",
+    "workedExample": "Add the 8-byte header, round up to a multiple of 16 (minimum 32), and subtract the header for the usable size:\n\n```formula\nC = max(32, 16 × ⌈(n + 8) / 16⌉)\nC = 16 × ⌈38 / 16⌉ = 16 × 3 = 48\nU = C − 8 = 48 − 8 = 40\nwhere\nC: the chunk size in bytes\nn: the bytes requested, 30\n⌈ ⌉: ceiling: round up to a whole number; ⌈38 / 16⌉ = ⌈2.375⌉ = 3\nmax: the larger of its two arguments; 32 is the minimum chunk\nU: the usable bytes malloc_usable_size reports\nIn words: 30 bytes plus the 8-byte header is 38, which rounds up to a 48-byte chunk with 40 usable bytes.\n```\n\n```\nmalloc(24) -> 32 chunk, 24 usable\nmalloc(25) -> 48 chunk, 40 usable\nmalloc(30) -> 48 chunk, 40 usable\n```\n\nSo 10 of the 40 usable bytes are internal fragmentation, plus the 8-byte header.",
     "link": {
       "title": "MallocInternals — glibc wiki",
       "url": "https://sourceware.org/glibc/wiki/MallocInternals"
@@ -71,7 +71,7 @@
       },
       {
         "text": "Exactly 3 pages, wasting nothing",
-        "explanation": "Buddy blocks are always 2^k pages. Three pages is not a power of two."
+        "explanation": "Buddy blocks are always a power of two pages (1, 2, 4, 8 ...). Three pages is not a power of two."
       },
       {
         "text": "Order 1 (8 KiB), plus a separate 4 KiB block",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Convert to pages: 12 KiB / 4 KiB = **3 pages**.\n2. Round up to a power of two: 2^2 = **4 pages**, so order 2.\n3. Block size 16 KiB, waste 16 − 12 = **4 KiB** (25%).\n\nIn the worst case (2^k + 1 pages) buddy allocation wastes almost half the block, which is why the kernel uses slab caches on top of it for small objects.",
+    "workedExample": "1. Convert to pages, then pick the smallest power of two that holds them:\n\n```formula\nN = 12 KiB / 4 KiB = 3\nk = ⌈log_2(N)⌉ = ⌈log_2(3)⌉ = ⌈1.58⌉ = 2\nS = 2^k × 4 KiB = 4 × 4 KiB = 16 KiB\nW = S − 12 KiB = 4 KiB\nwhere\nN: the number of 4 KiB pages requested\nk: the order of the block: it holds 2^k pages\nlog_2: the base-2 logarithm: the power of 2 that gives the number\n⌈ ⌉: ceiling: round up to a whole number\nS: the block size\nW: the wasted space inside the block\nKiB: kibibyte, 1,024 bytes\nIn words: 3 pages round up to 4 pages (order 2), a 16 KiB block, so 4 KiB (25 %) is wasted.\n```\n\nIn the worst case, a request one page larger than a power of two, buddy allocation wastes almost half the block (for example 9 pages take a 16-page block). That is why the kernel uses slab caches on top of it for small objects.",
     "link": {
       "title": "Buddy memory allocation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Buddy_memory_allocation"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Size 32 KiB = **0x8000**.\n2. Buddy address = offset XOR size:\n\n```\n0x18000 = 1 1000 0000 0000 0000\n0x08000 = 0 1000 0000 0000 0000\nXOR     = 1 0000 0000 0000 0000\n        = 0x10000\n```\n\n3. The pair is [0x10000, 0x18000) and [0x18000, 0x20000).\n4. If both are free, they merge into one 64 KiB block at the lower address, **0x10000**, which is 64 KiB aligned. The allocator then tries to merge again at the next order.",
+    "workedExample": "1. Size 32 KiB = 32,768 bytes = **0x8000**.\n2. The buddy's offset is the block's offset with the size bit flipped:\n\n```formula\na_b = a XOR S\na_b = 0x18000 XOR 0x8000 = 0x10000\na_m = min(a, a_b) = 0x10000\nS_m = 2 × S = 0x10000\nwhere\na_b: the buddy's offset\na: the freed block's offset, 0x18000\nXOR: exclusive or, bit by bit: a result bit is 1 when exactly one input bit is 1, so XOR with S flips the one bit worth S\nS: the block size, 0x8000 (32 KiB)\na_m: the merged block's offset, the lower of the pair\nmin: the smaller of its two arguments\nS_m: the merged block's size, 0x10000 = 64 KiB\nIn words: flipping the 32 KiB bit of 0x18000 gives 0x10000; together the pair is a 64 KiB block starting at 0x10000.\n```\n\nThe same XOR in binary:\n\n```\n0x18000 = 1 1000 0000 0000 0000\n0x08000 = 0 1000 0000 0000 0000\nXOR     = 1 0000 0000 0000 0000\n        = 0x10000\n```\n\n3. The pair is [0x10000, 0x18000) and [0x18000, 0x20000).\n4. If both are free, they merge into one 64 KiB block at the lower address, **0x10000**, which is 64 KiB aligned. The allocator then tries to merge again at the next order.",
     "link": {
       "title": "Physical Page Allocation — Understanding the Linux VMM",
       "url": "https://www.kernel.org/doc/gorman/html/understand/understand009.html"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "For an illustrative pool of 64-byte slots, there are 64 slots per 4 KiB page. Independent 5% survival leaves a page empty with probability 0.95^64 ≈ 3.75%, so about 96.25% retain a survivor. This is not the exact glibc malloc(64) layout: those requests normally occupy 80-byte chunks in the stated model. Surviving data prevents discarding the whole page, but does not pin it in RAM. Allocator statistics and native/runtime profiles are needed to distinguish retention from leaks. Lifetime-segregated pools, trimming and allocator changes can be evaluated; trimming cannot discard a page containing live data.",
+    "workedExample": "For an illustrative pool of 64-byte slots, there are 64 slots per 4 KiB page. If each object survives independently with probability 5%, a page is wholly empty only if all 64 of its objects were freed:\n\n```formula\nq = (1 − s)^m = 0.95^64 ≈ 0.0375\n1 − q ≈ 0.9625\nwhere\nq: the probability that a page holds no survivors and can be released\ns: the probability that any one object survives, 0.05\nm: the objects per page, 4,096 / 64 = 64\n≈: approximately equal to\nIn words: with 64 objects per page, even a 5 % survival rate leaves about 96 % of pages holding at least one live object.\n```\n\nAbout 3.75% of pages are empty and about 96.25% retain a survivor. This is not the exact glibc malloc(64) layout: those requests normally occupy 80-byte chunks in the stated model. Surviving data prevents discarding the whole page, but does not pin it in RAM. Allocator statistics and native/runtime profiles are needed to distinguish retention from leaks. Lifetime-segregated pools, trimming and allocator changes can be evaluated; trimming cannot discard a page containing live data.",
     "link": {
       "title": "MallocInternals — glibc wiki",
       "url": "https://sourceware.org/glibc/wiki/MallocInternals"
@@ -157,7 +157,7 @@
     "options": [
       {
         "text": "A 1 MiB request can receive a dedicated mmap when existing arena space cannot satisfy it and default mapping limits permit",
-        "explanation": "Correct. This exceeds the initial threshold, but eligible existing free space, mapping limits and settings still affect the path."
+        "explanation": "Correct. This exceeds the initial threshold, but eligible existing free space, mapping limits and settings still affect the code path."
       },
       {
         "text": "The per-thread tcache lets most small `malloc`/`free` pairs avoid taking any lock",
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "With exactly 700-byte slots and no padding, floor(8192/700)=11, leaving 492 bytes (about 6%). A 4096-byte slab fits five and leaves 596 bytes (about 15%). Larger slabs improve packing in this example; that is not monotonic for every object size, and higher-order allocation has fragmentation and allocation-failure tradeoffs.",
+    "workedExample": "With exactly 700-byte slots and no padding:\n\n```formula\nN = ⌊S_slab / s⌋ = ⌊8,192 / 700⌋ = 11\nW = 8,192 B − 11 × 700 B = 492 B\nN_1 = ⌊4,096 / 700⌋ = 5\nW_1 = 4,096 B − 5 × 700 B = 596 B\nwhere\nN: objects per 8 KiB slab\nS_slab: the slab size in bytes, 8,192\ns: the object size, 700 bytes\n⌊ ⌋: floor: round down to a whole number\nW: leftover bytes in the 8 KiB slab, about 6 %\nN_1: objects per single 4 KiB page slab\nW_1: leftover bytes in the 4 KiB slab, about 15 %\nB: bytes\nIn words: 11 objects fit in two pages with 492 bytes spare, while one page fits only 5 and wastes 596.\n```\n\nLarger slabs improve packing in this example; that is not monotonic for every object size, and higher-order allocation has fragmentation and allocation-failure tradeoffs.",
     "link": {
       "title": "Slab allocation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Slab_allocation"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "The smallest listed class at least 257 is 320. Waste is 63 bytes, or 63/320 ≈ 19.7% of the slot. Above the smallest classes, the largest adjacent-class ratio in this scheme is 1.25; it is not 1.25 for every adjacent pair. Reducing a record to 256 bytes reduces its slot size from 320 to 256, a 20% reduction, assuming the same alignment and no other constraints.",
+    "workedExample": "The smallest listed class at least 257 is 320. The waste as a share of the slot:\n\n```formula\nw = (S − n) / S\nw = (320 − 257) / 320 = 63 / 320\nw ≈ 0.197 = 19.7 %\nwhere\nw: the rounding waste as a fraction of the slot\nS: the slot (size-class) size, 320 bytes\nn: the requested size, 257 bytes\n≈: approximately equal to\n%: per cent\nIn words: 63 of the 320 bytes are unused, just under a fifth of the slot.\n```\n\nAbove the smallest classes, the largest adjacent-class ratio in this scheme is 1.25; it is not 1.25 for every adjacent pair. Reducing a record to 256 bytes reduces its slot size from 320 to 256, a 20% reduction, assuming the same alignment and no other constraints.",
     "link": {
       "title": "jemalloc",
       "url": "https://jemalloc.net/"
@@ -267,11 +267,11 @@
       },
       {
         "text": "Each thread's tcache holds 64 MiB",
-        "explanation": "In the stated release/defaults, tcache holds at most seven chunks per each of 64 small bins, about 236 KiB total per thread, not 64 MiB. Other releases and tunables differ."
+        "explanation": "In the stated release/defaults, tcache holds at most seven chunks in each of 64 small bins (usable sizes 24 to 1,032 bytes), about 231 KiB (236,544 bytes) of usable space per thread, not 64 MiB. Other releases and tunables differ."
       }
     ],
     "answer": 1,
-    "workedExample": "The mappings are consistent with this glibc configuration, not proof of arena retention. The default arena cap is 8×32=256, but actual arena count is demand dependent. Threads can share arenas; chunks keep their arena ownership, although cross-thread frees can make chunks reusable through another thread's tcache. RSS also includes stacks, mappings and runtime/native allocations. Measure allocator statistics and memory pressure, then test an arena cap or a compatible alternative allocator against both memory and throughput.",
+    "workedExample": "The mappings are consistent with this glibc configuration, not proof of arena retention. The default arena cap is 8 × 32 = 256, but actual arena count is demand dependent. Threads can share arenas; chunks keep their arena ownership, although cross-thread frees can make chunks reusable through another thread's tcache. RSS also includes stacks, mappings and runtime/native allocations. Measure allocator statistics and memory pressure, then test an arena cap or a compatible alternative allocator against both memory and throughput.",
     "link": {
       "title": "mallopt(3) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "With an ideal page-aligned 64 MiB range and exactly one minor fault per 4 KiB page, population would require 16,384 faults. At 200 requests/s that model gives 3,276,800 faults/s. Actual malloc alignment, prior touches, huge pages and fault batching change counts; TLB invalidations need not send an IPI to every core. A 48-buffer pool retains 3 GiB of payload, so a bounded shared pool may be preferable. Reuse reduces churn but does not guarantee zero future faults or system calls.",
+    "workedExample": "With an ideal page-aligned 64 MiB range and exactly one minor fault per 4 KiB page:\n\n```formula\nF = 64 MiB / 4 KiB = 16,384\nR_F = 200 × F = 3,276,800\nP_M = 48 × 64 MiB = 3,072 MiB = 3 GiB\nwhere\nF: faults to populate one fresh 64 MiB mapping\nR_F: faults per second at 200 requests per second\nP_M: the payload a pool of 48 buffers keeps resident\nMiB: mebibyte, 1,024 KiB\nKiB: kibibyte, 1,024 bytes\nGiB: gibibyte, 1,024 MiB\nIn words: each fresh buffer costs 16,384 faults, over three million a second at this request rate, while a pool trades that for 3 GiB of retained memory.\n```\n\nActual malloc alignment, prior touches, huge pages and fault batching change counts; TLB invalidations need not send an IPI to every core. A 48-buffer pool retains 3 GiB of payload, so a bounded shared pool may be preferable. Reuse reduces churn but does not guarantee zero future faults or system calls.",
     "link": {
       "title": "mallopt(3) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
@@ -315,7 +315,7 @@
     "options": [
       {
         "text": "Many free small blocks but scarce order-9 blocks can make a 2 MiB allocation require compaction, fallback or failure",
-        "explanation": "Correct. External fragmentation of physical memory is the classic buddy weakness; compaction migrates movable pages to rebuild large blocks."
+        "explanation": "Correct. External fragmentation of physical memory is the classic buddy weakness; compaction moves movable pages to rebuild large blocks."
       },
       {
         "text": "SLUB is currently the only slab implementation in mainline Linux",
@@ -361,7 +361,7 @@
       },
       {
         "text": "A ≈ 320 MB, B ≈ 200 MB",
-        "explanation": "Correct. 10^7 × 32 B = 320 MB for glibc versus 10^7 × 20 B = 200 MB for the pool: glibc uses 60% more."
+        "explanation": "Correct. 10 million × 32 B = 320 MB for glibc versus 10 million × 20 B = 200 MB for the pool: glibc uses 60% more."
       },
       {
         "text": "A ≈ 640 MB, B ≈ 200 MB",
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. glibc: 20 + 8 = 28, rounded to a multiple of 16 → **32-byte chunk** (24 usable, enough for 20).\n2. Option A: 10,000,000 × 32 = **320 MB** (≈ 305 MiB).\n3. Option B: 10,000,000 × 20 = **200 MB** (≈ 191 MiB), plus a negligible header for the whole array.\n4. Overhead of A: 120 MB, **60%** more.\n\nThis is the slab idea in user space: when you have huge numbers of identical objects, a dedicated pool removes per-object headers and rounding. It also improves locality, since records sit contiguously.",
+    "workedExample": "1. glibc chunk size for a 20-byte request, then the totals:\n\n```formula\nC = 16 × ⌈(20 + 8) / 16⌉ = 32\nT_A = 10^7 × 32 B = 320 MB ≈ 305 MiB\nT_B = 10^7 × 20 B = 200 MB ≈ 191 MiB\n(T_A − T_B) / T_B = 120 / 200 = 60 %\nwhere\nC: the glibc chunk size in bytes (24 usable, enough for 20)\n⌈ ⌉: ceiling: round up to a whole number\nT_A: total memory with one malloc per record\nT_B: total memory with a pool of 20-byte slots\n10^7: ten million records\nB: bytes\nMB: megabyte, 10^6 bytes\nMiB: mebibyte, 2^20 = 1,048,576 bytes\n≈: approximately equal to\n%: per cent\nIn words: the header and rounding make each record cost 32 bytes instead of 20, so glibc uses 60 % more memory.\n```\n\n2. Option B also has a negligible header for the whole array.\n\nThis is the slab idea in user space: when you have huge numbers of identical objects, a dedicated pool removes per-object headers and rounding. It also improves locality, since records sit contiguously.",
     "link": {
       "title": "MallocInternals — glibc wiki",
       "url": "https://sourceware.org/glibc/wiki/MallocInternals"

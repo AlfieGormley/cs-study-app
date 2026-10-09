@@ -116,7 +116,19 @@ Surely more frames always means fewer faults? Not for FIFO. Take this string:
 
 With FIFO, adding a frame made things **worse**. This is **Belady's anomaly**.
 
-LRU and OPT cannot suffer it because they are **stack algorithms**: the set of pages held with *n* frames is always a subset of the set held with *n + 1* frames. Anything that hits with *n* frames also hits with more. FIFO lacks this property because its eviction order depends on arrival time, which changes as the frame count changes.
+LRU and OPT cannot suffer it because they are **stack algorithms**. Run the same reference string twice, once with one frame fewer, and compare what is in memory after each reference:
+
+```formula
+M(n, t) ⊆ M(n + 1, t)   for all t
+where
+M(n, t): the set of pages in memory just after reference number t, when the policy runs with n frames
+n: the number of frames
+t: the position in the reference string: 1 for the first reference, 2 for the second, and so on
+⊆: "is a subset of": every page in the left-hand set is also in the right-hand set
+In words: at every step, whatever the policy holds with n frames it would also be holding with one more frame.
+```
+
+So anything that hits with n frames also hits with n + 1, and adding frames can never add faults. For LRU, the contents with n frames are the n most recently used pages, and those are always among the n + 1 most recently used, so the property holds on every string. FIFO lacks this property because its eviction order depends on arrival time, which changes as the frame count changes.
 
 ## Why exact page LRU is expensive
 
@@ -163,7 +175,7 @@ def clock_victim(frames, abit, hand):
 
 ### Using the dirty bit too
 
-Evicting a **dirty** page costs a write before the frame is reusable. The **enhanced clock** prefers, in order:
+Evicting a **dirty page** costs a write before the frame is reusable. The **enhanced clock** prefers, in order:
 
 | (A, D) | Meaning | Preference |
 |---|---|---|
@@ -191,7 +203,7 @@ inactive --- used again ---> active
 - When the active list is too large, pages are demoted from it.
 - **Refault detection**: when an evicted file page is faulted back in, the kernel works out how long it was gone (from a shadow entry left in the page cache). Refault distance and related history can influence activation. This is a workload-size/eviction-history signal, not simply elapsed wall-clock time.
 
-Since Linux 6.1 there is also the **multi-generational LRU (MGLRU)**, from Google. It sorts pages into several generations by age rather than two lists and scans page tables more efficiently. Its documentation describes aging, eviction and refault feedback for workload-dependent reclaim decisions. Distros choose whether to enable it (`/sys/kernel/mm/lru_gen/enabled`).
+Since Linux 6.1 there is also the **multi-generational LRU (MGLRU)**, from Google. It sorts pages into several generations by age rather than two lists and scans page tables more efficiently. Its documentation describes how pages move to older generations, eviction and refault feedback for workload-dependent reclaim decisions. Distros choose whether to enable it (`/sys/kernel/mm/lru_gen/enabled`).
 
 ### When reclaim runs
 
@@ -204,7 +216,23 @@ Each memory zone has three **watermarks**: min, low and high.
 
 ## Thrashing
 
-Every process has a **working set**: the pages it is actively using over a recent window (Peter Denning's model, 1968). If the working sets of all running processes fit in RAM, faults are rare.
+Every process has a **working set**: the pages it is actively using over a recent window (Peter Denning's model, 1968). Denning defined the window in the process's own execution time; it is usually counted in memory references, as here:
+
+```formula
+W(t, Δ) = {r_i  for t − Δ < i ≤ t}
+where
+W(t, Δ): the working set at time t: the set of distinct pages referenced in the last Δ references
+t: the current time, counted in references (the t-th reference made so far)
+Δ: delta, the window size: how many recent references count
+r_i: the page referenced at time i
+i: a reference time inside the window, from t − Δ + 1 to t
+{ }: a set: each distinct page counts once, however often it is referenced
+In words: look back over the last Δ references and list the different pages touched; the size of that set is roughly how many frames the process needs right now.
+```
+
+For example, with Δ = 4 and recent references 4, 4, 3, 4, the working set is {3, 4}: two pages, so about two frames, even though four references were made. Too small a Δ misses pages the program will soon need again; too large a Δ counts pages from an earlier phase.
+
+If the working sets of all running processes fit in RAM, faults are rare.
 
 When sustained demand outruns available resident capacity, repeated faults can evict pages needed again soon, which causes another fault, which evicts another needed page. The system spends its time moving pages, not running programs. That is **thrashing**.
 

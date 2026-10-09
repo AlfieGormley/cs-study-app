@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "137 is conventionally 128+9 (SIGKILL), but the number alone is not proof of OOM. OOMKilled supplies the runtime-reported reason. Inspect kernel logs, memory.events and node pressure to distinguish a container/ancestor limit from global OOM. A local cgroup OOM can occur with free host RAM. Then size limits and demand from measured peaks, rather than assuming every OOMKilled means the leaf container crossed its own limit.",
+    "workedExample": "A process killed by a signal is reported with an exit code of 128 plus the signal number:\n\n```formula\nc = 128 + s = 128 + 9 = 137\nwhere\nc: the reported exit code\ns: the signal number; SIGKILL is 9 (SIGTERM is 15, giving 143)\nIn words: 137 means \"killed by signal 9\", SIGKILL, which cannot be caught.\n```\n\nThe number alone is not proof of OOM. OOMKilled supplies the runtime-reported reason. Inspect kernel logs, memory.events and node pressure to distinguish a container/ancestor limit from global OOM. A local cgroup OOM can occur with free host RAM. Then size limits and demand from measured peaks, rather than assuming every OOMKilled means the leaf container crossed its own limit.",
     "link": {
       "title": "Resource management for pods and containers — Kubernetes",
       "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
@@ -79,7 +79,7 @@
       },
       {
         "text": "Successful reservations do not guarantee backing; sustained demand can exhaust reclaimable memory and trigger allocation failure or OOM handling",
-        "explanation": "Correct. Heuristic admission can permit more commitment than available backing. Runtime limits and other consumers determine the later outcome."
+        "explanation": "Correct. Heuristic admission can permit more commitment than available backing. Runtime limits and other users of memory determine the later outcome."
       }
     ],
     "answer": 3,
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "With the stated ratio model, CommitLimit is 4+32×0.8=29.6 GiB (subject to page-unit rounding). Strict admission checks eligible new commitment and applicable reserves; not every mmap or malloc creates an equal new charge. At ratio 50 the budget is 20 GiB. RAM outside that commitment budget can still serve file cache and kernel users, so it is not necessarily wasted.",
+    "workedExample": "With the stated ratio model, all of swap counts but only 80% of RAM:\n\n```formula\nCommitLimit = S_swap + R × r / 100\nCommitLimit = 4 GiB + 32 GiB × 80 / 100\nCommitLimit = 4 GiB + 25.6 GiB\nCommitLimit = 29.6 GiB\nwhere\nCommitLimit: the most memory strict mode will promise\nS_swap: the swap space, 4 GiB\nR: the usable RAM, 32 GiB (no HugeTLB reservation)\nr: vm.overcommit_ratio, 80 (per cent)\nGiB: gibibyte, 2^30 bytes\nIn words: 4 GiB of swap plus 80 % of 32 GiB of RAM gives a 29.6 GiB limit.\n```\n\nThe result is subject to page-unit rounding. Strict admission checks eligible new commitment and applicable reserves; not every mmap or malloc creates an equal new charge. At ratio 50 the budget is 20 GiB. RAM outside that commitment budget can still serve file cache and kernel users, so it is not necessarily wasted.",
     "link": {
       "title": "Overcommit accounting — Linux kernel docs",
       "url": "https://www.kernel.org/doc/html/latest/mm/overcommit-accounting.html"
@@ -135,7 +135,7 @@
       },
       {
         "text": "PSS 60 MiB each; sum 480 MiB",
-        "explanation": "Correct. Each worker is charged 30 + 240 / 8 = 60 MiB, and 8 × 60 = 480 MiB = 8 × 30 private + 240 shared, the true total."
+        "explanation": "Correct. Each worker is charged 30 + 240 / 8 = 60 MiB, and 8 × 60 = 480 MiB, which equals 8 × 30 MiB private plus 240 MiB shared, the true total."
       },
       {
         "text": "PSS 150 MiB each; sum 1,200 MiB",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. PSS = private + shared / sharers.\n2. Per worker: 30 + 240 / 8 = 30 + 30 = **60 MiB**.\n3. Sum: 8 × 60 = **480 MiB**.\n4. Sanity check: real RAM = 8 × 30 (private) + 240 (shared once) = 480 MiB. PSS sums correctly; RSS (8 × 270 = 2,160 MiB) overstates usage by 4.5×.\n5. Note that as workers write to shared pages, COW turns shared into private and PSS rises. Read it from `/proc/<pid>/smaps_rollup` or with `smem`.",
+    "workedExample": "1. PSS gives each process its private pages plus an equal share of the shared ones:\n\n```formula\nPSS = U + S / N\nPSS = 30 MiB + 240 MiB / 8 = 60 MiB\nT_PSS = 8 × 60 MiB = 480 MiB\nT_RSS = 8 × (30 MiB + 240 MiB)\nT_RSS = 2,160 MiB\nwhere\nPSS: proportional set size of one worker\nU: the worker's private resident memory, 30 MiB\nS: the resident memory shared by all the workers, 240 MiB\nN: the number of processes sharing it, 8\nT_PSS: the sum of PSS over all workers\nT_RSS: the sum of RSS, which counts the shared pages in full for every worker\nMiB: mebibyte, 2^20 bytes\nIn words: each worker is charged 30 MiB of its own plus an eighth of the 240 MiB, 60 MiB, and the eight sum to the real 480 MiB.\n```\n\n2. Sanity check: real RAM = 8 × 30 MiB (private) + 240 MiB (shared once) = 480 MiB. PSS sums correctly; RSS (2,160 MiB) overstates usage by 4.5×.\n3. Note that as workers write to shared pages, COW turns shared into private and PSS rises. Read it from `/proc/<pid>/smaps_rollup` or with `smem`.",
     "link": {
       "title": "proc_pid_smaps(5) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man5/proc_pid_smaps.5.html"
@@ -204,7 +204,7 @@
       },
       {
         "text": "Both, in order of RSS",
-        "explanation": "The ordinary path selects a victim; related threads or tasks sharing its address space can also be killed, and cgroup group-kill policy adds cases. It does not simply kill both listed processes in RSS order."
+        "explanation": "The ordinary code path selects a victim; related threads or tasks sharing its address space can also be killed, and cgroup group-kill policy adds cases. It does not simply kill both listed processes in RSS order."
       },
       {
         "text": "B, because its adjusted score is higher",
@@ -212,7 +212,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Base score ≈ memory used as a fraction of total, in thousandths:\n\n```\nA: 6 / 16 * 1000 = 375\nB: 2 / 16 * 1000 = 125\n```\n\n2. Add `oom_score_adj` (each unit = 1/1000 of total memory):\n\n```\nA: 375 + 0   = 375\nB: 125 + 500 = 625\n```\n\n3. B has the highest badness, so B gets SIGKILL.\n\nThis is how you mark disposable work (batch jobs, caches) as preferred victims and protect critical daemons with negative values.",
+    "workedExample": "Badness is, roughly, memory as thousandths of the allowance, plus the adjustment:\n\n```formula\nS ≈ 1000 × M / T + a\nS_A ≈ 1000 × 6 / 16 + 0 = 375\nS_B ≈ 1000 × 2 / 16 + 500 = 625\nwhere\nS: the badness score; the highest is killed\nM: the process's memory in GiB (RSS here, ignoring swap and page tables)\nT: the allowance, 16 GiB\na: oom_score_adj; each unit is 1/1000 of the allowance\nS_A: process A's score (6 GiB, adjustment 0)\nS_B: process B's score (2 GiB, adjustment +500)\n≈: approximately equal to (the kernel works in pages)\nIn words: A's larger size earns 375, but B's +500 adjustment, worth 8 GiB, lifts it to 625.\n```\n\nB has the highest badness, so B gets SIGKILL.\n\nThis is how you mark disposable work (batch jobs, caches) as preferred victims and protect critical daemons with negative values.",
     "link": {
       "title": "proc(5) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
@@ -222,14 +222,14 @@
     "id": "mem-in-practice-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A log-shipping container has a 1 GiB limit. Its `memory.current` sits at 1,020 MiB all day, but it has never been OOM-killed. `memory.stat` shows `anon 140 MiB` and `file 860 MiB`. What is going on? Further inspection confirms the file usage is mostly clean, unpinned disk-backed cache and current pressure is low.",
+    "prompt": "A log-shipping container has a 1 GiB limit. Its `memory.current` sits at 1,020 MiB all day, but it has never been OOM-killed. `memory.stat` shows `anon 140 MiB` and `file 860 MiB`. What is going on? Further inspection confirms the file usage is mostly clean disk-backed cache that is not pinned in place and current pressure is low.",
     "options": [
       {
         "text": "It is about to be OOM-killed; raise the limit urgently",
         "explanation": "The additional evidence makes immediately raising the limit unjustified; near-limit usage alone does not establish imminent OOM. Reclaim can still have workload costs."
       },
       {
-        "text": "Mostly clean disk-backed cache is charged to the group and can be reclaimed; this can be normal, but monitor reclaim pressure and other memory consumers",
+        "text": "Mostly clean disk-backed cache is charged to the group and can be reclaimed; this can be normal, but monitor reclaim pressure and other users of memory",
         "explanation": "Correct under the added cache-state evidence. No single counter proves ongoing safety, and anonymous pages are not the only possible unreclaimable usage."
       },
       {
@@ -242,7 +242,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "140 MiB anon + 860 MiB file leaves about 20 MiB of other charged usage in the stated 1020 MiB total. The added evidence identifies mostly clean disk-backed cache, which can be reclaimed. File also includes categories such as tmpfs and dirty/writeback pages, so file usage is not automatically safe. OOM can result from several charged categories and reclaim restrictions, not only anon approaching the limit. Monitor pressure, reclaim, events and workload latency alongside usage.",
+    "workedExample": "140 MiB anon + 860 MiB file leaves about 20 MiB of other charged usage in the stated 1020 MiB total. The added evidence identifies mostly clean disk-backed cache, which can be reclaimed. File also includes categories such as tmpfs and dirty/writeback pages, so file usage is not automatically safe. OOM can result from several charged categories and reclaim restrictions, not only anon approaching the limit. Watch pressure, reclaim, events and workload latency alongside usage.",
     "link": {
       "title": "Control Group v2 — Linux kernel docs",
       "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
@@ -282,7 +282,7 @@
     "id": "mem-in-practice-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "A Redis server with a 24 GiB dataset on a 64 GiB box runs with `vm.overcommit_memory = 2`, `overcommit_ratio = 50` and no swap. `BGSAVE` fails with `fork: Cannot allocate memory`, although `free` shows 35 GiB available. What is the cause and the usual fix? Assume overcommit_kbytes=0, no HugeTLB reservation, and diagnostics confirm a 24 GiB existing eligible commit plus another 24 GiB required by fork.",
+    "prompt": "A Redis server with a 24 GiB dataset on a 64 GiB box runs with `vm.overcommit_memory = 2`, `overcommit_ratio = 50` and no swap. `BGSAVE` fails with `fork: Cannot allocate memory`, although `free` shows 35 GiB available. What is the cause and the usual fix? Assume overcommit_kbytes=0, no HugeTLB reservation, and diagnostics confirm a 24 GiB of existing eligible committed memory plus another 24 GiB required by fork.",
     "options": [
       {
         "text": "The child would need a full copy of the dataset immediately; buy more RAM",
@@ -290,7 +290,7 @@
       },
       {
         "text": "Strict accounting must charge the child for all of the parent's private writable memory in case it is all written; Committed_AS would exceed CommitLimit (32 GiB). Redis recommends `vm.overcommit_memory = 1`",
-        "explanation": "Correct. CommitLimit = 0 + 64 × 0.5 = 32 GiB. 24 GiB already committed plus another 24 GiB for the child's potential copies is 48 GiB, so fork fails even though RAM is free."
+        "explanation": "Correct. The limit is 0 GiB of swap plus half of 64 GiB, 32 GiB. 24 GiB already committed plus another 24 GiB for the child's potential copies is 48 GiB, so fork fails even though RAM is free."
       },
       {
         "text": "Transparent huge pages prevent fork",
@@ -298,11 +298,11 @@
       },
       {
         "text": "The OOM killer blocked the fork because Redis has the highest oom_score",
-        "explanation": "oom_score is for victim selection, not the commit-admission calculation. ENOMEM from fork can have several causes; this scenario supplies evidence for the commit check."
+        "explanation": "oom_score is for victim selection, not the commit limit admission calculation. ENOMEM from fork can have several causes; this scenario supplies evidence for the commit check."
       }
     ],
     "answer": 1,
-    "workedExample": "Under the stated accounting assumptions, CommitLimit=64×0.5=32 GiB and the proposed total is 24+24=48 GiB, so strict admission rejects it. Redis recommends mode 1 to avoid this check, but that does not guarantee fork success or enough later COW memory. Increasing the strict budget sufficiently is another policy choice. Measure actual commit, resident and peak COW demand; a few-GiB overhead or sufficient headroom cannot be inferred from dataset size alone.",
+    "workedExample": "Under the stated accounting assumptions:\n\n```formula\nCommitLimit = S_swap + R × r / 100\nCommitLimit = 0 + 64 GiB × 50 / 100\nCommitLimit = 32 GiB\nC_new = 24 GiB + 24 GiB = 48 GiB\nC_new > 32 GiB\nwhere\nCommitLimit: the most memory strict mode will promise\nS_swap: the swap space, none here\nR: the usable RAM, 64 GiB\nr: vm.overcommit_ratio, 50 (per cent)\nC_new: the commitment the fork would create: the existing 24 GiB plus 24 GiB for the child\nGiB: gibibyte, 2^30 bytes\n>: greater than\nIn words: the limit is 32 GiB, but the fork would push total commitments to 48 GiB, so strict admission rejects it.\n```\n\nRedis recommends mode 1 to avoid this check, but that does not guarantee fork success or enough later COW memory. Increasing the strict budget sufficiently is another policy choice. Measure actual committed memory, resident and peak COW demand; a few-GiB overhead or sufficient headroom cannot be inferred from dataset size alone.",
     "link": {
       "title": "Redis administration — Redis docs",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/admin/"
@@ -340,7 +340,7 @@
       1,
       2
     ],
-    "workedExample": "First compare allocator live/active/resident/retained metrics with OS accounting. LSan uses reachability; bcc memleak tracks observed allocation/free pairs and can include useful reachable allocations while missing pre-attachment allocations. A heap profiler can expose growing reachable structures by stack/site. Tool availability, coverage and overhead vary; no measured production slowdown or prevalence ranking is supplied here.",
+    "workedExample": "First compare allocator live/active/resident/retained metrics with OS accounting. LSan uses reachability; bcc memleak records observed allocation/free pairs and can include useful reachable allocations while missing pre-attachment allocations. A heap profiler can expose growing reachable structures by stack/site. Tool availability, coverage and overhead vary; no measured production slowdown or prevalence ranking is supplied here.",
     "link": {
       "title": "LeakSanitizer — Clang docs",
       "url": "https://clang.llvm.org/docs/LeakSanitizer.html"
@@ -350,7 +350,7 @@
     "id": "mem-in-practice-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "A pod has one container with a **2 GiB** memory limit and no swap. Its heap stays at about 800 MiB. It writes 1.5 GiB of temporary files. In case (a) they go to an `emptyDir` on the node's disk; in case (b) to an `emptyDir` with `medium: Memory` (tmpfs). Assume all pages hold live data, charges belong to this cgroup, no earlier volume quota fails, and disk writeback can make progress. What is the key memory-budget difference?",
+    "prompt": "A pod has one container with a **2 GiB** memory limit and no swap. Its heap stays at about 800 MiB. It writes 1.5 GiB of temporary files. In case (a) they go to an `emptyDir` on the node's disk; in case (b) to an `emptyDir` with `medium: Memory` (tmpfs). Assume all pages hold live data, charges belong to this cgroup, no earlier volume size limit fails, and disk writeback can make progress. What is the key memory-budget difference?",
     "options": [
       {
         "text": "Both are fine: file data is page cache and is always reclaimable",
@@ -362,7 +362,7 @@
       },
       {
         "text": "Disk-backed pages can be written back and reclaimed; 800 MiB of live anonymous data plus 1.5 GiB of live unswapped tmpfs exceeds the 2 GiB budget",
-        "explanation": "Correct. 800+1536=2336 MiB, or 2.28125 GiB, before other charges. This cannot all remain charged within a 2048 MiB cap; allocation failure or OOM handling is possible."
+        "explanation": "Correct. 800 + 1,536 = 2,336 MiB, or 2.28125 GiB, before other charges. This cannot all remain charged within a 2048 MiB cap; allocation failure or OOM handling is possible."
       },
       {
         "text": "(b) is fine because tmpfs memory is charged to the node, not the container",
@@ -370,7 +370,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Disk-backed dirty pages can become clean through successful writeback and then be reclaimed. Live tmpfs contents cannot be discarded without losing file data; with no swap they consume memory while retained. The stated payload is 800+1536=2336 MiB=2.28125 GiB, above 2048 MiB before other charges. Depending on allocation path and limits, failure can appear as OOM handling or an error; disk-backed case also needs room for overhead and functioning reclaim/writeback. Budget memory-backed volumes explicitly.",
+    "workedExample": "Disk-backed dirty pages can become clean through successful writeback and then be reclaimed. Live tmpfs contents cannot be discarded without losing file data; with no swap they consume memory while retained. The stated payload is 800 + 1,536 = 2,336 MiB = 2.28125 GiB, above 2048 MiB before other charges. Depending on allocation path and limits, failure can appear as OOM handling or an error; disk-backed case also needs room for overhead and functioning reclaim/writeback. Budget memory-backed volumes explicitly.",
     "link": {
       "title": "Control Group v2 — Linux kernel docs",
       "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"

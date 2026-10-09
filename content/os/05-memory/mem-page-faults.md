@@ -22,7 +22,7 @@ That one trick gives you:
 On x86-64, when the MMU cannot complete a translation (a not-present entry at any level) or the access breaks a permission bit, it raises exception 14, the **page fault (#PF)**. Before jumping to the kernel's handler it:
 
 1. Puts the faulting virtual address in the **CR2** register.
-2. Pushes an **error code** describing the access.
+2. Pushes a **page-fault error code** describing the access.
 3. Saves the instruction pointer of the faulting instruction, not the next one, so the instruction can be **restarted**.
 
 | Error bit | Set means |
@@ -81,18 +81,57 @@ $ /usr/bin/time -v ./prog
 
 ### The cost in numbers
 
-Treat the page fault rate `p` like a TLB miss rate:
+Treat the page fault rate like a TLB miss rate. Each access either completes normally or takes a major fault, so the average access time is a weighted average of the two:
 
+```formula
+EAT = (1 − p) × t_mem + p × t_fault
+where
+EAT: the effective access time: the average time of one memory access, in nanoseconds (ns)
+p: the page-fault rate: the fraction of accesses that take a major page fault, from 0 to 1 (0.001 is one in a thousand)
+1 − p: the fraction of accesses that do not fault
+t_mem: the time of an ordinary memory access, in ns; 100 ns in the example below
+t_fault: the total time of an access that faults, including servicing the fault, in ns; a storage read makes it millions of ns
+ns: nanosecond, a billionth of a second (10^-9 s)
+In words: because a fault costs tens of thousands of times more than a normal access, even a tiny fault rate dominates the average.
 ```
-EAT = (1 - p) * mem + p * fault
-```
+
+This is a hypothetical model: it assumes one fixed cost per fault and accesses happening one after another. Real fault costs vary widely (see the content-gap note above), and minor faults cost far less than major ones.
 
 > [!example] One fault per thousand accesses
-> Memory access 100 ns, major fault 8 ms (8,000,000 ns), p = 0.001.
->
-> EAT = 0.999 × 100 + 0.001 × 8,000,000 = 99.9 + 8,000 ≈ **8,100 ns**. Memory is now about 80 times slower.
->
-> To keep the slowdown under 10% (EAT < 110 ns) you need p × 7,999,900 < 10, so p < 1.25 × 10^-6: fewer than **one major fault per 800,000 accesses**.
+> Memory access 100 ns, major fault 8 ms (8,000,000 ns), one fault per thousand accesses.
+
+```formula
+t_fault = 8 ms = 8,000,000 ns
+EAT = 0.999 × 100 ns + 0.001 × 8,000,000 ns
+EAT = 99.9 ns + 8,000 ns ≈ 8,100 ns
+where
+t_fault: the time of an access that takes a major fault
+ms: millisecond, a thousandth of a second, which is 1,000,000 ns
+EAT: the effective (average) access time
+ns: nanosecond, 10^-9 seconds
+≈: approximately equal to
+In words: one access in a thousand costing 8 ms raises the average from 100 ns to about 8,100 ns, so memory is now about 80 times slower.
+```
+
+How rare must faults be to keep the slowdown under 10%, so that the average stays below 110 ns? Rearrange the formula and solve for p:
+
+```formula
+EAT = t_mem + p × (t_fault − t_mem)
+100 ns + p × 7,999,900 ns < 110 ns
+p × 7,999,900 ns < 10 ns
+p < 10 / 7,999,900 ≈ 1.25 × 10^-6
+where
+EAT: the effective (average) access time
+t_mem: an ordinary access, 100 ns
+p: the page-fault rate, the fraction of accesses that fault
+t_fault: the time of a faulting access, 8,000,000 ns
+ns: nanosecond
+≈: approximately equal to
+10^-6: one millionth
+In words: the extra cost per access is the fault rate times the 7,999,900 ns penalty, and it must stay under 10 ns, so fewer than one major fault per 800,000 accesses.
+```
+
+That is fewer than **one major fault per 800,000 accesses**.
 
 This is why a machine that is swapping heavily feels frozen rather than merely slow.
 
@@ -135,7 +174,25 @@ int main(void) {
 }
 ```
 
-64 MiB / 4 KiB = 16,384 pages, so with 4 KiB pages it prints a number close to **16,384**. With transparent huge pages set to `always`, each fault can map a whole 2 MiB page and the count drops to a few dozen.
+The expected count is the region size divided by the page size, since each page faults once on its first write:
+
+```formula
+F = S / P
+F = 64 MiB / 4 KiB = 2^26 B / 2^12 B = 2^14
+F = 16,384
+F_huge = 64 MiB / 2 MiB = 32
+where
+F: the number of first-touch faults with base pages
+S: the size of the region, 64 MiB = 2^26 bytes
+P: the page size, 4 KiB = 2^12 bytes
+F_huge: the count if every fault mapped a whole 2 MiB huge page
+MiB: mebibyte, 2^20 bytes
+KiB: kibibyte, 2^10 bytes
+B: bytes
+In words: one fault per page touched; bigger pages mean proportionally fewer faults.
+```
+
+So with 4 KiB pages it prints a number close to **16,384**. With transparent huge pages set to `always`, each fault can map a whole 2 MiB page and the count drops to a few dozen (32 if every fault got a huge page).
 
 Two refinements:
 
@@ -150,7 +207,7 @@ Instead Linux:
 
 1. Creates the child's memory context and mappings, respecting exceptions such as DONTFORK/WIPEONFORK.
 2. Shares eligible private backing under COW and write-protects the required mappings; some page-table work can be deferred.
-3. Leaves shared mappings shared. Certain pinned/private pages may need special copying rather than ordinary COW.
+3. Leaves shared mappings shared. Certain private pages, such as pinned pages, may need special copying rather than ordinary COW.
 
 When either process writes, the read-only PTE causes a protection fault. The kernel sees the VMA is writable, so this is a **COW fault**: it allocates a new frame, copies the 4 KiB, points the writer's PTE at the copy with write permission, and drops the reference on the original. If the writer turns out to be the only remaining user, it simply makes the page writable again with no copy.
 
@@ -224,10 +281,10 @@ Compression trades CPU and metadata for saved backing capacity; cost and compres
 - **Stack growth**: eligible grow-down stack mappings may expand within limits; an arbitrary below-stack fault does not guarantee expansion.
 - **Guard pages**: deliberately unmapped pages below thread stacks turn overflows into immediate `SIGSEGV`.
 - **userfaultfd**: lets a user-space program handle faults on a region. QEMU uses it for post-copy live migration, fetching guest pages over the network on demand.
-- **Garbage collectors and databases** use `mprotect` to trap writes and track dirty pages.
+- **Garbage collectors and databases** use `mprotect` to trap writes and record which pages are dirty.
 
 ## Key takeaways
-- A page fault is a restartable exception: CR2 holds the address, the error code says why, and the kernel fixes the PTE and retries.
+- A page fault is a restartable exception: CR2 holds the address, the page-fault error code says why, and the kernel fixes the PTE and retries.
 - Linux consults VMAs and backing state. Invalid accesses often deliver SIGSEGV; file failures may deliver SIGBUS, and other resource/protection failures are possible.
 - Minor/major counters distinguish page-in work, not fixed latency. An expensive fault can dominate a hypothetical average even at a low rate.
 - Demand paging allocates frames on first touch; reads of untouched anonymous memory map the shared zero page.

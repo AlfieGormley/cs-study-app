@@ -3,16 +3,31 @@ id: sort-binary-search
 title: Binary search done right
 level: intermediate
 minutes: 15
-summary: Writing binary search from an invariant so it is correct first time, lower and upper bound, the classic overflow and infinite-loop bugs, rotated arrays and binary search on the answer.
+summary: Writing binary search from an invariant so it is correct first time, lower_bound and upper_bound, the classic overflow and infinite-loop bugs, rotated arrays and binary search on the answer.
 ---
 
-Binary search is the payoff for sorting. In a sorted array of a billion items, it finds any key in at most 30 middle-element probes. The Python code may perform both equality and order tests per probe. The idea fits in a sentence: compare with the middle element and discard the half that cannot contain the answer.
+Binary search is the payoff for sorting. Throughout this lesson, n is the number of elements in the sorted array, and costs use Big O notation (O(log n) grows with the base-2 logarithm of n: how many times n can be halved before reaching 1). In a sorted array of a billion items, it finds any key in at most 30 middle-element probes. The Python code may perform both equality and order tests per probe. The idea fits in a sentence: compare with the middle element and discard the half that cannot contain the answer.
 
 And yet it is notoriously easy to get wrong. Jon Bentley reported that when he asked professional programmers to write it, around 90% of their versions had bugs. The fix is not to memorise a template, but to write every binary search from an explicit **invariant**.
 
 ## Why it is fast
 
-Each step halves the range. Starting from n elements, after k steps about n / 2ᵏ remain. The search ends when one or zero remain, so it takes about log₂ n steps.
+Each step halves the range. The search ends when one or zero elements remain, so the question is how many halvings that takes:
+
+```formula
+r_k ≈ n / 2^k
+n / 2^k = 1  ⇒  k = log_2(n)
+log_2(10^9) ≈ 29.9
+where
+r_k: how many elements are still in range after k steps
+n: the number of elements in the sorted array; a billion (10^9) in the last line
+k: the number of steps (probes) taken so far
+2^k: 2 multiplied by itself k times
+log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n, which is how many halvings take n down to 1
+⇒: "which happens when"
+≈: approximately equal to
+In words: halving a billion items about 30 times leaves one, so binary search needs about 30 probes.
+```
 
 | n | max comparisons |
 |---|---|
@@ -20,13 +35,28 @@ Each step halves the range. Starting from n elements, after k steps about n / 2�
 | 1,000,000 | 20 |
 | 1,000,000,000 | 30 |
 
-Exactly, a successful search over n elements needs at most ⌊log₂ n⌋ + 1 three-way comparisons. The decision-tree argument from lesson 4 shows no comparison-based search can do better in the worst case.
+Exactly:
+
+```formula
+c_max = ⌊log_2(n)⌋ + 1
+c_max = ⌊log_2(1000)⌋ + 1 = 9 + 1 = 10
+where
+c_max: the most three-way comparisons (less, equal or greater) a successful search can need
+n: the number of elements; here 1,000
+log_2(n): the base-2 logarithm of n; log_2(1000) ≈ 9.97
+⌊ ⌋: the floor: round down to a whole number
+In words: binary search over n elements never needs more than one probe per halving plus one, which is 10 for a thousand elements and 30 for a billion.
+```
+
+That is where the table comes from. The decision-tree argument from lesson 4 shows no comparison-based search can do better in the worst case.
 
 ## Think in invariants
 
 Write down what is true about `lo` and `hi` before every iteration, and make sure each update keeps it true. The loop condition and the return value then follow.
 
 ### Version 1: find any index of x (closed interval)
+
+Here `a` is the sorted array, n its length, x the value we are looking for, and `lo` and `hi` the indices bounding the part of the array still in play.
 
 **Invariant:** if x is in the array, it is in `a[lo..hi]` (inclusive).
 
@@ -46,9 +76,9 @@ def search(a, x):
 
 Every choice follows from the invariant. The range `[lo, hi]` is empty when `lo > hi`, so loop while `lo <= hi`. When `a[mid] < x`, mid itself is ruled out, so `lo = mid + 1`, not `mid`.
 
-### Version 2: lower bound (half-open interval)
+### Version 2: lower_bound (half-open interval)
 
-Finding *some* match is often not enough. You want the **first** position where x could go: the **lower bound**, the index of the first element ≥ x. This is what Python's `bisect_left` and C++'s `std::lower_bound` return.
+Finding *some* match is often not enough. You want the **first** position where x could go: the **binary-search lower bound** (often called lower_bound), the index of the first element ≥ x. This is what Python's `bisect_left` and C++'s `std::lower_bound` return.
 
 **Invariant:** everything in `a[0..lo)` is < x, and everything in `a[hi..n)` is ≥ x. The answer is in `[lo, hi]`.
 
@@ -66,7 +96,7 @@ def lower_bound(a, x):
 
 When the loop ends, `lo == hi`, so everything before it is < x and everything from it on is ≥ x. That is the answer by definition. Note `hi = len(a)`, not `len(a) - 1`: the answer can be "after everything".
 
-Trace: find the lower bound of 8 in `[1, 3, 5, 7, 9, 11, 13]`.
+Trace: find lower_bound of 8 in `[1, 3, 5, 7, 9, 11, 13]`.
 
 ```
 lo hi mid a[mid]
@@ -76,7 +106,7 @@ lo hi mid a[mid]
 lo == hi == 4: insert 8 at index 4
 ```
 
-**Upper bound** (first element > x, `bisect_right`) is identical except the test becomes `a[mid] <= x`.
+The **binary-search upper bound** (upper_bound: the first element > x, `bisect_right`) is identical except the test becomes `a[mid] <= x`.
 
 ```
 a = [1, 3, 3, 3, 5, 8]
@@ -86,7 +116,7 @@ count of 3s = 4 - 1 = 3
 lower_bound(a, 4) = upper_bound(a, 4) = 4
 ```
 
-Lower and upper bound together answer most real questions: does x exist (`lo < n and a[lo] == x`), how many copies, where to insert while keeping order, and range queries ("all orders between 10:00 and 11:00" is `[lower_bound(10:00), lower_bound(11:00))`).
+lower_bound and upper_bound together answer most real questions: does x exist (`lo < n and a[lo] == x`), how many copies, where to insert while keeping order, and range queries ("all orders between 10:00 and 11:00" is `[lower_bound(10:00), lower_bound(11:00))`).
 
 ## The classic pitfalls
 
@@ -98,11 +128,40 @@ int mid = lo + (hi - lo) / 2;   // fix
 int mid = (lo + hi) >>> 1;      // Java
 ```
 
-With 32-bit ints, `lo + hi` overflows once the array has more than about 2³⁰ (a billion) elements, producing a negative index. In 2006 Joshua Bloch revealed that this bug had sat in Java's `Arrays.binarySearch` for about nine years, and in the version in Programming Pearls for two decades. Python's integers do not overflow, but C, C++, Java, Go and Rust code must use the safe form.
+A 32-bit signed `int` can hold values only up to about 2.1 billion. Two large indices can add up to more than that:
+
+```formula
+s_max = 2^31 − 1 = 2147483647
+lo + hi = 1.1 × 10^9 + 1.2 × 10^9
+lo + hi = 2.3 × 10^9 > s_max
+lo + (hi − lo) / 2 ≤ hi
+where
+s_max: the largest value a 32-bit signed integer can hold
+lo: the low index of the search range; here 1.1 billion
+hi: the high index of the search range; here 1.2 billion
+2^31: 2 multiplied by itself 31 times
+10^9: ten to the power 9, a billion
+≤: less than or equal to
+>: greater than
+In words: once both indices are above about a billion, their sum exceeds the largest int and wraps to a negative number; the safe form only ever adds half the gap to lo, so it never exceeds hi.
+```
+
+So `lo + hi` overflows once the array has more than about 2³⁰ (a billion) elements, producing a negative index. In 2006 Joshua Bloch revealed that this bug had sat in Java's `Arrays.binarySearch` for about nine years, and in the version in Programming Pearls for two decades. Python's integers do not overflow, but C, C++, Java, Go and Rust code must use the safe form.
 
 ### 2. Infinite loops
 
-If you ever write `lo = mid`, check what happens when `hi = lo + 1`. Then `mid = (lo + hi) // 2 = lo`, so `lo = mid` changes nothing and the loop spins forever.
+If you ever write `lo = mid`, check what happens when `hi = lo + 1`. Then `mid = (lo + hi) // 2 = lo`, so `lo = mid` changes nothing and the loop spins forever:
+
+```formula
+m = ⌊(lo + hi) / 2⌋
+m = ⌊(4 + 5) / 2⌋ = ⌊4.5⌋ = 4
+where
+m: the midpoint index, mid in the code
+lo: the low end of the range; here 4
+hi: the high end of the range; here 5, one more than lo
+⌊ ⌋: the floor: round down to a whole number (Python's // does this)
+In words: with two elements left, the rounded-down midpoint is lo itself, so setting lo to it makes no progress.
+```
 
 ```
 lo=4, hi=5 -> mid=4 -> lo = mid = 4
@@ -160,11 +219,24 @@ ok?:      F  F  F  F  F  T  T ...
                          ^ find this
 ```
 
-Binary search finds the first true in O(log(range)) evaluations of the predicate.
+Binary search finds the first true in about log₂ of the number of candidates evaluations of the predicate:
 
-**Example.** Packages with weights `[1, 2, ..., 10]` must be shipped in order within 5 days. What is the smallest ship capacity that works?
+```formula
+e ≤ ⌈log_2(H − L + 1)⌉
+e ≤ ⌈log_2(55 − 10 + 1)⌉ = ⌈5.52⌉ = 6
+where
+e: the number of times the predicate is evaluated
+L: the smallest candidate answer; 10 in the example below
+H: the largest candidate answer; 55 in the example below
+log_2: the base-2 logarithm
+⌈ ⌉: the ceiling: round up to the next whole number
+≤: less than or equal to
+In words: each evaluation halves the candidate range, so 46 candidates need at most 6 checks.
+```
 
-- Capacity below 10 cannot carry the heaviest package; 55 (the total) does it in one day. So the answer is in `[10, 55]`.
+**Example.** Packages with weights `[1, 2, ..., 10]` must be shipped in order within 5 days. What is the minimum ship capacity that works?
+
+- A ship capacity below 10 cannot carry the heaviest package; 55 (the total) does it in one day. So the answer is in `[10, 55]`.
 - "Can we ship with capacity c?" is monotone: if c works, any larger c works. It is checked greedily in O(n).
 
 ```python
@@ -209,7 +281,20 @@ lo  hi  mid  ok?
 answer: 15
 ```
 
-Five checks of O(n) each, instead of trying all 46 capacities. Total cost: O(n log(sum)). The same pattern handles largest minimum separation of routers when feasibility is monotone and efficiently checkable. A job-scheduling decision can be monotone yet computationally hard. **Content gap:** learning-rate divergence is omitted as an example because general training dynamics do not supply a reliably monotone predicate.
+Five checks of O(n) each, instead of trying all 46 capacities. In general:
+
+```formula
+T = O(n × log(S))
+where
+T: the total running time of min_capacity
+n: the number of packages; each feasibility check walks all of them once
+S: the total weight of all packages, which bounds the range of capacities to search (55 here)
+log: the logarithm (base 2 here; the base only changes a constant)
+O: Big O: grows at most this fast, up to a constant factor
+In words: about log(S) feasibility checks, each costing one pass over the n packages.
+```
+
+The same pattern handles largest minimum separation of routers when feasibility is monotone and efficiently checkable. A job-scheduling decision can be monotone yet computationally hard. **Content gap:** learning-rate divergence is omitted as an example because general training dynamics do not supply a reliably monotone predicate.
 
 **Integer square root** is another instance, using the `hi - lo > 1` style:
 
@@ -241,7 +326,7 @@ For **real-valued** answers, use a suitable tolerance and an iteration limit, an
 ## Key takeaways
 - Binary search takes about log₂ n steps: 30 for a billion items.
 - Write it from an invariant, choose one interval convention ([lo, hi] or [lo, hi)) and derive the loop condition and updates from it.
-- Lower bound (first ≥ x) and upper bound (first > x) answer existence, counts, insertion points and range queries.
+- lower_bound (first ≥ x) and upper_bound (first > x) answer existence, counts, insertion points and range queries.
 - Watch for midpoint overflow in fixed-width languages, `lo = mid` infinite loops and unsorted input.
 - Rotated arrays: one half is always sorted (O(log n) for distinct keys only).
 - Binary search on the answer works for any monotone predicate, turning "find the minimum that works" into O(log range) checks.

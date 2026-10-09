@@ -6,13 +6,13 @@ minutes: 13
 summary: Counting sort, radix sort and bucket sort escape the n log n bound by using keys as indices; here is how they work, what they really cost, and when they apply.
 ---
 
-The last lesson proved that any sort which only *compares* elements needs Ω(n log n) comparisons. The way around that is to stop comparing. If keys are small integers, or can be broken into small integer digits, you can use them directly as **array indices**. An index lookup answers "which of k buckets does this go in?" in one step, which is far more information than a yes/no comparison.
+The last lesson proved that any sort which only *compares* elements needs Ω(n log n) comparisons, where n is the number of elements and Ω (Big Omega) means "at least this growth rate, up to a constant factor". The way around that is to stop comparing. If keys are small integers, or can be broken into small integer digits, you can use them directly as **array indices**. An index lookup answers "which of k buckets does this go in?" in one step, which is far more information than a yes/no comparison.
 
 That is the whole trick behind counting sort, radix sort and bucket sort. The catch is that they only work when the keys have the right shape.
 
 ## Counting sort
 
-**Assumption:** keys are integers in a known range `0..k−1`.
+**Assumption:** keys are integers in a known range `0..k−1`: k is the number of possible key values, and n is the number of elements.
 
 Count how many times each key occurs, then use running totals to work out where each key's block starts in the output.
 
@@ -51,7 +51,22 @@ If you are sorting bare integers (no attached data), you can skip the output arr
 
 - Exam scores 0 to 100 for 2 million students: k = 101, n = 2,000,000. Linear and very fast.
 - Ages, HTTP status codes, bytes (k = 256), days of the year: all good fits.
-- 1,000 arbitrary 32-bit integers: k = 2³² ≈ 4.3 billion. With 4-byte counters the counts alone need 16 GiB (about 17.2 GB); Python lists have different, larger overhead. Hopeless.
+- 1,000 arbitrary 32-bit integers: about 4.3 billion possible values, so about 4.3 billion counters, whatever n is. The counts alone need 16 GiB (formula below); Python lists have different, larger overhead. Hopeless.
+
+```formula
+k = 2^32 ≈ 4.3 × 10^9
+M = k × 4 B = 2^34 B
+M = 16 GiB ≈ 17.2 GB
+where
+k: the number of possible key values: a 32-bit integer can take 2^32 values
+M: the memory the counter array needs
+2^32: 2 multiplied by itself 32 times, 4,294,967,296
+B: bytes; each counter here is a 4-byte integer
+GiB: gibibyte, 2^30 = 1,073,741,824 bytes
+GB: gigabyte, 1,000,000,000 bytes
+≈: approximately equal to
+In words: one 4-byte counter for each of the 4.3 billion possible values needs 16 GiB, even to sort only 1,000 numbers.
+```
 
 The rule: counting sort is great when **k is O(n)** or smaller. When k is much larger than n, use radix sort.
 
@@ -88,17 +103,50 @@ def radix_sort(a, base=256):
 
 ### What radix sort really costs
 
-With d digits in base b, each pass is a counting sort costing O(n + b):
+Each pass is a counting sort over one digit, so it costs O(n + b) for a digit with b possible values. Multiply by the number of passes:
 
-```
-T = O(d · (n + b))
+```formula
+T = O(d × (n + b))
+P = d × n = 4 × 10^7
+C = n × log_2(n) ≈ 10^7 × 23.3 ≈ 2.3 × 10^8
+where
+T: the running time of LSD radix sort
+O: Big O: grows at most this fast, up to a constant factor
+d: the number of digits per key, which is the number of passes; 4 here (32-bit keys, one byte per digit)
+n: the number of keys; 10 million (10^7) here
+b: the base: how many values one digit can take; 256 here, one byte
+P: the total output placements across all the passes
+C: roughly the comparisons an n log n comparison sort would make on the same keys
+log_2(n): the base-2 logarithm of n; log_2(10^7) ≈ 23.3
+10^7: ten to the power 7, ten million
+≈: approximately equal to
+In words: radix sort does d passes, each touching every key once plus a table of b counters; for 32-bit keys in base 256 that is 4 passes.
 ```
 
-For 32-bit unsigned integers with base 256 (one byte per digit): d = 4, b = 256. Four passes over the data, each with a 256-entry count table that fits in L1 cache. For n = 10 million, that is 40 million output placements across the digit passes, plus counting reads and other overhead, versus roughly 230 million comparisons for an n log n sort.
+For 32-bit unsigned integers with base 256 (one byte per digit): four passes over the data, each with a 256-entry count table that fits in L1 cache. For 10 million keys, that is 40 million output placements across the digit passes, plus counting reads and other overhead, versus roughly 230 million comparisons for an n log n sort.
 
 > [!warning] Radix sort depends on key width
-> The bound is O(d(n + b)) under constant-cost digit operations. Distinct keys require d ≥ ceil(log_b n), but that lower bound on d does not imply an upper bound: keys can be much wider. Fixed 32- or 64-bit keys give a fixed number of passes, with at most 2^32 or 2^64 distinct values. Python arbitrary-size integer division has its own bit cost.
+> The bound above assumes each digit operation costs a constant amount. It is "linear" only because the number of digits is treated as fixed. Python arbitrary-size integer division has its own bit cost.
 
+How many digits are there? It depends on the key width, not on n, but n distinct keys need at least enough digits to tell them apart:
+
+```formula
+d = w / log_2(b)
+d = 32 / log_2(256) = 32 / 8 = 4
+d ≥ ⌈log_b(n)⌉
+where
+d: the number of digits (passes)
+w: the key width in bits; 32 here
+b: the base, the number of values one digit can take; 256 here
+log_2(b): the number of bits in one digit; log_2(256) = 8
+log_b(n): the logarithm of n to base b: the power you raise b to in order to get n
+n: the number of keys, all distinct
+⌈ ⌉: the ceiling: round up to the next whole number
+≥: greater than or equal to
+In words: 32-bit keys in base 256 always take 4 passes, and n distinct keys can never fit in fewer than log_b(n) digits.
+```
+
+That lower bound on d does not imply an upper bound: keys can be much wider. Fixed 32- or 64-bit keys give a fixed number of passes, with at most 2³² or 2⁶⁴ distinct values.
 Choosing the base is a trade-off. Base 2¹⁶ means 2 passes for 32-bit keys, but clearing 65,536 counters costs more and the table may exceed the target CPU cache. Base 2⁸ uses a smaller table. The best base depends on counter representation, hardware and workload.
 
 ### MSD radix sort and strings
@@ -114,7 +162,18 @@ Choosing the base is a trade-off. Base 2¹⁶ means 2 passes for 32-bit keys, bu
 
 **Assumption:** keys are roughly **uniformly distributed** over a known range, for example floats in `[0, 1)`.
 
-Create n buckets, each covering an equal slice of the range. Drop each element into its bucket, sort each bucket (with insertion sort), then concatenate.
+Create n buckets (one per element), each covering an equal slice of the range. Drop each element into its bucket, sort each bucket (with insertion sort), then concatenate. The bucket for a value is found by arithmetic, not comparison:
+
+```formula
+j = ⌊x × n⌋
+j = ⌊0.78 × 6⌋ = ⌊4.68⌋ = 4
+where
+j: the bucket number, from 0 to n − 1
+x: the value being placed, at least 0 and less than 1; here 0.78
+n: the number of elements, which is also the number of buckets; here 6
+⌊ ⌋: the floor: round down to a whole number
+In words: multiply the value by the number of buckets and round down; that picks the slice of [0, 1) the value falls in.
+```
 
 ```python
 def bucket_sort(a):  # floats in [0, 1)
@@ -146,7 +205,7 @@ Bucket sort ideas show up in **histogram-based** and **sample sort** algorithms:
 
 | Situation | Choice |
 |---|---|
-| Small integer range (k ≲ n) | Counting sort |
+| Small integer range (k not much above n) | Counting sort |
 | Fixed-width ints, large n | LSD radix sort |
 | Strings, variable length | MSD radix sort |
 | Uniform real values | Bucket sort |
@@ -154,7 +213,7 @@ Bucket sort ideas show up in **histogram-based** and **sample sort** algorithms:
 
 In real systems:
 
-- **NumPy:** `np.sort(kind='stable')` is documented as mapping to radix sort for integer data types and to Timsort for others, chosen by dtype. (The default `kind='quicksort'` is actually introsort.)
+- **NumPy:** `np.sort(kind='stable')` picks its algorithm by dtype. The NumPy 1.17 release notes, which introduced it, say radix sort is used for small integer types of **16 bits or less** and Timsort for the remaining types, including 32- and 64-bit integers. (The default `kind='quicksort'` is actually introsort.)
 - **GPUs:** NVIDIA CUB offers radix sorting for supported keys; histogram, scan and scatter operations parallelize well. GPU libraries also support comparison-based sorting.
 - **Databases:** some analytic engines radix-sort fixed-width encoded keys (such as normalised sort keys) instead of calling a comparator per pair.
 

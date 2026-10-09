@@ -20,7 +20,21 @@ Place n queens on an n × n board so that no two share a row, column or diagonal
 
 ### Modelling shrinks the tree
 
-For n = 8, compare three ways of framing the search:
+For n = 8, compare three ways of framing the search. Each extra piece of structure you build into the model shrinks the number of candidate placements:
+
+```formula
+N_any = C(64, 8) = 4,426,165,368
+N_row = 8^8 = 16,777,216
+N_perm = 8! = 40,320
+where
+N_any: placements choosing any 8 of the 64 squares
+C(64, 8): "64 choose 8", the number of ways to pick 8 squares from 64 when order doesn't matter
+N_row: placements with exactly one queen in each row (8 column choices for each of 8 rows)
+8^8: 8 multiplied by itself 8 times
+N_perm: placements with one queen per row and per column (each row takes a different column)
+8!: 8 factorial, 8 × 7 × … × 1
+In words: one queen per row cuts 4.4 billion candidates to 16.8 million, and one per column as well cuts them to 40,320.
+```
 
 | Model | Candidates |
 |---|---|
@@ -32,7 +46,19 @@ Backtracking row by row, rejecting a column the moment it's attacked, makes only
 
 ### O(1) attack checks
 
-Every square on the same down-right diagonal has the same `row − col`; every square on the same down-left (anti-) diagonal has the same `row + col`.
+Every square on the same down-right diagonal has the same `row − col`; every square on the same down-left (anti-) diagonal has the same `row + col`. Moving one step down-right adds 1 to both row and column, so their difference stays the same; moving down-left adds 1 to the row and takes 1 from the column, so their sum stays the same:
+
+```formula
+r_1 − c_1 = r_2 − c_2
+r_1 + c_1 = r_2 + c_2
+1 + 2 = 3 + 0 = 3
+where
+r_1: the row number of the first square, counting from 0 at the top
+c_1: the column number of the first square, counting from 0 at the left
+r_2: the row number of the second square
+c_2: the column number of the second square
+In words: the first line holds exactly when two squares share a down-right diagonal (row minus column matches); the second holds exactly when they share an anti-diagonal (row plus column matches); squares (1, 2) and (3, 0) both have sum 3.
+```
 
 ```
 row-col on a 4x4      row+col on a 4x4
@@ -103,7 +129,7 @@ def count_queens(n):
 `free & -free` isolates the lowest set bit (two's complement trick), so each loop iteration jumps straight to the next legal column. The count for n = 12 is 14,200. Python integer bit operations scale with the number of machine words needed to hold the masks.
 
 > [!note] Content gap
-> The original tenth-of-a-second runtime is omitted: no pinned machine and interpreter benchmark establishes it.
+> The original tenth-of-a-second running time is omitted: no pinned machine and interpreter benchmark establishes it.
 
 > [!note] N-Queens has a direct construction
 > For n = 1 and every n ≥ 4, direct constructions can place one solution in O(n) output operations without backtracking; n = 2 and n = 3 have no solution. Backtracking matters when you need all solutions, or for variants with extra constraints.
@@ -196,7 +222,7 @@ Each assignment can trigger more eliminations, which trigger more assignments. M
 
 ## Word search
 
-Given a rectangular grid of single-character strings, is a word spelled by a path of horizontally or vertically adjacent cells, using each cell at most once? The empty word is accepted; a non-empty word on an empty board is rejected.
+Given a rectangular grid of single-character strings, is a word spelled by a path of horizontally or vertically adjacent cells, using each cell no more than once? The empty word is accepted; a non-empty word on an empty board is rejected.
 
 ```python
 def exist(board, word):
@@ -233,7 +259,24 @@ def exist(board, word):
 - **Unchoose** = restore the letter. Forget this and a failed path permanently blocks cells that a later path needs.
 - **Prune** = the letter mismatch check, which can reject a branch immediately; its effectiveness depends on the grid and word.
 
-Complexity: R·C starting cells; the first step has 4 directions and every later step at most 3 (you can't go back), so the worst case is **O(R·C·3ᴸ)** for a word of length L. Mismatches and boundaries can reduce this upper bound, but no reduction is guaranteed for every input.
+Complexity: count the paths the search can try. Every cell is a possible start; the first step has 4 directions and every later step at most 3 (you can't go back the way you came):
+
+```formula
+P ≤ R × C × 4 × 3^{L − 2}
+P = O(R × C × 3^L)
+P ≤ 12 × 4 × 3^8 = 314,928
+where
+P: the number of paths the search may explore, an upper bound
+R: the number of rows in the grid
+C: the number of columns in the grid
+L: the length of the word, in letters (at least 2 for the first line)
+3^{L − 2}: 3 multiplied by itself L − 2 times
+O: Big-O, grows no faster than this up to a constant factor
+≤: at most
+In words: R × C starting cells, 4 choices for the first step and at most 3 for each later one; a 3 × 4 grid and a 10-letter word allow at most about 315,000 paths.
+```
+
+So the worst case is **O(R·C·3ᴸ)** for a word of length L. Mismatches and boundaries can reduce this upper bound, but no reduction is guaranteed for every input.
 
 ### Many words at once
 
@@ -251,9 +294,20 @@ All of this generalises to CSPs: variables, domains and constraints. Solvers com
 | Forward checking | After assigning, prune neighbours' domains; fail if one empties |
 | Arc consistency (AC-3) | For binary constraints, retain a value only if it has support in each constrained neighbour |
 
-**Forward checking** looks one step ahead. **Arc consistency** propagates further: removing a value from one domain can remove values from others, and so on, until nothing changes. Propagation has a per-node cost and can reduce the search tree; whether it improves runtime depends on the instance and implementation.
+**Forward checking** looks one step ahead. **Arc consistency** propagates further: removing a value from one domain can remove values from others, and so on, until nothing changes. Propagation has a per-node cost and can reduce the search tree; whether it improves running time depends on the instance and implementation.
 
-**Exact cover.** A 9 × 9 Sudoku has 729 potential candidate rows (cell × digit) and 324 exactly-once constraint columns before givens remove candidates. Knuth’s **Algorithm X** can be implemented with **dancing links** (DLX): restoring an individual removed link/node takes O(1), while undoing a whole choice may restore many nodes. N-Queens uses exactly-one row/column constraints and **at-most-one diagonal** constraints, so the direct formulation needs optional secondary columns (generalised exact cover) or another encoding.
+**Exact cover** is the problem of choosing rows of a 0/1 table so that every column has exactly one 1 among the chosen rows. Sudoku fits it directly:
+
+```formula
+N_rows = 81 × 9 = 729
+N_cols = 4 × 81 = 324
+where
+N_rows: candidate rows, one per (cell, digit) pair: 81 cells times 9 digits
+N_cols: constraint columns: each cell filled once, each digit once per row, once per column and once per box, 81 of each kind
+In words: a 9 × 9 Sudoku becomes a 729 × 324 exact-cover table before the givens remove candidates.
+```
+
+Knuth’s **Algorithm X** can be implemented with **dancing links** (DLX): restoring an individual removed link/node takes O(1), while undoing a whole choice may restore many nodes. N-Queens uses exactly-one row/column constraints and **at-most-one diagonal** constraints, so the direct formulation needs optional secondary columns (generalised exact cover) or another encoding.
 
 **SAT solvers.** The DPLL algorithm is backtracking plus **unit propagation** (an unsatisfied clause with one unassigned literal and all others false forces it). Modern CDCL solvers add clause learning and non-chronological backjumping, and can solve substantial structured instances; size alone does not determine difficulty. They power hardware verification, scheduling and package managers: libsolv (used by DNF and by conda's libmamba solver) resolves dependencies with SAT techniques, while pip's resolver backtracks over candidate versions.
 

@@ -6,7 +6,7 @@ minutes: 12
 summary: Base cases, the recursive leap of faith, what the call stack really does, tail recursion (and why Python won't optimise it), and how to turn recursion into a loop.
 ---
 
-A function is **recursive** when its execution can call itself, directly or through other functions. To make a terminating recursive algorithm, use a well-founded progress measure: it must not admit an infinite decreasing chain. A common design has these two properties:
+A function is **recursive** when its execution can call itself, directly or through other functions. To make a terminating recursive algorithm, use a well-founded progress measure: it can never decrease forever (no infinite decreasing chain). A common design has these two properties:
 
 1. There is at least one **base case**: an input small enough to answer directly, with no further calls.
 2. Every recursive call makes **progress** towards a base case.
@@ -89,8 +89,8 @@ Then the stack unwinds: `fact(1)` returns 1, `fact(2)` computes 2 × 1 = 2, `fac
 
 Two consequences follow:
 
-- **Space is proportional to depth.** With constant-sized frame state, depth d costs O(d) control-stack space. Retained lists, arbitrary-size integers and other objects must be counted separately. A recursive function over a linked list of length n uses O(n) space; over a balanced tree of n nodes, O(log n).
-- **Work after the call happens on the way back up.** Along a single call chain, code before the call runs on descent and code after it runs on return; multiple recursive branches are completed in their program order.
+- **Space is proportional to depth.** With constant-sized frame state, a recursion that is d calls deep at its deepest point costs O(d) control-stack space: d frames, each of fixed size. Retained lists, arbitrary-size integers and other objects must be counted separately. A recursive function over a linked list of length n uses O(n) space; over a balanced tree of n nodes, O(log n).
+- **Work after the call happens on the way back up.** Along a single call chain, code before the call runs on descent and code after it runs on return; multiple recursive branches are completed in the order the code calls them.
 
 ```python
 def show(n):
@@ -134,10 +134,44 @@ def fib(n):
 fib(1) fib(0)
 ```
 
-`fib(4)` makes 9 calls, `fib(5)` 15, `fib(30)` over 2.6 million. The total grows roughly like 1.618ⁿ because the same subproblems are solved again and again. Caching results (memoisation) reduces this to O(n) additions; integer bit costs grow with n, so this is not an O(n) bit-time claim; that idea is the heart of the dynamic programming module.
+`fib(4)` makes 9 calls, `fib(5)` 15, `fib(30)` over 2.6 million. Counting the calls gives a recurrence of its own, because each call is itself plus the calls its two children make:
+
+```formula
+C(n) = 1 + C(n − 1) + C(n − 2)
+C(0) = C(1) = 1
+C(n) = 2 × F(n + 1) − 1 = Θ(φ^n)
+C(30) = 2 × F(31) − 1
+C(30) = 2 × 1,346,269 − 1 = 2,692,537
+where
+C(n): the total number of calls that fib(n) makes, including itself
+n: the argument passed to fib
+F(n): the nth Fibonacci number (F(0) = 0, F(1) = 1, each later one the sum of the previous two)
+φ: phi, the golden ratio, (1 + √5) / 2 ≈ 1.618
+φ^n: φ multiplied by itself n times
+Θ: Big-Theta, grows at exactly this rate up to a constant factor (here C(n) is about 1.45 × φ^n)
+In words: the call count follows the Fibonacci pattern itself, so each extra 1 on the argument multiplies the work by about 1.6.
+```
+
+The total grows that fast because the same subproblems are solved again and again. Caching results (memoisation) reduces this to O(n) additions; integer bit costs grow with n, so this is not an O(n) bit-time claim; that idea is the heart of the dynamic programming module.
 
 > [!warning] Hidden O(n) work per call
-> `return xs[0] + total(xs[1:])` looks linear, but each slice copies the list. The slices copy (n−1) + (n−2) + ... + 0 = n(n−1)/2 references, giving O(n²) time with constant-cost element addition, and because every frame holds its slice until it returns, O(n²) memory at peak. Pass an index instead of slicing.
+> `return xs[0] + total(xs[1:])` looks linear, but each slice copies the list. Because every frame holds its slice until it returns, memory grows the same way. Pass an index instead of slicing.
+
+Adding up the copies on a list of n items:
+
+```formula
+S = (n − 1) + (n − 2) + … + 1 + 0
+S = n × (n − 1) / 2 = O(n^2)
+S = 1000 × 999 / 2 = 499,500
+where
+S: the total number of list references copied by all the slices
+n: the length of the original list; 1000 in the last line
+…: and so on, one fewer each time
+O(n^2): grows in proportion to n squared (n × n)
+In words: the slices copy n − 1, then n − 2, and so on, which adds up to about n²/2 copies; 1000 items cost about half a million copies instead of 1000.
+```
+
+That gives O(n²) time (assuming constant-cost element addition) and, because the slices are all alive at the deepest point, O(n²) memory at its peak.
 
 ## Tail recursion
 
@@ -157,7 +191,7 @@ def fact_acc(n, acc=1):
     return fact_acc(n - 1, acc * n)
 ```
 
-Why care? Because a tail call needs nothing from the current frame afterwards, so a language can **reuse the frame** instead of pushing a new one. This is **tail-call optimisation (TCO)**, and it turns tail recursion into a loop with O(1) stack space. Scheme requires it by its standard; many functional language implementations rely on it; C compilers such as GCC and Clang often perform it at higher optimisation levels, but the C standard doesn't guarantee it.
+Why care? Because a tail call needs nothing from the current frame afterwards, so a language can **reuse the frame** instead of pushing a new one. This is **tail-call optimisation (TCO)**, and it turns tail recursion into a loop with O(1) stack space. The Scheme programming language requires it by its standard; many functional language implementations rely on it; C compilers such as GCC and Clang often perform it at higher optimisation levels, but the C standard doesn't guarantee it.
 
 ### Python does not do TCO
 
@@ -211,7 +245,7 @@ A Python list stores pending work in dynamically allocated memory. General simul
 
 ## Common pitfalls
 
-- **Missing or unreachable base case.** `fact(-1)` with base case `n == 0` recurses forever (until `RecursionError`). Reject negative input: changing the base case to `n <= 1` alone terminates but incorrectly returns 1 for negative factorials.
+- **Missing base case, or one that is never reached.** `fact(-1)` with base case `n == 0` recurses forever (until `RecursionError`). Reject negative input: changing the base case to `n <= 1` alone terminates but incorrectly returns 1 for negative factorials.
 - **Not shrinking the input.** Calling `f(n)` from `f(n)` with a different flag still needs a measure that strictly decreases.
 - **Repeated subproblems.** Exponential blow-up, as with naive `fib`.
 - **Expensive arguments.** Slicing lists or strings per call adds hidden O(n) work.

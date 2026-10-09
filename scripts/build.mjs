@@ -193,7 +193,7 @@ for (const subjectName of dirs(contentDir)) {
 index.subjects.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
 // Glossary: core terms (glossary-data.js) plus every module's verified glossary.json.
-// Ids are unique app-wide. Aliases are unique within a subject and must not repeat a core term (see
+// Ids are unique app-wide. Aliases are unique within a subject; a subject may shadow a core term (see
 // glossary-rules.js for how lookups work across subjects). Modules are visited in curriculum order, so when two
 // modules in one subject define the same word the earlier one keeps it: a later entry whose id or term is taken is
 // skipped, and a clashing alias is dropped from the later entry. Both are reported.
@@ -203,9 +203,10 @@ const glossaryClashes = [];
   const ids = new Map(coreGlossary.map((e) => [e.id, 'glossary-data.js']));
   // Same namespaces as glossary.js: core aliases everywhere, module aliases per subject.
   const nameKey = (t, a) => t.subject + ':' + aliasKey(a);
-  const coreNames = new Map(coreGlossary.flatMap((e) => [e.term, ...e.aliases].map((a) => [aliasKey(a), `${e.id} (glossary-data.js)`])));
   const names = new Map();
-  const taken = (t, a) => coreNames.get(aliasKey(a)) ?? names.get(nameKey(t, a));
+  // A subject's own term may reuse a core term's name or alias: inside that subject it wins (glossary.js looks up
+  // the subject first), and everywhere else the core definition still applies.
+  const taken = (t, a) => names.get(nameKey(t, a));
   const order = new Map(index.subjects.flatMap((sub, si) => sub.modules.map((m, mi) => [`${sub.id}/${m.id}`, si * 1000 + mi])));
   moduleTerms.sort((a, b) => (order.get(a.key) ?? 1e9) - (order.get(b.key) ?? 1e9));
   for (const { t: raw, file, category, subjectId } of moduleTerms) {

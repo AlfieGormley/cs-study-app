@@ -21,7 +21,7 @@ Optimal substructure is shared with dynamic programming. The greedy choice prope
 
 ## Interval scheduling
 
-You have one meeting room and a list of requested meetings `(start, end)`. In both interval examples assume finite real endpoints with start < end, representing positive-duration half-open intervals [start, end). Accept as **many** meetings as possible with no overlaps. (In CLRS this is the **activity selection** problem.)
+You have one meeting room and a list of requested meetings `(start, end)`. In both interval examples assume finite real endpoints with start < end, representing positive-duration **half-open intervals** [start, end): each meeting includes its start time but not its end time, so a meeting ending at 10 doesn't clash with one starting at 10. Accept as **many** meetings as possible with no overlaps. (In CLRS this is the **activity selection** problem.)
 
 Several greedy rules sound plausible:
 
@@ -61,7 +61,7 @@ def max_meetings(intervals):
     return chosen
 ```
 
-The sort dominates: **O(n log n)**. The `>=` treats a meeting ending at 10 and one starting at 10 as compatible; use `>` if touching intervals conflict in your problem.
+For n meetings, the sort dominates: **O(n log n)**, and the loop afterwards is a single O(n) pass. The `>=` treats a meeting ending at 10 and one starting at 10 as compatible; use `>` if touching intervals conflict in your problem.
 
 > [!example] Trace
 > Meetings sorted by end: (1,4), (3,5), (0,6), (5,7), (3,9), (5,9), (6,10), (8,11), (8,12), (2,14), (12,16).
@@ -78,11 +78,22 @@ The standard proof technique for greedy is the **exchange argument**: take any o
 
 1. Let g be the meeting with the earliest finish time overall.
 2. Take any optimal schedule O, and let o be its first meeting.
-3. Since g finishes earliest of all, g.end ≤ o.end.
-4. Replace o with g. Every other meeting in O starts at or after o.end ≥ g.end, so none of them overlap g.
+3. Since g finishes earliest of all, it ends no later than o.
+4. Replace o with g. Every other meeting in O starts at or after the end of o, which is at or after the end of g, so none of them overlap g:
+
+```formula
+e_g ≤ e_o ≤ s_x
+where
+e_g: the end time of g, the meeting that finishes first overall
+e_o: the end time of o, the first meeting in the optimal schedule O
+s_x: the start time of any other meeting x in O
+≤: is at or before (less than or equal to)
+In words: g ends no later than o, and every later meeting in O starts no earlier than o ends, so swapping o for g creates no clash.
+```
+
 5. The new schedule is still valid and has the same size: it's also optimal, and it starts with g.
 
-So the greedy first choice is safe (greedy choice property). After choosing g, the remaining problem is "schedule the meetings starting at or after g.end", the same problem on a smaller input (optimal substructure). Induction finishes the proof.
+So the greedy first choice is safe (greedy choice property). After choosing g, the remaining problem is "schedule the meetings starting at or after the end of g", the same problem on a smaller input (optimal substructure). Induction finishes the proof.
 
 A related proof style is **greedy stays ahead**: show that after k steps, greedy's k-th meeting ends no later than the k-th meeting of any other valid schedule. Then greedy can never fall behind, so it fits at least as many.
 
@@ -90,7 +101,7 @@ A related proof style is **greedy stays ahead**: show that after k steps, greedy
 
 Now every meeting *must* happen. What's the minimum number of rooms?
 
-Greedy: process meetings by **start** time, and put each one in any room that has become free; open a new room only if none has. A min-heap of room end times finds the earliest-free room in O(log n).
+Greedy: process meetings by **start** time, and put each one in any room that has become free; open a new room only if none has. A **min-heap** of room end times finds the earliest-free room in O(log n) for n meetings.
 
 ```python
 import heapq
@@ -106,11 +117,40 @@ def min_rooms(intervals):
     return len(ends)
 ```
 
-Why is it optimal? Greedy opens room k only when k − 1 rooms are all busy at time s, so k meetings overlap at that instant. No schedule can use fewer rooms than the maximum number of meetings overlapping at once. Greedy matches that lower bound. This is how calendar systems and some schedulers allocate resources: O(n log n).
+Why is it optimal? The number of meetings running at the same moment is a hard floor: they each need their own room.
+
+```formula
+R_min ≥ D
+D = max_t m(t)
+where
+R_min: the minimum number of rooms any valid schedule needs
+D: the depth: the most meetings that overlap at any single moment
+t: a moment in time
+m(t): the number of meetings in progress at moment t
+max_t: the largest value over all moments t
+≥: is at least
+In words: if 3 meetings are all running at 10:15, no schedule can manage with fewer than 3 rooms.
+```
+
+Greedy opens a new room (room k, say) only when the k − 1 rooms already open are all busy at the new meeting's start time, so k meetings overlap at that instant: D is at least k. Greedy therefore never uses more rooms than D, matching the lower bound. This is how calendar systems and some schedulers allocate resources, in O(n log n) time for n meetings.
 
 ## Huffman coding
 
-Text is stored as bits. A fixed-length code gives every symbol the same length: 6 symbols need 3 bits each. If some symbols are much more common, a **variable-length** code can do better by giving them shorter codewords.
+Text is stored as bits. A **fixed-length code** gives every symbol the same length, enough bits to give each symbol a different pattern:
+
+```formula
+b = ⌈log_2(k)⌉
+b = ⌈log_2(6)⌉ = ⌈2.58⌉ = 3 bits
+where
+b: the number of bits each symbol needs in a fixed-length code
+k: the number of different symbols, here 6
+log_2(k): the base-2 logarithm of k, the power you raise 2 to in order to get k
+⌈ ⌉: ceiling: round up to the next whole number
+bits: binary digits, each 0 or 1
+In words: 2 bits give only 4 patterns, too few for 6 symbols, so each symbol takes 3 bits (8 patterns, 2 unused).
+```
+
+If some symbols are much more common, a **variable-length** code can do better by giving them shorter codewords.
 
 For immediate symbol-by-symbol decoding without separators, a **prefix code** is sufficient: no codeword is a prefix of another. Prefix codes correspond to binary trees with symbols at the leaves; the code for a symbol is its path (0 = left, 1 = right).
 
@@ -167,7 +207,9 @@ The tie counter matters: without it, two entries with equal frequency make `heap
 > 4. Merge 25 + 30 = 55.
 > 5. Merge a 45 + 55 = 100.
 >
-> Code lengths: a 1, b 3, c 3, d 3, e 4, f 4. Total = 45·1 + 13·3 + 12·3 + 16·3 + 9·4 + 5·4 = **224 bits**, versus 300 with a fixed 3-bit code: about 25.3% fewer payload bits, excluding codebook and framing overhead.
+> Code lengths: a 1, b 3, c 3, d 3, e 4, f 4.
+
+The resulting tree (0 = left branch, 1 = right branch):
 
 ```
             (100)
@@ -181,11 +223,31 @@ The tie counter matters: without it, two entries with equal frequency make `heap
                 f5   e9
 ```
 
+The cost of a code is each symbol's frequency times its code length, added up:
+
+```formula
+B = Σ f_i × ℓ_i
+B = 45×1 + 13×3 + 12×3 + 16×3 + 9×4 + 5×4
+B = 45 + 39 + 36 + 48 + 36 + 20 = 224 bits
+B_fixed = 100 × 3 = 300 bits
+(300 − 224) / 300 ≈ 0.253
+where
+B: the total bits to encode the 100 characters with the Huffman code
+Σ: sum: add up the term for every symbol i
+i: one of the six symbols a to f
+f_i: how many times symbol i occurs (its frequency)
+ℓ_i: the length of symbol i's codeword, in bits
+B_fixed: the bits needed with a fixed 3-bit code
+≈: approximately equal to
+bits: binary digits
+In words: the Huffman code needs 224 bits instead of 300, about 25.3% fewer payload bits, excluding codebook and framing overhead.
+```
+
 ### Why it's optimal
 
 Exchange argument again: in some optimal tree, the two least frequent symbols are **siblings at the deepest level**. If not, swap them with whatever is deepest; moving a rarer symbol deeper and a more common one shallower can't increase the total cost. So merging the two rarest first is safe, and the merged node behaves like a single symbol in a smaller problem.
 
-Huffman minimises expected length among binary prefix codes for the supplied individual-symbol frequencies. Arithmetic coding and ANS encode sequences so the average cost per symbol need not be an integer; physical output bits remain whole. Zstandard uses FSE, an ANS variant, for sequence symbols and can use Huffman coding for literals.
+Huffman minimises expected length among prefix codes made of 0s and 1s for the supplied individual-symbol frequencies. Arithmetic coding and ANS encode sequences so the average cost per symbol need not be an integer; physical output bits remain whole. Zstandard uses FSE, an ANS variant, for sequence symbols and can use Huffman coding for literals.
 
 ### Where Huffman is used
 

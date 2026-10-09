@@ -61,12 +61,20 @@ Without a 1-coin, greedy can get stuck even when a solution exists. Coins {3, 5}
 
 ### The DP alternative
 
-Instead of committing to one coin, consider *every* last coin and take the best:
+Instead of committing to one coin, consider *every* possible last coin and take the best. Whatever the last coin c is, the rest of the amount must itself be paid optimally:
 
-```
-best[a] = 1 + min(best[a - c])
-          over coins c <= a
-best[0] = 0
+```formula
+B(a) = 1 + min_{c ≤ a} B(a − c)
+B(0) = 0
+B(6) = 1 + min(B(5), B(3), B(2))
+B(6) = 1 + min(2, 1, 2) = 2
+where
+B(a): the fewest coins that make amount a (best[a] in the code); infinity if a can't be made
+a: the amount to make, a whole number of at least 0
+c: one coin denomination, a positive whole number
+min_{c ≤ a}: the smallest value over every coin c no bigger than a
+min: the smallest of its inputs
+In words: the best way to pay a is one coin plus the best way to pay what is left, tried for every coin that fits; for coins {1, 3, 4}, 6 is best paid as 3 + 3.
 ```
 
 ```python
@@ -90,15 +98,49 @@ def min_coins(coins, amount):
     return best[amount]
 ```
 
-For {1, 3, 4}: best[0..6] = 0, 1, 2, 1, 1, 2, 2. For k denominations and amount A, this uses O(k + A(k + 1)) unit-cost work including input/table initialisation, conventionally O(Ak) for positive A and k, and O(A + k) storage. It is correct for the stated positive-integer, unlimited-supply domain. The dynamic programming module develops this way of thinking in depth; here the point is the contrast. Greedy keeps **one** candidate per step; DP compares the last-coin alternatives for each amount, retaining the best value for that state.
+For {1, 3, 4}, the table for amounts 0 to 6 is 0, 1, 2, 1, 1, 2, 2. The cost is one pass over the coins for each amount:
+
+```formula
+W = O(k + A × (k + 1)) = O(A × k)
+M = O(A + k)
+W ≈ 1,000 × 8 = 8,000
+where
+W: the unit-cost work, in basic steps, including reading the coins and filling the table
+M: the storage used (the table plus the coin list)
+k: the number of coin denominations (8 in the last line)
+A: the target amount (1,000 in the last line); the simplified form assumes A and k are both at least 1
+O: Big-O, grows no faster than this up to a constant factor
+≈: approximately equal to
+In words: every amount from 1 to A tries every coin once, so the work is about A times k: 8 UK denominations and £10.00 (1,000 pence) take about 8,000 steps.
+```
+
+It is correct for the stated positive-integer, unlimited-supply domain. The dynamic programming module develops this way of thinking in depth; here the point is the contrast. Greedy keeps **one** candidate per step; DP compares the last-coin alternatives for each amount, retaining the best value for that state.
 
 ### Testing a coin system
 
-You don't have to test every amount. Kozen and Zaks (1994) showed that for at least three distinct positive integer denominations 1 = c₁ < ... < cₘ, if the system is non-canonical then its smallest counterexample x satisfies c₃ + 1 < x < cₘ + cₘ₋₁. So for {1, 5, 12}, checking amounts below 17 suffices, and 15 is found. Pearson later gave a polynomial-time test.
+You don't have to test every amount. Kozen and Zaks (1994) showed that the smallest counterexample, if there is one, lies in a narrow window:
+
+```formula
+1 = c_1 < c_2 < … < c_m
+c_3 + 1 < x < c_m + c_{m−1}
+13 < x < 17
+where
+c_1: the smallest denomination, which must be 1
+c_2: the second-smallest denomination
+c_m: the largest denomination
+c_{m−1}: the second-largest denomination
+c_3: the third-smallest denomination
+m: the number of distinct denominations, at least 3
+x: the smallest amount where greedy uses more coins than necessary, if the system is non-canonical
+…: and so on, in increasing order
+In words: if greedy ever goes wrong, it first goes wrong somewhere between c_3 + 1 and the sum of the two largest coins, so only those amounts need checking; for {1, 5, 12} that is 14 to 16.
+```
+
+So for {1, 5, 12}, checking amounts below 17 suffices, and 15 is found. Pearson later gave a polynomial-time test.
 
 ## Fractional versus 0/1 knapsack
 
-A knapsack holds capacity W. The examples use positive integer weights, non-negative integer values and non-negative integer capacity. Items may be omitted; maximise the value carried.
+A knapsack holds a maximum total weight, its capacity W. The examples use positive integer weights, non-negative integer values and non-negative integer capacity. Items may be omitted; maximise the value carried.
 
 ### Fractional: greedy works
 
@@ -130,7 +172,7 @@ def fractional(items, cap):   # (w, v)
     return total
 ```
 
-Exchange argument: if an optimal load holds some lower-ratio item while higher-ratio material is left behind, swap equal weights. Value goes up or stays the same. So filling by ratio is optimal. Sorting takes O(n log n) ratio comparisons; exact rational arithmetic has additional operand-bit costs.
+Exchange argument: if an optimal load holds some lower-ratio item while higher-ratio material is left behind, swap equal weights. Value goes up or stays the same. So filling by ratio is optimal. For n items, sorting takes O(n log n) ratio comparisons; exact rational arithmetic has additional operand-bit costs.
 
 ### 0/1: greedy fails
 
@@ -152,7 +194,24 @@ fractional: A + B + 2/3 of C
 
 Greedy's high-ratio choice, A, wastes capacity that couldn't be filled afterwards. With whole items, *how well the pieces fit together* matters, and the value/weight rule does not capture that interaction.
 
-0/1 knapsack is NP-hard. The standard DP runs in O(n × W), which is **pseudo-polynomial**: its storage and work depend on W’s numeric value, so feasibility depends on both n and W and the available resources.
+0/1 knapsack is **NP-hard**: at least as hard as every problem in NP, so no algorithm is known that solves every instance in time polynomial in the size of the input (and none exists unless P = NP). The standard DP fills one table entry per capacity value for each item:
+
+```formula
+T = O(n × W)
+T ≈ 100 × 50 = 5,000
+T ≈ 100 × 5 × 10^9 = 5 × 10^11
+where
+T: the number of table updates the DP performs
+n: the number of items (100 in the examples)
+W: the capacity, as a number (50, then 5 × 10^9 in the examples)
+O: Big-O, grows no faster than this up to a constant factor
+≈: approximately equal to
+10^9: one billion
+10^11: one hundred billion
+In words: the work grows with the capacity's numeric value, not with the number of digits needed to write it, so a capacity of 5 billion makes the table impractically large.
+```
+
+That makes it **pseudo-polynomial**: its storage and work depend on W’s numeric value, so whether it is practical depends on both n and W and the available resources.
 
 ```python
 def knapsack01(items, cap):
@@ -175,7 +234,42 @@ def knapsack01(items, cap):
 ```
 
 > [!tip] Greedy as an approximation
-> Ratio-greedy alone can be arbitrarily bad: for capacity M > 2, items (w 1, v 2) and (w M, v M) give greedy value 2 versus optimum M. For positive weights and non-negative values, first discard items heavier than capacity. Take the ratio-ordered whole-item prefix up to the first item that does not fit, and compare its value with the best single feasible item. Their maximum is at least half the optimum: the fractional upper bound is no more than prefix value plus the next item’s full value. Continuing to fit later items can only improve that prefix value.
+> Ratio-greedy alone can be arbitrarily bad: with a large capacity, a small item with a high ratio can block one big item that fills the whole knapsack. A small fix gives a guarantee of at least half the optimum.
+
+For example:
+
+```formula
+w_1 = 1, v_1 = 2;   w_2 = M, v_2 = M
+G = 2,   OPT = M,   M > 2
+where
+w_1: the weight of the small item
+v_1: the value of the small item (ratio 2)
+w_2: the weight of the big item, equal to the capacity
+v_2: the value of the big item (ratio 1)
+M: the capacity, any number greater than 2
+G: the value ratio-greedy collects (it takes the small item, then the big one no longer fits)
+OPT: the best possible value (the big item alone)
+In words: greedy gets 2 while the optimum is M, so the gap can be made as large as you like.
+```
+
+The fix: for positive weights and non-negative values, first discard items heavier than capacity. Take the ratio-ordered whole-item prefix up to the first item that does not fit, and compare its value with the best single feasible item:
+
+```formula
+OPT ≤ G + v_next
+max(G, v_max) ≥ (G + v_next) / 2
+max(G, v_max) ≥ OPT / 2
+where
+OPT: the best possible 0/1 value
+G: the value of the ratio-ordered prefix of whole items
+v_next: the value of the first item that didn't fit
+v_max: the value of the best single item that fits on its own (at least v_next)
+max: the larger of its inputs
+≤: at most
+≥: at least
+In words: the fractional optimum, which beats any 0/1 answer, is at most the prefix plus the whole next item; the larger of two numbers is at least their average, so the better of the prefix and the best single item gets at least half the optimum.
+```
+
+Continuing to fit later items can only improve that prefix value.
 
 ## Other places greedy breaks
 
@@ -215,7 +309,7 @@ A possible counterexample is `([1, 7, 6], 18, 6, 3)`. The generator and random s
 
 ### 3. Try to write the exchange argument
 
-Take an optimal solution that doesn't make the greedy choice. Can you swap the greedy choice in without making it worse? A valid exchange proof for every remaining subproblem establishes correctness; an intuitive swap that works only on examples does not. If a proposed swap breaks feasibility, that particular proof attempt fails. To disprove the greedy rule, exhibit an input where its final solution is worse than a feasible alternative; a failed exchange attempt alone is insufficient.
+Take an optimal solution that doesn't make the greedy choice. Can you swap the greedy choice in without making it worse? A valid exchange proof for every remaining subproblem establishes correctness; an intuitive swap that works only on examples does not. If a proposed swap makes the solution invalid, that particular proof attempt fails. To disprove the greedy rule, exhibit an input where its final solution is worse than a feasible alternative; a failed exchange attempt alone is insufficient.
 
 ### 4. Read the structure of the problem
 

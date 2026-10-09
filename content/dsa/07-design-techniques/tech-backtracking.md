@@ -10,9 +10,9 @@ Some problems don't have a clever formula. You simply have to try possibilities:
 
 Picture walking a maze with a piece of chalk. At each junction you pick a corridor and mark it. If you reach a dead end, you walk back to the last junction, rub out the mark and try the next corridor. With systematic choice enumeration and a mark for every cell on the current path, you can enumerate simple routes without following a cycle forever. The path is working state; access to the maze and any extra constraints still requires storage.
 
-## The decision tree
+## The state-space tree
 
-Every backtracking problem is a walk over an implicit **decision tree**. Each level is one decision; each edge is one choice; each leaf is a complete candidate.
+Every backtracking problem is a walk over an implicit tree of decisions, its **state-space tree**. Each level is one decision; each edge is one choice; each leaf is a complete candidate.
 
 Generating subsets of `[1, 2, 3]`: at each level decide "include this element or not".
 
@@ -88,7 +88,25 @@ def subsets(nums):
 #  [2], [2,3], [3]]
 ```
 
-For n distinct elements (or n distinguished positions), there are 2ⁿ subsets, and copying each costs up to n, so the total is **O(n · 2ⁿ)**. At n = 20 that's about a million subsets; at n = 40 it exceeds a trillion, making full materialisation expensive. Feasibility depends on the representation and resources.
+Each element is either in or out, independently, so the number of subsets doubles with every extra element. Copying each finished subset into the result costs up to n steps:
+
+```formula
+N_sub = 2^n
+W = O(n × 2^n)
+N_sub = 2^20 = 1,048,576
+N_sub = 2^40 ≈ 1.1 × 10^12
+where
+N_sub: the number of subsets of n distinct elements (including the empty set and the whole set)
+n: the number of distinct elements (or distinguished positions)
+2^n: 2 multiplied by itself n times
+W: the total work to generate and copy every subset
+O: Big-O, grows no faster than this up to a constant factor
+10^12: one trillion (a 1 followed by 12 zeros)
+≈: approximately equal to
+In words: every extra element doubles the number of subsets; 20 elements give about a million, 40 give over a trillion.
+```
+
+At n = 40 full materialisation is very expensive. Whether it is practical depends on the representation and resources.
 
 > [!warning] Append a copy, not the path
 > `res.append(path)` stores a reference to the one shared list. After the search finishes, every unchoose has run, `path` is empty, and `res` is a list of identical empty lists: `[[], [], [], []]`. Always append `path[:]` or `list(path)`.
@@ -119,11 +137,27 @@ def permutations(nums):
 # [1,2,3] -> 123 132 213 231 312 321
 ```
 
-For n distinct values, the tree has n choices at the root, n − 1 below that, and so on: **n!** leaves. Repeated input values produce duplicate value sequences unless separately handled. With O(n) to copy each, it's **O(n · n!)**. 10! is about 3.6 million; 13! is over 6 billion.
+For n distinct values, the tree has n choices at the root, n − 1 below that, and so on down to 1. Multiplying those choices together gives the number of leaves, **n factorial**:
+
+```formula
+n! = n × (n − 1) × … × 2 × 1
+W = O(n × n!)
+10! = 3,628,800
+13! = 6,227,020,800
+where
+n: the number of distinct values to order
+n!: n factorial, the product of every whole number from 1 to n; the number of orderings of n distinct items (0! = 1)
+…: and so on, one less each time
+W: the total work to generate and copy every permutation (each copy costs up to n)
+O: Big-O, grows no faster than this up to a constant factor
+In words: n choices for the first position, n − 1 for the second, and so on, multiply to n factorial orderings: about 3.6 million for 10 values and over 6 billion for 13.
+```
+
+Repeated input values produce duplicate value sequences unless separately handled.
 
 ## Combinations
 
-Choosing k of n items without regard to order is subsets with a size limit. Using `start` again prevents `[2, 1]` from appearing after `[1, 2]`:
+Choosing k items from n without regard to order is subsets with a size limit. Using `start` again prevents `[2, 1]` from appearing after `[1, 2]`:
 
 ```python
 def combine(n, k):
@@ -148,7 +182,22 @@ def combine(n, k):
 #                  [2,3] [2,4] [3,4]
 ```
 
-There are C(n, k) = n! / (k!(n − k)!) results. The loop bound `n - need + 2` is already a small piece of **pruning**: if you need 2 more numbers, there's no point starting at n.
+The number of results is the **binomial coefficient**, "n choose k":
+
+```formula
+C(n, k) = n! / (k! × (n − k)!)
+C(4, 2) = 24 / (2 × 2) = 6
+where
+C(n, k): the number of ways to choose k items from n distinct items when order doesn't matter
+n: the number of items to choose from
+k: how many items each combination contains, from 0 to n
+n!: n factorial, n × (n − 1) × … × 1 (and 0! = 1)
+k!: k factorial, the number of orderings of the k chosen items
+(n − k)!: the factorial of the number of items left out
+In words: count the orderings of all n items, then divide out the orderings inside the chosen group and inside the left-out group, because they don't make a different combination.
+```
+
+That matches the 6 pairs that `combine(4, 2)` prints above. The loop bound `n - need + 2` is already a small piece of **pruning**: if you need 2 more numbers, there's no point starting at n.
 
 ## Pruning: the point of backtracking
 
@@ -208,6 +257,8 @@ The `i > start` condition is key: it allows `[2, 2]` (the second 2 chosen at a *
 
 ## Complexity at a glance
 
+Here n is the number of input elements, k the size of each combination, 2ⁿ the number of subsets, n! the number of permutations and C(n,k) the number of combinations, as worked out above. Each result costs up to n (or k) steps to copy.
+
 | Problem | Results | Time |
 |---|---|---|
 | Subsets | 2ⁿ | O(n·2ⁿ) |
@@ -215,15 +266,28 @@ The `i > start` condition is key: it allows `[2, 2]` (the second 2 chosen at a *
 | Combinations (0 ≤ k ≤ n) | C(n,k) | O(1 + k·C(n,k)) |
 | With pruning | varies | often far less |
 
-For subsets, permutations and combinations, working space is O(n), excluding output. With reusable candidates, path depth can instead reach target/min(candidate). In general count path, frames and constraint state separately. Counting can omit stored outputs but normally still explores all relevant branches; finding one solution can stop at the first success.
+For subsets, permutations and combinations, working space is O(n), excluding output. With reusable candidates, the path can be much longer than the number of candidates:
+
+```formula
+D_max = ⌊T / c_min⌋
+D_max = ⌊8 / 2⌋ = 4
+where
+D_max: the deepest the path (and the recursion) can go
+T: the target sum
+c_min: the smallest candidate value (a positive whole number)
+⌊ ⌋: floor: round down to a whole number
+In words: the longest path uses the smallest candidate over and over until the target is reached; for target 8 with smallest candidate 2, that is [2, 2, 2, 2].
+```
+
+In general count path, frames and constraint state separately. Counting can omit stored outputs but normally still explores all relevant branches; finding one solution can stop at the first success.
 
 ## Where backtracking shows up
 
-- **Regular expression engines.** Backtracking engines such as Python’s `re` can explore exponentially many alternatives for `(a+)+$` on `"aaaa…ab"`. This can cause **regular-expression denial of service (ReDoS)**. Cloudflare’s 2 July 2019 outage involved a different pattern with super-linear backtracking; it is not evidence that this exact pattern was deployed. RE2 and Rust’s `regex` bound a single search by O(mn) in regex size m and input length n, hence linear in n for a fixed regex; repeated-search APIs can have different bounds.
+- **Regular expression engines.** Backtracking engines such as Python’s `re` can explore exponentially many alternatives for `(a+)+$` on `"aaaa…ab"`. This can cause **regular-expression denial of service (ReDoS)**. Cloudflare’s 2 July 2019 outage involved a different pattern with super-linear backtracking; it is not evidence that this exact pattern was deployed. RE2 and Rust’s `regex` bound a single search by O(m × n), where m is the size of the regex and n the length of the input, hence linear in the input length for a fixed regex; repeated-search APIs can have different bounds.
 
 > [!note] Content gap
 > Per-length regex timings are omitted because no pinned interpreter, machine and benchmark support the original measurements.
-- **Dependency resolvers.** pip's resolver backtracks: it picks candidate versions and, on conflict, undoes choices and tries alternative compatible versions; those need not always be older.
+- **Dependency resolvers.** pip's resolver backtracks: it picks candidate versions and, after a conflict, undoes choices and tries alternative compatible versions; those need not always be older.
 - **SAT and constraint solvers** (next lesson), Prolog's execution model, parsers with alternatives, and puzzle solvers.
 
 ## Pitfalls
@@ -235,9 +299,9 @@ For subsets, permutations and combinations, working space is O(n), excluding out
 - **Exploding output.** No pruning helps if the answer itself has n! entries.
 
 ## Key takeaways
-- Backtracking is a depth-first walk over a decision tree, building one partial solution in shared state.
+- Backtracking is a depth-first walk over a state-space tree (its tree of decisions), building one partial solution in shared state.
 - Template: check for a complete solution, then for each valid choice: choose, explore, unchoose.
-- Subsets O(n·2ⁿ), permutations O(n·n!), combinations O(1 + k·C(n,k)) for 0 ≤ k ≤ n.
+- For n input elements: subsets cost O(n·2ⁿ), permutations O(n·n!), and combinations of size k cost O(1 + k·C(n,k)).
 - Use a `start` index to avoid reordered duplicates; sort and skip equal siblings for duplicate inputs.
 - Pruning abandons whole subtrees; sorted inputs often turn `continue` into `break`.
 

@@ -13,18 +13,38 @@ A processor can fetch and execute instructions beyond a branch before its direct
 
 ## What a misprediction costs
 
-In an additive model with a fixed average recovery penalty and no overlap with other counted stalls, estimated extra CPI is:
+In an additive model with a fixed average recovery penalty and no overlap with other counted stalls, mispredictions add this many cycles to every instruction on average:
 
-```
-branch CPI = branch fraction
-           x misprediction rate
-           x penalty (cycles)
+```formula
+CPI_br = F_br × m × c_mis
+m = 1 − A
+where
+CPI_br: the extra cycles per instruction caused by branch mispredictions
+F_br: the branch fraction: the share of executed instructions that are branches, between 0 and 1
+m: the misprediction rate: the share of branches predicted wrongly, between 0 and 1
+A: the predictor's accuracy: the share of branches predicted correctly, between 0 and 1
+c_mis: the misprediction penalty: the cycles lost recovering from each wrong prediction
+In words: only mispredicted branches cost anything, so the extra CPI is how often branches occur, times how often they are guessed wrong, times what each wrong guess costs.
 ```
 
-> [!example] Why 95% isn't good enough
-> Assume unchanged retired instruction count and clock frequency, with additive penalties. 20% of instructions are branches, the predictor is 95% accurate, and the penalty is 15 cycles.
-> Extra CPI = 0.2 × 0.05 × 15 = **0.15**.
-> On a 4-wide core whose ideal CPI is 0.25, that takes CPI to 0.40: the program runs **1.6× slower** than with perfect prediction. Getting to 98% accuracy brings the extra CPI down to 0.06.
+### Why 95% isn't good enough
+
+Assume unchanged retired instruction count and clock frequency, with additive penalties. 20% of instructions are branches, the predictor is 95% accurate, and the penalty is 15 cycles. The core is 4-wide, with an ideal CPI of 0.25 when every prediction is right:
+
+```formula
+CPI_br = 0.2 × (1 − 0.95) × 15 = 0.15
+CPI = CPI_base + CPI_br
+CPI = 0.25 + 0.15 = 0.40
+S = CPI / CPI_base = 0.40 / 0.25 = 1.6
+where
+CPI_br: the extra cycles per instruction from mispredictions
+CPI_base: the CPI with perfect prediction, 0.25 for this 4-wide core (it can finish up to 4 instructions per cycle)
+CPI: the actual average cycles per instruction
+S: the slowdown factor relative to perfect prediction; with the same instruction count and clock, time is proportional to CPI
+In words: 5% of branches being wrong adds 0.15 cycles to every instruction, which makes this core 1.6 times slower than with perfect prediction.
+```
+
+The program runs **1.6× slower** than with perfect prediction. Getting to 98% accuracy brings the extra CPI down to 0.2 × 0.02 × 15 = 0.06.
 
 Lower base CPI makes a given additional CPI more significant. Width and pipeline organisation can affect recovery, but neither alone determines a universal penalty or area cost.
 
@@ -55,7 +75,7 @@ The exit mispredicts, then flips the bit to N, so the first iteration of the *ne
 
 ### The 2-bit saturating counter
 
-A **2-bit counter** adds hysteresis: a strongly biased state needs two consecutive opposite outcomes to reverse its prediction. From a weak state, one opposite outcome is enough:
+A **2-bit saturating counter** adds hysteresis: a strongly biased state needs two consecutive opposite outcomes to reverse its prediction. From a weak state, one opposite outcome is enough:
 
 ```
 state  meaning             predict
@@ -63,12 +83,28 @@ state  meaning             predict
   2    weakly taken        T
   1    weakly not taken    N
   0    strongly not taken  N
-
-taken:     state + 1 (max 3)
-not taken: state - 1 (min 0)
 ```
 
-Taken increments the counter (stopping at 3), not taken decrements it (stopping at 0), and the top bit is the prediction. A single loop exit moves "strongly taken" to "weakly taken", which still predicts taken next time. Now there is only 1 miss per 10.
+Taken increments the counter (stopping at 3), not taken decrements it (stopping at 0), and the top bit is the prediction:
+
+```formula
+c′ = min(c + 1, 3)   if o = T
+c′ = max(c − 1, 0)   if o = N
+d = T   if c ≥ 2, else N
+where
+c: the current state of the counter, a whole number from 0 to 3 (two bits)
+c′: the state of the counter after the branch outcome is known
+o: the branch's actual outcome
+d: the direction the counter predicts before the outcome is known
+T: taken: the branch jumps to its target
+N: not taken: execution falls through to the next instruction
+min: the smaller of the two values, which stops the count at 3
+max: the larger of the two values, which stops the count at 0
+≥: is greater than or equal to
+In words: count up on taken and down on not taken, never leaving 0 to 3, and predict taken whenever the count is in the top half.
+```
+
+A single loop exit moves "strongly taken" to "weakly taken", which still predicts taken next time. Now there is only 1 miss per 10.
 
 ```python
 def two_bit(outcomes, start=1):
@@ -99,13 +135,13 @@ print(one_bit(loop), two_bit(loop))
 
 One-bit: 200 misses in 1,000 (80%). Two-bit: 101 (about 90%; the extra 1 is the first warm-up miss).
 
-### Aliasing
+### Predictor aliasing
 
-The table is indexed by only some PC bits, so two different branches can share an entry and corrupt each other's counters. This is **aliasing**. More capacity can reduce interference. Tags help distinguish entries, but finite capacity and partial tags do not eliminate every collision or replacement effect.
+The table is indexed by only some PC bits, so two different branches can share an entry and corrupt each other's counters. This is **predictor aliasing**. More capacity can reduce interference. Tags help distinguish entries, but finite capacity and partial tags do not eliminate every collision or replacement effect.
 
 ## Correlation: using global history
 
-A 2-bit counter only sees one branch's own past. But branches are often correlated with each other:
+A 2-bit saturating counter only sees one branch's own past. But branches are often correlated with each other:
 
 The following is source-level pseudocode; assume x and y stay unchanged. Compiler lowering may introduce, remove or invert machine branches.
 
@@ -117,9 +153,25 @@ if (x == 0 && y == 0) ...  // B3
 
 The third condition is determined by the first two conditions. When corresponding machine branches and relevant history are available, this provides a learnable correlation. A predictor that knows the last few outcomes of *all* branches can learn this.
 
-A **global history register** (GHR) is a shift register holding the outcomes of the last *n* branches (1 = taken). The **gshare** predictor (McFarling, 1993) XORs the GHR with the branch's PC to index a table of 2-bit counters. The same branch now gets a different counter for each recent history, so it can learn patterns.
+A **global history register** (GHR) is a shift register holding the outcomes of the most recent branches (1 = taken). The **gshare** predictor (McFarling, 1993) XORs the GHR with the branch's PC to index a table of 2-bit counters:
 
-For the following single-branch model, pass Boolean outcomes and an integer PC; it uses the low PC bits directly, without modelling instruction alignment or speculative history recovery. A pattern that defeats a plain 2-bit counter is strict alternation, T N T N:
+```formula
+i = (PC ⊕ GHR) mod 2^h
+i = 1011₂ ⊕ 0110₂ = 1101₂ = 13
+where
+i: the index of the 2-bit counter to use, from 0 to 2^h − 1
+PC: the program counter: the address of the branch instruction
+GHR: the global history register: the last h branch outcomes, one bit each (1 = taken)
+⊕: XOR (exclusive or), bit by bit: a result bit is 1 when exactly one of the two input bits is 1
+mod: the remainder after division; mod 2^h keeps only the low h bits
+h: the number of history bits, which sets the table size to 2^h counters; 4 in the example (16 counters)
+₂: the number is written in binary (base 2)
+In words: gshare mixes the branch's address with the recent history of all branches, so the same branch uses a different counter in each recent context.
+```
+
+In the example, a branch whose low PC bits are 1011 sees history 0110 and uses counter 13. The same branch now gets a different counter for each recent history, so it can learn patterns.
+
+For the following single-branch model, pass Boolean outcomes and an integer PC; it uses the low PC bits directly, without modelling instruction alignment or speculative history recovery. A pattern that defeats a plain 2-bit saturating counter is strictly alternating outcomes, T N T N:
 
 ```python
 def gshare(outcomes, pc=0x40, hbits=4):
@@ -144,7 +196,7 @@ alt = [True, False] * 500
 print(gshare(alt))   # 3
 ```
 
-Starting weakly not-taken, a lone 2-bit counter mispredicts **all 1,000** of these (it bounces between the two weak states). gshare, after a 3-miss warm-up, gets every one right, because "last outcome was T" and "last outcome was N" select different counters.
+Starting weakly not-taken, a lone 2-bit saturating counter mispredicts **all 1,000** of these (it bounces between the two weak states). gshare, after a 3-miss warm-up, gets every one right, because "last outcome was T" and "last outcome was N" select different counters.
 
 The same gshare with only 4 bits of history produces 108 misses in the 1,000-outcome trace above (10.8%) on the 9-taken loop: it can't see far enough back to count to 9. That is the motivation for long histories.
 

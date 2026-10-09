@@ -39,7 +39,21 @@ A simple **single-cycle** processor does all five steps in one long clock cycle.
 ```
 IF   ID   EX   MEM  WB
 200  100  200  200  100  (ps)
-total for a load = 800 ps
+```
+
+A load uses all five steps, so the single cycle must cover their sum:
+
+```formula
+T_1 = t_IF + t_ID + t_EX + t_MEM + t_WB
+T_1 = 200 + 100 + 200 + 200 + 100 = 800 ps
+f_1 = 1 / T_1 = 1 / 800 ps = 1.25 GHz
+where
+T_1: the clock period of the single-cycle design, in picoseconds (ps)
+t_IF, t_ID, t_EX, t_MEM, t_WB: the logic delay of each step (fetch, decode, execute, memory, write back), in picoseconds
+f_1: the resulting clock frequency, in gigahertz (GHz)
+ps: picoseconds; 1 ps = 10^-12 seconds, so 1,000 ps = 1 nanosecond
+GHz: gigahertz, 10^9 cycles per second
+In words: a single-cycle CPU's clock tick must be as long as all five steps of its slowest instruction put together.
 ```
 
 So the clock period is 800 ps (1.25 GHz), and each instruction takes one cycle. Most of the hardware sits idle most of the time: while the ALU is working, the fetch unit has nothing to do.
@@ -84,33 +98,79 @@ Between each pair of stages sits a **pipeline register** (named IF/ID, ID/EX, EX
 
 ### The clock period
 
-The clock now only needs to cover the slowest **stage**, not the whole instruction. Here that is 200 ps (IF, EX and MEM). In reality a pipeline register adds its own delay, setup time and clock skew, which must be budgeted. Assuming 20 ps of combined per-cycle boundary overhead gives a 220 ps period; this is a teaching assumption, not a measured device value.
+The clock now only needs to cover the slowest **stage**, not the whole instruction. In reality a pipeline register adds its own delay, setup time and clock skew, which must be budgeted:
+
+```formula
+T_clk = t_max + t_reg
+t_max = max(t_IF, t_ID, t_EX, t_MEM, t_WB)
+where
+T_clk: the pipelined clock period, in picoseconds (ps)
+t_IF, t_ID, t_EX, t_MEM, t_WB: the logic delay of each of the five stages, in picoseconds
+max: the largest of the values listed
+t_max: the delay of the slowest stage
+t_reg: the per-cycle overhead of a pipeline register (its own delay, setup time and clock skew), in picoseconds
+ps: picoseconds, 10^-12 seconds
+In words: every stage gets the same clock tick, so the tick must fit the slowest stage plus the register overhead.
+```
+
+Here the slowest stages are IF, EX and MEM at 200 ps. With no overhead the period is 200 ps. Assuming 20 ps of combined per-cycle boundary overhead gives 200 + 20 = 220 ps; this is a teaching assumption, not a measured device value.
 
 ## How much faster?
 
-For n ≥ 1 instructions on an initially empty, single-issue k-stage pipeline with no stalls, the first instruction takes k cycles to come out, and each subsequent one takes 1 more:
+Take a run of instructions on an initially empty, single-issue pipeline with no stalls. The first instruction needs one cycle per stage to come out, and each later one comes out 1 cycle after the one before:
 
-```
-cycles = k + (n - 1)
-```
-
-For 1,000 instructions:
-
-```
-single-cycle: 1000 x 800 ps = 800 ns
-pipelined:    1004 x 200 ps = 200.8 ns
-speedup ~ 3.98x
+```formula
+N_cyc = k + (n − 1)
+where
+N_cyc: the total clock cycles from the first fetch to the last write-back
+k: the number of pipeline stages; 5 here
+n: the number of instructions in the run, at least 1
+In words: filling the pipeline costs one cycle per stage, then every further instruction adds just one more cycle.
 ```
 
-The ideal speedup of a k-stage pipeline is k, here 5. We got about 4 for two reasons:
+For 1,000 instructions, compare the single-cycle design with the pipelined one:
 
-1. **Unbalanced stages.** ID and WB need only 100 ps but get a full 200 ps slot. The pipeline runs at the pace of its slowest stage. The best possible speedup here is 800 / 200 = 4.
+```formula
+T_single = n × T_1 = 1000 × 800 ps = 800 ns
+T_pipe = (k + n − 1) × T_clk
+T_pipe = 1004 × 200 ps = 200.8 ns
+S = T_single / T_pipe = 800 / 200.8 ≈ 3.98
+where
+T_single: the total time on the single-cycle design
+T_pipe: the total time on the pipelined design
+n: the number of instructions, 1,000
+k: the number of pipeline stages, 5
+T_1: the single-cycle clock period, 800 ps
+T_clk: the pipelined clock period, 200 ps (no register overhead)
+S: the speedup: how many times faster the pipeline is
+ps: picoseconds, 10^-12 seconds
+ns: nanoseconds, 10^-9 seconds; 1 ns = 1,000 ps
+≈: approximately equal to (rounded)
+In words: the pipeline runs the 1,000 instructions about 3.98 times faster than the single-cycle design.
+```
+
+The ideal speedup of a k-stage pipeline is k, here 5: that happens when the k stages are perfectly balanced, so each stage is exactly one k-th of the single-cycle period, and there is no register overhead. We got about 4 for two reasons:
+
+1. **Unbalanced stages.** ID and WB need only 100 ps but get a full 200 ps slot. The pipeline runs at the pace of its slowest stage.
 2. **Fill and drain.** The first k − 1 cycles have empty stages. With 1,000 instructions this barely matters (4 cycles); with 5 it would matter a lot.
 
-Add 20 ps of register overhead per stage and the cycle becomes 220 ps, so the speedup drops to about 800 / 220 ≈ 3.6.
+For a long run, n is so large that the fill cycles vanish and the speedup settles at the ratio of the two clock periods:
+
+```formula
+S_max = T_1 / T_clk
+S_max = 800 ps / 200 ps = 4
+S_max = 800 ps / 220 ps ≈ 3.6
+where
+S_max: the long-run speedup as the number of instructions grows very large
+T_1: the single-cycle clock period, 800 ps
+T_clk: the pipelined clock period: 200 ps without register overhead, 220 ps with 20 ps of overhead
+ps: picoseconds, 10^-12 seconds
+≈: approximately equal to (rounded)
+In words: in the long run the pipeline wins by the ratio of the old clock tick to the new one, so register overhead eats directly into the gain.
+```
 
 > [!warning] Throughput and latency differ
-> With a 200 ps cycle, a single load now takes 5 × 200 = 1,000 ps to pass through, compared with 800 ps unpipelined. In this comparison, pipelining raises throughput while increasing instruction latency. Balanced stages with no register overhead could preserve latency; real overhead and imbalance often increase it. Enough independent work allows the improved throughput to outweigh fill/drain overhead; billions of instructions are not required.
+> With a 200 ps cycle, a single load now takes five cycles of 200 ps, 1,000 ps in all, to pass through, compared with 800 ps unpipelined. In this comparison, pipelining raises throughput while increasing instruction latency. Balanced stages with no register overhead could preserve latency; real overhead and imbalance often increase it. Enough independent work allows the improved throughput to outweigh fill/drain overhead; billions of instructions are not required.
 
 ## Why RISC was designed for this
 
@@ -125,7 +185,7 @@ x86, with variable-length instructions from 1 to 15 bytes and memory operands on
 
 ## Real pipelines
 
-The five-stage design is a teaching model. Real implementations divide work differently, and “pipeline depth” may refer to different instruction paths or recovery events. A cross-product stage-count table is omitted because comparable primary documentation was not established for every entry.
+The five-stage design is a teaching model. Real implementations divide work differently, and “pipeline depth” may refer to different instruction paths or recovery events. A cross-product table of stage counts is omitted because comparable primary documentation was not established for every entry.
 
 Splitting a critical stage can shorten the clock period, while adding register overhead and potentially delaying particular result or branch-resolution paths. Not every hazard penalty necessarily increases: that depends on where stages are added and which bypass paths exist.
 
@@ -143,7 +203,7 @@ The next lesson covers each one and the tricks, chiefly **forwarding**, that kee
 - The ideal single-issue model overlaps instructions and completes one per cycle in steady state, with no hazards or resource conflicts.
 - Pipelining targets throughput; in the worked design each instruction takes longer to pass through.
 - The clock is set by the slowest stage plus pipeline register overhead, so unbalanced stages limit the speedup.
-- For n ≥ 1 in the ideal model, total cycles are k + n − 1. Long-run speedup approaches k only with balanced stages and negligible overhead.
+- In the ideal model, a run takes one cycle per stage to fill the pipeline, then one cycle for each further instruction. Long-run speedup approaches the number of stages only with balanced stages and negligible overhead.
 - Regular encodings and load/store organization simplify this pipeline model; many x86 implementations pipeline decoded micro-ops.
 
 ## Further reading

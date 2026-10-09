@@ -18,7 +18,7 @@ A **structural hazard** happens when two instructions need the same piece of har
 
 The classic example is memory. In cycle 4, instruction i1 is in MEM reading data while i4 is in IF fetching an instruction. With one single-ported memory, one of them must wait.
 
-Possible fixes include stalling, adding ports or separating resources. Many CPUs use **separate L1 instruction and data caches** (a "modified Harvard" design), and register files often have multiple access ports. The textbook 5-stage pipeline is designed so that structural hazards do not arise; in wider, real processors they appear as contention for ports and functional units.
+Possible fixes include stalling, adding ports or separating resources. Many CPUs use **separate L1 instruction and data caches** (a "modified Harvard" design), and register files often have multiple read and write ports. The textbook 5-stage pipeline is designed so that structural hazards do not arise; in wider, real processors they appear as contention for ports and functional units.
 
 ## Data hazards
 
@@ -97,7 +97,22 @@ add x6, x4, x5  !    add x6, x4, x5
 sw  x6, d            sw  x6, d
 ```
 
-The naive order has two load-use stalls (marked `!`). In the scheduled order every load has an independent instruction between it and its first dependent operation, so there are none: 12 cycles instead of 14. Compilers do this routinely (**instruction scheduling**), and it matters most on simple in-order cores such as small ARM microcontrollers.
+The naive order has two load-use stalls (marked `!`). In the scheduled order every load has an independent instruction between it and its first dependent operation, so there are none. Counting cycles for the 8 instructions from first fetch to last write-back:
+
+```formula
+N_cyc = k + (n − 1) + s_tot
+N_naive = 5 + (8 − 1) + 2 = 14
+N_sched = 5 + (8 − 1) + 0 = 12
+where
+N_cyc: the total clock cycles from the first fetch to the last write-back
+k: the number of pipeline stages, 5
+n: the number of instructions, 8 in each listing
+s_tot: the total stall cycles (bubbles) in the run: 2 for the naive order, 0 for the scheduled one
+N_naive, N_sched: the cycle counts for the naive and the scheduled order
+In words: each stall adds one cycle to the ideal fill-plus-one-per-instruction count, so removing both stalls saves 2 of 14 cycles.
+```
+
+Compilers do this routinely (**instruction scheduling**), and it matters most on simple in-order cores such as small ARM microcontrollers.
 
 ### Counting stalls in code
 
@@ -152,17 +167,36 @@ Real processors use **dynamic branch prediction**, the subject of the next lesso
 
 ## Putting numbers on it
 
-For a long run in this scalar model, ignoring fill/drain and avoiding double-counting overlapping penalties, hazards add stall cycles to ideal CPI 1:
+For a long run in this scalar model, ignoring fill/drain and avoiding double-counting overlapping penalties, hazards add stall cycles to the ideal CPI of 1. Each hazard type contributes how often it can occur, times how often it actually bites, times what it costs:
 
-```
-CPI = 1 + stall cycles per instruction
+```formula
+CPI = 1 + s
+s = Σ_h (F_h × p_h × c_h)
+where
+CPI: cycles per instruction, the average clock cycles per completed instruction
+1: the ideal CPI of a single-issue pipeline, which completes one instruction per cycle when nothing stalls
+s: the average stall cycles per instruction
+Σ_h: sigma: add up the bracketed term over every hazard type h
+h: one hazard type, such as load-use stalls or taken branches
+F_h: the fraction of all instructions that can cause hazard h (for example, the fraction that are loads), between 0 and 1
+p_h: the probability that such an instruction actually causes the stall (for example, that the next instruction depends on the load), between 0 and 1
+c_h: the penalty each time, in stall cycles
+In words: CPI is one plus the average number of stall cycles per instruction, and each hazard adds its frequency times its probability times its penalty.
 ```
 
-> [!example] A worked CPI
-> 25% of instructions are loads, and 40% of those are immediately followed by a dependent instruction (1-cycle stall each). 15% are branches; with predict-not-taken, 60% of them are taken, costing 2 cycles.
-> Assume these penalties are additive, and the stated dependencies need operands in EX. Load stalls: 0.25 × 0.4 × 1 = 0.10.
-> Branch stalls: 0.15 × 0.6 × 2 = 0.18.
-> CPI = 1 + 0.10 + 0.18 = **1.28**.
+A worked example: 25% of instructions are loads, and 40% of those are immediately followed by a dependent instruction (1-cycle stall each). 15% are branches; with predict-not-taken, 60% of them are taken, costing 2 cycles. Assume these penalties are additive, and the stated dependencies need operands in EX:
+
+```formula
+s_load = 0.25 × 0.4 × 1 = 0.10
+s_br = 0.15 × 0.6 × 2 = 0.18
+CPI = 1 + s_load + s_br
+CPI = 1 + 0.10 + 0.18 = 1.28
+where
+s_load: the stall cycles per instruction from load-use hazards: fraction of loads × fraction followed by a dependent instruction × 1-cycle penalty
+s_br: the stall cycles per instruction from taken branches: fraction of branches × fraction taken × 2-cycle penalty
+CPI: cycles per instruction including the stalls
+In words: load-use stalls add 0.10 cycles and taken branches add 0.18 cycles to every instruction on average, so CPI rises from 1 to 1.28.
+```
 
 Notice branches cost more than loads here. That is why branch prediction gets an entire lesson, and why it matters even more in deeper pipelines, where recovery penalties may be larger. Exact real-core cycle counts require a specified core and measurement.
 
@@ -175,7 +209,7 @@ Notice branches cost more than loads here. That is why branch prediction gets an
 - An immediate EX-stage load consumer costs one stall in this model; compilers schedule independent instructions into that slot.
 - WAR and WAW are name dependences; they don't matter in an in-order 5-stage pipeline but do in out-of-order cores.
 - Control hazards cost cycles proportional to how late the branch resolves; predicting, resolving early, and (historically) delay slots reduce them.
-- CPI = 1 + stalls per instruction, computed as frequency × probability × penalty for each hazard type.
+- In this model, CPI is 1 plus the average stall cycles per instruction; each hazard type contributes its frequency times the probability it stalls times its penalty.
 
 ## Further reading
 - [Hazard (computer architecture) — Wikipedia](https://en.wikipedia.org/wiki/Hazard_(computer_architecture))

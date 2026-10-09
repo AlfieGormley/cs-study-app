@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Check each dependence:\n\n```\nlw  -> add  (x1)  load-use: 1 stall\nadd -> sub  (x3)  ALU->ALU: 0\nlw  -> sub  (x1)  2+ apart: 0\nsub -> or   (x5)  ALU->ALU: 0\n```\n\n1. Ideal cycles = k + n − 1 = 5 + 3 = 8.\n2. Stalls = 1.\n3. Total = **9**.\n4. Without forwarding, each back-to-back dependence costs 2: 8 + 6 = 14.",
+    "workedExample": "Check each dependence:\n\n```\nlw  -> add  (x1)  load-use: 1 stall\nadd -> sub  (x3)  ALU->ALU: 0\nlw  -> sub  (x1)  2+ apart: 0\nsub -> or   (x5)  ALU->ALU: 0\n```\n\nThen add the stalls to the ideal pipelined cycle count:\n\n```formula\nN_cyc = k + (n − 1) + s_tot\nN_cyc = 5 + 3 + 1 = 9\nN_nofwd = 5 + 3 + 6 = 14\nwhere\nN_cyc: the cycles from the first IF to the last WB, with forwarding\nk: the number of pipeline stages, 5\nn: the number of instructions, 4\ns_tot: the total stall cycles: 1 with forwarding (the load-use pair)\nN_nofwd: the cycle count without forwarding, where each of the 3 back-to-back dependences costs 2 stalls (6 in all)\nIn words: 8 cycles for four instructions plus one load-use bubble makes 9; without forwarding, six bubbles make 14.\n```",
     "link": {
       "title": "Operand forwarding — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Operand_forwarding"
@@ -127,11 +127,11 @@
     "options": [
       {
         "text": "1.25",
-        "explanation": "Correct. Load-use: 0.3 × 0.5 × 1 = 0.15. Branches: 0.2 × 0.5 × 1 = 0.10. CPI = 1 + 0.15 + 0.10 = 1.25."
+        "explanation": "Correct. Load-use stalls add 0.3 × 0.5 × 1 = 0.15 cycles per instruction and branches add 0.2 × 0.5 × 1 = 0.10, so CPI is 1 + 0.15 + 0.10 = 1.25."
       },
       {
         "text": "1.50",
-        "explanation": "This charges every load and every branch a stall (0.3 + 0.2). Only dependent loads and taken branches stall."
+        "explanation": "This charges every load and every branch a stall (0.3 + 0.2). Only loads followed by a dependent instruction, and taken branches, stall."
       },
       {
         "text": "1.15",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "For each hazard: fraction of instructions × probability it bites × penalty.\n\n```\nload-use: 0.30 x 0.5 x 1 = 0.15\nbranch:   0.20 x 0.5 x 1 = 0.10\n                           ----\nextra CPI                  0.25\n```\n\nCPI = 1 + 0.25 = **1.25**.",
+    "workedExample": "For each hazard: fraction of instructions × probability it bites × penalty.\n\n```formula\ns_ld = 0.30 × 0.5 × 1 = 0.15\ns_br = 0.20 × 0.5 × 1 = 0.10\nCPI = 1 + s_ld + s_br\nCPI = 1 + 0.15 + 0.10 = 1.25\nwhere\ns_ld: the load-use stall cycles per instruction: 30% are loads, half of those have an immediate dependent, 1 stall each\ns_br: the branch stall cycles per instruction: 20% are branches, half are taken, 1 cycle each\nCPI: cycles per instruction; 1 is the ideal for this pipeline with no stalls\nIn words: the stalls add a quarter of a cycle to every instruction on average, so CPI is 1.25.\n```",
     "link": {
       "title": "Hazard (computer architecture) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hazard_(computer_architecture)"
@@ -229,7 +229,7 @@
       },
       {
         "text": "Swap the two `add`s",
-        "explanation": "Then `add x5` comes before `lw x4`, which reads x4 too early and changes the result."
+        "explanation": "Then `add x5` comes before `lw x4`, which reads x4 before it is loaded and changes the result."
       },
       {
         "text": "Insert a `nop` after each load",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Time per instruction = CPI × clock period (take A's clock as 1).\n\n```\nA: 1 + 0.2x0.6x2           = 1.24\nB: 1 + 0.2x0.6x1 + 0.2x0.3 = 1.18\n   1.18 x 1.03              = 1.215\n```\n\n1. B's CPI is lower: smaller penalty, partly offset by new stalls.\n2. B's clock period is 3% longer.\n3. Net: 1.24 / 1.215 ≈ **1.02**, B about 2% faster.\n4. Real design decisions often come down to margins this thin, which is why architects simulate rather than guess.",
+    "workedExample": "Time per instruction is CPI times the clock period. Take A's clock period as 1.\n\n```formula\nt = CPI × T_clk\nCPI_A = 1 + 0.2 × 0.6 × 2 = 1.24\nCPI_B = 1 + 0.2 × 0.6 × 1 + 0.2 × 0.3\nCPI_B = 1.18\nt_A = 1.24 × 1 = 1.24\nt_B = 1.18 × 1.03 ≈ 1.215\nS = t_A / t_B = 1.24 / 1.215 ≈ 1.02\nwhere\nt, t_A, t_B: the average time per instruction, in units of A's clock period\nCPI, CPI_A, CPI_B: cycles per instruction; 1 is the ideal\nT_clk: the clock period: 1 for A, 1.03 for B (3% longer)\n0.2 × 0.6: branches (20%) that are taken (60%); they cost 2 cycles on A and 1 on B\n0.2 × 0.3: branches (20%) that stall 1 cycle on B waiting for an operand (30% of them)\nS: the speedup of B over A\n≈: approximately equal to (rounded)\nIn words: B saves 0.06 cycles per instruction but its clock is 3% slower, leaving it only about 2% faster.\n```\n\nReal design decisions often come down to margins this thin, which is why architects simulate rather than guess.",
     "link": {
       "title": "Classic RISC pipeline — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Classic_RISC_pipeline"
@@ -288,12 +288,12 @@
         "explanation": "Correct. The buggy unit sees that the first instruction's destination (x0) matches a source of the second and forwards 7 instead of using the hard-wired zero. Correct result: 0 + 5 = 5."
       },
       {
-        "text": "x3 = 5 either way; writes to x0 are discarded",
+        "text": "x3 gets 5 either way; writes to x0 are discarded",
         "explanation": "The register file does discard the write, but forwarding bypasses the register file. Without the check, the 7 is forwarded anyway."
       },
       {
         "text": "x3 = 7; it should be 12",
-        "explanation": "Neither number is right. x3 = x0 + x4, so the buggy value is 7 + 5 and the correct value is 0 + 5."
+        "explanation": "Neither number is right. The second instruction adds x0 and x4, so the buggy value is 7 + 5 and the correct value is 0 + 5."
       },
       {
         "text": "The pipeline stalls forever",
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. x0 always reads as 0 in RISC-V and MIPS; writes to it are ignored.\n2. Instruction 1 computes 7 and carries 'destination = x0' in EX/MEM.\n3. Instruction 2 has source x0. The buggy unit matches 0 == 0 and forwards 7.\n4. x3 = 7 + 5 = **12** (wrong). Correct: 0 + 5 = **5**.\n5. Fix: forward only if the earlier instruction writes a register **and** its destination is not x0.",
+    "workedExample": "1. x0 always reads as 0 in RISC-V and MIPS; writes to it are ignored.\n2. Instruction 1 computes 7 and holds 'destination = x0' in EX/MEM.\n3. Instruction 2 has source x0. The buggy unit matches 0 == 0 and forwards 7.\n\n```formula\nx3 = x0 + x4\nx3_bug = 7 + 5 = 12\nx3_ok = 0 + 5 = 5\nwhere\nx3, x0, x4: RISC-V registers; the second instruction writes the sum of x0 and x4 into x3\nx3_bug: the value x3 gets when the forwarding unit wrongly supplies the 7 computed for x0\nx3_ok: the correct value, using the hard-wired zero in x0\nIn words: forwarding the discarded 7 gives 12, but x0 must always read as 0, so the right answer is 5.\n```\n\nFix: forward only if the earlier instruction writes a register **and** its destination is not x0.",
     "link": {
       "title": "Operand forwarding — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Operand_forwarding"

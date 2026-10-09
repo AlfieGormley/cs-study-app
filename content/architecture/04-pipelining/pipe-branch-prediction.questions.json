@@ -15,15 +15,15 @@
       },
       {
         "text": "2.7",
-        "explanation": "This uses the hit rate rather than miss rate. A correct prediction incurs no misprediction-recovery penalty in this model; prediction itself still uses resources."
+        "explanation": "This uses the accuracy (90%) rather than the misprediction rate (10%). A correct prediction incurs no misprediction-recovery penalty in this model; prediction itself still uses resources."
       },
       {
         "text": "1.2",
-        "explanation": "This is miss rate × penalty (0.1 × 12), the extra cycles per *branch*, not per instruction."
+        "explanation": "This is misprediction rate × penalty (0.1 × 12), the extra cycles per *branch*, not per instruction."
       }
     ],
     "answer": 0,
-    "workedExample": "Extra CPI = branch fraction × miss rate × penalty.\n\n```\n0.25 x (1 - 0.90) x 12\n= 0.25 x 0.10 x 12\n= 0.3\n```\n\nIf the base CPI were 1, the program would run at 1.3: the added recovery term accounts for 0.3 / 1.3 ≈ 23% of modelled execution time.",
+    "workedExample": "Only mispredicted branches pay the penalty:\n\n```formula\nCPI_br = F_br × (1 − A) × c_mis\nCPI_br = 0.25 × (1 − 0.90) × 12\nCPI_br = 0.25 × 0.10 × 12 = 0.3\nwhere\nCPI_br: the extra cycles per instruction from mispredictions\nF_br: the fraction of instructions that are branches, 0.25\nA: the predictor's accuracy, 0.90, so 1 − A = 0.10 is the misprediction rate\nc_mis: the misprediction penalty, 12 cycles\nIn words: a quarter of instructions are branches, a tenth of those are guessed wrong, and each wrong guess costs 12 cycles, adding 0.3 cycles per instruction.\n```\n\nIf the base CPI were 1, the program would run at CPI 1.3, so the recovery term would account for 0.3 / 1.3 ≈ 23% of modelled execution time.",
     "link": {
       "title": "Branch predictor — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Branch_predictor"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "For the stated backward branch BTFN predicts taken without using execution history. If its outcomes are 99 taken followed by one not-taken exit, it is correct 99 times out of 100.",
+    "workedExample": "For the stated backward branch BTFN predicts taken without using execution history. If its outcomes are 99 taken followed by one not-taken exit, it is correct in 99 of every 100 outcomes.",
     "link": {
       "title": "Branch predictor — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Branch_predictor"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Trace state, prediction, outcome:\n\n```\nstate pred  out  result  next\n  2    T     T   hit       3\n  3    T     N   miss      2\n  2    T     N   miss      1\n  1    N     T   miss      2\n  2    T     T   hit       3\n```\n\nTotal: **3 misses**. Note the hysteresis: it took two Ns to flip the prediction to N, and then one T to flip it back from weak N.",
+    "workedExample": "Trace state, prediction, outcome:\n\n```\nstate pred  out  result  next\n  2    T     T   hit       3\n  3    T     N   miss      2\n  2    T     N   miss      1\n  1    N     T   miss      2\n  2    T     T   hit       3\n```\n\nTotal: **3 misses**. Note the hysteresis: it took two N outcomes to flip the prediction to N, and then one T to flip it back from weak N.",
     "link": {
       "title": "Branch predictor — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Branch_predictor"
@@ -131,7 +131,7 @@
       },
       {
         "text": "1-bit 50%, 2-bit 75%",
-        "explanation": "Correct. The 1-bit predictor misses the N and then the next T: 2 of 4. The 2-bit counter only drops to weakly taken on the N, so it misses only the N: 1 of 4."
+        "explanation": "Correct. The 1-bit predictor misses the N and then the next T: 2 of 4. The 2-bit saturating counter only drops to weakly taken on the N, so it misses only the N: 1 of 4."
       },
       {
         "text": "1-bit 50%, 2-bit 100%",
@@ -194,7 +194,7 @@
         "explanation": "True in this early-fetch model: the BTB supplies a candidate target before full instruction decoding. Other front ends can organise prediction differently."
       },
       {
-        "text": "A lone 2-bit counter predicts the pattern T, N, T, N, ... well",
+        "text": "A lone 2-bit saturating counter predicts the pattern T, N, T, N, ... well",
         "explanation": "False. It can't represent alternation; depending on its starting state it gets 50% or even 0% right. A history-based predictor such as gshare learns it."
       },
       {
@@ -202,8 +202,8 @@
         "explanation": "True. Recording the last n outcomes of all branches lets, for example, `if (x == 0 && y == 0)` be predicted from the earlier tests of x and y."
       },
       {
-        "text": "Aliasing means a single branch jumps to two different targets",
-        "explanation": "False. Aliasing means different branches or history contexts map to the same predictor entry and may interfere; it is not the definition of multiple jump targets."
+        "text": "Predictor aliasing means a single branch jumps to two different targets",
+        "explanation": "False. Predictor aliasing means different branches or history contexts map to the same predictor entry and may interfere; it is not the definition of multiple jump targets."
       }
     ],
     "answer": [
@@ -211,7 +211,7 @@
       1,
       3
     ],
-    "workedExample": "Check each one against what each structure does:\n\n1. RAS: stack of return addresses. **True.**\n2. BTB: PC-indexed target cache used in IF. **True.**\n3. 2-bit counter on alternation: from state 1 it bounces 1→2→1 and misses every time; from state 3 it bounces 3→2→3 and misses every N. **False.**\n4. GHR + gshare/TAGE: correlation. **True.**\n5. The option defining aliasing as one branch having two targets is **false**. Different branches or contexts sharing one predictor entry is aliasing.",
+    "workedExample": "Check each one against what each structure does:\n\n1. RAS: stack of return addresses. **True.**\n2. BTB: PC-indexed target cache used in IF. **True.**\n3. 2-bit saturating counter on alternation: from state 1 it bounces 1→2→1 and misses every time; from state 3 it bounces 3→2→3 and misses every N. **False.**\n4. GHR + gshare/TAGE: correlation. **True.**\n5. The option defining predictor aliasing as one branch having two targets is **false**. Different branches or contexts sharing one predictor entry is predictor aliasing.",
     "link": {
       "title": "Branch predictor — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Branch_predictor"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "XOR bit by bit:\n\n```\nPC    1 0 1 1\nGHR   0 1 1 0\nXOR   1 1 0 1  = 8 + 4 + 1 = 13\n```\n\nThe same branch with a different recent history (say `0111`) would use entry 1011 XOR 0111 = 1100 = 12, a different counter. That is how gshare learns history-dependent behaviour while spreading entries across the table.",
+    "workedExample": "gshare XORs the branch address bits with the global history, bit by bit:\n\n```\nPC    1 0 1 1\nGHR   0 1 1 0\nXOR   1 1 0 1\n```\n\n```formula\ni = PC ⊕ GHR\ni = 1011₂ ⊕ 0110₂ = 1101₂\ni = 8 + 4 + 1 = 13\ni′ = 1011₂ ⊕ 0111₂ = 1100₂ = 12\nwhere\ni: the index of the 2-bit counter gshare uses, from 0 to 15 in a 16-entry table\nPC: the low 4 bits of the branch's address (program counter), 1011\nGHR: the 4-bit global history register: the last 4 branch outcomes, 0110\n⊕: XOR (exclusive or), bit by bit: a result bit is 1 when exactly one input bit is 1\n₂: the number is written in binary (base 2)\ni′: the index the same branch would use with a different history, 0111\nIn words: 1011 XOR 0110 is binary 1101, which is entry 13; a different history sends the same branch to a different entry, 12.\n```\n\nThat is how gshare learns history-dependent behaviour while spreading entries across the table.",
     "link": {
       "title": "Branch predictor — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Branch_predictor"
@@ -255,15 +255,15 @@
     "options": [
       {
         "text": "About 1.03×, the same as the accuracy gain",
-        "explanation": "The miss rate halves (6% to 3%), but the effect on total time depends on both the base CPI and the recovery term."
+        "explanation": "The misprediction rate halves (6% to 3%), but the effect on total time depends on both the base CPI and the recovery term."
       },
       {
-        "text": "2×, because the miss rate halved",
+        "text": "2×, because the misprediction rate halved",
         "explanation": "Only the misprediction part of CPI halves; the base 0.3 does not change."
       },
       {
         "text": "About 1.24×",
-        "explanation": "Correct. CPI goes from 0.3 + 0.2 × 0.06 × 16 = 0.492 to 0.3 + 0.2 × 0.03 × 16 = 0.396. 0.492 / 0.396 ≈ 1.24."
+        "explanation": "Correct. CPI falls from 0.3 + 0.2 × 0.06 × 16 = 0.492 to 0.3 + 0.2 × 0.03 × 16 = 0.396, and 0.492 / 0.396 ≈ 1.24."
       },
       {
         "text": "About 1.5×",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Old CPI = 0.3 + 0.2 × 0.06 × 16 = 0.492. New CPI = 0.3 + 0.2 × 0.03 × 16 = 0.396. With unchanged instruction count and clock, speedup = 0.492 / 0.396 ≈ 1.24. Recovery CPI halves; base CPI does not.",
+    "workedExample": "Add the misprediction term to the base CPI for each predictor:\n\n```formula\nCPI = CPI_0 + F_br × m × c_mis\nCPI_old = 0.3 + 0.2 × 0.06 × 16 = 0.492\nCPI_new = 0.3 + 0.2 × 0.03 × 16 = 0.396\nS = 0.492 / 0.396 ≈ 1.24\nwhere\nCPI, CPI_old, CPI_new: cycles per instruction (with the old or new predictor)\nCPI_0: the base CPI with perfect prediction, 0.3\nF_br: the fraction of instructions that are branches, 0.2\nm: the misprediction rate: 0.06 at 94% accuracy, 0.03 at 97%\nc_mis: the misprediction penalty, 16 cycles\nS: the speedup; with unchanged instruction count and clock, time is proportional to CPI\n≈: approximately equal to (rounded)\nIn words: halving the misprediction rate halves only the recovery part of CPI, 0.192 down to 0.096, giving about 1.24 times the speed.\n```\n\nRecovery CPI halves; base CPI does not.",
     "link": {
       "title": "The microarchitecture of Intel, AMD and VIA CPUs (Agner Fog)",
       "url": "https://www.agner.org/optimize/microarchitecture.pdf"
@@ -281,7 +281,7 @@
     "id": "pipe-branch-prediction-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "For ordinary, non-volatile, non-atomic unsigned count and ordinary err, with no concurrent access, a C loop uses `if (err != 0) count++;`, true once in about 10,000 iterations. It is rewritten as `count += (err != 0);`. What can you conclude about performance from this source change alone?",
+    "prompt": "For an ordinary unsigned count that is neither `volatile` nor atomic, and an ordinary err, with no concurrent access, a C loop uses `if (err != 0) count++;`, true once in about 10,000 iterations. It is rewritten as `count += (err != 0);`. What can you conclude about performance from this source change alone?",
     "options": [
       {
         "text": "A big speedup, because branches are always slow",
@@ -339,7 +339,7 @@
       1,
       4
     ],
-    "workedExample": "Work out misses per period for each pattern:\n\n| Pattern | Misses | Accuracy |\n|---|---|---|\n| all T | 0 | 100% |\n| 9T, N | 1 / 10 | 90% |\n| T, N | 1 or 2 / 2 | 50% or 0% |\n| random | ~1 / 2 | ~50% |\n| 99T, N | 1 / 100 | 99% |\n\nThe 2-bit counter is good for biased branches and loop exits; it does not track phase within a period. It can score well on a biased periodic pattern without learning its exact sequence.",
+    "workedExample": "Work out misses per period for each pattern:\n\n| Pattern | Misses | Accuracy |\n|---|---|---|\n| all T | 0 | 100% |\n| 9T, N | 1 / 10 | 90% |\n| T, N | 1 or 2 / 2 | 50% or 0% |\n| random | ~1 / 2 | ~50% |\n| 99T, N | 1 / 100 | 99% |\n\nThe 2-bit saturating counter is good for biased branches and loop exits; it does not track phase within a period. It can score well on a biased periodic pattern without learning its exact sequence.",
     "link": {
       "title": "Branch predictor — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Branch_predictor"

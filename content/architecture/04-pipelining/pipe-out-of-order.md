@@ -172,9 +172,9 @@ A **reorder buffer**, discussed by Smith and Pleszkun in their work on precise i
 - Instructions execute out of order and write results into their ROB entry (or a physical register), not the architectural state.
 - The head of the ROB **retires** (commits) only when it has completed. Retirement is in order, up to the supported retirement width per cycle.
 - If the head instruction faulted, the core discards it and every younger entry, and the exception appears exactly at that instruction: **precise exceptions**.
-- If a branch turns out mispredicted, every entry after it is **squashed**. The rename table is restored to its state at the branch, and fetch restarts on the right path.
+- If a branch turns out mispredicted, every entry after it is **squashed**. The rename table is restored to the state it had at the branch, and fetch restarts on the right path.
 
-This is what makes **speculative execution** safe, architecturally: wrong-path instructions execute, but never commit. But "never commits" is not the same as "leaves no trace": some microarchitectural effects, such as cache state, may persist; recovery of predictor history is implementation-dependent, which is what the Spectre and Meltdown vulnerabilities revealed.
+This is what makes **speculative execution** safe, architecturally: wrong-path instructions execute, but never commit. But "never commits" is not the same as "leaves no trace": some microarchitectural effects, such as cache state, may persist, and recovery of predictor history is implementation-dependent. The Spectre and Meltdown vulnerabilities exploited exactly such leftover traces.
 
 ### Memory ordering
 
@@ -189,7 +189,25 @@ Loads and stores need extra care, because whether two of them conflict depends o
 > [!note] Product data omitted
 > Exact commercial decode widths and ROB sizes are omitted because sufficiently reliable, consistently defined primary-source figures were not established here. Instruction counts, µop counts and ROB entries are not interchangeable.
 
-For a hypothetical 80 ns miss at 4 GHz, latency is 320 cycles. Maintaining allocation at four entries per cycle while retirement is blocked would require space for roughly 1,280 entries. This is an occupancy estimate, assuming sufficient independent work and no earlier resource limit. It does not prove all real misses stall for a fixed duration. A larger window may discover independent memory accesses whose latencies overlap (**memory-level parallelism**); bandwidth and other queues still limit progress.
+While a load at the head of the reorder buffer waits for memory, nothing behind it can retire, but the CPU front end keeps allocating new entries. How many entries would it take to keep allocating for the whole wait? Convert the miss time to cycles, then multiply by the allocation rate. For a hypothetical 80 ns miss at 4 GHz:
+
+```formula
+L = t_miss × f
+L = 80 ns × 4 GHz = 320
+E = L × w
+E = 320 × 4 = 1280
+where
+L: the miss latency counted in clock cycles
+t_miss: the miss latency in time, 80 nanoseconds (ns) here
+f: the clock frequency, 4 gigahertz (GHz) here
+ns: nanoseconds, 10^-9 seconds
+GHz: gigahertz, 10^9 cycles per second, so 80 ns × 4 GHz = 80 × 10^-9 × 4 × 10^9 = 320
+E: the number of reorder-buffer entries needed to keep allocating until the load returns
+w: the allocation width: new entries allocated per cycle, 4 here
+In words: an 80 ns miss lasts 320 cycles at 4 GHz, and allocating four entries every one of those cycles needs about 1,280 free entries.
+```
+
+So maintaining allocation at four entries per cycle while retirement is blocked would require space for roughly 1,280 entries. This estimates how many entries would be occupied, assuming sufficient independent work and no earlier resource limit. It does not prove all real misses stall for a fixed duration. A larger window may discover independent memory accesses whose latencies overlap (**memory-level parallelism**); bandwidth and other queues still limit progress.
 
 ## Why not let the compiler do it?
 

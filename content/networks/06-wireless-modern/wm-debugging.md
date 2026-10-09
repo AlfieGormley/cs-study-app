@@ -69,7 +69,7 @@ How to read it:
 
 - **`* * *`** at hop 3: no reply was received for those probes. Filtering, loss, rate limits or different paths can explain it. Later replies show that some probes reached farther, not that every packet passed one identified router.
 - **The jump at hop 5** (10 ms → 78 ms) could be consistent with a longer path, but hostnames and hop RTT differences alone cannot identify a cable, its distance or the exact forward-link delay.
-- **Latency that rises at one hop and falls again** at later hops can reflect reply processing, rate limits, differing return paths or different samples. It does not establish equivalent transit delay for application traffic.
+- **Latency that rises at one hop and falls again** at later hops can reflect reply processing, rate limits, differing return paths or different samples. It does not establish equivalent forwarding delay for application traffic.
 - Paths are often **asymmetric**: replies may come back a different way, which traceroute cannot show. Run it in both directions when you can.
 
 **mtr** runs traceroute continuously and shows loss and latency per hop. Low intermediate response rates with healthy destination samples often suggest reply handling rather than persistent forwarding loss. They do not prove that explanation: probes are separate samples and can take different paths. End-to-end measurements and captures are needed; genuine forwarding loss need not appear identically at every later line.
@@ -108,7 +108,25 @@ ttfb    0.910
 total   0.955
 ```
 
-Each value is measured from the start, so subtract to get each phase:
+Each value is measured from the start, so subtract the previous milestone to get each phase:
+
+```formula
+T_phase = t_end − t_start
+T_tcp = t_connect − t_dns
+T_tcp = 0.088 s − 0.004 s = 0.084 s = 84 ms
+where
+T_phase: the duration of one phase, in seconds (s)
+t_end: the cumulative time at which the phase finished
+t_start: the cumulative time at which the phase began (the previous milestone)
+T_tcp: the duration of the TCP handshake
+t_connect: curl's time_connect value, 0.088 s here
+t_dns: curl's time_namelookup value, 0.004 s here
+s: second
+ms: millisecond, one thousandth of a second
+In words: every curl timer runs from the very start, so each phase is the difference between two neighbouring timers.
+```
+
+Applying the same subtraction to every milestone:
 
 | Phase | Calculation | Time |
 |---|---|---|
@@ -199,31 +217,73 @@ ping -4 -M do -s 1472 host  # IPv4 1500
 ping -4 -M do -s 1372 host  # IPv4 1400
 ```
 
-1,472 bytes of payload + 8 ICMP + 20 IP = 1,500. These sizes assume IPv4 without options. Probe success/failure also depends on ICMP policy, reverse-path size and local cached PMTU; it is evidence, not proof of the application’s exact PMTU. Correct filtering of relevant ICMP errors, suitable MTU and, for TCP, carefully configured MSS clamping can help. MSS clamping does not repair UDP or every directional problem.
+The `-s` value is the ICMP payload only; the headers make up the rest of the IP packet:
+
+```formula
+L_IP = L_data + H_ICMP + H_IP
+L_IP = 1,472 + 8 + 20 = 1,500 B
+L_IP = 1,372 + 8 + 20 = 1,400 B
+where
+L_IP: the total IPv4 packet size, in bytes (B)
+L_data: the ICMP echo payload size set with -s
+H_ICMP: the ICMP echo header, 8 B
+H_IP: the IPv4 header without options, 20 B
+B: byte
+In words: to test a 1,500-byte path, ask for 28 bytes less payload than the MTU.
+```
+
+These sizes assume IPv4 without options. Probe success/failure also depends on ICMP policy, reverse-path size and local cached PMTU; it is evidence, not proof of the application’s exact PMTU. Correct filtering of relevant ICMP errors, suitable MTU and, for TCP, carefully configured MSS clamping can help. MSS clamping does not repair UDP or every directional problem.
 
 ### Loss-limited throughput
 
-TCP throughput falls sharply with loss, especially over long RTTs. The simplified Reno congestion-avoidance Mathis model below assumes periodic loss, one ACK per segment, adequate data/window, light/moderate loss and no RTO-dominated behaviour:
+TCP throughput falls sharply with loss, especially over long RTTs. The simplified Reno congestion-avoidance Mathis model below assumes periodic loss, one ACK per segment, adequate data/window, light/moderate loss and no RTO-dominated behaviour. Its constant 1.22 is approximately the square root of 3/2, which falls out of the saw-tooth shape of Reno's congestion window: it grows by one segment per round trip and halves at each loss.
 
-```
-rate ~= (MSS / RTT) x (1.22 / sqrt(p))
-
-MSS 1460 B, RTT 100 ms, p = 0.0001
-1460 x 8 / 0.1   = 116,800 bit/s
-x 1.22 / 0.01    = ~14.2 Mbit/s
+```formula
+X ≈ (MSS / RTT) × (1.22 / √(p))
+MSS / RTT = 1460 × 8 bit / 0.1 s
+MSS / RTT = 116,800 bit/s
+X ≈ 116,800 × 1.22 / √(0.0001)
+X ≈ 116,800 × 1.22 / 0.01
+X ≈ 14,249,600 bit/s ≈ 14.2 Mbit/s
+where
+X: the model's long-run throughput for one TCP flow, in bits per second (bit/s)
+MSS: maximum segment size: the most payload in one TCP segment, 1,460 bytes here (× 8 to convert to bits)
+RTT: the round-trip time, 100 ms = 0.1 seconds (s)
+p: the packet loss probability as a fraction: 0.0001 is 0.01%, one packet in 10,000
+√: square root; √(0.0001) = 0.01
+bit: one binary digit
+bit/s: bits per second
+Mbit/s: megabits per second, one million bits per second
+s: second
+≈: approximately equal to
+In words: throughput is one segment per round trip, multiplied by a factor that grows as loss gets rarer; halving RTT doubles it, but cutting loss by 100 times only multiplies it by 10.
 ```
 
 The supplied Reno model returns about 14.2 Mbit/s; it is not a general law for CUBIC or BBR, nor a ceiling established by a ping loss estimate. Low loss can be missed in short samples. Parallel streams can also hide per-flow limits, so compare single- and multi-stream tests with endpoint resource measurements.
 
 ### Window-limited throughput
 
-Without loss, a single flow is capped at **window / RTT**. To fill 1 Gbit/s at 100 ms RTT, TCP needs a window equal to the bandwidth-delay product:
+Without loss, a single flow is capped at **one window per round trip**: the sender can have at most one window of unacknowledged data in flight per round trip. To fill 1 Gbit/s at 100 ms RTT, TCP needs a window equal to the bandwidth-delay product:
 
-```
-1e9 bit/s x 0.1 s / 8 = 12.5 MB
+```formula
+X_max = 8 × W / RTT
+BDP = R × RTT / 8
+BDP = 10^9 bit/s × 0.1 s / 8
+BDP = 12,500,000 B = 12.5 MB
+where
+X_max: the window-limited throughput, in bits per second (bit/s)
+W: the effective window: the unacknowledged data allowed in flight, in bytes (B)
+RTT: the round-trip time, in seconds (s); 0.1 s here
+BDP: the bandwidth-delay product: the data that must be in flight to keep the link full, in bytes
+R: the link rate to fill, 1 Gbit/s = 10^9 bit/s here
+bit/s: bits per second
+B: byte, 8 bits; multiplying or dividing by 8 converts between bytes and bits
+MB: megabyte, 10^6 bytes
+s: second
+In words: a full pipe holds rate × round-trip time of data, so a 1 Gbit/s, 100 ms path needs 12.5 MB in flight.
 ```
 
-If the measured effective flight window is 4,000,000 bytes at a fixed 100 ms RTT, the simple window/RTT limit is 320 Mbit/s. Socket-memory settings are not identical to that window; other bottlenecks can reduce achieved throughput.
+If the measured effective flight window is 4,000,000 bytes at a fixed 100 ms RTT, the simple limit is 8 × 4,000,000 bits ÷ 0.1 s = 320 Mbit/s. Socket-memory limits are not identical to that window; other bottlenecks can reduce achieved throughput.
 
 ### Other usual suspects
 

@@ -93,9 +93,38 @@ The answer is an **overlay**: a tunnel endpoint, such as a hypervisor, switch or
              host A->B  :4789 VNI=24b
 ```
 
-- The 24-bit **VXLAN Network Identifier** allows about 16 million segments, against 4,094 usable VLAN IDs.
-- RFC 7348 recommends deriving the outer UDP source port from inner headers to provide entropy for outer-header ECMP. Actual path use depends on the hash, mapping and traffic.
-- With outer IPv4 without options, UDP, VXLAN and untagged inner Ethernet without inner FCS, the outer IP packet contains **50 bytes in addition to the inner IP packet**: 20 + 8 + 8 + 14. Thus a 1,500-byte underlay IP MTU permits at most 1,450 inner IP bytes under these assumptions. Outer Ethernet is outside that IP MTU; tags, outer IPv6 or other encapsulation alter the budget. A tenant MTU of 1,500 instead needs at least 1,550 underlay IP bytes here, not necessarily a 9,000-byte jumbo frame. Getting this wrong produces the classic "small requests work, big ones hang" bug.
+- The 24-bit **VXLAN Network Identifier** allows about 16 million segments, against 4,094 usable VLAN IDs (the calculation follows this list).
+- RFC 7348 recommends deriving the outer UDP source port from inner headers to add variation for outer-header ECMP. Actual path use depends on the hash, mapping and traffic.
+- With outer IPv4 without options, UDP, VXLAN and untagged inner Ethernet without inner FCS, the outer IP packet contains **50 bytes in addition to the inner IP packet**: 20 + 8 + 8 + 14. Thus a 1,500-byte underlay IP MTU permits at most 1,450 inner IP bytes under these assumptions (calculation below). Outer Ethernet is outside that IP MTU; tags, outer IPv6 or other encapsulation alter the budget. A tenant MTU of 1,500 instead needs at least 1,550 underlay IP bytes here, not necessarily a 9,000-byte jumbo frame. Getting this wrong produces the classic "small requests work, big ones hang" bug.
+
+Every extra bit in an identifier field doubles the number of values it can hold:
+
+```formula
+N_VNI = 2^24 = 16,777,216
+N_VLAN = 2^12 − 2 = 4,094
+where
+N_VNI: the number of distinct VXLAN segment identifiers; 2^24 means 2 raised to the power 24, that is 24 twos multiplied together, because the field is 24 bits long
+N_VLAN: the number of usable VLAN IDs; the 12-bit field has 4,096 values, but 0 and 4,095 are reserved
+In words: twelve extra bits multiply the number of isolated segments by about four thousand.
+```
+
+The MTU budget adds up every header that sits inside the outer IP packet:
+
+```formula
+H = H_IP + H_UDP + H_VX + H_Eth
+H = 20 + 8 + 8 + 14 = 50 B
+X_max = MTU_u − H = 1,500 − 50 = 1,450 B
+where
+H: the encapsulation overhead counted against the underlay MTU, in bytes (B)
+H_IP: the outer IPv4 header, 20 B without options
+H_UDP: the outer UDP header, 8 B
+H_VX: the VXLAN header, 8 B
+H_Eth: the inner Ethernet header, 14 B (untagged, no FCS)
+X_max: the largest inner IP packet that fits without fragmentation
+MTU_u: the underlay IP MTU, 1,500 B here
+B: byte
+In words: VXLAN costs 50 bytes inside the outer IP packet, so a 1,500-byte underlay leaves 1,450 bytes for the tenant's IP packet.
+```
 
 Something must know which physical host each virtual address lives on. In VXLAN fabrics, BGP EVPN often distributes that mapping. A cloud provider may use a proprietary distributed virtual-network datapath. Do not infer that every provider uses standard VXLAN or the same per-host architecture; AWS’s VPC behaviour below is an API-level example.
 
@@ -105,7 +134,7 @@ An AWS VPC is a regional logical network supporting IPv4 and/or supported IPv6 c
 
 - **CIDR block**: e.g. `10.20.0.0/16`. Plan it so it does not overlap anything you may connect it to later (on-premises, other VPCs).
 - **Subnets**: each lives in one availability zone. For an ordinary AWS private IPv4 subnet, the first four addresses and the last are reserved. These are offsets from the subnet base, not necessarily addresses ending .0–.3. The VPC DNS resolver is available at the primary VPC CIDR base plus two (and link-local addresses); each subnet’s base-plus-two is reserved, not necessarily its resolver endpoint. AWS does not support subnet broadcast. BYOIP has documented exceptions to the ordinary reservation rule.
-- **Route tables**: a subnet is associated with one table, which can be shared by several subnets. A public IPv4 subnet has a direct Internet-gateway route; an instance also needs suitable public addressing, routes and filtering to communicate. Private subnets may use NAT, private connectivity or no Internet route. IPv6 egress uses different mechanisms.
+- **Route tables**: a subnet is associated with one table, which can be shared by several subnets. A public IPv4 subnet has a direct Internet-gateway route; an instance also needs suitable public addressing, routes and filtering to communicate. Private subnets may use NAT, private connectivity or no Internet route. IPv6 outbound Internet access uses different mechanisms.
 - **Security groups**: attached to instances or network interfaces.
 - **Network ACLs**: attached to subnets.
 
@@ -119,6 +148,22 @@ for az, net in zip("abc", subnets):
 # a 10.20.0.0/20 4091
 # b 10.20.16.0/20 4091
 # c 10.20.32.0/20 4091
+```
+
+The arithmetic behind that output: a prefix length p leaves 32 − p bits for host addresses.
+
+```formula
+A = 2^(32 − p)
+A_20 = 2^(32 − 20) = 2^12 = 4,096
+U_20 = A_20 − 5 = 4,091
+S = 2^(20 − 16) = 2^4 = 16
+where
+A: the number of addresses in an IPv4 block with prefix length p
+p: the prefix length, the number after the slash in CIDR notation, e.g. 20 in /20
+A_20: the number of addresses in one /20 subnet
+U_20: the usable addresses in a /20 after AWS reserves 5 in every subnet (the first four and the last)
+S: the number of /20 subnets that fit in one /16
+In words: each extra prefix bit halves a block, so a /20 has 4,096 addresses and a /16 holds 16 of them.
 ```
 
 A `/16` holds sixteen `/20`s, so this plan leaves thirteen spare for private subnets and future growth.
@@ -148,9 +193,9 @@ Security groups can also reference other security groups: an eligible rule such 
 ## Trade-offs and failure modes
 
 - **Controller availability.** Controller-loss behaviour is configured: in OpenFlow fail-secure mode retained entries can continue, subject to timeout expiry and other changes. Fail-standalone/hybrid behaviour and preinstalled local failover differ. Replication can improve availability but is not mandated by SDN itself.
-- **Consistency during updates.** Changing many switches is not atomic; for a moment some use old rules and some new, which can cause loops or black holes. Techniques include two-phase updates with version tags.
+- **Consistency during updates.** Changing many switches is not atomic; for a moment some use old rules and some new, which can cause loops or packets silently dropped for lack of a matching rule. Techniques include two-phase updates with version tags.
 - **Scale of reactive control.** Reactive control consumes controller/channel/table resources. Test its capacity and use aggregate/proactive rules where suitable; no universal flow-rate cutoff or deployment share is assumed here.
-- **Debuggability.** A virtual network's state lives in software and hypervisors. Cloud tools like VPC Flow Logs and reachability analysers exist because `traceroute` inside an overlay often tells you little.
+- **Debuggability.** The state of a virtual network lives in software and hypervisors. Cloud tools like VPC Flow Logs and reachability analysers exist because `traceroute` inside an overlay often tells you little.
 
 ## Key takeaways
 - SDN exposes programmable control over forwarding; architecture, replication and retained local control vary.
@@ -160,7 +205,7 @@ Security groups can also reference other security groups: an eligible rule such 
 - Prepare new paths before using them, and retain old rules until in-flight old-path packets have drained.
 
 > [!note] Evidence limits
-> Universal SDN adoption shares, TCAM capacities, controller rate limits and unverified provider-internal datapaths are omitted. Cloud rules and product features must be rechecked against current documentation. This lesson’s arithmetic and table traces are models; no live AWS or OpenFlow fabric was deployed during review.
+> Universal SDN adoption shares, TCAM capacities, controller rate limits and unverified provider-specific datapaths are omitted. Cloud rules and product features must be rechecked against current documentation. This lesson’s arithmetic and table traces are models; no live AWS or OpenFlow fabric was deployed during review.
 
 ## Further reading
 - [Software-defined networking — Wikipedia](https://en.wikipedia.org/wiki/Software-defined_networking)

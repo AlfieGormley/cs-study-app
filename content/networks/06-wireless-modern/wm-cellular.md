@@ -12,7 +12,7 @@ For applications, mobile paths introduce changing capacity, radio-state transiti
 
 ## The big picture
 
-Every cellular network has three parts: the phone (the **UE**, user equipment), the **radio access network** (RAN) of base stations, and the **core network** that handles identity, sessions and the gateway to the Internet.
+Every cellular network has three parts: the phone (the **UE**, user equipment), the **radio access network** (RAN) of base stations, and the **core network** that handles identity, sessions and the packet gateway to the Internet.
 
 ```
  UE ~~radio~~ eNodeB/gNodeB
@@ -30,7 +30,7 @@ Every cellular network has three parts: the phone (the **UE**, user equipment), 
 |---|---|---|
 | Base station | eNodeB | gNodeB |
 | Attach, mobility | MME | AMF |
-| Session control | distributed across MME and gateway control functions | SMF |
+| Session control | distributed across MME and gateway control functions | SMF (session management function) |
 | Packet gateway | S-GW + P-GW | UPF |
 | Subscriber data / authentication | HSS with associated authentication functions | UDM/UDR for subscriber data; AUSF for authentication |
 
@@ -38,19 +38,47 @@ The 5G core defines **service-based** control-plane functions with HTTP-based se
 
 ### Tunnels keep your IP address still
 
-For an IP session, session establishment selects/allocates addressing and user-plane resources. LTE uses EPS bearers with a P-GW anchor. In 5G, the SMF manages the PDU session and address allocation, potentially using a UPF or external allocation mechanism; a session-anchor UPF forwards user traffic. Not every PDU session carries IP: Ethernet and unstructured types also exist. Relevant radio-to-core user-plane interfaces use **GTP-U**, whose registered destination UDP port is 2152.
+For an IP session, session establishment selects/allocates addressing and user-plane resources. LTE uses EPS bearers with a P-GW anchor. In 5G, the session management function (SMF) manages the PDU session and address allocation, potentially using a UPF or external allocation mechanism; a session-anchor UPF forwards user traffic. Not every PDU session carries IP: Ethernet and unstructured types also exist. Relevant radio-to-core user-plane interfaces use **GTP-U**, whose registered destination UDP port is 2152.
 
-The gateway is the **anchor**: to the Internet, your phone lives at the gateway. During a supported handover that preserves the session anchor/address, user-plane paths can be updated while the application retains its IP address. Connections can survive, but radio interruption, loss, session changes or timeout can still break them; no particular vehicle speed guarantees continuity.
+The P-GW or anchor UPF is the **session anchor**: to the Internet, your phone lives there. During a supported handover that preserves the session anchor/address, user-plane paths can be updated while the application retains its IP address. Connections can survive, but radio interruption, loss, session changes or timeout can still break them; no particular vehicle speed guarantees continuity.
 
 Moving to an independently addressed Wi-Fi path commonly changes the effective endpoint address. Keeping the old path alive, provider-integrated access, tunnels or mobility-capable transports can change the outcome.
 
 ## Scheduled radio access
 
-LTE and NR use OFDM-based downlink resource allocation. A resource block spans **12 subcarriers**; the number of active subcarriers depends on the channel configuration. In the conventional LTE example, 15 kHz spacing gives 180 kHz per resource block and a 1 ms subframe scheduling interval. Later features and specialised modes qualify a universal 1 ms rule. LTE uplink commonly uses DFT-spread OFDM (SC-FDMA), rather than simply the same downlink waveform.
+LTE and NR use OFDM-based downlink resource allocation. A resource block spans **12 subcarriers**; the number of active subcarriers depends on the channel configuration. The width of one resource block follows directly:
+
+```formula
+W_RB = 12 × Δf
+W_RB = 12 × 15 kHz = 180 kHz
+where
+W_RB: the width of one resource block, in kilohertz (kHz)
+Δf: delta-f, the subcarrier spacing: the gap between neighbouring subcarrier centres, 15 kHz in LTE
+kHz: kilohertz, one thousand hertz (cycles per second)
+In words: a resource block is twelve subcarriers side by side, so its width is twelve times the spacing.
+```
+
+In the conventional LTE example, 15 kHz spacing gives 180 kHz per resource block and a 1 ms subframe scheduling interval. Later features and specialised modes qualify a universal 1 ms rule. LTE uplink commonly uses DFT-spread OFDM (SC-FDMA), rather than simply the same downlink waveform.
 
 For dynamically scheduled uplink data without an existing grant, a connected UE can request resources and receive an uplink grant. Existing/configured grants and random-access procedures mean a fresh request/grant is not required for every packet. Scheduling coordinates access but does not eliminate random-access collisions or inter-cell interference; fairness is a scheduler policy, not an automatic guarantee.
 
-5G NR adds flexible **numerology**. Common examples use 15, 30, 60 or 120 kHz spacing. This is not the complete set in later releases. For normal cyclic prefix, the corresponding full-slot duration is `1 ms / 2^μ` with spacing `15 × 2^μ kHz`; mini-slot transmission need not occupy a full slot:
+5G NR adds flexible **numerology**. Common examples use 15, 30, 60 or 120 kHz spacing. This is not the complete set in later releases. Each step doubles the subcarrier spacing and halves the slot. For normal cyclic prefix (14 OFDM symbols per slot):
+
+```formula
+Δf = 15 kHz × 2^μ
+T_slot = 1 ms / 2^μ
+μ = 1:  Δf = 30 kHz,  T_slot = 0.5 ms
+μ = 3:  Δf = 120 kHz,  T_slot = 0.125 ms
+where
+Δf: delta-f, the subcarrier spacing, in kilohertz (kHz)
+μ: mu, the numerology index, a whole number: 0, 1, 2 or 3 in these examples; 2^μ means 2 raised to the power μ, so 1, 2, 4 or 8
+T_slot: the duration of one full slot, in milliseconds (ms)
+kHz: kilohertz, one thousand hertz
+ms: millisecond, one thousandth of a second
+In words: doubling the subcarrier spacing makes each symbol, and so each slot, half as long.
+```
+
+Spacing and symbol length are inverses because an OFDM symbol must last one cycle of the spacing: 1 / 15 kHz is about 66.7 µs. Shorter slots let the scheduler act more often, which lowers radio latency; wider spacing also tolerates the larger frequency errors of high bands. Mini-slot transmission need not occupy a full slot:
 
 | Spacing | Slot length | Typical use |
 |---|---|---|
@@ -87,7 +115,7 @@ Radio activity can contribute substantially to energy use, depending on the devi
 
 - **Idle**: the UE has no active RRC connection, but can perform paging monitoring, measurements, reselection and other procedures. It is not powered off.
 - **Connected**: RRC context supports scheduled communication; grants and discontinuous reception (DRX) still affect timing and power. Connected does not mean continuously transmitting or always at maximum power.
-- NR **RRC_INACTIVE** retains access-stratum context and can reduce resumption work relative to idle. Its supported use is release/deployment-specific; related LTE suspension and newer inactive-state data features make “all packets always need full promotion” too broad.
+- NR **RRC_INACTIVE** retains access-stratum context and can make resuming a connection less work than starting from idle. Its supported use is release/deployment-specific; related LTE suspension and newer inactive-state data features make “all packets always need full promotion” too broad.
 
 Two costs follow:
 
@@ -96,7 +124,32 @@ Two costs follow:
 
 ### Worked example: polling versus batching
 
-Use a toy model: instantaneous requests each add an interval `[t, t + 10)` of activity. Count the union of those intervals. Ignore promotion time, transfers, DRX, other applications and observation-window clipping:
+Use a toy model: each instantaneous request at time t keeps the radio active from t until 10 seconds later. Count the union of those intervals, so overlapping tails are counted once. Ignore promotion time, transfers, DRX, other applications and observation-window clipping. Sorting requests by time, each one adds whichever is smaller, a full tail or the gap since the previous request:
+
+```formula
+ΔT_i = min(T_tail, t_i − t_{i−1})
+T_on = Σ ΔT_i
+N_poll = 3600 s / 30 s = 120
+T_poll = 120 × 10 s = 1,200 s
+N_batch = 3600 s / 300 s = 12
+T_batch = 12 × 10 s = 120 s
+where
+ΔT_i: delta-T-i, the extra active time added by request i, in seconds (s)
+min: the minimum function: the smaller of its two values
+T_tail: the tail: how long the radio stays active after a request, 10 s in this model
+t_i: the time of request i, in seconds
+t_{i−1}: the time of the previous request; for the very first request, ΔT_1 is a full tail
+T_on: the total time the radio is active, in seconds
+Σ: sigma, "the sum of": add up ΔT_i for every request
+N_poll: the number of requests in one hour (3,600 s) when polling every 30 s
+T_poll: the active time for polling, where every gap exceeds the tail so each request adds a full 10 s
+N_batch: the number of requests in one hour when batching every 300 s
+T_batch: the active time for batching
+s: second
+In words: a request that arrives during an existing tail only extends it; a request after the tail ends pays a whole new tail.
+```
+
+With polling every 30 s, each gap is longer than the 10 s tail, so every request pays in full. The same rule as Python:
 
 ```python
 from math import isfinite

@@ -85,7 +85,7 @@ ICPC’s June 2025 guidance describes approximately **150–200 faults annually*
 
 ## The last mile
 
-The **last mile** (or access network) connects homes and businesses to their ISP. It is one possible bottleneck; aggregation, interconnection, servers and local Wi-Fi can also limit service.
+The **last mile** (or access network) connects homes and businesses to their ISP. It is one possible bottleneck; aggregation networks, interconnection, servers and local Wi-Fi can also limit service.
 
 | Technology | Medium | Rate interpretation |
 |---|---|---|
@@ -104,7 +104,54 @@ The **last mile** (or access network) connects homes and businesses to their ISP
 
 ## The physics of latency
 
-Light in optical fibre travels at about c / 1.47, roughly 204,000 km/s, or about **5 µs per km**. A useful rule: **1 ms of round-trip time per 100 km** of fibre.
+Light slows down in glass. How much is set by the glass's refractive index:
+
+```formula
+v = c / n
+v = 299,792 km/s / 1.47 ≈ 204,000 km/s
+t_km = 1 km / v ≈ 4.9 µs ≈ 5 µs
+RTT = 2 × d / v
+RTT = 2 × 100 km / 204,000 km/s ≈ 1 ms
+where
+v: the speed of light in the fibre, in kilometres per second (km/s)
+c: the speed of light in a vacuum, about 299,792 km/s
+n: the refractive index of the fibre's glass core, about 1.47 (vacuum is exactly 1)
+t_km: the one-way delay per kilometre of fibre
+RTT: the propagation round-trip time: there and back, ignoring every other delay
+d: the one-way fibre route length, in kilometres (km)
+km: kilometre
+µs: microsecond, one millionth of a second
+ms: millisecond, one thousandth of a second
+≈: approximately equal to
+In words: light in fibre covers about 204 km every millisecond, so each 100 km of route adds about 1 ms of round-trip time.
+```
+
+So light in fibre travels at roughly 204,000 km/s, about **5 µs per km**. A useful rule: **1 ms of round-trip time per 100 km** of fibre. The same formula, with the number of legs made explicit, covers satellites, where the signal goes up and down in vacuum at the full speed c:
+
+```formula
+RTT = m × d / v
+RTT_fibre = 2 × 5,570 km / 204,000 km/s
+RTT_fibre ≈ 0.0546 s = 54.6 ms
+RTT_GEO = 4 × 35,786 km / 299,792 km/s
+RTT_GEO ≈ 0.477 s = 477 ms
+RTT_LEO = 4 × 550 km / 299,792 km/s
+RTT_LEO ≈ 0.0073 s = 7.3 ms
+where
+RTT: the propagation round-trip time, in seconds (s) or milliseconds (ms)
+m: the number of one-way legs the signal travels: 2 for a direct path (there and back), 4 for a satellite bent pipe (up, down, up, down)
+d: the length of each leg, in kilometres (km)
+v: the propagation speed: about 204,000 km/s in fibre, 299,792 km/s in vacuum
+RTT_fibre: a hypothetical 5,570 km fibre route
+RTT_GEO: a geostationary satellite overhead, 35,786 km up
+RTT_LEO: a low-Earth-orbit satellite overhead, 550 km up
+km/s: kilometres per second
+s: second
+ms: millisecond
+≈: approximately equal to
+In words: a GEO hop costs almost half a second however fast the link, while a LEO hop costs only a few milliseconds.
+```
+
+The same model in Python:
 
 ```python
 C = 299_792            # km/s in vacuum
@@ -139,14 +186,14 @@ The trade-offs:
 
 - Coverage and capacity determine constellation size; not every LEO service requires thousands of satellites.
 - Terminals need suitable satellite tracking and handover, using electronically steered arrays or other supported antenna designs. Handover performance is deployment-specific.
-- Traffic must reach a terrestrial gateway somewhere to connect with ground Internet services. Inter-satellite links can move that gateway farther from the user.
+- Traffic must reach a terrestrial gateway somewhere to connect with ground Internet services. Inter-satellite links can move that ground station farther from the user.
 - **Laser inter-satellite links** travel approximately at vacuum light speed. A suitably short space route can beat a longer/slower fibre route in propagation, but orbital geometry, actual routing and processing determine the result.
-- Shared capacity, obstructions, atmospheric conditions and available gateways affect performance.
+- Shared capacity, obstructions, atmospheric conditions and available ground gateways affect performance.
 
 | | GEO example | LEO example |
 |---|---|---|
 | Altitude | 35,786 km | Assumed 550 km |
-| Four vertical legs at c | about 477 ms | about 7.3 ms |
+| Four vertical legs at light speed | about 477 ms | about 7.3 ms |
 | Apparent motion | approximately fixed for a ground observer | moves across the sky |
 | Coverage design | non-polar geometry, beam and capacity constraints | constellation, tracking and handover constraints |
 

@@ -131,15 +131,15 @@
     "id": "sched-thread-apis-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You submit 10 tasks to `ThreadPoolExecutor(max_workers=4)`. Each task just calls `time.sleep(1)`. Roughly how long until all results are available?",
+    "prompt": "You submit 10 jobs to `ThreadPoolExecutor(max_workers=4)`. Each job just calls `time.sleep(1)`. Roughly how long until all results are available?",
     "options": [
       {
         "text": "About 1 second",
-        "explanation": "Only 4 tasks can run at once. The other 6 wait in the queue for a free worker."
+        "explanation": "Only 4 jobs can run at once. The other 6 wait in the queue for a free worker."
       },
       {
         "text": "About 2.5 seconds",
-        "explanation": "Tasks can't be split across workers: each needs a full second on one worker, so the work proceeds in whole waves."
+        "explanation": "Jobs can't be split across workers: each needs a full second on one worker, so the work proceeds in whole waves."
       },
       {
         "text": "About 10 seconds",
@@ -147,11 +147,11 @@
       },
       {
         "text": "About 3 seconds",
-        "explanation": "Correct. 10 tasks over 4 workers needs ⌈10/4⌉ = 3 waves of 1 second each."
+        "explanation": "Correct. 10 jobs over 4 workers needs 3 waves (10 / 4 = 2.5, rounded up to whole waves) of 1 second each."
       }
     ],
     "answer": 3,
-    "workedExample": "1. 4 workers, each running one task at a time.\n2. Seconds 0–1: tasks 1–4. Seconds 1–2: tasks 5–8. Seconds 2–3: tasks 9–10 (two workers idle).\n3. Number of waves = ⌈10 / 4⌉ = 3, so about 3 seconds.\n4. The GIL doesn't get in the way because `time.sleep` releases it, as does real blocking I/O.",
+    "workedExample": "1. 4 workers, each running one job at a time.\n2. Seconds 0–1: jobs 1–4. Seconds 1–2: jobs 5–8. Seconds 2–3: jobs 9–10 (two workers idle).\n3. Count the waves and multiply by the time per wave:\n\n```formula\nN_waves = ⌈N_jobs / N_workers⌉\nN_waves = ⌈10 / 4⌉ = ⌈2.5⌉ = 3\nT ≈ N_waves × t_job = 3 × 1 s = 3 s\nwhere\nN_waves: how many rounds of jobs the pool runs\nN_jobs: jobs submitted, 10 here\nN_workers: worker threads, 4 here\n⌈x⌉: ceiling: round x up to the next whole number, because a part-filled wave still takes a whole job's time\nT: total elapsed time, in seconds (s)\nt_job: time for one job, 1 s here\n≈: approximately equal to (ignores overhead)\ns: seconds\nIn words: share the jobs between the workers, round up to whole waves, and each wave lasts one job.\n```\n\n4. So it takes about 3 seconds.\n5. The GIL doesn't get in the way because `time.sleep` releases it, as does real blocking I/O.",
     "link": {
       "title": "concurrent.futures — Python docs",
       "url": "https://docs.python.org/3/library/concurrent.futures.html"
@@ -161,7 +161,7 @@
     "id": "sched-thread-apis-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A service runs on 16 cores. Each request spends about 40 ms waiting for a remote API and 10 ms computing. Using the rule of thumb `threads = cores × (1 + wait/compute)`, how many worker threads should you start with?",
+    "prompt": "A service runs on 16 cores. Each request spends about 40 ms waiting for a remote API and 10 ms computing. Using this rule of thumb, how many worker threads should you start with?\n\n```formula\nN_thr = N_cpu × (1 + t_wait / t_cpu)\nwhere\nN_thr: the number of threads in the pool\nN_cpu: the number of CPU cores\nt_wait: time each request spends waiting, in milliseconds (ms)\nt_cpu: time each request spends computing, in ms\nms: milliseconds, thousandths of a second\nIn words: the more time requests spend waiting compared with computing, the more threads each core needs.\n```",
     "options": [
       {
         "text": "16",
@@ -173,15 +173,15 @@
       },
       {
         "text": "80",
-        "explanation": "Correct. wait/compute = 40/10 = 4, so 16 × (1 + 4) = 80."
+        "explanation": "Correct. Waiting divided by computing is 40 ms / 10 ms = 4, so 16 × (1 + 4) = 80."
       },
       {
         "text": "800",
-        "explanation": "That treats the ratio as 50 (or multiplies by request time). The formula uses the ratio of wait to compute, 4."
+        "explanation": "That treats the ratio as 50 (or multiplies by request time). The formula uses the ratio of waiting time to computing time, which is 4."
       }
     ],
     "answer": 2,
-    "workedExample": "1. wait / compute = 40 ms / 10 ms = 4.\n2. Each thread keeps a core busy only 10/50 = 20% of the time, so you need about 5 threads per core to keep it busy.\n3. threads = 16 × (1 + 4) = **80**.\n\nTreat this as a starting point. Measure throughput and latency, and remember the remote API may become the bottleneck before your cores do.",
+    "workedExample": "1. Each request is 40 ms of waiting plus 10 ms of computing, 50 ms in all, so a thread keeps a core busy only 10 / 50 = 20% of the time. You need about 5 threads per core to keep it busy.\n2. The rule of thumb gives the same answer:\n\n```formula\nN_thr = N_cpu × (1 + t_wait / t_cpu)\nN_thr = 16 × (1 + 40 ms / 10 ms)\nN_thr = 16 × (1 + 4) = 80\nwhere\nN_thr: the suggested number of threads\nN_cpu: the number of cores, 16 here\nt_wait: waiting time per request, 40 ms here\nt_cpu: computing time per request, 10 ms here\nms: milliseconds, thousandths of a second\nIn words: 5 threads per core (1 computing plus 4 waiting) times 16 cores is 80 threads.\n```\n\nSo start with **80**. Treat this as a starting point. Measure throughput and latency, and remember the remote API may become the bottleneck before your cores do.",
     "link": {
       "title": "Thread pool — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Thread_pool"
@@ -219,7 +219,7 @@
       2,
       3
     ],
-    "workedExample": "The GIL is one lock that must be held to **execute Python bytecode**.\n\n1. Pure-Python CPU work: always needs the GIL, so no parallelism.\n2. Blocking I/O and long C-level work that release the GIL: other threads run meanwhile.\n3. Correctness: the GIL is not a portable atomicity guarantee for compound shared operations; switching points and extension behaviour vary.\n4. Implementation: `threading.Thread` creates a real OS thread; the OS schedules it, and it then waits for the GIL.",
+    "workedExample": "The GIL is one lock that must be held to **execute Python bytecode**.\n\n1. Pure-Python CPU work: always needs the GIL, so no parallelism.\n2. Blocking I/O and long C-level work that release the GIL: other threads run meanwhile.\n3. Correctness: the GIL is not a portable atomicity guarantee for multi-step shared operations; switching points and extension behaviour vary.\n4. Implementation: `threading.Thread` creates a real OS thread; the OS schedules it, and it then waits for the GIL.",
     "link": {
       "title": "Global interpreter lock — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Global_interpreter_lock"
@@ -229,7 +229,7 @@
     "id": "sched-thread-apis-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "For independent pure-Python CPU-bound image tasks in one GIL-enabled CPython interpreter, which option can use multiple CPU cores, provided task sizes amortise startup and data-transfer overhead?",
+    "prompt": "For independent pure-Python CPU-bound image jobs in one GIL-enabled CPython interpreter, which option can use multiple CPU cores, provided job sizes amortise startup and data-transfer overhead?",
     "options": [
       {
         "text": "`ThreadPoolExecutor(max_workers=8)`",
@@ -279,7 +279,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Trace it:\n\n1. Both parent tasks reach the barrier, ensuring they occupy the two workers before either submits its child.\n2. Each `parent` submits a `child`. Both children go into the queue.\n3. Each `parent` then blocks in `f.result()` waiting for its child.\n4. A child can only run on a free worker, but both workers are blocked inside `parent`.\n5. Nobody can make progress: deadlock.\n\nWith 3 workers it would work, which is why this bug often hides until load increases. Fixes: a separate pool for child tasks, not blocking inside tasks (compose futures or use `asyncio`), or doing the child work inline.",
+    "workedExample": "Trace it:\n\n1. Both parent jobs reach the barrier, ensuring they occupy the two workers before either submits its child.\n2. Each `parent` submits a `child`. Both children go into the queue.\n3. Each `parent` then blocks in `f.result()` waiting for its child.\n4. A child can only run on a free worker, but both workers are blocked inside `parent`.\n5. Nobody can make progress: deadlock.\n\nWith 3 workers it would work, which is why this bug often hides until load increases. Fixes: a separate pool for child jobs, not blocking inside jobs (compose futures or use `asyncio`), or doing the child work inline.",
     "link": {
       "title": "concurrent.futures — Python docs",
       "url": "https://docs.python.org/3/library/concurrent.futures.html"

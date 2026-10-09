@@ -20,6 +20,8 @@ Real-time work sits above all of this, in strict-priority classes that the fair 
 | 6.6 (2023) | EEVDF replaces CFS's pick logic |
 | 6.12 (2024) | sched_ext: schedulers in BPF |
 
+The O(...) labels are Big O notation, where n is the number of runnable tasks: O(n) means picking the next task took time proportional to n, and O(1) means it took the same time however many tasks there were.
+
 The O(1) scheduler was fast but relied on heuristics to guess which tasks were interactive, much like MLFQ. Those heuristics could be fooled, and desktop latency suffered under load. Con Kolivas's fairness-based RSDL patches showed a simpler approach worked, and Ingo Molnar wrote CFS in response.
 
 ## Scheduling classes
@@ -42,15 +44,27 @@ Ignoring throttling and fair-server service, an eligible `SCHED_FIFO` thread out
 
 CFS's design starts from an imaginary "ideal multi-tasking CPU" that runs all *n* runnable tasks simultaneously, each at 1/*n* speed. Real hardware can run only one task per CPU at a time, so CFS tracks how far each task has fallen behind that ideal.
 
-The tool is **virtual runtime** (`vruntime`), in nanoseconds. When a task runs for a real time *Δ*, its vruntime grows by:
+The tool is **virtual runtime** (`vruntime`), in nanoseconds. Every task has a **scheduling weight** (set by its nice value, below); a normal nice 0 task has weight 1024. When a task runs, its vruntime is advanced by the real time it ran, scaled by how its weight compares with 1024:
 
+```formula
+v_new = v_old + t_run × 1024 / w
+v_new = 50 ms + 4 ms × 1024 / 1024
+v_new = 54 ms
+where
+v_new: the task's vruntime after it has run, in nanoseconds (ns) inside the kernel; milliseconds (ms) in these examples
+v_old: the task's vruntime before it ran, same units
+t_run: the real CPU time the task just ran for, same units
+w: the task's weight; 1024 for nice 0, larger for more important tasks and smaller for less important ones
+ns: nanoseconds, billionths of a second
+ms: milliseconds, thousandths of a second
+In words: a nice 0 task's virtual clock runs at real speed; a heavier task's runs slower and a lighter task's faster, so lighter tasks look as if they have had more CPU than they really have.
 ```
-vruntime += delta * 1024 / weight
-```
+
+In the example, a nice 0 task with vruntime 50 ms runs for 4 ms and ends up at 54 ms. The formula is the whole of CFS's fairness: it holds for tasks in the fair class competing on one run queue.
 
 The rule for picking is then trivial: **run the task with the smallest vruntime**, the one that has had least.
 
-To find it fast, CFS keeps runnable tasks in a **red-black tree** ordered by vruntime, caching the leftmost node. Picking is O(1); inserting a task after it runs or wakes is O(log *n*).
+To find it fast, CFS keeps runnable tasks in a **red-black tree** ordered by vruntime, caching the leftmost node. Picking is O(1); inserting a task after it runs or wakes is O(log *n*), time that grows with the logarithm of *n*: roughly one more step each time the number of runnable tasks doubles.
 
 ```
           [B 40]
@@ -60,11 +74,25 @@ To find it fast, CFS keeps runnable tasks in a **red-black tree** ordered by vru
  [C 10] <- leftmost: runs next
 ```
 
-As C runs, its vruntime rises and it moves right; eventually another task becomes leftmost and preempts it. A small granularity stops tasks swapping every microsecond and thrashing the cache.
+As C runs, its vruntime rises and it moves right; eventually another task becomes leftmost and preempts it. A minimum run time (the minimum granularity) stops tasks changing places every microsecond and constantly refilling the cache.
 
 ### Weights and nice
 
-Nice values map to weights through a fixed table. Nice 0 is 1024, and each step is a factor of about **1.25**:
+Nice values map to weights through a fixed table in the kernel. Nice 0 is 1024, and each step is a factor of about **1.25**, so the table is close to this formula:
+
+```formula
+w ≈ 1024 / 1.25^n
+w ≈ 1024 / 1.25^5 ≈ 1024 / 3.05 ≈ 335
+w ≈ 1024 / 1.25^{−5} ≈ 1024 × 3.05 ≈ 3125
+where
+w: the task's weight, a plain number with no unit
+n: the task's nice value, from −20 to 19
+1.25^n: 1.25 multiplied by itself n times (for a negative n, divide by it instead)
+≈: approximately equal to; the real table is rounded and differs slightly
+In words: each nice step up divides the weight by about 1.25, and each step down multiplies it by about 1.25.
+```
+
+The exact kernel values:
 
 | Nice | Weight |
 |---|---|
@@ -75,25 +103,85 @@ Nice values map to weights through a fixed table. Nice 0 is 1024, and each step 
 | 5 | 335 |
 | 19 | 15 |
 
-For two otherwise equal competitors in one fair group, moving one from nice 0 to nice 1 changes the split from 50/50 to about 55.5/44.5. The share change depends on the competitors. A higher weight makes vruntime grow *more slowly*, so the task stays leftmost for longer and gets more real CPU.
+Weights turn into CPU time like this: when several tasks in one fair group all want the CPU, each gets its weight divided by the total weight of the competitors.
 
-> [!example] Who gets what?
-> Three CPU-bound tasks in the same fair group share one CPU: A and B at nice 0, C at nice 5. Total weight = 1024 + 1024 + 335 = 2383.
-> - A: 1024 / 2383 ≈ 43%
-> - B: ≈ 43%
-> - C: 335 / 2383 ≈ 14%
->
-> Check with vruntime: after 10 ms of real time each, A and B gain 10 ms of vruntime, but C gains 10 × 1024 / 335 ≈ 30.6 ms. C becomes "rightmost" three times as fast, so it runs about a third as often.
+```formula
+s_i = w_i / (w_1 + w_2 + … + w_n)
+s_0 = 1024 / (1024 + 820) ≈ 0.555
+s_1 = 820 / (1024 + 820) ≈ 0.445
+where
+s_i: the share of CPU time task i gets, as a fraction (0.555 means 55.5 %)
+w_i: task i's weight, from the table
+w_1, w_2, w_n: the weights of all n competing tasks
+n: the number of runnable tasks competing for the CPU
+…: "and so on" for every task in between
+s_0, s_1: the shares of a nice 0 task (weight 1024) and a nice 1 task (weight 820) competing alone
+≈: approximately equal to (rounded)
+In words: each task gets a slice of the CPU proportional to its weight.
+```
+
+So for two otherwise equal competitors in one fair group, moving one from nice 0 to nice 1 changes the split from 50/50 to about 55.5/44.5. The share change depends on the competitors. A higher weight makes vruntime grow *more slowly*, so the task stays leftmost for longer and gets more real CPU.
+
+**Worked example: who gets what?** Three CPU-bound tasks in the same fair group share one CPU: A and B at nice 0, C at nice 5.
+
+```formula
+w_tot = 1024 + 1024 + 335 = 2383
+s_A = s_B = 1024 / 2383 ≈ 0.43
+s_C = 335 / 2383 ≈ 0.14
+v_C = 10 ms × 1024 / 335 ≈ 30.6 ms
+where
+w_tot: the total weight of the three tasks
+s_A, s_B, s_C: the CPU shares of A, B and C, as fractions (0.43 means 43 %)
+v_C: how much C's vruntime grows when it runs for 10 ms of real time
+ms: milliseconds, thousandths of a second
+≈: approximately equal to (rounded)
+In words: A and B each get about 43 % of the CPU and C about 14 %, because C's virtual clock runs about three times as fast.
+```
+
+Check with vruntime: after 10 ms of real time each, A and B gain 10 ms of vruntime, but C gains about 30.6 ms. C moves to the right of the tree three times as fast, so it runs about a third as often.
 
 Note what nice is *not*: it's not a strict priority. A nice 19 task alongside a nice 0 task still gets 15 / 1039, about 1.4%. That proportional share assumes competition within the same fair group, available CPU bandwidth and no overriding higher-class work.
 
 ### Sleepers and new tasks
 
-A task that sleeps for a minute would wake with a tiny vruntime and monopolise the CPU while it "caught up". CFS prevents this with `min_vruntime`, a monotonic floor tracking the smallest vruntime in the queue. A waking task's vruntime is raised to roughly `min_vruntime` minus a small bonus (half a latency period), so interactive tasks get a modest head start, not a minute's worth. New tasks start near `min_vruntime` too.
+A task that sleeps for a minute would wake with a tiny vruntime and monopolise the CPU while it "caught up". CFS prevents this with `min_vruntime`, a monotonic floor tracking the smallest vruntime in the queue. A waking task's vruntime is raised to roughly `min_vruntime` minus a small bonus (half a latency period), so interactive tasks get a modest head start, not a minute's worth:
+
+```formula
+v_wake = max(v_old, v_min − L / 2)
+where
+v_wake: the sleeper's vruntime when it wakes, in milliseconds (ms) here (nanoseconds in the kernel)
+max(a, b): the larger of the two values a and b
+v_old: the vruntime the task had when it went to sleep
+v_min: min_vruntime, the smallest vruntime in the run queue (it only ever increases)
+L: the target latency described in the next section, 24 ms on a machine with 8 or more CPUs
+In words: a task that slept briefly keeps its own vruntime; one that slept a long time is moved up to half a target latency below the queue's minimum vruntime, so it gets a small head start and nothing more.
+```
+
+This was classic CFS behaviour, in kernels before 6.6, with its default `GENTLE_FAIR_SLEEPERS` setting, which halves the bonus (without it the bonus was a whole target latency). EEVDF, from 6.6, handles sleepers through lag instead. New tasks start near `min_vruntime` too.
 
 ### Latency and slices
 
-CFS had no fixed quantum. It aimed to run every runnable task once within a **target latency** (6 ms by default, scaled by 1 + log2 of the CPU count, capped at 8 CPUs), with a minimum slice of 0.75 ms (also scaled) so that hundreds of tasks wouldn't each get microseconds.
+CFS had no fixed quantum. It aimed to run every runnable task once within a **target latency**, with a **minimum slice** so that hundreds of tasks wouldn't each get microseconds. Both defaults grow a little on machines with more CPUs, because more CPUs share the load:
+
+```formula
+k = 1 + ⌊log_2(min(N_cpu, 8))⌋
+L = 6 ms × k
+g = 0.75 ms × k
+k = 1 + ⌊log_2(8)⌋ = 1 + 3 = 4
+L = 24 ms,  g = 3 ms
+where
+k: the scaling factor, from 1 (one CPU) to 4 (8 or more CPUs)
+⌊x⌋: floor: round x down to a whole number
+log_2(x): the base-2 logarithm of x, the power you raise 2 to in order to get x (log_2(8) = 3)
+min(a, b): the smaller of the two values a and b
+N_cpu: the number of CPUs online; counting stops at 8
+L: the target latency, in milliseconds (ms)
+g: the minimum slice (sched_min_granularity), in ms
+ms: milliseconds, thousandths of a second
+In words: start from 6 ms and 0.75 ms and multiply both by a factor that grows by one each time the CPU count doubles, up to 8 CPUs.
+```
+
+On a 4-CPU machine, for example, the factor is 3, giving 18 ms and 2.25 ms.
 
 That worked, but latency was a side effect of fairness. There was no way to say "this task wants short, frequent slices", so CFS grew wake-up heuristics to keep desktops snappy, and these were hard to reason about.
 
@@ -103,24 +191,58 @@ That worked, but latency was a side effect of fairness. There was no way to say 
 
 Two ideas:
 
-1. **Lag.** Compare the service a task should have received on the ideal CPU with what it actually got. Positive lag means it is owed CPU; negative means it has had more than its share. In practice the kernel computes the weighted average vruntime *V* of the queue, and a task is **eligible** if its vruntime ≤ *V* (lag ≥ 0).
-2. **Virtual deadline.** Each task requests a slice *r* (by default the base slice). Its deadline is its vruntime plus that slice scaled by weight:
+1. **Lag.** Compare the service a task should have received on the ideal CPU with what it actually got. Positive lag means it is owed CPU; negative means it has had more than its share. In practice the kernel computes the weighted average vruntime of the queue, and a task is **eligible** if its vruntime is no more than that average (lag of zero or more):
 
+```formula
+V = (w_1 × v_1 + … + w_n × v_n) / W
+W = w_1 + … + w_n
+lag_i = w_i × (V − v_i)
+lag_i ≥ 0  when  v_i ≤ V
+where
+V: the weighted average vruntime of the run queue, in nanoseconds (ns)
+w_1, w_n, w_i: the weights of the tasks, from their nice values
+v_1, v_n, v_i: the vruntimes of the tasks, in ns
+n: the number of runnable tasks in the queue
+…: "and so on" for every task in between
+W: the total weight of the queue
+lag_i: how much CPU service task i is owed; positive means owed, negative means it is ahead
+ns: nanoseconds, billionths of a second
+≥, ≤: greater than or equal to, less than or equal to
+In words: a task whose vruntime is at or behind the queue's average has had no more than its fair share, so it may be picked.
 ```
-deadline = vruntime + r * 1024 / weight
+
+2. **Virtual deadline.** Each task requests a slice (by default the base slice). Its deadline is its vruntime plus that slice scaled by weight:
+
+```formula
+d_i = v_i + r_i × 1024 / w_i
+where
+d_i: task i's virtual deadline, in nanoseconds (ns)
+v_i: task i's vruntime, in ns
+r_i: the slice task i asks for, in ns
+w_i: task i's weight; 1024 for nice 0
+ns: nanoseconds, billionths of a second
+In words: a task's deadline is where its vruntime would be after one full slice; a shorter slice puts that deadline earlier.
 ```
 
 The rule: **among eligible tasks, run the one with the earliest virtual deadline.**
 
 Eligibility keeps it fair: nobody who is ahead of their share gets picked. Deadlines add latency control: a task asking for a **shorter slice** gets an earlier deadline, so it runs sooner, though in smaller pieces. Over time it gets the same total share.
 
-> [!example] Short slice, same weight
-> A and B are both nice 0 with vruntime 0. A uses a 3 ms slice; B asks for 1 ms.
-> - Both are eligible (vruntime 0 = *V*).
-> - Deadlines: A = 0 + 3 = 3, B = 0 + 1 = 1.
-> - B runs first, for 1 ms. Its vruntime becomes 1 and its next deadline 2.
->
-> B now waits for A to catch up before it is eligible again, so neither gets more than its half. B simply gets its half in smaller, more frequent pieces.
+**Worked example: short slice, same weight.** A and B are both nice 0 (weight 1024) with vruntime 0. A uses a 3 ms slice; B asks for 1 ms. Both are eligible, because both vruntimes equal the average, 0.
+
+```formula
+d_A = 0 + 3 ms × 1024 / 1024 = 3 ms
+d_B = 0 + 1 ms × 1024 / 1024 = 1 ms
+v_B = 0 + 1 ms = 1 ms
+d_B = 1 ms + 1 ms = 2 ms
+where
+d_A, d_B: the virtual deadlines of A and B, in milliseconds (ms)
+v_B: B's vruntime after it has run for 1 ms
+ms: milliseconds, thousandths of a second
+In words: B's deadline is earlier, so B runs first, for 1 ms; its next deadline is then 2 ms.
+```
+
+B now waits for A to catch up before it is eligible again, so neither gets more than its half. B simply gets its half in smaller, more frequent pieces.
 
 In the checked Linux 6.12 source the unscaled base slice is 0.75 ms; the default logarithmic scaling gives 3 ms at eight or more CPUs. Tunables and later kernels can differ. Since Linux 6.12 a normal task can request its own slice, between 0.1 ms and 100 ms, through the `sched_runtime` field of `sched_setattr()`.
 
@@ -175,7 +297,28 @@ chrt -d --sched-runtime  5000000 \
         --sched-period  16666666 0 ./render
 ```
 
-That says "5 ms of CPU every 16.7 ms frame, finished within 10 ms". The kernel schedules deadline tasks by **Earliest Deadline First**, and uses the Constant Bandwidth Server to stop any task exceeding its runtime. It also performs **admission control**: if the new task's utilisation (runtime / period) would push the total over the permitted limit, `sched_setattr()` fails with `EBUSY`. Admission checks reserve bandwidth; acceptance alone is not a universal proof that application deadlines will be met. Worst-case execution time, blocking, deadline versus period, CPU topology and scheduling assumptions still matter. The kernel documentation distinguishes schedulability tests from the simpler utilization admission test.
+That says "5 ms of CPU every 16.7 ms frame, finished within 10 ms". The kernel schedules deadline tasks by **Earliest Deadline First**, and uses the Constant Bandwidth Server to stop any task exceeding its runtime. It also performs **admission control**. Each task's **utilisation** is the fraction of one CPU it reserves, and the kernel refuses a new task if the total would go over the permitted limit:
+
+```formula
+U = t_run / T
+U = 5 ms / 16.7 ms ≈ 0.30
+U_1 + U_2 + … + U_n ≤ M × 0.95
+where
+U: one task's utilisation, the fraction of a CPU it reserves (0.30 means 30 %)
+t_run: the task's runtime per period, in milliseconds (ms)
+T: the task's period, in ms
+U_1, U_2, U_n: the utilisations of all n deadline tasks, including the new one
+n: the number of deadline tasks
+…: "and so on"
+M: the number of CPUs in the group of CPUs being checked (its root domain); on chips mixing big and little cores the kernel sums the CPUs' relative capacities instead
+0.95: the default limit per CPU, from sched_rt_runtime_us / sched_rt_period_us = 950000 / 1000000
+≤: less than or equal to
+≈: approximately equal to
+ms: milliseconds, thousandths of a second
+In words: the render task reserves about 30 % of a CPU, and all deadline tasks together may reserve at most 95 % of each CPU by default.
+```
+
+If the new task does not fit, `sched_setattr()` fails with `EBUSY`. From Linux 6.12 the fair server described above is itself a deadline reservation (by default 50 ms in every 1 s, 5 % of each CPU) counted in the same total, so in the checked 6.12 source ordinary deadline tasks can reserve only about 90 % of each CPU unless the fair server is reconfigured. Admission checks reserve bandwidth; acceptance alone is not a universal proof that application deadlines will be met. Worst-case execution time, blocking, deadline versus period, CPU topology and scheduling assumptions still matter. The kernel documentation distinguishes schedulability tests from the simpler utilization admission test.
 
 ### The other fair policies
 
@@ -192,9 +335,9 @@ $ ps -eLo pid,tid,cls,rtprio,ni,comm
  1200  1200  TS      -  19 backup
 ```
 
-`TS` is the fair class, `FF` is FIFO, `RR` is round robin, `DLN` is deadline. In `top`, real-time tasks show `rt` in the PR column.
+`TS` is the fair class, `FF` is FIFO, `RR` is round robin, `DLN` is deadline. In `top`, the PR column shows 20 plus the nice value for normal tasks; real-time tasks show negative numbers (minus 1 minus their real-time priority), and `rt` for real-time priority 99.
 
-`/proc/<pid>/sched` shows a task's vruntime, slice and switch counts, and `perf sched` records scheduling latency. Scheduler tunables moved from `/proc/sys/kernel` to `/sys/kernel/debug/sched/` in 5.13, a signal that they're for debugging, not routine tuning.
+`/proc/<pid>/sched` shows a task's vruntime, slice and switch counts, and `perf sched` records scheduling latency. Scheduler tunables moved from `/proc/sys/kernel` to `/sys/kernel/debug/sched/` in 5.13, a sign that they're for debugging, not routine tuning.
 
 ## Pitfalls
 
@@ -207,7 +350,7 @@ $ ps -eLo pid,tid,cls,rtprio,ni,comm
 - Linux stacks scheduling classes: deadline, then real-time, then fair, then idle. Bandwidth controls and deadline-class fair-server service qualify this ordering.
 - CFS gives each task CPU in proportion to its weight by always running the task with the smallest vruntime; vruntime grows more slowly for heavier tasks.
 - Nice maps to weights that differ by about 1.25× per step (CPU shares depend on competing weights); it's proportional sharing, not strict priority.
-- EEVDF (6.6+) keeps the weights but picks the eligible task (lag ≥ 0) with the earliest virtual deadline, so shorter requested slices mean lower latency without a bigger share.
+- EEVDF (6.6+) keeps the weights but picks the eligible task (one owed CPU, with a lag of zero or more) with the earliest virtual deadline, so shorter requested slices mean lower latency without a bigger share.
 - SCHED_FIFO and SCHED_RR give strict priorities 1–99; SCHED_DEADLINE reserves runtime using deadline/period parameters and admission control; application deadline guarantees require additional schedulability assumptions. All are powerful enough to starve the system, which is why limits exist.
 
 ## Further reading

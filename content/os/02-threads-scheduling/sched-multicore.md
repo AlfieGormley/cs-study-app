@@ -21,7 +21,7 @@ Socket / NUMA node 0        node 1
 ```
 
 - **SMT siblings** (hyper-threads) share one core's execution units and L1/L2 caches. Resource contention can make two busy siblings slower than using separate physical cores; the effect depends on the workloads.
-- **Cores in one socket** (or one chiplet) share a last-level cache (L3).
+- **Cores in one CPU socket** (or one chiplet) share a last-level cache (L3).
 - **NUMA nodes** each have their own memory. Reaching another node's memory goes over an interconnect and is slower.
 
 A thread that has been running on a CPU has a **warm cache** there: its working set is in L1, L2 and L3. Move it, and it pays to reload that state. This is **cache affinity**, and it is the central tension of multicore scheduling: keep threads where their data is, but don't leave CPUs idle while work waits elsewhere.
@@ -37,7 +37,7 @@ OSTEP frames the two basic designs:
 
 In a simple global-queue design, scheduling decisions contend for one lock and may move tasks between CPUs. The scaling limit and cache cost depend on implementation and workload; a global queue can also incorporate affinity heuristics.
 
-With **per-CPU run queues**, each CPU schedules from its own queue with no shared lock, and threads tend to stay put. The cost is **imbalance**: CPU 0 might have four runnable threads while CPU 1 is idle. The fix is **migration**, moving threads between queues, typically by **work stealing**: an idle or lightly loaded CPU pulls work from a busier one.
+With **per-CPU run queues**, each CPU schedules from its own queue with no shared lock, and threads tend to stay put. The cost is **load imbalance**: CPU 0 might have four runnable threads while CPU 1 is idle. The fix is **task migration**, moving threads between queues, typically by **work stealing**: an idle or lightly loaded CPU pulls work from a busier one.
 
 Linux has used per-CPU run queues since the O(1) scheduler in 2.6.0. Go's runtime, Java's ForkJoinPool and Tokio use the same per-worker-queue-plus-stealing idea in user space.
 
@@ -102,7 +102,7 @@ When it hurts:
 
 ## NUMA: memory has an address *and* a location
 
-On a multi-socket server, each node's memory is local to its cores. Remote access cost and interconnect bandwidth depend on the machine and workload.
+On a multi-socket server, each node's memory is local to its cores. Remote memory access cost and interconnect bandwidth depend on the machine and workload.
 
 > [!note] Content gap
 > No reproducible machine-specific NUMA measurements accompany this lesson, so no universal remote/local latency multiplier is provided. `numactl --hardware` shows the nodes and a distance table (10 means local; remote nodes are larger, commonly around 20).
@@ -119,7 +119,7 @@ Tools and policies:
 - **Automatic NUMA balancing** (since Linux 3.8, `kernel.numa_balancing`): the kernel periodically unmaps pages to sample which node touches them through "hinting faults", then migrates pages towards their users, or tasks towards their memory. It helps long-running, well-partitioned workloads, at the cost of some overhead.
 - `numastat -p <pid>` shows where a process's memory actually lives.
 
-The scheduler is NUMA-aware: its top-level domain balances reluctantly across nodes, because moving a thread can turn accesses to its existing memory into remote accesses; cache hits and pages already elsewhere are exceptions.
+The scheduler is NUMA-aware: its top-level scheduling domain balances reluctantly across nodes, because moving a thread can turn accesses to its existing memory into remote accesses; cache hits and pages already elsewhere are exceptions.
 
 ## Containers: shares versus quotas
 
@@ -132,19 +132,47 @@ Containers use cgroups to control CPU in two very different ways.
 
 **Weight** (default 100) is proportional sharing between groups, just like nice between threads. If the machine is otherwise idle, a low-weight container can still use every CPU. It's *work-conserving*.
 
-**Quota** is CFS bandwidth control. `cpu.max` holds "quota period" in microseconds; `200000 100000` means 200 ms of CPU time per 100 ms period, i.e. 2 CPUs' worth. Fair-class CPU time is charged across the group. Exhausted local bandwidth allocations cause throttling even with idle CPUs. Ancestor quotas, per-CPU runtime accounting and configured burst credit also affect the exact timeline.
+A **CPU quota** is set through CFS bandwidth control. `cpu.max` holds two numbers, "quota period", in microseconds. Dividing one by the other tells you how many CPUs' worth of time the group may use:
+
+```formula
+N_eff = Q / P
+N_eff = 200000 µs / 100000 µs = 2
+where
+N_eff: the group's limit expressed as a number of whole CPUs kept busy
+Q: the quota, the CPU time the whole group may use in each period, in microseconds (µs); 200000 µs = 200 ms here
+P: the period, the length of each accounting window, in µs; 100000 µs = 100 ms here
+µs: microseconds, millionths of a second
+In words: 200 ms of CPU time in every 100 ms window is the same as keeping two CPUs fully busy.
+```
+
+So `200000 100000` means 200 ms of CPU time per 100 ms period, 2 CPUs' worth. Fair-class CPU time is charged across the group. Exhausted local bandwidth allocations cause throttling even with idle CPUs. Ancestor quotas, per-CPU runtime accounting and configured burst credit also affect the exact timeline.
 
 In Kubernetes, a pod's CPU **request** becomes its cgroup weight, and its CPU **limit** becomes its `cpu.max` quota (with the default 100 ms period).
 
 ### How throttling wrecks tail latency
 
-> [!example] Two CPUs of quota, eight busy threads
-> A container has `cpu.max = 200000 100000` and a server with 8 worker threads, on a 32-core host. In an idealized model, all 8 run simultaneously from the period boundary, with no other contention, overhead, burst credit or carried local runtime.
-> - The group consumes 8 CPU-ms per ms of wall time.
-> - 200 ms of quota lasts 200 / 8 = **25 ms**.
-> - For the remaining **75 ms** of the period, nothing in the container runs.
->
-> A request arriving at t = 26 ms waits at least 74 ms for replenishment in this model. If it then immediately receives a CPU for 5 ms, its latency is 79 ms; queueing behind existing work can add more. Average usage is "2 CPUs, within limit", so dashboards look fine.
+**Worked example: two CPUs of quota, eight busy threads.** A container has `cpu.max = 200000 100000` and a server with 8 worker threads, on a 32-core host. In an idealised model, all 8 run simultaneously from the period boundary, with no other contention, overhead, burst credit or carried local runtime. Eight threads on eight CPUs burn 8 ms of CPU time for every millisecond of wall-clock time, so:
+
+```formula
+t_run = Q / n = 200 ms / 8 = 25 ms
+t_thr = P − t_run = 100 ms − 25 ms
+t_thr = 75 ms
+t_lat = (P − t_a) + t_cpu
+t_lat = (100 − 26) ms + 5 ms = 79 ms
+where
+t_run: how long into each period the quota lasts, in milliseconds (ms)
+Q: the quota per period, 200 ms of CPU time
+n: the number of threads running at once, 8
+t_thr: how long the whole container is throttled (stopped) for in each period, in ms
+P: the period, 100 ms
+t_lat: the latency of a request that arrives while the container is throttled, in ms
+t_a: when the request arrives, measured from the start of the period: 26 ms here
+t_cpu: the CPU time the request needs, 5 ms here
+ms: milliseconds, thousandths of a second
+In words: eight threads use up a two-CPU budget in a quarter of the period, then everything stops for the other three quarters, and a request that arrives during the stop waits for the next period.
+```
+
+So for the remaining **75 ms** of each period nothing in the container runs, and a request arriving 26 ms into the period has a latency of at least 79 ms; queueing behind existing work can add more. Average usage is "2 CPUs, within limit", so dashboards look fine.
 
 The symptom is p99 latency far above p50 while CPU usage looks modest. Check `cpu.stat`:
 
@@ -152,6 +180,19 @@ The symptom is p99 latency far above p50 while CPU usage looks modest. Check `cp
 nr_periods 36000
 nr_throttled 9100
 throttled_usec 412000000
+```
+
+The fraction of periods that ended in throttling is one counter divided by the other:
+
+```formula
+f_thr = nr_throttled / nr_periods
+f_thr = 9100 / 36000 ≈ 0.25
+where
+f_thr: the fraction of enforcement periods in which the group ran out of quota
+nr_throttled: the number of periods in which the group was throttled
+nr_periods: the number of periods in which the group had runnable work
+≈: approximately equal to (rounded)
+In words: about one period in four ended with the group out of quota.
 ```
 
 Here a quarter of periods were throttled. Ways out:

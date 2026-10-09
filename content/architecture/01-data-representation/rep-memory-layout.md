@@ -36,7 +36,7 @@ The names come from *Gulliver's Travels*, where two nations go to war over which
 | x86, x86-64 | TCP/IP multi-byte header fields |
 | ARM (in practice) | IBM z/Architecture |
 | Common RISC-V systems (ISA also defines other modes) | PNG integers, JPEG marker-segment lengths |
-| BMP and ZIP fields specified little-endian | Java class-file multibyte items |
+| Windows bitmap (.bmp) and ZIP fields specified little-endian | Java class-file multibyte items |
 
 ARM, PowerPC and MIPS are **bi-endian** (configurable), common Android, iOS and macOS ARM systems use little-endian data. Linux also supports big-endian ARM configurations. Network and file formats specify byte order per format; not every protocol is big-endian.
 
@@ -94,15 +94,26 @@ uint32_t rd_be32(const uint8_t *b) {
 }
 ```
 
-File formats either fix an order (PNG is big-endian; BMP, ZIP and most Windows formats are little-endian) or record it. TIFF files start with `II` (Intel, little) or `MM` (Motorola, big). UTF-16 can use a byte order mark or an externally specified byte-order convention; a BOM is not universally required.
+File formats either fix an order (PNG is big-endian; Windows bitmap images, ZIP and most Windows formats are little-endian) or record it. TIFF files start with `II` (Intel, little) or `MM` (Motorola, big). UTF-16 can use a byte order mark or an externally specified byte-order convention; a BOM is not universally required.
 
 ## Alignment
 
-A value of size *n* is **naturally aligned** if its address is a multiple of *n*: a 4-byte `int` at 0, 4, 8, and so on; an 8-byte `double` at multiples of 8.
+A value is **naturally aligned** if its address is a whole multiple of its own size:
+
+```formula
+A mod n = 0
+where
+A: the address where the value starts, counted in bytes
+n: the size of the value in bytes (1, 2, 4 or 8 for ordinary scalar types)
+mod: modulo, the remainder after dividing A by n
+In words: an aligned address divides exactly by the value's size, leaving no remainder.
+```
+
+So a 4-byte `int` belongs at 0, 4, 8, and so on, and an 8-byte `double` at multiples of 8. Because sizes are powers of two, this is also a bit test: an address is a multiple of 8 exactly when its low 3 bits are 0.
 
 ### Why hardware cares
 
-A CPU can issue byte-sized loads. Cacheable misses commonly transfer whole cache lines, often 64 bytes, while load/store execution and uncached or device accesses have additional size and alignment rules.
+A CPU can issue byte-sized loads. Cacheable misses commonly transfer whole cache lines, often 64 bytes, while individual load and store instructions, and uncached or device accesses, have additional size and alignment rules.
 
 ```
 cache line boundary at 64
@@ -150,6 +161,22 @@ offset 9-11  tail padding
 sizeof = 12, alignment 4
 ```
 
+The offsets follow from rounding up to the next multiple of each alignment:
+
+```formula
+o = ⌈p / a⌉ × a
+o_b = ⌈1 / 4⌉ × 4 = 4
+S = ⌈9 / 4⌉ × 4 = 12
+where
+o: the offset where a member starts, in bytes from the start of the struct
+p: the first free offset, just after the previous member
+a: the member's alignment in bytes (4 for int)
+o_b: the offset of b: the first free byte is 1, rounded up to a multiple of 4
+S: the struct's size: the 9 bytes used so far, rounded up to a multiple of the struct's alignment, 4
+⌈ ⌉: ceiling: round up to the next whole number, so ⌈1/4⌉ = 1 and ⌈9/4⌉ = 3
+In words: each member moves forward to the next multiple of its alignment, and the whole struct is rounded up the same way.
+```
+
 Six bytes of data, six bytes of padding. Why the tail padding? In an array `struct A arr[2]`, `arr[1]` starts sizeof(struct A) **bytes** after arr[0], namely `(unsigned char *)arr + sizeof(struct A)`. The expression `arr + sizeof(struct A)` would incorrectly scale that count by the element size again. If the size were 9, `arr[1].b` would sit at offset 13, misaligned. Rounding the size to 12 keeps every element aligned.
 
 Reorder the members largest first and the padding mostly vanishes:
@@ -183,7 +210,7 @@ printf("%zu %zu %zu\n",
 ```
 
 > [!note] ABI-dependent
-> Alignment of each type comes from the platform ABI, not the C standard. On 32-bit x86 Linux (i386 System V), a `double` inside a struct is only 4-byte aligned, so `{char; double; char}` is 16 bytes there, not 24. Code that shares binary structs between platforms must not rely on the layout.
+> Alignment of each type comes from the platform ABI, not the C standard. On 32-bit x86 Linux (i386 System V), a `double` inside a struct is only 4-byte aligned, so `{char; double; char}` is 16 bytes there, not 24. Code that shares binary structs between platforms cannot rely on the layout.
 
 ### Packed structs
 
@@ -225,7 +252,7 @@ The `0i` trick pads the end to an `int` boundary. Any explicit byte-order prefix
 Sometimes you want **more** alignment than natural:
 
 - **SIMD**: aligned AVX/AVX-512 load forms require their specified alignment; unaligned forms also exist. Alignment can avoid split accesses, but performance depends on the instruction and processor.
-- **False sharing**: two threads updating different variables on the same 64-byte cache line force the line to bounce between cores. Separate counters by the relevant cache-line size, including alignment and stride/padding. alignas(64) on the start of an array alone does not separate adjacent counters. C++17 hardware_destructive_interference_size is an implementation-provided size hint, used with alignas and an appropriate layout; speedups depend on the workload. The caches module covers why, in its lesson on coherence.
+- **False sharing**: two threads updating different variables on the same 64-byte cache line force the line to bounce between CPU cores. Separate counters by the relevant cache-line size, including alignment and stride/padding. alignas(64) on the start of an array alone does not separate adjacent counters. C++17 hardware_destructive_interference_size is an implementation-provided size hint, used with alignas and an appropriate layout; speedups depend on the workload. The caches module covers why, in its lesson on coherence.
 - **Pages**: mapping and device interfaces may require page or device-specific alignment. Query the page size; 4 KiB is common, not universal. aligned_alloc and posix_memalign align virtual allocations, but do not alone pin memory, ensure physical contiguity or map it for DMA; use the required operating-system device API.
 
 ## Key takeaways

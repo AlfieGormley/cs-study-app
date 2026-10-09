@@ -32,14 +32,14 @@ Three intuitions are worth memorising:
 - OR with 1 **sets** a bit; OR with 0 leaves it alone.
 - XOR with 1 **flips** a bit; XOR with 0 leaves it alone.
 
-A **mask** is a constant whose 1s pick out the positions you care about. Choosing the operator decides what happens to those positions.
+A **bit mask** (often just called a mask) is a constant whose 1s pick out the positions you care about. Choosing the operator decides what happens to those positions.
 
 > [!warning] Bitwise is not logical
 > `&&` and `||` in C (and `and` / `or` in Python) are **logical** operators. They treat each whole operand as true or false and short-circuit. `2 & 1` is 0, but `2 && 1` is 1.
 
 ## The four mask idioms
 
-For unsigned int x and 0 ≤ k < its width, build the mask `1u << k`. A wider x needs a correspondingly wide unsigned mask; complementing a 32-bit mask before widening it would clear the upper bits of a 64-bit x.
+For an unsigned int `x` and a bit position `k` (from 0 up to one less than the width of `x` in bits), build the mask `1u << k`, which has a single 1 in position `k`. A wider `x` needs a correspondingly wide unsigned mask; complementing a 32-bit mask before widening it would clear the upper bits of a 64-bit x.
 
 ```c
 x |=  (1u << k);   /* set bit k    */
@@ -82,11 +82,37 @@ b =  colour        & 0xFF   # 0xFF = 255
 
 To pack, shift each field up and OR them together: `(r << 16) | (g << 8) | b`. CPU instruction encodings, IPv4 headers, Unix file modes and UUIDs are all decoded this way.
 
-In Python, for non-negative n, a mask of the low *n* bits is `(1 << n) - 1`. In C, the operand type, promotions and shift-count limit matter; use an appropriately wide unsigned mask and handle n equal to the width separately. For *n* = 5 that is `0b11111` = 31.
+A mask of the low bits is one less than a power of two, because subtracting 1 from `1000...0` turns it into `0111...1`:
+
+```formula
+M = 2^n − 1
+M = 2^5 − 1 = 31 = 0b11111
+where
+M: a mask whose low n bits are 1 and every bit above them 0; in Python it is written (1 << n) - 1
+n: how many low bits the mask covers (not negative), here 5
+2^n: 2 multiplied by itself n times; written 1 << n in code
+0b11111: the binary literal for five 1-bits (0b marks binary in Python and C23)
+In words: one less than 2 to the power n is a run of n ones, which keeps exactly the low n bits when AND-ed.
+```
+
+In C, the operand type, promotions and shift-count limit matter; use an appropriately wide unsigned mask and handle *n* equal to the width separately.
 
 ## Shifts
 
-`x << k` moves every bit *k* places left and fills with zeros. For unsigned values that do not lose any 1s off the top, it multiplies by 2^k:
+`x << k` moves every bit *k* places left and fills with zeros. Each place doubles the value, so for unsigned values that do not lose any 1s off the top it is a multiplication by a power of two:
+
+```formula
+x << k = x × 2^k
+5 << 3 = 5 × 2^3 = 5 × 8 = 40
+where
+<<: left shift: move every bit k places towards the top and fill the bottom k places with 0s
+x: the unsigned value being shifted
+k: the number of places to shift
+2^k: 2 multiplied by itself k times
+In words: shifting left by k places multiplies by 2 to the power k, as long as no 1 bit falls off the top.
+```
+
+In bits:
 
 ```
 0000 0101  (5)
@@ -105,7 +131,23 @@ logical    >> 2: 0011 1100  (60)
 arithmetic >> 2: 1111 1100  (-4)
 ```
 
-An arithmetic shift by *k* divides by 2^k, but it rounds **towards negative infinity**, while C's `/` rounds **towards zero**. On C implementations with arithmetic right shift, `-17 >> 1` is −9 while C99-and-later `-17 / 2` is −8. A compiler may implement signed division using a corrected shift, unless it proves a correction unnecessary; a bare arithmetic shift is not generally equivalent.
+An arithmetic shift divides by a power of two, but it rounds **towards negative infinity**, while C's `/` rounds **towards zero**:
+
+```formula
+x >> k = ⌊x / 2^k⌋
+−17 >> 1 = ⌊−8.5⌋ = −9
+trunc(−17 / 2) = trunc(−8.5) = −8
+where
+>>: arithmetic right shift by k places: move every bit k places down, filling the top with copies of the sign bit
+x: a signed integer, here −17
+k: the number of places shifted, here 1
+2^k: 2 multiplied by itself k times
+⌊ ⌋: floor: round down to the next whole number, towards negative infinity, so ⌊−8.5⌋ = −9
+trunc: truncation: drop the fractional part, rounding towards zero; this is what C's integer / does (C99 and later)
+In words: for negative numbers the shift rounds down (−9) while division rounds towards zero (−8); for non-negative numbers both give the same answer.
+```
+
+So on C implementations with arithmetic right shift, `-17 >> 1` is −9 while C99-and-later `-17 / 2` is −8. A compiler may implement signed division using a corrected shift, unless it proves a correction unnecessary; a bare arithmetic shift is not generally equivalent.
 
 ### The C shift rules
 
@@ -149,7 +191,7 @@ x&(x-1) 0010 1000   (40)
 
 Uses:
 
-- **Power-of-two test**: `x != 0 && (x & (x - 1)) == 0`. A power of two has exactly one 1-bit, so clearing it leaves 0.
+- **Power-of-two test**: `x != 0 && (x & (x - 1)) == 0`. A power of two has exactly one bit set to 1, so clearing it leaves 0.
 - **Counting bits** (Kernighan's method): repeat until zero; the number of steps is the number of 1s. It loops once per set bit, not once per position.
 
 ```python
@@ -183,13 +225,29 @@ Fenwick trees (binary indexed trees) are built on this trick. For nonzero unsign
 
 XOR has properties that make it unusually useful:
 
-- `a ^ a = 0` and `a ^ 0 = a`.
+```formula
+a ⊕ a = 0
+a ⊕ 0 = a
+a ⊕ b = b ⊕ a
+(a ⊕ b) ⊕ c = a ⊕ (b ⊕ c)
+(a ⊕ k) ⊕ k = a
+where
+⊕: XOR (exclusive or), written ^ in C and Python: each result bit is 1 where the two input bits differ
+a: any integer, treated as a row of bits
+b: any second integer
+c: any third integer
+k: a key: any value XOR-ed in and then XOR-ed in again
+0: the value whose bits are all 0
+In words: anything XOR itself is 0, XOR with 0 changes nothing, order and grouping do not matter, and XOR-ing the same key twice undoes it.
+```
+
+- A value XOR itself is 0, and XOR with 0 leaves a value alone.
 - It is commutative and associative, so order does not matter.
-- It is its own inverse: `(a ^ k) ^ k = a`.
+- It is its own inverse: XOR-ing with the same key twice gets the original back.
 
 Consequences:
 
-- **Find the odd one out.** XOR every element of a list where every value appears twice except one. The pairs cancel and the single value is left, in O(n) word operations and O(1) auxiliary words for fixed-width values; arbitrary-precision integer costs depend on bit length.
+- **Find the odd one out.** XOR every element of a list where every value appears twice except one. The pairs cancel and the single value is left. For a list of n fixed-width values that takes O(n) word operations (work growing in proportion to n) and O(1) auxiliary words (a fixed amount of extra memory); arbitrary-precision integer costs depend on bit length.
 - **Parity.** XOR-ing all the bits gives 1 if the count of 1s is odd. RAID 5 stores the XOR of the data blocks so any one lost block can be rebuilt by XOR-ing the rest.
 - **Toggle with a key.** A one-time pad XORs with a secret uniformly random message-length pad used only once. A stream cipher such as ChaCha20 XORs plaintext with a generated keystream, not directly with its short secret key. Repeating the same XOR recovers the input; that identity alone does not provide secure encryption.
 

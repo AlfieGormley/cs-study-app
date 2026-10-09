@@ -21,7 +21,32 @@ This lesson separates two ideas that are easy to blur:
 '0' = 0x30   'A' = 0x41   'a' = 0x61
 ```
 
-Two tidy design choices are worth knowing. The digit `d` is `0x30 + d`, so `c - '0'` converts a digit character to its value. Upper and lower case differ only in bit 5 (`0x20`), so `c | 0x20` lower-cases an ASCII letter.
+Two tidy design choices are worth knowing. First, the ten digit characters are numbered in order, starting at 0x30:
+
+```formula
+c = 0x30 + d
+d = c − 0x30
+c = 0x30 + 7 = 0x37 = 55
+where
+c: the ASCII code of a digit character such as '7'
+d: the digit's numeric value, 0 to 9
+0x30: 48 in decimal, the ASCII code of the character '0'
+In words: a digit's code is 48 plus its value, so subtracting the code of '0' turns a digit character back into its number.
+```
+
+That is why `c - '0'` in C converts a digit character to its value. Second, upper and lower case letters differ only in bit 5:
+
+```formula
+c_lower = c_upper + 0x20
+'a' = 0x41 + 0x20 = 0x61
+where
+c_upper: the ASCII code of an upper-case letter, 0x41 ('A') to 0x5A ('Z'); bit 5 is 0 in all of them
+c_lower: the code of the matching lower-case letter
+0x20: 32 in decimal, which is 2 to the power 5: a 1 in bit 5 only
+In words: lower case is upper case with bit 5 set, so setting that bit lower-cases an ASCII letter.
+```
+
+So `c | 0x20` (OR with a mask for bit 5) lower-cases an ASCII letter.
 
 Bytes have 8 bits, so the top 128 values were free. Everyone filled them differently: ISO 8859-1 (Latin-1) for Western Europe, Windows-1252 (mostly shares Latin-1 assignments but replaces many C1-control positions with other characters), KOI8-R for Russian, Shift JIS for Japanese, and many others. Plain text bytes often lack encoding metadata, though a file format can include such metadata. Shift JIS is variable-width, not merely a different assignment of single high bytes. Open a Russian file with the Western code page and you got gibberish, which the Japanese call **mojibake**.
 
@@ -37,13 +62,25 @@ U+4F60  你   CJK UNIFIED IDEOGRAPH
 U+1F600 😀   GRINNING FACE
 ```
 
-The code space runs from U+0000 to **U+10FFFF**, which is 1,114,112 positions in 17 **planes** of 65,536. Plane 0, the **Basic Multilingual Plane** (BMP, U+0000 to U+FFFF), includes many common scripts. Supplementary planes contain further scripts, CJK characters and many emoji; some emoji are in the BMP. Not every code point is an assigned character: the code space also includes surrogates, private-use areas, noncharacters and unassigned positions.
+The code space runs from U+0000 to **U+10FFFF**, which is 1,114,112 positions in 17 **planes** of 65,536:
+
+```formula
+0x10FFFF + 1 = 0x110000
+0x110000 = 17 × 65,536 = 1,114,112
+where
+0x10FFFF: the highest code point, written in hexadecimal
+65,536: 0x10000, which is 2 to the power 16: the number of code points in one plane
+17: the number of planes, numbered 0 to 16 (0x10)
+In words: counting from U+0000 to U+10FFFF gives 0x110000 positions, which is 17 blocks of 65,536.
+```
+
+Plane 0, the **Basic Multilingual Plane** (BMP, U+0000 to U+FFFF), includes many common scripts. Supplementary planes contain further scripts, CJK characters and many emoji; some emoji are in the BMP. Not every code point is an assigned character: the code space also includes surrogates, private-use areas, noncharacters and unassigned positions.
 
 The first 128 code points are identical to ASCII, and the first 256 to Latin-1.
 
 ## UTF-32: simple and wasteful
 
-UTF-32 stores each Unicode scalar value as one 32-bit code unit. That is four octets per scalar value, so finding the *n*th code point is O(1). But English text becomes four times larger, and the bytes depend on endianness (UTF-32LE vs UTF-32BE). It is used internally sometimes, rarely for storage or exchange.
+UTF-32 stores each Unicode scalar value as one 32-bit code unit. That is four octets per scalar value, so finding the code point at any position takes O(1) time: the same small amount of work whatever the position, because code point number k always starts at byte 4 × k. But English text becomes four times larger, and the bytes depend on endianness (UTF-32LE vs UTF-32BE). It is used internally sometimes, rarely for storage or exchange.
 
 ## UTF-8: the encoding that won
 
@@ -113,11 +150,28 @@ UTF-8 is widely used for interchange. RFC 8259 requires it for JSON exchanged ou
 
 **UTF-16** uses 16-bit **code units**. BMP scalar values (excluding D800–DFFF) take one unit. Code points above U+FFFF take two, called a **surrogate pair**, built from a range of the BMP (U+D800 to U+DFFF) reserved so that no character uses it.
 
-To encode a code point *c* above U+FFFF:
+To encode a code point above U+FFFF:
 
 1. Subtract 0x10000, leaving a 20-bit number.
 2. The top 10 bits plus 0xD800 give the **high surrogate**.
 3. The low 10 bits plus 0xDC00 give the **low surrogate**.
+
+As a formula:
+
+```formula
+v = c − 0x10000
+H = 0xD800 + ⌊v / 0x400⌋
+L = 0xDC00 + (v mod 0x400)
+where
+c: the code point, from 0x10000 up to 0x10FFFF
+v: c minus 0x10000, a 20-bit number from 0 to 0xFFFFF
+H: the high surrogate code unit, 0xD800 to 0xDBFF: 0xD800 plus the top 10 bits of v
+L: the low surrogate code unit, 0xDC00 to 0xDFFF: 0xDC00 plus the low 10 bits of v
+0x400: 1,024, which is 2 to the power 10
+⌊ ⌋: floor: round down to a whole number; dividing by 0x400 and rounding down keeps the top 10 bits
+mod: modulo, the remainder after division; v mod 0x400 is the low 10 bits
+In words: split the 20-bit offset into a top half and a bottom half of 10 bits each, and add each half to the start of its reserved surrogate range.
+```
 
 For 😀 (U+1F600):
 
@@ -130,7 +184,7 @@ low 10:  0x200  -> DC00 + 200 = DE00
 
 So 😀 in UTF-16 is `D83D DE00`. Because of the reserved surrogate block, those 2,048 values can never be characters, leaving 1,112,064 valid **scalar values**.
 
-UTF-16 extends an earlier 16-bit design with surrogate pairs. Java, JavaScript, Windows W APIs, .NET and Qt use 16-bit code units in their string interfaces; their adoption histories differ, so they should not all be described as pre-1996 adopters. UTF-16 also has byte-order variants (UTF-16LE and UTF-16BE), often signalled by a **byte order mark** (BOM), U+FEFF, at the start of the file.
+UTF-16 extends an earlier 16-bit design with surrogate pairs. Java, JavaScript, Windows W APIs, .NET and Qt use 16-bit code units in their string interfaces; their adoption histories differ, so they cannot all be described as pre-1996 adopters. UTF-16 also has byte-order variants (UTF-16LE and UTF-16BE), often signalled by a **byte order mark** (BOM), U+FEFF, at the start of the file.
 
 ## What is the length of a string?
 

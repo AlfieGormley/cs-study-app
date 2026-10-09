@@ -6,7 +6,20 @@ minutes: 13
 summary: How negative integers are stored, why two's complement won, sign extension, and what happens (and what C allows the compiler to assume) when arithmetic overflows.
 ---
 
-Lesson 1 read a row of bits as a non-negative number. That is an **unsigned** integer. With *n* bits it covers 0 to 2^n − 1, so an 8-bit unsigned value runs from 0 to 255.
+Lesson 1 read a row of bits as a non-negative number. That is an **unsigned integer**. Its range follows from counting patterns:
+
+```formula
+0 ≤ x ≤ 2^n − 1
+0 ≤ x ≤ 2^8 − 1 = 255
+where
+x: a value an n-bit unsigned integer can hold
+n: the number of bits, here 8
+2^n: 2 multiplied by itself n times: the number of different bit patterns
+≤: less than or equal to
+In words: the smallest unsigned value is 0 (all bits 0) and the largest is one less than the number of patterns (all bits 1), because one pattern is used up by zero.
+```
+
+So an 8-bit unsigned value runs from 0 to 255, and a 32-bit one from 0 to 4,294,967,295.
 
 Programs also need negative numbers. There is no minus sign in hardware, only bits, so some bit patterns have to be set aside to mean negative values. Several schemes have been tried. Mainstream present-day processors use **two's complement** for signed integers. This lesson explains how it works, why it won, and what goes wrong when a result does not fit.
 
@@ -41,7 +54,23 @@ Addition is nearly uniform, but you must add any carry out of the top bit back i
 
 ## Two's complement
 
-Two's complement makes one small change to the weights. The most significant bit is worth **minus** 2^(n−1) instead of plus. All other bits keep their usual positive weights.
+Two's complement makes one small change to the weights. The most significant bit is worth **minus** its usual weight instead of plus. All other bits keep their usual positive weights:
+
+```formula
+x = −d_{n−1} × 2^{n−1} + Σ d_i × 2^i
+where
+x: the signed value that the n bits represent
+n: the number of bits (8 for an 8-bit integer)
+d_{n−1}: the top bit, also called the sign bit: 0 or 1
+2^{n−1}: the weight of the top bit, 2 multiplied by itself n − 1 times; 128 for 8 bits, but subtracted instead of added
+Σ: "add up" the term after it for every bit position i from 0 to n − 2, that is, every bit except the top one
+d_i: the bit (0 or 1) in position i
+i: the bit position, counted from 0 at the right
+2^i: the ordinary positive weight of position i
+In words: read the bits exactly as for unsigned numbers, except that the top bit subtracts its weight instead of adding it.
+```
+
+For 8 bits the weights are:
 
 ```
 bit:      7   6   5   4  3  2  1  0
@@ -68,7 +97,19 @@ Notice that the same bit pattern means different things. `1111 1111` is 255 if y
 
 ### Range
 
-With *n* bits, two's complement covers −2^(n−1) to 2^(n−1) − 1.
+The most negative value has only the top bit set; the most positive has every bit set except the top one:
+
+```formula
+−2^{n−1} ≤ x ≤ 2^{n−1} − 1
+−2^7 ≤ x ≤ 2^7 − 1   for n = 8
+−128 ≤ x ≤ 127
+where
+x: a value an n-bit two's complement integer can hold
+n: the number of bits
+2^{n−1}: 2 multiplied by itself n − 1 times: half the number of bit patterns (128 for 8 bits)
+≤: less than or equal to
+In words: half of the patterns are negative and the other half are zero and the positive numbers, so the range runs from minus half the pattern count up to one less than half.
+```
 
 | Width | Min | Max |
 |---|---|---|
@@ -89,7 +130,20 @@ flip  1111 1010
  +1   1111 1011   = -5
 ```
 
-It works in both directions. Negate −5 the same way and you get +5 back. The reason: x + ~x is all ones, which is −1, so ~x = −x − 1, and therefore ~x + 1 = −x.
+It works in both directions. Negate −5 the same way and you get +5 back. Here is why:
+
+```formula
+x + ~x = −1
+~x = −x − 1
+~x + 1 = −x
+where
+x: any n-bit two's complement value
+~x: x with every bit inverted, 0s becoming 1s and 1s becoming 0s; ~ is the bitwise NOT operator in C and Python
+−1: in two's complement, the all-ones pattern (1111 1111 in 8 bits)
+In words: a number plus its inverted copy has a 1 in every position, which is −1; move x to the other side and add 1, and "flip and add one" is exactly negation.
+```
+
+For example, with x = 5: ~5 is `1111 1010` (−6), and adding 1 gives `1111 1011`, which is −5.
 
 A quick shortcut for doing it by hand: copy bits from the right up to and including the first `1`, then flip everything to the left of it.
 
@@ -105,7 +159,22 @@ The real prize is that **addition is the same circuit for signed and unsigned**.
   0000 0010   = 2  (and 251+7-256 = 2)
 ```
 
-This works because *n*-bit arithmetic is arithmetic **modulo 2^n**. In mod 256, −5 and 251 are the same number. Two's complement simply chooses to label the top half of the circle as negative:
+This works because fixed-width arithmetic is **modular arithmetic**: it wraps around, like a clock, once it runs out of bit patterns. Numbers that differ by a whole multiple of the pattern count (256 for 8 bits) end up as the same bit pattern:
+
+```formula
+a ≡ b (mod 2^n)
+−5 ≡ 251 (mod 256)
+251 − (−5) = 256
+where
+≡: "is congruent to": the two numbers leave the same remainder when divided by the modulus, so n-bit hardware stores them as the same bit pattern
+mod: modulo: arithmetic that wraps around after reaching the modulus; here the modulus is 2^n
+a: any integer
+b: any integer that differs from a by a whole multiple of 2^n
+n: the number of bits (8 in the example, so 2^n = 256)
+In words: with 8 bits, −5 and 251 are the same number, because they are exactly 256 apart.
+```
+
+Two's complement simply chooses to label the upper half of the circle as negative:
 
 ```
 bits:     00 .. 7F | 80 .. FF
@@ -117,14 +186,26 @@ wrap: 0x7F + 1 = 0x80
   signed   127 + 1 = -128 (overflow)
 ```
 
-Subtraction is addition of the negation (a − b = a + ~b + 1), so one adder handles `+`, `−`, signed and unsigned. Multiplication's low *n* bits are also identical for both. Division, comparison, widening, high multiplication bits and arithmetic flags can depend on signedness.
+Subtraction is addition of the negation:
+
+```formula
+a − b = a + (−b)
+a − b = a + ~b + 1
+where
+a: the number being subtracted from
+b: the number being subtracted
+~b: b with every bit inverted (bitwise NOT)
+In words: to subtract, invert b, add 1 to make −b, then add; hardware typically feeds the +1 in as a carry into the lowest bit, so no separate subtractor is needed.
+```
+
+So one adder handles `+`, `−`, signed and unsigned. Multiplication's low *n* bits are also identical for both. Division, comparison, widening, high multiplication bits and arithmetic flags can depend on signedness.
 
 > [!note] Now it is the law
 > C23 and C++20 finally require signed integers to use two's complement. Earlier standards also allowed sign-magnitude and ones' complement, although two's complement was already the norm on common general-purpose targets. Representation does not change the rule that signed arithmetic overflow is undefined.
 
 ## Sign extension
 
-When you widen a value, say from 8 to 32 bits, the new upper bits must preserve its value.
+When you widen a value (a **widening conversion**), say from 8 to 32 bits, the new upper bits must preserve its value.
 
 - **Unsigned** values are **zero-extended**: fill with 0s.
 - **Signed** values are **sign-extended**: fill with copies of the sign bit.
@@ -147,7 +228,7 @@ int32_t b = u;     /* 253 */
 
 ## Overflow
 
-Overflow means the true mathematical result does not fit in the type. The hardware still produces *n* bits; what those bits mean, and what your language promises, varies.
+**Integer overflow** means the true mathematical result does not fit in the type. The hardware still produces *n* bits; what those bits mean, and what your language promises, varies.
 
 ### The two flags
 
@@ -169,7 +250,7 @@ Here the carry flag is clear (200 fits in unsigned 8 bits) but the overflow flag
 
 C treats the two cases very differently.
 
-- Arithmetic whose resulting type is unsigned is defined to wrap modulo 2^n. Narrow unsigned operands may first promote to signed int; their expressions follow the promoted type, not an automatic wrap at the original width. `UINT_MAX + 1` is 0, and `0u - 1` is `UINT_MAX` (4,294,967,295 for 32 bits).
+- Arithmetic whose resulting type is unsigned is defined to wrap around: results are reduced modulo 2 to the power of the type's width in bits (modulo 4,294,967,296 for a 32-bit `unsigned int`). Narrow unsigned operands may first promote to signed int; their expressions follow the promoted type, not an automatic wrap at the original width. `UINT_MAX + 1` is 0, and `0u - 1` is `UINT_MAX` (4,294,967,295 for 32 bits).
 - **Signed** overflow is **undefined behaviour**. The C standard imposes no requirements on an execution with undefined behaviour; consequences need not be confined to the point of overflow. Optimisers may assume defined executions do not overflow.
 
 That assumption has visible effects:
@@ -226,7 +307,7 @@ for (size_t i = n - 1; i >= 0; i--)
     use(a[i]);
 ```
 
-`i >= 0` is always true, so the condition cannot stop the loop. After unsigned wrap (or immediately for n = 0), indexing is out of bounds: this is undefined behaviour, not a guaranteed infinite loop. GCC warnings such as `-Wsign-compare` and `-Wtype-limits` can help; flags and diagnostics differ between compilers. A safe reverse traversal is `for (size_t i = n; i > 0; ) use(a[--i]);`.
+`i >= 0` is always true, so the condition cannot stop the loop. After unsigned wrap (or immediately when `n` is 0), indexing is out of bounds: this is undefined behaviour, not a guaranteed infinite loop. GCC warnings such as `-Wsign-compare` and `-Wtype-limits` can help; flags and diagnostics differ between compilers. A safe reverse traversal is `for (size_t i = n; i > 0; ) use(a[--i]);`.
 
 ## Python: no overflow, but you can fake it
 
@@ -253,16 +334,16 @@ NumPy, however, uses fixed-width types, so `np.int8(100) + np.int8(100)` wraps t
 ## Overflow in the real world
 
 - **Ariane 5, 1996.** A conversion of the horizontal-bias alignment result (related to horizontal velocity) from 64-bit floating point to a 16-bit signed integer raised an exception. Both inertial reference systems failed through the same software path; the inquiry identified reuse of assumptions from Ariane 4 and inadequate protection/testing, not just a number being too large.
-- **Boeing 787, 2015.** The US FAA warned that a counter in the generator control units would overflow after 248 days of continuous power, potentially losing all AC electrical power if the units entered failsafe together. The FAA directive states the counter-overflow interval; it does not specify a 32-bit centisecond representation. That implementation claim is omitted because it could not be verified from the directive.
+- **Boeing 787, 2015.** The US FAA warned that a counter in the generator control units would overflow after 248 days powered on without a restart, potentially losing all AC electrical power if the units entered failsafe together. The FAA directive states the counter-overflow interval; it does not specify a 32-bit centisecond representation. That implementation claim is omitted because it could not be verified from the directive.
 > [!note] Evidence gap
 > The YouTube/Gangnam Style migration anecdote is omitted: the original engineering account of counter type and migration timing was not available for reliable primary-source verification. A hypothetical signed 32-bit view counter still has the demonstrable limit 2,147,483,647.
 
 - **The year 2038 problem.** A signed 32-bit `time_t` counting seconds from 1970 runs out at 03:14:07 UTC on 19 January 2038, and a wrapping interpretation of the next bit pattern corresponds to December 1901. Actual software may fail differently; signed overflow in C is not guaranteed to wrap. Common current 64-bit Unix ABIs use a 64-bit `time_t`, but embedded devices and old file formats remain at risk.
 
 ## Key takeaways
-- Unsigned *n*-bit integers cover 0 to 2^n − 1; two's complement covers −2^(n−1) to 2^(n−1) − 1.
-- In two's complement the top bit weighs −2^(n−1); negate by inverting and adding 1.
-- The same adder works for signed and unsigned because both are arithmetic mod 2^n. The type, not the bits, decides the meaning.
+- Unsigned integers run from 0 to one less than the number of bit patterns (0 to 255 in 8 bits); two's complement runs from minus half the patterns to one less than half (−128 to 127 in 8 bits).
+- In two's complement the top bit has a negative weight (−128 in 8 bits); negate by inverting and adding 1.
+- The same adder works for signed and unsigned because both are wrap-around (modular) arithmetic. The type, not the bits, decides the meaning.
 - Widening uses sign extension for signed types and zero extension for unsigned.
 - The carry flag signals unsigned overflow; the overflow flag signals signed overflow (same-sign inputs, different-sign result).
 - In C, arithmetic in an unsigned resulting type wraps (check narrow-operand promotions), but signed overflow is undefined behaviour that the optimiser exploits. Use `__builtin_add_overflow` or C23 `ckd_add`.

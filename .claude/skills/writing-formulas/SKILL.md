@@ -78,6 +78,8 @@ The same symbol appearing in several blocks is defined in **each** block: every 
 - Use maths notation, **not programming syntax**: no `**`, `*`, `pi`, `sqrt()`, `math.log10()` or `10**(x/20)` in
   a formula block. Code belongs in a `python` (or `c`, `sql`, …) block. If you show both, put the formula block
   first and the code after it.
+- Formula blocks can't go inside a callout (`> [!note]`) or a list item. Put the block straight after the
+  callout or list; a numbered list can resume afterwards ("4." keeps its number).
 - Keep each equation line within **44 characters** in lessons and **40** in questions. Split long derivations over
   several lines (all of them come before `where`).
 - **Connective words need no definition**: `for`, `all`, `some`, `as`, `so`, `when`, `if`, `then`, `means`, `gives`,

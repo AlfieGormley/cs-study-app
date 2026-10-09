@@ -31,7 +31,7 @@ On routed Ethernet hops the link-layer addresses identify the local next hop. Or
 1. The host looks in its **ARP cache** (`ip neigh` on Linux, `arp -a` on macOS and Windows).
 2. On a miss, it broadcasts an **ARP request** to `ff:ff:ff:ff:ff:ff`: "Who has 192.168.1.1? Tell 192.168.1.20."
 3. Hosts in the broadcast domain can receive it, subject to filtering and isolation. Normally the owner of 192.168.1.1 sends a **unicast ARP reply**: "192.168.1.1 is at `a4:91:b1:...`."
-4. The asker caches the answer. RFC 826 updates an existing sender mapping before testing the opcode, and adds a new mapping when the receiver is the target. Implementations can impose additional checks; not every listener learns every request.
+4. The asker caches the answer. RFC 826 updates an existing sender mapping before testing the opcode, and adds a new mapping when the receiver is the target. Implementations can impose additional checks; not every receiving host learns from every request.
 
 The packet travels directly in an Ethernet frame with EtherType `0x0806`. It is not an IP packet. For IPv4 over Ethernet it is 28 bytes:
 
@@ -66,7 +66,7 @@ for i in range(0, 28, 12):
 # c0a80101
 ```
 
-`c0a80114` is 192.168.1.20 and `c0a80101` is 192.168.1.1. A reply has the same layout with OPER = 2 and the target MAC filled in. On basic untagged Ethernet, a 28-byte ARP message needs 18 bytes of padding to form a 64-byte frame including the header and FCS. VLAN tags change the framing calculation; captures may omit padding or FCS.
+`c0a80114` is 192.168.1.20 and `c0a80101` is 192.168.1.1. A reply has the same layout with the OPER (operation) field set to 2 and the target MAC filled in. On basic untagged Ethernet, a 28-byte ARP message needs 18 bytes of padding to form a 64-byte frame including the header and FCS. VLAN tags change the framing calculation; captures may omit padding or FCS.
 
 ### The cache
 
@@ -77,7 +77,7 @@ Cache lifetime and reachability are separate. Linux's default 30-second base rea
 An unsolicited ARP announcement advertises a host’s own address; it is commonly called **gratuitous ARP**. Address-conflict detection also uses a distinct probe before claiming an address. RFC 5227 specifies both:
 
 - **Probe**: before using an address, send a request for it with sender IP 0.0.0.0. A conflicting request or reply, or another host probing the same target address, can reveal a conflict. It is not enough to check replies alone.
-- **Announcement**: broadcast an ARP request with both sender and target IP set to the announced address, allowing listeners to refresh applicable mappings.
+- **Announcement**: broadcast an ARP request with both sender and target IP set to the announced address, allowing receiving hosts to refresh applicable mappings.
 
 Announcements can help move a virtual IP during failover. With different physical MAC addresses, neighbours need the new mapping. VRRP uses a shared virtual MAC; then switch forwarding tables must learn its new location. Failure detection, filtering and implementation affect recovery time.
 
@@ -142,7 +142,7 @@ A single patch cable plugged into two wall ports on the same switch can take dow
 
 Classic **STP** (historically IEEE 802.1D) lets switches agree on a loop-free **tree** across the physical mesh, and block the remaining links. If an active link fails, a blocked one is unblocked.
 
-Switches exchange **BPDUs** (bridge protocol data units), using a default hello interval of 2 seconds and the standard bridge-group multicast MAC `01:80:c2:00:00:00`. Each BPDU says, in effect, "I think the root is X, and my cost to reach it is C".
+Switches exchange **BPDUs** (bridge protocol data units), using a default hello time of 2 seconds and the standard bridge-group multicast MAC `01:80:c2:00:00:00`. Each BPDU says, in effect, "I think the root is X, and my cost to reach it is C".
 
 ### Step 1: elect a root bridge
 
@@ -152,7 +152,7 @@ With the extended system ID, configurable priority occupies the upper four bits 
 
 ### Step 2: each switch picks a root port
 
-Every non-root switch chooses one **root port**: its port with the lowest total **path cost** to the root. Costs come from link speed; in the commonly used short path-cost table, 100 Mbit/s costs 19, 1 Gbit/s costs 4 and 10 Gbit/s costs 2. After equal root IDs and path costs, ties use the sender bridge ID, sender port ID, and finally local port ID. Costs may be configured; long path-cost values differ.
+Every non-root switch chooses one **root port**: its port with the lowest total **path cost** to the root (the sum of the costs of every link on the way). Costs come from link speed; in the commonly used short path-cost table, 100 Mbit/s costs 19, 1 Gbit/s costs 4 and 10 Gbit/s costs 2. After equal root IDs and path costs, ties use the sender bridge ID, sender port ID, and finally local port ID. Costs may be configured; long path-cost values differ.
 
 ### Step 3: each link picks a designated port
 
@@ -177,13 +177,13 @@ The S2–S3 link: both ends have cost 4, so the tie goes to the lower bridge ID,
        /  \
       R    R
      S2 -D-X- S3
- R = root port   D = designated
- X = blocked
+ R: root port   D: designated
+ X: blocked
 ```
 
 If the S1–S3 link fails, S3 stops receiving BPDUs from S1, its blocked port becomes its new root port, and traffic flows via S2.
 
-### Convergence: the slow part
+### STP convergence: the slow part
 
 Classic STP is cautious. A port moving towards forwarding passes through **listening** (15 s) and **learning** (15 s) states, the "forward delay", so the whole network can settle before any data flows. If a failure is detected only by BPDUs stopping, the switch first waits up to the 20-second **max age**. With these default timers, a transition can therefore take **30 to 50 seconds**; actual recovery depends on the failure and topology.
 

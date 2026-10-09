@@ -16,10 +16,20 @@ This lesson covers both halves. The detection codes reappear throughout the stac
 
 The sender computes a few redundant bits from the data and sends them along. The receiver recomputes them from what arrived. A mismatch means something changed.
 
-How good a code is depends on its **Hamming distance** *d*: the minimum number of bit flips needed to turn one valid codeword into another.
+How good a code is depends on its **Hamming distance**: the minimum number of bit flips needed to turn one valid codeword (a bit pattern the code allows) into another. From the distance you can read off how many flipped bits the code is guaranteed to catch or repair:
 
-- A code with distance *d* detects any error of up to *d* − 1 bits.
-- It can **correct** up to ⌊(*d* − 1) / 2⌋ bits.
+```formula
+t_detect = d − 1
+t_correct = ⌊(d − 1) / 2⌋
+where
+d: the code's minimum Hamming distance, a whole number of bits
+t_detect: the largest number of flipped bits that is always detected
+t_correct: the largest number of flipped bits that can always be corrected
+⌊ ⌋: the floor function: round down to the nearest whole number (⌊1.5⌋ = 1)
+In words: fewer than d flips can never turn one valid codeword into another, so they are always noticed; to fix errors, the damaged word must stay closer to its original than to any other codeword, which allows fewer than half of d flips.
+```
+
+For example, a code with distance 3 detects up to 2 flipped bits, or corrects 1: ⌊(3 − 1) / 2⌋ = 1.
 
 For a given worst-case number of bit errors, correction requires a larger minimum distance than detection. These are alternative decoding guarantees; a distance-3 correcting decoder cannot also promise to identify every two-bit error as uncorrectable.
 
@@ -62,7 +72,7 @@ The checksum field (bytes 10–11 here) is zero while computing; the sender then
 It was chosen because it is **fast in software**: just additions, which can be done 32 or 64 bits at a time and updated incrementally when a router changes the TTL. Its weaknesses follow from addition being commutative:
 
 - **Reordered 16-bit words** give the same sum, as the second example shows.
-- Some multi-bit errors cancel, such as one word going up by *x* and another down by *x*.
+- Some multi-bit errors cancel, such as one word going up by some amount and another going down by the same amount.
 - A roughly uniform random checksum result suggests an undetected-error probability on the order of 2⁻¹⁶. Structured corruptions, such as word reordering, do not follow that model.
 
 > [!note] Errors the CRC never sees
@@ -70,7 +80,22 @@ It was chosen because it is **fast in software**: just additions, which can be d
 
 ## Cyclic redundancy checks
 
-A **CRC** treats the bits as the coefficients of a polynomial over GF(2), arithmetic where addition and subtraction are both XOR and there are no carries. Sender and receiver agree on a **generator** polynomial *G* of degree *r*.
+A **CRC** treats the bits as the coefficients of a polynomial over GF(2), arithmetic where addition and subtraction are both XOR (exclusive or: 1 when exactly one input is 1) and there are no carries. Each bit is the coefficient of one power of a placeholder *x*, so the bit string `1001` is the polynomial x³ + 1. Sender and receiver agree on a **generator** polynomial *G* of degree *r* (its highest power), and the CRC is a remainder after dividing by it:
+
+```formula
+R = (D × x^r) mod G
+T = D × x^r + R
+T mod G = 0
+where
+R: the CRC: the r-bit remainder the sender appends
+D: the data bits, read as a polynomial
+x: a placeholder: each power of x marks one bit position, and its coefficient (0 or 1) is that bit; multiplying by x^r shifts the bits r places left (appends r zeros)
+r: the degree of the generator, which is also the number of CRC bits; 3 for 1001, 32 for CRC-32
+G: the generator polynomial both ends agree on
+mod: the remainder after division, done with XOR in place of subtraction
+T: the transmitted bits: the data followed by the CRC
+In words: append r zeros to the data, divide by the generator, and send the data with the remainder in place of the zeros. The result divides exactly by the generator, so any change that leaves a non-zero remainder is detected.
+```
 
 1. Append *r* zeros to the data *D*.
 2. Divide by *G* using XOR long division.
@@ -93,7 +118,7 @@ A **CRC** treats the bits as the coefficients of a polynomial over GF(2), arithm
  000000011   remainder R = 011
 ```
 
-The sender transmits `101110 011`. The receiver divides `101110011` by `1001` and gets `000`. If the fourth bit is flipped in transit (`101010011`), the remainder is `100`, not zero, and the frame is dropped.
+The sender transmits `101110 011`. The receiver divides `101110011` by `1001` and gets `000`. If the fourth bit is flipped on the way (`101010011`), the remainder is `100`, not zero, and the frame is dropped.
 
 The same thing in code:
 
@@ -125,8 +150,18 @@ For a generator of degree *r* ≥ 1 with leading and constant coefficients 1, th
 
 - **All single-bit errors**.
 - **All burst errors of length *r* or less**: the span between first and last flipped bits is at most *r*.
-- **All odd numbers of bit errors**, if *G* has (x + 1) as a factor.
-- For suitably random long error patterns, approximately a 2⁻ʳ fraction are undetected. This is not a guarantee for arbitrary or adversarial errors.
+- **All odd numbers of bit errors**, if *G* has (x + 1) as a factor. A quick test: that is true exactly when the generator's bit pattern has an even number of 1s.
+- For suitably random long error patterns, approximately one in 2ʳ is undetected (formula below). This is not a guarantee for arbitrary or adversarial errors.
+
+```formula
+P_miss ≈ 2^(−r)
+P_miss ≈ 2^(−32) ≈ 2.3 × 10⁻¹⁰
+where
+P_miss: the fraction of random error patterns that happen to leave a zero remainder and go undetected
+r: the number of CRC bits (the generator's degree); 32 for CRC-32
+≈: approximately equal to
+In words: a random corruption has about a one-in-2^r chance of producing a valid-looking frame; for CRC-32 that is about one in 4.3 billion.
+```
 
 Ethernet's **CRC-32** uses generator `0x04C11DB7` with the x³² term implicit. It detects every burst of up to 32 bits within the protected codeword. Koopman's table gives distance at least 4 through 91,607 data bits (excluding the 32 check bits), and at least 5 through 2,974 data bits. Thus all 1–3-bit errors within the FCS-protected region of ordinary 1518-byte or 9000-byte frames are detected. This excludes preamble/SFD and assumes fixed framing, rather than inserted or deleted bits. Other generators, including CRC-32C, have different guarantees.
 
@@ -155,8 +190,8 @@ print(crc32(msg) == zlib.crc32(msg))  # True
 
 `0xEDB88320` is `0x04C11DB7` bit-reversed, and `0xCBF43926` is the standard check value for CRC-32.
 
-> [!warning] A CRC is not a MAC
-> A CRC is linear: an attacker who flips some bits can compute exactly how the CRC changes and fix it up, without knowing anything secret. WEP's integrity check was a CRC-32, which is one reason WEP fell. For tamper resistance you need a cryptographic MAC, such as the authentication tag in TLS.
+> [!warning] A CRC is not a message authentication code
+> A CRC is linear: an attacker who flips some bits can compute exactly how the CRC changes and fix it up, without knowing anything secret. WEP's integrity check was a CRC-32, which is one reason WEP fell. For tamper resistance you need a keyed cryptographic check, a message authentication code, such as the authentication tag in TLS.
 
 ## Recovering: FEC or ARQ?
 
@@ -176,28 +211,74 @@ Real systems can combine FEC with retransmission. FEC is not absent from Etherne
 
 The simplest ARQ: send one frame, wait for its ACK, then send the next. If no ACK arrives before a timeout, resend. A 1-bit sequence number (alternating 0 and 1) lets the receiver spot a duplicate when the frame arrived but the ACK was lost.
 
-Assume ordered channels, detectable corruption, no arbitrarily delayed duplicates surviving sequence-number reuse, and retry behaviour that eventually permits delivery. For the loss-free timing model, let *L* be the complete frame size, *R* the data-link rate and RTT the round-trip propagation delay, excluding data-frame transmission. Ignore ACK transmission, processing, queueing and framing gaps. The sender is busy for *L*/*R* out of each *L*/*R* + RTT:
+Assume ordered channels, detectable corruption, no arbitrarily delayed duplicates surviving sequence-number reuse, and retry behaviour that eventually permits delivery. For the loss-free timing model, ignore ACK transmission, processing, queueing and framing gaps. Each cycle the sender spends one frame time transmitting, then a round trip waiting for the ACK. Its **utilisation** is the fraction of time it is actually sending:
 
-```
-U = (L/R) / (L/R + RTT)
+```formula
+U = (L / R) / (L / R + RTT)
+where
+U: the sender's utilisation: the fraction of time the link is busy sending data, from 0 to 1
+L: the complete frame size, in bits
+R: the data-link rate, in bits per second
+L / R: the frame's transmission time, in seconds
+RTT: the round-trip propagation delay, in seconds, excluding the data frame's own transmission time
+In words: the sender is busy for one frame time out of every frame time plus round trip; when the round trip is much longer than the frame time, the link sits almost idle.
 ```
 
 > [!example] Stop-and-wait across a country
-> 1 Gbit/s, 30 ms RTT, 1500-byte frames (12,000 bits).
-> - *L*/*R* = 12,000 / 10⁹ = 12 µs.
-> - U = 0.012 / 30.012 ≈ **0.04%**.
-> - Throughput = 12,000 bits / 30.012 ms ≈ **400 kbit/s** on a gigabit link.
+> 1 Gbit/s, 30 ms RTT, 1500-byte frames (12,000 bits). The utilisation comes out at about **0.04%**, so throughput is only about **400 kbit/s** on a gigabit link.
+
+```formula
+L / R = 12,000 bit / (10⁹ bit/s) = 12 µs
+U = 0.012 ms / (0.012 ms + 30 ms)
+U = 0.012 / 30.012 ≈ 0.0004 = 0.04%
+X = L / (L / R + RTT)
+X = 12,000 bit / 30.012 ms ≈ 400 kbit/s
+where
+L: the frame size, 12,000 bits
+R: the link rate, 1 Gbit/s = 10⁹ bits per second
+bit: one binary digit; bit/s is bits per second
+s: seconds
+µs: microseconds; 12 µs = 0.012 ms
+ms: milliseconds, thousandths of a second
+U: the utilisation
+RTT: the round-trip propagation delay, 30 ms
+X: the throughput: one frame delivered per cycle
+kbit/s: kilobits per second; 1 kbit is 1,000 bits
+≈: approximately equal to
+In words: the sender transmits for 12 µs and then waits 30 ms, so the gigabit link is busy only 0.04% of the time and carries about 400 kbit/s.
+```
 
 ## Sliding windows
 
-The fix is **pipelining**: allow up to *N* frames to be outstanding. To keep the link busy the window must cover a full round trip, which is the bandwidth-delay product from lesson 2:
+The fix is **pipelining**: allow up to *N* frames to be outstanding (sent but not yet acknowledged). To keep the link busy the window must cover a full round trip, which is the bandwidth-delay product from lesson 2:
 
-```
-U = min(1, N * (L/R) / (L/R + RTT))
-N to fill = ceil((L/R + RTT) / (L/R))
+```formula
+U = min(1, N × (L / R) / (L / R + RTT))
+N_fill = ⌈(L / R + RTT) / (L / R)⌉
+where
+U: the sender's utilisation, from 0 to 1
+min: the minimum, the smaller of the two values; utilisation cannot exceed 1 (100%)
+N: the window: how many frames may be outstanding at once
+L / R: one frame's transmission time: frame size L in bits divided by link rate R in bits per second
+RTT: the round-trip propagation delay, in seconds
+N_fill: the smallest window that keeps the link continuously busy
+⌈ ⌉: the ceiling function: round up to the next whole number
+In words: N frames keep the sender busy N times longer per cycle; once the window covers a whole cycle (one frame time plus a round trip), the link never idles.
 ```
 
-For the example above, N = 30.012 / 0.012 ≈ **2,501 frames** in flight. Two strategies handle a loss inside that window.
+For the example above:
+
+```formula
+N_fill = ⌈(0.012 ms + 30 ms) / 0.012 ms⌉
+N_fill = ⌈30.012 / 0.012⌉ = 2,501
+where
+N_fill: the window, in frames, that fills the 1 Gbit/s, 30 ms path
+ms: milliseconds; 0.012 ms (12 µs) is one 12,000-bit frame time at 1 Gbit/s
+⌈ ⌉: the ceiling function: round up to a whole number of frames
+In words: the first ACK returns 30.012 ms after the first frame starts, enough time to send **2,501 frames**, so that many must be allowed in flight.
+```
+
+Two strategies handle a loss inside that window.
 
 ### Go-Back-N
 
@@ -223,7 +304,18 @@ It costs memory and bookkeeping on both sides, and it avoids retransmitting corr
 
 ### Window size versus sequence numbers
 
-With *k*-bit sequence numbers, numbers wrap modulo 2ᵏ. Under the ordered-channel and bounded-old-duplicate assumptions above, window limits avoid confusing retransmissions from the outstanding window with new data. Finite sequence numbers alone cannot handle packets delayed across arbitrary numbers of wraps. The table assumes equal sender and receiver windows for Selective Repeat.
+With *k*-bit sequence numbers there are 2ᵏ distinct numbers, and counting wraps back to 0 after the last one (modulo 2ᵏ): with *k* = 2 the numbers go 0, 1, 2, 3, 0, 1, …. Under the ordered-channel and bounded-old-duplicate assumptions above, window limits avoid confusing retransmissions from the outstanding window with new data. Finite sequence numbers alone cannot handle packets delayed across arbitrary numbers of wraps. The table assumes equal sender and receiver windows for Selective Repeat.
+
+```formula
+W_GBN ≤ 2^k − 1
+W_SR ≤ 2^(k − 1)
+where
+W_GBN: the largest safe Go-Back-N window, in frames
+W_SR: the largest safe Selective Repeat window, in frames
+k: the number of bits in the sequence-number field
+≤: less than or equal to
+In words: Go-Back-N can use every sequence number but one; Selective Repeat can use only half of them.
+```
 
 | Protocol | Maximum window |
 |---|---|
@@ -241,34 +333,104 @@ With a window of 3 the receiver would be expecting 3 when the old 0 reappears, a
 Selective Repeat is stricter because the receiver accepts a whole window of numbers. After receiving 0, 1, 2 with window 3, it accepts {3, 0, 1}. If the ACKs are lost and the sender resends the old 0, it falls inside the new window and is wrongly accepted. Keeping the window at no more than half the sequence space separates the old retransmissions from the next receive window in this scenario.
 
 > [!example] Sizing sequence numbers
-> The 2,501-frame window above needs *k* = 12 for Go-Back-N (4,095 ≥ 2,501), but *k* = 13 for Selective Repeat (2¹² = 4,096 ≥ 2,501, whereas 2¹¹ = 2,048 isn't enough). TCP numbers bytes using 32 bits and constrains window sizes; negotiated timestamps support PAWS rejection of old segments. Byte numbering alone does not remove wraparound concerns.
+> The 2,501-frame window above needs 12-bit sequence numbers for Go-Back-N, but 13 bits for Selective Repeat. TCP numbers bytes using 32 bits and constrains window sizes; negotiated timestamps support PAWS rejection of old segments. Byte numbering alone does not remove wraparound concerns.
+
+```formula
+k = 11: 2^11 − 1 = 2,047 < 2,501
+k = 12: 2^12 − 1 = 4,095 ≥ 2,501
+k = 12: 2^(12 − 1) = 2,048 < 2,501
+k = 13: 2^(13 − 1) = 4,096 ≥ 2,501
+where
+k: the number of sequence-number bits being tried
+<: less than (too small)
+≥: greater than or equal to (big enough)
+In words: Go-Back-N's limit of 2^k − 1 first reaches 2,501 at k = 12; Selective Repeat's limit of 2^(k − 1) is only half as big, so it needs one more bit, k = 13.
+```
 
 ### When errors happen: the maths
 
-If attempts independently fail with probability *p* < 1 and retries continue until success, the geometric distribution gives **1 / (1 − p)** expected attempts. This counts attempts, not elapsed time: timeout and ACK behaviour still matter.
+Two questions: how likely is a frame to be damaged, and how many tries does it then take on average? If attempts independently fail with the same probability and retries continue until success, the number of attempts follows the geometric distribution:
 
-If individual bits flip independently with probability *b*, an *n*-bit frame has at least one flipped bit with probability **p = 1 − (1 − b)ⁿ**, approximately *nb* when *nb* is small. Treating this as frame-loss probability additionally assumes every such frame is rejected; FEC and undetected errors change that mapping.
+```formula
+E[A] = 1 / (1 − p)
+where
+E[A]: the expected (average) number of attempts needed to deliver one frame
+p: the probability that any one attempt fails, between 0 and 1 (must be below 1)
+In words: if a fraction p of attempts fail, then on average 1 / (1 − p) attempts are needed per success; at p = 0.5, two attempts.
+```
 
-For a hypothetical uncoded 12,000-bit frame at *b* = 10⁻⁶:
+This counts attempts, not elapsed time: timeout and ACK behaviour still matter.
 
-- p ≈ **1.1928%**.
-- Expected attempts ≈ **1.0121** under the independent retry model.
-- A continuously busy sender retransmitting only failed frames spends a fraction **1 − p ≈ 98.8072%** of frame transmission time on successful attempts. This is an ideal efficiency, not a finite-window throughput prediction.
+If individual bits flip independently, a frame survives only if every one of its bits survives:
+
+```formula
+p = 1 − (1 − b)^n
+p ≈ n × b
+where
+p: the probability that an n-bit frame has at least one flipped bit
+b: the probability that any single bit flips (the bit error rate)
+n: the number of bits in the frame
+≈: approximately equal to
+In words: each bit survives with probability 1 − b, so all n survive with probability (1 − b)^n; one minus that is the chance something flipped. When n × b is small (well below 1) this is close to n × b.
+```
+
+Treating this as frame-loss probability additionally assumes every such frame is rejected; FEC and undetected errors change that mapping.
+
+For a hypothetical uncoded 12,000-bit frame at a bit error rate of 10⁻⁶ (one bit in a million):
+
+```formula
+p = 1 − (1 − 10⁻⁶)^12000
+p ≈ 0.011928 = 1.1928%
+E[A] = 1 / (1 − 0.011928) ≈ 1.0121
+1 − p ≈ 0.988072 = 98.8072%
+where
+p: the probability that a 12,000-bit frame is damaged
+E[A]: the expected number of attempts per delivered frame
+≈: approximately equal to
+In words: about 1.2% of frames are damaged, so on average a frame needs about 1.012 attempts, and about 98.8% of transmission time goes on attempts that succeed.
+```
+
+So about **1.19%** of frames are damaged and a frame needs about **1.0121** attempts under the independent retry model. A continuously busy sender retransmitting only failed frames spends about **98.81%** of frame transmission time on successful attempts. This is an ideal efficiency, not a finite-window throughput prediction.
 
 Go-Back-N also retransmits later outstanding frames discarded after a gap. Its actual goodput depends on timer values, acknowledgements, propagation, window size and the loss process.
 
-MIT's lecture gives an **approximate** Go-Back-N model: choose N to fill the loss-free feedback cycle, set the timeout to N frame times, ignore ACK errors, and charge N transmissions for each failed delivery attempt. Then expected transmissions per delivered frame are **1 + Np/(1 − p)**, giving efficiency **(1 − p)/(1 + (N − 1)p)**. With N = 2,501 and p ≈ 0.0119283 this is about **3.21%**. It is a model of retransmission work, not a universal finite-window or measured-network prediction.
+MIT's lecture gives an **approximate** Go-Back-N model: choose N to fill the loss-free feedback cycle, set the timeout to N frame times, ignore ACK errors, and charge N transmissions for each failed delivery attempt:
+
+```formula
+T_avg = 1 + N × p / (1 − p)
+η = 1 / T_avg
+η = (1 − p) / (1 + (N − 1) × p)
+where
+T_avg: the expected number of frame transmissions per delivered frame
+N: the window size in frames (here also the number of frames resent after each failure)
+p: the probability that a frame transmission fails
+η: eta, the efficiency: the fraction of transmissions that deliver new frames
+In words: each failure costs a whole window of N retransmissions, so with a big window even a small failure rate wastes most of the link.
+```
+
+With the example's numbers:
+
+```formula
+η = 0.9880717 / (1 + 2,500 × 0.0119283)
+η ≈ 0.98807 / 30.82 ≈ 0.0321 = 3.21%
+where
+η: eta, the Go-Back-N efficiency for N = 2,501 and p ≈ 0.0119283
+≈: approximately equal to
+In words: with a 2,501-frame window and 1.2% damaged frames, only about **3.21%** of transmissions deliver new data in this model.
+```
+
+It is a model of retransmission work, not a universal finite-window or measured-network prediction.
 
 > [!note] Content omitted after review
 > Measured protocol-performance comparisons are absent because no link implementation or workload has been benchmarked here. The formulas describe their stated idealised models.
 
 ## Key takeaways
-- A code with Hamming distance *d* detects *d* − 1 bit errors and corrects ⌊(*d* − 1)/2⌋. These are alternative guarantees for bounded bit flips.
+- A code with Hamming distance d detects up to d − 1 flipped bits, or corrects up to half of d − 1 (rounded down). These are alternative guarantees for bounded bit flips.
 - Parity catches odd numbers of flips only. The Internet checksum is fast to compute in software but misses reordered words and some cancelling errors.
 - A CRC of degree *r* is XOR long division. It catches all bursts up to *r* bits; Ethernet's CRC-32 catches every 1–3-bit error within its protected region at the frame lengths discussed here. CRCs are not secure against tampering.
 - Corruption between an incoming link check and outgoing check generation can escape both. End-to-end checks are still needed.
-- Stop-and-wait utilisation is (L/R) / (L/R + RTT). Pipelining needs a window of about one bandwidth-delay product.
-- Go-Back-N resends from the loss onward, with window up to 2ᵏ − 1. Selective Repeat retransmits timed-out unacknowledged frames, with window up to 2ᵏ⁻¹. Selective Repeat avoids retransmitting correctly received later frames solely because of an earlier gap.
+- Stop-and-wait utilisation is one frame time divided by one frame time plus a round trip, which is tiny on long fast paths. Pipelining needs a window of about one bandwidth-delay product.
+- Go-Back-N resends from the loss onward, with a window of at most one less than the number of sequence numbers. Selective Repeat retransmits timed-out unacknowledged frames, with a window of at most half the sequence numbers. Selective Repeat avoids retransmitting correctly received later frames solely because of an earlier gap.
 
 ## Further reading
 - [Cyclic redundancy check — Wikipedia](https://en.wikipedia.org/wiki/Cyclic_redundancy_check)

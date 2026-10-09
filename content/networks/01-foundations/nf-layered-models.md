@@ -45,7 +45,7 @@ What each layer is responsible for:
 
 ## Encapsulation
 
-On the way down the stack, each layer takes what the layer above handed it, treats it as an opaque **payload**, and prepends its own **header** (and sometimes appends a trailer). On the way up at the receiver, each layer strips its header, acts on it, and passes the payload up.
+On the way down the stack, each layer takes what the layer above handed it, treats it as an opaque **payload**, and adds its own **header** in front (and sometimes appends a trailer). On the way up at the receiver, each layer strips its header, acts on it, and passes the payload up.
 
 Each layer's unit has a name, the **PDU** (protocol data unit):
 
@@ -87,9 +87,38 @@ A browser sends a 100-byte HTTP request over IPv4 and TCP on wired Ethernet. Ass
 
 The Ethernet header is destination MAC (6 bytes), source MAC (6) and EtherType (2). The 4-byte **FCS** (frame check sequence) is a CRC-32 trailer covered in lesson 6.
 
-On the wire Ethernet also sends an 8-byte preamble and start delimiter before the frame, and then leaves a nominal 12-byte-time **inter-frame gap** between frames. The PHY may transmit idle signalling during this interval, so it is not necessarily electrically silent. So the link is busy for 178 byte-times to deliver 100 bytes of HTTP: about 56% efficiency.
+On the wire Ethernet also sends an 8-byte preamble and start delimiter before the frame, and then leaves a nominal 12-byte-time **inter-frame gap** between frames. The PHY may transmit idle signalling during this interval, so it is not necessarily electrically silent. So the link is busy for 158 + 8 + 12 = 178 byte-times (a byte-time is how long the link takes to send one byte) to deliver 100 bytes of HTTP.
 
-A full-size segment does far better. With a 1500-byte IP packet, TCP carries 1460 bytes of data, and the wire time is 1500 + 38 = 1538 bytes, so efficiency is 1460 / 1538 ≈ **94.9%**. Lesson 2 uses this figure.
+**Efficiency** answers "what share of the link's busy time carried data the application actually wanted?" Divide the useful bytes by everything the frame cost on the wire:
+
+```formula
+η = D / W
+η = 100 B / 178 B ≈ 0.56
+where
+η: eta, the efficiency: the fraction of the link's busy time that carries useful data, from 0 to 1 (0.56 = 56%)
+D: the useful application data in the frame, in bytes (B); here the 100-byte HTTP request
+W: the wire time the frame occupies, counted in byte-times: the data plus every header, trailer, preamble and gap; here 178
+B: bytes; one byte is 8 bits
+≈: approximately equal to (the result is rounded)
+In words: only 100 of every 178 byte-times carry the request, so the link spends about 56% of its time on useful data and 44% on overhead.
+```
+
+A full-size segment does far better, because the same fixed overhead is spread over much more data. With a 1500-byte IP packet, TCP carries 1460 bytes of data (1500 minus 20 bytes of IPv4 header and 20 of TCP header). The Ethernet costs on top are 14 (header) + 4 (FCS) + 8 (preamble and start delimiter) + 12 (gap) = 38 byte-times:
+
+```formula
+W = 1500 B + 38 B = 1538 B
+η = D / W
+η = 1460 B / 1538 B ≈ 0.949
+where
+W: the wire time of one full-size frame, in byte-times: the 1500-byte IP packet plus 38 bytes of Ethernet header, FCS, preamble and gap
+η: eta, the efficiency: the fraction of wire time carrying TCP data (0.949 = 94.9%)
+D: the TCP data carried per frame, in bytes; here 1460
+B: bytes; one byte is 8 bits
+≈: approximately equal to (rounded)
+In words: a full-size frame spends about 95% of its wire time on data, because 78 bytes of overhead are now spread over 1460 bytes of data instead of 100.
+```
+
+The model assumes minimal headers (no TCP or IP options, no VLAN tag) and counts only the fields listed. Options, tags, encryption or tunnelling add bytes and lower the efficiency. Lesson 2 uses the 94.9% figure.
 
 ```
  8      14      20   20   1460      4  12
@@ -146,7 +175,7 @@ In theory a layer knows nothing about the others. In practice the boundaries lea
 - Layering splits networking into independent problems: signals, one-hop delivery, end-to-end delivery, process-to-process delivery, and applications.
 - OSI has seven layers and supplies the numbering; TCP/IP has four and describes what the internet runs. This course uses a five-layer teaching model.
 - Encapsulation adds a header per layer; fields like EtherType, IP Protocol and ports let the receiver demultiplex.
-- Headers cost bandwidth: a 100-byte request uses 178 byte-times on Ethernet, while a full 1460-byte segment is about 95% efficient.
+- Headers cost bandwidth: a 100-byte request uses 178 byte-times on Ethernet (about 56% efficient), while a full 1460-byte segment is about 95% efficient.
 - Layers leak through NAT, checksums, MTU, middleboxes and wireless loss. Many hard network bugs sit at those boundaries.
 
 ## Further reading

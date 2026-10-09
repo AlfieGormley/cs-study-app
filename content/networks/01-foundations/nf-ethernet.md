@@ -31,7 +31,25 @@ The following is the basic untagged format. Tagged/envelope frames and specific 
 Use a nominal **inter-frame gap** of 96 bit-times (12 byte-times) for the steady-rate calculations here. Some PHYs use alignment/deficit-idle rules; gap timing is not literal extra payload bytes. So each frame costs 20 extra bytes of wire time: 8 for preamble and SFD, and 12 for the gap.
 
 > [!example] Packet rates
-> A minimum frame occupies 64 + 20 = 84 bytes = 672 bits of wire time. At 1 Gbit/s that is up to 10⁹ / 672 ≈ **1.49 million frames per second**. At full-size 1538 byte-times it is about 81,000 frames per second. Router and firewall vendors quote "packets per second" figures for exactly this reason: small packets are the hard case.
+> A minimum frame occupies 64 + 20 = 84 bytes of wire time. At 1 Gbit/s that allows up to about **1.49 million frames per second**; at full size it is about 81,000 frames per second. Router and firewall vendors quote "packets per second" figures for exactly this reason: small packets are the hard case.
+
+The most frames a link can carry each second is its bit rate divided by the bits each frame occupies on the wire, overhead included:
+
+```formula
+f_max = R / (8 × (F + 20))
+f_max = (10⁹ bit/s) / (8 bit/B × 84 B)
+f_max = (10⁹ bit/s) / (672 bit)
+f_max ≈ 1.49 × 10⁶ /s
+where
+f_max: the maximum frame rate, in frames per second
+R: the link rate, in bits per second; 1 Gbit/s = 10⁹ bits per second
+F: the frame size from destination address to FCS, in bytes; 64 for a minimum frame, 1518 for a full-size one
+bit: one binary digit; bit/s is bits per second
+B: bytes; 8 bit/B means 8 bits per byte
+s: seconds; /s means "per second", so f_max is in frames per second
+≈: approximately equal to
+In words: each frame costs its own bytes plus 20 bytes of preamble, SFD and gap, times 8 bits per byte. Minimum frames take 672 bits each, so a gigabit link carries up to about 1.49 million of them a second; 1538-byte-time full frames allow about 81,000.
+```
 
 ## MAC addresses
 
@@ -61,15 +79,45 @@ Original Ethernet put every host on one shared coaxial cable (later, one hub). O
 1. **Carrier sense**: listen; if someone is transmitting, wait.
 2. When the line is idle, transmit.
 3. **Collision detect**: while transmitting, listen. If the signal on the wire doesn't match what you're sending, another host started at nearly the same moment. Stop and send a 32-bit **jam** signal so everyone notices.
-4. **Binary exponential backoff**: after the nth collision on this frame, pick K at random from 0 to 2^min(n,10) − 1, and wait K slot times before retrying, still obeying carrier-sense rules. At 10/100 Mbit/s the slot is 512 bit-times; historical half-duplex Gigabit uses 4096 bit-times. Give up after 16 attempts.
+4. **Binary exponential backoff**: after each collision, wait a random whole number of **slot times** before retrying, still obeying carrier-sense rules. The range of possible waits doubles with every collision on this frame, up to a cap (formula below). At 10/100 Mbit/s the slot is 512 bit-times; historical half-duplex Gigabit uses 4096 bit-times. Give up after 16 attempts.
+
+```formula
+K ∈ {0, 1, …, 2^min(n, 10) − 1}
+t_wait = K × t_slot
+where
+K: the number of slot times to wait, chosen at random (each value equally likely)
+∈: "is one of": K is picked from the set in braces
+…: and every whole number in between
+n: how many collisions this frame has suffered so far (1 after the first)
+min: the minimum, the smaller of the two values; it stops the range growing after the 10th collision
+t_wait: the backoff wait before trying again
+t_slot: the slot time: 512 bit-times, which is 51.2 µs (microseconds) at 10 Mbit/s
+In words: after the first collision wait 0 or 1 slots, after the second 0–3, after the third 0–7, and so on, doubling up to 0–1023 slots from the 10th collision onwards.
+```
 
 Backoff adapts to load: with two hosts colliding, after the first collision each picks 0 or 1, so they avoid each other half the time. Repeated collisions widen the range quickly.
 
 ### Why the minimum frame is 64 bytes
 
-A sender only knows about a collision if it is still transmitting when the colliding signal gets back to it. The worst case is a collision at the far end of the network: the signal must travel there and back. So the transmission time of the shortest frame must be at least the maximum round-trip time.
+A sender only knows about a collision if it is still transmitting when the colliding signal gets back to it. The worst case is a collision at the far end of the network: the signal must travel there and back. So the transmission time of the shortest frame must be at least the maximum round-trip time:
 
-At 10 Mbit/s, 64 bytes (512 bits) takes 51.2 µs to send. The **slot time**, propagation and repeater delays together constrain the collision domain; physical topology rules cannot be inferred from cable speed alone. At gigabit speeds, 512 bits takes only 0.512 µs, which would limit a shared segment to a few tens of metres; half-duplex gigabit worked around this with "carrier extension", an historical half-duplex mechanism distinct from modern full-duplex operation.
+```formula
+L_min / R ≥ 2 × d_max / v
+L_min / R = 512 bit / (10⁷ bit/s)
+L_min / R = 51.2 µs
+where
+L_min: the minimum frame length, in bits; 64 bytes = 512 bits
+R: the link rate, in bits per second; 10 Mbit/s = 10⁷ bits per second
+d_max: the largest distance between two hosts on the shared segment, in metres
+v: the signal speed in the cable, in metres per second (about 2 × 10⁸ m/s)
+≥: greater than or equal to
+bit: one binary digit; bit/s is bits per second
+s: seconds
+µs: microseconds, millionths of a second
+In words: sending the smallest frame must take at least as long as a signal needs to reach the far end and come back, so faster links need shorter networks or longer minimum frames.
+```
+
+At 10 Mbit/s, 64 bytes (512 bits) takes 51.2 µs to send. The **slot time**, propagation and repeater delays together constrain the collision domain; physical topology rules cannot be inferred from cable speed alone. At gigabit speeds, 512 bits takes only 0.512 µs (the link is a hundred times faster than 10 Mbit/s, so a frame takes a hundredth of the time), which would limit a shared segment to a few tens of metres; half-duplex gigabit worked around this with "carrier extension", an historical half-duplex mechanism distinct from modern full-duplex operation.
 
 ### Why it no longer matters
 
@@ -87,7 +135,7 @@ Assume valid frames, one VLAN, eligible forwarding ports, ordinary learning and 
 1. **Learn**: when a frame arrives on port P with source MAC S, record "S is reachable via P".
 2. **Forward**: look up the destination MAC.
    - Known, on another port: send it out of that port only.
-   - Known, on the same port it arrived from: drop it (filter).
+   - Known, on the same port it arrived on: drop it (filter).
    - Unknown, broadcast or (by default) multicast: **flood** it to eligible forwarding ports in the same VLAN, excluding ingress. Multicast snooping/filtering can narrow the set.
 3. **Age**: remove dynamic entries after the configured ageing interval when they are not refreshed. Static entries and topology-change handling have different rules.
 

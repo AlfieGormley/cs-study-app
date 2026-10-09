@@ -39,7 +39,7 @@ Field by field:
 |---|---|---|
 | Version | 4 | Always 4 |
 | IHL | 4 | Header length in 32-bit words |
-| DSCP / ECN | 6 / 2 | QoS class, congestion marks |
+| DSCP / ECN | 6 / 2 | QoS traffic class, congestion marks |
 | Total Length | 16 | Header + data, in bytes |
 | Identification | 16 | Groups fragments |
 | Flags | 3 | Reserved, DF, MF |
@@ -51,11 +51,35 @@ Field by field:
 
 A few details worth knowing:
 
-- **IHL** counts 4-byte words, so the usual value is 5 (20 bytes) and the maximum is 15 (60 bytes). Options add header bytes and can encounter filtering or slower processing, depending on the option and equipment.
-- **Total Length** is 16 bits, so a datagram can be at most 65,535 bytes. Basic Ethernet commonly carries 1,500-byte IP packets, but other links, jumbo configurations and encapsulations have different MTUs.
+- **IHL** (Internet Header Length) counts 4-byte words, not bytes. Options add header bytes and can encounter filtering or slower processing, depending on the option and equipment.
+- **Total Length** is a 16-bit field, so it caps the size of a whole datagram. Basic Ethernet commonly carries 1,500-byte IP packets, but other links, jumbo configurations and encapsulations have different MTUs.
 - **Protocol** tells the receiver which handler gets the payload: 1 is ICMP, 6 is TCP, 17 is UDP.
 - **DSCP** (Differentiated Services Code Point) marks traffic classes, for example "expedited forwarding" for voice. **ECN**, when supported by endpoints and the network, permits congestion marking of eligible packets; it does not eliminate all packet drops.
 - The **checksum** covers the header only, not the data. Because every router decrements TTL, a forwarding router must update it, possibly incrementally. IPv6 has no corresponding header checksum.
+
+To turn the IHL field into a header length in bytes, multiply by the word size:
+
+```formula
+L_hdr = IHL × 4 B
+L_hdr = 5 × 4 B = 20 B
+L_hdr = 15 × 4 B = 60 B
+where
+L_hdr: the length of the IPv4 header, in bytes (B)
+IHL: Internet Header Length, the 4-bit header field that counts the header in 32-bit (4-byte) words; 5 when there are no options, 15 at most
+B: bytes; one byte is 8 bits
+In words: multiply the IHL value by 4 to get the header length in bytes. The usual IHL of 5 means a 20-byte header; the largest, 15, means 60 bytes, of which 40 are options.
+```
+
+The largest datagram follows from the size of the Total Length field. A field of 16 bits can hold 65,536 different values (2 to the power 16), from 0 up to one less than that:
+
+```formula
+L_max = (2^16 − 1) B = 65,535 B
+where
+L_max: the largest value the 16-bit Total Length field can hold, and so the largest possible IPv4 datagram (header plus data), in bytes (B)
+2^16: 2 multiplied by itself 16 times, which is 65,536: the number of different values 16 bits can represent
+B: bytes; one byte is 8 bits
+In words: Total Length counts from 0, so its largest value is 65,536 − 1 = 65,535 bytes. In practice the link MTU, usually far smaller, is what limits real packets.
+```
 
 ### Reading a header in Python
 
@@ -106,7 +130,19 @@ A forwarding router decrements TTL by at least one. If it expires, the router di
 
 Why bother? Transient routing loops can occur while routers disagree about the topology (see the interior routing lesson). Without TTL, forwarding has no hop-count expiry, though congestion or faults can still drop packets. With initial TTL at most 255 and compliant forwarding, an ordinary datagram cannot be forwarded indefinitely. Tunnel encapsulation uses its own outer TTL and needs separate consideration.
 
-The sender chooses the initial TTL. If it is known to be 64 and each router subtracts exactly one without rewriting or encapsulation, arrival at 52 means 12 forwarding hops. An observed TTL alone does not establish the starting value or identify an operating system.
+The sender chooses the initial TTL. If you know that starting value, and each router subtracts exactly one without rewriting or encapsulation, the difference counts the routers crossed:
+
+```formula
+h = TTL_0 − TTL_rx
+h = 64 − 52 = 12
+where
+h: the number of forwarding hops, that is routers that decremented the TTL; a whole number with no unit
+TTL_0: the initial TTL the sender set, here 64
+TTL_rx: the TTL value in the packet when it arrives, here 52
+In words: each router takes one off, so the amount that has gone missing is the number of routers the packet passed through.
+```
+
+This only works when both assumptions hold. An observed TTL alone does not establish the starting value or identify an operating system.
 
 > [!note] Content omitted after review
 > A universal OS-default table and Internet hop-count range are omitted because they depend on platform versions, configuration and measurements not established here.
@@ -120,7 +156,25 @@ If a router must forward a datagram bigger than the next link's MTU, IPv4 gives 
 1. **Fragment** it into smaller datagrams, if the **DF** (Don't Fragment) flag is clear.
 2. **Drop** it if DF is set, and report ICMP "Fragmentation Needed" when error-generation and rate rules permit.
 
-In ordinary IP forwarding, reassembly is performed at the **destination**, not as a normal transit-router step. Firewalls/NATs may track or reassemble fragments for their separate functions, and a tunnel endpoint is the destination of the outer packet. Each fragment has its own IP header; option-copy rules mean not every option appears in every fragment. Fragments share **Identification**, carry an **offset** in 8-byte units and have **MF** set unless they contain the end of the original payload.
+In ordinary IP forwarding, reassembly is performed at the **destination**, not as a normal transit-router step. Firewalls/NATs may track or reassemble fragments for their separate functions, and a tunnel endpoint is the destination of the outer packet. Each fragment has its own IP header; option-copy rules mean not every option appears in every fragment. Fragments share the same **Identification field** value, carry an **offset** in 8-byte units and have **MF** set unless they contain the end of the original payload.
+
+Two rules set the fragment sizes. Every fragment except the last must carry a multiple of 8 data bytes, because the offset field counts in 8-byte units. So a router fits as much data as the MTU allows after the header, rounded down to a multiple of 8:
+
+```formula
+D = ⌊(MTU − H) / 8⌋ × 8
+F = O / 8
+where
+D: the data carried by each non-final fragment, in bytes (B)
+MTU: the maximum transmission unit of the outgoing link: the largest IP packet it carries, in bytes
+H: the IP header length of each fragment, in bytes; 20 with no options
+⌊ ⌋: floor: round down to a whole number, so ⌊185.9⌋ = 185
+F: the value written in a fragment's Fragment Offset field, in 8-byte units
+O: where the fragment's data starts within the original data, in bytes, counting from 0
+B: bytes; one byte is 8 bits
+In words: take the room left after the header, round it down to a multiple of 8, and record each fragment's starting position divided by 8.
+```
+
+The example below applies these rules.
 
 > [!example] Fragmenting 4,000 bytes over a 1,500-byte link
 > A datagram has a 20-byte header and 3,980 bytes of data. Each fragment can carry 1,500 − 20 = 1,480 data bytes (a multiple of 8, as required).
@@ -130,6 +184,24 @@ In ordinary IP forwarding, reassembly is performed at the **destination**, not a
 > - Fragment 3: 1,020 bytes, offset 370, MF = 0
 >
 > Check: 1,480 + 1,480 + 1,020 = 3,980. Total lengths on the wire are 1,500, 1,500 and 1,040.
+
+The same numbers, worked with the formula:
+
+```formula
+D = ⌊(1500 − 20) / 8⌋ × 8 = 1480 B
+F_2 = 1480 / 8 = 185
+F_3 = 2960 / 8 = 370
+D_3 = 3980 − 2960 = 1020 B
+where
+D: the data carried by each non-final fragment, in bytes (B); 1,480 is already a multiple of 8, so rounding changes nothing here
+⌊ ⌋: floor: round down to a whole number
+F_2, F_3: the Fragment Offset field values of fragments 2 and 3, in 8-byte units; fragment 1 starts at 0
+D_3: the data left over for the last fragment, in bytes
+B: bytes; one byte is 8 bits
+In words: two full fragments carry 1,480 bytes each and start at bytes 0 and 1,480; the third starts at byte 2,960 (field value 370) and carries the remaining 1,020 bytes.
+```
+
+The rounding matters when the room left is not a multiple of 8: an MTU of 1,000 leaves 980 bytes, but only 976 can be used.
 
 ```python
 def fragment(data_len, mtu, hdr=20):
@@ -178,6 +250,20 @@ Fragmentation works, but it is bad news in practice:
 - **Reassembly costs memory** at the receiver and is a classic denial-of-service target (overlapping-fragment attacks, fragment floods).
 - **ID wrap-around.** At high speeds the 16-bit Identification wraps quickly, risking fragments from different datagrams being stitched together.
 
+How quickly? A 16-bit counter has 65,536 values, so if a sender uses one per datagram:
+
+```formula
+t_wrap = 2^16 / r
+t_wrap = 65,536 / 15,000 per s ≈ 4.4 s
+where
+t_wrap: the time before the Identification counter repeats a value, in seconds (s)
+2^16: 2 multiplied by itself 16 times, 65,536: the number of different values the 16-bit Identification field can hold
+r: the rate at which the sender sends datagrams to the same destination with the same protocol, in datagrams per second; about 15,000 for 8 KB datagrams at 1 Gbit/s
+≈: approximately equal to (the result is rounded)
+s: seconds
+In words: the faster the sender, the sooner Identification values repeat. If reassembly state lasts longer than this (often tens of seconds), an old fragment can be mistaken for part of a new datagram.
+```
+
 IPv6 takes the lesson to heart: routers **never** fragment. Only the sending host may, using an extension header, and every IPv6 link must present an MTU of at least 1,280 bytes to IPv6, using fragmentation below IPv6 if the physical link needs it.
 
 ## Path MTU Discovery
@@ -208,8 +294,24 @@ Classic ICMP-based PMTUD depends on error feedback reaching the sender. If that 
 Common fixes:
 
 - **Permit necessary ICMP errors.** IPv4 type 3/code 4 and ICMPv6 type 2 carry MTU feedback. ICMPv6 also supports essential functions such as neighbour discovery; treat message types appropriately rather than applying a blanket rule.
-- **MSS clamping.** Routers on tunnels or PPPoE links rewrite the TCP **MSS** option in SYN packets to limit what the receiving peer sends. Bidirectional coverage requires handling MSS advertisements in both directions; MSS is not one jointly negotiated value. For inner IPv4 with fixed 20-byte IP/TCP headers, a 1,492-byte IP MTU gives MSS 1,452. MSS does not constrain UDP; senders must also account for any options when forming packets (RFC 6691).
+- **MSS clamping.** Routers on tunnels or PPPoE links rewrite the TCP **MSS** (maximum segment size) option in SYN packets to limit what the receiving peer sends. Bidirectional coverage requires handling MSS advertisements in both directions; MSS is not one jointly negotiated value. MSS does not constrain UDP; senders must also account for any options when forming packets (RFC 6691).
 - **Packetization Layer PMTUD** (RFC 4821, and RFC 8899 for datagram protocols like QUIC) probes with progressively larger packets and watches for loss, without relying on ICMP.
+
+The MSS counts only TCP data, so the right clamp value is the MTU minus both headers. For inner IPv4 with fixed 20-byte IP and TCP headers (no options):
+
+```formula
+MSS = MTU − H_IP − H_TCP
+MSS = 1492 − 20 − 20 = 1452 B
+where
+MSS: maximum segment size: the most TCP data bytes one segment may carry, in bytes (B)
+MTU: the IP MTU of the link or tunnel, in bytes; here 1,492 for PPPoE
+H_IP: the IPv4 header length, 20 bytes without options
+H_TCP: the TCP header length, 20 bytes without options
+B: bytes; one byte is 8 bits
+In words: subtract the IP and TCP headers from the MTU, and what is left is the most data a full-size TCP segment can carry without being too big for the link.
+```
+
+On ordinary 1,500-byte Ethernet the same sum gives the familiar 1,460. Any IP or TCP options make the headers bigger and the usable MSS smaller.
 
 ## ICMP: IP's error and diagnostic channel
 
@@ -224,7 +326,7 @@ The **Internet Control Message Protocol** (ICMP, RFC 792) rides inside IP (proto
 
 The IPv4 errors discussed here quote the offending IP header and at least the first 8 bytes of its payload, so the sender can match the error to the right connection (for a first fragment carrying TCP or UDP, these include the ports). The returned data cannot exceed what was actually available.
 
-To avoid storms, hosts never send an ICMP error about an ICMP error, about a fragment other than the first, or about a broadcast. Routers also **rate-limit** the ICMP they generate.
+To avoid storms, hosts never send an ICMP error about an ICMP error, about a fragment other than the first, or about a broadcast. Routers also apply **rate limiting** to the ICMP they generate.
 
 ### ping
 
@@ -234,8 +336,8 @@ To avoid storms, hosts never send an ICMP error about an ICMP error, about a fra
 
 `traceroute` discovers the routers along a path by sending probes with deliberately small TTLs:
 
-1. Send a probe with TTL = 1. The first router decrements it to 0, drops it and returns **Time Exceeded**. Its source address reveals hop 1.
-2. Send with TTL = 2. The second router replies. And so on.
+1. Send a probe with a TTL of 1. The first router decrements it to 0, drops it and returns **Time Exceeded**. Its source address reveals hop 1.
+2. Send with a TTL of 2. The second router replies. And so on.
 3. Eventually a probe reaches the destination, which replies differently, and traceroute stops.
 
 The classic Unix traceroute sends **UDP** probes to unlikely high ports (starting at 33434). The destination answers with ICMP **Port Unreachable** (type 3, code 3), which signals "you've arrived". Windows `tracert` sends ICMP Echo Requests instead and stops on an Echo Reply. Probe counts, starting ports and stopping rules depend on the implementation and options.

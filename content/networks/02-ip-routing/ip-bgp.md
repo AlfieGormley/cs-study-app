@@ -18,6 +18,18 @@ An **autonomous system** (AS) is a network under one administrative policy: an I
 - Private ranges exist for internal use: 64512–65534 and 4200000000–4294967294.
 - AS numbers in the examples below illustrate routing policy; they are not instructions to announce those routes publicly.
 
+Here is why 16 bits ran short, and where the reserved numbers originate:
+
+```formula
+N_16 = 2^16 = 65,536
+N_32 = 2^32 = 4,294,967,296
+where
+N_16: the number of values a 16-bit ASN field can encode, from 0 to 65,535
+N_32: the number of values a 32-bit ASN field can encode, from 0 to 4,294,967,295
+2^16, 2^32: 2 multiplied by itself 16 or 32 times
+In words: 16 bits allow only about 65 thousand AS numbers, too few for every network on the Internet; 32 bits allow about 4.3 billion. The reserved values 65535 and 4294967295 are the largest number each field size can hold.
+```
+
 An AS can use an IGP such as OSPF or IS-IS internally, alongside internal BGP. eBGP exchanges routes between ASes; designs can also use eBGP inside one organisation.
 
 ## A path-vector protocol
@@ -44,8 +56,21 @@ BGP routers ("speakers") form sessions over **TCP port 179**, using configured p
 |---|---|
 | OPEN | Start session, exchange ASN and hold time |
 | UPDATE | Announce or withdraw prefixes |
-| KEEPALIVE | Maintain liveness; one third of a nonzero hold time is a suggested maximum interval |
+| KEEPALIVE | Maintain liveness at a suggested interval of at most a third of the hold time |
 | NOTIFICATION | Error; close the session |
+
+The hold time is how long a router waits to hear anything from its peer before declaring the session dead. RFC 4271 suggests a default hold time of 90 seconds, and sending KEEPALIVEs often enough that two in a row can be lost before the hold time runs out:
+
+```formula
+t_KA ≤ t_hold / 3
+t_KA ≤ 90 s / 3 = 30 s
+where
+t_KA: the interval between KEEPALIVE messages, in seconds (s)
+t_hold: the negotiated hold time, in seconds; RFC 4271 suggests 90 s, and zero turns the hold timer and KEEPALIVEs off
+≤: is at most
+s: seconds
+In words: send a KEEPALIVE at least three times per hold time, so a single lost message does not bring the session down.
+```
 
 After the initial permitted route exchange, normal updates are incremental. Route-refresh extensions can request re-advertisements. KEEPALIVE or UPDATE receipt can reset the hold timer; negotiated hold time zero disables this timer and KEEPALIVEs. Memory needs depend on prefixes, paths, attributes and implementation.
 
@@ -54,24 +79,35 @@ After the initial permitted route exchange, normal updates are incremental. Rout
 - **eBGP** runs between different ASes, usually over a direct link.
 - **iBGP** runs between routers in the *same* AS, to distribute BGP reachability internally, subject to selection and export policy.
 
-iBGP does not prepend the local ASN, so the AS_PATH cannot record internal router traversal. In base iBGP, an iBGP-learned route is not re-advertised to another internal peer. A full mesh therefore needs n(n−1)/2 sessions: 4,950 for 100 routers. **Route reflectors** (RFC 4456) relax that restriction: selected client routes can be reflected to clients and non-clients, while non-client routes are reflected to clients. ORIGINATOR_ID and CLUSTER_LIST support reflection-loop detection. Confederations are another scaling approach.
+iBGP does not prepend the local ASN, so the AS_PATH cannot record internal router traversal. In base iBGP, an iBGP-learned route is not re-advertised to another internal peer, so every BGP router must have a session with every other one, a full mesh:
+
+```formula
+S = n × (n − 1) / 2
+S = 100 × 99 / 2 = 4,950
+where
+S: the number of iBGP sessions in a full mesh
+n: the number of BGP routers in the AS, here 100
+In words: each of the n routers needs a session with the n − 1 others, and dividing by 2 counts each shared session once. Doubling the routers roughly quadruples the sessions.
+```
+
+**Route reflectors** (RFC 4456) relax that restriction: selected client routes can be reflected to clients and non-clients, while non-client routes are reflected to clients. ORIGINATOR_ID and CLUSTER_LIST support reflection-loop detection. Confederations are another scaling approach.
 
 ## Path attributes and best-path selection
 
-Each route carries **attributes**:
+Each route carries **path attributes**:
 
 - **AS_PATH**: the advertised AS traversal, possibly including prepending.
 - **NEXT_HOP**: where to send the traffic.
 - **LOCAL_PREF**: a preference set *inside* your AS and shared over iBGP. Higher wins.
 - **MED** (multi-exit discriminator): a hint from a neighbour about which of several links into it you should use. Lower wins.
-- **Communities**: tags like `65010:100` that carry meaning by agreement, such as "don't announce this to peers" or "prepend twice towards Europe".
+- **BGP communities**: tags like `65010:100` that carry meaning by agreement, such as "don't announce this to peers" or "prepend twice towards Europe".
 
 Among eligible routes for the same prefix, a common Cisco-style sequence is below. Reachability checks, vendor-specific steps (including Cisco weight before LOCAL_PREF), configuration and multipath settings matter; this is not a universal BGP ordering:
 
 1. Highest **LOCAL_PREF**.
 2. Prefer routes originated locally.
 3. Shortest **AS_PATH**.
-4. Lowest **origin** attribute (IGP, then EGP, then incomplete). These are attribute codes, not proof that the route was learned through an IGP.
+4. Lowest **origin attribute** (IGP, then EGP, then incomplete). These are attribute codes, not proof that the route was learned through an IGP.
 5. Lowest **MED** (normally only between routes from the same neighbouring AS).
 6. **eBGP** over iBGP.
 7. Lowest IGP cost to the NEXT_HOP ("hot potato").
@@ -131,7 +167,7 @@ A simplified commercial policy consistent with the **Gao–Rexford** model is sh
 | Peer | Middle | Customers only |
 | Provider | Least (you pay) | Customers only |
 
-The export rule produces **valley-free** paths: traffic goes up through providers, across at most one peer link, and down through customers. Under these export restrictions a network does not provide transit between its providers. Real contracts and routing policies can differ; convergence results require additional model assumptions, including an acyclic customer-provider hierarchy.
+The export rule produces **valley-free** paths: traffic goes up through providers, across at most one peer link, and down through customers. Under these export restrictions a network does not provide transit between its providers. Real contracts and routing policies can differ; results about BGP convergence require additional model assumptions, including an acyclic customer-provider hierarchy.
 
 ### Traffic engineering
 
@@ -142,7 +178,7 @@ Operators steer traffic with the tools above:
 - **More-specific prefixes**: announce a /23 everywhere and two /24s from different sites. Where those more-specific routes are accepted and installed, longest-prefix match selects them.
 - **Anycast**: announce the same prefix from many locations. Routing policy selects one reachable announcement; this need not be the geographically closest or lowest-latency site. DNS services can use this arrangement.
 
-RFC 7454 documented IPv4 **/24** and IPv6 **/48** as common public-routing specificity limits in 2015, while explicitly allowing those practices to change. Acceptance depends on the receiving network and its current policy. More-specific routes can be useful in private or explicitly agreed routing; no announcement length guarantees global propagation.
+RFC 7454 documented IPv4 **/24** and IPv6 **/48** as common public-routing specificity limits in 2015, while explicitly allowing those practices to change. Acceptance depends on the receiving network and its current policy. More-specific routes can be useful in private or explicitly agreed routing; no announcement length guarantees that a route spreads everywhere.
 
 ## When BGP goes wrong
 
@@ -150,7 +186,7 @@ BGP believes what neighbours tell it unless operators filter. Mistakes and attac
 
 ### Hijacks
 
-A **hijack** is an unauthorised route announcement for address space. A more-specific announcement is especially effective, because longest-prefix match prefers it where it is accepted and installed alongside the covering route.
+A **BGP hijack** is an unauthorised route announcement for address space. A more-specific announcement is especially effective, because longest-prefix match prefers it where it is accepted and installed alongside the covering route.
 
 - **Pakistan Telecom and YouTube, February 2008.** Ordered to block YouTube domestically, Pakistan Telecom (AS17557) announced 208.65.153.0/24, a more specific part of YouTube's 208.65.152.0/22. Its upstream, PCCW, passed it on without filtering, and much of the world's YouTube traffic was drawn to Pakistan and dropped, during the interval documented by RIPE RIS from 18:47 to 21:01 UTC on 24 February. YouTube first counter-announced the /24, then two /25s; acceptance varied by network.
 - **Amazon Route 53, April 2018.** Attackers announced more-specific routes for some of Amazon's DNS address space via a small ISP (eNet, AS10297). For about two hours, DNS queries for the cryptocurrency site MyEtherWallet were answered by an attacker's server, which sent users to a phishing copy. Cloudflare documented the redirection and certificate-warning risk; this lesson does not establish a reliable total financial loss.
@@ -161,16 +197,16 @@ A **route leak** breaks the export rules: a network re-announces routes it shoul
 
 - **Verizon and DQE, June 2019.** DQE Communications used a "BGP optimiser" that generated more-specific routes internally. These leaked to a customer, Allegheny Technologies, which announced them to its other provider, Verizon (AS701). Verizon accepted and propagated them, and traffic for parts of Cloudflare, Amazon and others was drawn through a small network that couldn't carry it.
 
-### Self-inflicted: Facebook, October 2021
+### Self-inflicted: the Facebook outage, October 2021
 
-On 4 October 2021 a maintenance command accidentally disconnected Facebook's backbone. Facebook's DNS servers are built to **withdraw** their BGP announcements if they can't reach the data centres, so they did. The prefixes holding Facebook's authoritative DNS vanished from the Internet, `facebook.com` stopped resolving, and the backbone disconnection disrupted Facebook services. Cached DNS answers could still exist; DNS failure was a consequence that compounded the underlying network outage. Internal tools depended on the same network, which slowed the recovery.
+On 4 October 2021 a maintenance command accidentally disconnected Facebook's backbone. Facebook's DNS servers are built to **withdraw** their BGP announcements (a **route withdrawal**) if they can't reach the data centres, so they did. The prefixes holding Facebook's authoritative DNS vanished from the Internet, `facebook.com` stopped resolving, and the backbone disconnection disrupted Facebook services. Cached DNS answers could still exist; DNS failure was a consequence that compounded the underlying network outage. Internal tools depended on the same network, which slowed the recovery.
 
 ## RPKI: authorising route origins
 
 The **Resource Public Key Infrastructure** adds cryptographic evidence about who may originate a prefix.
 
-1. Resource certificates form a validation chain rooted in configured trust anchors. They attest resource control within this system, rather than legal ownership.
-2. A holder signs a **ROA** (route origin authorisation): "AS X may originate prefix P, up to length L."
+1. Resource certificates form a validation chain rooted in configured trust anchors. They attest who holds the address and AS resources within this system, rather than legal ownership.
+2. A holder signs a **ROA** (route origin authorisation): a statement that one named AS may originate a prefix, announced at any length from the prefix's own length up to a stated maximum length (**maxLength**).
 3. Validator software checks signed objects and supplies validated prefix/origin/max-length records to routers. For the simple AS_SEQUENCE paths here, the origin is the final ASN.
 
 **Route origin validation** (ROV, RFC 6811) gives each route one of three states:
@@ -181,7 +217,21 @@ The **Resource Public Key Infrastructure** adds cryptographic evidence about who
 | Invalid | Covering validated records exist, but none authorises both origin and length |
 | NotFound | No ROA covers it |
 
-Operators choose how to use validation states; **dropping Invalid** routes is a filtering policy, not an automatic effect of computing ROV. Had YouTube's /22 had a ROA with max length 22, Pakistan Telecom's /24 would have been Invalid twice over (wrong origin, too long).
+For a route covered by a ROA, the check is two comparisons, and both must pass:
+
+```formula
+a = a_ROA
+p ≤ L
+where
+a: the route's origin AS: the last ASN in its AS_PATH
+a_ROA: the AS the ROA authorises to originate the prefix
+p: the route's prefix length, for example 24 for a /24
+L: the ROA's max length: the longest prefix it allows
+≤: is at most
+In words: a covered route is Valid when its origin is the authorised AS and its prefix is no longer than the max length; if no covering ROA passes both checks it is Invalid.
+```
+
+Operators choose how to use validation states; **dropping Invalid** routes is a filtering policy, not an automatic effect of computing ROV. Had YouTube's /22 had a ROA with max length 22, Pakistan Telecom's /24 would have been Invalid twice over: the origin AS 17557 is not YouTube's, and 24 is more than 22.
 
 > [!warning] Max length cuts both ways
 > In a hypothetical prefix-arithmetic example, a ROA for 192.0.0.0/22 with max length 24 authorises your /24s, but if you only announce the /22, an attacker can announce a /24 with *your* ASN as origin and pass validation. RFC 9319 recommends ROAs that match exactly what you announce.
@@ -190,9 +240,9 @@ Operators choose how to use validation states; **dropping Invalid** routes is a 
 
 ROV checks the **origin only**. An attacker who announces your prefix with a fake path ending in your ASN (`666 65010`) can be Valid when origin and prefix length are authorised. ROV does not validate the intervening path or detect a leak that retains an authorised origin.
 
-- **BGPsec** (RFC 8205) provides signed AS-path propagation for participating BGPsec speakers. Its protection depends on cryptographic validation and deployment; it is not a claim that every forwarding router signs every packet.
+- **BGPsec** (RFC 8205) signs the AS path hop by hop for participating BGPsec speakers. Its protection depends on cryptographic validation and deployment; it is not a claim that every forwarding router signs every packet.
 - **ASPA** (autonomous system provider authorisation) publishes authorised provider relationships. The IETF verification draft retrieved for this review is work in progress (August 2026); detection depends on relationship data, direction and validation rules, and is not guaranteed for every forged path.
-- **Filtering** remains the basic defence: providers should accept from customers only the prefixes they're registered to announce, and cap how many. The MANRS initiative publishes these practices as baseline norms.
+- **Prefix filtering** remains the basic defence: providers should accept from customers only the prefixes they're registered to announce, and cap how many. The MANRS initiative publishes these practices as baseline norms.
 
 > [!note] Content omitted after review
 > Current AS/route counts, adoption percentages, router performance guarantees and the Route 53 incident's financial loss are omitted because this review did not establish reliable dated evidence for them. No live Internet routing changes were performed to validate the examples.

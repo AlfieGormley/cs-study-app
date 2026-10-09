@@ -6,7 +6,7 @@ minutes: 16
 summary: How NAT and port translation stretch IPv4, why they break end-to-end connectivity, how STUN, TURN and ICE get around them, and how IPv6 addressing, SLAAC and dual stack work.
 ---
 
-IPv4 has 2³² possible address values, about 4.3 billion, with some reserved for special purposes. **NAT** shares or translates address space; **IPv6** provides a much larger address space. They address different aspects of connectivity and coexist in deployed networks.
+IPv4 has 2³² possible address values (2 multiplied by itself 32 times), about 4.3 billion, with some reserved for special purposes. **NAT** shares or translates address space; **IPv6** provides a much larger address space. They address different aspects of connectivity and coexist in deployed networks.
 
 ## Network address translation
 
@@ -15,7 +15,7 @@ A **NAT** device, usually your home router or a cloud NAT gateway, sits between 
 ### Kinds of NAT
 
 - **Static NAT**: a fixed one-to-one mapping. Private 10.0.0.5 always appears as public 198.51.100.5. Used to expose a server.
-- **Dynamic NAT**: private hosts borrow a public address from a pool while they're active. Still one-to-one at any moment.
+- **Dynamic NAT**: private hosts borrow a public address from a pool while they're active. Still one private address per public address at any moment.
 - **NAPT / PAT** (port address translation, often called "NAT overload" or masquerading): many private hosts share **one** public address, distinguished by **port**. NAPT is commonly used on home gateways; product configurations differ.
 
 ### How port translation works
@@ -83,7 +83,7 @@ print(nat.inbound(8080))
 
 The toy drops inbound packets without a mapping. Real routers may also have static mappings, an explicitly configured fallback host or locally listening services. Translation lookup and firewall policy are distinct.
 
-Real NATs expire state. RFC 4787 requires UDP mappings to last at least two idle minutes, with a specific exception for certain well-known destination ports; it recommends a default of at least five minutes. RFC 5382 specifies at least 2 hours 4 minutes for established TCP idle state when the NAT cannot determine whether endpoints remain active. These are protocol requirements, not measurements of every router. Keepalive choices must account for the application, state-refresh rules and actual network.
+Real NATs expire state. RFC 4787 requires UDP mappings to last at least two idle minutes, with a specific exception for certain well-known destination ports; it recommends a default of at least five minutes. RFC 5382 specifies at least 2 hours 4 minutes for idle established TCP connections when the NAT cannot determine whether endpoints remain active. These are protocol requirements, not measurements of every router. Keepalive choices must account for the application, state-refresh rules and actual network.
 
 ### Mapping and filtering behaviour
 
@@ -94,7 +94,7 @@ NATs differ in two ways that matter for peer-to-peer apps (RFC 4787 terms):
 | Mapping | Reuses a mapping for the same internal endpoint across destinations | Mapping depends on the remote IP and port |
 | Filtering | Anyone may send to the mapping | Only previously contacted remote IP:port pairs |
 
-Older literature uses "full cone", "restricted cone", "port-restricted cone" and **symmetric** NAT. Those historical categories combine properties; describing mapping and filtering separately is clearer. Destination-dependent mapping can make a STUN-observed mapping unusable with another peer. It does not by itself prove that all direct connectivity checks will fail.
+Older literature uses "full cone", "restricted cone", "port-restricted cone" and **symmetric NAT**. Those historical categories combine properties; describing mapping and filtering separately is clearer. Destination-dependent mapping can make a STUN-observed mapping unusable with another peer. It does not by itself prove that all direct connectivity checks will fail.
 
 ## Why NAT breaks end-to-end connectivity
 
@@ -106,7 +106,7 @@ IP was designed so any host could send a packet to any other. NAT breaks that:
 - **Carrier-grade NAT** shares public IPv4 addresses among subscribers. It can add another translation layer beyond a home NAT, and RFC 6598 provides 100.64.0.0/10 for shared internal addressing. Sharing ratios vary. IP-based bans can affect unrelated subscribers; attribution needs sufficiently detailed mapping records, including protocol, ports and time. A subscriber mapping is not proof of an individual person's identity.
 
 > [!note] NAT is not a firewall
-> Translation does not define a complete security policy. Missing mappings can prevent delivery, while filtering determines which traffic may use existing mappings. IPv6 can apply stateful firewall rules without address translation.
+> Translation does not define a complete security policy. Missing mappings can prevent delivery, while filtering determines which traffic may use existing mappings. IPv6 can apply stateful firewall rules without network address translation.
 
 ## NAT traversal: STUN, TURN and ICE
 
@@ -135,7 +135,22 @@ Video calls, WebRTC, games and VPN meshes (Tailscale, for example) want direct p
 
 ## IPv6
 
-IPv6 (RFC 8200) is the long-term fix: **128-bit** addresses, about 3.4 × 10³⁸ of them. The base header is a fixed 40 bytes with no checksum and no router fragmentation; TTL is renamed **Hop Limit**, and extras go in optional extension headers.
+IPv6 (RFC 8200) is the long-term fix: **128-bit** addresses. Every extra bit doubles the number of possible addresses, so 96 more bits than IPv4 make an enormous difference:
+
+```formula
+N_4 = 2^32 ≈ 4.3 × 10^9
+N_6 = 2^128 ≈ 3.4 × 10^38
+N_6 / N_4 = 2^96 ≈ 7.9 × 10^28
+where
+N_4: the number of possible IPv4 address values
+N_6: the number of possible IPv6 address values
+2^32, 2^96, 2^128: 2 multiplied by itself 32, 96 or 128 times
+10^9, 10^28, 10^38: 1 followed by 9, 28 or 38 zeros; 10^9 is a billion
+≈: approximately equal to (the result is rounded)
+In words: IPv4 has about 4.3 billion addresses; IPv6 has about 340 undecillion (34 followed by 37 zeros), roughly 79 thousand trillion trillion times as many.
+```
+
+The base header is a fixed 40 bytes with no checksum and no router fragmentation; TTL is renamed **Hop Limit**, and extras go in optional extension headers.
 
 ### Writing addresses
 
@@ -166,7 +181,18 @@ There is no broadcast; multicast groups like `ff02::1` (all nodes on the link) r
 
 ### The /64 convention
 
-A global address is typically split 64/64: a **prefix** (routing) and an **interface identifier** (the host). Ethernet SLAAC uses **/64** prefixes. Other uses include /127 point-to-point router links and /128 host routes, so IPv6 routing is not limited to /64. Delegation sizes vary; a /56 contains 256 /64s and a /48 contains 65,536.
+A global address is typically split 64/64: a **prefix** (routing) and an **interface identifier** (the host). Ethernet SLAAC uses **/64** prefixes. Other uses include /127 point-to-point router links and /128 host routes, so IPv6 routing is not limited to /64. Delegation sizes vary. How many /64 subnets a delegated prefix holds depends on the bits between its length and 64:
+
+```formula
+S = 2^(64 − p)
+S = 2^(64 − 56) = 2^8 = 256
+S = 2^(64 − 48) = 2^16 = 65,536
+where
+S: the number of /64 subnets that fit inside the delegated prefix
+p: the delegated prefix length, for example 56 for a /56; at most 64
+2^8, 2^16: 2 multiplied by itself 8 or 16 times
+In words: the bits between the delegated prefix and the /64 boundary number the subnets; 8 such bits give 256 subnets and 16 give 65,536.
+```
 
 ### SLAAC: configuring without a server
 
@@ -175,10 +201,23 @@ A global address is typically split 64/64: a **prefix** (routing) and an **inter
 1. Form a **link-local** address: `fe80::` + an interface identifier.
 2. Run **duplicate address detection** (DAD): probe the tentative address with Neighbor Solicitation. A conflicting Advertisement or another host's DAD Solicitation can reveal a duplicate; absence of a reply is not an absolute uniqueness guarantee.
 3. Send a **Router Solicitation** to `ff02::2` (all routers).
-4. A **Router Advertisement** may carry prefix information and flags. A usable autonomous prefix must have its A flag set and suitable length/lifetimes. The RA source becomes a default-router candidate only with a nonzero router lifetime; an RA need not advertise a prefix or a default route.
+4. A **Router Advertisement** (RA) may carry prefix information and flags. A usable autonomous prefix must have its A flag set and suitable length/lifetimes. The RA source becomes a default-router candidate only with a nonzero router lifetime; an RA need not advertise a prefix or a default route.
 5. The host can form an address from an eligible prefix and interface identifier, then perform DAD. Working routing, neighbour resolution and other configuration are still needed for external connectivity.
 
-One historical interface-identifier method derives it from the MAC (**modified EUI-64**): split the MAC, insert `ff:fe`, and XOR the first byte with `0x02` (the U/L bit). `00:1a:2b:3c:4d:5e` becomes `021a:2bff:fe3c:4d5e`. That leaks a stable hardware ID everywhere you go, so alternatives include opaque, prefix-dependent **stable** identifiers (RFC 7217) and changing **temporary** addresses (RFC 8981). Which method is enabled depends on the system and configuration; stable identifiers are not freshly randomised for every connection.
+One historical interface-identifier method derives it from the MAC (**modified EUI-64**): split the 48-bit MAC in half, insert `ff:fe` between the halves to make 64 bits, and flip the universal/local (**U/L**) bit, worth 0x02, in the first byte. Flipping one bit is an exclusive-or:
+
+```formula
+y = x XOR 0x02
+y = 0x00 XOR 0x02 = 0x02
+y = 0x3c XOR 0x02 = 0x3e
+where
+x: the first byte of the MAC address, written in hexadecimal (0x prefix: base 16, digits 0–9 and a–f)
+y: the first byte of the interface identifier
+XOR: exclusive or: compare two values bit by bit; each result bit is 1 when the two bits differ, so XOR with 0x02 flips only the second-lowest bit
+In words: the first byte is copied with just its U/L bit flipped: 00 becomes 02 and 3c becomes 3e. Every other byte is copied unchanged.
+```
+
+So `00:1a:2b:3c:4d:5e` becomes `021a:2bff:fe3c:4d5e`. That leaks a stable hardware ID everywhere you go, so alternatives include opaque, prefix-dependent **stable identifiers** (RFC 7217) and changing **temporary addresses** (RFC 8981). Which method is enabled depends on the system and configuration; stable identifiers are not freshly randomised for every connection.
 
 RA flags say whether to also use **DHCPv6**: M (managed: get addresses from DHCPv6) and O (other: get options such as DNS from DHCPv6). DNS servers can also be sent in the RA itself (RDNSS). Support for DHCPv6 modes varies across client versions. M/O flags do not force a client to implement a mode, and SLAAC prefix processing is controlled separately by the prefix A flag.
 

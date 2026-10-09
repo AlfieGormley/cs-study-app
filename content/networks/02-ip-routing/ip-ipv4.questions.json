@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Split the byte into nibbles: `0x46` → `4` and `6`.\n2. High nibble = Version = 4 (IPv4).\n3. Low nibble = IHL = 6, measured in 32-bit words.\n4. 6 × 4 = **24 bytes**.\n5. The fixed header is 20 bytes (IHL 5), so this packet carries 4 bytes of options/padding. The maximum is IHL 15 = 60 bytes.",
+    "workedExample": "1. Split the byte into nibbles (4-bit halves, one hexadecimal digit each): `0x46` → `4` and `6`.\n2. The high nibble is the Version: 4, so this is IPv4.\n3. The low nibble is the IHL: 6, counted in 32-bit (4-byte) words.\n\n```formula\nL_hdr = IHL × 4 B\nL_hdr = 6 × 4 B = 24 B\nwhere\nL_hdr: the IPv4 header length, in bytes (B)\nIHL: Internet Header Length, the 4-bit field counting the header in 4-byte words; 5 to 15\nB: bytes; one byte is 8 bits\nIn words: four bytes per IHL unit, so an IHL of 6 means a 24-byte header.\n```\n\n4. A header without options is 20 bytes (IHL 5), so this packet carries 4 bytes of options or padding. The largest IHL, 15, gives 60 bytes.",
     "link": {
       "title": "RFC 791: Internet Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc791"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "The five decrements produce 63, 62, 61, 60 and 59. The destination receives TTL 59. This calculation relies on the known initial value and forwarding assumptions; an arrival TTL alone cannot identify the sender's OS.",
+    "workedExample": "Each router subtracts one, so the arrival TTL is the starting TTL minus the number of routers:\n\n```formula\nTTL_rx = TTL_0 − h\nTTL_rx = 64 − 5 = 59\nwhere\nTTL_rx: the TTL when the packet reaches the destination\nTTL_0: the initial TTL set by the sender, here 64\nh: the number of forwarding routers crossed, here 5\nIn words: five routers each take one off 64, leaving 59.\n```\n\nThe five decrements produce 63, 62, 61, 60 and 59. This calculation relies on the known initial value and forwarding assumptions; an arrival TTL alone cannot identify the sender's OS.",
     "link": {
       "title": "RFC 791: Internet Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc791"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Space for data per fragment: 1,000 − 20 = 980 bytes.\n2. Non-final fragments must carry a multiple of 8: ⌊980 ÷ 8⌋ × 8 = **976**.\n3. Split 1,980:\n\n```\nfrag  data  byte off  field  MF\n1     976   0         0      1\n2     976   976       122    1\n3     28    1952      244    0\n```\n\n4. Check: 976 + 976 + 28 = 1,980.\n5. The last fragment is 48 bytes at the IP layer, before link framing (20 + 28), with offset 244 and MF = 0.",
+    "workedExample": "1. Work out how much data fits in each non-final fragment, then where the last one starts:\n\n```formula\nD = ⌊(MTU − H) / 8⌋ × 8\nD = ⌊(1000 − 20) / 8⌋ × 8\nD = ⌊122.5⌋ × 8 = 976 B\nD_3 = 1980 − 2 × 976 = 28 B\nF_3 = 1952 / 8 = 244\nwhere\nD: the data in each non-final fragment, in bytes (B); it must be a multiple of 8\nMTU: the link's maximum transmission unit, 1,000 bytes\nH: the IP header in each fragment, 20 bytes\n⌊ ⌋: floor: round down to a whole number\nD_3: the data left for the third and last fragment, in bytes\nF_3: the last fragment's offset field: its starting byte, 1,952, in 8-byte units\nB: bytes; one byte is 8 bits\nIn words: 980 bytes of room rounds down to 976 per fragment; two such fragments leave 28 bytes, which start at byte 1,952, recorded as 244.\n```\n\n2. The full split:\n\n```\nfrag  data  byte off  field  MF\n1     976   0         0      1\n2     976   976       122    1\n3     28    1952      244    0\n```\n\n3. Check: 976 + 976 + 28 = 1,980.\n4. The last fragment is 48 bytes at the IP layer, before link framing (20 + 28), with offset 244 and MF clear (0).",
     "link": {
       "title": "IP fragmentation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/IP_fragmentation"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Probe with TTL = n reaches router n with TTL 1; router decrements to 0, drops it, sends **ICMP type 11** (Time Exceeded).\n2. When TTL is large enough, the probe reaches the destination intact.\n3. The destination's kernel finds no socket on the probe's destination port and returns **ICMP type 3, code 3** (Port Unreachable).\n4. traceroute sees the different type and stops.\n5. Windows `tracert` uses ICMP Echo probes instead and stops on an Echo Reply (type 0).",
+    "workedExample": "1. A probe sent with a small TTL, say 3, reaches the third router with TTL 1; that router decrements it to 0, drops it and sends **ICMP type 11** (Time Exceeded).\n2. When TTL is large enough, the probe reaches the destination intact.\n3. The destination's kernel finds no socket on the probe's destination port and returns **ICMP type 3, code 3** (Port Unreachable).\n4. traceroute sees the different type and stops.\n5. Windows `tracert` uses ICMP Echo probes instead and stops on an Echo Reply (type 0).",
     "link": {
       "title": "Traceroute — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Traceroute"
@@ -267,11 +267,11 @@
       },
       {
         "text": "1,436",
-        "explanation": "Correct. Tunnel MTU = 1,500 − 20 − 4 = 1,476. Inner packet = 20 (IP) + 20 (TCP) + payload, so MSS = 1,476 − 40 = 1,436."
+        "explanation": "Correct. The tunnel MTU is 1,500 − 20 − 4 = 1,476 bytes. Each inner packet spends 20 bytes on IP and 20 on TCP, so the MSS is 1,476 − 40 = 1,436 bytes."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Outer path MTU: 1,500.\n2. GRE overhead: 20 (outer IP) + 4 (GRE) = 24 → tunnel MTU **1,476**.\n3. Each inner packet: inner IP 20 + TCP 20 + payload.\n4. MSS = 1,476 − 20 − 20 = **1,436**.\n\n```\n|outer IP 20|GRE 4|IP 20|TCP 20|data|\n <---------------- 1500 ----------->\n```\n\n5. Clamping the relevant MSS advertisements in both directions limits both peers under these header/path assumptions. A single SYN advertises only what its sender can receive; other packet types and later path changes need separate handling.",
+    "workedExample": "1. Outer path MTU: 1,500 bytes. GRE overhead: 20 (outer IP) + 4 (GRE) = 24 bytes.\n2. Each inner packet: inner IP 20 + TCP 20 + payload.\n\n```formula\nMTU_t = 1500 − 20 − 4 = 1476 B\nMSS = MTU_t − H_IP − H_TCP\nMSS = 1476 − 20 − 20 = 1436 B\nwhere\nMTU_t: the tunnel's MTU: the largest inner IP packet that fits inside the 1,500-byte outer path, in bytes (B)\nMSS: maximum segment size: the most TCP data one segment may carry, in bytes\nH_IP: the inner IPv4 header, 20 bytes without options\nH_TCP: the TCP header, 20 bytes without options\nB: bytes; one byte is 8 bits\nIn words: take the outer and GRE headers off 1,500 to get the tunnel MTU, then take the inner IP and TCP headers off that to get the most data per segment.\n```\n\n```\n|outer IP 20|GRE 4|IP 20|TCP 20|data|\n <---------------- 1500 ----------->\n```\n\n3. Clamping the relevant MSS advertisements in both directions limits both peers under these header/path assumptions. A single SYN advertises only what its sender can receive; other packet types and later path changes need separate handling.",
     "link": {
       "title": "Path MTU Discovery — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Path_MTU_Discovery"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Known initial TTL 128 minus observed TTL 116 gives 12 one-unit forwarding decrements. Without those assumptions, an arrival TTL alone does not reveal the initial TTL, exact path length or operating system.",
+    "workedExample": "```formula\nh = TTL_0 − TTL_rx\nh = 128 − 116 = 12\nwhere\nh: the number of forwarding routers crossed\nTTL_0: the known initial TTL, 128\nTTL_rx: the TTL observed on arrival, 116\nIn words: the 12 that has gone missing is one per router.\n```\n\nThis holds only under the stated assumptions. Without them, an arrival TTL alone does not reveal the initial TTL, exact path length or operating system.",
     "link": {
       "title": "RFC 791: Internet Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc791"
@@ -331,7 +331,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1 Gbit/s is 125,000,000 bytes/s at the specified accounting boundary. Dividing by 8,192 gives about 15,258.79 datagrams/s. A 65,536-value counter wraps after 4.295 seconds, shorter than the assumed 30-second reassembly-state lifetime. Reused IDs with the same source, destination and protocol can create ambiguity if old fragments remain. This is a hypothetical sequential-ID model; real ID selection, packet overhead and receiver checks affect the risk (RFC 4963 and RFC 6864).",
+    "workedExample": "Convert the bit rate into datagrams per second, then see how long 65,536 Identification values last:\n\n```formula\nR_B = 10^9 bit/s / 8 = 1.25 × 10^8 B/s\nr = R_B / S ≈ 15,258.79 per s\nt_wrap = 2^16 / r\nt_wrap = 65,536 / 15,258.79 ≈ 4.295 s\nwhere\nR_B: the sending rate in bytes per second; 1 Gbit/s is 10^9 bits per second, and 8 bits make a byte\n10^9, 10^8: 1 followed by 9 or 8 zeros\nbit/s: bits per second\nB/s: bytes per second (B means bytes)\nr: datagrams sent per second\nS: the size of each datagram, 8,192 bytes\n2^16: 2 multiplied by itself 16 times, 65,536: the number of values a 16-bit counter can take\nt_wrap: the time until the counter repeats a value, in seconds (s)\n≈: approximately equal to (the result is rounded)\nIn words: about 15,000 datagrams a second use up all 65,536 IDs in a little over 4 seconds.\n```\n\nThat is shorter than the assumed 30-second reassembly-state lifetime. Reused IDs with the same source, destination and protocol can create ambiguity if old fragments remain. This is a hypothetical sequential-ID model; real ID selection, packet overhead and receiver checks affect the risk (RFC 4963 and RFC 6864).",
     "link": {
       "title": "IP fragmentation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/IP_fragmentation"

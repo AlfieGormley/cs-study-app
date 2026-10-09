@@ -25,9 +25,9 @@ A routing table is a list of entries. Each says "packets for this **prefix** go 
 
 Entries come from three places:
 
-- **Connected** routes are commonly installed when an interface is configured and usable; options can suppress automatic prefix-route installation. Configure `192.168.1.1/24` on eth0 and the router knows 192.168.1.0/24 is directly reachable there.
-- **Static** routes are typed in by an operator.
-- **Dynamic** routes are learnt from a routing protocol.
+- **Connected routes** are commonly installed when an interface is configured and usable; options can suppress automatic prefix-route installation. Configure `192.168.1.1/24` on eth0 and the router knows 192.168.1.0/24 is directly reachable there.
+- **Static routes** are typed in by an operator.
+- **Dynamic routes** are learnt from a routing protocol.
 
 The **default route** `0.0.0.0/0` matches every address. It means "if nothing better matches, send it here". A simple home-network example has a connected route and a default route pointing at the home router; VPNs and other configuration can add more.
 
@@ -102,7 +102,7 @@ print(lookup("10.1.3.1"))   # dc1
 print(lookup("8.8.8.8"))    # isp
 ```
 
-This is O(N) per lookup for fixed-width IPv4, allocating a list of matches. The example assumes routes already selected by the control plane and one entry per prefix; it does not implement metrics, ECMP or policy routing. None means no matching route. Large tables motivate structures that avoid scanning every entry.
+It compares the address with every route, so a table of N routes costs N prefix comparisons per lookup. In Big-O notation that is O(N), where N is the number of routes: the work grows in direct proportion to the table size. It also allocates a list of matches. The example assumes routes already selected by the control plane and one entry per prefix; it does not implement metrics, ECMP or policy routing. None means no matching route. Large tables motivate structures that avoid scanning every entry.
 
 ## When routes tie: distance and metric
 
@@ -183,7 +183,22 @@ node 10.1/16: dc1
 node 10.1.2/24: rack7
 ```
 
-Lookup is O(W) where W is the address width: at most 32 bit-consuming edges for IPv4, 128 for IPv6 (including the root gives at most 33 or 129 visited nodes), regardless of table size. **Patricia** (path-compressed) tries skip chains of single-child nodes, and **multibit** tries consume 4, 8 or more bits per step to cut memory accesses. Linux's IPv4 FIB uses an LC-trie (level- and path-compressed).
+Each step down the tree consumes one bit of the destination address, so the walk can never be longer than the address:
+
+```formula
+s ≤ W
+s_4 ≤ 32
+s_6 ≤ 128
+where
+s: the number of bit-consuming steps (edges followed from the root) in one lookup
+W: the address width, in bits
+s_4: the steps for an IPv4 lookup, whose addresses are 32 bits wide
+s_6: the steps for an IPv6 lookup, whose addresses are 128 bits wide
+≤: is at most
+In words: a binary trie lookup takes at most one step per address bit, however many routes the table holds.
+```
+
+In Big-O notation the lookup is O(W), where W is the address width, regardless of table size. Counting the root as well, a lookup visits at most 33 nodes for IPv4 or 129 for IPv6. By contrast, a million-route linear scan would make a million comparisons. **Patricia** (path-compressed) tries skip chains of single-child nodes, and **multibit** tries consume 4, 8 or more bits per step to cut memory accesses. Linux's IPv4 FIB uses an LC-trie (level- and path-compressed).
 
 ### TCAM
 
@@ -208,14 +223,29 @@ A common ECMP policy hashes flow-identifying fields, often the IP/port/protocol 
 The trade-offs:
 
 - A few huge flows ("elephants") can land on the same link while others sit idle.
-- Reusing correlated hashes with similarly ordered next-hop groups can repeat collisions downstream (**hash polarisation**). Different hash seeds can reduce correlated choices, without guaranteeing perfect balance.
+- Reusing correlated hashes with similarly ordered next-hop groups can make downstream routers repeat the same path choices (**hash polarisation**). Different hash seeds can reduce correlated choices, without guaranteeing perfect balance.
 - When a path is added or removed, naive modulo hashing remaps many flows. **Resilient hashing** limits the churn.
+
+Naive modulo hashing picks a next hop like this:
+
+```formula
+i = H(f) mod k
+where
+i: the index of the chosen next hop, from 0 to k − 1
+H(f): a hash function applied to f, giving a large whole number that looks random but is always the same for the same input
+f: the flow's identifying fields, such as the 5-tuple of addresses, ports and protocol
+mod: modulo: the remainder after whole-number division, so 14 mod 4 = 2 and 14 mod 3 = 2
+k: the number of next hops in the equal-cost group
+In words: hash the flow and take the remainder after dividing by the number of paths; the same flow always lands on the same path while k stays the same.
+```
+
+Change k and almost every remainder changes. Going from 4 paths to 3, a flow keeps its path only if its hash gives the same remainder for both, which happens for about a quarter of flows. So about three quarters of flows move, although only the quarter on the removed path had to.
 
 ## Asymmetric routing
 
 With ordinary destination-based forwarding, each router makes its own decision; policy routing can consider other fields. Nothing forces the reply to come back the same way, and on the Internet it often doesn't. That's normal, but it breaks things that assume symmetry:
 
-- **Stateful firewalls** may reject traffic when the necessary connection state is absent. Asymmetric-routing support or shared state can change the outcome.
+- **Stateful firewalls** may reject traffic when the necessary connection state is absent. Asymmetric-routing support or state shared between firewalls can change the outcome.
 - **Strict reverse path filtering** checks whether the ingress interface is a best reverse path to the source. It can reject legitimate asymmetric traffic. Loose modes instead check source reachability without requiring the same interface; Linux policy and configuration affect the lookup. Choose a mode appropriate to the routing design.
 
 ## Pitfalls

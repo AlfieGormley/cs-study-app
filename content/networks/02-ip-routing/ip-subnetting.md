@@ -47,7 +47,22 @@ A contiguous subnet-mask octet can be 0, 128, 192, 224, 240, 248, 252, 254 or 25
 | /29 | 248 | 8 | 6 |
 | /30 | 252 | 4 | 2 |
 
-The **block size** in the interesting octet is 256 minus the mask value. A /n network contains 2^(32−n) addresses.
+The **block size** in the interesting octet is 256 minus the mask value. The size of the whole network comes from counting host bits: every host bit doubles the number of addresses.
+
+```formula
+h = 32 − p
+N = 2^h
+N = 2^(32 − 26) = 2^6 = 64
+N = 2^(32 − 20) = 2^12 = 4,096
+where
+h: the number of host bits: the bits after the prefix
+p: the prefix length, the number after the slash (/26 means p is 26); a whole number from 0 to 32
+N: the number of addresses in the network, including the network and broadcast addresses
+2^h: 2 multiplied by itself h times, so 2^6 = 2 × 2 × 2 × 2 × 2 × 2 = 64
+In words: an IPv4 address has 32 bits; the prefix uses p of them, and the remaining h bits can take 2^h different patterns, one per address. A /26 has 64 addresses and a /20 has 4,096.
+```
+
+Each extra prefix bit halves the network: a /25 has 128 addresses, a /26 has 64, a /27 has 32.
 
 To find the network an address belongs to, a host ANDs the address with the mask. With the same configured mask, equal results identify the same numerical subnet. Actual next-hop selection uses routes and policy; a subnet comparison alone does not prove layer 2 connectivity or exclude a more-specific route.
 
@@ -56,10 +71,30 @@ To find the network an address belongs to, a host ANDs the address with the mask
 For conventional IPv4 subnets through /30:
 
 1. Find the **interesting octet**: the first mask octet below 255. It can be 0 for a byte-aligned prefix such as /24.
-2. **Block size** = 256 − mask value in that octet.
+2. **Block size**: 256 minus the mask value in that octet.
 3. **Network address**: round the interesting octet down to a multiple of the block size; octets to the right become 0.
-4. **Broadcast address**: network + block size − 1 in that octet; octets to the right become 255.
-5. **Usable hosts**: everything strictly between them, so 2^(host bits) − 2.
+4. **Broadcast address**: the network's value in that octet, plus the block size, minus 1; octets to the right become 255.
+5. **Usable hosts**: everything strictly between them.
+
+The same steps as arithmetic:
+
+```formula
+b = 256 − m
+x_net = ⌊x / b⌋ × b
+x_bc = x_net + b − 1
+H = 2^h − 2
+where
+b: the block size: how many values one subnet spans in the interesting octet
+m: the subnet mask's value in the interesting octet, for example 192 for a /26
+x: the address's value in the interesting octet, for example 77 in 192.168.10.77
+⌊ ⌋: floor: round down to a whole number, so ⌊77 / 64⌋ = ⌊1.2⌋ = 1
+x_net: the network address's value in the interesting octet
+x_bc: the broadcast address's value in the interesting octet
+H: the number of usable host addresses
+h: the number of host bits, 32 minus the prefix length
+2^h: 2 multiplied by itself h times: the total number of addresses in the subnet
+In words: the mask tells you the block size; the address rounded down to a whole number of blocks is the network; the last value in that block is the broadcast; and the usable hosts are all the addresses minus those two.
+```
 
 This conventional capacity excludes all-zero and all-one host fields. /31 point-to-point and /32 uses differ, as explained below. Special address ranges and platform reservations can further reduce assignable addresses; the arithmetic is not an allocation policy.
 
@@ -74,7 +109,24 @@ Network    192.168.10.64
 First host 192.168.10.65
 Last host  192.168.10.126
 Broadcast  192.168.10.127
-Hosts      2^6 - 2 = 62
+Hosts      62
+```
+
+The calculation behind those lines:
+
+```formula
+x_net = ⌊77 / 64⌋ × 64 = 1 × 64 = 64
+x_bc = 64 + 64 − 1 = 127
+h = 32 − 26 = 6
+H = 2^6 − 2 = 64 − 2 = 62
+where
+x_net: the network address's value in the 4th octet
+⌊ ⌋: floor: round down to a whole number
+x_bc: the broadcast address's value in the 4th octet
+h: the number of host bits for a /26
+H: the number of usable host addresses
+2^6: 2 multiplied by itself 6 times, 64
+In words: 77 lies in the second 64-wide block, which runs from 64 to 127. Of its 64 addresses, 62 are usable once the network and broadcast addresses are set aside.
 ```
 
 ### Worked example 2: 172.16.45.200/20
@@ -88,7 +140,22 @@ Network    172.16.32.0
 First host 172.16.32.1
 Last host  172.16.47.254
 Broadcast  172.16.47.255
-Hosts      2^12 - 2 = 4,094
+Hosts      4,094
+```
+
+```formula
+x_net = ⌊45 / 16⌋ × 16 = 2 × 16 = 32
+x_bc = 32 + 16 − 1 = 47
+h = 32 − 20 = 12
+H = 2^12 − 2 = 4,096 − 2 = 4,094
+where
+x_net: the network address's value in the 3rd (interesting) octet
+⌊ ⌋: floor: round down to a whole number
+x_bc: the broadcast address's value in the 3rd octet
+h: the number of host bits for a /20: the last 4 bits of the 3rd octet plus all 8 of the 4th
+H: the number of usable host addresses
+2^12: 2 multiplied by itself 12 times, 4,096
+In words: 45 lies in the block from 32 to 47 of the third octet. Twelve host bits give 4,096 addresses, 4,094 of them usable.
 ```
 
 The 4th octet doesn't matter here: it's entirely host bits, so it's 0 in the network and 255 in the broadcast.
@@ -104,7 +171,26 @@ They are on **different** numerical subnets. With only connected subnet routes a
 
 ### Worked example 4: carving up a /24 (VLSM)
 
-You have `192.168.1.0/24` and need subnets for 100 hosts, 50 hosts, 20 hosts and two point-to-point router links. **Variable-length subnet masking** gives each subnet the smallest address block (longest prefix) that fits. Starting at the aligned beginning of this unused /24, allocate largest first at the lowest available address:
+You have `192.168.1.0/24` and need subnets for 100 hosts, 50 hosts, 20 hosts and two point-to-point router links. **Variable-length subnet masking** (VLSM) gives each subnet the smallest address block (longest prefix) that fits.
+
+To size one subnet, find the fewest host bits whose usable capacity covers the need:
+
+```formula
+2^h − 2 ≥ n
+2^6 − 2 = 62 < 100
+2^7 − 2 = 126 ≥ 100
+p = 32 − h = 32 − 7 = 25
+where
+h: the number of host bits; try 1, 2, 3 … and keep the first that fits
+n: the number of hosts the subnet must hold, here 100
+2^h: 2 multiplied by itself h times: the number of addresses with h host bits
+≥: is at least (greater than or equal to)
+<: is less than, so 6 host bits are too few
+p: the resulting prefix length
+In words: keep adding host bits until the usable addresses (all addresses minus network and broadcast) reach the number you need; the prefix is whatever is left of the 32 bits.
+```
+
+Doing that for each need, and starting at the aligned beginning of this unused /24, allocate largest first at the lowest available address:
 
 | Need | Prefix | Range |
 |---|---|---|
@@ -164,7 +250,7 @@ Some special-purpose blocks are listed below. This is not a complete registry:
 
 ## Supernetting and route aggregation
 
-CIDR's other half is **aggregation** (also called **supernetting** or **summarisation**): advertising several contiguous networks as one shorter prefix.
+CIDR's other half is **route aggregation** (also called **supernetting** or **summarisation**): advertising several contiguous networks as one shorter prefix.
 
 Suppose an ISP has customers on `200.10.0.0/24`, `200.10.1.0/24`, `200.10.2.0/24` and `200.10.3.0/24`. Write the third octets in binary:
 
@@ -177,7 +263,20 @@ Suppose an ISP has customers on `200.10.0.0/24`, `200.10.1.0/24`, `200.10.2.0/24
 
 The first 22 bits match (16 from the first two octets, 6 here), so the ISP advertises one route: **200.10.0.0/22**. The rest of the Internet needs one entry instead of four.
 
-Aggregation requires **alignment**. The block must start on a multiple of its size. `200.10.1.0` to `200.10.4.0` is also four /24s, but no single /22 covers exactly them. The best summary is `200.10.1.0/24`, `200.10.2.0/23` and `200.10.4.0/24`:
+The general rule: merging a power-of-two number of equal, adjacent blocks shortens the prefix by that power.
+
+```formula
+p_agg = p − log_2(k)
+p_agg = 24 − log_2(4) = 24 − 2 = 22
+where
+p_agg: the prefix length of the summary route
+p: the prefix length of each block being merged, here 24
+k: how many equal-size, adjacent blocks are merged; must be a power of 2 (2, 4, 8 …), here 4
+log_2(k): the base-2 logarithm of k: how many times 2 must be multiplied by itself to make k, so log_2(4) = 2 and log_2(8) = 3
+In words: four /24s need 2 fewer prefix bits to cover them all, so they combine into one /22, provided the blocks are aligned as explained next.
+```
+
+Aggregation requires **prefix alignment**. The block must start on a multiple of its size: for k blocks, the first one's number (here the third octet) must be a multiple of k. `200.10.1.0` to `200.10.4.0` is also four /24s, but no single /22 covers exactly them. The best summary is `200.10.1.0/24`, `200.10.2.0/23` and `200.10.4.0/24`:
 
 ```python
 nets = [ip.ip_network(f"200.10.{i}.0/24")
@@ -193,15 +292,15 @@ The catch is that a summary can attract traffic for addresses that don't exist, 
 
 ## Address exhaustion
 
-IPv4 has 2³² possible address values, and special-purpose ranges reduce the pool available for globally unique assignments. Address sharing, transfers and allocation policies address scarcity in different ways; IPv6 provides a much larger address space.
+IPv4 has 2³² possible address values (2 multiplied by itself 32 times: 4,294,967,296, about 4.3 billion), and special-purpose ranges reduce the pool available for globally unique assignments. Address sharing, transfers and allocation policies address scarcity in different ways; IPv6 provides a much larger address space.
 
 > [!note] Content omitted after review
 > Current global route counts, address-market prices and a regional exhaustion/allocation timeline are absent because they require dated measurements and registry-policy evidence not established in this lesson. No universal purchase price or route-memory design is assumed.
 
 ## Key takeaways
 - An IPv4 address is a 32-bit number split into a network prefix and a host part; CIDR lets that split fall at any bit.
-- Block size = 256 − mask value in the interesting octet; round down to find the network, add block − 1 for the broadcast.
-- Usable hosts = 2^(host bits) − 2, except /31 links (2 usable) and /32 host routes.
+- The block size is 256 minus the mask value in the interesting octet; round down to a multiple of it to find the network, and add one block, minus 1, for the broadcast.
+- Usable hosts are 2 raised to the number of host bits, minus 2, except on /31 links (2 usable) and /32 host routes.
 - For an initially empty aligned block, allocating descending block sizes from its start is a straightforward way to preserve alignment.
 - RFC 1918 space is private; 100.64/10 is distinct shared space for CGN; 169.254/16 is link-local and does not itself diagnose DHCP failure.
 - Aggregation merges aligned, contiguous prefixes into one shorter route, keeping routing tables small.

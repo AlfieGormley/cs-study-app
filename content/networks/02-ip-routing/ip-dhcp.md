@@ -29,10 +29,10 @@ Client                       Server
   |<-- ACK -------------------- |
 ```
 
-1. **Discover**: "Is there a DHCP server? Here is my client identification." The client picks a random 32-bit **transaction ID** (`xid`) to match replies to this request.
-2. **Offer**: an eligible server may offer an address and settings, subject to pool availability and policy. Several servers might reply.
-3. **Request**: the client picks one offer and broadcasts a Request naming that server (option 54, server identifier) and the address (option 50). Broadcasting it tells the *other* servers their offers were declined, so any temporary offer reservations can be released. A server need not reserve an offered address.
-4. **Ack**: the chosen server confirms. The client validates the configuration and checks for an address conflict before using it.
+1. **Discover** (DHCPDISCOVER): "Is there a DHCP server? Here is my client identification." The client picks a random 32-bit **DHCP transaction ID** (`xid`) to match replies to this request.
+2. **Offer** (DHCPOFFER): an eligible server may offer an address and settings, subject to pool availability and policy. Several servers might reply.
+3. **Request** (DHCPREQUEST): the client picks one offer and broadcasts a Request naming that server (option 54, server identifier) and the address (option 50). Broadcasting it tells the *other* servers their offers were declined, so any temporary offer reservations can be released. A server need not reserve an offered address.
+4. **Ack** (DHCPACK): the chosen server confirms. The client validates the configuration and checks for an address conflict before using it.
 
 Before using it, the client should check nobody else already does: it sends **ARP probes** for the address (RFC 5227). A conflicting ARP announcement/reply or another host's simultaneous probe can reveal a collision. The client sends **DHCPDECLINE** and restarts after a delay (RFC 2131 recommends at least ten seconds). If all is clear, it announces itself with a **gratuitous ARP**, which can refresh peers' ARP caches; it cannot guarantee every peer updates its cache.
 
@@ -100,18 +100,34 @@ print(o[53][0])                    # 5
 print(int.from_bytes(o[51], "big"))  # 3600
 ```
 
-Message type 5 is an Ack; the lease is 0x0e10 = 3,600 seconds; the gateway is 192.168.1.1.
+Message type 5 is an Ack; the lease is 0x0e10 seconds, which is hexadecimal (base 16) for 14 × 256 + 1 × 16 + 0 = 3,600 seconds, one hour; the gateway is 192.168.1.1.
 
 ## Leases
 
-Dynamic allocation uses **leases**, allowing addresses to be reused after clients release them or leases expire. DHCP also supports other allocation arrangements; reuse depends on concurrent demand and lease retention, not just visitor count.
+Dynamic address assignment uses **DHCP leases**, allowing addresses to be reused after clients release them or leases expire. DHCP also supports other allocation arrangements; reuse depends on concurrent demand and lease retention, not just visitor count.
 
 For a finite lease, nominal default timers are below. Servers can supply different T1/T2 values; RFC 2131 recommends random timing variation, and a client may seek renewal early:
 
-- **T1 = 50%** of the lease: start **renewing**. Unicast a Request directly to the server that granted the lease.
-- **T2 = 87.5%** of the lease: if the server hasn't answered, start **rebinding**. Broadcast a Request so another server with sufficient state and authority may extend it.
+- **T1**, at 50% of the lease: start **renewing**. Unicast a Request directly to the server that granted the lease.
+- **T2**, at 87.5% of the lease: if the server hasn't answered, start **DHCP rebinding**. Broadcast a Request so another server with sufficient state and authority may extend it.
 
-If the lease expires with no answer, the client must stop using the address. Ignoring timing variation and explicit overrides, a 24-hour lease gives T1 = 12 hours and T2 = 21 hours, measured from the lease-start reference—not simply from delayed ACK arrival.
+If the lease expires with no answer, the client must stop using the address. Ignoring timing variation and explicit overrides, the two timers are fixed fractions of the lease, measured from the lease-start reference (not simply from delayed ACK arrival):
+
+```formula
+T_1 = 0.5 × L
+T_2 = 0.875 × L
+T_1 = 0.5 × 24 h = 12 h
+T_2 = 0.875 × 24 h = 21 h
+where
+T_1: the renewal time (T1): how long after the lease starts the client begins renewing with its own server
+T_2: the rebinding time (T2): how long after the lease starts the client asks any server
+L: the lease length granted by the server, here 24 hours
+0.5, 0.875: the default fractions, 50% and 87.5% (seven eighths) of the lease
+h: hours
+In words: a client tries its own server halfway through the lease, tries any server when seven eighths has passed, and gives the address up when the lease runs out.
+```
+
+For a 24-hour lease starting at midnight, that means renewing from 12:00, rebinding from 21:00 and expiry at 24:00. The same calculation in seconds:
 
 ```python
 def timers(lease):
@@ -129,7 +145,7 @@ A client leaving cleanly can send **DHCPRELEASE**, but many just disappear and l
 
 Lease length is a trade-off. Short leases (an hour) recycle addresses quickly in busy guest networks but generate more traffic and make the server more critical. Long leases (days) suit stable office networks.
 
-Servers usually hand the same client the same address again where they can, keyed on its MAC or client identifier. **Reservations** associate a stable address with configured client identification, which may be a MAC or a client identifier depending on the server. MAC randomisation or identifier changes can affect that association.
+Servers usually hand the same client the same address again where they can, keyed on its MAC or client identifier. **DHCP reservations** associate a stable address with configured client identification, which may be a MAC or a client identifier depending on the server. MAC randomisation or identifier changes can affect that association.
 
 ## Relays: one server for many subnets
 
@@ -149,7 +165,7 @@ The relay can also add **option 82** (relay agent information), identifying the 
 
 ## DHCP security
 
-Base DHCPv4 exchanges do not authenticate the server. Authentication extensions exist (RFC 3118), but without an enforced authentication or network-access policy, a device able to inject replies may impersonate a server.
+Base DHCPv4 exchanges do not authenticate the server. Authentication extensions exist (RFC 3118), but without enforced authentication or a policy controlling network access, a device able to inject replies may impersonate a server.
 
 A **rogue DHCP server**, whether an attacker or a consumer router connected with its DHCP service exposed to the LAN, can hand out its own address as the gateway and DNS. A client accepting those settings may send off-link traffic through that device or use its DNS service. This can enable interception or denial of service; it does not automatically reveal correctly authenticated TLS plaintext or intercept every local flow.
 
@@ -164,7 +180,7 @@ The defence on managed switches is **DHCP snooping**:
 Depending on operating-system configuration, a host may self-configure an IPv4 **link-local** address (RFC 3927, called APIPA on Windows). Automatic selection uses 169.254.1.0 through 169.254.254.255, excluding the first and last /24 of 169.254.0.0/16, and probes for conflicts. Such traffic remains on the link; routers must not forward it.
 
 > [!tip] Diagnosing with the address
-> An automatically configured 169.254.x.x address can suggest missing routable IPv4 configuration, so check DHCP logs, VLANs, relays and server reachability when DHCP was expected. The address alone does not prove DHCP failed: link-local can be intentional and can coexist with other configuration.
+> An automatically configured address in 169.254.0.0/16 can suggest missing routable IPv4 configuration, so check DHCP logs, VLANs, relays and server reachability when DHCP was expected. The address alone does not prove DHCP failed: link-local can be intentional and can coexist with other configuration.
 
 ### And IPv6?
 
@@ -202,7 +218,7 @@ No end-to-end timing bound follows from this trace: association, address-conflic
 
 | Symptom | Possible investigation |
 |---|---|
-| Unexpected automatic 169.254.x.x address | DHCP and interface configuration |
+| Unexpected automatic 169.254.0.0/16 address | DHCP and interface configuration |
 | Reachable known IP but name resolution fails | DNS configuration and resolver path |
 | LAN works, Internet doesn't | Gateway, NAT, ISP |
 | Small transfers work, large transfers hang | MTU / PMTUD, loss and transport behaviour |
@@ -210,7 +226,7 @@ No end-to-end timing bound follows from this trace: association, address-conflic
 
 ## Key takeaways
 - DHCP bootstraps a host with no address using broadcasts from 0.0.0.0 to 255.255.255.255 on UDP ports 68 and 67.
-- DORA: Discover, Offer, Request (broadcast, so other servers withdraw their offers), Ack; then an ARP check, and Decline on conflict.
+- DORA: Discover, Offer, Request (broadcast, so other servers withdraw their offers), Ack; then an ARP check, and Decline if the address is already in use.
 - Nominal default renewal/rebinding thresholds are 50% and 87.5%; overrides, early renewal and timing variation exist.
 - Relay agents forward broadcasts to a central server, using giaddr to choose the pool and option 82 to identify the port.
 - Rogue servers enable man-in-the-middle attacks; DHCP snooping, ARP inspection and source guard defend against them.

@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "It pushes it onto the stack, like x86 `call`",
-        "explanation": "BL writes the return address to X30 rather than pushing it to the stack. This does not promise that calling and executing an arbitrary function causes no memory traffic."
+        "explanation": "`bl` writes the return address to X30 rather than pushing it to the stack. This does not promise that calling and executing an arbitrary function causes no memory traffic."
       },
       {
         "text": "In `x29`, the frame pointer",
@@ -49,7 +49,7 @@
       },
       {
         "text": "In `x0`, alongside the first argument",
-        "explanation": "`x0` carries the first argument and the return value. Putting the return address there would clobber the argument."
+        "explanation": "`x0` passes the first argument and the return value. Putting the return address there would clobber the argument."
       }
     ],
     "answer": 2,
@@ -150,7 +150,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The rule: `rsp % 16 == 0` immediately before `call`.\n2. The caller's `call` pushed an 8-byte return address, so on entry to `f`, `rsp % 16 == 8`.\n3. `push rbp` subtracts 8: now `rsp % 16 == 0`.\n4. `sub rsp, N` must keep that: N must be a multiple of 16. Of the options, only 16 works.\n\nCompare a function that pushes nothing: it needs `sub rsp, 8` (or 24, 40, ...) to get aligned, which is why you see odd-looking `sub rsp, 8` or a dummy `push rax` in compiler output.",
+    "workedExample": "In the code, `rsp % 16` is C notation for the remainder when rsp is divided by 16.\n\n1. The rule: `rsp % 16 == 0` immediately before `call`.\n2. The caller's `call` pushed an 8-byte return address, so on entry to `f`, `rsp % 16 == 8`.\n3. `push rbp` subtracts 8: now `rsp % 16 == 0`.\n4. `sub rsp, N` must keep that: N must be a multiple of 16. Of the options, only 16 works.\n\n```formula\nrsp_entry mod 16 = 8\n(rsp_entry − 8) mod 16 = 0\n(rsp_entry − 8 − N) mod 16 = 0\nso N mod 16 = 0\n(4088 − 8 − 16) mod 16 = 4064 mod 16 = 0\nwhere\nrsp_entry: the stack pointer on entry to f, for example 4088\nN: the number of bytes `sub rsp, N` reserves\nmod: modulo: the remainder after dividing (4064 = 254 × 16, remainder 0)\n8: the size of the pushed rbp\n16: the alignment the ABI requires at a call\nIn words: after push rbp the stack is already 16-byte aligned, so whatever f reserves must be a whole number of 16-byte blocks.\n```\n\nCompare a function that pushes nothing: it needs `sub rsp, 8` (or 24, 40, ...) to get aligned, which is why you see odd-looking `sub rsp, 8` or a dummy `push rax` in compiler output.",
     "link": {
       "title": "x86 calling conventions — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/X86_calling_conventions"
@@ -168,7 +168,7 @@
       },
       {
         "text": "`rsi`, because `rdi` carries a hidden pointer to the caller's return buffer",
-        "explanation": "Correct. This struct is classified for memory return. RDI carries the hidden buffer address, RSI carries x, and RAX returns the buffer address. Floating-point arguments would retain their separate vector-register allocation."
+        "explanation": "Correct. This struct is classified for memory return. RDI passes the hidden buffer address, RSI passes x, and RAX returns the buffer address. Floating-point arguments would retain their separate vector-register allocation."
       },
       {
         "text": "`x8`, the indirect result register",
@@ -176,7 +176,7 @@
       },
       {
         "text": "`rax`, because `rdi` and `rsi` hold the struct's first fields",
-        "explanation": "`rax` is never an argument register in System V (apart from `al` holding an upper bound on vector-register use for variadic calls)."
+        "explanation": "`rax` is never an argument register in System V (apart from `al` holding a maximum count of vector-register use for variadic calls)."
       }
     ],
     "answer": 1,
@@ -270,7 +270,7 @@
       },
       {
         "text": "`r10`, the next register after `r9`",
-        "explanation": "System V has only six integer argument registers. `r10` is a scratch register (and carries the 4th argument for Linux system calls, not for normal functions)."
+        "explanation": "System V has only six integer argument registers. `r10` is a scratch register (and passes the 4th argument for Linux system calls, not for normal functions)."
       },
       {
         "text": "`[rbp + 24]`",
@@ -278,7 +278,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Arguments 1–6 are in registers; 7, 8 and 9 go on the stack, with the 7th at the lowest address.\n2. Before the `call`, the stack looks like (low to high): 7th, 8th, 9th.\n3. `call` pushes the return address below the 7th.\n4. `push rbp` pushes the saved `rbp` below that, and `mov rbp, rsp` points `rbp` at it.\n\n```\nrbp+32  9th arg\nrbp+24  8th arg\nrbp+16  7th arg\nrbp+8   return address\nrbp+0   saved rbp\n```",
+    "workedExample": "1. Arguments 1–6 are in registers; 7, 8 and 9 go on the stack, with the 7th at the lowest address.\n2. Before the `call`, the stack looks like (low to high): 7th, 8th, 9th.\n3. `call` pushes the return address below the 7th.\n4. `push rbp` pushes the saved `rbp` below that, and `mov rbp, rsp` points `rbp` at it.\n\n```\nrbp+32  9th arg\nrbp+24  8th arg\nrbp+16  7th arg\nrbp+8   return address\nrbp+0   saved rbp\n```\n\n```formula\nA_k = rbp + 8 × (k − 5)   for k ≥ 7\nA_8 = rbp + 8 × 3 = rbp + 24\nwhere\nA_k, A_8: the address of argument number k (8 here)\nk: the argument's position in the call, counting from 1\nrbp: the frame pointer after the prologue, pointing at the saved rbp\n5: rbp + 0 and rbp + 8 store the saved rbp and the return address, so argument 7 starts 2 slots up: 7 − 5 = 2\n8: each slot is 8 bytes\n≥: greater than or equal to\nIn words: skip the saved rbp and the return address, then count 8 bytes per stack argument from the 7th.\n```",
     "link": {
       "title": "Call stack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Call_stack"
@@ -376,7 +376,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "In the stated simplified model, 8 MiB / 16 B = 524,288 levels. Actual available depth depends on other stack use, limits, guards and generated code. This hand-written instruction sequence would wrap products at machine width; C factorial overflows a signed 64-bit long above 20 and therefore has undefined behaviour. The depth exercise is not a valid large-input C factorial computation.",
+    "workedExample": "In the stated simplified model:\n\n```formula\nL = S / f\nL = 8 × 1048576 B / 16 B = 524288\nwhere\nL: the number of recursion levels that fit\nS: the stack size limit: 8 MiB = 8 × 1,048,576 bytes = 8,388,608 bytes\nf: the stack used per level: 16 bytes\nB: byte\nMiB: mebibyte, 2^20 = 1,048,576 bytes\nIn words: divide the stack size by the bytes each call uses; 8 MiB at 16 bytes per call is about 524,000 levels.\n```\n\nActual available depth depends on other stack use, limits, guards and generated code. This hand-written instruction sequence would wrap products at machine width; C factorial overflows a signed 64-bit long above 20 and therefore has undefined behaviour. The depth exercise is not a valid large-input C factorial computation.",
     "link": {
       "title": "Call stack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Call_stack"

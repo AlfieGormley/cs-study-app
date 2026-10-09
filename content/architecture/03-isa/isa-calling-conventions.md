@@ -16,15 +16,26 @@ The hardware mechanism differs between the two ISAs.
 
 **x86-64** keeps the return address on the stack:
 
-- `call f` pushes the address of the next instruction (`rsp -= 8`, then store) and jumps to `f`.
+- `call f` pushes the address of the next instruction (moves `rsp` down 8 bytes, then stores it) and jumps to `f`.
 - `ret` pops that address into `rip`.
+
+```formula
+rsp_call = rsp − 8
+rsp_ret = rsp_call + 8 = rsp
+where
+rsp: the stack pointer just before the call: the address of the current top of the stack
+rsp_call: the stack pointer after call has pushed the return address
+rsp_ret: the stack pointer after ret has popped it again
+8: a return address is 64 bits = 8 bytes
+In words: the stack grows towards lower addresses, so pushing subtracts 8 and popping adds the same 8 back; if rsp was 0x1000 before the call, it is 0xff8 inside the function and 0x1000 again after the return.
+```
 
 **ARM64** keeps it in a register:
 
 - `bl f` (branch with link) puts the return address in `x30`, the **link register**, and jumps.
 - `ret` branches to the address in `x30`.
 
-The ARM64 design makes calls to **leaf functions** (functions that call nothing) cheap: no automatic return-address stack access from BL/RET themselves; the function can still access memory. But a function making a nested call and later returning to its own caller must preserve its original return address, or the inner `bl` will overwrite it and the outer `ret` will go to the wrong place.
+The ARM64 design makes calls to **leaf functions** (functions that call nothing) cheap: no automatic return-address stack access from `bl`/`ret` themselves; the function can still access memory. But a function making a nested call and later returning to its own caller must preserve its original return address, or the inner `bl` will overwrite it and the outer `ret` will go to the wrong place.
 
 ## Where arguments and results go
 
@@ -57,7 +68,23 @@ Here is a call to an eight-argument function `g(1, 2, ..., 8)`, in a representat
     add   rsp, 16    # caller pops args
 ```
 
-Arguments 7 and 8 go on the stack, pushed in reverse so the 7th ends up at the lower address. Inside `g`, they are at `[rsp + 8]` and `[rsp + 16]` (the return address is at `[rsp]`). On ARM64, all eight fit in `x0`–`x7`.
+Arguments 7 and 8 go on the stack, pushed in reverse so the 7th ends up at the lower address. On entry to `g`, the return address is at `[rsp]` and the stack arguments sit just above it:
+
+```formula
+A_k = rsp + 8 × (k − 6)   for k ≥ 7
+A_7 = rsp + 8 × 1 = rsp + 8
+A_8 = rsp + 8 × 2 = rsp + 16
+where
+A_k, A_7, A_8: the address of argument number k (7 and 8 here), as seen on entry to g
+k: the argument's position in the call, counting from 1
+rsp: the stack pointer on entry to g, which points at the return address
+6: the first six integer arguments travel in registers (rdi, rsi, rdx, rcx, r8, r9), so the 7th is the first on the stack
+8: each stack argument slot is 8 bytes
+≥: greater than or equal to
+In words: skip the 8-byte return address, then each later argument is a further 8 bytes up; after the call, the caller frees the two slots with `add rsp, 16` (2 × 8 bytes).
+```
+
+This assumes each stack argument fits one 8-byte slot, as these `int`s do; larger aggregates take more. On ARM64, all eight fit in `x0`–`x7`.
 
 ### Returning structs
 
@@ -71,8 +98,8 @@ Aggregate returns depend on ABI classification, not size alone:
 
 A call may destroy some registers and must preserve others:
 
-- **Caller-saved** (also called volatile or scratch): the called function may overwrite them freely. If the caller needs a value in one of these after the call, the caller must save it.
-- **Callee-saved** (non-volatile): the called function must restore them before returning. If it wants to use one, it saves the old value in its prologue and restores it in its epilogue.
+- **Caller-saved** (also called volatile registers or scratch registers): the called function may overwrite them freely. If the caller needs a value in one of these after the call, the caller must save it.
+- **Callee-saved** (also called non-volatile registers): the called function must restore them before returning. If it wants to use one, it saves the old value in its prologue and restores it in its epilogue.
 
 | | System V x86-64 | AAPCS64 |
 |---|---|---|
@@ -80,7 +107,7 @@ A call may destroy some registers and must preserve others:
 | Caller-saved | `rax rcx rdx rsi rdi r8`–`r11` | `x0`–`x17`, `x30` |
 | Vector callee-saved | none | low 64 bits of `v8`–`v15` |
 
-Some ARM64 registers have special jobs. `x8` carries the large-struct return pointer. `x16` and `x17` are scratch registers that linker-generated stubs may overwrite. `x18` is the **platform register**, reserved on Apple platforms and Windows. Portable code should not touch it.
+Some ARM64 registers have special jobs. `x8` passes the large-struct return pointer. `x16` and `x17` are scratch registers that linker-generated stubs may overwrite. `x18` is the **platform register**, reserved on Apple platforms and Windows. Portable code should not touch it.
 
 Why have both kinds? If every register were caller-saved, every call site would spill everything it cared about. If every register were callee-saved, every function would save registers it uses even when no caller needs them. A split lets the compiler put short-lived values in scratch registers and values live across calls in callee-saved ones.
 
@@ -96,7 +123,23 @@ long fact(long n) {
 }
 ```
 
-Compilers may replace this recursion with a loop. The examples below deliberately retain recursion. With 64-bit signed `long`, use inputs at most 20 for a representable factorial; the original C multiplication has undefined behaviour on signed overflow. `n` must survive the recursive call, so it goes in a callee-saved register.
+Compilers may replace this recursion with a loop. The examples below deliberately retain recursion. With 64-bit signed `long`, use inputs at most 20 for a representable factorial; the original C multiplication has undefined behaviour on signed overflow. The limit comes from comparing factorials with the largest signed 64-bit value:
+
+```formula
+L_max = 2^63 − 1 ≈ 9.22 × 10^18
+20! ≈ 2.43 × 10^18 < L_max
+21! ≈ 5.11 × 10^19 > L_max
+where
+L_max: the largest value a 64-bit signed long can store; in two's complement the top bit carries the sign, so the positive range stops at 2^63 − 1
+!: factorial: n! = n × (n − 1) × … × 1, so 3! = 6
+n: any whole number 1 or more
+…: and so on, through every whole number in between
+≈: approximately equal to
+<, >: less than, greater than
+In words: 20 factorial still fits in a signed 64-bit integer, but 21 factorial is more than five times too big.
+```
+
+`n` must survive the recursive call, so it goes in a callee-saved register.
 
 ```
 # long fact(long n)
@@ -147,7 +190,20 @@ S-32   return addr into fact(2)
 S-40   saved rbx = 2    <- rsp in fact(1)
 ```
 
-Each level costs 16 bytes: a return address and one saved register. Unbounded recursion keeps adding frames until stack resources are exhausted. Stack limits and guard arrangements depend on the OS and thread configuration; Linux can signal `SIGSEGV` on stack exhaustion. No universal 8 MB default is assumed.
+Each level costs 16 bytes: a return address and one saved register.
+
+```formula
+D = 16 × L
+D = 16 × 3 = 48 bytes
+where
+D: the stack space used by the active fact calls, in bytes
+L: how many fact calls are active at once (here fact(3), fact(2) and fact(1))
+16: one 8-byte return address plus one 8-byte saved rbx per call
+bytes: the unit of memory size; one byte is 8 bits
+In words: stack use grows in a straight line with recursion depth; the three levels above fill the 48 bytes from S + 7 down to S − 40.
+```
+
+Unbounded recursion keeps adding frames until stack resources are exhausted. Stack limits and guard arrangements depend on the OS and thread configuration; Linux can signal `SIGSEGV` on stack exhaustion. No universal 8 MB default is assumed.
 
 ### The classic frame-pointer prologue
 
@@ -169,7 +225,24 @@ When callers and callees maintain compatible frame records, saved `rbp` values f
 
 ## Alignment and the red zone
 
-**Alignment.** For the ordinary calls shown, both ABIs require 16-byte stack alignment at the call boundary. System V can require stronger alignment for some stack-passed over-aligned or vector arguments. On x86-64, `rsp` must be a multiple of 16 just *before* the `call`, so on entry to a function (after the 8-byte return address is pushed) `rsp % 16 == 8`. That is why `fact` above is aligned: its single `push rbx` brings `rsp` back to a multiple of 16 for the inner call. Compilers sometimes `push rax` or `sub rsp, 8` purely to fix alignment. Get it wrong in hand-written code and you may crash in a library function that uses aligned SSE instructions such as `movaps`.
+**Alignment.** For the ordinary calls shown, both ABIs require 16-byte stack alignment at the call boundary. System V can require stronger alignment for some stack-passed over-aligned or vector arguments. On x86-64, `rsp` must be a multiple of 16 just *before* the `call`, so on entry to a function (after the 8-byte return address is pushed) it is 8 past a multiple of 16:
+
+```formula
+rsp_before mod 16 = 0
+rsp_entry = rsp_before − 8
+rsp_entry mod 16 = 8
+rsp_entry = 4096 − 8 = 4088
+4088 mod 16 = 8
+where
+rsp_before: the stack pointer just before the call instruction, in this example 4096 (0x1000)
+rsp_entry: the stack pointer on the first instruction of the called function
+mod: modulo: the remainder after dividing by 16 (4088 = 255 × 16 + 8)
+16: the alignment in bytes that both ABIs require at a call
+8: the size of the pushed return address
+In words: the call's push leaves rsp 8 bytes off a 16-byte boundary, so a function must move rsp by another 8 (or 24, 40, …) before it makes its own call.
+```
+
+That is why `fact` above is aligned: its single `push rbx` moves `rsp` down another 8 bytes, to 4080 in this example, a multiple of 16 for the inner call. Compilers sometimes `push rax` or `sub rsp, 8` purely to fix alignment. Get it wrong in hand-written code and you may crash in a library function that uses aligned SSE instructions such as `movaps`.
 
 ARM64 is stricter: `sp` itself must be 16-byte aligned whenever it is used as the base of a memory access (the hardware can trap if it is not), which is why registers are saved in pairs or in 16-byte blocks.
 
@@ -177,8 +250,8 @@ ARM64 is stricter: `sp` itself must be 16-byte aligned whenever it is used as th
 
 ## Real-world variations
 
-- **Windows x64** uses a different convention: arguments in `rcx`, `rdx`, `r8`, `r9`; the caller must reserve 32 bytes of "shadow space" on the stack; `rsi` and `rdi` are callee-saved, as are `xmm6`–`xmm15`. Code that crosses the boundary (Wine, JITs, hand-written assembly) must translate.
-- **Variadic functions** on System V set `al` to an upper bound (0–8) on the number of vector registers used; it need not be the exact count. This lets the callee decide whether to save vector argument registers. On Apple ARM64, anonymous variadic arguments go on the stack (named fixed parameters follow their normal rules), which breaks code that pretends a variadic function is non-variadic.
+- **Windows x64** uses a different convention: arguments in `rcx`, `rdx`, `r8`, `r9`; the caller must reserve 32 bytes of "shadow space" on the stack (one 8-byte slot for each of the four register arguments); `rsi` and `rdi` are callee-saved, as are `xmm6`–`xmm15`. Code that crosses the boundary (Wine, JITs, hand-written assembly) must translate.
+- **Variadic functions** on System V set `al` to a maximum (0–8) for the number of vector registers used; it need not be the exact count. This lets the callee decide whether to save vector argument registers. On Apple ARM64, anonymous variadic arguments go on the stack (named fixed parameters follow their normal rules), which breaks code that pretends a variadic function is non-variadic.
 - **Tail calls.** If a function's last action is a call, the compiler can restore its frame and `jmp` (x86) or `b` (ARM64) to the target instead. The callee returns straight to the original caller, without adding another outstanding return frame; the callee may still use stack space. ABI and language constraints determine whether this transformation is possible.
 - **Profiling and unwinding.** Frame pointers simplify walking a compatible chain, while unwind metadata can describe optimized frames without one. A universal performance percentage and blanket claims about distribution package rebuilds are omitted because they require version- and workload-specific evidence.
 

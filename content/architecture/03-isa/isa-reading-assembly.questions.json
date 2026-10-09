@@ -41,7 +41,7 @@
       },
       {
         "text": "`rax = rdi - rax`",
-        "explanation": "The destination is right, but the subtraction is reversed. AT&T `sub src, dst` means dst = dst - src."
+        "explanation": "The destination is right, but the subtraction is reversed. AT&T `sub src, dst` means `dst = dst - src`."
       },
       {
         "text": "`rax = rax - rdi`",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "```\nrdi = 7\nlea rax,[rdi+rdi*2]  rax = 7 + 14 = 21\nshl rax, 2           rax = 21 * 4 = 84\n```\n\nSo the function is `x * 12`. Compilers replace `imul` by small constants with `lea` and shifts when their cost model favors it. Recognising `lea` with a scale as 'multiply by 3, 5 or 9' is one of the most useful reading skills.",
+    "workedExample": "```\nrdi = 7\nlea rax,[rdi+rdi*2]  rax = 7 + 14 = 21\nshl rax, 2           rax = 21 * 4 = 84\n```\n\nAs one formula:\n\n```formula\nr = (x + x × 2) × 2^2 = 12 × x\nr = (7 + 14) × 4 = 84\nwhere\nr: the value returned in rax\nx: the argument, which arrives in rdi (here 7)\n2^2: 4: `shl rax, 2` shifts left by 2 bits, which multiplies by 4\nIn words: lea makes three times x, the shift makes that four times bigger, so the function multiplies by 12.\n```\n\nSo the function is `x * 12`. Compilers replace `imul` by small constants with `lea` and shifts when their cost model favors it. Recognising `lea` with a scale as 'multiply by 3, 5 or 9' is one of the most useful reading skills.",
     "link": {
       "title": "x86 and amd64 instruction reference — Félix Cloutier",
       "url": "https://www.felixcloutier.com/x86/"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. `cmp edi, esi` computes 0xffffffff - 0x00000001 and sets flags.\n2. As unsigned numbers: 4,294,967,295 - 1, no borrow, so CF = 0; result non-zero, so ZF = 0.\n3. `ja` jumps if CF = 0 and ZF = 0: taken.\n4. A signed `jg` would test SF, OF and ZF and see -1 < 1: not taken.\n\nThis is how a C signed/unsigned mix-up (`if (len > limit)` with an unsigned limit) becomes a security bug: a negative length looks enormous, or vice versa.",
+    "workedExample": "1. `cmp edi, esi` computes 0xffffffff - 0x00000001 and sets flags.\n2. As unsigned numbers, the 32 bits of −1 mean the largest 32-bit number:\n\n```formula\nu = v + 2^32   for v < 0\nu = −1 + 4294967296 = 4294967295\nu − 1 = 4294967294\nwhere\nu: the unsigned number formed by the 32 bits in edi\nv: the signed value those bits represent, −1\n2^32: 4,294,967,296, the number of different 32-bit patterns\n<: less than\nIn words: read as unsigned, −1 is the largest 32-bit number, so subtracting 1 from it needs no borrow and leaves a non-zero result.\n```\n\nNo borrow, so CF = 0; the result is non-zero, so ZF = 0.\n3. `ja` jumps if CF = 0 and ZF = 0: taken.\n4. A signed `jg` would test SF, OF and ZF and see -1 < 1: not taken.\n\nThis is how a C signed/unsigned mix-up (`if (len > limit)` with an unsigned limit) becomes a security bug: a negative length looks enormous, or vice versa.",
     "link": {
       "title": "FLAGS register — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/FLAGS_register"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Trace with x = 44 = 0b101100:\n\n```\nx        x-1      x&(x-1)  eax\n101100   101011   101000   1\n101000   100111   100000   2\n100000   011111   000000   3\n000000   -> test sets ZF, je\n```\n\nReturns 3. This is Kernighan's population count: each iteration removes the lowest 1 bit. (A compiler targeting a modern CPU might just emit `popcnt` instead.)",
+    "workedExample": "First write 44 in binary:\n\n```formula\n44 = 2^5 + 2^3 + 2^2 = 32 + 8 + 4\n44 = 0b101100\nwhere\n2^5, 2^3, 2^2: the place values of bits 5, 3 and 2\n0b: marks a binary number\nIn words: 44 is made of three powers of two, so its binary form has exactly three 1 bits.\n```\n\nThen trace the loop with x = 44:\n\n```\nx        x-1      x&(x-1)  eax\n101100   101011   101000   1\n101000   100111   100000   2\n100000   011111   000000   3\n000000   -> test sets ZF, je\n```\n\nReturns 3. This is Kernighan's population count: each iteration removes the lowest 1 bit. (A compiler targeting a modern CPU might just emit `popcnt` instead.)",
     "link": {
       "title": "x86 and amd64 instruction reference — Félix Cloutier",
       "url": "https://www.felixcloutier.com/x86/"
@@ -259,7 +259,7 @@
       },
       {
         "text": "-4; C gives -3, so the 'optimisation' is wrong for negative odd numbers",
-        "explanation": "Correct. `sar` computes floor(-7 / 2) = -4. C integer division truncates towards zero, giving -3. The compiler's `shr eax, 31; add eax, edi` adds 1 to negative inputs first so the shift rounds towards zero."
+        "explanation": "Correct. `sar` rounds −3.5 down to −4. C integer division truncates towards zero, giving -3. The compiler's `shr eax, 31; add eax, edi` adds 1 to negative inputs first so the shift rounds towards zero."
       },
       {
         "text": "2147483644; `sar` is a logical shift that fills with zeros",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. -7 in 32-bit two's complement is 0xfffffff9.\n2. `sar` by 1 shifts right and copies the sign bit: 0xfffffffc = -4. That is floor(-3.5).\n3. C (since C99) truncates towards zero: -7 / 2 = -3.\n4. The compiler's version: bias = (unsigned)x >> 31 = 1 for negatives; -7 + 1 = -6; -6 >> 1 = -3. Correct.\n5. For positives the bias is 0, so nothing changes. (If x were `unsigned`, a plain `shr` would be right.) The shifts here describe x86 instructions; do not infer portable C17 semantics for right-shifting a negative signed integer.",
+    "workedExample": "1. -7 in 32-bit two's complement is 0xfffffff9.\n2. `sar` by 1 shifts right and copies the sign bit: 0xfffffffc = -4. That is −3.5 rounded down.\n3. C (since C99) truncates towards zero: -7 / 2 = -3.\n4. The compiler's version adds a bias first:\n\n```formula\nq = ⌊(x + c) / 2⌋\nc = 1 if x < 0, otherwise 0\nq = ⌊(−7 + 1) / 2⌋ = −3\nwhere\nq: the result, matching C's x / 2\nx: the signed input, here −7\nc: the bias, the sign bit of x: `shr eax, 31` moves it to bit 0\n⌊ ⌋: floor: round down towards minus infinity, which is what `sar` by 1 does\n<: less than\nIn words: adding 1 to a negative input before the rounding-down shift turns it into rounding towards zero.\n```\n\n5. For positives the bias is 0, so nothing changes. (If x were `unsigned`, a plain `shr` would be right.) The shifts here describe x86 instructions; do not infer portable C17 semantics for right-shifting a negative signed integer.",
     "link": {
       "title": "x86 and amd64 instruction reference — Félix Cloutier",
       "url": "https://www.felixcloutier.com/x86/"
@@ -292,7 +292,7 @@
         "explanation": "The elements are `int` (4 bytes), so a dword load is correct. qword would read two elements."
       },
       {
-        "text": "The ABI only defines the low 32 bits of `rsi` for an `unsigned` argument; the upper 32 bits can hold garbage, so it must zero-extend first (for example `mov esi, esi`)",
+        "text": "The ABI only defines the low 32 bits of `rsi` for an `unsigned` argument; the upper 32 bits can contain garbage, so it must zero-extend first (for example `mov esi, esi`)",
         "explanation": "Correct. For 32-bit arguments, the System V ABI leaves the upper half of the 64-bit register unspecified. In tests the caller happened to leave zeros there; in optimised code it may not, producing a wild address. Compilers emit `mov eax, esi` (or similar) before using such a value as a 64-bit index."
       },
       {

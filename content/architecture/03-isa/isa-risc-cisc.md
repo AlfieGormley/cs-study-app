@@ -6,7 +6,7 @@ minutes: 14
 summary: How instructions are packed into bits on ARM64 and x86-64, why one is fixed-length and the other is not, the addressing modes both offer, and why the RISC vs CISC war mostly ended in a truce.
 ---
 
-An instruction is a number. The previous lesson's toy machine used `op * 100 + address`. Real ISAs pack the operation, registers, constants and addressing information into bit fields. How they do that, and how much one instruction is allowed to do, splits ISAs into two broad families.
+An instruction is a number. The previous lesson's toy machine put the operation in the hundreds digit of a decimal number and the address in the last two digits. Real ISAs pack the operation, registers, constants and addressing information into bit fields. How they do that, and how much one instruction is allowed to do, splits ISAs into two broad families.
 
 ## Two philosophies
 
@@ -16,7 +16,7 @@ An instruction is a number. The previous lesson's toy machine used `op * 100 + a
 
 - **Load/store**: ordinary ALU operations use registers/immediates, with separate memory-transfer instructions. Atomic read-modify-write instructions are an important extension.
 - **Fixed-length**: often a 32-bit base encoding, simplifying boundary detection; compressed extensions are exceptions.
-- **Register-rich**: typically a relatively large register file, reducing spills; exact counts vary by ISA.
+- **Register-rich**: typically a relatively large register file, reducing register spills; exact counts vary by ISA.
 - **Regular**: few formats, so the hardware is simple and easy to pipeline.
 
 ARM64 (AArch64), RISC-V, MIPS and POWER are RISC. x86-64 is CISC.
@@ -64,7 +64,18 @@ bits   field  value   meaning
 4-0    Rd     00000   x0
 ```
 
-The general-purpose register fields in this format are 5 bits: encodings 0–30 name numbered registers, while 31 has instruction-dependent special meaning. Regular field placement helps decoding, but not every A64 instruction uses this format. An exact Apple M1 decode-width claim is omitted because a primary hardware specification establishing it was not available in this review.
+The general-purpose register fields in this format are 5 bits: encodings 0–30 name numbered registers, while 31 has instruction-dependent special meaning. The number of registers a field can name doubles with every bit:
+
+```formula
+R = 2^b
+R = 2^5 = 32
+where
+R: how many different registers a register field can name
+b: the width of the register field, in bits
+In words: a 5-bit field has 32 possible patterns: 0 to 30 pick x0 to x30, and 31 picks the stack pointer or the zero register, depending on the instruction.
+```
+
+Regular field placement helps decoding, but not every A64 instruction uses this format. An exact Apple M1 decode-width claim is omitted because a primary hardware specification establishing it was not available in this review.
 
 ### The price: immediates
 
@@ -74,10 +85,26 @@ A 32-bit instruction cannot encode every possible 64-bit constant. ARM64 offers 
 |---|---|
 | `add`/`sub` | 12 bits (0–4095), optionally shifted left 12 |
 | 64-bit `movz`/`movk` | 16 bits, placed at bit 0, 16, 32 or 48 |
-| Immediate `and`/`orr` | repeated, rotated runs of ones and zeros within power-of-two-sized elements; neither all-zero nor all-one masks are encodable |
-| Unsigned-offset scalar `ldr`/`str` | 12 bits, scaled by access size; other addressing forms differ |
+| Immediate `and`/`orr` | repeated, rotated runs of ones and zeros within power-of-two-sized elements; neither all-zeros nor all-ones values are encodable |
+| Unsigned-offset scalar `LDR`/`STR` | 12 bits, scaled by access size; other addressing forms differ |
 
-So `add x0, x0, #4095` is one instruction but `#4097` will not assemble. A full 64-bit constant takes up to four instructions:
+How big can an unsigned immediate be? A field of k bits has 2 to the power k patterns, and the smallest is 0:
+
+```formula
+v_max = 2^k − 1
+v_max = 2^12 − 1 = 4096 − 1 = 4095
+v = imm12 × 2^12
+v = 3 × 4096 = 12288
+where
+v_max: the largest value an unsigned k-bit field can hold
+k: the width of the immediate field, in bits: 12 for add/sub
+v: the constant actually added when the "shifted left 12" option is used
+imm12: the 12-bit immediate field written in the instruction, 0 to 4095
+2^12: 4096: shifting a number left by 12 bits multiplies it by 2^12
+In words: 12 bits reach 0 to 4095; the shifted form multiplies the field by 4096, so it reaches exact multiples of 4096 up to 4095 × 4096 = 16,773,120.
+```
+
+So `add x0, x0, #4095` is one instruction but `#4097` will not assemble: 4097 is above 4095 and is not a multiple of 4096. A full 64-bit constant takes up to four instructions:
 
 ```
 mov   x0, #0xcdef            // movz
@@ -85,6 +112,18 @@ movk  x0, #0x90ab, lsl #16   // keep rest
 movk  x0, #0x5678, lsl #32
 movk  x0, #0x1234, lsl #48
 // x0 = 0x1234567890abcdef
+```
+
+Each `movk` drops a 16-bit chunk into place without disturbing the rest, so the register ends up holding:
+
+```formula
+x0 = c_0 + c_1 × 2^16
+   + c_2 × 2^32 + c_3 × 2^48
+where
+x0: the 64-bit register being built
+c_0, c_1, c_2, c_3: the four 16-bit chunks, lowest first: 0xcdef, 0x90ab, 0x5678 and 0x1234 (0x marks a hexadecimal number)
+2^16, 2^32, 2^48: the place values of bit positions 16, 32 and 48: `lsl #16` (logical shift left by 16 bits) multiplies a chunk by 2^16 = 65,536
+In words: the 64-bit constant is four 16-bit pieces placed side by side, each moved to its slot by a shift.
 ```
 
 Some odd-looking constants are cheap: `0xff00ff00ff00ff00` is a repeating pattern, so it fits one `orr`-based `mov`. Compilers also put large constants in a nearby **literal pool** and load them with one PC-relative `ldr`.
@@ -104,9 +143,9 @@ disp       0-4 B    displacement
 imm        0-8 B    immediate
 ```
 
-- **REX** (`0x40`–`0x4F`) was added for 64-bit mode: its W bit selects 64-bit operands and three more bits extend register numbers from 3 bits (8 registers) to 4 (16 registers).
+- **REX** (`0x40`–`0x4F`) was added for 64-bit mode: its W bit selects 64-bit operands and three more bits extend register numbers from 3 bits (8 registers) to 4 bits (16 registers), by the same doubling rule as the A64 register fields.
 - **ModRM** says which register and which memory or register operand: `mod` (2 bits), `reg` (3), `rm` (3).
-- **SIB** (scale, index, base) describes `base + index * scale`.
+- **SIB** (scale, index, base) describes a base register plus an index register multiplied by a scale (see the effective-address formula below).
 - **disp** and **imm** are a displacement and an immediate constant.
 
 Some real encodings:
@@ -138,7 +177,7 @@ Note that x86 arithmetic is mostly **two-operand**: `add rax, rdi` means `rax = 
 ### Why variable length hurts and helps
 
 - It helps **code density**: short encodings can reduce instruction-cache footprint; actual code density depends on the instruction mix.
-- It hurts **decoding**: the decoder cannot know where instruction *n+1* starts until it has worked out the length of instruction *n*. Boundary detection adds work, although predecoding and parallel candidate decoding can help. Some x86 cores cache decoded **micro-ops**; this is not an ISA requirement or a universal core feature.
+- It hurts **instruction decoding**: the decoder cannot know where the next instruction starts until it has worked out the length of the current one. Boundary detection adds work, although predecoding and parallel candidate decoding can help. Some x86 cores cache decoded **micro-ops**; this is not an ISA requirement or a universal core feature.
 
 RISC ISAs claw back density with compressed formats: ARM's 16/32-bit Thumb-2 (on 32-bit ARM) and RISC-V's "C" extension of 16-bit instructions.
 
@@ -156,23 +195,91 @@ An **addressing mode** is a rule for where an operand comes from. Here are the c
 | PC-relative | `[rip + label]` | `adr`, `adrp`, literal `ldr` |
 | General load/store pre-/post-index | no general bracket form; string/stack instructions can update pointers implicitly | `[x0, #8]!` / `[x0], #8` |
 
-The **effective address** is the address the mode computes. With `rdi = 0x1000` and `rsi = 3`:
+The **effective address** is the address the mode computes. The most general x86 memory operand adds a base, a scaled index and a displacement. Take this operand with `rdi = 0x1000` and `rsi = 3`:
 
 ```
 [rdi + rsi*4 + 8]
-= 0x1000 + 3*4 + 8
-= 0x1000 + 0x14 = 0x1014
 ```
+
+```formula
+EA = base + index × scale + disp
+EA = 0x1000 + 3 × 4 + 8
+EA = 0x1000 + 20 = 0x1014
+where
+EA: the effective address: the memory address the instruction actually reads or writes
+base: the value in the base register, here rdi = 0x1000 (hexadecimal, 4096 in decimal)
+index: the value in the index register, here rsi = 3
+scale: a constant multiplier written into the instruction: 1, 2, 4 or 8 on x86; here 4, the size of an `int`
+disp: the displacement: a constant offset in bytes written into the instruction, here 8
+In words: start at the base address, step over index elements of scale bytes each, then add a fixed offset; 20 in decimal is 0x14, giving 0x1014.
+```
+
+Each part is optional: drop the index for base + displacement, drop the displacement for base + scaled index.
 
 What each mode is for:
 
 - **Base + displacement**: struct fields (`p->next` could be `[p + 8]` for a layout with that field offset) and stack slots (`[rsp + 24]`).
 - **Scaled index**: arrays. Scales are 1, 2, 4 or 8 on x86, matching element sizes.
-- **PC-relative**: globals and constants, so code works wherever it is loaded (position-independent code, lesson 6). A normal x86-64 RIP-relative disp32 ranges from −2 GiB to +2 GiB−1 relative to the next instruction. AArch64 `adrp` uses a signed 21-bit offset in 4 KiB units from the current PC rounded down to a 4 KiB boundary (−4 GiB through +4 GiB−4 KiB); a subsequent instruction can supply the low offset. These are encoding units, not a requirement that the OS use 4 KiB pages.
+- **PC-relative**: globals and constants, so code works wherever it is loaded (position-independent code, lesson 6). Its reach is limited by the signed offset field; the reach formulas follow this list.
 - **Pre/post-index**: ARM64 updates the base register as a side effect. `ldr w9, [x0], #4` loads `*x0` then adds 4 to `x0`: a pointer walk in one instruction. With `[x0, #-16]!`, the base is updated first, which is how ARM64 pushes onto the stack.
 
+How far can a PC-relative offset reach? A signed field of k bits (two's complement) holds half its patterns as negatives:
+
+```formula
+−2^{k−1} ≤ d ≤ 2^{k−1} − 1
+where
+d: the signed offset stored in the instruction
+k: the width of the offset field, in bits
+≤: less than or equal to
+In words: a signed k-bit field runs from minus 2 to the power (k − 1) up to one less than plus that amount; the positive side is one short because zero takes one of the non-negative patterns.
+```
+
+A normal x86-64 RIP-relative operand has a 32-bit displacement (disp32), measured from the next instruction:
+
+```formula
+target = rip_next + d
+−2^31 ≤ d ≤ 2^31 − 1
+2^31 B = 2 GiB
+where
+target: the address being referred to
+rip_next: the address of the instruction after this one (x86-64's instruction pointer, RIP, after the fetch)
+d: the signed 32-bit displacement, in bytes
+B: byte
+GiB: gibibyte: 2^30 = 1,073,741,824 bytes
+≤: less than or equal to
+In words: a RIP-relative operand reaches from 2 GiB before the next instruction to 1 byte short of 2 GiB after it.
+```
+
+AArch64 `adrp` counts in 4 KiB pages from the current PC rounded down to a 4 KiB boundary:
+
+```formula
+PC_page = PC − (PC mod 4096)
+target = PC_page + imm21 × 4096
+−2^20 ≤ imm21 ≤ 2^20 − 1
+where
+PC_page: the address of the adrp instruction rounded down to a multiple of 4096
+PC: the address of the adrp instruction itself
+mod: modulo: the remainder after division, so PC mod 4096 is how far PC sits past a 4 KiB boundary
+target: the start of the 4 KiB page being referred to
+imm21: the signed 21-bit offset in the instruction, counted in 4 KiB units
+4096: 4 KiB (kibibytes) = 4096 bytes, the unit adrp counts in
+≤: less than or equal to
+In words: adrp reaches about a million (1,048,576) 4 KiB pages either side of the current page, from 4 GiB below it to 4 KiB short of 4 GiB above it; a following instruction adds the low 12 bits of the exact address.
+```
+
+These are encoding units, not a requirement that the OS use 4 KiB pages.
+
 > [!tip] `lea` is the address calculator
-> x86's `lea` (load effective address) computes the address and puts it in a register *without touching memory*. Compilers use it as a shift-and-add that preserves flags (it still consumes execution resources): `lea rax, [rdi + rdi*4 + 7]` computes `x*5 + 7` in one instruction.
+> x86's `lea` (load effective address) computes the address and puts it in a register *without touching memory*. Compilers use it as a shift-and-add that preserves flags (it still consumes execution resources): `lea rax, [rdi + rdi*4 + 7]` multiplies by 5 and adds 7 in one instruction, as the formula below shows.
+
+```formula
+rax = x + x × 4 + 7
+rax = 5 × x + 7
+where
+rax: the destination register, which receives the computed number
+x: the input value held in register rdi
+In words: the address arithmetic adds x to four times x, then 7, so with x = 10 the result is 57, and no memory is read.
+```
 
 ## Who won?
 
@@ -187,7 +294,19 @@ A detailed account of market-share causes and a universal quantitative decoder-p
 
 ## Pitfalls
 
-- **"CISC is slower."** Instruction count is not speed. What matters is instructions × cycles per instruction × clock period (the next module's iron law), and both styles have world-class implementations.
+- **"CISC is slower."** Instruction count is not speed. What matters is total run time, which the next module's iron law splits into three factors:
+
+```formula
+T = N × CPI × t_clk
+where
+T: the time the program takes to run, in seconds (s)
+N: the number of instructions executed
+CPI: cycles per instruction: the average number of clock cycles each instruction takes
+t_clk: the clock period: the length of one clock cycle, in seconds; 1 nanosecond at 1 GHz
+In words: run time is how many instructions run, times how many cycles each takes on average, times how long a cycle lasts.
+```
+
+At the same clock, 1 million instructions at an average of 2 cycles each take exactly as long as 2 million at 1 cycle each. Both styles have world-class implementations.
 - **Counting instructions, not bytes.** Three ARM64 instructions can be the same size as one long x86 instruction.
 - **Assuming any constant fits.** The A64 immediate ADD form accepts 0–4095, optionally shifted left 12. Other constants need a different sequence.
 - **Forgetting x86 is two-operand.** `sub rax, rdi` computes `rax - rdi` into `rax`; reading it as three-operand gets the direction wrong.

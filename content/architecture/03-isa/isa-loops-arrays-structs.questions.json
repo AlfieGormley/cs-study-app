@@ -11,7 +11,7 @@
       },
       {
         "text": "`dword ptr [rdi + 4*rsi]`",
-        "explanation": "Correct. Address = base + index × element size = `rdi + 4*rsi`, and `dword` reads 4 bytes."
+        "explanation": "Correct. The base in `rdi` plus 4 times the index in `rsi` is the address of `a[i]`, and `dword` reads 4 bytes."
       },
       {
         "text": "`dword ptr [rsi + 4*rdi]`",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Address of `a[i]` = byte address `base + i * sizeof(int)` = `base + 4i` (C pointer arithmetic already scales `a + i`).\n2. The base is in `rdi`, the index in `rsi`, and 4 is a legal x86 scale (1, 2, 4 or 8).\n3. So the operand is `[rdi + 4*rsi]`, with `dword ptr` for a 4-byte load.\n4. ARM64 equivalent: `ldr w8, [x0, x1, lsl #2]` (shift left by 2 = multiply by 4).",
+    "workedExample": "1. Work out the byte address of `a[i]` (C pointer arithmetic already does this scaling for `a + i`):\n\n```formula\naddr = base + i × s\naddr = base + i × 4\nwhere\naddr: the byte address of element a[i]\nbase: the address where the array starts, held in rdi\ni: the element index, held in rsi\ns: the element size in bytes: sizeof(int) = 4\nIn words: skip i whole 4-byte ints from the start of the array.\n```\n\n2. The base is in `rdi`, the index in `rsi`, and 4 is a legal x86 scale (1, 2, 4 or 8).\n3. So the operand is `[rdi + 4*rsi]`, with `dword ptr` for a 4-byte load.\n4. ARM64 equivalent: `ldr w8, [x0, x1, lsl #2]` (shift left by 2 = multiply by 4).",
     "link": {
       "title": "Computer Systems: A Programmer's Perspective",
       "url": "https://csapp.cs.cmu.edu/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. `c`: offset 0, 1 byte.\n2. `x` needs 4-byte alignment: next multiple of 4 is 4. Padding bytes 1–3. `x` occupies 4–7.\n3. `d`: offset 8, 1 byte. Fields end at 9.\n4. Struct alignment = largest member alignment = 4. Round 9 up to a multiple of 4: **12**.\n5. Reordering to `int x; char c; char d;` gives 4 + 1 + 1 = 6, rounded up to 8.",
+    "workedExample": "1. `c`: offset 0, 1 byte.\n2. `x` needs 4-byte alignment: next multiple of 4 is 4. Padding bytes 1–3. `x` occupies 4–7.\n3. `d`: offset 8, 1 byte. Fields end at 9.\n4. The struct's alignment is its largest member alignment, 4 (from the `int`). Round the end up to a multiple of it:\n\n```formula\ns_T = ⌈e / A⌉ × A\ns_T = ⌈9 / 4⌉ × 4 = 3 × 4 = 12\nwhere\ns_T: sizeof(struct T), in bytes\ne: where the last field ends, in bytes: 9\nA: the struct's alignment: 4\n⌈ ⌉: ceiling: round up to the next whole number\nIn words: 9 bytes is not a whole number of 4-byte steps, so add 3 bytes of tail padding to reach **12**.\n```\n\n5. Reordering to `int x; char c; char d;` gives 4 + 1 + 1 = 6, rounded up to 8.",
     "link": {
       "title": "Data structure alignment — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. `x = -1` is the bit pattern 0xffffffff in `edi`.\n2. `cmp edi, 4` computes 0xffffffff - 4 and sets flags.\n3. `ja` (jump if above) is unsigned: 4,294,967,295 > 4, so it jumps to the default.\n4. Similarly, x = 5 is above 4 and goes to the default. Only 0–4 fall through to the table lookup.\n\nOne unsigned compare replaces the pair `x < 0 || x > 4`. This is the standard range check for jump tables.",
+    "workedExample": "1. `x = -1` is the bit pattern 0xffffffff in `edi`.\n2. `cmp edi, 4` computes 0xffffffff - 4 and sets flags.\n3. `ja` (jump if above) is unsigned, so it sees the bits as:\n\n```formula\nu = x + 2^32   for x < 0\nu = −1 + 4294967296 = 4294967295\nwhere\nu: the unsigned number formed by the 32 bits of x\nx: the signed switch value, −1\n2^32: 4,294,967,296, the number of different 32-bit patterns\n<: less than\nIn words: −1 looks like 4,294,967,295 to an unsigned compare, far above 4, so it jumps to the default.\n```\n\n4. Similarly, x = 5 is above 4 and goes to the default. Only 0–4 fall through to the lookup in the table.\n\nOne unsigned compare replaces the pair `x < 0 || x > 4`. This is the standard range check for jump tables.",
     "link": {
       "title": "Branch table — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Branch_table"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Iteration 1: `x1` 5→4, not zero, branch taken (1).\n2. Iteration 2: 4→3, taken (2).\n3. Iteration 3: 3→2, taken (3).\n4. Iteration 4: 2→1, taken (4).\n5. Iteration 5: 1→0, Z flag set, `b.ne` not taken; the loop exits.\n\nFive iterations, four taken branches. This also shows why the `add` can sit between `subs` and `b.ne`: on ARM64, ordinary arithmetic leaves NZCV alone.",
+    "workedExample": "1. Iteration 1: `x1` 5→4, not zero, branch taken (1).\n2. Iteration 2: 4→3, taken (2).\n3. Iteration 3: 3→2, taken (3).\n4. Iteration 4: 2→1, taken (4).\n5. Iteration 5: 1→0, Z flag set, `b.ne` not taken; the loop exits.\n\nFive iterations, four taken branches. In general, for a bottom-tested count-down loop:\n\n```formula\nb = n − 1\nb = 5 − 1 = 4\nwhere\nb: how many times the backward branch is taken\nn: the starting count in x1 (at least 1)\nIn words: every pass except the last jumps back; the last pass falls through.\n```\n\nThis also shows why the `add` can sit between `subs` and `b.ne`: on ARM64, ordinary arithmetic leaves NZCV alone.",
     "link": {
       "title": "Compiler Explorer",
       "url": "https://godbolt.org/"
@@ -169,11 +169,11 @@
       },
       {
         "text": "Each element is 40 bytes and a 4-byte field at offset 4 is read",
-        "explanation": "Correct. `rax = 5i`, then the address is `rdi + 8*5i + 4` = `rdi + 40i + 4`."
+        "explanation": "Correct. The `lea` makes five times the index, the scale 8 makes that 40 times the index, and `+ 4` is the field offset."
       }
     ],
     "answer": 3,
-    "workedExample": "LEA computes 5i, and MOV loads four bytes from base + 40i + 4. Under the stated direct indexing assumption, the element stride is 40 and the field offset is 4. This does not reveal the member’s name, semantic type, declaration position or the other fields.",
+    "workedExample": "LEA computes five times the index, and MOV loads four bytes from:\n\n```formula\naddr = rdi + 8 × (5 × i) + 4\naddr = rdi + 40 × i + 4\nwhere\naddr: the address of the field being read\nrdi: the base address of the array\ni: the index held in rsi\nIn words: each step of i moves 40 bytes, so elements are 40 bytes apart, and the field is 4 bytes into each one.\n```\n\nUnder the stated direct indexing assumption, the element stride is 40 and the field offset is 4. This does not reveal the member’s name, semantic type, declaration position or the other fields.",
     "link": {
       "title": "Computer Systems: A Programmer's Perspective",
       "url": "https://csapp.cs.cmu.edu/"
@@ -195,7 +195,7 @@
       },
       {
         "text": "0x105C",
-        "explanation": "Correct. Row-major: offset = (2 × 10 + 3) × 4 = 92 = 0x5C, so 0x1000 + 0x5C = 0x105C."
+        "explanation": "Correct. Row-major: (2 × 10 + 3) × 4 = 92 bytes = 0x5C, and 0x1000 + 0x5C = 0x105C."
       },
       {
         "text": "0x1068",
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. C arrays are row-major: all of row 0, then all of row 1, and so on.\n2. Each row has 10 ints = 40 bytes.\n3. `a[2][3]` is after 2 full rows (2 × 10 = 20 elements) plus 3 more: element number 23.\n4. Byte offset = 23 × 4 = 92 = 0x5C.\n5. Address = 0x1000 + 0x5C = **0x105C**.\n\nIn assembly: `i*10` via `lea` tricks, then `[rdi + 4*rax]`. The row count 8 never appears.",
+    "workedExample": "1. C arrays are row-major: all of row 0, then all of row 1, and so on.\n2. Each row has 10 ints = 40 bytes.\n3. `a[2][3]` is after 2 full rows (2 × 10 = 20 elements) plus 3 more: element number 23.\n4. Turn that into a byte address:\n\n```formula\naddr = base + (i × C + j) × s\naddr = 0x1000 + (2 × 10 + 3) × 4\naddr = 0x1000 + 92 = 0x105C\nwhere\naddr: the address of a[i][j]\nbase: the address of a[0][0]: 0x1000 (0x marks hexadecimal)\ni: the row index: 2\nj: the column index: 3\nC: the number of columns per row: 10\ns: the size of one int: 4 bytes\nIn words: 23 elements of 4 bytes is 92 bytes, which is 0x5C in hexadecimal, so the element is at **0x105C**.\n```\n\nIn assembly: `i*10` via `lea` tricks, then `[rdi + 4*rax]`. The row count 8 never appears.",
     "link": {
       "title": "Row- and column-major order — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Row-_and_column-major_order"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "As declared:\n```\na  @0   (1) + 7 pad\nb  @8   (8)\nc  @16  (1) + 3 pad\nd  @20  (4)\nend 24 -> already a multiple of 8\n```\nReordered largest-first:\n```\nb  @0   (8)\nd  @8   (4)\na  @12  (1)\nc  @13  (1)\nend 14 -> round up to 16\n```\n24 - 16 = **8 bytes** per element. For 10 million elements that is 80 MB less memory for allocation. A complete streaming scan has roughly one-third fewer bytes; exact cache-line traffic depends on access patterns and alignment.",
+    "workedExample": "As declared:\n```\na  @0   (1) + 7 pad\nb  @8   (8)\nc  @16  (1) + 3 pad\nd  @20  (4)\nend 24 -> already a multiple of 8\n```\nReordered largest-first:\n```\nb  @0   (8)\nd  @8   (4)\na  @12  (1)\nc  @13  (1)\nend 14 -> round up to 16\n```\nThe tail rounding for the reordered layout:\n\n```formula\ns_P = ⌈e / A⌉ × A\ns_P = ⌈14 / 8⌉ × 8 = 2 × 8 = 16\nwhere\ns_P: sizeof(struct P) after reordering, in bytes\ne: where the last field ends: 14\nA: the struct's alignment, 8 for the double\n⌈ ⌉: ceiling: round up to the next whole number\nIn words: 14 bytes rounds up to the next multiple of 8, which is 16.\n```\n\n24 − 16 = **8 bytes** per element. For 10 million elements that is 80 MB less memory for allocation. A complete streaming scan has roughly one-third fewer bytes; exact cache-line traffic depends on access patterns and alignment.",
     "link": {
       "title": "Data structure alignment — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Tracing f(4):\n| edi before | eax after add | edi after dec | jne |\n|---|---|---|---|\n| 4 | 4 | 3 | taken |\n| 3 | 7 | 2 | taken |\n| 2 | 9 | 1 | taken |\n| 1 | 10 | 0 | not taken |\n\nSo f(4) = 10.\n\nTracing f(0): `add` leaves 0, `dec` wraps to 0xffffffff, `jne` is taken, and it runs 2^32 times in total (wrapping `eax` along the way). The missing piece is the entry guard (`test edi, edi` / `je`) that a compiler adds when it rotates a `for` or `while` loop. Hand-written loops that forget it are a classic bug.",
+    "workedExample": "Tracing f(4):\n| edi before | eax after add | edi after dec | jne |\n|---|---|---|---|\n| 4 | 4 | 3 | taken |\n| 3 | 7 | 2 | taken |\n| 2 | 9 | 1 | taken |\n| 1 | 10 | 0 | not taken |\n\nSo f(4) = 10, the sum 4 + 3 + 2 + 1.\n\nTracing f(0): `add` leaves 0, `dec` wraps to 0xffffffff, `jne` is taken, and it keeps going until edi wraps all the way round:\n\n```formula\nN = 2^32 = 4294967296 ≈ 4.3 × 10^9\nwhere\nN: the number of passes through the loop when called with 0\n2^32: the number of different 32-bit values edi passes through: 0, then 0xffffffff down to 1\n≈: approximately equal to\nIn words: starting from 0 the loop visits every 32-bit value once, about 4.3 billion iterations, wrapping eax along the way.\n```\n\nThe missing piece is the entry guard (`test edi, edi` / `je`) that a compiler adds when it rotates a `for` or `while` loop. Hand-written loops that forget it are a classic bug.",
     "link": {
       "title": "Compiler Explorer",
       "url": "https://godbolt.org/"

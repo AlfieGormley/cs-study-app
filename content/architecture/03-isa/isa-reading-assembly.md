@@ -28,6 +28,20 @@ The others follow the same pattern: `rbx`, `rcx`, `rdx`, `rsi`, `rbp`, `r9`–`r
 > [!warning] The 32-bit write rule
 > Writing a 32-bit register **zeroes the upper 32 bits** of the 64-bit register. `mov eax, -1` leaves `rax = 0x00000000ffffffff`. Writing an 8- or 16-bit register leaves the other bits **unchanged**. Compilers lean on the first rule constantly: `mov eax, edi` is how they zero-extend a 32-bit value to 64 bits.
 
+Why does −1 become `0xffffffff`? In two's complement, a negative 32-bit value is stored as the unsigned pattern 4,294,967,296 higher (one more than the largest 32-bit number):
+
+```formula
+u = v + 2^32   for v < 0
+u = −1 + 4294967296 = 4294967295
+u = 0xffffffff
+where
+u: the unsigned number formed by the 32 stored bits
+v: the signed value written, here −1
+2^32: 4,294,967,296, the number of different 32-bit patterns
+<: less than
+In words: −1 in 32 bits is the all-ones pattern, 0xffffffff in hexadecimal; writing it to eax clears the top half of rax, so rax holds 4,294,967,295, not −1.
+```
+
 ### ARM64
 
 Thirty-one 64-bit registers `x0` to `x30`, each with a 32-bit view `w0` to `w30`. Writing a `w` register zeroes the upper 32 bits, like x86.
@@ -71,6 +85,33 @@ f:
 | Memory | `[b + i*s + d]` | `d(b,i,s)` |
 | Size | `qword ptr` | suffix `q`, `l`, `w`, `b` |
 
+Both memory spellings describe the same effective address:
+
+```formula
+EA = b + i × s + d
+where
+EA: the effective address: the memory address the operand points at
+b: the value in the base register
+i: the value in the index register
+s: the scale: 1, 2, 4 or 8
+d: the displacement: a constant byte offset
+In words: Intel writes [b + i*s + d] and AT&T writes d(b,i,s); both mean base plus scaled index plus offset, so AT&T's 7(%rdi,%rdi,4) is rdi + rdi × 4 + 7.
+```
+
+All three listings compute the same number. The ARM64 version builds five times x from a shift: `lsl #2` (logical shift left by 2 bits) multiplies by 4.
+
+```formula
+x8 = x0 + x0 × 2^2 = 5 × x0
+x0_out = 5 × x0 + 7
+x0_out = 5 × 10 + 7 = 57
+where
+x0: the argument x, which arrives in register x0
+x8: a scratch register holding 5 × x
+x0_out: the return value, written back into x0
+2^2: 4: shifting left by 2 bits multiplies by 4
+In words: x plus four times x is five times x; add 7 and return it, so f(10) is 57.
+```
+
 GNU GDB and GNU `objdump` normally default to AT&T on x86; `objdump -d -M intel` and GDB's `set disassembly-flavor intel` switch. This module uses Intel syntax with GNU assembler conventions (`#` comments) for x86, and standard syntax with `//` comments for ARM64. A64 instructions with an explicit result normally put the destination first; stores such as `str w0, [x1]` put the source register before the destination address.
 
 ## The core instructions
@@ -78,7 +119,7 @@ GNU GDB and GNU `objdump` normally default to AT&T on x86; `objdump -d -M intel`
 | Job | x86-64 | ARM64 |
 |---|---|---|
 | Copy | `mov` | `mov` |
-| Load / store | `mov` with `[...]` | `ldr` / `str` |
+| Load / store | `mov` with `[...]` | `LDR` / `STR` |
 | Address arithmetic | `lea` | `add`, `adr`, `adrp` |
 | Arithmetic | `add sub imul neg` | `add sub mul neg` |
 | Bitwise | `and or xor not shl shr sar` | `and orr eor mvn lsl lsr asr` |
@@ -99,11 +140,11 @@ After `cmp a, b`, choose the branch by **signedness**:
 
 | Meaning | x86 signed / unsigned | ARM64 signed / unsigned |
 |---|---|---|
-| a > b | `jg` / `ja` | `b.gt` / `b.hi` |
-| a >= b | `jge` / `jae` | `b.ge` / `b.hs` |
-| a < b | `jl` / `jb` | `b.lt` / `b.lo` |
-| a <= b | `jle` / `jbe` | `b.le` / `b.ls` |
-| a == b | `je` | `b.eq` |
+| `a > b` | `jg` / `ja` | `b.gt` / `b.hi` |
+| `a >= b` | `jge` / `jae` | `b.ge` / `b.hs` |
+| `a < b` | `jl` / `jb` | `b.lt` / `b.lo` |
+| `a <= b` | `jle` / `jbe` | `b.le` / `b.ls` |
+| `a == b` | `je` | `b.eq` |
 
 For these same-width integer comparisons, signedness determines which condition code interprets the flags. It can also affect earlier conversions and instruction selection. The bits in the register are the same; `jg` tests the sign, overflow and zero flags, while `ja` tests the carry and zero flags.
 
@@ -174,7 +215,7 @@ The same ideas, with different instruction choices: this version rewrites `a[i]`
 |---|---|
 | `xor eax, eax` | `eax = 0` (2 bytes, and many cores recognize a dependency-breaking zero idiom) |
 | `test rdi, rdi` then `je` | `if (rdi == 0)` |
-| `lea eax, [rdi + rdi*2]` | `eax = low32(rdi * 3)`, no memory access |
+| `lea eax, [rdi + rdi*2]` | `eax` gets three times `rdi` (low 32 bits kept), no memory access |
 | `movsxd rax, edi` / `sxtw x0, w0` | sign-extend 32 to 64 bits (an `int` to 64-bit `long` here) |
 | `mov eax, edi` / `mov w0, w0` | zero-extend `unsigned` to 64 bits |
 | `cmovg`, `csel` | branch-free `a > b ? a : b` |
@@ -195,7 +236,23 @@ half:
     ret
 ```
 
-For `x = -7`: the bias is 1, `-7 + 1 = -6`, and `-6 >> 1 = -3`, which is correct. For non-power-of-two divisors such as 10, compilers multiply by a "magic" reciprocal constant and shift. If you see a large odd constant and an `imul` where you expected a division, division by a constant is one possibility; confirm the complete sequence before drawing that conclusion.
+The arithmetic shift (`sar`) rounds down, so the bias is what turns rounding down into rounding towards zero:
+
+```formula
+q = ⌊(x + c) / 2⌋
+c = 1 if x < 0, otherwise 0
+q = ⌊(−7 + 1) / 2⌋ = ⌊−3⌋ = −3
+⌊−7 / 2⌋ = ⌊−3.5⌋ = −4
+where
+q: the result the code returns, which matches C's x / 2
+x: the signed integer being halved, here −7
+c: the bias: 1 for a negative x, 0 otherwise; `shr eax, 31` produces it by moving the sign bit down to bit 0
+⌊ ⌋: floor: round down towards minus infinity, which is what an arithmetic shift right by 1 does to a halving
+<: less than
+In words: without the bias −7 shifts to −4 (rounded down from −3.5); adding 1 first gives −6, which halves exactly to −3, the round-towards-zero answer C requires.
+```
+
+For a non-negative `x` the bias is 0, and rounding down already equals rounding towards zero. For non-power-of-two divisors such as 10, compilers multiply by a "magic" reciprocal constant and shift. If you see a large odd constant and an `imul` where you expected a division, division by a constant is one possibility; confirm the complete sequence before drawing that conclusion.
 
 ### Branch-free max
 

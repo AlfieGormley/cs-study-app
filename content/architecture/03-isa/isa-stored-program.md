@@ -12,7 +12,7 @@ The **von Neumann model** uses a shared memory for code and data, making it poss
 
 ## The parts of the machine
 
-This simplified von Neumann machine has a few essential parts:
+This simplified von Neumann machine has a few key parts:
 
 ```
  +-----------------  CPU  ----------------+
@@ -39,7 +39,17 @@ This simplified von Neumann machine has a few essential parts:
 Ignoring interrupts, exceptions and halted states, the toy machine repeats this cycle:
 
 1. **Fetch.** Read the instruction at address PC from memory into IR.
-2. **Advance.** Move PC on to the next instruction (PC + instruction length).
+2. **Advance.** Move PC on to the next instruction, which starts straight after the one just fetched:
+
+```formula
+PC_next = PC + L
+where
+PC_next: the new value of the program counter: the address of the next instruction to fetch
+PC: the program counter: the address of the instruction that was just fetched
+L: the length of that instruction: always 1 memory cell in the toy machine below, always 4 bytes on ARM64, anywhere from 1 to 15 bytes on x86-64
+In words: the next instruction begins right after the end of the current one, unless the current instruction is a jump that later overwrites PC.
+```
+
 3. **Decode.** Work out what the bits mean: which operation, which registers, which memory address, any constant.
 4. **Execute.** Do it: an ALU operation, a memory read or write, or a change to PC (a jump).
 5. Repeat.
@@ -50,15 +60,34 @@ Real CPUs also accept **interrupts**, such as a hardware timer event. When an in
 
 ## A small computer in Python
 
-The clearest way to understand the cycle is to build one. This toy machine has one register, an **accumulator** (`acc`), and memory cells holding integers. Each instruction is a number `op * 100 + address`:
+The clearest way to understand the cycle is to build one. This toy machine has one register, an **accumulator** (`acc`), and memory cells holding integers. Each instruction is a single decimal number: the hundreds digit says which operation to do, and the last two digits give the memory address it works on.
+
+```formula
+ir = op × 100 + a
+op = ⌊ir / 100⌋
+a = ir mod 100
+ir = 2 × 100 + 21 = 221
+where
+ir: the whole instruction as stored in one memory cell, a whole number from 0 to 699 in this machine
+op: the opcode: a number from 0 to 6 that says which operation to do (see the table below)
+a: the address operand: which memory cell, 0 to 99, the instruction reads, writes or jumps to
+⌊ ⌋: floor: round down to a whole number, so ⌊221 / 100⌋ = 2
+mod: modulo: the remainder after whole-number division, so 221 mod 100 = 21
+100: the machine works in decimal and gives the address two digits (00 to 99), so multiplying the opcode by 100 shifts it past them
+In words: the hundreds digit is the operation and the last two digits are the address, so 221 means "ADD the value in cell 21 to the accumulator".
+```
+
+Decoding is the reverse: Python's `divmod(ir, 100)` returns the floor and the remainder together. In the table, `m[a]` means the memory cell at address `a`, written in the same Python style as the code below:
 
 | op | Meaning |
 |---|---|
 | 0 | HALT |
-| 1 / 2 / 3 | acc = m[a] / acc += m[a] / acc -= m[a] |
-| 4 | m[a] = acc (STORE) |
-| 5 | if acc == 0: jump to a (JZ) |
-| 6 | jump to a (JMP) |
+| 1 | `acc = m[a]` (LOAD) |
+| 2 | `acc += m[a]` (ADD) |
+| 3 | `acc -= m[a]` (SUB) |
+| 4 | `m[a] = acc` (STORE) |
+| 5 | `if acc == 0`: jump to `a` (JZ, jump if zero) |
+| 6 | jump to `a` (JMP, jump) |
 
 ```python
 def run(mem):
@@ -88,7 +117,20 @@ def run(mem):
 
 This teaching interpreter assumes integer cells and valid in-range addresses. Unknown opcodes raise an error; invalid accesses can raise Python exceptions. There is no step limit, so a looping program can run forever.
 
-Here is a program, for a nonnegative integer `n`, that adds `n + (n-1) + ... + 1`. The code is at addresses 0 to 8, `n` lives at 20, the running total at 21 and the constant 1 at 22:
+Here is a program that adds up every whole number from a starting value down to 1:
+
+```formula
+total = n + (n − 1) + … + 1
+total = n × (n + 1) / 2
+total = 3 × 4 / 2 = 6
+where
+total: the sum the program leaves in memory cell 21
+n: the starting value, a whole number 0 or more, stored in cell 20 (3 in the run below)
+…: and so on: every whole number in between is included
+In words: add n, then one less, then one less again, all the way down to 1; the shortcut n × (n + 1) / 2 gives the same answer, so starting from 3 the program should end with 6.
+```
+
+The code is at addresses 0 to 8, `n` lives at 20, the running total at 21 and the constant 1 at 22:
 
 ```
 addr  value  meaning
@@ -112,7 +154,18 @@ run(mem)
 print(mem[21])   # 6  (3 + 2 + 1)
 ```
 
-Notice what is going on. The program is a list of integers in the same `mem` list as the data. `run` cannot tell `120` the instruction from `120` the number; it only treats a cell as an instruction because PC points at it. With `n = 3`, the loop body (8 instructions) runs three times, then LOAD, JZ and HALT run once more: 27 fetches in all.
+Notice what is going on. The program is a list of integers in the same `mem` list as the data. `run` cannot tell `120` the instruction from `120` the number; it only treats a cell as an instruction because PC points at it. With `n = 3`, the loop body (8 instructions) runs three times, then LOAD, JZ and HALT run once more as the program stops:
+
+```formula
+F = 8 × n + 3
+F = 8 × 3 + 3 = 27
+where
+F: the total number of instructions fetched before the machine halts
+n: the starting value in cell 20 (here 3)
+8: the loop body, addresses 0 to 7, which runs once for each value n, n − 1, …, 1
+3: the final LOAD, JZ (now taken, because acc is 0) and HALT
+In words: every pass round the loop costs 8 fetches, and stopping costs 3 more, so starting from 3 the machine makes 27 fetches.
+```
 
 > [!warning] Code is data, both ways
 > If the program did `STORE 7`, it would overwrite its own `JMP` instruction with whatever number was in `acc`. That is **self-modifying code**. It is also how many attacks work: trick a program into writing attacker-chosen bytes into memory, then trick it into jumping there.
@@ -127,15 +180,15 @@ The **instruction set architecture** (ISA) is the contract between software and 
 - what happens on errors, interrupts and system calls,
 - the privilege levels (user mode vs kernel mode).
 
-The ISA deliberately does *not* say how the chip is built. That is the **microarchitecture**. AMD's Zen and Intel's Core designs both implement x86-64 but are very different inside. Apple's M-series and AWS Graviton chips both implement ARM64. Binary compatibility also requires the instructions and extensions actually used, a compatible OS and ABI, executable format, and required libraries. An ARM64 macOS binary does not therefore run unchanged on an ARM64 Linux server.
+The ISA deliberately does *not* say how the chip is built. That is the **microarchitecture**. AMD Zen and Intel Core designs both implement x86-64 but are very different inside. Apple's M-series and AWS Graviton chips both implement ARM64. Binary compatibility also requires the instructions and extensions actually used, a compatible OS and ABI, executable format, and required libraries. An ARM64 macOS binary does not therefore run unchanged on an ARM64 Linux server.
 
 This separation is why your old programs still run on new hardware. A CPU must preserve the ISA’s observable behaviour. Many implementations overlap instructions (pipelining), issue several per cycle (superscalar), and execute out of order. This does not promise sequential consistency between threads: the ISA’s memory-ordering rules still apply. The next module covers how.
 
 ## Von Neumann, Harvard and the bottleneck
 
-Because code and data share one memory and one path to the CPU, fetching instructions and loading data compete for the same bus. John Backus called this the **von Neumann bottleneck** in 1977. Main-memory latency and bandwidth can limit execution; caches and prefetching can reduce that pressure. A universal claim about the fraction of chip area occupied by caches is omitted because it requires measurements of a specified chip.
+Because code and data share one memory and one path to the CPU, fetching instructions and loading data compete for the same memory bus. John Backus called this the **von Neumann bottleneck** in 1977. Main-memory latency and bandwidth can limit execution; caches and prefetching can reduce that pressure. A universal claim about the fraction of chip area occupied by caches is omitted because it requires measurements of a specified chip.
 
-The alternative is the **Harvard architecture**: separate memories (and buses) for instructions and data. Many microcontrollers and DSPs work this way; on an AVR (the chip in classic Arduinos) the program sits in flash and data in SRAM.
+The alternative is the **Harvard architecture**: separate memories (and buses) for instructions and data. Many microcontrollers and DSPs work this way; on an AVR (the chip in classic Arduinos) the program sits in flash memory and data in SRAM.
 
 A common modern general-purpose arrangement is called **modified Harvard** (the exact cache hierarchy is chip-specific):
 
@@ -171,7 +224,7 @@ The Python `run` loop resembles a simple instruction interpreter: fetch an opcod
 - The toy cycle is fetch, advance, decode, execute. Real CPUs also handle exceptions, interrupts and overlapping execution.
 - The ISA is the contract (instructions, registers, encoding, memory model); the microarchitecture is how a particular chip fulfils it.
 - Shared code and data memory creates the von Neumann bottleneck; many modern general-purpose CPUs use split L1 caches (modified Harvard) and deeper cache hierarchies.
-- Code-as-data enables JITs, loaders and emulators, and also code-injection attacks, which is why W^X exists.
+- Code-as-data makes possible JITs, loaders and emulators, and also code-injection attacks, which is why W^X exists.
 
 ## Further reading
 - [Von Neumann architecture — Wikipedia](https://en.wikipedia.org/wiki/Von_Neumann_architecture)

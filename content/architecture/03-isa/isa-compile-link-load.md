@@ -8,9 +8,9 @@ summary: How source code becomes a running process (object files, relocations, E
 
 Typing `gcc hello.c` feels like one step. It has preprocessing, compilation, assembly and linking stages (which need not be separate programs or materialized files), and then the kernel and a dynamic loader cooperate to turn the final file into a process.
 
-Knowing this pipeline explains error messages you will meet ("undefined reference", "relocation truncated", "cannot find -lfoo"), why lazy binding can add work to a first library call, and where the operating system's memory-safety defences come from.
+Knowing these steps explains error messages you will meet ("undefined reference", "relocation truncated", "cannot find -lfoo"), why lazy binding can add work to a first library call, and where the operating system's memory-safety defences come from.
 
-## The pipeline
+## The build steps
 
 ```flow
 hello.c: C source
@@ -45,7 +45,22 @@ e8 00 00 00 00   call  <main+0x9>
      R_X86_64_PLT32  puts-0x4
 ```
 
-The `call` is encoded with a zero displacement, and the relocation entry says: "when you know where `puts` (or its PLT stub) is, put the PC-relative distance here, minus 4 because the displacement is measured from the end of the instruction".
+The `call` is encoded with a zero displacement, and the relocation entry says: "when you know where `puts` (or its PLT stub) is, put the PC-relative distance here, minus 4 because the displacement is measured from the end of the instruction". The linker's calculation is:
+
+```formula
+disp = L + A − P
+disp = L − (P + 4)
+disp = 0x401030 − 0x401009 = 0x27
+where
+disp: the signed 32-bit value the linker writes into the call's 4-byte displacement field
+L: the address of puts's PLT stub, puts@plt (here 0x401030); if the linker can resolve the call directly, it uses puts itself
+A: the addend stored in the relocation entry: −4 here
+P: the address of the displacement field itself, 1 byte after the e8 opcode (here 0x401005 for a call at 0x401004)
+4: the field is 4 bytes long, so P + 4 is the end of the instruction, the point the CPU measures from
+In words: the hole gets the distance from the end of the call instruction to the target; with the call ending at 0x401009 and puts@plt at 0x401030, that is 0x27 (39) bytes forwards.
+```
+
+The addresses here are illustrative (`main` at 0x401000, so the `call` at `main+0x4` ends at `main+0x9`); the x86-64 psABI defines `R_X86_64_PLT32` as L + A − P.
 
 ## Static linking
 
@@ -82,9 +97,9 @@ This schematic has no RWX load segment; actual linker output and permission flag
 
 ## Dynamic linking
 
-Most programs link against **shared libraries** (`libc.so.6`) instead. The executable records only which libraries it needs (`DT_NEEDED` entries; inspect them with `readelf -d`). Processes mapping the same unchanged library file can share its code pages. Replacing a library file normally benefits newly started processes; existing processes can retain the old mapping until restarted. ABI compatibility, containers and bundled copies also matter.
+Most programs link against **shared libraries** (`libc.so.6`) instead. The executable records only which libraries it needs (`DT_NEEDED` entries; inspect them with `readelf -d`). Processes mapping the same unchanged library file can share its pages of code. Replacing a library file normally benefits newly started processes; existing processes can retain the old mapping until restarted. ABI compatibility, Linux containers and bundled copies also matter.
 
-The catch: the library's load address isn't known until run time, and differs between processes. Code must still be able to find functions and globals in other modules without the loader rewriting the code pages, which would stop them being shared.
+The catch: the library's load address isn't known until run time, and differs between processes. Code must still be able to find functions and globals in other modules without the loader rewriting the pages of code, which would stop them being shared.
 
 ### PIC and the GOT
 
@@ -150,7 +165,20 @@ Code-reuse attacks need to know *where* things are. **Address space layout rando
 
 - Linux controls it with `/proc/sys/kernel/randomize_va_space` (2 adds heap randomization to mode 1; defaults depend on kernel configuration and system policy).
 - The executable is randomised only if it is built as a **PIE** (typically ELF Type DYN, but DYN also describes shared objects). Compiler defaults are toolchain-specific; use `-fPIE -pie` explicitly when appropriate, which is one reason the jump tables in the previous lesson use relative offsets.
-- Address width permits more randomization space but does not determine effective entropy. A fixed default-bit count and universal attack-time estimate are omitted because architecture, kernel configuration and deployment determine them.
+- Randomisation is measured in **bits of entropy**: b bits means 2 to the power b equally likely positions. If the position stays fixed while an attacker tries each candidate once, the average number of tries is:
+
+```formula
+N = 2^b
+G = (N + 1) / 2
+G = (2^8 + 1) / 2 = 257 / 2 = 128.5
+where
+N: the number of equally likely positions
+b: the bits of entropy
+G: the average number of guesses needed, counting the successful one
+In words: each extra bit doubles the guessing work, and on average the attacker finds the position halfway through the list; 8 bits of entropy means about 128 tries.
+```
+
+- This assumes the address stays put between guesses; a target that re-randomises after every failure needs N tries on average instead. Address width permits more randomization space but does not determine effective entropy. A fixed default-bit count and universal attack-time estimate are omitted because architecture, kernel configuration and deployment determine them.
 
 Limits: ASLR randomises a module's *base*, and everything inside keeps its relative position. With a matching binary and a correctly identified symbol, a leaked address can reveal that module’s base and the locations of objects at known offsets. Arbitrary leaked pointers, symbol interposition and indirect-function implementations need additional identification. A forked child inherits its parent's existing mapping addresses; subsequent mapping changes or exec can make their layouts diverge. KASLR can also randomize the kernel base when supported and enabled.
 
@@ -186,7 +214,19 @@ rsp+32  (padding)
 rsp+0   buf[32]
 ```
 
-- In the glibc 2.39 x86-64 layout reviewed here, the stack guard is accessed in thread-local storage at `fs:0x28` (40). It is chosen at start-up from the kernel-supplied random bytes, with its lowest byte forced to zero to impede string-based disclosure and overwrite across the guard. A terminating zero can still overwrite its first byte unchanged; this is not protection against every overwrite or leak.
+The offsets follow from the prologue: `sub rsp, 48` reserves the buffer, padding and canary, and the earlier `push rbx` sits just above them.
+
+```formula
+r = F + 8
+r = (32 + 8 + 8) + 8 = 56
+where
+r: how far above rsp the return address is, in bytes
+F: the bytes reserved by `sub rsp, 48`: a 32-byte buffer, 8 bytes of padding and the 8-byte canary
+8: the saved rbx, pushed before the subtraction
+In words: the return address sits just above everything the function pushed or reserved, 56 bytes above rsp.
+```
+
+- In the glibc 2.39 x86-64 layout reviewed here, the stack guard is accessed in thread-local storage at `fs:0x28` (40). It is chosen at start-up from the kernel-supplied random bytes, with its lowest byte forced to zero to impede string-based disclosure and overwrite across the guard. A terminating zero can still overwrite its first byte unchanged; this is not protection against every overwrite or information leak.
 - `__stack_chk_fail` prints "stack smashing detected" and aborts. A crash is a far better outcome than a hijack.
 - `-fstack-protector-strong` covers additional functions with local arrays or references to local frame addresses; optimized-away or register-only objects do not count. Defaults depend on compiler and build configuration. `-fstack-protector-all` instruments every function at a higher cost.
 
@@ -201,7 +241,7 @@ Limits: a canary detects a mismatch when its check executes. A non-contiguous wr
 | Canaries | some overwrites crossing the guard | arbitrary writes |
 | Full RELRO | GOT overwrites | other pointers |
 
-Additional mechanisms can reduce particular attack paths when hardware, OS, compiler and application support enable them. Intel CET adds a **shadow stack** (a protected copy of return addresses checked on every `ret`) and indirect-branch tracking. ARM64 has **pointer authentication** (PAC, signing return addresses in spare pointer bits) and **branch target identification** (BTI). With a supporting libc and compiler configuration, `_FORTIFY_SOURCE` can add checks to selected library operations using inferred object sizes; it does not bounds-check every memory access.
+Additional mechanisms can reduce particular attack paths when hardware, OS, compiler and application support them. Intel CET adds a **shadow stack** (a protected copy of return addresses checked on every `ret`) and indirect-branch tracking. ARM64 has **pointer authentication** (PAC, signing return addresses in spare pointer bits) and **branch target identification** (BTI). With a supporting libc and compiler configuration, `_FORTIFY_SOURCE` can add checks to selected library operations using inferred object sizes; it does not bounds-check every memory access.
 
 To audit a binary, `checksec --file=prog` (from the checksec project) or `readelf -lW` and `readelf -d` show which of these are enabled. These are the first things a security review of a native binary checks.
 

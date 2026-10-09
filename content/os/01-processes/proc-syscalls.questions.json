@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Each `printf` writes 2 bytes (`x` and `\\n`) into glibc's stdout buffer.\n2. Is stdout a terminal? No, it's a file, so it is **fully buffered**: newlines don't trigger a flush.\n3. Total output is 1,000 × 2 = 2,000 bytes. The buffer is at least 4,096 bytes, so it never fills.\n4. At `exit`, glibc flushes once: one `write(1, ..., 2000)`.\n\nRun on a terminal instead and you'd see about 1,000 writes, because terminals are line-buffered. You can check both with `strace -e trace=write`.",
+    "workedExample": "1. Each `printf` writes 2 bytes (`x` and `\\n`) into glibc's stdout buffer.\n2. Is stdout a terminal? No, it's a file, so it is **fully buffered**: newlines don't trigger a flush.\n3. Add up the bytes that land in the buffer:\n\n```formula\nB_out = n × b_each\nB_out = 1,000 × 2 B = 2,000 B\nwhere\nB_out: the total output held in the stdio buffer, in bytes (B)\nn: the number of printf calls, here 1,000\nb_each: the bytes each call adds, here 2 B (the letter x and a newline)\nB: byte, 8 bits\nIn words: a thousand two-byte lines make 2,000 bytes of output in total.\n```\n\n4. The prompt says the buffer holds at least 2,000 bytes (glibc's default is typically 4 KiB or more), so it never fills and never forces an early flush.\n5. At `exit`, glibc flushes once: one `write(1, ..., 2000)`.\n\nRun on a terminal instead and you'd see about 1,000 writes, because terminals are line-buffered. You can check both with `strace -e trace=write`.",
     "link": {
       "title": "stdio buffering: setbuf(3) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man3/setbuf.3.html"
@@ -127,15 +127,15 @@
     "options": [
       {
         "text": "About 0.5 ms",
-        "explanation": "The 1 MiB case alone is about 1.024 ms for 2,048 calls, not 0.5 ms; the saving is about 261.12 ms."
+        "explanation": "The 1 MiB case alone is about 1.024 ms for 2,048 calls, not 0.5 ms; the saving is about 261 ms."
       },
       {
         "text": "About 261 ms",
-        "explanation": "Correct. 4 KiB: 2 × 262,144 = 524,288 calls ≈ 262 ms. 1 MiB: 2 × 1,024 = 2,048 calls ≈ 1 ms. The saving is about 261 ms."
+        "explanation": "Correct. With 4 KiB chunks the copy makes 524,288 calls, about 262 ms of overhead. With 1 MiB chunks it makes 2,048 calls, about 1 ms. The saving is about 261 ms."
       },
       {
         "text": "About 2.6 s",
-        "explanation": "This is ten times too large. Recheck: 1 GiB / 4 KiB is 262,144 reads, not 2.6 million."
+        "explanation": "This is ten times too large. Recheck: a 1 GiB file in 4 KiB chunks needs 262,144 reads, not 2.6 million."
       },
       {
         "text": "Nothing: the same bytes are copied either way",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Count syscalls (one `read` + one `write` per chunk):\n\n```\n4 KiB:  1 GiB / 4 KiB = 262,144\n        x 2 calls     = 524,288\n        x 500 ns      ~ 262 ms\n\n1 MiB:  1 GiB / 1 MiB = 1,024\n        x 2 calls     = 2,048\n        x 500 ns      ~ 1 ms\n```\n\nSaving ≈ 261.12 ms under the supplied per-call assumption, ignoring an extra EOF check and short transfers. Copying and storage costs may dominate at larger sizes; a particular optimal buffer size requires measurement.",
+    "workedExample": "Count the syscalls (one `read` plus one `write` per chunk), then multiply by the assumed cost of each:\n\n```formula\nN = 2 × (S / b)\nT = N × t_call\nN_4K = 2 × (1 GiB / 4 KiB)\nN_4K = 2 × 262,144 = 524,288\nT_4K = 524,288 × 500 ns ≈ 262 ms\nN_1M = 2 × (1 GiB / 1 MiB)\nN_1M = 2 × 1,024 = 2,048\nT_1M = 2,048 × 500 ns ≈ 1 ms\nΔT = 262.144 ms − 1.024 ms\nΔT ≈ 261 ms\nwhere\nN: the number of syscalls: one read plus one write per chunk\nS: the file size, here 1 GiB\nb: the buffer size, the bytes moved per call\nT: the total per-call overhead, ignoring the time spent copying the bytes themselves\nt_call: the overhead of one syscall, in nanoseconds (ns); 500 ns is the figure the question supplies\nN_4K, T_4K: the call count and overhead with a 4 KiB buffer\nN_1M, T_1M: the call count and overhead with a 1 MiB buffer\nΔT: the difference between the two overheads: the saving, in milliseconds (ms)\nGiB: gibibyte, 1,073,741,824 bytes (2 to the power 30)\nMiB: mebibyte, 1,048,576 bytes (2 to the power 20)\nKiB: kibibyte, 1,024 bytes\nns: nanosecond, one billionth of a second\nms: millisecond, one thousandth of a second (1,000,000 ns)\n≈: approximately equal to (rounded)\nIn words: the bigger buffer makes 256 times fewer calls, so it saves almost all of the 262 ms of per-call overhead.\n```\n\nThe exact saving is 261.12 ms under the supplied per-call assumption, ignoring an extra EOF check and short transfers. Copying and storage costs may dominate at larger sizes; a particular optimal buffer size requires measurement.",
     "link": {
       "title": "Anatomy of a system call, part 1 — LWN",
       "url": "https://lwn.net/Articles/604287/"
@@ -226,7 +226,7 @@
     "options": [
       {
         "text": "1,200 means an error code; check `errno`",
-        "explanation": "Errors are signalled by -1. A positive return is the number of bytes actually read."
+        "explanation": "Errors are reported by returning -1. A positive return is the number of bytes actually read."
       },
       {
         "text": "Nothing: `read` always waits for the full count on sockets",
@@ -302,7 +302,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "At a baseline 400,000 operations/s on one saturated core, time per operation is 2.5 microseconds. An assumed extra 0.5 microseconds would raise it to 3.0 microseconds: about 333,333 operations/s, a 16.7% throughput drop, rather than 20%. A 20% throughput drop would correspond to 3.125 microseconds per operation in this simple model. Batch calls or buffer output, then measure; the prompt alone does not isolate every cost.",
+    "workedExample": "Use a simple model: one saturated core, every operation costing the same time, and the KPTI change adding a fixed time to each operation.\n\n```formula\nt_op = 1 / R\nt_op = 1 / (400,000 per s) = 2.5 µs\nt_new = 2.5 µs + 0.5 µs = 3.0 µs\nR_new = 1 / t_new\nR_new = 1 / 3.0 µs ≈ 333,333 per s\nD = 1 − R_new / R\nD = 1 − 333,333 / 400,000 ≈ 16.7 %\nt_20 = t_op / (1 − 0.20)\nt_20 = 2.5 µs / 0.8 = 3.125 µs\nwhere\nR: the throughput before the upgrade, 400,000 operations per second on one core\nt_op: the time one operation takes, in microseconds (µs)\nt_new: the time per operation after adding an assumed 0.5 µs of extra entry and exit cost\nR_new: the throughput after the change, in operations per second\nD: the fractional throughput drop, shown as a percentage\nt_20: the time per operation that would produce exactly a 20 % drop\n%: per cent, parts per hundred\nµs: microsecond, one millionth of a second\ns: second\n≈: approximately equal to (rounded)\nIn words: on a saturated core throughput is one divided by the time per operation, so 0.5 µs extra per call cuts throughput by about 17 %; a 20 % drop needs about 0.625 µs extra.\n```\n\nSo the reported 20 % loss fits a per-operation cost increase of roughly 0.6 µs in this simple model. Because the cost is per crossing, batch calls or buffer output, then measure; the prompt alone does not isolate every cost.",
     "link": {
       "title": "Kernel page-table isolation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Kernel_page-table_isolation"

@@ -41,7 +41,7 @@ A `getpid` syscall is a *mode switch*: the CPU enters the kernel and returns to 
 
 ## What gets saved and restored
 
-On Linux x86-64 the path looks like this:
+On Linux x86-64 the context-switch code path looks like this:
 
 ```
 task A running in user mode
@@ -122,6 +122,20 @@ int main(void) {
 
 Under the same-logical-CPU alternating model, each round trip includes at least the parent-to-child and child-to-parent switches, plus four I/O syscalls. The minimal illustration omits failure/EINTR handling and child reaping. Pin both processes to the same core (`taskset -c 0 ./pp`) to measure a true switch; on different cores you measure cross-core wakeup latency instead. The measured half-trip includes IPC and wake-up overhead and is not an isolated scheduler instruction cost. The `lat_ctx` tool in lmbench does the same thing more carefully.
 
+The program's last line turns the measured time into a cost per half-trip, one process handing the byte to the other:
+
+```formula
+t_half = T / (2 × N)
+where
+t_half: the time for one half-trip, in nanoseconds (ns)
+T: the total measured time for all round trips, in nanoseconds (ns)
+N: the number of round trips, 100,000 in the program
+ns: nanosecond, one billionth of a second
+In words: divide the total time by the number of one-way hand-offs, which is twice the number of round trips.
+```
+
+For example, if 100,000 round trips take 0.5 s (500,000,000 ns), each half-trip takes 500,000,000 ns divided by 200,000, which is 2,500 ns. That figure is an upper bound on one switch, because it also includes a `write` and a `read`.
+
 ## The indirect cost: caches and the TLB
 
 The microseconds above are the visible part. The bigger cost often comes afterwards.
@@ -131,7 +145,31 @@ The microseconds above are the visible part. The bigger cost often comes afterwa
 Caches have finite, processor-specific capacities. Another task can evict useful code/data lines, making later accesses require a lower cache level or memory. The number and latency of misses depend on the working sets and memory-level parallelism.
 
 > [!example] Paying for a cold cache
-> Say A's hot working set is 512 KiB: 8,192 lines of 64 bytes. Assume every line was evicted, each refill takes a hypothetical 15 ns and refills are fully serialised. The sum is 8,192 × 15 ns = 122.88 µs. This is a simplified latency sum, not a prediction of real elapsed time; overlapping refills and bandwidth matter. Not every switch is that bad, but this is why a switch's true cost depends on the working set.
+> Say task A's hot working set is 512 KiB, and while A was switched out another task evicted all of it. Assume each refill takes a hypothetical 15 ns and refills are fully serialised. The calculation below shows A then spends over 100 µs just refilling.
+
+To estimate a refill cost, count the cache lines in the working set and multiply by the time to refill one line:
+
+```formula
+N_lines = W / L
+T_refill = N_lines × t_line
+N_lines = 524,288 B / 64 B = 8,192
+T_refill = 8,192 × 15 ns = 122,880 ns
+T_refill ≈ 122.88 µs
+where
+N_lines: the number of cache lines the working set fills
+W: the working set, the data a task touches repeatedly; here 512 KiB = 524,288 B
+L: the cache-line size, the unit a cache stores and refills; 64 B on typical x86-64 CPUs
+T_refill: the total time spent refilling, if the refills happen one after another
+t_line: the time to refill one line from a lower cache level or memory; 15 ns is a hypothetical figure
+B: byte, 8 bits
+KiB: kibibyte, 1,024 bytes
+ns: nanosecond, one billionth of a second
+µs: microsecond, one millionth of a second (1,000 ns)
+≈: approximately equal to
+In words: a half-megabyte working set is about eight thousand cache lines, and refilling them one at a time at 15 ns each adds up to about 123 µs.
+```
+
+This is a simplified latency sum, not a prediction of real elapsed time; overlapping refills and bandwidth matter. Not every switch is that bad, but this is why a switch's true cost depends on the working set.
 
 ### The TLB
 
@@ -171,10 +209,12 @@ Everything so far concerns tasks the *kernel* knows about. Threads can also be m
 | Model | Mapping | Example |
 |---|---|---|
 | 1:1 | each thread is a kernel task | Linux pthreads (NPTL), Java platform threads |
-| N:1 | many user threads, one kernel task | early "green threads" |
-| M:N | many user threads over a pool of kernel threads | Go goroutines, Java virtual threads |
+| N:1 | N user threads, one kernel task | early "green threads" |
+| M:N | M user threads over a pool of N kernel threads | Go goroutines, Java virtual threads |
 
-A **user-level switch** saves a few registers and swaps stacks in a library function, with no kernel entry and no page-table change, avoiding kernel-scheduler work on that path; the runtime and workload determine its cost. The catch: if a user thread makes a blocking syscall, the kernel thread under it blocks too, so M:N runtimes may use nonblocking I/O, park user threads or move runnable work to other OS threads around blocking calls. Threads, and how the scheduler chooses who runs next, are the subject of the next module.
+In these names the first number counts user threads and the second counts kernel threads. M is usually much larger than N: a Go program can run 100,000 goroutines on a handful of kernel threads.
+
+A **user-level switch** saves a few registers and swaps stacks in a library function, with no kernel entry and no page-table change, avoiding kernel-scheduler work on that code path; the runtime and workload determine its cost. The catch: if a user thread makes a blocking syscall, the kernel thread under it blocks too, so M:N runtimes may use nonblocking I/O, park user threads or move runnable work to other OS threads around blocking calls. Threads, and how the scheduler chooses who runs next, are the subject of the next module.
 
 ## Key takeaways
 - A context switch saves one task's registers, FPU/SIMD state, stack pointer and (for a different process) address-space root, and loads another's; a syscall alone is only a mode switch.

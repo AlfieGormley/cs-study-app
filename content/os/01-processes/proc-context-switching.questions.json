@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\ntotal      = 0.5 s = 500,000,000 ns\nper trip   = 500,000,000 / 100,000\n           = 5,000 ns\nswitches   = 2 per trip\nper switch = 5,000 / 2 = 2,500 ns\n```\n\nIt's an *upper bound* because those 2.5 µs also cover the `read` and `write` syscalls. Pinning to one core (`taskset -c 0`) makes sure you measure switches, not cross-core wake-ups.",
+    "workedExample": "Turn the total time into a time per round trip, then split it between the two switches each round trip contains:\n\n```formula\nt_trip = T / N\nt_trip = 500,000,000 ns / 100,000\nt_trip = 5,000 ns\nt_switch = t_trip / 2\nt_switch = 5,000 ns / 2 = 2,500 ns\nwhere\nT: the total measured time, 0.5 s = 500,000,000 ns\nN: the number of round trips, 100,000\nt_trip: the time for one round trip, in nanoseconds (ns)\nt_switch: the time per context switch, in nanoseconds (ns); there are 2 switches per round trip\nns: nanosecond, one billionth of a second; 1,000 ns = 1 µs\ns: second\nµs: microsecond, one millionth of a second\nIn words: each round trip takes 5 µs and contains two switches, so each switch costs at most 2.5 µs.\n```\n\nIt's an *upper bound* because those 2.5 µs also cover the `read` and `write` syscalls. Pinning to one core (`taskset -c 0`) makes sure you measure switches, not cross-core wake-ups.",
     "link": {
       "title": "Mechanism: Limited Direct Execution — OSTEP",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "256 × 1,024 / 64 = 4,096 cache lines. With fully serialised hypothetical 20 ns refills, 4,096 × 20 = 81,920 ns = 81.92 microseconds. Real elapsed cost can differ because of prefetch, overlap, bandwidth and which lines are actually accessed.",
+    "workedExample": "Count the cache lines, then add up the refill times:\n\n```formula\nN_lines = W / L\nN_lines = (256 × 1,024 B) / 64 B\nN_lines = 262,144 B / 64 B = 4,096\nT = N_lines × t_line\nT = 4,096 × 20 ns = 81,920 ns\nT ≈ 81.92 µs\nwhere\nN_lines: the number of cache lines the working set fills\nW: the working set, 256 KiB = 262,144 bytes\nL: the cache-line size, here 64 bytes\nT: the total refill time if refills happen one after another\nt_line: the hypothetical time to refill one line from L3, here 20 ns\nB: byte\nns: nanosecond, one billionth of a second\nµs: microsecond, one millionth of a second (1,000 ns)\n≈: approximately equal to\nIn words: 4,096 lines refilled one at a time at 20 ns each add up to about 82 µs.\n```\n\nReal elapsed cost can differ because of prefetch, overlap, bandwidth and which lines are actually accessed.",
     "link": {
       "title": "Context switch — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Context_switch"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "10,000 / 16 = 625 runnable threads per core under the simplified even-distribution assumption. This can cause scheduling contention and disrupt locality, but does not prove every cache is empty on every turn. Compare bounded worker pools, nonblocking I/O, CPU profiles and cache/scheduler counters. The appropriate worker count depends on blocking, CPU work and the service's shared data.",
+    "workedExample": "Spread the threads evenly over the cores:\n\n```formula\nr = N_threads / N_cores\nr = 10,000 / 16 = 625\nwhere\nr: runnable threads per core\nN_threads: busy threads, here 10,000\nN_cores: CPU cores, here 16\nIn words: each core has about 625 threads taking turns on it.\n```\n\nThat is under the simplified even-distribution assumption. This can cause scheduling contention and disrupt locality, but does not prove every cache is empty on every turn. Compare bounded worker pools, nonblocking I/O, CPU profiles and cache/scheduler counters. The appropriate worker count depends on blocking, CPU work and the service's shared data.",
     "link": {
       "title": "Context switch — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Context_switch"
@@ -323,11 +323,11 @@
       },
       {
         "text": "The kernel scheduler sees and schedules each goroutine individually",
-        "explanation": "The kernel sees only the M kernel threads. Choosing which goroutine runs on them is the runtime's job."
+        "explanation": "The kernel sees only the N kernel threads. Choosing which goroutine runs on them is the runtime's job."
       },
       {
         "text": "M:N threads can run in parallel on several cores",
-        "explanation": "Correct. That's the difference from N:1: the N user threads are spread over M kernel threads, which can run on different cores."
+        "explanation": "Correct. That's the difference from N:1: the M user threads are spread over N kernel threads, which can run on different cores."
       }
     ],
     "answer": [
@@ -335,7 +335,7 @@
       1,
       3
     ],
-    "workedExample": "Think about what the kernel can see:\n\n- **Kernel view**: M kernel threads. It schedules those, possibly in parallel on several cores, so D is true.\n- **Runtime view**: N goroutines multiplexed onto them. A switch between goroutines is a library call, so A is true, and the kernel never sees individual goroutines, so C is false.\n- **Blocking**: if a goroutine traps into a blocking syscall, its kernel thread sleeps, so B is true. Go copes by handing the other goroutines to another thread.",
+    "workedExample": "In M:N threading, M user threads (here goroutines) run on top of N kernel threads. Think about what the kernel can see:\n\n- **Kernel view**: N kernel threads. It schedules those, possibly in parallel on several cores, so D is true.\n- **Runtime view**: M goroutines multiplexed onto them. A switch between goroutines is a library call, so A is true, and the kernel never sees individual goroutines, so C is false.\n- **Blocking**: if a goroutine traps into a blocking syscall, its kernel thread sleeps, so B is true. Go copes by handing the other goroutines to another thread.",
     "link": {
       "title": "Thread (computing) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Thread_(computing)"

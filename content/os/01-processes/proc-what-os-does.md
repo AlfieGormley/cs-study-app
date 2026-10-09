@@ -101,7 +101,7 @@ Everything that is "OS" runs in kernel space as one big program: scheduler, memo
 - **Pro**: fast. A file read goes from the VFS to ext4 to the block layer to the NVMe driver without any boundary crossing.
 - **Con**: a bug in any driver runs with full privilege. A bad GPU driver can corrupt file system memory and panic the kernel.
 
-Linux softens this with **loadable kernel modules** (`modprobe`, `lsmod`), so drivers need not be compiled in. But a loaded module still runs in ring 0 with no isolation. It is a packaging trick, not a protection boundary. **eBPF** is a newer route: small programs checked by a verifier before the kernel runs them, constraining extensions according to the verifier and runtime rules; verifier or kernel bugs can still undermine that protection.
+Linux softens this with **loadable kernel modules** (`modprobe`, `lsmod`), so drivers need not be compiled in. But a loaded module still runs in ring 0 with no isolation. It is a packaging trick, not a protection boundary. **eBPF** is a newer route: small programs checked by a verifier before the kernel runs them, constraining these kernel extensions according to the verifier and runtime rules; verifier or kernel bugs can still undermine that protection.
 
 ### Microkernels
 

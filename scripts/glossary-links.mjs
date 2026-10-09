@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Shows what every glossary link in a module points at, so wrong-sense links are easy to spot.
-// It resolves words exactly like the app (glossary-rules.js): own subject, then core terms, then other subjects'
+// It resolves words exactly like the app (glossary-rules.js): own subject (which may shadow core), then core terms, then other subjects'
 // multi-word aliases. Lines marked "!" are single words owned by a different module, the usual source of
 // wrong-sense links (for example "from" opening a pagination term in an unrelated lesson).
 //   node scripts/glossary-links.mjs content/<subject>/<module>          all links, most frequent first
@@ -40,7 +40,6 @@ for (const s of subjects)
       const entry = { ...t, subject: s };
       for (const a of [t.term, ...(t.aliases ?? [])]) {
         const k = aliasKey(a);
-        if (coreMap.has(k)) continue;
         const rec = { id: t.id, owner: `${s}/${m}`, alias: a };
         if (!map.has(k)) map.set(k, rec);
         if (fallsBack(entry, a) && !fallback.has(k)) fallback.set(k, rec);

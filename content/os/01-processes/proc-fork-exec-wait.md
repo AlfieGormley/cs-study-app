@@ -44,7 +44,21 @@ int main(void) {
 Assuming successful calls and no interruption of the wait, this prints `child 15` then `parent 10`. The child changed *its own copy* of `x`. After `fork` the two processes have separate address spaces; private-memory changes are separate; explicitly shared mappings and external resources remain shared.
 
 > [!example] Counting processes
-> `for (i = 0; i < 3; i++) fork();` followed by `printf("x\n")` prints `x` **8** times. Each `fork` doubles the number of processes: 1, 2, 4, 8. Assuming every fork succeeds and every process executes the remaining calls, n successive forks give 2ⁿ processes.
+> `for (i = 0; i < 3; i++) fork();` followed by `printf("x\n")` prints `x` **8** times. Each `fork` doubles the number of processes: 1, 2, 4, 8.
+
+The general rule: every process alive at a `fork` runs it, so each fork in a straight line doubles the count.
+
+```formula
+P = 2^n
+P = 2^3 = 2 × 2 × 2 = 8
+where
+P: the number of processes after the forks, including the original
+n: the number of fork calls every process executes one after another, here 3
+2^n: 2 multiplied by itself n times
+In words: n forks in a row turn one process into 2 to the power n processes.
+```
+
+The rule assumes every fork succeeds and every process goes on to execute all the remaining forks. It breaks when a fork sits inside a condition: `if (fork() && fork())` makes 3 processes, not 4, because the first child skips the second fork.
 
 ### What the child inherits
 
@@ -97,7 +111,7 @@ What survives `exec`:
 - Current directory, user IDs (unless setuid), resource limits.
 - Signals set to *ignore* stay ignored; signals with handlers reset to default (the handler code is gone).
 
-The family is `execl`, `execv`, `execle`, `execve`, `execvp` and `execlp`. They differ in how arguments are passed (list or vector), whether `PATH` is searched (`p`) and whether you pass an environment (`e`). All are wrappers around the one syscall, **`execve`**.
+The family is `execl`, `execv`, `execle`, `execve`, `execvp` and `execlp`. They differ in how arguments are passed (as separate arguments, `l`, or as one `argv` array, `v`), whether `PATH` is searched (`p`) and whether you pass an environment (`e`). All are wrappers around the one syscall, **`execve`**.
 
 ## Why split fork and exec?
 
@@ -143,7 +157,21 @@ else if (WIFSIGNALED(status))
            WTERMSIG(status));
 ```
 
-The exit status is **8 bits**: 0 to 255. `exit(256)` looks like success (0) to the parent, and `exit(300)` arrives as 44 (300 mod 256). Convention: 0 means success, anything else failure.
+The exit status is **8 bits**: 0 to 255. The parent sees only the low 8 bits of the value the child passed to `exit`, which is the remainder after dividing by 256:
+
+```formula
+s_seen = s mod 256
+s_seen = 256 mod 256 = 0
+s_seen = 300 mod 256 = 44
+where
+s: the value the child passed to exit()
+s_seen: the status the parent reads with WEXITSTATUS
+mod: the remainder after division: 300 = 1 × 256 + 44, so 300 mod 256 = 44
+256: the number of different values 8 bits can hold (2 to the power 8)
+In words: anything above 255 wraps round, so the parent sees only what is left over after removing whole multiples of 256.
+```
+
+So `exit(256)` looks like success (0) to the parent, and `exit(300)` arrives as 44. Convention: 0 means success, anything else failure.
 
 Bash and several other shells use these conventions (other shells may encode signal deaths differently):
 
@@ -153,7 +181,19 @@ Bash and several other shells use these conventions (other shells may encode sig
 | 1–125 | program-defined failure |
 | 126 | found but not executable |
 | 127 | command not found |
-| 128 + N | killed by signal N |
+| 128 + signal number | killed by that signal |
+
+When a child dies from a signal rather than calling `exit`, Bash builds `$?` from the signal number:
+
+```formula
+s_bash = 128 + N
+s_bash = 128 + 9 = 137
+s_bash = 128 + 15 = 143
+where
+s_bash: the status Bash reports in its $? variable
+N: the number of the signal that killed the child, for example 9 for SIGKILL or 15 for SIGTERM
+In words: Bash adds 128 to the signal number, so any status above 128 hints at a signal death.
+```
 
 In Bash, signal 9 can produce 137 and signal 15 can produce 143, but explicit `exit(137)` or `exit(143)` produce the same values. Status alone cannot prove a signal or OOM cause; inspect wait status or runtime diagnostics.
 

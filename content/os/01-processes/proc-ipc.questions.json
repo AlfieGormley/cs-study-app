@@ -173,7 +173,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. `head -n 1` reads a line, prints `y` and exits, closing the only read end.\n2. `yes` keeps writing. A write to a pipe with no readers raises `SIGPIPE`.\n3. The default action is to terminate, so `yes` dies.\n4. Shells report a signal death as 128 + N: 128 + 13 = 141.\n\nThis is the behaviour you want for pipelines: producers stop automatically when the consumer has finished.",
+    "workedExample": "1. `head -n 1` reads a line, prints `y` and exits, closing the only read end.\n2. `yes` keeps writing. A write to a pipe with no readers raises `SIGPIPE`.\n3. The default action is to terminate, so `yes` dies.\n4. Shells report a signal death as 128 plus the signal number:\n\n```formula\ns_bash = 128 + N\ns_bash = 128 + 13 = 141\nwhere\ns_bash: the status Bash reports for the process, here in PIPESTATUS\nN: the signal number; SIGPIPE is 13 on Linux\nIn words: a process killed by signal 13 shows up as status 141.\n```\n\nThis is the behaviour you want for pipelines: producers stop automatically when the consumer has finished.",
     "link": {
       "title": "pipe(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\ncapacity = 64 KiB = 65,536 bytes\nwrite    = 4,096 bytes\n65,536 / 4,096 = 16 writes\n```\n\nThe 17th `write` blocks until the reader drains some space (or fails with `EAGAIN` if the fd is non-blocking). A bounded buffer is what makes a fast producer slow down to a slow consumer's speed. `fcntl(fd, F_SETPIPE_SZ, n)` can resize it, up to `/proc/sys/fs/pipe-max-size`.",
+    "workedExample": "Divide the pipe's capacity by the size of each write:\n\n```formula\nk = C / w\nC = 64 KiB = 65,536 B\nk = 65,536 B / 4,096 B = 16\nwhere\nk: the number of writes that fit before the pipe is full\nC: the pipe capacity reported by F_GETPIPE_SZ, in bytes (B)\nw: the size of each write, here 4,096 B\nKiB: kibibyte, 1,024 bytes\nB: byte\nIn words: sixteen 4 KiB writes fill a 64 KiB pipe, so the seventeenth has to wait.\n```\n\nThe 17th `write` blocks until the reader drains some space (or fails with `EAGAIN` if the fd is non-blocking). A bounded buffer is what makes a fast producer slow down to a slow consumer's speed. `fcntl(fd, F_SETPIPE_SZ, n)` can resize it, up to `/proc/sys/fs/pipe-max-size`.",
     "link": {
       "title": "pipe(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
@@ -289,7 +289,7 @@
       },
       {
         "text": "A's writes are not interleaved with other writers' bytes, though reads can split them; B's writes may be interleaved",
-        "explanation": "Correct. 200 ≤ 4,096, so each of A's writes lands in one piece. B's 10 KiB writes can be split and mixed with other data."
+        "explanation": "Correct. A's 200-byte records are within the 4,096-byte `PIPE_BUF` limit, so each lands in one piece. B's 10 KiB writes are over it, so they can be split and mixed with other data."
       },
       {
         "text": "Both may be interleaved, because pipes give no atomicity at all",
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. `PIPE_BUF` on Linux is 4,096 bytes.\n2. A: 200 ≤ 4,096, so each write is atomic and is never interleaved.\n3. B: 10,240 > 4,096, so the kernel may copy it in pieces as space frees up, and other writers' data can land in between.\n\nFixes for B: keep records under 4 KiB, give each worker its own pipe, or use a `SOCK_DGRAM` or `SOCK_SEQPACKET` Unix socket, which delivers each message whole.",
+    "workedExample": "A single pipe write is atomic only when it is no bigger than `PIPE_BUF`, which is 4,096 bytes on Linux. Compare each writer's record size with that limit:\n\n```formula\nw ≤ PIPE_BUF\nw_A = 200 B ≤ 4,096 B\nw_B = 10 KiB = 10,240 B > 4,096 B\nwhere\nw: the size of one write call, in bytes (B)\nPIPE_BUF: the largest write the kernel promises not to interleave with other writers: 4,096 B on Linux, at least 512 B by POSIX\nw_A: writer A's record size, 200 B\nw_B: writer B's record size, 10 KiB\n≤: less than or equal to\n>: greater than\nKiB: kibibyte, 1,024 bytes\nB: byte\nIn words: a write is guaranteed to arrive in one unbroken piece only if it fits within PIPE_BUF; A's records do and B's don't.\n```\n\n1. A: each write is atomic and is never interleaved.\n2. B: the kernel may copy it in pieces as space frees up, and other writers' data can land in between.\n\nFixes for B: keep records under 4 KiB, give each worker its own pipe, or use a `SOCK_DGRAM` or `SOCK_SEQPACKET` Unix socket, which delivers each message whole.",
     "link": {
       "title": "pipe(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/pipe.7.html"

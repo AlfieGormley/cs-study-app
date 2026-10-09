@@ -27,6 +27,23 @@ Each process sees a **virtual address space**: a range of addresses that the MMU
 
 The following is a schematic of a conventional Linux x86-64 layout (low addresses at the bottom), not an exact map. With four-level paging the low user range spans 128 TiB; a large non-canonical gap separates it from high kernel addresses. Five-level paging supports a larger range.
 
+Where does 128 TiB come from? Four-level paging translates 48-bit virtual addresses, and Linux gives the lower half of that range to user space and the upper half to the kernel:
+
+```formula
+S_user = 2^{n − 1} B
+S_user = 2^{48 − 1} B = 2^47 B
+S_user = 140,737,488,355,328 B
+S_user = 128 TiB
+where
+S_user: the size of the user part of each process's virtual address space, in bytes (B)
+n: the number of virtual-address bits the page tables translate: 48 with four-level paging, 57 with five-level paging
+B: byte, 8 bits
+TiB: tebibyte, 2 to the power 40 bytes (1,099,511,627,776 B), so 2^47 B is 2^7 = 128 TiB
+In words: 48 address bits can name 2^48 bytes; half of those, 128 TiB, belong to user space.
+```
+
+A process only uses a tiny part of that range; the rest is simply unmapped. With five-level paging (57 bits) the same halving gives 64 PiB of user space, though Linux only hands out addresses above 128 TiB to programs that ask for them.
+
 ```
  0xffff...  +--------------------+
             | kernel (no access) |
@@ -167,6 +184,46 @@ Linux doesn't distinguish ready from running: both are `R`. Sleeping is split in
 
 > [!warning] Load average counts `D`
 > Linux's load average counts tasks in `R` *and* `D`. A load of 40 on an 8-core box doesn't necessarily mean CPU saturation; it might be 35 processes stuck on a hung NFS mount. Check `top` for many `D` processes and low CPU use.
+
+How is the number itself made? About every 5 seconds the kernel counts the tasks in `R` or `D` and folds that count into three moving averages, one for each of the 1, 5 and 15-minute figures that `uptime` and `top` print:
+
+```formula
+n = N_R + N_D
+α = e^{−Δt / τ}
+L_new = α × L_old + (1 − α) × n
+where
+n: the number of tasks counted at this sample
+N_R: tasks running or runnable (state R)
+N_D: tasks in uninterruptible sleep (state D)
+α: alpha, the weight kept from the old average, between 0 and 1
+e: Euler's number, about 2.718; e^{x} is the exponential function
+Δt: the time between samples, about 5 seconds
+τ: tau, the averaging period: 60 s, 300 s or 900 s for the 1, 5 and 15-minute figures
+L_old: the load average before this sample
+L_new: the load average after this sample
+In words: each sample nudges the average a small step towards the current count of R and D tasks; the longer the period, the smaller the step.
+```
+
+Worked example: an idle machine (load 0) suddenly has 40 tasks stuck in `R` or `D`. After one minute, which is 12 samples, the 1-minute figure is:
+
+```formula
+α = e^{−5 s / 60 s} ≈ 0.920
+L_k = n × (1 − α^k)
+L_12 = 40 × (1 − 0.920^12)
+L_12 ≈ 40 × 0.63 ≈ 25
+where
+α: alpha, the weight each sample keeps from the old average, for the 1-minute figure
+e: Euler's number, about 2.718
+s: second
+L_k: the 1-minute load average after k samples, starting from 0
+n: the steady count of R and D tasks, here 40
+k: the number of 5-second samples taken so far; 12 samples is one minute
+L_12: the load average after 12 samples, that is, after one minute
+≈: approximately equal to (rounded)
+In words: each sample keeps 92 % of the old average and adds 8 % of the current count, so after one minute the figure has covered only about 63 % of the way from 0 to 40.
+```
+
+The figure only approaches 40 after several minutes. That lag is why a load spike shows up first in the 1-minute figure and only later in the 15-minute one. The kernel actually does this arithmetic in fixed-point integers, so its constants differ slightly in the last digits.
 
 ## Key takeaways
 - A process is a running program: an address space, execution state (registers), OS resources and an identity.

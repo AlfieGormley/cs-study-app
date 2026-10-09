@@ -127,7 +127,7 @@
     "options": [
       {
         "text": "About 8,000 calls; then the process gets `SIGSEGV` when it touches the guard region below the stack",
-        "explanation": "Correct. The default stack limit is usually 8 MiB. 8 MiB / 1 KiB ≈ 8,192 frames. Beyond that, the access hits unmapped memory and the kernel sends `SIGSEGV`."
+        "explanation": "Correct. The default stack limit is usually 8 MiB, which holds about 8,192 frames of 1 KiB each. Beyond that, the access hits unmapped memory and the kernel sends `SIGSEGV`."
       },
       {
         "text": "Unlimited: the stack grows into the heap until RAM runs out",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "8 MiB / 1 KiB = 8,192 nominal frames, with fewer available after existing stack use. Access beyond the expandable stack can generate SIGSEGV. Check the actual resource limit. Under Linux NPTL, default new-thread stack size derives from the startup RLIMIT_STACK setting when finite, or an architecture-specific fallback when unlimited; pthread_attr_setstacksize explicitly overrides an attribute.",
+    "workedExample": "Divide the stack limit by the space one call uses:\n\n```formula\nN_max = S_stack / s_frame\nN_max = 8 MiB / 1 KiB\nN_max = 8,192 KiB / 1 KiB = 8,192\nwhere\nN_max: the largest number of nested calls that fit, ignoring what the stack already holds\nS_stack: the stack size limit, here 8 MiB (shown as 8192 by ulimit -s, which counts in KiB)\ns_frame: the stack space one call uses (its stack frame), here about 1 KiB\nMiB: mebibyte, 1,024 KiB (1,048,576 bytes)\nKiB: kibibyte, 1,024 bytes\nIn words: an 8 MiB stack holds about eight thousand 1 KiB frames.\n```\n\nThat is a nominal figure, with fewer available after existing stack use (`main`, the C runtime, environment strings). Access beyond the expandable stack can generate SIGSEGV. Check the actual resource limit. Under Linux NPTL, default new-thread stack size derives from the startup RLIMIT_STACK setting when finite, or an architecture-specific fallback when unlimited; pthread_attr_setstacksize explicitly overrides an attribute.",
     "link": {
       "title": "getrlimit(2) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man2/getrlimit.2.html"
@@ -222,7 +222,7 @@
     "id": "proc-process-abstraction-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Two processes print the same virtual address for a global variable, say `0x5555555580a0`. One sets it to 1, the other to 2. What does each then read back?",
+    "prompt": "Two processes print the same virtual address for a global variable, say `0x5555555580a0`. One sets it to 1, the other to 2. What value does each then read?",
     "options": [
       {
         "text": "Both read 2, because they share the address",
@@ -242,7 +242,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Each process has its own page tables.\n2. Virtual `0x...80a0` in process A maps to some physical frame; in process B, to a different one.\n3. A's write changes A's frame; B's changes B's.\n4. They read back 1 and 2.\n\nSame addresses are common: without ASLR, two runs of the same binary load at identical addresses. Isolation comes from the translation, not from the addresses being different.",
+    "workedExample": "1. Each process has its own page tables.\n2. Virtual `0x...80a0` in process A maps to some physical frame; in process B, to a different one.\n3. A's write changes A's frame; B's changes B's.\n4. A reads 1 and B reads 2.\n\nSame addresses are common: without ASLR, two runs of the same binary load at identical addresses. Isolation comes from the translation, not from the addresses being different.",
     "link": {
       "title": "The Abstraction: Address Spaces — OSTEP",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
@@ -272,7 +272,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Linux load average = tasks running or runnable (`R`) + tasks in uninterruptible sleep (`D`), averaged over time.\n2. Idle CPUs mean few `R` tasks. So most of the 45 must be `D`.\n3. `D` usually means waiting inside the kernel for I/O that can't be abandoned: disk, NFS, some device drivers.\n4. Next steps: `cat /proc/<pid>/stack` (as root) or `cat /proc/<pid>/wchan` to see where they're stuck; `iostat -x` for disk saturation; check NFS servers.\n\nThis catches people out because most other Unix systems count only runnable tasks.",
+    "workedExample": "Start from what Linux's load average counts:\n\n```formula\nn = N_R + N_D\nwhere\nn: the number of tasks counted at each sample; the load average is a moving average of n over 1, 5 or 15 minutes\nN_R: tasks running or runnable (state R)\nN_D: tasks in uninterruptible sleep (state D)\nIn words: Linux counts runnable tasks and tasks stuck in uninterruptible sleep together, then averages that count over time.\n```\n\n1. Idle CPUs mean few `R` tasks. So most of the 45 must be `D`.\n2. `D` usually means waiting inside the kernel for I/O that can't be abandoned: disk, NFS, some device drivers.\n3. Next steps: `cat /proc/<pid>/stack` (as root) or `cat /proc/<pid>/wchan` to see where they're stuck; `iostat -x` for disk saturation; check NFS servers.\n\nThis catches people out because most other Unix systems count only runnable tasks.",
     "link": {
       "title": "proc(5) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
@@ -340,7 +340,7 @@
       2,
       3
     ],
-    "workedExample": "1. A return-address overwrite needs a *target address*: shellcode, a libc function, or ROP gadgets.\n2. ASLR randomises where regions start (A), so the attacker must guess.\n3. It doesn't stop the overflow (B false). Stack canaries and bounds-checking address that.\n4. Weaknesses: leaks reveal a base (C), and non-PIE binaries aren't moved (D). Modern distros build PIE by default for this reason.\n5. W^X stays in force (E false).\n\nOn Linux, `/proc/sys/kernel/randomize_va_space` = 2 means full randomisation.",
+    "workedExample": "1. A return-address overwrite needs a *target address*: shellcode, a libc function, or ROP gadgets.\n2. ASLR randomises where regions start (A), so the attacker must guess.\n3. It doesn't stop the overflow (B false). Stack canaries and bounds-checking address that.\n4. Weaknesses: leaks reveal a base (C), and non-PIE binaries aren't moved (D). Modern distros build PIE by default for this reason.\n5. W^X (write XOR execute: a page may be writable or executable, never both at once) stays in force (E false).\n\nOn Linux, `/proc/sys/kernel/randomize_va_space` = 2 means full randomisation.",
     "link": {
       "title": "Address space layout randomization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"

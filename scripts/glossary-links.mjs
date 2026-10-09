@@ -71,7 +71,7 @@ for (const m of text.matchAll(re)) {
   const mine = e.owner === `${here.subject}/${here.module}`;
   const suspect = !mine && !/[\s-]/.test(m[0]) && e.owner !== 'core';
   if (suspectOnly && !suspect) continue;
-  const key = `${suspect ? '!' : ' '} ${m[0].toLowerCase()} → ${e.id} [${mine ? 'this module' : e.owner}]`;
+  const key = `${suspect ? '!' : ' '} ${m[0]} → ${e.id} [${mine ? 'this module' : e.owner}]`;
   counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 for (const [k, n] of [...counts].sort((a, b) => b[1] - a[1])) console.log(`${String(n).padStart(4)} ${k}`);

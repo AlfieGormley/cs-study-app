@@ -77,7 +77,7 @@ Under sequential consistency at least one thread sees the other's write, so `r1 
 
 In the machine-code model, a full fence between the store and load in each thread forbids that result (for example mfence on x86). In C, first use valid atomic accesses; a hardware fence does not legalize races on plain objects.
 
-### Message passing
+### The message-passing test
 
 ```c
 int data = 0;
@@ -99,7 +99,7 @@ The plain data accesses lack a happens-before edge and therefore race: the C pro
 
 ## Acquire and release
 
-The fix for message passing is the most important pattern in this lesson:
+The fix for the message-passing test is the most important pattern in this lesson:
 
 ```c
 // producer
@@ -127,7 +127,7 @@ release ready=1 ---> acquire sees 1
                      read data -> 42
 ```
 
-The names come from locks. Taking a lock is an acquire (the critical section cannot leak upwards out of it); releasing it is a release (the critical section cannot leak downwards). Correct standard mutex use supplies the synchronization needed for protected accesses. Applications must still coordinate object lifetime, initialization and all access paths; having a lock somewhere is not enough.
+The names come from locks. Taking a lock is an acquire (the critical section cannot leak upwards out of it); releasing it is a release (the critical section cannot leak downwards). Correct standard mutex use supplies the synchronization needed for protected accesses. Applications must still coordinate object lifetime, initialization and every piece of code that touches the data; having a lock somewhere is not enough.
 
 On x86, acquire loads and release stores are plain `mov` instructions, because TSO already provides that ordering; only the compiler is restrained. On ARMv8 they become `ldar` and `stlr`.
 
@@ -152,9 +152,9 @@ Relaxed is fine when you need the value to be correct but nothing else to be ord
 
 ## Fences
 
-A **fence** (barrier) orders memory operations without being attached to a particular variable: `atomic_thread_fence(memory_order_seq_cst)` in C11. Hardware equivalents include x86 `mfence` and ARM `dmb ish`. The Linux kernel has its own family (`smp_mb()`, `smp_wmb()`, `smp_rmb()`, `smp_store_release()`, `smp_load_acquire()`), documented at length in `memory-barriers.txt`.
+A **fence** (memory barrier) orders memory operations without being attached to a particular variable: `atomic_thread_fence(memory_order_seq_cst)` in C11. Hardware equivalents include x86 `mfence` and ARM `dmb ish`. The Linux kernel has its own family (`smp_mb()`, `smp_wmb()`, `smp_rmb()`, `smp_store_release()`, `smp_load_acquire()`), documented at length in `memory-barriers.txt`.
 
-There is also a **compiler-only** barrier, such as `asm volatile("" ::: "memory")` in GCC, which stops the compiler moving accesses across it but emits no instruction.
+There is also a **compiler-only barrier**, such as `asm volatile("" ::: "memory")` in GCC, which stops the compiler moving accesses across it but emits no instruction.
 
 ## Happens-before
 
@@ -162,7 +162,21 @@ The formal model ties this together. The **happens-before** relation is built fr
 
 1. **Sequenced-before**: within one thread, program order.
 2. **Synchronises-with**: a release store and an acquire load that reads its value; an unlock and a later lock of the same mutex; `pthread_create` and the start of the new thread; a thread's end and `pthread_join` returning.
-3. **Transitivity**: if A happens-before B and B happens-before C, then A happens-before C.
+3. **Transitivity**: happens-before chains, as the formula below shows.
+
+Writing an arrow for "happens-before":
+
+```formula
+A → B and B → C gives A → C
+where
+A: an operation in some thread, such as a write, a read, a lock or an unlock
+B: a second operation
+C: a third operation, possibly in yet another thread
+→: happens-before: the operation on the left is guaranteed to be ordered before, and visible to, the operation on the right
+In words: ordering links join up, so if A is ordered before B and B before C, then A is ordered before C, even when A and C share no direct synchronisation.
+```
+
+The message-passing fix above is one such chain. The write `data = 42` is sequenced-before the release store; the release store synchronises-with the acquire load that reads 1; the acquire load is sequenced-before the read of `data`. Chaining the three edges gives "the write of 42 happens-before the read", so the consumer must print 42.
 
 The rule that matters: if a write happens-before a read of the same location (and no other write intervenes), the read sees that write. If two conflicting accesses are **not** ordered by happens-before and are not both atomic, you have a data race, and in C, C++ and Rust that is undefined behaviour. Java and Go define similar happens-before rules; Java gives racy programs weaker but defined semantics rather than UB.
 
@@ -221,7 +235,7 @@ The inner load can be relaxed because the mutex already orders it after any prev
 
 ## What this means for Python
 
-Python has no `memory_order`. CPython with the GIL behaves close to sequentially consistent for pure Python code, because only one thread executes bytecode at a time and acquiring the GIL acts as a barrier. Free-threaded CPython currently uses internal locking for many built-ins, but that is not a blanket language-level atomicity contract. In both cases use documented threading and queue protocols for shared invariants. Python does not specify the complete C11 memory model described above.
+Python has no `memory_order`. CPython with the GIL behaves close to sequentially consistent for pure Python code, because only one thread executes bytecode at a time and acquiring the GIL acts as a memory barrier. Free-threaded CPython currently uses internal locking for many built-ins, but that is not a blanket language-level atomicity contract. In both cases use documented threading and queue protocols for shared invariants. Python does not specify the complete C11 memory model described above.
 
 ## Key takeaways
 - Atomic means indivisible; ordering is a separate question about when other memory operations become visible.

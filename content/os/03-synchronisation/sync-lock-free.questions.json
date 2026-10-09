@@ -3,7 +3,7 @@
     "id": "sync-lock-free-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "A stack is protected by a spinlock built from compare-and-swap. The thread holding the spinlock is preempted for 50 ms in the middle of a push. Which progress guarantee does this stack provide?",
+    "prompt": "A stack data structure is protected by a spinlock built from compare-and-swap. The thread holding the spinlock is preempted for 50 ms in the middle of a push. Which progress guarantee does this design provide?",
     "options": [
       {
         "text": "Wait-free",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Ask the defining question for each guarantee: *if some threads stop, can the others still finish?*\n\n1. Holder suspended mid-push.\n2. Every other thread spins on the lock word. None can enter, so none completes a push or pop.\n3. That rules out obstruction-free (a lone thread cannot finish), lock-free (no thread progresses) and wait-free.\n4. So it is **blocking**.\n\nThe lesson: \"lock-free\" is about what happens when threads are delayed, not about which instructions appear in the code. A Treiber stack is lock-free because nobody ever holds anything others must wait for.",
+    "workedExample": "Ask the defining question for each guarantee: *if some threads stop, can the others still finish?*\n\n1. Holder suspended mid-push.\n2. Every other thread spins on the lock word. None can enter, so none completes a push or pop.\n3. That rules out obstruction-free (a lone thread cannot finish), lock-free (no thread progresses) and wait-free.\n4. So it is a **blocking algorithm**.\n\nThe lesson: \"lock-free\" is about what happens when threads are delayed, not about which instructions appear in the code. A Treiber stack is lock-free because nobody ever holds anything others must wait for.",
     "link": {
       "title": "Non-blocking algorithm — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
@@ -79,11 +79,11 @@
       },
       {
         "text": "Because readers that started before the publish may still hold a pointer to the old version and be reading it",
-        "explanation": "Correct. Those pre-existing readers took no lock the writer can see. The grace period lasts until all of them have left their read-side critical sections; only then is the old copy unreachable."
+        "explanation": "Correct. Those pre-existing readers took no lock the writer can see. The RCU grace period lasts until all of them have left their read-side critical sections; only then is the old copy unreachable."
       }
     ],
     "answer": 3,
-    "workedExample": "Think about who can still see the old object.\n\n1. Before the publish, reader R loads `cur` and gets the old pointer.\n2. The writer publishes the new pointer. R is still using the old object.\n3. If the writer freed the old object now, R would read freed memory.\n4. New readers load `cur` after the publish and get the new version, so they are safe.\n\nSo the writer waits for a **grace period**: until every reader that started before the publish has called `rcu_read_unlock()`. `synchronize_rcu()` blocks until then; `call_rcu()` schedules the free for later instead.",
+    "workedExample": "Think about who can still see the old object.\n\n1. Before the publish, reader R loads `cur` and gets the old pointer.\n2. The writer publishes the new pointer. R is still using the old object.\n3. If the writer freed the old object now, R would read memory that was already freed.\n4. New readers load `cur` after the publish and get the new version, so they are safe.\n\nSo the writer waits for an **RCU grace period**: until every reader that started before the publish has called `rcu_read_unlock()`. `synchronize_rcu()` blocks until then; `call_rcu()` schedules the free for later instead.",
     "link": {
       "title": "What is RCU? — Linux kernel documentation",
       "url": "https://www.kernel.org/doc/html/latest/RCU/whatisRCU.html"
@@ -97,23 +97,23 @@
     "options": [
       {
         "text": "B, a node T2 has already freed; C is no longer reachable from `top`",
-        "explanation": "Correct. `top` equals A again, so the CAS succeeds and installs T1's stale `next`. The stack now starts at freed memory and C has been lost. This is the ABA problem."
+        "explanation": "Correct. `top` equals A again, so the CAS succeeds and installs T1's stale `next`. The Treiber stack now starts at memory that was already freed and C has been lost. This is the ABA problem."
       },
       {
-        "text": "A, because T1's CAS fails when it notices the stack has changed",
+        "text": "A, because T1's CAS fails when it notices the Treiber stack has changed",
         "explanation": "CAS only compares the current value with the expected one. `top` changed from A to B to C and back to A; it cannot tell, so it succeeds."
       },
       {
         "text": "C, because T1's CAS fails, refreshes `old` and retries",
-        "explanation": "That would happen if the CAS failed, but `top` holds the same pointer value T1 expects. Nothing in the comparison reveals that the stack underneath has changed."
+        "explanation": "That would happen if the CAS failed, but `top` holds the same pointer value T1 expects. Nothing in the comparison reveals that the Treiber stack underneath has changed."
       },
       {
-        "text": "NULL, because T2 emptied the stack",
-        "explanation": "T2 pushed A back, so the stack was `A → C` when T1 resumed, not empty."
+        "text": "NULL, because T2 emptied the Treiber stack",
+        "explanation": "T2 pushed A back, so the Treiber stack was `A → C` when T1 resumed, not empty."
       }
     ],
     "answer": 0,
-    "workedExample": "Track `top` and the list step by step:\n\n```\nstart        top=A  A->B->C\nT1 reads     old=A, next=B\nT2 pop       top=B  B->C\nT2 pop       top=C  C\nT2 free(B)\nT2 push(A)   top=A  A->C\nT1 CAS(A,B)  A==A, so top=B\n```\n\n1. When T1 resumes, `top` is A, exactly what it expects.\n2. The CAS swaps in `next`, which was computed from the *old* state: B.\n3. B has been freed, and C (still on the real stack) is now unreachable.\n\nThe value went A, then other values, then A again. Comparing values cannot detect that.",
+    "workedExample": "Follow `top` and the list step by step:\n\n```\nstart        top=A  A->B->C\nT1 reads     old=A, next=B\nT2 pop       top=B  B->C\nT2 pop       top=C  C\nT2 free(B)\nT2 push(A)   top=A  A->C\nT1 CAS(A,B)  A==A, so top=B\n```\n\n1. When T1 resumes, `top` is A, exactly what it expects.\n2. The CAS swaps in `next`, which was computed from the *old* state: B.\n3. B has been freed, and C (still on the real Treiber stack) is now unreachable.\n\nThe value went A, then other values, then A again. Comparing values cannot detect that.",
     "link": {
       "title": "ABA problem — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/ABA_problem"
@@ -177,7 +177,7 @@
       },
       {
         "text": "Every `rdlock` and `unlock` atomically updates the shared reader count, so its cache line bounces between all 32 cores; for a 100 ns read that dominates",
-        "explanation": "Correct. Readers are \"shared\" logically, but each one still writes the same word. With such short read sections, the lock's own cache-line traffic serialises them much as a mutex would."
+        "explanation": "Correct. Readers are \"shared\" logically, but each one still writes the same word. With read sections this brief, the lock's own cache-line traffic serialises them much as a mutex would."
       }
     ],
     "answer": 3,
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "The reader's rule is: *the copy is valid only if the counter was even and unchanged across the whole copy.*\n\n```\nread seq   -> 10  (even: no write now)\ncopy data  ...    writer: 10->11,\n                  updates, 11->12\nread seq   -> 12  (changed!)\n```\n\n1. 10 is even, so it was safe to start.\n2. 12 is not equal to 10, so a write completed during the copy.\n3. The copy might be torn (for example new seconds with old nanoseconds), so discard it and loop.\n\nThis is why seqlock readers must not follow pointers in the data: a torn copy could contain a pointer to freed memory.",
+    "workedExample": "The reader's rule is: *the copy is valid only if the counter was even and unchanged across the whole copy.*\n\n```\nread seq   -> 10  (even: no write now)\ncopy data  ...    writer: 10->11,\n                  updates, 11->12\nread seq   -> 12  (changed!)\n```\n\n1. 10 is even, so it was safe to start.\n2. 12 is not equal to 10, so a write completed during the copy.\n3. The copy might be torn (for example new seconds with old nanoseconds), so discard it and loop.\n\nThis is why seqlock readers must never follow pointers in the data: a torn copy could contain a pointer to memory that was already freed.",
     "link": {
       "title": "Sequence counters and sequential locks — Linux kernel documentation",
       "url": "https://www.kernel.org/doc/html/latest/locking/seqlock.html"
@@ -221,7 +221,7 @@
     "id": "sync-lock-free-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "The lesson's Python copy-on-write config is changed so the writer updates two fields **in place**:\n\n```python\ndef move(host, port):\n    with _write_lock:\n        _config[\"host\"] = host\n        _config[\"port\"] = port\n```\n\nReaders still do `c = get_config()` and then `connect(c[\"host\"], c[\"port\"])`. What can go wrong?",
+    "prompt": "The lesson's Python copy-on-write config is changed so the writer updates two fields **in place**:\n\n```python\ndef move(host, port):\n    with _write_lock:\n        _config[\"host\"] = host\n        _config[\"port\"] = port\n```\n\nReaders still do `c = get_config()` and then `connect(c[\"host\"], c[\"port\"])`. What can fail?",
     "options": [
       {
         "text": "Nothing: each dict assignment is atomic under the GIL, so the update is safe",
@@ -233,7 +233,7 @@
       },
       {
         "text": "A reader can run between the two assignments and connect to the new host with the old port",
-        "explanation": "Correct. Readers share the same dict the writer is mutating, so a reader can observe the half-updated state. Building a new dict and swapping the reference publishes both fields at once."
+        "explanation": "Correct. Readers share the same dict the writer is mutating, so a reader can observe the half-updated state. Building a new dict and replacing the reference publishes both fields at once."
       },
       {
         "text": "Python raises `RuntimeError: dictionary changed size during iteration`",
@@ -263,11 +263,11 @@
       },
       {
         "text": "R2 and R3, because both are active when `synchronize_rcu()` is called",
-        "explanation": "R3 is not active at t=3; it starts at t=4. Even if it overlapped, a reader that started after the publish only finds the new version, so the grace period need not include it."
+        "explanation": "R3 is not active at t=3; it starts at t=4. Even if it overlapped, a reader that started after the publish only finds the new version, so the RCU grace period need not include it."
       },
       {
         "text": "None, because readers hold no locks the writer can see",
-        "explanation": "Readers announce nothing visible to the writer, but RCU still tracks them indirectly (for example by waiting until every CPU has context-switched). Freeing without waiting would let R2 read freed memory."
+        "explanation": "Readers announce nothing visible to the writer, but RCU still accounts for them indirectly (for example by waiting until every CPU has context-switched). Freeing without waiting would let R2 read memory that was already freed."
       }
     ],
     "answer": 0,
@@ -288,7 +288,7 @@
         "explanation": "Correct. The suspended thread holds nothing. Others' CAS operations succeed; when it resumes, its CAS fails (or, with ABA protection, behaves correctly) and it retries."
       },
       {
-        "text": "A stack protected by a glibc futex-based mutex is lock-free, because the fast path never enters the kernel",
+        "text": "A stack data structure protected by a glibc futex-based mutex is lock-free, because the fast path never enters the kernel",
         "explanation": "The fast path is about speed, not progress. If the mutex holder is suspended, every other thread waits, which is blocking."
       },
       {
@@ -327,19 +327,19 @@
       },
       {
         "text": "The 64-bit tag wraps around and lets ABA through",
-        "explanation": "A 64-bit tag wraps after 2^64 updates: about 584.5 years at 10^9 updates/s. This illustrates a very long cycle, but finite tags are not a mathematical no-wrap guarantee. The immediate dereference-after-free bug needs no wraparound."
+        "explanation": "A 64-bit tag takes a very long time to wrap:\n\n```formula\nt_wrap = 2^64 / r\nt_wrap = 2^64 / (10^9 /s)\nt_wrap ≈ 1.84 × 10^10 s\nt_wrap ≈ 584.5 years\nwhere\nt_wrap: the time until the tag returns to a value it held before\n2^64: 2 to the power 64, the number of distinct 64-bit tag values, about 1.84 × 10^19\nr: the update rate: 10^9 updates per second\n10^9: 10 to the power 9, one billion\ns: second\nyears: years of 365.25 days (31,557,600 s)\n≈: approximately equal to (rounded)\nIn words: at a billion updates a second, a 64-bit tag takes over five centuries to repeat.\n``` This illustrates a very long cycle, but finite tags are not a mathematical no-wrap guarantee. The immediate dereference-after-free bug needs no wraparound."
       },
       {
         "text": "The CAS ignores the tag on some cores",
         "explanation": "A 16-byte CAS compares all 16 bytes; there is no core that compares only the pointer half."
       },
       {
-        "text": "Between loading `old` and reading `old->next`, another thread can pop and `free()` that node; the tag makes the later CAS fail, but the read of freed memory has already happened",
+        "text": "Between loading `old` and reading `old->next`, another thread can pop and `free()` that node; the tag makes the later CAS fail, but the read of the freed node has already happened",
         "explanation": "Correct. Tags fix ABA but not reclamation. If the allocator has returned the page to the OS, or reused it, reading `old->next` can segfault or return garbage. Hazard pointers, epochs or RCU are needed to delay the free."
       }
     ],
     "answer": 3,
-    "workedExample": "Look at the order of operations in `pop`:\n\n```\n1  old  = top        (ptr, tag)\n2  next = old->next  <- reads node\n3  CAS(top, old, next)\n```\n\n1. T1 does step 1 and is preempted.\n2. T2 pops the same node and calls `free()`. The allocator may unmap the page or hand the memory to another caller.\n3. T1 does step 2: it dereferences freed memory. Crash, or garbage in `next`.\n4. Step 3 would fail thanks to the tag, but the damage happened at step 2.\n\nSo the stack needs **safe memory reclamation**: do not free a node until no thread can still be between steps 1 and 3 with a pointer to it.",
+    "workedExample": "Look at the order of operations in `pop`:\n\n```\n1  old  = top        (ptr, tag)\n2  next = old->next  <- reads node\n3  CAS(top, old, next)\n```\n\n1. T1 does step 1 and is preempted.\n2. T2 pops the same node and calls `free()`. The allocator may unmap the page or hand the memory to another caller.\n3. T1 does step 2: it dereferences memory that was already freed. Crash, or garbage in `next`.\n4. Step 3 would fail thanks to the tag, but the damage happened at step 2.\n\nSo the Treiber stack needs **safe memory reclamation**: do not free a node until no thread can still be between steps 1 and 3 with a pointer to it.",
     "link": {
       "title": "Hazard pointer — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hazard_pointer"
@@ -360,8 +360,8 @@
         "explanation": "Correct. Readers write nothing shared, so they scale across all cores, and the rare torn read (high and low halves from different updates) is detected and retried. This is how Linux protects its timekeeping data."
       },
       {
-        "text": "RCU: allocate a new timestamp object for each update and swap a pointer",
-        "explanation": "It would work, but it means allocating and freeing an object 1,000 times a second and waiting out grace periods, just to protect 8 bytes of plain data. A seqlock does the job with no allocation."
+        "text": "RCU: allocate a new timestamp object for each update and publish it with an atomic pointer swap",
+        "explanation": "It would work, but it means allocating and freeing an object 1,000 times a second and waiting out RCU grace periods, just to protect 8 bytes of plain data. A seqlock does the job with no allocation."
       },
       {
         "text": "No synchronisation: writes are rare, so readers almost always see a correct value",
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Match the data to the tool:\n\n1. **Small, plain data** (8 bytes, no pointers): a torn copy is harmless if it is detected and thrown away.\n2. **Read constantly, written often but briefly**: readers must not write shared state.\n3. That is exactly a seqlock's niche.\n\nWhy torn reads matter here:\n\n```\nold = 0x00000001_FFFFFFFF\nnew = 0x00000002_00000000\nreader: high = 1 (old)\nwriter: stores both halves\nreader: low  = 0 (new)\nresult  0x00000001_00000000\n```\n\nThat is about 4.3 billion ticks too small. The seqlock reader sees the counter changed and retries.",
+    "workedExample": "Match the data to the tool:\n\n1. **Small, plain data** (8 bytes, no pointers): a torn copy is harmless if it is detected and thrown away.\n2. **Read constantly, written often but briefly**: readers must never write shared state.\n3. That is exactly a seqlock's niche.\n\nWhy torn reads matter here:\n\n```\nold = 0x00000001_FFFFFFFF\nnew = 0x00000002_00000000\nreader: high = 1 (old)\nwriter: stores both halves\nreader: low  = 0 (new)\nresult  0x00000001_00000000\n```\n\nHow far off is that?\n\n```formula\nv_new − v_torn = 2^33 − 2^32\nv_new − v_torn = 2^32 ≈ 4.3 × 10^9 ticks\nwhere\nv_new: the new timestamp 0x00000002_00000000, which equals 2^33 ticks (high half 2, low half 0)\nv_torn: the value the reader assembled, 0x00000001_00000000, which equals 2^32 ticks\n2^32: 2 to the power 32, the weight of 1 in the high half: 4,294,967,296\n2^33: 2 to the power 33, twice 2^32\nticks: timer ticks, the counting unit of the timestamp\n≈: approximately equal to\n10^9: 10 to the power 9, one billion\nIn words: the torn read lands about 4.3 billion ticks below the true value.\n``` The seqlock reader sees the counter changed and retries.",
     "link": {
       "title": "Sequence counters and sequential locks — Linux kernel documentation",
       "url": "https://www.kernel.org/doc/html/latest/locking/seqlock.html"

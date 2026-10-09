@@ -14,17 +14,33 @@ This lesson covers the two classic tools for **waiting on a condition**: semapho
 
 A **semaphore**, introduced by Edsger Dijkstra in the 1960s, is an integer counter with two atomic operations:
 
-- **wait** (also called P, `down`, `acquire`, `sem_wait`): decrement the counter. If the result would be negative, block until it can go ahead.
+- **wait** (also called P, `down`, `acquire`, `sem_wait`): decrement the counter. If the result would be negative, block until it can proceed.
 - **signal** (also called V, `up`, `release`, `sem_post`): increment the counter, waking one blocked waiter if there is one.
 
 P and V are historical names for the wait and signal operations.
 
-The counter represents a number of available **permits**. What you use it for depends on the initial value.
+The counter represents a number of available **permits**. Each completed wait takes one permit and each signal gives one back, so at any moment between operations:
+
+```formula
+S = S_0 + n_signal − n_wait
+S ≥ 0
+where
+S: the semaphore's current counter value: the number of permits available right now
+S_0: the initial value, chosen when the semaphore is created
+n_signal: the number of signal operations completed so far
+n_wait: the number of wait operations that have completed (returned) so far
+≥: greater than or equal to
+In words: the count is the starting permits, plus every signal, minus every completed wait, and it never goes below zero; a wait that would push it below zero blocks instead.
+```
+
+For example, a semaphore created with 3 permits that has seen 3 completed waits and 1 signal holds 3 + 1 − 3 = 1 permit, so the next wait goes straight through and the one after that blocks.
+
+What you use a semaphore for depends on the initial value.
 
 | Initial value | Use |
 |---|---|
 | 1 | mutual exclusion, with balanced waits/posts |
-| N | N identical resources |
+| pool size | a pool of identical resources |
 | 0 | "wait until X happens" |
 
 ### As a lock
@@ -45,7 +61,7 @@ sem_post(&s);
 
 ### As a resource pool
 
-Initialised to N, up to N threads proceed at once and the (N+1)th waits. A web server might allow at most 10 concurrent database queries:
+Initialised to the size of a pool, say 10, up to 10 threads proceed at once and the 11th waits. A web server might allow at most 10 concurrent database queries:
 
 ```python
 import threading
@@ -78,7 +94,7 @@ pthread_create(&t, NULL, child, NULL);
 sem_wait(&done);       // blocks until post
 ```
 
-Assuming initialization and calls succeed, it works whichever thread runs first. POSIX sem_wait can fail with EINTR; real code must retry that case and handle other errors rather than enter a protected section without a permit. The snippets omit this error handling. If the child posts before the parent waits, the counter is 1 and the parent's wait returns immediately. The semaphore *remembers* the signal. That memory is the key difference from a condition variable.
+Assuming initialization and calls succeed, it works whichever thread runs first. POSIX sem_wait can fail with EINTR; real code must retry that case and handle other errors rather than enter a protected section without a permit. The snippets omit this error handling. If the child posts before the parent waits, the counter is 1 and the parent thread's wait returns immediately. The semaphore *remembers* the signal. That memory is the key difference from a condition variable.
 
 ### Semaphore versus mutex
 
@@ -180,7 +196,7 @@ synchronized void put(T x)
 
 Because there is only one condition per object, producers and consumers share it, which is why `notifyAll` is the safe default there. `java.util.concurrent.locks` offers explicit locks with several `Condition`s.
 
-Python's `threading.Condition` bundles a lock and a CV, and its `wait_for` method writes the while loop for you:
+Python's `threading.Condition` combines a lock and a CV, and its `wait_for` method writes the while loop for you:
 
 ```python
 import threading
@@ -209,11 +225,11 @@ They are equally powerful: each can be built from the other plus a mutex. In pra
 | | Semaphore | Mutex + CV |
 |---|---|---|
 | Remembers signals | yes (count) | no |
-| Condition | "count > 0" | any predicate |
+| Condition | count above 0 | any predicate |
 | Ownership | none | mutex has owner |
 | Typical use | pools, signalling | general waiting |
 
-Semaphores are compact for counting problems. Condition variables are clearer for arbitrary conditions ("queue not empty *and* not shutting down"), because the condition is written explicitly in the while loop rather than encoded in a count. Many style guides prefer CVs for that reason.
+Semaphores are compact when the problem is really about counting. Condition variables are clearer for arbitrary conditions ("queue not empty *and* not shutting down"), because the condition is written explicitly in the while loop rather than encoded in a count. Many style guides prefer CVs for that reason.
 
 ## Common mistakes
 
@@ -223,14 +239,14 @@ Semaphores are compact for counting problems. Condition variables are clearer fo
 4. **Calling `wait` without holding the mutex.** Undefined in POSIX; Python raises `RuntimeError`.
 5. **Doing long work while holding the mutex** after waking. Take what you need, unlock, then work.
 
-For POSIX condition variables, signalling with or without the mutex held is permitted, but predicate changes and object lifetime must remain correctly coordinated. Python notify/notify_all and Java notify/notifyAll require holding their associated lock or monitor; the POSIX rule must not be copied into those APIs.
+For POSIX condition variables, signalling with or without the mutex held is permitted, but predicate changes and object lifetime must remain correctly coordinated. Python notify/notify_all and Java notify/notifyAll require holding their associated lock or monitor; the POSIX rule must never be copied into those APIs.
 
 ## Key takeaways
-- A semaphore is a counter of permits: init 1 for a lock, N for a pool, 0 for "wait until it happens". It remembers posts and has no owner.
+- A semaphore is a counter of permits: start it at 1 for a lock, the pool size for a pool, 0 for "wait until it happens". It remembers posts and has no owner.
 - A condition variable has no memory. The condition lives in shared state protected by a mutex, and `wait` atomically releases that mutex and sleeps.
 - Always wait in a `while` loop: Mesa semantics let state change before you run, and POSIX permits spurious wakeups.
 - Use `signal` when any one waiter will do and `broadcast` when waiters wait for different things; separate CVs per condition avoid thundering herds.
-- Monitors (Java `synchronized`, Python `Condition`) bundle a lock with condition variables into one structured construct.
+- Monitors (Java `synchronized`, Python `Condition`) combine a lock with condition variables into one structured construct.
 
 ## Further reading
 - [OSTEP: Condition variables (PDF)](https://pages.cs.wisc.edu/~remzi/OSTEP/threads-cv.pdf)

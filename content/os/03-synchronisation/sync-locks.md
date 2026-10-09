@@ -90,7 +90,7 @@ void cas_lock(void) {
 
 Note the C11 quirk: on failure, `atomic_compare_exchange_*` stores the value it actually found into `expected`, so the loop must reset it. The `_weak` form may fail spuriously (on ARM's load-linked/store-conditional instructions), which is fine inside a retry loop.
 
-CAS is strictly more powerful than test-and-set. It can implement any read-modify-write update ("read x, compute f(x), CAS it in, retry if someone beat you"), which is the foundation of lock-free programming in lesson 6.
+CAS is strictly more powerful than test-and-set. It can implement any read-modify-write update ("read the current value, compute the new value from it, CAS it in, retry if someone beat you"), which is the foundation of lock-free programming in lesson 6.
 
 | Primitive | x86 | ARMv8 |
 |---|---|---|
@@ -118,7 +118,7 @@ void ticket_unlock(void) {
 }
 ```
 
-Tickets order admission by ticket allocation, assuming holders and waiters keep progressing and counter wraparound does not alias outstanding tickets. Linux queued spinlocks use queue-based waiting, but their implementation and fairness properties should not be equated with this simple ticket model.
+Tickets order admission by ticket allocation, assuming holders and waiters keep progressing and counter wraparound does not alias outstanding tickets. Linux queued spinlocks use queue-based waiting, but their implementation and fairness properties are not the same as this simple ticket model.
 
 ## What spinning costs
 
@@ -135,7 +135,7 @@ So spinlocks suit one niche: **very short critical sections on multicore machine
 
 ## Sleeping locks and the futex
 
-For user programs the right answer to "lock is busy" is usually: **stop running and let the OS wake you when it is free**. That needs the kernel, because only the kernel can put a thread to sleep. Avoiding a kernel transition can reduce uncontended-path overhead; actual costs and contention rates are workload- and platform-dependent. You do not want a syscall when nobody else is waiting.
+For user programs the right answer to "lock is busy" is usually: **stop running and let the OS wake you when it is free**. That needs the kernel, because only the kernel can put a thread to sleep. Avoiding a kernel transition can reduce uncontended fast-path overhead; actual costs and contention rates are workload- and platform-dependent. You do not want a syscall when nobody else is waiting.
 
 Linux solves this with the **futex** ("fast userspace mutex"). It has two halves:
 
@@ -170,7 +170,7 @@ void unlock(atomic_int *f) {
 
 (`futex_wait` and `futex_wake` are illustrative wrappers. A real Linux implementation needs a correctly aligned 32-bit futex word compatible with its atomic representation, the appropriate private/shared operation and handling for interruptions, spurious wakes and errors.)
 
-The fast paths are the point. An uncontended `lock` is one CAS; an uncontended `unlock` is one atomic decrement. This teaching algorithm illustrates the fast-path principle. Ordinary glibc mutexes also use user-space atomic state plus futex slow paths, but exact instructions and paths differ with mutex type, glibc version and optimizations. Windows (`SRWLOCK`, `WaitOnAddress`) and macOS (`os_unfair_lock`) use the same idea.
+The fast paths are the point. An uncontended `lock` is one CAS; an uncontended `unlock` is one atomic decrement. This teaching algorithm illustrates the fast-path principle. Ordinary glibc mutexes also use user-space atomic state plus futex slow paths, but exact instructions and control flow differ with mutex type, glibc version and optimizations. Windows (`SRWLOCK`, `WaitOnAddress`) and macOS (`os_unfair_lock`) use the same idea.
 
 Many mutexes are also **adaptive**: on contention they spin briefly first, betting the holder is running on another core and will release soon, and only then sleep. The Linux kernel's own `mutex` does this "optimistic spinning" while the owner is running.
 
@@ -181,7 +181,38 @@ Many mutexes are also **adaptive**: on contention they spin briefly first, betti
 
 A correctly implemented lock still needs a correct application protocol: all relevant accesses must participate, lifetimes must be valid and lock ordering must avoid deadlock. Performance then depends partly on contention.
 
-No reproducible uncontended-lock timing is supplied here. When it is heavily contended, threads queue, sleep and wake, and the critical section becomes a serial bottleneck. Amdahl's law applies directly: if 10% of the work runs under one global lock, no number of cores can make the program more than 10 times faster.
+No reproducible uncontended-lock timing is supplied here. When it is heavily contended, threads queue, sleep and wake, and the critical section becomes a serial bottleneck.
+
+**Amdahl's law** puts a number on that bottleneck. It answers "how much faster can more cores make this program?" when part of the work must run one thread at a time, as everything under a single lock does:
+
+```formula
+S(N) = 1 / (s + (1 − s) / N)
+S_max = 1 / s   as N → ∞
+where
+S(N): the speed-up on N cores: how many times faster the program runs than on 1 core (a plain ratio with no unit)
+s: the serial fraction: the share of the single-core running time that can only run one thread at a time, for example under one global lock; a number from 0 to 1
+1 − s: the parallel fraction, the share that spreads perfectly across cores
+N: the number of cores running the work in parallel
+S_max: the best possible speed-up, however many cores you add
+→: tends towards, as N keeps growing
+∞: infinity: N growing without any limit
+In words: the serial part never gets faster, so it sets a ceiling of 1 / s on the speed-up; adding cores only shrinks the parallel part.
+```
+
+For example, if 10% of the work runs under one global lock (s = 0.1) and you have 16 cores:
+
+```formula
+S(16) = 1 / (0.1 + 0.9 / 16)
+S(16) = 1 / (0.1 + 0.05625)
+S(16) = 1 / 0.15625 = 6.4
+S_max = 1 / 0.1 = 10
+where
+S(16): the speed-up on 16 cores, as a plain ratio (6.4 means 6.4 times faster than 1 core)
+S_max: the ceiling with unlimited cores
+In words: with a tenth of the work serialised by one lock, 16 cores give only about 6.4 times the single-core speed, and no number of cores can beat 10 times.
+```
+
+The law assumes the parallel part splits perfectly and ignores the extra cost of contention itself (cache-line transfers, sleeping and waking). For lock-bound programs, treat its figure as an optimistic upper estimate: real ones usually do worse.
 
 The main lever is **granularity**, meaning how much data each lock protects.
 
@@ -216,7 +247,7 @@ Practical rules:
 ## Key takeaways
 - Locks are built on atomic hardware read-modify-write instructions: test-and-set (`xchg`), compare-and-swap (`lock cmpxchg`) and fetch-and-add (`lock xadd`).
 - Spinlocks waste CPU and collapse if the holder is preempted; they suit short kernel critical sections with preemption disabled.
-- A futex keeps the uncontended path in user space (one atomic op) and only calls into the kernel to sleep or wake when threads collide; glibc mutexes are built on it.
+- A futex keeps the uncontended fast path in user space (one atomic op) and only calls into the kernel to sleep or wake when threads collide; glibc mutexes are built on it.
 - Ticket locks order admission subject to progress and wraparound assumptions; queued-lock fairness is implementation-specific. Adaptive mutexes may spin before sleeping.
 - Contention, not the lock itself, is the cost. Shrink critical sections, use finer granularity where it is measured to matter, or avoid sharing altogether.
 

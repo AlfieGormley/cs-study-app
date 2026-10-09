@@ -73,8 +73,34 @@ Two increments ran; the counter went up by one. Thread B's store overwrote Threa
 
 Not every interleaving is bad. If A finishes all three steps before B starts its load, the answer is 7. The bug only appears when the windows overlap, which is why it is intermittent.
 
-> [!example] How bad can it get?
-> In a simplified sequentially consistent load/add/store model, two threads each increment N times (N at least 2). The final value can range from 2 to 2N. This is an interleaving exercise, not a guarantee for the data-racing C program, whose behaviour is undefined. The value 2 needs a pathological schedule: A loads 0 and stalls; B runs N-1 increments; A stores 1; B loads 1 and stalls; A runs its remaining N-1 increments; B stores 2. Unlikely, but the scheduler is allowed to do it.
+### How bad can it get?
+
+Take a simplified, sequentially consistent model: every load and store happens whole, one at a time, in some interleaved order. Two threads start with the counter at 0 and each run the same number of load/add/store increments, at least two each. The range of possible final values is:
+
+```formula
+2 ≤ V_final ≤ 2 × N   for N ≥ 2
+where
+V_final: the value of the shared counter once both threads have finished, starting from 0
+N: the number of increments each thread performs, each one a separate load, add and store
+≤: less than or equal to
+≥: greater than or equal to
+In words: with two threads the result can be anything from 2 (almost every update lost) up to 2 × N (no update lost).
+```
+
+For example, with N = 1,000,000 the program from the top of this lesson could, in this model, print any value from 2 to 2,000,000.
+
+The top value needs no overlap at all. The bottom value, 2, needs a pathological schedule:
+
+1. A loads 0 and stalls.
+2. B runs all but one of its increments.
+3. A stores 1, wiping out all of B's work.
+4. B loads 1 and stalls.
+5. A runs all of its remaining increments.
+6. B stores 2, wiping out all of A's work.
+
+Unlikely, but the scheduler is allowed to do it. The bound needs at least two increments per thread: with just one each, the final value can be 1 (both load 0, both store 1).
+
+This is an interleaving exercise, not a guarantee for the data-racing C program, whose behaviour is undefined.
 
 ## The same bug in Python
 
@@ -129,13 +155,13 @@ if account.balance() >= 100:
     account.withdraw(100)
 ```
 
-Two threads can both see a balance of 150, both pass the check, and both withdraw. Each method is thread-safe; the *combination* is not. This pattern is called **check-then-act** (or time-of-check to time-of-use, TOCTOU), and it is also a classic security bug with files: checking permissions on a path, then opening it after an attacker has swapped it for a symlink.
+Two threads can both see a balance of 150, both pass the check, and both withdraw. Each method is thread-safe; the *combination* is not. This pattern is called **check-then-act** (or time-of-check to time-of-use, TOCTOU), and it is also a classic security bug with files: checking permissions on a path, then opening it after an attacker has replaced it with a symlink.
 
 The fix is to make the check and the action a single atomic unit: hold one lock across both, or offer an operation like `withdraw_if_at_least(100)`.
 
 ## Critical sections
 
-A **critical section** is a piece of code that accesses shared state and must not be executed by more than one thread at a time. In the counter example, the load-add-store is the critical section.
+A **critical section** is a piece of code that accesses shared state and must never be executed by more than one thread at a time. In the counter example, the load-add-store is the critical section.
 
 The general shape of a solution:
 
@@ -204,7 +230,7 @@ Tools help find them. ThreadSanitizer (`-fsanitize=thread` in GCC and Clang) det
 ## Key takeaways
 - A race condition is any bug whose result depends on timing; a data race is the specific case of unsynchronised conflicting accesses, which is undefined behaviour in C and C++.
 - `counter++` is load, add, store. Interleaving those steps loses updates, and even a single `inc` instruction is not atomic across cores without `lock`.
-- Do not infer atomicity from bytecode boundaries or the GIL; protect compound shared updates explicitly.
+- Do not infer atomicity from bytecode boundaries or the GIL; protect multi-step shared updates explicitly.
 - Making each operation thread-safe does not make a sequence of them safe; check-then-act needs one atomic unit.
 - A critical-section solution needs mutual exclusion, progress and bounded waiting. Peterson's teaching algorithm needs a valid atomic memory model, such as sequentially consistent C atomics; fences alone do not legalize racing plain C accesses.
 

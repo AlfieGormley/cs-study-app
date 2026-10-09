@@ -21,7 +21,7 @@ Lock-free techniques avoid holding anything that others must wait for. Instead o
 | Lock-free | some thread always progresses |
 | Wait-free | every thread finishes, bounded |
 
-- **Blocking**: any algorithm using a mutex. If the holder is descheduled, nobody else in that critical section progresses.
+- **Blocking algorithm**: any algorithm using a mutex. If the holder is descheduled, nobody else in that critical section progresses.
 - **Obstruction-free**: a thread finishes in a bounded number of steps if all others pause. Contending threads may keep undoing each other's work.
 - **Lock-free**: continued execution guarantees system-wide operation progress under the algorithm's primitive and scheduling assumptions. An individual operation can starve; this is not a fixed wall-clock completion deadline.
 - **Wait-free**: *every* thread completes in a bounded number of its own steps, however others behave. The strongest guarantee and the hardest to build.
@@ -54,7 +54,7 @@ CAS retry loops generally do not give each thread a fixed retry bound. By contra
 
 ## A lock-free stack
 
-The **Treiber stack** (R. Kent Treiber, IBM, 1986) is the "hello world" of lock-free structures. The stack is a linked list, and `top` is an atomic pointer.
+The **Treiber stack** (R. Kent Treiber, IBM, 1986) is the "hello world" of lock-free structures. The Treiber stack is a linked list, and `top` is an atomic pointer.
 
 ```c
 struct node {
@@ -95,7 +95,7 @@ Garbage collection helps with reclamation, but the algorithm still needs correct
 
 CAS asks "is `top` still equal to `old`?". It cannot tell whether `top` **changed and then changed back**. That is the **ABA problem**.
 
-Start with the stack `A → B → C`.
+Start with the Treiber stack `A → B → C`.
 
 ```
 T1: pop: old = A, next = B
@@ -109,17 +109,32 @@ T1: CAS(top, A, B)  succeeds!
                          top = B (freed)
 ```
 
-T1's CAS succeeds because `top` is A again, but the A it sees is a *different moment* of A, and the `next` it computed (B) is stale. The stack now points at freed memory, and C has been lost. A memory allocator recycling a freed node's address causes exactly the same thing, so you do not need to push the "same" node deliberately.
+T1's CAS succeeds because `top` is A again, but the A it sees is a *different moment* of A, and the `next` it computed (B) is stale. The Treiber stack now points at memory that was already freed, and C has been lost. A memory allocator recycling a freed node's address causes exactly the same thing, so you do not need to push the "same" node deliberately.
 
 The fixes:
 
-1. **Tagged pointers.** Pair the pointer with a version counter and CAS both together. Every successful update increments the counter, so "A, version 7" no longer matches "A, version 9". x86-64 offers a 16-byte CAS (`cmpxchg16b`) for pointer-plus-counter pairs; packing a small counter into pointer bits is platform-specific and requires validating address representation and atomic support. A 16-bit tag wraps after 65536 updates; any finite tag needs an argument that wraparound cannot alias an outstanding observation.
+1. **Tagged pointers.** Pair the pointer with a version counter and CAS both together. Every successful update increments the counter, so "A, version 7" no longer matches "A, version 9". x86-64 offers a 16-byte CAS (`cmpxchg16b`) for pointer-plus-counter pairs; packing a small counter into pointer bits is platform-specific and requires validating address representation and atomic support.
+
+A tag with a fixed number of bits eventually wraps around to a value it has held before:
+
+```formula
+U_wrap = 2^b
+U_wrap = 2^16 = 65536
+where
+U_wrap: the number of successful updates after which the tag is back at its starting value
+b: the number of bits in the tag; 16 in the example line
+2^b: 2 raised to the power b, meaning 2 multiplied by itself b times
+In words: each extra tag bit doubles the number of updates before the tag repeats.
+```
+
+So a 16-bit tag repeats after 65,536 updates, and a thread stalled across exactly 65,536 updates (or any multiple of it) would see a matching tag and could still be fooled. Any finite tag needs an argument that wraparound cannot alias an outstanding observation.
+
 2. **LL/SC.** ARM's load-linked/store-conditional fails if the location was written *at all* since the load, so in principle it is immune. In practice C11's `compare_exchange` on ARM still compares values, so C code gets the ABA problem anyway.
 3. **Do not reuse memory while anyone might hold a reference.** This is the real fix, and it leads to the next problem.
 
 ## Safe memory reclamation
 
-The second bug on the `(!)` line is a **use-after-free**. Between T1 loading `old` and reading `old->next`, T2 may have popped that node and freed it. T1 then reads freed memory, which may crash or return garbage, even if the CAS later fails.
+The second bug on the `(!)` line is a **use-after-free**. Between T1 loading `old` and reading `old->next`, T2 may have popped that node and freed it. T1 then reads memory that was already freed, which may crash or return garbage, even if the CAS later fails.
 
 With a lock this cannot happen: nobody frees a node while someone else is inside the critical section. Without one, you need a way to know when **no thread can still be looking at a node**. The main schemes are:
 
@@ -128,13 +143,13 @@ With a lock this cannot happen: nobody frees a node while someone else is inside
 | Garbage collection | freed only when unreachable |
 | Hazard pointers | threads announce what they read |
 | Epoch-based | free after all threads move on |
-| RCU | free after a grace period |
+| RCU | free after an RCU grace period |
 
 - **Garbage collection** prevents freeing a node or recycling its address while a live reference remains. It does not prevent logical ABA if the program explicitly removes and reinserts the same node, so node-reuse rules still matter. That is why lock-free structures are far more common in Java and Go. `java.util.concurrent.ConcurrentLinkedQueue` is based on the **Michael–Scott queue** (1996), which uses CAS on both the head and the tail.
 - **Hazard pointers** (Maged Michael, 2004): before dereferencing a node, a thread publishes its address in a per-thread "hazard" slot and re-checks it is still reachable. A thread that wants to free a node first scans everyone's hazard slots and defers the free if it finds a match.
 - **Epoch-based reclamation** (used by Rust's `crossbeam-epoch`): threads mark themselves as active in a global epoch; retired nodes are freed once every active thread has moved past the epoch in which they were retired. Cheaper per access than hazard pointers, but one stalled thread can stop all reclamation.
 
-WG21 proposals P2530 and P2545 specify hazard-pointer and RCU facilities for C++; check the chosen standard-library implementation before relying on availability.
+WG21 papers P2530 and P2545 specify hazard-pointer and RCU facilities for C++; both were voted into the C++26 working draft in June 2023. Check the chosen standard-library implementation before relying on availability.
 
 ## Read-write locks
 
@@ -160,7 +175,7 @@ void update(int key, int v) {
 
 It seems like an obvious win, but it often disappoints:
 
-- **Readers still write.** Each `rdlock` and `unlock` is an atomic update to the shared reader count. With 32 cores doing short lookups, that one cache line bounces between cores just as a mutex's would. For sufficiently short reads, this overhead can outweigh reader parallelism; there is no universal duration threshold.
+- **Readers still write.** Each `rdlock` and `unlock` is an atomic update to the shared reader count. With 32 cores doing short lookups, that one cache line bounces between cores just as a mutex's would. For read sections that are short enough, this overhead can outweigh reader parallelism; there is no universal duration threshold.
 - **Starvation.** As in the readers–writers problem, a reader-preferring lock (glibc's default) can starve writers; a writer-preferring one can starve readers.
 - **Upgrade deadlock.** Two readers that each try to upgrade to a write lock wait for each other to stop reading. Most libraries do not support upgrading for this reason.
 
@@ -185,7 +200,7 @@ reader:
 
 This is algorithm pseudocode. Portable C requires a race-free representation (for example atomic fields) plus a proven ordering protocol; retrying does not undo undefined behavior. Linux seqlock APIs follow the Linux kernel memory model and do not magically make arbitrary plain C fields portable atomic objects. Writers must also meet the API's serialization and non-preemption requirements.
 
-These readers do not take the writer lock or update a shared reader count, reducing contention. They do not scale perfectly: cache traffic and repeated retries still cost time. The cost: a reader may read torn, inconsistent data and must throw it away and retry, so it must not follow pointers inside that data (they might point to freed memory). Seqlocks suit small, plain values updated often and read constantly. Linux uses them for timekeeping, where the current time is read by every `clock_gettime` call and updated on every timer tick.
+These readers do not take the writer lock or update a shared reader count, reducing contention. They do not scale perfectly: cache traffic and repeated retries still cost time. The cost: a reader may read torn, inconsistent data and must throw it away and retry, so it must never follow pointers inside that data (they might point to memory that was already freed). Seqlocks suit small, plain values updated often and read constantly. Linux uses them for timekeeping, where the current time is read by every `clock_gettime` call and updated on every timer tick.
 
 ## RCU: read-copy-update
 
@@ -196,7 +211,7 @@ The idea is in the name. In this immutable-configuration example, a writer does 
 1. **Reads** the current version.
 2. **Copies** it and modifies the copy.
 3. **Updates** a shared pointer to the new version with a single release store (publication).
-4. Waits for a **grace period**: until every reader that might still be using the old version has finished.
+4. Waits for an **RCU grace period**: until every reader that might still be using the old version has finished.
 5. Frees the old version.
 
 ```c
@@ -224,7 +239,7 @@ void set_timeout(int t) {   // under a mutex
 }
 ```
 
-This is RCU-style pseudocode: a real kernel implementation uses kernel allocation and protected pointer-access APIs; a liburcu application needs its selected flavor's headers, registration and lifecycle rules. Assume cur initially refers to a valid object and writers hold the same mutex.
+This is RCU-style pseudocode: a real kernel implementation uses kernel allocation and protected pointer-access APIs; a liburcu application needs its selected flavor's headers, registration, start-up and shutdown rules. Assume cur initially refers to a valid object and writers hold the same mutex.
 
 `rcu_assign_pointer` is a release store and `rcu_dereference` an ordered load, so a reader that sees the new pointer also sees the fully built object. That is the double-checked-locking lesson again.
 
@@ -240,13 +255,13 @@ free                             ^ old
 
 synchronize_rcu waits for read-side sections that pre-exist its invocation, not necessarily every later reader. In the simplified diagram publication and the start of the grace-period wait are adjacent; R1/R2 may retain the old object. Actual grace-period completion need not coincide with the last illustrated unlock.
 
-How does the kernel know when a grace period has ended without readers announcing themselves? In a non-preemptible kernel, an RCU reader may not sleep or be preempted, so once **every CPU has passed through a context switch**, no pre-existing reader can still be running. `rcu_read_lock()` then compiles to little or nothing. Costs and grace-period duration depend on RCU flavor, configuration and workload; no fixed timing is supplied here. `call_rcu()` lets a writer register a callback to free the old data later instead of blocking.
+How does the kernel know when an RCU grace period has ended without readers announcing themselves? In a non-preemptible kernel, an RCU reader may not sleep or be preempted, so once **every CPU has passed through a context switch**, no pre-existing reader can still be running. `rcu_read_lock()` then compiles to little or nothing. Costs and grace-period duration depend on RCU flavor, configuration and workload; no fixed timing is supplied here. `call_rcu()` lets a writer register a callback to free the old data later instead of blocking.
 
 The trade-offs:
 
 - Readers may see **slightly stale** data for a moment after an update. Fine for a routing table; wrong for a bank balance.
 - Writers are slow and must serialise among themselves (usually with an ordinary mutex).
-- Old versions stay in memory until their grace period ends, so a burst of updates can raise memory use.
+- Old versions stay in memory until their RCU grace period ends, so a rapid run of updates can raise memory use.
 
 In user space, `liburcu` provides RCU for applications.
 
@@ -272,12 +287,12 @@ def set_timeout(t):
         _config = new      # publish
 ```
 
-Readers briefly take the publication lock, then retain a reference to an unchanged dictionary. Reclamation timing is runtime-dependent. Callers must not mutate the returned dictionary or mutable objects reachable from it. Java's `CopyOnWriteArrayList` is the same pattern for lists: every write copies the array, so it only suits collections that are read far more than written.
+Readers briefly take the publication lock, then retain a reference to an unchanged dictionary. Reclamation timing is runtime-dependent. Callers must never mutate the returned dictionary or mutable objects reachable from it. Java's `CopyOnWriteArrayList` is the same pattern for lists: every write copies the array, so it only suits collections that are read far more than written.
 
-The rule that makes this safe: **never mutate a published object**. `_config["timeout"] = 30` could violate the snapshot invariant; do not equate Python compound-operation races with the precise C data-race definition.
+The rule that makes this safe: **never mutate a published object**. `_config["timeout"] = 30` could break the guarantee that a published dictionary never changes; do not equate Python multi-step-operation races with the precise C data-race definition.
 
 > [!note] Content gap
-> No hardware-specific lock, cache-transfer or RCU timing benchmark is available. The stack deliberately omits safe reclamation, and the seqlock/RCU fragments are protocol illustrations, not complete production implementations.
+> No hardware-specific lock, cache-transfer or RCU timing benchmark is available. The Treiber stack example deliberately omits safe reclamation, and the seqlock/RCU fragments are protocol illustrations, not complete production implementations.
 
 ## Choosing a tool
 
@@ -285,7 +300,7 @@ The rule that makes this safe: **never mutate a published object**. `_config["ti
 |---|---|
 | Shared counter | atomic fetch-add |
 | Small, hot, plain data | seqlock |
-| Read-mostly linked data | RCU or copy-on-write |
+| Read-mostly linked data | RCU or copy-on-write updates |
 | Long reads, some writes | read-write lock |
 | Queue between threads | library queue |
 | Anything else | a mutex |
@@ -295,10 +310,10 @@ The rule that makes this safe: **never mutate a published object**. `_config["ti
 
 ## Key takeaways
 - Lock-free means some thread always makes progress even if others stall; wait-free means every thread does. A CAS-based spinlock is neither.
-- The core pattern is read, compute privately, CAS, retry on failure. A non-spurious CAS failure indicates interference; weak CAS may also fail spuriously.
+- The basic pattern is read, compute privately, CAS, retry on failure. A non-spurious CAS failure indicates interference; weak CAS may also fail spuriously.
 - CAS cannot detect a value that changed and changed back (ABA). Tagged pointers help, but the real fix is safe memory reclamation: garbage collection, hazard pointers, epochs or RCU.
-- Read-write-lock benefits depend on workload; short reads may contend on shared reader metadata. Seqlocks and RCU let readers write nothing shared.
-- RCU publishes a new copy with a release store and frees the old one after a grace period, making reads nearly free at the cost of slower writers and briefly stale reads. Copy-on-write with an immutable object is the same idea in Python and Java.
+- Read-write-lock benefits depend on workload; very brief read sections may contend on shared reader metadata. Seqlocks and RCU let readers write nothing shared.
+- RCU publishes a new copy with a release store and frees the old one after an RCU grace period, making reads nearly free at the cost of slower writers and briefly stale reads. Copy-on-write updates of an immutable object are the same idea in Python and Java.
 
 ## Further reading
 - [Non-blocking algorithm — Wikipedia](https://en.wikipedia.org/wiki/Non-blocking_algorithm)

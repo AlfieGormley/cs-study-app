@@ -75,7 +75,7 @@
       },
       {
         "text": "Zero: the uncontended fast path stays in user space",
-        "explanation": "Correct. No futex wait or wake is needed on this path. The exact atomic operations depend on implementation and optimization; this does not promise exactly one machine instruction per API call."
+        "explanation": "Correct. No futex wait or wake is needed on this fast path. The exact atomic operations depend on implementation and optimization; this does not promise exactly one machine instruction per API call."
       },
       {
         "text": "It depends on how many cores the machine has",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "For the stipulated ordinary uncontended fast path, user-space state is sufficient to acquire and release, so no futex syscall is needed. The lesson's decrement algorithm illustrates one design; glibc versions and mutex types can use different instructions and additional paths.",
+    "workedExample": "For the stipulated ordinary uncontended fast path, user-space state is sufficient to acquire and release, so no futex syscall is needed. The lesson's decrement algorithm illustrates one design; glibc versions and mutex types can use different instructions and additional slow paths.",
     "link": {
       "title": "futex(2) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man2/futex.2.html"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. `fetch_add(&next, 1)` returns 7 to T; `next` becomes 8.\n2. `serving == 4` means ticket 4 is inside. Tickets 5 and 6 are waiting.\n3. Unlock 1: serving 5 (ticket 5 enters).\n4. Unlock 2: serving 6.\n5. Unlock 3: serving 7. T's spin condition `serving != 7` becomes false.\n\nThree unlocks, in strict FIFO order. That ordering is the fairness a plain test-and-set spinlock lacks.",
+    "workedExample": "1. `fetch_add(&next, 1)` returns 7 to T; `next` becomes 8.\n2. `serving == 4` means ticket 4 is inside. Tickets 5 and 6 are waiting.\n3. Unlock 1: serving 5 (ticket 5 enters).\n4. Unlock 2: serving 6.\n5. Unlock 3: serving 7. T's spin condition `serving != 7` becomes false.\n\nThe count is just the gap between T's ticket and the ticket now being served:\n\n```formula\nU = t_T − s_now\nU = 7 − 4 = 3\nwhere\nU: the number of ticket_unlock() calls needed before T may enter\nt_T: the ticket number T drew from next: 7\ns_now: the current value of serving, the ticket now inside: 4\nIn words: every unlock moves serving on by one ticket, so T waits for one unlock per ticket ahead of it, the current holder included.\n```\n\nThree unlocks, in strict FIFO order. That ordering is the fairness a plain test-and-set spinlock lacks.",
     "link": {
       "title": "OSTEP: Locks (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks.pdf"
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Amdahl's law: speed-up = 1 / (s + p/N), where s is the serial fraction.\n\n```\ns = 0.10, p = 0.90, N = 16\np / N = 0.05625\ns + p/N = 0.15625\n1 / 0.15625 = 6.4\n```\n\nAs N → ∞, the bound is 1/0.1 = 10×. Halving the time spent under the lock (s = 0.05) would raise the 16-core figure to about 9.1×, which is why shrinking critical sections matters so much.",
+    "workedExample": "Amdahl's law gives the best possible speed-up when part of the work can only run on one core at a time:\n\n```formula\nS(N) = 1 / (s + p / N)\nS(16) = 1 / (0.10 + 0.90 / 16)\nS(16) = 1 / (0.10 + 0.05625)\nS(16) = 1 / 0.15625 = 6.4\nwhere\nS(N): the speed-up on N cores, a plain ratio: how many times faster than on 1 core\ns: the serial fraction, the share of time spent under the global lock: 0.10\np: the parallel fraction, 1 − s: 0.90\nN: the number of cores: 16\nIn words: the locked tenth still runs one thread at a time, so 16 cores give only 6.4 times the speed.\n```\n\nTwo follow-ups show where the limit lies:\n\n```formula\nS_max = 1 / s = 1 / 0.1 = 10\nS(16) = 1 / (0.05 + 0.95 / 16) ≈ 9.1\nwhere\nS_max: the speed-up with unlimited cores, where the parallel part shrinks to nothing\nS(16): the 16-core speed-up after halving the locked share to s = 0.05\ns: the serial fraction\n≈: approximately equal to (rounded)\nIn words: even infinite cores cannot beat 10 times here, but halving the locked share lifts 16 cores from 6.4 to about 9.1 times.\n```\n\nThat is why shrinking critical sections matters so much.",
     "link": {
       "title": "OSTEP: Lock-based concurrent data structures (PDF)",
       "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks-usage.pdf"
@@ -250,11 +250,11 @@
     "options": [
       {
         "text": "With only 0 and 1, `unlock` cannot tell whether anyone is sleeping, so it must either call `FUTEX_WAKE` every time (a syscall even when uncontended) or risk leaving a sleeper asleep forever",
-        "explanation": "Correct. State 2 records \"someone may be waiting\". Unlock from state 1 can skip the syscall; unlock from 2 must wake. That keeps the uncontended path syscall-free without lost wakeups."
+        "explanation": "Correct. State 2 records \"someone may be waiting\". Unlock from state 1 can skip the syscall; unlock from 2 must wake. That keeps the uncontended fast path syscall-free without lost wakeups."
       },
       {
         "text": "State 2 counts exactly how many threads are waiting",
-        "explanation": "It is a flag, not a count. Many waiters still show as 2; the kernel tracks the actual queue."
+        "explanation": "It is a flag, not a count. Many waiters still show as 2; the kernel manages the actual queue."
       },
       {
         "text": "Because `FUTEX_WAIT` rejects the value 1",

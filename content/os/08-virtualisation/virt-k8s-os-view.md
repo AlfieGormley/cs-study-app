@@ -75,11 +75,80 @@ resources:
 | memory limit | `memory.max` | `536870912` |
 | memory request | scheduling/priority; optional protection | configuration dependent |
 
+The memory value is just the limit in bytes. Kubernetes' `Mi` suffix is a power-of-two unit:
+
+```formula
+M_max = 512 Mi
+M_max = 512 × 1024 × 1024 B
+M_max = 536870912 B
+where
+M_max: the memory limit as written into memory.max
+Mi: mebibyte (MiB), 1024 × 1024 = 1,048,576 bytes; Kubernetes writes it Mi
+B: byte, eight bits
+In words: 512Mi is 512 binary megabytes, which is 536,870,912 bytes.
+```
+
 ### CPU request → weight
 
-A CPU request is converted to cgroup v1–style **shares** (`millicores × 1024 / 1000`, so 250m gives 256) and then to `cpu.weight` (range 1–10,000, default 100). Weights matter only under **contention**. A sufficiently parallel container may exceed its request when allowed by limits, affinity and ancestors. Eligible competing sibling cgroups receive relative weight-based service; this is not a flat global split of every container on the node.
+A CPU request is first converted to cgroup v1–style **CPU shares**, where 1024 shares meant one whole CPU:
 
-The shares-to-weight formula has changed over time. Older runc used a linear mapping where 1 CPU (1024 shares) became weight 39. The current upstream opencontainers/cgroups implementation uses a curve mapping 1024 shares to 100; the deployed runc/library version determines whether that mapping is used. The curve preserves selected endpoints/defaults, not every ratio: actual weights and contention shares can change across implementations. Inspect cpu.weight on the deployed runtime instead of assuming a 2:1 request always becomes exactly a 2:1 weight.
+```formula
+S = floor(R_m × 1024 / 1000)
+S = floor(250 × 1024 / 1000) = 256
+where
+S: the CPU shares value, clamped to the range 2–262,144 (no unit)
+R_m: the CPU request in millicores (m); 1000m = 1 CPU, so 250m is a quarter of a CPU
+floor: round down to a whole number
+In words: shares are the request scaled so that one full CPU is worth 1024; a 250m request gives 256 shares.
+```
+
+The shares are then converted to `cpu.weight` (range 1–10,000, default 100). Weights matter only under **CPU contention**. A sufficiently parallel container may exceed its request when allowed by limits, affinity and ancestors. Eligible competing sibling cgroups receive relative weight-based service; this is not a flat global split of every container on the node.
+
+The shares-to-weight formula has changed over time. Older runc used a linear mapping that stretches the shares range 2–262,144 onto the weight range 1–10,000:
+
+```formula
+W_old = 1 + floor((S − 2) × 9999 / 262142)
+W_old = 1 + floor(1022 × 9999 / 262142)
+W_old = 1 + 38 = 39
+where
+W_old: the cpu.weight the older linear mapping writes (no unit)
+S: the CPU shares value, here 1024 (one CPU)
+floor: round down to a whole number
+In words: the linear mapping turns one CPU's worth of shares into weight 39, well below the default weight of 100.
+```
+
+The current upstream opencontainers/cgroups implementation uses a curve instead, chosen so that the minimum, default and maximum line up:
+
+```formula
+x = log_2(S)
+y = (x^2 + 125 × x) / 612 − 7 / 34
+W_new = ⌈10^y⌉
+where
+x: the base-2 logarithm of the shares value
+S: the CPU shares value (2 to 262,144)
+log_2: logarithm base 2: the power you raise 2 to in order to get the number; log_2(1024) = 10
+y: an intermediate exponent (no unit)
+W_new: the cpu.weight the curve writes (no unit)
+⌈ ⌉: ceiling: round up to the next whole number
+In words: the curve maps 2 shares to weight 1, 1024 shares (one CPU) to the default weight 100, and 262,144 shares to the maximum 10,000.
+```
+
+For one CPU (1024 shares):
+
+```formula
+x = log_2(1024) = 10
+y = (100 + 1250) / 612 − 7 / 34 = 2
+W_new = ⌈10^2⌉ = 100
+where
+x: the base-2 logarithm of 1024 shares
+log_2: logarithm base 2; 2^10 = 1024
+y: the exponent, here exactly 2
+W_new: the resulting cpu.weight
+⌈ ⌉: ceiling: round up to a whole number
+In words: one CPU's worth of shares lands exactly on the default weight of 100 under the curve.
+```
+
+The deployed runc/library version determines whether that mapping is used. The curve preserves selected endpoints/defaults, not every ratio: actual weights and CPU-contention shares can change across implementations. Inspect cpu.weight on the deployed runtime instead of assuming a 2:1 request always becomes exactly a 2:1 weight.
 
 ### CPU limit → quota and throttling
 
@@ -87,16 +156,40 @@ A CPU limit becomes CFS bandwidth control. `cpu.max = "50000 100000"` means 50 m
 
 One possible latency cause is quota exhaustion. In an idealised case with four continuously running threads on four available CPUs, no burst credit and no tighter ancestor limit:
 
-```
-period = 100 ms, quota = 50 ms
-4 threads busy in parallel:
-  50 ms / 4 = 12.5 ms wall to use quota
-  then throttled for 87.5 ms
+```formula
+t_wall = Q / N
+t_wall = 50 ms / 4 = 12.5 ms
+t_thr = P − t_wall
+t_thr = 100 ms − 12.5 ms = 87.5 ms
+where
+t_wall: wall-clock time from the start of a period until the quota is used up, in milliseconds (ms)
+Q: the quota: CPU time the cgroup may use per period, here 50 ms (a 500m limit)
+N: threads busy at the same time, each on its own CPU, here 4
+t_thr: how long the whole cgroup is then throttled, in ms
+P: the quota period, here 100 ms
+ms: millisecond, one thousandth of a second
+In words: four threads burn a 50 ms budget in 12.5 ms of real time, then every thread in the cgroup waits 87.5 ms for the next period.
 ```
 
 A request arriving just after the quota runs out waits up to 87.5 ms, even when its average over a longer, partly idle measurement interval is below the limit. `cpu.stat` exposes this as `nr_throttled` and `throttled_usec`. The usual fixes are to raise or remove CPU limits (keeping requests), or to size thread pools to the limit. Runtime parallelism settings and container-aware resource detection can help avoid excessive runnable work; their purpose and behavior extend beyond quota throttling.
 
-A simplified model of the ordinary quota/share conversion (integer millicores; excludes feature flags, pod budgets and special policies):
+The quota itself comes from the limit in the same way the shares come from the request. Kubernetes writes a minimum quota of 1 ms:
+
+```formula
+Q = max(1000, floor(L_m × P / 1000))
+Q = floor(500 × 100000 / 1000) µs
+Q = 50000 µs
+where
+Q: the quota written as the first number of cpu.max, in microseconds (µs)
+L_m: the CPU limit in millicores (m); 500m is half a CPU
+P: the quota period, here 100000 µs (100 ms)
+max: the larger of its two inputs; here it enforces a 1000 µs (1 ms) minimum
+floor: round down to a whole number
+µs: microsecond, one millionth of a second
+In words: the quota is the limit's fraction of a CPU times the period, so a 500m limit allows 50 ms of CPU time in every 100 ms period.
+```
+
+A simplified model of the ordinary quota/share conversion as code (integer millicores; excludes feature flags, pod budgets and special policies):
 
 ```
 PERIOD = 100_000  # microseconds
@@ -122,15 +215,25 @@ print(cpu_max(None))   # max 100000
 print(shares(250))     # 256
 ```
 
-Note that a 2-CPU limit gives a quota (200 ms) larger than the period. That's allowed, because the quota is summed across CPUs.
+Note that a 2-CPU limit (2000m) gives a quota of 2000 × 100000 / 1000 = 200,000 µs (200 ms), larger than the 100 ms period. That's allowed, because the quota is summed across CPUs.
 
 ### Memory limit → memory.max and the OOM killer
 
-Memory allocation can be throttled/reclaimed, for example through memory.high; that differs from periodically pausing runnable CPU work. When usage in the container's cgroup hits `memory.max`, the kernel first tries to reclaim memory, mostly page cache. If that fails, the **cgroup OOM killer** kills a process inside that cgroup. If the container's process is killed and the runtime identifies OOM, termination commonly appears as OOMKilled with exit code 137. A killed child need not terminate the entire container, and exit 137 alone does not prove OOM.
+Memory allocation can be throttled/reclaimed, for example through memory.high; that differs from periodically pausing runnable CPU work. When usage in the container's cgroup hits `memory.max`, the kernel first tries to reclaim memory, mostly page cache. If that fails, the **cgroup OOM killer** kills a process inside that cgroup. If the container's process is killed and the runtime identifies OOM, termination commonly appears as OOMKilled with exit code 137. That number follows the shell convention for a process killed by a signal:
+
+```formula
+E = 128 + s
+E = 128 + 9 = 137
+where
+E: the exit code reported for a process killed by a signal
+s: the signal number; SIGKILL, which the OOM killer sends, is 9
+In words: an exit code above 128 means "killed by signal (code minus 128)", so 137 means killed by SIGKILL.
+```
+ A killed child need not terminate the entire container, and exit 137 alone does not prove OOM.
 
 As a useful shorthand, CPU quotas throttle and unrecoverable memory pressure can kill; allocation failures, reclaim and configuration create exceptions. Page cache counts towards the limit, so a container streaming large files can approach `memory.max` while its heap is small. That memory is reclaimable, though, so it is usually reclaimed rather than causing a kill. An `emptyDir` with `medium: Memory` is tmpfs, and its pages are charged to the writing container's cgroup. They cannot be discarded like clean disk cache; swap availability/configuration can allow shmem pages to leave RAM.
 
-Memory requests don't set a cgroup limit by default. The scheduler uses them to place pods, and the kubelet uses them for eviction and OOM ranking. MemoryQoS can configure protection/throttling according to the Kubernetes version and kubelet settings; inspect the actual memory.min, memory.low and memory.high values.
+Memory requests don't set a cgroup limit by default. The scheduler uses them to place pods, and the kubelet uses them for node-pressure eviction and OOM ranking. MemoryQoS can configure protection/throttling according to the Kubernetes version and kubelet settings; inspect the actual memory.min, memory.low and memory.high values.
 
 ## QoS classes and who dies first
 
@@ -138,15 +241,30 @@ For ordinary Linux pods using container-level CPU/memory resources, the followin
 
 | Class | Rule | `oom_score_adj` |
 |---|---|---|
-| Guaranteed | requests = limits, CPU and memory, every container | −997 |
-| Burstable | anything in between | 2 to 999 |
+| Guaranteed | requests equal limits, CPU and memory, every container | −997 |
+| Burstable | anything in between | 3 to 999 |
 | BestEffort | no CPU/memory requests or limits | 1000 |
 
-For a non-critical Burstable container without pod-level resource adjustments, the score is `1000 − 1000 × memoryRequest / nodeMemory`, clamped to the range 2–999. A container requesting a quarter of node memory capacity gets 750, and one requesting 1% gets 990.
+For a non-critical Burstable container without pod-level resource adjustments, the kubelet sets the adjustment from the share of node memory the container requests. The more memory it reserves, the lower (safer) its score:
+
+```formula
+A = 1000 − 1000 × M_req / M_node
+A_set = min(max(3, A), 999)
+where
+A: the raw oom_score_adj before clamping (no unit); the kernel's range is −1000 to 1000
+M_req: the container's memory request, in bytes (or any unit, as long as both use the same one)
+M_node: the node's memory capacity, in the same unit
+A_set: the value actually written, clamped to 3–999; the kubelet computes the floor as 1000 + (−997) = 3
+max: the larger of its inputs
+min: the smaller of its inputs
+In words: subtract the requested fraction of node memory, scaled to 1000, from 1000, then keep the result between 3 and 999 so a Burstable container always ranks between Guaranteed and BestEffort.
+```
+
+A container requesting a quarter of node memory capacity gets 1000 − 1000 × 0.25 = 750, and one requesting 1% gets 1000 − 10 = 990. The kubelet computes 1000 × M_req / M_node with integer division (rounding down) before subtracting. The Kubernetes documentation writes the lower clamp as 2, but the kubelet source (`pkg/kubelet/qos/policy.go`) returns 3 for anything below 3.
 
 Two separate mechanisms use these values:
 
-1. **Node-pressure eviction** (kubelet). When `memory.available` drops below the hard threshold (100Mi by default on Linux), the kubelet evicts pods. It ranks them first by whether their usage exceeds their requests, then by Pod priority, then by how far usage exceeds requests. Hard-pressure eviction uses no termination grace period. A controller may create a replacement pod; the original pod is not moved or rescheduled as the same object. Soft-threshold grace settings differ.
+1. **Node-pressure eviction** (kubelet). When `memory.available` drops below the hard threshold (100Mi by default on Linux), the kubelet terminates pods to reclaim memory. It ranks them first by whether their usage exceeds their requests, then by Pod priority, then by how far usage exceeds requests. Hard-pressure eviction uses no termination grace period. A controller may create a replacement pod; the original pod is not moved or rescheduled as the same object. Soft-threshold grace settings differ.
 2. **Kernel OOM killer** (node-wide). If memory runs out before the kubelet reacts, the kernel picks a victim by usage plus `oom_score_adj`. These adjustments bias victim selection; actual memory use, eligible scope and other factors matter. QoS class alone is not a strict universal kill ordering or a promise that a Guaranteed workload survives.
 
 ## securityContext is the last lesson in YAML
@@ -173,7 +291,7 @@ securityContext:
 | `privileged: true` | broad runtime privilege relaxation |
 | pod `spec.hostUsers: false` | user namespace |
 
-Writing this into every pod is error-prone, so Kubernetes has **Pod Security Admission**. You label a namespace with `pod-security.kubernetes.io/enforce=restricted`, and the API server rejects pods that do not meet the **restricted** Pod Security Standard. For ordinary Linux host-user-namespace pods, the selected Restricted policy version requires running as non-root, dropping ALL capabilities (only `NET_BIND_SERVICE` may be added back), `allowPrivilegeEscalation: false` and a RuntimeDefault or Localhost seccomp profile. The **baseline** standard blocks the worst options, such as privileged mode, host namespaces and `hostPath`.
+Writing this into every pod is error-prone, so Kubernetes has **Pod Security Admission**. You label a Kubernetes namespace with `pod-security.kubernetes.io/enforce=restricted`, and the API server rejects pods that do not meet the **restricted** Pod Security Standard. For ordinary Linux host-user-namespace pods, the selected Restricted policy version requires running as non-root, dropping ALL capabilities (only `NET_BIND_SERVICE` may be added back), `allowPrivilegeEscalation: false` and a RuntimeDefault or Localhost seccomp profile. The **baseline** standard blocks the worst options, such as privileged containers, host namespaces and `hostPath`.
 
 ## RuntimeClass: choosing the boundary per pod
 

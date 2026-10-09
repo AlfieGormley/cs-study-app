@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The CFS period is 100 ms = 100,000 µs.\n2. 500m = 0.5 CPU.\n3. Quota = 0.5 × 100,000 = 50,000 µs.\n4. `cpu.max` is written as `<quota> <period>`, so `50000 100000`.",
+    "workedExample": "1. The CFS period is 100 ms = 100,000 µs.\n2. 500m = 0.5 CPU.\n\n```formula\nQ = L × P\nQ = 0.5 × 100000 µs = 50000 µs\nwhere\nQ: the quota, CPU time allowed per period, in microseconds (µs)\nL: the CPU limit in CPUs; 500m (millicores) = 0.5\nP: the quota period, 100000 µs = 100 ms\nµs: microsecond, one millionth of a second\nIn words: half a CPU means 50 ms of CPU time in every 100 ms period.\n```\n\n3. `cpu.max` is written as `<quota> <period>`, so `50000 100000`.",
     "link": {
       "title": "Resource management for pods and containers — Kubernetes docs",
       "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
@@ -71,7 +71,7 @@
       },
       {
         "text": "The kubelet moves the pod to another node with more memory",
-        "explanation": "Kubernetes does not live-migrate pods. A pod that is evicted or killed is restarted or replaced, not moved."
+        "explanation": "Kubernetes does not live-migrate pods. A pod removed by node-pressure eviction or killed is restarted or replaced, not moved."
       },
       {
         "text": "The pod swaps to disk without limit",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "The stated OOM handler killed the container main process with signal 9. The runtime reports OOMKilled and an exit code conventionally represented as 137. Restart policy determines what follows. Killing only a child or seeing 137 without OOM evidence would require a different diagnosis.",
+    "workedExample": "The stated OOM handler killed the container main process with SIGKILL, signal 9. Exit codes for signal deaths follow the shell convention:\n\n```formula\nE = 128 + s = 128 + 9 = 137\nwhere\nE: the exit code reported for a process killed by a signal\ns: the signal number; SIGKILL is 9\nIn words: a code above 128 means killed by signal (code minus 128), so 137 is SIGKILL.\n```\n\nThe runtime reports OOMKilled and exit code 137. Restart policy determines what follows. Killing only a child or seeing 137 without OOM evidence would require a different diagnosis.",
     "link": {
       "title": "Resource management for pods and containers — Kubernetes docs",
       "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
@@ -105,7 +105,7 @@
       },
       {
         "text": "The CPU request is too low, so the scheduler gives it fewer cores",
-        "explanation": "Requests set `cpu.weight` and matter only under contention. They don't produce a hard pause like this."
+        "explanation": "Requests set `cpu.weight` and matter only under CPU contention. They don't produce a hard pause like this."
       },
       {
         "text": "The OOM killer is restarting threads",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Limit 1 CPU means quota 100 ms per 100 ms period.\n2. In a burst, 8 threads run in parallel: 100 ms / 8 = 12.5 ms of wall time to use the quota.\n3. Then every thread waits until the period ends: 100 − 12.5 = 87.5 ms.\n4. Requests landing in that window see roughly 85 ms of extra latency.\n5. Averaged over seconds, usage is only 40%, which hides the problem.\n6. Confirm with `cpu.stat` (`nr_throttled`, `throttled_usec`). Fix by raising or removing the limit or by matching thread counts to it.",
+    "workedExample": "1. Limit 1 CPU means quota 100 ms per 100 ms period.\n2. In a burst, 8 threads run in parallel and share that quota.\n\n```formula\nt_wall = Q / N = 100 ms / 8\nt_wall = 12.5 ms\nt_thr = P − t_wall\nt_thr = 100 ms − 12.5 ms = 87.5 ms\nwhere\nt_wall: wall time until the quota runs out\nQ: the quota, 100 ms of CPU time per period\nN: busy threads, each on its own CPU, here 8\nt_thr: time every thread then waits\nP: the period, 100 ms\nms: millisecond, one thousandth of a second\nIn words: eight threads use a whole CPU's budget in an eighth of the period, then all wait 87.5 ms.\n```\n\n3. Requests landing in that window can wait up to about 87.5 ms extra.\n4. Averaged over seconds, usage can look low (say 40% of the limit), which hides the problem.\n5. Confirm with `cpu.stat` (`nr_throttled`, `throttled_usec`). Fix by raising or removing the limit or by matching thread counts to it.",
     "link": {
       "title": "About cgroup v2 — Kubernetes docs",
       "url": "https://kubernetes.io/docs/concepts/architecture/cgroups/"
@@ -157,7 +157,7 @@
     "options": [
       {
         "text": "250",
-        "explanation": "That is 1000 × request/capacity, the fraction itself. The formula subtracts it from 1000."
+        "explanation": "That is 1000 times the requested fraction (1000 × 16/64 = 250) on its own. The formula subtracts it from 1000."
       },
       {
         "text": "−997",
@@ -165,7 +165,7 @@
       },
       {
         "text": "750",
-        "explanation": "Correct. 1000 − 1000 × 16/64 = 1000 − 250 = 750, which is inside the clamp range 2–999."
+        "explanation": "Correct. 1000 − 1000 × 16/64 = 1000 − 250 = 750, which is inside the clamp range 3–999."
       },
       {
         "text": "1000",
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Formula: `min(max(2, 1000 − 1000 × req / capacity), 999)`.\n2. req / capacity = 16 / 64 = 0.25.\n3. 1000 × 0.25 = 250.\n4. 1000 − 250 = 750.\n5. Clamp to [2, 999]: 750 stands.\n6. Intuition: the more memory you reserve, the less likely you are to be the kernel's victim.",
+    "workedExample": "```formula\nA = 1000 − 1000 × M_req / M_node\nA = 1000 − 1000 × 16 GiB / 64 GiB\nA = 1000 − 250 = 750\nA_set = min(max(3, A), 999) = 750\nwhere\nA: the raw oom_score_adj (no unit)\nM_req: the container's memory request\nM_node: the node's memory capacity\nGiB: gibibyte, 1024 × 1024 × 1024 bytes\nA_set: the value written, clamped to 3–999\nmax: the larger of its inputs\nmin: the smaller of its inputs\nIn words: requesting a quarter of node memory takes 250 off 1000, and 750 is already inside 3–999.\n```\n\nIntuition: the more memory you reserve, the less likely you are to be the kernel's victim.",
     "link": {
       "title": "Node-pressure eviction — Kubernetes docs",
       "url": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/"
@@ -191,10 +191,10 @@
       },
       {
         "text": "On an idle node, a container may use far more CPU than its request",
-        "explanation": "Correct. Weights matter only under contention; spare CPU is free to use."
+        "explanation": "Correct. Weights matter only under CPU contention; spare CPU is free to use."
       },
       {
-        "text": "Under contention, busy sibling cgroups get CPU in proportion to their weights",
+        "text": "Under CPU contention, busy sibling cgroups get CPU in proportion to their weights",
         "explanation": "Correct for eligible competing siblings without other constraints. Actual weights need not preserve an exact 2:1 ratio between 500m and 250m requests after nonlinear conversion and rounding."
       },
       {
@@ -212,7 +212,7 @@
       2,
       4
     ],
-    "workedExample": "1. Request → shares → `cpu.weight`, which is proportional, not absolute.\n2. Idle node: no competition, so no proportional split is enforced.\n3. Busy node: A (weight w1) and B (weight w2) split CPU as w1 : w2.\n4. Requests also drive scheduling: a pod fits only if the sum of requests ≤ allocatable.\n5. A hard cap needs a limit (`cpu.max`).",
+    "workedExample": "1. Request → shares → `cpu.weight`, which is proportional, not absolute.\n2. Idle node: no competition, so no proportional split is enforced.\n3. Busy node: two busy sibling cgroups split CPU under CPU contention by weight:\n\n```formula\nF_A = w_A / (w_A + w_B)\nF_B = w_B / (w_A + w_B)\nwhere\nF_A, F_B: the fraction of the CPU time cgroups A and B receive\nw_A, w_B: their cpu.weight values (no unit)\nIn words: each busy sibling gets its weight's share of the total weight.\n```\n\n4. Requests also drive scheduling: a pod fits on a node only if all requests together stay within what the node can allocate:\n\n```formula\nΣ R_i ≤ C_alloc\nwhere\nΣ: sum over every pod i on the node, including the new one\nR_i: the CPU request of pod i\nC_alloc: the node's allocatable CPU\n≤: at most\nIn words: the scheduler adds up requests, not actual usage.\n```\n\n5. A hard cap needs a limit (`cpu.max`).",
     "link": {
       "title": "Resource management for pods and containers — Kubernetes docs",
       "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
@@ -272,7 +272,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "900+200=1100 MiB exceeds 1024 MiB before other charges. Without swap or enough reclaimable data, the retained allocations cannot all fit. Expect allocation failure/OOM handling rather than silent deletion of tmpfs files. If the container main process is OOM-killed, termination can be reported as OOMKilled; a child victim need not end the container.",
+    "workedExample": "```formula\nU = 900 MiB + 200 MiB = 1100 MiB\nM_max = 1 GiB = 1024 MiB\nU > M_max\nwhere\nU: memory charged to the cgroup: tmpfs pages plus the new heap\nM_max: the effective memory limit\nMiB: mebibyte, 1,048,576 bytes\nGiB: gibibyte, 1024 MiB\n>: is greater than\nIn words: the charges total 1100 MiB, more than the 1024 MiB limit, even before other charges.\n```\n\nWithout swap or enough reclaimable data, the retained allocations cannot all fit. Expect allocation failure/OOM handling rather than silent deletion of tmpfs files. If the container main process is OOM-killed, termination can be reported as OOMKilled; a child victim need not end the container.",
     "link": {
       "title": "Resource management for pods and containers — Kubernetes docs",
       "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
@@ -316,7 +316,7 @@
     "options": [
       {
         "text": "The kubelet issues a CRI `Exec` call, and containerd/the shim runs something like `runc exec`",
-        "explanation": "Correct. Exec goes through the same CRI and runtime stack as container creation."
+        "explanation": "Correct. CRI Exec goes through the same CRI and runtime stack as container creation."
       },
       {
         "text": "The new `sh` process joins the container's existing namespaces with `setns()`",

@@ -32,7 +32,7 @@ image index (optional, multi-arch)
                     |- layer 3 (tar.gz)
 ```
 
-- **Layers** are tar archives of file system *changes*: files added or modified, plus whiteout entries (files named `.wh.<name>`) for deletions. Applying the changesets produces a rootfs; an overlayfs snapshotter is one implementation. OCI whiteout files must be interpreted, not exposed as ordinary application files. Layers may be uncompressed, gzip or zstd according to supported media types.
+- **Layers** are tar archives of file system *changes*: files added or modified, plus whiteout entries (files named `.wh.<name>`) for deletions. Applying the changesets produces a rootfs; an overlayfs snapshotter is one implementation. OCI whiteout files must be interpreted, not exposed as ordinary application files. Layers may be uncompressed, gzip or Zstandard (zstd) according to supported media types.
 - The **config** holds runtime defaults (`Env`, `Entrypoint`, `Cmd`, `WorkingDir`, `User`, exposed ports), the build history and the `diff_ids`, digests of each *uncompressed* layer.
 - The **manifest** lists the config digest and each layer's digest, media type and size.
 - An **image index** (a "manifest list") points to platform-specific manifests and other supported entries, so `python:3.12` resolves to the right one for your CPU.
@@ -131,6 +131,21 @@ RUN tar xf big.tgz       # +600 MB
 RUN rm big.tgz           # +0, still 900
 ```
 
+Each `RUN` step becomes its own layer, and an image ships every layer, so the image's file data is the sum of the layers:
+
+```formula
+S = S_1 + S_2 + S_3
+S = 300 MB + 600 MB + 0 MB
+S = 900 MB
+where
+S: the total uncompressed file data shipped across the image's layers, in megabytes (MB)
+S_1: the layer from the download step: the 300 MB archive
+S_2: the layer from the extract step: 600 MB of extracted files
+S_3: the layer from the rm step: only a whiteout, 0 MB
+MB: megabyte, 1,000,000 bytes in this decimal-unit illustration
+In words: layers only ever add; deleting the archive in a later layer adds a whiteout of size zero and cannot subtract the 300 MB already captured.
+```
+
 Do download, extract and clean-up in one `RUN`, or better, use a **multi-stage build**: compile in a full toolchain image, then copy only the output into a minimal runtime image.
 
 ```
@@ -144,7 +159,7 @@ COPY --from=build /app /app
 ENTRYPOINT ["/app"]
 ```
 
-For a compatible Go project, this copies only the built binary into the final base. CGO_ENABLED=0 does not make every project buildable or eliminate runtime data dependencies. Distroless provides selected runtime files but not a general shell/package-manager environment. Image size and vulnerability exposure must be measured; no fixed size reduction is asserted.
+For a compatible Go project, this copies only the built binary into the final base. `CGO_ENABLED=0` does not make every project buildable or eliminate runtime data dependencies. Distroless provides selected runtime files but not a general shell/package-manager environment. Image size and vulnerability exposure must be measured; no fixed size reduction is asserted.
 
 BuildKit adds more tools: independent stages build **in parallel**, `RUN --mount=type=cache` keeps a package manager's download cache between builds without putting it in a layer, and `--mount=type=secret` temporarily exposes credentials without automatically persisting the mount. A build command can still copy secrets into layers or print them to logs, so handling matters.
 

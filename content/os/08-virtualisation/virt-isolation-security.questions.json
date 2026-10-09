@@ -79,7 +79,7 @@
       },
       {
         "text": "Whether each system call (by number, architecture and raw argument values) is allowed, fails with an errno, or kills the process",
-        "explanation": "Correct. The kernel runs the BPF program on every syscall entry and acts on its return value."
+        "explanation": "Correct. The kernel runs the classic BPF program on every syscall entry and acts on its return value."
       }
     ],
     "answer": 3,
@@ -101,7 +101,7 @@
       },
       {
         "text": "The container has gained `CAP_SYS_ADMIN` (bit 21, value 0x200000)",
-        "explanation": "Correct. 0xa82425fb − 0xa80425fb = 0x200000 = 2^21, which is bit 21."
+        "explanation": "Correct. The two masks differ by exactly 0x200000, which is 2 to the power 21: the value of bit 21 alone."
       },
       {
         "text": "The container has lost `CAP_NET_RAW`",
@@ -109,11 +109,11 @@
       },
       {
         "text": "The container is running with `--privileged`",
-        "explanation": "Privileged mode grants all capabilities (a mask like `000001ffffffffff`), not just one extra bit."
+        "explanation": "A privileged container (`--privileged`) gets all capabilities (a mask like `000001ffffffffff`), not just one extra bit."
       }
     ],
     "answer": 1,
-    "workedExample": "XOR the masks: 0xa82425fb ^ 0xa80425fb = 0x200000 = 2^21. Exactly SYS_ADMIN is additionally effective. This does not prove which runtime flag or credential operation set it; assess its namespace scope and why it is needed.",
+    "workedExample": "XOR the two masks: bits that differ come out as 1.\n\n```formula\nΔ = M_new ⊕ M_base\nΔ = 0xa82425fb ⊕ 0xa80425fb\nΔ = 0x200000 = 2^21\nwhere\nΔ: delta, the bits that differ between the two masks\nM_new: the mask in this container, 0xa82425fb\nM_base: the baseline mask, 0xa80425fb\n⊕: exclusive OR (XOR), bit by bit: 1 where the inputs differ, 0 where they match\n2^21: 2 raised to the power 21, the value of bit 21 alone\nIn words: the only differing bit is bit 21, and the new mask is the larger, so capability 21 was added.\n```\n\nExactly SYS_ADMIN is additionally effective. This does not prove which runtime flag or credential operation set it; assess its namespace scope and why it is needed.",
     "link": {
       "title": "capabilities(7) — Linux manual page",
       "url": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
@@ -134,7 +134,7 @@
         "explanation": "Any syscall number can be filtered, and Docker's profile already handles common ones."
       },
       {
-        "text": "The path argument is a pointer into user memory: BPF filters see only the pointer value, and even a checked copy could be changed by another thread before the kernel uses it (TOCTOU)",
+        "text": "The path argument is a pointer into user memory: classic BPF filters see only the pointer value, and even a checked copy could be changed by another thread before the kernel uses it (TOCTOU)",
         "explanation": "Correct. Path-based rules belong in an LSM (AppArmor, SELinux) or a USER_NOTIF supervisor that handles the call carefully."
       },
       {
@@ -169,7 +169,7 @@
       },
       {
         "text": "The kernel panics because the UID is out of range",
-        "explanation": "UIDs up to 2^32 − 2 are valid; mapped ranges are routine."
+        "explanation": "UIDs up to 4,294,967,294 (2 to the power 32, minus 2) are valid; mapped ranges are routine."
       }
     ],
     "answer": 1,
@@ -183,11 +183,11 @@
     "id": "virt-isolation-security-q7",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "For ordinary rootful Docker on Linux, which effects are associated with privileged mode, subject to host/runtime configuration? Select all that apply.",
+    "prompt": "For ordinary rootful Docker on Linux, which effects are associated with running a privileged container (`--privileged`), subject to host/runtime configuration? Select all that apply.",
     "options": [
       {
         "text": "Grants all capabilities, including `CAP_SYS_ADMIN`",
-        "explanation": "Correct. Privileged mode gives the container every capability."
+        "explanation": "Correct. A privileged container gets every capability."
       },
       {
         "text": "Disables the default seccomp profile",
@@ -211,7 +211,7 @@
       1,
       2
     ],
-    "workedExample": "Privileged mode broadens capability/device access and relaxes standard seccomp/LSM restrictions. That can expose host resources and should be treated as highly privileged. It does not itself request host PID/network namespaces or add a VM. The actual host disk name and mountability are system-specific.",
+    "workedExample": "Running with `--privileged` broadens capability/device access and relaxes standard seccomp/LSM restrictions. That can expose host resources and should be treated as highly privileged. It does not itself request host PID/network namespaces or add a VM. The actual host disk name and mountability are system-specific.",
     "link": {
       "title": "Running containers — Docker docs",
       "url": "https://docs.docker.com/engine/containers/run/"
@@ -267,11 +267,11 @@
       },
       {
         "text": "It cannot: syscall numbers are the same on every ABI",
-        "explanation": "They are not. On i386, `execve` is 11 and number 59 is a different call."
+        "explanation": "They are not. On the i386 ABI, `execve` is 11 and number 59 is a different call."
       }
     ],
     "answer": 0,
-    "workedExample": "The i386 execve number is 11 rather than native x86-64 number 59, so a denylist ignoring ABI can miss it. Validate supported ABIs and use correct per-ABI rules. Also handle x32 number encoding: x32 shares AUDIT_ARCH_X86_64 and sets __X32_SYSCALL_BIT, so checking arch alone is not enough. Existing threads also require correct filter synchronisation.",
+    "workedExample": "The i386 ABI execve number is 11 rather than native x86-64 number 59, so a denylist ignoring ABI can miss it. Validate supported ABIs and use correct per-ABI rules. Also handle x32 number encoding: x32 shares AUDIT_ARCH_X86_64 and sets __X32_SYSCALL_BIT, so checking arch alone is not enough. Existing threads also require correct filter synchronisation.",
     "link": {
       "title": "Seccomp BPF — Linux kernel documentation",
       "url": "https://docs.kernel.org/userspace-api/seccomp_filter.html"

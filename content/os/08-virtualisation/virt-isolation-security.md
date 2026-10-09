@@ -23,7 +23,7 @@ Native Linux process containers share a host kernel. Its attack surface depends 
 
 ## Capabilities: splitting root
 
-Traditional Unix has two kinds of process: UID 0 can do anything, and everyone else is checked. Linux splits root's power into about 40 **capabilities**. The kernel checks the relevant capability, not the UID, before a privileged action.
+Traditional Unix has two kinds of process: UID 0 can do anything, and everyone else is checked. Linux splits root's power into about 40 **capabilities** (41 on kernels since 5.9, numbered 0 to 40). The kernel checks the relevant capability, not the UID, before a privileged action.
 
 | Capability | Grants |
 |---|---|
@@ -43,7 +43,20 @@ The Moby default list retrieved for this review contains 14 capabilities, includ
 CapEff: 00000000a80425fb
 ```
 
-That is a bitmask, with bit *n* standing for capability number *n*. This Python decodes it:
+That is a bit mask written in hexadecimal. Every capability has a fixed number (CHOWN is 0, SYS_ADMIN is 21), and capability number c owns bit c of the mask:
+
+```formula
+M = Σ 2^c   for all c in C
+where
+M: the capability mask the kernel prints after CapEff, a 64-bit number shown in hexadecimal (base 16)
+C: the set of capability numbers the thread currently holds in its effective set
+c: one capability number, from 0 (CHOWN) up to 40 (CHECKPOINT_RESTORE) on kernels since 5.9
+Σ: sigma, the summation sign: add up the term after it once for every c in C
+2^c: 2 raised to the power c, the value of bit c on its own; for example 2^21 = 2,097,152 = 0x200000
+In words: each capability is one bit; the mask is the sum of those bits' values, so bit c is 1 exactly when capability c is held.
+```
+
+For example, the Docker default above has bits 0, 1, 3–8, 10, 13, 18, 27, 29 and 31 set: 14 bits, so 14 capabilities. Bit 21 (SYS_ADMIN, worth 0x200000) is not set. This Python decodes any mask the same way:
 
 ```
 NAMES = {0: "CHOWN", 1: "DAC_OVERRIDE",
@@ -111,7 +124,7 @@ That is a *denylist*: allow everything except the named calls. Docker's default 
 Filters stack. A process can add more filters but never remove one, and every filter runs, with action precedence deciding the result (and defined rules for equal-precedence data). A filter applies per thread unless explicitly synchronised to other threads.
 
 > [!warning] What seccomp cannot see
-> BPF filters see only register values. They cannot follow pointers, so they cannot inspect a path passed to `open()`. Even if they could, another thread could change the memory after the check (a TOCTOU race). Path-based policy belongs to an LSM. Filters must identify the syscall ABI. Checking arch distinguishes i386 from x86-64, but x32 uses AUDIT_ARCH_X86_64 too and marks syscall numbers with __X32_SYSCALL_BIT; arch alone is insufficient for that case.
+> Classic BPF filters see only register values. They cannot follow pointers, so they cannot inspect a path passed to `open()`. Even if they could, another thread could change the memory after the check (a TOCTOU race). Path-based policy belongs to an LSM. Filters must identify the syscall ABI. Checking arch distinguishes the i386 ABI from x86-64, but x32 uses AUDIT_ARCH_X86_64 too and marks syscall numbers with __X32_SYSCALL_BIT; arch alone is insufficient for that case.
 
 Why bother, if the default profile allows most calls? Because many kernel exploits need a rarely used syscall. CVE-2022-0185 affected filesystem-context handling on vulnerable kernels. An unprivileged attacker could reach the required namespaced CAP_SYS_ADMIN through user namespaces where permitted; already-privileged callers did not need that exact route. A profile blocking the necessary calls can close this path. Kubernetes seccomp defaults and policy must be checked on the actual cluster.
 
@@ -126,7 +139,22 @@ An enforcing LSM policy can deny file access even when a pathname becomes reacha
 
 ## User namespaces: root that isn't
 
-In a user namespace, UID 0 inside the container maps to an unprivileged UID range on the host, say 100000–165535. New user namespaces initially grant capabilities scoped to that user namespace, but runtimes may drop them. Container UID 0 in this example maps to host UID 100000. A mount-visibility escape alone does not grant host-root credentials; a kernel exploit can defeat more than mount isolation.
+In a user namespace, UID 0 inside the container maps to an unprivileged UID range on the host, say 100000–165535. The kernel stores each range as a start inside, a start outside and a length (the three numbers in `/proc/<pid>/uid_map`) and translates by adding a fixed shift:
+
+```formula
+u_host = h_0 + (u_ctr − c_0)
+for c_0 ≤ u_ctr < c_0 + L
+where
+u_host: the user ID (UID) the host kernel sees and checks
+u_ctr: the UID as seen inside the container
+c_0: the first container UID of the mapped range, here 0
+h_0: the first host UID of the range, here 100000
+L: the length of the range: how many UIDs it maps, here 65536
+≤, <: at most, and strictly less than
+In words: a container UID is shifted by a fixed amount into the host range; a UID outside every mapped range cannot be used, and appears as the overflow ID (usually 65534).
+```
+
+With the example range, container UID 0 becomes host UID 100000 + (0 − 0) = 100000, and container UID 1000 becomes 101000. New user namespaces initially grant capabilities scoped to that user namespace, but runtimes may drop them. A mount-visibility escape alone does not grant host-root credentials; a kernel exploit can defeat more than mount isolation.
 
 This is the foundation of **rootless** Podman and Docker. Kubernetes supports it per pod with `hostUsers: false`. The feature is stable as of Kubernetes 1.36.
 
@@ -134,7 +162,7 @@ The trade-off is that user namespaces let unprivileged code reach kernel code th
 
 ## When the shared kernel is the problem
 
-All of the above filters requests to the **host kernel**. A reachable kernel flaw can bypass important protections. Dirty Pipe (CVE-2022-0847) enabled constrained modification of readable file-backed page-cache data on vulnerable kernels, including read-only files; exploitability depended on reachable files and calls. No profile is required to allow splice, and the flaw did not mean every process could overwrite arbitrary host files.
+All of the above filters requests to the **host kernel**. A reachable kernel flaw can bypass important protections. Dirty Pipe (CVE-2022-0847) enabled constrained modification of readable file-backed page-cache data on vulnerable kernels, including read-only files; exploitability depended on reachable files and calls. No profile is required to allow the splice() call, and the flaw did not mean every process could overwrite arbitrary host files.
 
 Runtime bugs matter too. In CVE-2019-5736, a malicious container could overwrite the host's `runc` binary through `/proc/self/exe` while `docker exec` was running, leading to host code execution under the vulnerable runtime's privileges. This is a historical vulnerability, not a claim about patched current releases.
 
@@ -163,7 +191,7 @@ The costs are compatibility (not every syscall or `/proc` file is implemented) a
 
 Firecracker (AWS, written in Rust) is a KVM-based virtual machine monitor stripped down to almost nothing. It offers virtio-net, virtio-block, virtio-vsock, a serial console and a partial keyboard controller (used only to reset the VM). There is no BIOS, no PCI bus by default and no USB or GPU emulation.
 
-Firecracker publishes configuration-specific targets: at most 125 ms from InstanceStart to guest /sbin/init and at most 5 MiB VMM overhead under its documented small-VM, tuned-kernel host conditions. These exclude guest RAM and have workload/configuration caveats; they are not universal end-to-end launch figures or capacity guarantees. The project documents use in Lambda and Fargate. A guest kernel remains behind a virtualisation boundary.
+Firecracker publishes configuration-specific targets: at most 125 ms from InstanceStart to guest /sbin/init and at most 5 MiB VMM overhead under its documented small-VM, tuned-kernel host conditions. These exclude guest RAM and have workload/configuration caveats; they are not universal end-to-end launch figures or capacity guarantees. The project documents use in AWS Lambda and AWS Fargate. A guest kernel remains behind a virtualisation boundary.
 
 Defence in depth continues outside the VM. For a hardened deployment, the **jailer** sets up host-side restrictions such as chroot, namespaces, cgroups and reduced privileges; Firecracker applies its thread-specific seccomp filters. The jailer limits the VMM's host privileges; the outcome of any escape depends on the vulnerability and deployment. A guest-kernel compromise alone is not the same as executing host VMM code.
 

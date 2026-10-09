@@ -14,7 +14,7 @@ An operating system assumes it owns the machine. It expects to run in the CPU's 
 
 - **Consolidation.** Separate lightly loaded physical servers can share one host as VMs, potentially reducing hardware, power and space when capacity and isolation requirements permit.
 - **Isolation.** A guest kernel panic is normally confined to that VM. Hypervisor/device-model vulnerabilities, shared resources and host failures can still affect other guests.
-- **Encapsulation.** A VM has disk, memory, CPU and virtual-device state. Supported configurations can snapshot or migrate that state; external services, passthrough devices and destination compatibility can constrain this.
+- **Encapsulation.** A VM has disk, memory, CPU and virtual-device state. Supported configurations can snapshot or live-migrate that state; external services, passthrough devices and destination compatibility can constrain this.
 - **Compatibility.** Run Windows on a Linux host, or a 2008-era OS that would never boot on today's hardware.
 - **The cloud.** Cloud virtual-machine offerings use hypervisors to share hardware. Bare-metal offerings such as EC2 metal instances are an exception; cloud provisioning itself does not require a guest hypervisor.
 
@@ -166,7 +166,7 @@ Paravirtualisation survived in a different form. Instead of rewriting the whole 
 
 - **"VMs are slow."** CPU-bound code can approach native speed, but there is no universal overhead percentage. The costs show up in I/O, in memory-heavy workloads (address translation) and in anything that causes many exits.
 - **Timing is not virtualised perfectly.** Popek and Goldberg exempted timing from equivalence on purpose. A guest can detect it is virtualised by timing instructions, which malware uses to hide from sandboxes.
-- **Overcommit.** Hypervisors can promise more vCPUs or memory than exist. Overcommit can improve utilisation but is not required for consolidation. Contention can produce noisy-neighbour effects and steal time: reported periods when a vCPU was runnable but not scheduled.
+- **Overcommit.** Hypervisors can promise more vCPUs or memory than exist. Overcommit can improve utilisation but is not required for consolidation. CPU contention can produce noisy-neighbour effects and steal time: reported periods when a vCPU was runnable but not scheduled.
 
 ## Key takeaways
 
@@ -177,7 +177,7 @@ Paravirtualisation survived in a different form. Instead of rewriting the whole 
 - VMware's binary translation and Xen's paravirtualisation worked around x86 until hardware support arrived; paravirtual *drivers* are still everywhere.
 
 > [!note] Evidence gaps
-> No reproducible benchmark supports a universal VM overhead, interpretation slowdown or historical server-utilisation percentage here, so those figures are omitted. Snapshot/migration support and isolation depend on the actual platform and configuration.
+> No reproducible benchmark supports a universal VM overhead, interpretation slowdown or historical server-utilisation percentage here, so those figures are omitted. Snapshot/live-migration support and isolation depend on the actual platform and configuration.
 
 ## Further reading
 

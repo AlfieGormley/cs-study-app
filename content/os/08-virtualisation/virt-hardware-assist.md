@@ -85,10 +85,49 @@ Nested paging normally lets guest page-table writes proceed without shadow-table
 
 The catch is the cost of a **TLB miss**. Every pointer in the guest's page-table walk is itself a guest-physical address that must be translated through the nested tables.
 
-> [!example] Counting a two-dimensional walk
-> With n guest levels and m nested levels, an idealised uncached walk with ordinary pages reads (n + 1)(m + 1) − 1 page-table entries, excluding the final data access and accessed/dirty-bit update traffic. For 4-level guest and 4-level EPT tables that is 5 × 5 − 1 = **24 memory references**, against 4 natively. Five guest-physical addresses need translating (the guest CR3, the three lower table addresses and the final data address), each by a 4-step nested walk: 20. Add the 4 guest entries themselves: 24.
+### Counting a two-dimensional walk
 
-In practice, TLBs and page-walk caches hide most of this, and **huge pages** help a lot. With 2 MiB leaves in a four-level EPT (3 entries traversed), the worst case falls to 4 × 3 + 4 + 3 = 19; with compatible 2 MiB mappings in both stages, it falls further. A 2 MiB translation covers 512 times the bytes of a 4 KiB translation, but TLB entry counts and achieved performance differ by page size and CPU.
+How many memory reads does one TLB miss cost? The guest's walk reads one entry per guest level. Every table address it follows, and the final data address, is a guest-physical address, so each needs its own walk through the nested tables. This formula counts the reads for an idealised walk with ordinary (4 KiB) pages and nothing cached:
+
+```formula
+R_2D = (n + 1) × m + n
+R_2D = (n + 1) × (m + 1) − 1
+where
+R_2D: the number of page-table entries read from memory for one complete two-dimensional (guest plus nested) walk. It excludes the final data access and any accessed/dirty-bit updates
+n: the number of levels in the guest's own page tables, typically 4 on x86-64 (5 with five-level paging)
+m: the number of levels in the nested (EPT or NPT) tables, typically 4
+In words: n + 1 guest-physical addresses (the guest CR3, the n − 1 lower table addresses and the final data address) each need an m-step nested walk, plus the n guest entries themselves; tidied up, that is (n + 1) × (m + 1) − 1.
+```
+
+For 4-level guest tables and 4-level EPT:
+
+```formula
+R_2D = (n + 1) × (m + 1) − 1
+R_2D = (4 + 1) × (4 + 1) − 1
+R_2D = 24
+where
+R_2D: page-table entries read for one uncached nested walk
+n: guest page-table levels, here 4
+m: nested (EPT) page-table levels, here 4
+In words: a 4-by-4 nested walk reads 24 page-table entries, against 4 for the same walk on bare metal.
+```
+
+Five guest-physical addresses need translating (the guest CR3, the three lower table addresses and the final data address), each by a 4-step nested walk: 20 reads. Add the 4 guest entries themselves: **24 memory references**. The model assumes every walk misses every cache; real hardware almost never pays the full 24.
+
+In practice, TLBs and page-walk caches hide most of this, and **huge pages** help a lot. A 2 MiB EPT leaf ends each nested walk one level early, so each nested walk reads 3 entries instead of 4:
+
+```formula
+R_2D = (n + 1) × m_eff + n
+R_2D = (4 + 1) × 3 + 4
+R_2D = 19
+where
+R_2D: page-table entries read for one uncached nested walk
+n: guest page-table levels, here 4, with ordinary 4 KiB guest pages
+m_eff: nested-table entries actually read per nested walk; 3 when the EPT maps 2 MiB pages, instead of 4
+In words: 2 MiB pages in the nested tables cut the worst case from 24 reads to 19; huge pages in both stages cut it further.
+```
+
+A 2 MiB translation covers 512 times the bytes of a 4 KiB translation (2 MiB ÷ 4 KiB = 512), but TLB entry counts and achieved performance differ by page size and CPU.
 
 A further feature, **VPID** (AMD: ASID), tags TLB entries with the VM they belong to, so the TLB need not be flushed on every VM entry and exit.
 
@@ -139,33 +178,68 @@ NIC switching and VF-to-VF connectivity depend on hardware and configuration. Cl
 
 Because a VM is just state, you can move a running one between hosts: to patch a host, drain failing hardware or rebalance load. The standard technique is **pre-copy** (Clark et al., NSDI 2005):
 
-1. Copy all guest memory to the destination while the VM keeps running. Track pages the guest **dirties** during the copy (the hypervisor write-protects pages or uses hardware dirty logging).
+1. Copy all guest memory to the destination while the VM keeps running. Record pages the guest **dirties** during the copy (the hypervisor write-protects pages or uses hardware dirty logging).
 2. Copy dirty pages again. Rounds shrink only when the effective dirty set and transfer capacity permit convergence.
 3. When the remaining dirty set is small enough, **pause** the VM, copy the last dirty pages plus CPU and device state.
-4. Resume on the destination; redirect network traffic (for example, with a gratuitous ARP).
+4. Resume on the destination; steer network traffic to the new host (for example, with a gratuitous ARP).
 
 The pause in step 3 is the **downtime**. Its duration depends on remaining state, device handling, transfer rate and orchestration; no universal downtime range is asserted here.
 
-> [!example] Will it converge?
-> In a decimal-unit toy model, a 16 GB VM has an effective 1.25 GB/s copy rate and 200 MB/s of distinct newly dirty page data. Assume constant rates and no protocol/state-transfer overhead; a nominal 10 Gbit/s link does not guarantee that effective rate.
-> - Round 1: 16 GB takes 12.8 s; 2.56 GB dirtied meanwhile.
-> - Round 2: 2.56 GB takes 2.05 s; 410 MB dirtied.
-> - Round 3: 410 MB takes 0.33 s; 66 MB dirtied.
-> - Stop before round 4 and copy the remaining roughly 66 MB while paused: about 52 ms of memory-transfer time, plus CPU/device and switchover work.
->
-> In this model each round shrinks by 0.16. If distinct dirty-page production stays at least as fast as effective copying, the set need not shrink. Raw write bandwidth alone is insufficient: repeatedly writing an already-dirty page does not add another page to the set.
+### Will it converge?
+
+Whether pre-copy ever finishes depends on two rates: how fast the hypervisor can copy memory, and how fast the guest dirties *distinct* pages. Each round copies whatever the guest dirtied while the previous round was copying:
+
+```formula
+r = d / b
+t_k = D_k / b
+D_{k+1} = d × t_k = r × D_k
+where
+r: the shrink ratio: each round's data as a fraction of the previous round's (no unit)
+d: the rate at which the guest dirties distinct pages, in gigabytes per second (GB/s)
+b: the effective copy rate actually achieved, in GB/s (not the link's nominal speed)
+D_k: the data copied in round k, in gigabytes (GB); round 1 copies all guest memory
+t_k: the time round k takes, in seconds (s)
+D_{k+1}: the data dirtied during round k, which round k + 1 must copy, in GB
+In words: every round copies what the guest managed to dirty during the previous round, so the remaining data shrinks by the factor r each round while r is below 1, and never shrinks if r is 1 or more.
+```
+
+A decimal-unit toy model: a 16 GB VM, an effective 1.25 GB/s copy rate and 0.2 GB/s (200 MB/s) of distinct newly dirtied page data. Assume constant rates and no protocol or state-transfer overhead; a nominal 10 Gbit/s link does not guarantee that effective rate.
+
+```formula
+r = 0.2 GB/s / 1.25 GB/s = 0.16
+t_1 = 16 GB / 1.25 GB/s = 12.8 s
+D_2 = 0.2 GB/s × 12.8 s = 2.56 GB
+t_2 = 2.56 GB / 1.25 GB/s ≈ 2.05 s
+D_3 = 2.56 GB × 0.16 = 0.4096 GB
+t_3 = 0.4096 GB / 1.25 GB/s ≈ 0.33 s
+D_4 = 0.4096 GB × 0.16 ≈ 0.0655 GB
+t_4 = 0.0655 GB / 1.25 GB/s ≈ 0.052 s
+where
+r: the shrink ratio, dirtying rate divided by copy rate (no unit)
+t_1, t_2, t_3, t_4: the time each copy round takes, in seconds (s)
+D_2, D_3, D_4: the data dirtied during the previous round, which this round must copy, in gigabytes (GB)
+GB: gigabyte, 1,000,000,000 bytes (decimal units in this model); 0.4096 GB ≈ 410 MB and 0.0655 GB ≈ 66 MB
+GB/s: gigabytes per second
+s: seconds
+≈: approximately equal to (rounded)
+In words: with a shrink ratio of 0.16, the data left to copy falls from 16 GB to about 66 MB in three rounds.
+```
+
+So stop before round 4 and copy the remaining roughly 66 MB while paused: about 52 ms of memory-transfer time, plus CPU/device and switchover work.
+
+The model shows when pre-copy fails. If distinct dirty-page production *d* stays at least as fast as effective copying *b*, then *r* is 1 or more and the set need not shrink. Raw write bandwidth alone is insufficient: repeatedly writing an already-dirty page does not add another page to the set.
 
 For write-heavy guests, hypervisors have fallbacks:
 
 - **Auto-converge**: throttle the guest's vCPUs so it dirties memory more slowly.
 - **Post-copy**: move CPU state first, start the VM on the destination, and fetch pages on demand as it faults on them. This can shorten the stop phase, but missing-page faults stall execution. If indispensable pages exist only on the source when it fails, the destination cannot reconstruct them.
 
-SR-IOV is the awkward case: VF state lives in hardware and requires explicit device/driver migration support to export and restore. Common workarounds are to hot-unplug the VF and fail over to virtio during migration, or to use devices designed with migration support.
+SR-IOV is the awkward case: VF state lives in hardware and requires explicit device/driver live-migration support to export and restore. Common workarounds are to hot-unplug the VF and fail over to virtio during live migration, or to use devices designed with live-migration support.
 
 ## Pitfalls
 
 - **Nested virtualisation** (a hypervisor inside a VM) is supported by some KVM configurations and cloud instance types. Exposed CPU features and provider restrictions matter; extra translation and exit handling can add cost, but there is no fixed per-level multiplier.
-- **CPU feature masking.** A VM migrated to an older CPU model would crash on missing instructions, so clusters advertise a common baseline (for example, a named QEMU CPU model) instead of the host's real features.
+- **CPU feature masking.** A VM live-migrated to an older CPU model would crash on missing instructions, so clusters advertise a common baseline (for example, a named QEMU CPU model) instead of the host's real features.
 - **Huge pages in the guest only** help less than you hope if the host backs memory with 4 KB pages.
 
 ## Key takeaways

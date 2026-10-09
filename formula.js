@@ -45,9 +45,10 @@ export function parseFormula(source) {
 }
 
 // Symbols used in a piece of formula text. Numbers (including 1e-3, 0x1F) and quoted strings are not symbols.
+// A quote straight after a letter, digit or bracket is a prime mark (A', f'(x)), not the start of a string.
 export function symbols(text) {
   const stripped = String(text)
-    .replace(/"[^"]*"|'[^']*'(?![′'])/g, ' ')
+    .replace(/"[^"]*"|(?<![\p{L}\p{N}_)\]′'])'[^'\n]*'(?![′'])/gu, ' ')
     .replace(/(?<![\w{])(?:0x[0-9a-f]+|0b[01]+|\d+(?:\.\d+)?(?:e[+-]?\d+)?)/gi, ' ');
   return [...new Set((stripped.match(TOKEN) || []).map((t) => t.replace(/_\{([^}]*)\}$/, '_$1')))];
 }

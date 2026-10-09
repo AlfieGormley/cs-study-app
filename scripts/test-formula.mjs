@@ -11,6 +11,10 @@ test('symbols: Greek splits, Latin runs stay whole, numbers are not symbols', ()
   assert.deepEqual(symbols('x = 1.5e3 + 0x1F'), ['x']);
   assert.deepEqual(symbols('V_out = V_in × R_2'), ['V_out', 'V_in', 'R_2']);
 });
+test('a quote after a letter is a prime, not a string', () => {
+  assert.deepEqual(symbols("Y = A' + B'"), ['Y', "A'", "B'"]);
+  assert.deepEqual(symbols("s = 'abc' + t"), ['s', 't']);
+});
 test('every symbol must be defined', () => {
   assert.deepEqual(checkFormula(good), []);
   assert.match(checkFormula('f = c / λ').join(), /where/);

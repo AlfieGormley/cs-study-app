@@ -186,7 +186,7 @@ For a left-associative operator, the recursive call demands a *stronger* operato
 2 ^ (3 ^ 2) = 2^9 = 512
 (2 ^ 3) ^ 2 = 8^2 = 64
 where
-^: "raised to the power": the left number multiplied by itself as many times as the right number says, so 3 ^ 2 = 3 × 3 = 9 and 2 ^ 3 = 2 × 2 × 2 = 8
+^: "raised to the power": as many copies of the left number multiplied together as the right number says, so 3 ^ 2 = 3 × 3 = 9 and 2 ^ 3 = 2 × 2 × 2 = 8
 2^9: 2 raised to the power 9 (nine 2s multiplied together)
 8^2: 8 raised to the power 2, which is 8 × 8
 In words: right associativity works out the top exponent first, so `2 ^ 3 ^ 2` means 2 to the power 9, which is 512, not 8 squared, which is 64.

@@ -246,7 +246,7 @@ C(n): the total number of calls made to evaluate fib(n), counting the first call
 n: the argument passed to fib, a whole number
 F(n): the n-th Fibonacci number: F(0) = 0, F(1) = 1, and each later one is the sum of the two before it (F(31) = 1,346,269)
 φ: phi, the golden ratio, (1 + √5) / 2 ≈ 1.618; consecutive Fibonacci numbers grow by about this factor
-φ^n: φ multiplied by itself n times
+φ^n: n copies of φ multiplied together
 √: square root
 1.45: the constant 2 × φ / √5 ≈ 1.447, which comes from Binet's closed-form formula for Fibonacci numbers
 ≈: approximately equal to

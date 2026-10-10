@@ -65,7 +65,7 @@ X = [1, 2], Y = [].
 
 ### Backtracking search
 
-Prolog answers a query by **depth-first search with backtracking** (formally, SLD resolution). It tries clauses top to bottom and goals left to right. When a goal fails, it backs up to the most recent choice and tries the next alternative.
+Prolog answers a query by **depth-first search with backtracking** (formally, SLD resolution). It tries clauses top to bottom and goals left to right. When a goal fails, it backtracks to the most recent choice and tries the next alternative.
 
 ```
 ?- ancestor(tom, W)

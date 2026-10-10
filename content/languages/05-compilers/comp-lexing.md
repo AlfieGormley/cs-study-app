@@ -218,7 +218,7 @@ where
 S_DFA: the number of states in the smallest DFA for the language
 S_NFA: the number of states in the simple NFA for the same language
 n: how far from the end the required `a` must be (n = 3 means the third character from the end)
-2^n: 2 multiplied by itself n times: each of the last n characters is one of 2 letters, and every different history needs its own state
+2^n: n copies of 2 multiplied together: each of the last n characters is one of 2 letters, and every different history needs its own state
 In words: each extra position the DFA must remember doubles its number of states, while the NFA grows by only one state.
 ```
 
@@ -232,7 +232,7 @@ W = 2^{29} ≈ 5.4 × 10^8   when k = 30
 where
 W: the number of ways to split a run of `a`s into one or more non-empty groups; a backtracking engine may try each one before giving up
 k: the number of `a` characters in the input
-2^{k−1}: 2 multiplied by itself k − 1 times: each of the k − 1 gaps between neighbouring `a`s either is or is not a group boundary
+2^{k−1}: k − 1 copies of 2 multiplied together: each of the k − 1 gaps between neighbouring `a`s either is or is not a group boundary
 ≈: approximately equal to
 In words: every extra `a` doubles the number of splits to try, so the matching time grows exponentially with the input length.
 ```

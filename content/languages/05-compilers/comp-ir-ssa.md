@@ -413,7 +413,7 @@ x × 8 = x × 2^3 = x << 3
 where
 x: an integer value
 k: how many places the bits move, a whole number from 0 upwards
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 <<: left shift: move every bit of the left operand k places towards the more significant end, filling the gap with zeros
 In words: shifting left by k places doubles the value k times, so ×2 is a shift by 1 and ×8 a shift by 3.
 ```

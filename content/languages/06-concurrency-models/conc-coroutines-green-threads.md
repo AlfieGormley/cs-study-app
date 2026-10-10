@@ -154,7 +154,7 @@ where
 S_k: the goroutine's stack size after it has been grown k times, in kibibytes (KiB)
 S_0: the initial stack size, 2 KiB in the cited implementation
 k: the number of times the stack has been grown; each growth doubles it
-2^k: 2 multiplied by itself k times (2^3 = 2 × 2 × 2 = 8)
+2^k: k copies of 2 multiplied together (2^3 = 2 × 2 × 2 = 8)
 KiB: kibibyte, 1,024 bytes
 In words: each growth doubles the stack, so three growths take a 2 KiB stack to 16 KiB, and a deeply recursive goroutine reaches 1 MiB after nine growths.
 ```

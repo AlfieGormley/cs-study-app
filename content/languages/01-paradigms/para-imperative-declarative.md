@@ -127,8 +127,8 @@ React compares the new description with the previous one and computes DOM update
 
 **Kubernetes** continuously reconciles declared desired state, such as three Pod replicas, against observed state. When replicas disappear its controllers attempt to restore them, subject to capacity and scheduling constraints. **Terraform** also declares desired infrastructure, but normally refreshes and reconciles during explicit plan/apply runs; it is not a continuously running self-healing controller. Imperative scripts can also run repeatedly and inspect state if programmed to do so.
 
-> [!tip] Declarative interface, imperative engine
-> Declarative systems are almost always built on imperative code. The SQL planner, React's reconciler and Kubernetes controllers are imperative programs. The paradigm describes the interface you work with, not what happens all the way down.
+> [!tip] Declarative surface, imperative engine
+> Declarative systems are almost always built on imperative code. The SQL planner, React's reconciler and Kubernetes controllers are imperative programs. The paradigm describes the layer you work with, not what happens all the way down.
 
 A useful goal of desired-state operations is **idempotence** under stable inputs and provider behavior: applying the same declaration twice gives the same result as applying it once. Written as a formula, an operation is idempotent when:
 

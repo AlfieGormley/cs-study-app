@@ -224,7 +224,7 @@ where
 P: the probability that at least one of the n backends responds slowly
 p: the probability that any one backend is slow, 1% = 0.01
 n: the number of backends the request waits for, 100 here
-(1 − p)^n: the chance that all n are fast: (1 − p) multiplied by itself n times
+(1 − p)^n: the chance that all n are fast: n copies of (1 − p) multiplied together
 ≈: approximately equal to (rounded)
 In words: with 100 backends each slow 1% of the time, about 63% of fan-out requests wait for at least one slow response.
 ```

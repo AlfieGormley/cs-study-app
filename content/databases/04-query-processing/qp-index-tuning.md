@@ -48,7 +48,7 @@ where
 m: the average number of matching rows on each heap page
 r_page: the number of rows on each heap page, about 136 for `orders`
 s: the selectivity: the fraction of rows that match, here 0.037 (3.7%) for one quarter
-p_none: the probability that a page holds no matching row, if each row matches independently at random; (1 − s) multiplied by itself once per row on the page
+p_none: the probability that a page holds no matching row, if each row matches independently at random; one factor of (1 − s) per row on the page, all multiplied together
 P: the number of heap pages in the table, 7,353
 P_hit: the expected number of heap pages holding at least one matching row
 ≈: approximately equal to
@@ -236,7 +236,7 @@ Check over weeks of traffic, and on replicas, before dropping anything. Also loo
 1. Find the queries that matter with `pg_stat_statements`, ordered by `total_exec_time` (the run time of every call added together, so a fast query called a million times can outrank a slow one called once), not just the slowest single run.
 2. Get `EXPLAIN (ANALYZE, BUFFERS)` on production-sized data.
 3. Design an index for the query: equality columns, then sort, then range; add `INCLUDE` columns only if an index-only scan is worth the size.
-4. Build it without blocking writes: `CREATE INDEX CONCURRENTLY`. It's slower, and if it fails it leaves an invalid index you must drop.
+4. Build it without blocking writes: `CREATE INDEX CONCURRENTLY`. It's slower, and if it fails it leaves an INVALID index you must drop.
 5. Re-run EXPLAIN and compare buffers and time. Watch write latency afterwards.
 
 ## Key takeaways

@@ -350,7 +350,7 @@ where
 G_ROLLUP: how many groupings ROLLUP computes: the full list, then each shorter prefix, down to the empty grouping (the grand total)
 G_CUBE: how many groupings CUBE computes: every subset of the listed columns
 k: the number of columns listed inside ROLLUP or CUBE, here 1 (city)
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 N: the rows in this ROLLUP (c.city) result: 3 city rows plus 1 grand-total row
 In words: ROLLUP of k columns makes k + 1 levels of subtotal, while CUBE makes every combination, 2^k of them; each grouping set contributes one row per distinct value combination.
 ```

@@ -62,7 +62,7 @@ where
 x: any value a binary floating-point number can hold exactly
 m: a whole number, the significand; a 64-bit double has 53 bits for it, so up to about 9 × 10^15
 e: a whole-number exponent, which can be negative (2^−3 = 1/8)
-2^e: two multiplied by itself e times; a negative e means dividing by two that many times
+2^e: e copies of two multiplied together; a negative e means dividing by two that many times
 In words: a float can only store fractions whose denominator (the number below the line) is a power of two, such as 1/2, 3/8 or 5/1024. A tenth has a factor of 5 below the line, so no choice of m and e gives exactly 0.1, and the nearest storable value is used instead.
 ```
 
@@ -89,7 +89,7 @@ Avoid `real`, `float` and `double precision` for money. Also avoid PostgreSQL's 
 
 ### Dates and times
 
-PostgreSQL has real types. Use `date` for calendar dates and `timestamptz` (timestamp with time zone) for moments in time. `timestamptz` stores an absolute instant, internally in UTC, and converts to the session's time zone on display. Plain `timestamp` stores a wall-clock reading with no zone, which becomes ambiguous the moment two servers or users disagree on time zone or a clock change happens. PostgreSQL's own wiki says to prefer `timestamptz`.
+PostgreSQL has real types. Use `date` for calendar dates and `timestamptz` (timestamp with time zone) for moments in time. `timestamptz` stores an absolute instant, internally in UTC, and converts to the session's time zone on display. Plain `timestamp` stores a wall-clock reading with no zone, which becomes ambiguous the moment two servers or users disagree on time zone or a daylight-saving clock change happens. PostgreSQL's own wiki says to prefer `timestamptz`.
 
 SQLite has no date type. Store ISO-8601 text (`'2026-03-09'`, or `'2026-03-09T14:30:00Z'` in UTC). It only sorts correctly if every value uses the same zero-padded format:
 

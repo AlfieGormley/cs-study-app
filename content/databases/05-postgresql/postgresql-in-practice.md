@@ -252,9 +252,9 @@ H = N_xid / 2 = 2^31 XIDs
 H = 2147483648 XIDs
 where
 N_xid: the total number of different values a 32-bit transaction ID can hold, about 4.3 billion
-2^32: 2 multiplied by itself 32 times; each of the 32 bits doubles the number of possible values
+2^32: 32 copies of 2 multiplied together; each of the 32 bits doubles the number of possible values
 H: the comparison horizon: for any XID, how many XIDs count as older than it; the same number count as newer
-2^31: 2 multiplied by itself 31 times, half of 2^32
+2^31: 31 copies of 2 multiplied together, half of 2^32
 XIDs: transaction IDs, the unit counted here; each writing transaction uses one
 In words: any transaction ID can only look about 2.1 billion IDs into the past; anything further back would appear to be in the future.
 ```

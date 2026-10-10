@@ -149,7 +149,7 @@ For portable relational schemas, choose one of three mappings. PostgreSQL also h
 |---|---|---|
 | Single table | one, with type column | many NULLs |
 | Class table | parent + one per subtype | joins |
-| Concrete table | one per subtype | no shared key |
+| Concrete table | one per subtype | no key common to all subtypes |
 
 **Single-table inheritance** puts every column in one table with a `kind` discriminator. It is fast and simple, but subtype columns must be nullable, so declare kind NOT NULL and use CHECK constraints to keep them coherent:
 

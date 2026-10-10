@@ -219,7 +219,7 @@ The iterator model pays a function call per row per operator. That overhead is n
 
 - **Vectorised execution** (DuckDB, ClickHouse, Snowflake): `next()` returns a batch of around a thousand values from one column at a time, so loops are tight and CPU-cache friendly.
 - **Compiled execution** (HyPer, Umbra, SingleStore): the plan is compiled to machine code that fuses operators into a single loop. Postgres has a limited form of this: it can **JIT-compile** expressions with LLVM for expensive queries.
-- **Parallel execution**: Postgres can split a scan across worker processes and gather their results through a `Gather` node. You'll see `Gather` and `Parallel Seq Scan` in real plans on big tables.
+- **Parallel query**: Postgres can split a scan across worker processes and gather their results through a `Gather` node. You'll see `Gather` and `Parallel Seq Scan` in real plans on big tables.
 
 The ideas in this module (plans as trees, join algorithms, cost estimation) apply to all of them.
 

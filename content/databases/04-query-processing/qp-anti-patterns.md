@@ -3,7 +3,7 @@ id: qp-anti-patterns
 title: Common performance anti-patterns
 level: advanced
 minutes: 17
-summary: The query shapes that defeat the planner. Non-sargable predicates, type mismatches, OFFSET pagination, NOT IN, correlated subqueries, DISTINCT as a join fix, OR across columns, N+1 queries, generic plans and exact counts, each with an illustrative plan and a possible rewrite.
+summary: The query shapes that defeat the planner. Non-sargable predicates, type mismatches, OFFSET pagination, NOT IN, correlated subqueries, DISTINCT as a join fix, OR across columns, N+1 queries, generic plans and exact row counts, each with an illustrative plan and a possible rewrite.
 ---
 
 > [!note] Content gap: benchmark provenance
@@ -298,7 +298,7 @@ In words: without knowing the parameter, the planner expects a third of the tabl
 
 It also can't use the partial index, because it can't prove the parameter is 'pending'. If most calls ask for rare values, every call now scans the table. Fixes: `SET plan_cache_mode = force_custom_plan` for that session or role, or write separate statements for the rare and common cases.
 
-## 11. Exact counts and SELECT *
+## 11. Exact row counts and SELECT *
 
 `SELECT count(*) FROM orders` read every page: 48 ms here, minutes on a billion-row table. Postgres has no stored row count, because under MVCC different transactions may legitimately see different counts. If an estimate will do (a "~1.2M results" label), read `reltuples` from `pg_class`, or the row estimate from EXPLAIN.
 

@@ -17,7 +17,7 @@ Four different-looking definitions, one answer. That convergence is the foundati
 
 It is called a **thesis**, not a theorem, because "effective procedure" is an informal idea. You cannot prove that an informal notion equals a formal one. You can only gather evidence. The evidence is overwhelming:
 
-- **Standard models of effective computation agree.** λ-calculus, μ-recursive functions, register (RAM) machines, two-counter Minsky machines, Post tag systems, Conway's Game of Life and the one-dimensional cellular automaton Rule 110 have universal variants or encodings. Rule 110 universality uses suitable repeating backgrounds; these results concern idealised unbounded resources. Oracle machines and proposed hypercomputers are different models, not counterexamples established as effective procedures.
+- **Standard models of effective computation agree.** λ-calculus, μ-recursive functions, register machines (random-access machines), two-counter Minsky machines, Post tag systems, Conway's Game of Life and the one-dimensional cellular automaton Rule 110 have universal variants or encodings. Rule 110 universality uses suitable repeating backgrounds; these results concern idealised unbounded resources. Oracle machines and proposed hypercomputers are different models, not counterexamples established as effective procedures.
 - **General-purpose languages with suitable operations** can simulate a TM under unbounded-resource idealisation. Loops plus memory alone are not a proof: a PDA can loop and has an unbounded stack, but its restricted memory access limits its power.
 - **Nobody has found a counterexample**: a function that is clearly computable by some mechanical method but not by any TM.
 
@@ -25,7 +25,27 @@ The thesis is what makes the theorems of this module matter. "No TM decides the 
 
 ## The λ-calculus in Python
 
-Church's model has only three things: variables, function definition (λx. body) and function application. No numbers, no loops. Numbers can be encoded as functions: the **Church numeral** n means "apply f n times".
+Church's model has only three things: variables, function definition (λx. body, "the function that takes x and returns body") and function application. No numbers, no loops. Numbers can be encoded as functions: the **Church numeral** for n means "apply f n times".
+
+```formula
+c_0 = λf. λx. x
+c_2 = λf. λx. f(f(x))
+succ = λn. λf. λx. f(n(f)(x))
+c_2(g)(0) = g(g(0)) = 2   with g(k) = k + 1
+where
+λ: lambda: λx. … defines an anonymous function whose input is called x and whose result is the expression after the dot
+f: the function to be applied repeatedly
+x: the starting value f is applied to
+c_0, c_2: the Church numerals for 0 and 2: "apply f zero times" and "apply f twice"
+succ: the successor function: turns the numeral for n into the numeral for n + 1 by applying f once more
+n: a Church numeral (itself a function)
+n(f)(x): apply n to f, then apply the result to x: "apply f n times to x"
+g: an ordinary function that adds 1, used to decode a numeral back into a number
+k: the input to g
+In words: a number is represented by the act of doing something that many times; feeding it "add 1" and 0 turns it back into an ordinary number.
+```
+
+The Python below writes exactly these definitions with `lambda`, and `to_int` is the decoding step in the last line.
 
 ```python
 zero = lambda f: lambda x: x
@@ -51,11 +71,19 @@ In the untyped λ-calculus, a **fixed-point combinator**, such as Y, supplies re
 
 Turing's most important idea was not the machine but the **universal machine** U. A TM's rules are a finite table, so they can be written as a string, written ⟨M⟩. U takes ⟨M⟩ and an input w on its tape and simulates M on w:
 
+```formula
+U(⟨M⟩, w) = M(w)
+where
+U: the universal Turing machine, one fixed machine
+M: any Turing machine
+⟨M⟩: angle brackets: the encoding of M, its rule table written out as a string of symbols so another machine can read it
+w: the input string for M
+U(⟨M⟩, w): what U does when its tape holds the encoding of M followed by w
+M(w): the outcome of running M on w: accept, reject or run forever
+In words: given a description of any machine and an input, U does exactly what that machine would do on that input, including running forever if it would.
 ```
-U(⟨M⟩, w) = accept  if M accepts w
-            reject  if M rejects w
-            loops   if M loops on w
-```
+
+So U accepts if M accepts w, rejects if M rejects w, and loops if M loops on w. Feed U the encoding of the binary increment machine and the input `1011`, and U ends with `1100` on its simulated tape, just as the machine itself would.
 
 U is a single fixed machine that can simulate any encoded TM. It demonstrates the programs-as-data idea behind interpreters. The previous lesson's Python simulator illustrates this, with `delta` as the encoded rules, but its step cap makes each call a bounded simulation. CPython and the JVM are practical interpreters with resource limits; a CPU decoder alone is not a universal machine. Universality concerns the whole effective computing system with unbounded storage and execution.
 
@@ -112,7 +140,7 @@ print(bf("++++++++[>++++++++<-]>+."))  # A
 
 Because the bar is so low, systems keep crossing it by accident:
 
-- **C++ templates** can express universal computation when compiler resource and instantiation-depth limits are idealised away.
+- **C++ templates** can express universal computation when compiler resource limits and limits on how deeply templates nest are idealised away.
 - **x86-style `mov` operations**, plus a final unconditional jump back to the start, simulate a TM in Stephen Dolan's 2013 construction. It assumes unbounded addressable memory; a finite straight-line sequence of `mov` instructions alone is not universal.
 - **SQL with recursive CTEs and suitable data operations** can encode TM simulation when storage and value sizes are unbounded. PostgreSQL `WITH RECURSIVE` supplies iteration, but the keyword alone is not a proof and a real database has finite resource/type limits.
 - **Magic: The Gathering** has a card combination that simulates a universal TM (Churchill, Biderman and Herrick, 2019).
@@ -125,12 +153,12 @@ Turing completeness has a price: as lesson 6 shows, every non-trivial property o
 | System | Restriction | Benefit |
 |---|---|---|
 | Formal regular expressions | finite automata | linear input scan for a fixed DFA |
-| eBPF in Linux | verifier restricts accepted programs, including loop bounds | termination and safety checks under its model; not a guarantee against implementation bugs |
+| eBPF in Linux | verifier restricts accepted programs, including loop bounds | termination and safety checking under its model; not a guarantee against implementation bugs |
 | Bitcoin Script | no loops | every script terminates |
 | Starlark core | no recursion, finite iteration | core evaluation terminates; extensions and external build commands need separate analysis |
 | Total fragments of Agda and Rocq; Dhall | termination restrictions | stronger evaluation guarantees; Agda/Rocq also have guarded coinduction and features requiring separate treatment |
 
-Ethereum bounds transaction execution with **gas**. Continuing computation consumes the finite budget; some terminating instructions, including `STOP`, have zero base cost, so it is false that every instruction costs at least one gas. A transaction eventually stops normally, exceptionally or out of gas. This guarantees termination under EVM semantics, not successful completion or a wall-clock deadline. Calling the EVM Turing complete also idealises away its actual resource and fixed-width addressing limits.
+Ethereum bounds the execution of each Ethereum transaction with **gas**. Continuing computation consumes the finite budget; some terminating instructions, including `STOP`, have zero base cost, so it is false that every instruction costs at least one gas. Every Ethereum transaction eventually stops normally, exceptionally or out of gas. This guarantees termination under EVM semantics, not successful completion or a wall-clock deadline. Calling the EVM Turing complete also idealises away its actual resource and fixed-width addressing limits.
 
 ## Real computers are finite
 
@@ -142,7 +170,7 @@ A closed deterministic computer with fixed finite RAM, registers, storage and ot
 - The **physical Church–Turing thesis** claims that any function computable by a *physical* device is TM-computable. Proposed "hypercomputers" (machines that perform infinitely many steps in finite time, or use exact real numbers) appear to require physically unrealistic resources.
 - The **extended (strong) Church–Turing thesis** is commonly stated using efficient simulation by a probabilistic classical TM, with only **polynomial** overhead. This one is in doubt. Shor's algorithm factors integers in polynomial time on a quantum computer, and no polynomial-time classical factoring algorithm is known.
 
-Quantum computers do **not** threaten the original thesis. For the standard effective quantum circuit model, a classical computer can approximate amplitudes and outcome probabilities to a specified accuracy, generally using exponential resources. This assumes effectively specified gates; arbitrary exact real-number oracles are not part of that model. Their possible advantage concerns what is computable efficiently, a question for complexity theory; a general BQP-versus-BPP separation is not known.
+Quantum computers do **not** threaten the original thesis. For the standard effective quantum circuit model, a classical computer can approximate amplitudes and outcome probabilities to a specified accuracy, generally using exponential resources. This assumes effectively specified quantum gates; arbitrary exact real-number oracles are not part of that model. Their possible advantage concerns what is computable efficiently, a question for complexity theory; a general BQP-versus-BPP separation is not known.
 
 ## Pitfalls
 
@@ -154,7 +182,7 @@ Quantum computers do **not** threaten the original thesis. For the standard effe
 - The Church–Turing thesis: anything computable by an effective procedure is computable by a Turing machine. It is a well-supported thesis, not a theorem.
 - Standard effective universal models agree on computability, under their appropriate unbounded-resource assumptions.
 - The universal TM runs any encoded machine ⟨M⟩: the theoretical basis of interpreters and stored-program computers.
-- Prove Turing completeness by simulation; loops and memory alone are not sufficient, and explicit branching syntax is not necessary.
+- Prove Turing completeness by showing the system can simulate a TM; loops and memory alone are not sufficient, and explicit branching syntax is not necessary.
 - The extended thesis (polynomial simulation) is challenged by quantum computing; the original thesis is not.
 
 ## Further reading

@@ -24,14 +24,41 @@ Alan Turing described it in 1936 by imagining a human clerk working with pencil 
 - A **head** that reads one cell, writes a symbol there, and moves one cell left (L) or right (R).
 - A **finite control**: the current state.
 
-Formally, a TM is a 7-tuple (Q, Σ, Γ, δ, q₀, q_accept, q_reject):
+Formally, a TM is a 7-tuple (a list of seven parts in a fixed order):
 
-- **Q**: finite set of states, including the start q₀ and two halting states q_accept ≠ q_reject.
-- **Σ**: finite input alphabet (not containing the blank).
-- **Γ**: finite tape alphabet, with Σ ⊆ Γ and `_` ∈ Γ. Γ can include extra marker symbols such as X.
-- **δ: (Q − {q_accept, q_reject}) × Γ → Q × Γ × {L, R}**: in state q reading symbol a, write b, move, and enter a new state.
+```formula
+M = (Q, Σ, Γ, δ, q_0, q_accept, q_reject)
+Σ ⊆ Γ     _ ∈ Γ     _ ∉ Σ
+Q′ = Q − {q_accept, q_reject}
+δ: Q′ × Γ → Q × Γ × {L, R}
+δ(q, a) = (r, b, D)
+where
+M: the Turing machine
+Q: a finite set of states
+Σ: sigma, the input alphabet: the characters an input may contain
+Γ: gamma, the tape alphabet: everything that may ever be written on the tape, including Σ, the blank and extra markers such as X
+δ: delta, the transition function: the machine's rule book
+q_0: the start state
+q_accept: the accepting state; entering it stops the machine with "yes"
+q_reject: the rejecting state, different from q_accept; entering it stops the machine with "no"
+_: the blank symbol, filling every cell not holding input
+⊆: is a subset of: every member of Σ is also in Γ
+∈, ∉: is a member of, is not a member of
+Q′: the working states: every state except the two halting ones (halting states have no rules)
+−: set difference: Q with those two states removed
+{ }: curly braces: the set of the things listed inside
+→: in the line δ: Q′ × Γ → Q × Γ × {L, R}, the arrow separates what δ takes as input (left) from what it gives back (right)
+×: Cartesian product: all ordered pairs (or triples) with one item from each set
+L, R: the two head moves: one cell left, one cell right
+q, r: the current state and the next state
+a, b: the symbol read under the head and the symbol written in its place
+D: the direction the head then moves, L or R
+In words: a TM is a finite set of states plus a tape; in each working state, the symbol under the head decides what to write, which way to move and which state to enter next.
+```
 
-A **configuration** is a snapshot: state, tape contents and head position. It is often written `1 0 q 1 1`, meaning the tape is `1011`, the machine is in state q, and the head is on the third symbol.
+So δ(q, a) = (r, b, D) reads: "in state q reading symbol a, write b, move in direction D and enter state r". In the binary increment machine below, δ(C, 1) = (C, 0, L): in state C reading a 1, write 0, move left and stay in state C. (The Python dictionaries list the same three things in the order write, move, next state.)
+
+A **TM configuration** is a snapshot: state, tape contents and head position. It is often written `1 0 q 1 1`, meaning the tape is `1011`, the machine is in state q, and the head is on the third symbol.
 
 > [!note] Three outcomes, not two
 > On a given input a TM can **accept**, **reject**, or **loop forever**. A DFA completes one transition per input symbol. A PDA can have infinite epsilon-move branches; a decision algorithm for CFL membership still exists. A TM has no such guarantee. That third outcome is the source of every undecidability result in this module.
@@ -109,7 +136,7 @@ print("".join(tape[i] for i in
 # 1100 8
 ```
 
-Notice the `max_steps` guard. If the simulation times out, you know only that it did not halt within that budget; the timeout alone does not settle eventual halting. You will meet that problem again.
+Notice the `max_steps` cap. If the simulation times out, you know only that it did not halt within that budget; the timeout alone does not settle eventual halting. You will meet that problem again.
 
 ## Example 2: aⁿbⁿcⁿ, beyond any PDA
 
@@ -164,7 +191,22 @@ for w in ["abc", "aabbcc", "aabbc",
 # aaabbbccc acc 46
 ```
 
-Each pass walks across the string, and there are n passes, so the machine takes **O(n²)** steps (8, 23, 46 for n = 1, 2, 3). A two-tape TM could do it in O(n): copy the a's to tape 2, then match them against the b's and c's.
+Each pass walks across the string and back, and there is one pass per a:
+
+```formula
+T(n) ≈ n × (c × n)
+T(n) = O(n^2)
+T(1) = 8    T(2) = 23    T(3) = 46
+where
+T(n): the number of steps the machine takes on the input a^n b^n c^n
+n: the number of a's (the input has 3 × n symbols)
+c: a fixed constant: each pass walks a distance proportional to n, there and back, so the cost of one pass is about c × n steps
+≈: is approximately
+O(…): big-O: grows no faster than the expression inside, up to a constant factor, for large n
+In words: n passes of about n steps each make the running time grow with the square of n.
+```
+
+The measured counts fit: from n = 1 to 2 the steps rise by 15, from 2 to 3 by 23, and gaps that grow steadily are the mark of a quadratic. Doubling n roughly quadruples the time for large n. A two-tape TM could do it in O(n): copy the a's to tape 2, then match them against the b's and c's.
 
 ## Robustness: the variants are all equivalent
 
@@ -176,15 +218,38 @@ The definition seems arbitrary. Why one tape? Why not stay put? The remarkable f
 | Two-way infinite tape | fold it in half |
 | A fixed number k of tapes | Standard O(t²) simulation when t ≥ input length |
 | Nondeterministic | Fair search; exponential upper bound in a branch-time bound |
-| RAM with suitable bit-cost or bounded-word operations | polynomial slowdown |
+| Random-access machine with suitable bit-cost or bounded-word operations | polynomial slowdown |
 
-The multi-tape simulation stores all k tapes on one, separated by markers, with a dot over each simulated head. Each simulated step sweeps the used tape once, which is O(t) cells after t steps, giving O(t²) total.
+The multi-tape simulation stores all k tapes on one, separated by markers, with a dot over each simulated head. Each simulated step sweeps the used tape once, which is O(t) cells after t steps:
+
+```formula
+T_1(t) = t × O(t) = O(t^2)
+where
+T_1(t): the number of single-tape steps needed to simulate the multi-tape machine
+t: the number of steps the multi-tape (k-tape) machine takes, at least the input length
+O(…): big-O: grows no faster than the expression inside, up to a constant factor
+In words: t simulated steps, each costing one sweep over at most about t cells, give a quadratic slowdown.
+```
+
+For example, a 3-tape machine running t = n² steps on an input of length n becomes a single-tape machine running O(n⁴) steps. Slower, but still polynomial, which is why the variants agree on which problems are solvable at all.
 
 Nondeterministic TMs are simulated by trying all branches **breadth-first**. Depth-first would be wrong: it could follow an infinite branch forever while an accepting branch sits elsewhere. This matters for power, not just speed. This simulation establishes an upper bound, not a proof that exponential slowdown is necessary. Whether every language accepted in nondeterministic polynomial time has a deterministic polynomial-time decider is P versus NP.
 
 ## The busy beaver: how strange small machines get
 
-For the standard two-way tape, two-symbol busy-beaver model, count n working states separately from a halt state. Among machines that halt from a blank tape, which runs longest? That maximum step count is the **busy beaver** number S(n). The 2-state champion:
+For the standard two-way tape, two-symbol busy-beaver model, count n working states separately from a halt state. Among machines that halt from a blank tape, which runs longest? That maximum step count is the **busy beaver** number S(n). A second measure counts the 1s left on the tape:
+
+```formula
+S(2) = 6     Σ(2) = 4
+S(5) = 47,176,870
+where
+S(n): the most steps any halting n-state machine of this kind takes, started on a blank tape
+Σ(n): the most 1s any such halting machine leaves on the tape. Here Σ is just a function name, not the input alphabet
+n: the number of working states (not counting the halt state)
+In words: the best 2-state machine runs 6 steps and leaves four 1s; the best 5-state machine runs over 47 million steps.
+```
+
+The 2-state champion:
 
 ```python
 BB2 = {
@@ -206,7 +271,7 @@ print(n, ones)   # 6 4
 | 4 | 107 | 13 |
 | 5 | 47,176,870 | 4,098 |
 
-S(5) was only proved in 2024, by the online bbchallenge collaboration with a Coq-verified proof. Doing so meant showing that every one of the many millions of 5-state machines either halts within 47,176,870 steps or never halts. The proof combines exhaustive reduction of machine cases with certified reasoning about non-halting.
+S(5) was only proved in 2024, by the online bbchallenge collaboration with a Coq-verified proof. Doing so meant showing that every one of the many millions of 5-state machines either halts within 47,176,870 steps or never halts. The proof combines a case-by-case check covering every machine with certified reasoning about non-halting.
 
 > [!note] Evidence gap
 > The previous unspecific claim about six-state machines encoding open Collatz-like problems is omitted: no particular machine, encoding convention and unresolved mathematical statement were identified for verification.
@@ -220,14 +285,28 @@ Turing-machine notation is mainly a mathematical and educational model rather th
 ## Pitfalls
 
 - **Reject is not loop.** A recogniser may never answer "no". If you want a decider, you must prove it halts on every input.
-- **The tape is infinite, but each halting run uses finitely much.** In t single-cell moves the head visits at most t + 1 cells; counting initially stored input as well gives at most |input| + t + 1 cells involved.
+- **The tape is infinite, but each halting run uses finitely much.** The bounds are in the formula below.
 - **Implicit reject** (no matching rule) is a common convention, as in the simulator above. Be clear which convention a textbook uses.
+
+```formula
+C_visit ≤ t + 1
+C_used ≤ |w| + t + 1
+where
+C_visit: the number of distinct cells the head visits
+C_used: the number of cells involved at all, counting cells that held input
+t: the number of steps (single-cell moves) in the run
+|w|: the length of the input w, in symbols
+≤: is at most
+In words: the head starts on one cell and reaches at most one new cell per step, so a finite run touches finitely many cells.
+```
+
+For a run of t = 10 steps on a 4-symbol input, the head visits at most 11 cells, and at most 15 cells are involved.
 
 ## Key takeaways
 - A TM is a finite control plus an unbounded read-write tape; transitions read/write a symbol and move one cell, with no outgoing transitions from halting states.
 - On each input it accepts, rejects or loops. Deciders always halt; recognisers need only accept the right strings.
 - TMs decide non-context-free languages like aⁿbⁿcⁿ by crossing off symbols in O(n²) steps.
-- Multi-tape, nondeterministic and RAM variants all recognise the same languages; only running time changes.
+- Multi-tape, nondeterministic and random-access machine variants all recognise the same languages; only running time changes.
 - Busy beaver values explode (S(5) = 47,176,870) and S(n) is uncomputable.
 
 ## Further reading

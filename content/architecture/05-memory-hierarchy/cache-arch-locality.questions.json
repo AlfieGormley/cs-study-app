@@ -45,7 +45,7 @@
       },
       {
         "text": "512",
-        "explanation": "Correct. 4,096 × 8 B = 32,768 B. 32,768 / 64 = 512 lines, and each line misses once (on its first element) then hits 7 times."
+        "explanation": "Correct. The 32 KiB array spans 512 lines of 64 bytes. Each line misses once, on its first element, then hits 7 times. The worked example shows the arithmetic."
       },
       {
         "text": "8",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Array size: 4,096 × 8 B = 32,768 B (32 KiB).\n2. Lines touched: 32,768 / 64 = **512**.\n3. Each line misses on its first access (a compulsory miss) and the next 7 doubles in it hit.\n4. Miss rate = 512 / 4,096 = 1/8 = **12.5%**.\n\n```\nline 0: d0 MISS d1..d7 hit\nline 1: d8 MISS d9..d15 hit\n...\n512 lines -> 512 misses\n```\n\nWith 4-byte ints instead, each line would hold 16 values and the miss rate would halve to 6.25%.",
+    "workedExample": "Each miss fetches a whole line, so count lines, not elements. Every line misses once (a compulsory miss) and its other 7 doubles hit:\n\n```formula\nS = N × s\nS = 4,096 × 8 B = 32,768 B\nN_lines = S / L\nN_lines = 32,768 B / 64 B = 512\nm = N_lines / N\nm = 512 / 4,096 = 1/8 = 12.5 %\nwhere\nS: the array's size in bytes (B); 32,768 B is 32 KiB\nN: the number of doubles read, 4,096, one load each\ns: the size of one double, 8 bytes\nL: the cache line size, 64 bytes\nN_lines: the number of lines the array covers, which is also the number of misses\nm: the miss rate: misses divided by accesses\nB: byte, 8 bits\nKiB: kibibyte, 1,024 bytes\n%: per cent, parts per hundred\nIn words: 4,096 doubles fill 512 lines; each line misses once, so one access in 8 misses.\n```\n\n```\nline 0: d0 MISS d1..d7 hit\nline 1: d8 MISS d9..d15 hit\n...\n512 lines -> 512 misses\n```\n\nWith 4-byte ints instead, each line would hold 16 values and the miss rate would halve to 6.25%.",
     "link": {
       "title": "Locality of reference — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
@@ -151,7 +151,7 @@
       1,
       4
     ],
-    "workedExample": "Spatial locality = useful bytes that sit **next to each other**, so one 64-byte line serves several accesses.\n\n- Array instead of list: neighbours are adjacent. ✔\n- Smaller element type: more values per line (64/2 = 32 `int16` vs 64/8 = 8 `int64`). ✔\n- Column-wise walk of a row-major array: each step skips a whole row, so each access can need a new line. ✘\n- Memoising a function result: reuse of the same item, temporal. ✘\n- Hot fields together: they can share fetched lines, depending on layout. ✔",
+    "workedExample": "Spatial locality means useful bytes sit **next to each other**, so one 64-byte line serves several accesses.\n\n- Array instead of list: neighbours are adjacent. ✔\n- Smaller element type: more values per line (see the calculation below). ✔\n- Column-wise walk of a row-major array: each step skips a whole row, so each access can need a new line. ✘\n- Memoising a function result: reuse of the same item, temporal. ✘\n- Hot fields together: they can share fetched lines, depending on layout. ✔\n\nHow many values fit in one line:\n\n```formula\nn = L / s\nn = 64 B / 2 B = 32\nn = 64 B / 8 B = 8\nwhere\nn: the number of values that fit in one cache line\nL: the cache line size, 64 bytes\ns: the size of one value: 2 B for int16 (second line), 8 B for int64 (third line)\nB: byte, 8 bits\nIn words: a 64-byte line holds 32 two-byte values but only 8 eight-byte values, four times fewer.\n```",
     "link": {
       "title": "Locality of reference — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
@@ -259,7 +259,7 @@
       },
       {
         "text": "About the same as A's, because both loops touch every cache line once",
-        "explanation": "Correct. 16 int32s × 4 B = 64 B, so B's stride is exactly one line. Both loops fetch all 1,048,576 lines; B just uses 4 bytes of each."
+        "explanation": "Correct. B's stride of 16 four-byte ints is exactly one 64-byte line, so both loops fetch all 1,048,576 lines; B just uses 4 bytes of each."
       },
       {
         "text": "About 16 times longer than A, because strided access defeats caching",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "There are 64 MiB / 64 B = 1,048,576 lines. A reads 16 ints per line; B's stride is 16 × 4 = 64 B, touching one int in every line. Both transfer 64 MiB. Equal effective bandwidth and transfer-dominated runtime therefore give approximately equal times. Without those explicit assumptions, equal line counts alone do not determine runtime.",
+    "workedExample": "Count lines, because in this model transferred lines set the time:\n\n```formula\nN_lines = S / L\nN_lines = 64 MiB / 64 B\nN_lines = 2^26 B / 2^6 B = 2^20\nN_lines = 1,048,576\nd_B = k × s\nd_B = 16 × 4 B = 64 B\nwhere\nN_lines: the number of 64-byte lines in the array\nS: the array's size, 64 MiB\nL: the cache line size, 64 bytes\nMiB: mebibyte, 1,048,576 bytes (2^20 B)\nB: byte, 8 bits\n2^26: 26 copies of 2 multiplied together; 64 MiB is 2^6 × 2^20 bytes\nd_B: loop B's stride, the distance in bytes between the elements it reads\nk: how many elements loop B steps over each time, 16\ns: the size of one int32, 4 bytes\nIn words: the array is about a million lines, and loop B's 64-byte stride lands on every one of them.\n```\n\nA reads 16 ints per line; B reads one int in every line. Both transfer all 64 MiB. Equal effective bandwidth and transfer-dominated runtime therefore give approximately equal times. Without those explicit assumptions, equal line counts alone do not determine runtime.",
     "link": {
       "title": "Gallery of processor cache effects",
       "url": "https://igoro.com/archive/gallery-of-processor-cache-effects/"
@@ -285,7 +285,7 @@
     "options": [
       {
         "text": "62,500 vs 125,000",
-        "explanation": "Correct: 8,000,000 / 128 = 62,500 and 8,000,000 / 64 = 125,000. The alignment and one-fill assumptions make the count exact."
+        "explanation": "Correct: the 128-byte lines of A each hold twice as much, so A needs half as many fills as B. The alignment and one-fill assumptions make the count exact."
       },
       {
         "text": "125,000 on both, since the data size is the same",
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "The array occupies 8,000,000 bytes. Cache A needs 8,000,000 / 128 = 62,500 fills; B needs 8,000,000 / 64 = 125,000. Both transfer the same useful array bytes in this aligned model. Larger lines can waste bandwidth on sparse accesses and enlarge the region affected by false sharing. These are model line sizes, not claims about entire processor families.",
+    "workedExample": "Each needed line is filled once, so the number of fills is the array size divided by the line size:\n\n```formula\nS = 1,000,000 × 8 B = 8,000,000 B\nN_A = S / L_A\nN_A = 8,000,000 B / 128 B = 62,500\nN_B = S / L_B\nN_B = 8,000,000 B / 64 B = 125,000\nwhere\nS: the array's size in bytes: 1,000,000 doubles of 8 bytes each\nN_A: the number of line fills cache A needs\nN_B: the number of line fills cache B needs\nL_A: cache A's line size, 128 bytes\nL_B: cache B's line size, 64 bytes\nB: byte, 8 bits\nIn words: doubling the line size halves the number of fills for the same aligned sequential scan.\n```\n\nBoth transfer the same useful array bytes in this aligned model. Larger lines can waste bandwidth on sparse accesses and enlarge the region affected by false sharing. These are model line sizes, not claims about entire processor families.",
     "link": {
       "title": "Locality of reference — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
@@ -314,7 +314,7 @@
     "prompt": "A large RAM index is searched using either a balanced binary search tree with scattered nodes or a B-tree storing many keys per node. Which statements explain why the B-tree can improve cache behaviour? Select all that apply.",
     "options": [
       {
-        "text": "Larger fanout can reduce the number of nodes visited",
+        "text": "A larger branching factor can reduce the number of nodes visited",
         "explanation": "Correct. A well-filled B-tree has more children per node, so it can have fewer levels than a balanced binary tree with the same number of keys."
       },
       {
@@ -327,14 +327,14 @@
       },
       {
         "text": "A B-tree changes the big-O of search from O(log n) to O(1)",
-        "explanation": "Both balanced structures have logarithmic search depth. Layout, fanout and the cost per node affect practical performance."
+        "explanation": "Both balanced structures have logarithmic search depth, O(log n) where n is the number of keys. Layout, branching factor and the cost per node affect practical performance."
       }
     ],
     "answer": [
       0,
       1
     ],
-    "workedExample": "A balanced binary tree with 100 million keys has depth on the order of log2(10^8) ≈ 26.6. An idealised fanout of 32 suggests a scale of log32(10^8) ≈ 5.3 levels; actual integer height depends on occupancy and node structure. Each B-tree node can occupy multiple lines, including child pointers. Fewer nodes can reduce serial dependent misses, but neither an exact DRAM round-trip count nor a speedup is guaranteed.",
+    "workedExample": "Compare tree heights. The more children each node has (its branching factor), the fewer levels a balanced tree needs to hold the same number of keys:\n\n```formula\nd_bin ≈ log_2(n)\nd_bin ≈ log_2(10^8) ≈ 26.6\nd_B ≈ log_32(n)\nd_B ≈ log_32(10^8) ≈ 5.3\nwhere\nn: the number of keys, here 100 million (10^8)\nd_bin: the depth of a balanced binary tree, in levels (nodes visited per search)\nd_B: the rough depth of a B-tree with an idealised branching factor of 32\nlog_2: logarithm base 2: how many times you must double 1 to reach the number\nlog_32: logarithm base 32: how many times you must multiply 1 by 32 to reach the number; log_32(n) = log_2(n) / 5\n10^8: 8 copies of 10 multiplied together, 100,000,000\n≈: approximately equal to\nIn words: a binary tree over 100 million keys is about 27 levels deep, while a 32-way B-tree is only about 5 to 6.\n```\n\nActual integer height depends on how full the nodes are and on their structure. Each B-tree node can occupy multiple lines, including child pointers. Fewer nodes can reduce serial dependent misses, but neither an exact DRAM round-trip count nor a speedup is guaranteed.",
     "link": {
       "title": "What every programmer should know about memory (LWN)",
       "url": "https://lwn.net/Articles/250967/"

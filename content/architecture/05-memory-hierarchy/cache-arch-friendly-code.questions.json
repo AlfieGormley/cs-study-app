@@ -3,14 +3,14 @@
     "id": "cache-arch-friendly-code-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "In C, N=4096 and a is a rectangular array of eight-byte doubles. Which loop has the contiguous inner access pattern and fewer demand misses in the lesson's cold aligned 64-byte-line, 32 KiB fully associative LRU model, with no prefetching or other accesses?\n\n```\n// A\nfor (i = 0; i < N; i++)\n  for (j = 0; j < N; j++)\n    s += a[i][j];\n// B\nfor (j = 0; j < N; j++)\n  for (i = 0; i < N; i++)\n    s += a[i][j];\n```",
+    "prompt": "In C, the constant `N` is 4096 and a is a rectangular array of eight-byte doubles. Which loop has the contiguous inner access pattern and fewer demand misses in the lesson's cold aligned 64-byte-line, 32 KiB fully associative LRU model, with no prefetching or other accesses?\n\n```\n// A\nfor (i = 0; i < N; i++)\n  for (j = 0; j < N; j++)\n    s += a[i][j];\n// B\nfor (j = 0; j < N; j++)\n  for (i = 0; i < N; i++)\n    s += a[i][j];\n```",
     "options": [
       {
         "text": "B, because it visits columns, which are contiguous in C",
         "explanation": "C is row-major: *rows* are contiguous. B's inner loop jumps 32 KiB (a whole row) per step."
       },
       {
-        "text": "They are the same speed, since both perform N² additions",
+        "text": "They are the same speed, since both perform the same number of additions",
         "explanation": "Equal addition counts do not imply equal cache behaviour. Reordering a floating-point sum can also change rounding."
       },
       {
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Row-major addresses are base + (i×4096+j)×8. A walks in eight-byte steps and misses once per eight doubles: 2,097,152 model misses. B has a 32,768-byte stride and revisits lines only after 4,096 distinct lines, exceeding the 512-line cache: 16,777,216 model misses. These counts do not promise a runtime ratio; floating-point summation order can also affect results.",
+    "workedExample": "In a row-major array, element a[i][j] sits at:\n\n```formula\nA_ij = A_base + (i × N + j) × s\nwhere\nA_ij: the byte address of a[i][j]\nA_base: the address of a[0][0]\ni: the row number, from 0\nj: the column number, from 0\nN: the number of columns per row, 4,096\ns: the size of one double, 8 bytes\nIn words: skip i whole rows of N elements, then j elements, and multiply by the element size.\n```\n\nSo increasing j moves 8 bytes, and increasing i moves 4,096 × 8 = 32,768 bytes. A misses once per line of eight doubles; B misses on every access, because it comes back to a line only after 4,096 other lines and the cache holds only 512 (32 KiB / 64 B):\n\n```formula\nM_A = N^2 × s / B_line\nM_A = 4096^2 × 8 B / 64 B\nM_A = 2,097,152\nM_B = N^2 = 16,777,216\nwhere\nM_A: model misses for loop A (row walk)\nM_B: model misses for loop B (column walk)\nN: the number of rows and of columns, 4,096\nN^2: N × N, the number of elements, 16,777,216\ns: the size of one double, 8 bytes\nB_line: the cache line size, 64 bytes\nB: byte, 8 bits\nIn words: the row walk misses once per 64-byte line (every eighth double); the column walk misses on every element, eight times as many misses.\n```\n\n These counts do not promise a runtime ratio; floating-point summation order can also affect results.",
     "link": {
       "title": "Row- and column-major order — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Row-_and_column-major_order"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Column-major: with lower bounds 1, `a(i, j)` is at byte address `base + ((i-1) + (j-1)*M) * size`.\n2. Consecutive `i` → consecutive addresses.\n3. So in Fortran/Julia/MATLAB the inner loop should vary the **first** index:\n\n```\ndo j = 1, n\n  do i = 1, m\n    s = s + a(i, j)\n  end do\nend do\n```",
+    "workedExample": "In column-major order all of column 1 comes first, then column 2, and so on. With indices starting at 1, `a(i, j)` is at:\n\n```formula\nA_ij = A_base + k × s\nk = (i − 1) + (j − 1) × M\nwhere\nA_ij: the byte address of a(i, j)\nA_base: the address of a(1, 1)\nk: how many elements come before a(i, j)\ni: the row number, from 1\nj: the column number, from 1\nM: the number of rows (the column length)\ns: the size of one element in bytes\nIn words: skip j − 1 whole columns of M elements, then i − 1 elements; adding 1 to i moves just one element.\n```\n\n1. Consecutive `i` → consecutive addresses.\n2. So in Fortran/Julia/MATLAB the inner loop should vary the **first** index:\n\n```\ndo j = 1, n\n  do i = 1, m\n    s = s + a(i, j)\n  end do\nend do\n```",
     "link": {
       "title": "Row- and column-major order — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Row-_and_column-major_order"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "For each reference, look at how the address changes as the **inner** index `j` increases:\n\n| Reference | Step | Misses/iter |\n|---|---|---|\n| `a[j][i]` | one row | 1 |\n| `b[i][j]` | 8 bytes | 0.125 |\n\nTotal = **1.125**. This is effectively a transpose-and-multiply, and the classic fix is to block it into tiles so the column walk of `a` reuses lines.",
+    "workedExample": "For each reference, look at how the address changes as the **inner** index `j` increases:\n\n| Reference | Step | Misses/iter |\n|---|---|---|\n| `a[j][i]` | one row | 1 |\n| `b[i][j]` | 8 bytes | 0.125 |\n\nAdd the two references:\n\n```formula\nm_iter = m_a + m_b\nm_iter = 1 + 0.125 = 1.125\nwhere\nm_iter: total model misses per inner-loop iteration\nm_a: misses per iteration on a[j][i]; a row stride, so 1\nm_b: misses per iteration on b[i][j]; 8-byte stride, so 8 B / 64 B = 0.125\nB: byte, 8 bits\nIn words: one miss per iteration from walking down a column of a, plus one-eighth of a miss from walking along a row of b.\n```\n\nTotal = **1.125**. This is effectively a transpose-and-multiply, and the classic fix is to block it into tiles so the column walk of `a` reuses lines.",
     "link": {
       "title": "Loop nest optimization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Loop_nest_optimization"
@@ -138,12 +138,12 @@
         "explanation": "Correct. Inner `j`: A[i][k] fixed (0), B[k][j] stride 1 (0.125), C[i][j] stride 1 (0.125) = 0.25."
       },
       {
-        "text": "All orders have the same misses since they do n³ operations",
+        "text": "All orders have the same misses since they do the same number of operations",
         "explanation": "They do the same arithmetic but touch memory in very different orders: 0.25 vs 1.125 vs 2.0 misses per iteration."
       }
     ],
     "answer": 2,
-    "workedExample": "The inner loop index decides the pattern:\n\n| Inner index | A | B | C | Total |\n|---|---|---|---|---|\n| k (ijk, jik) | 0.125 | 1 | 0 | 1.125 |\n| j (ikj, kij) | 0 | 0.125 | 0.125 | 0.25 |\n| i (jki, kji) | 1 | 0 | 1 | 2.0 |\n\nSo `kij` (and `ikj`) are best: 8× fewer misses than `jki`.",
+    "workedExample": "The inner loop index decides the pattern:\n\n| Inner index | A | B | C | Total |\n|---|---|---|---|---|\n| k (ijk, jik) | 0.125 | 1 | 0 | 1.125 |\n| j (ikj, kij) | 0 | 0.125 | 0.125 | 0.25 |\n| i (jki, kji) | 1 | 0 | 1 | 2.0 |\n\nFor the best order, inner index j:\n\n```formula\nm_iter = m_A + m_B + m_C\nm_iter = 0 + 0.125 + 0.125 = 0.25\nwhere\nm_iter: total model misses per inner-loop iteration\nm_A: misses on A[i][k]; fixed element in a register, so 0\nm_B: misses on B[k][j]; stride 1, so 8 B / 64 B = 0.125\nm_C: misses on C[i][j]; stride 1, so 0.125\nB: byte, 8 bits\nIn words: with j innermost, two arrays are walked along rows and one stays put, giving a quarter of a miss per iteration.\n```\n\nSo `kij` (and `ikj`) are best: 2.0 / 0.25 = 8× fewer misses than `jki`.",
     "link": {
       "title": "Loop nest optimization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Loop_nest_optimization"
@@ -153,11 +153,11 @@
     "id": "cache-arch-friendly-code-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "For three T×T tiles of eight-byte doubles and a 48 KiB cache budget, what is the largest integer T satisfying the useful-byte inequality 3×T²×8 ≤ 49,152? Ignore line rounding, conflicts and other data for this capacity-only calculation.",
+    "prompt": "For three T×T tiles of eight-byte doubles and a 48 KiB cache budget, what is the largest whole-number tile edge T satisfying this useful-byte inequality?\n\n```formula\n3 × T^2 × s ≤ S_budget\n3 × T^2 × 8 B ≤ 49,152 B\nwhere\nT: the tile edge in elements; a tile is T × T\nT^2: T × T, the elements in one tile\n3: three tiles at once, one each of A, B and C\ns: the size of one double, 8 bytes\nS_budget: the cache budget, 48 KiB = 49,152 bytes\n≤: less than or equal to\nB: byte, 8 bits\nIn words: the bytes in three T × T tiles of doubles must not exceed 48 KiB.\n``` Ignore line rounding, conflicts and other data for this capacity-only calculation.",
     "options": [
       {
         "text": "78",
-        "explanation": "78 fits only *one* tile (78² × 8 ≈ 48.7 KB is just under 49,152 B). You need A, B and C tiles at once."
+        "explanation": "78 fits only *one* tile: a single 78 × 78 tile of doubles is 48,672 bytes, just under 49,152 B. You need A, B and C tiles at once."
       },
       {
         "text": "32",
@@ -165,15 +165,15 @@
       },
       {
         "text": "45",
-        "explanation": "Correct. 3 × T² × 8 ≤ 49,152 → T² ≤ 2,048 → T ≤ 45.25. Check: 3 × 45² × 8 = 48,600 ≤ 49,152."
+        "explanation": "Correct. Three 45 × 45 tiles of doubles take 48,600 bytes, within 49,152; three 46 × 46 tiles take 50,784 bytes, which is over."
       },
       {
         "text": "64",
-        "explanation": "3 × 64² × 8 = 98,304 bytes, twice the cache."
+        "explanation": "Three 64 × 64 tiles of doubles take 98,304 bytes, twice the budget."
       }
     ],
     "answer": 2,
-    "workedExample": "3×T²×8 ≤ 49,152 gives T² ≤ 2,048, so T≤45.254… and the largest integer is 45. At 45 the footprint is 48,600 bytes; at 46 it is 50,784. This necessary byte-budget check does not prove that strided tiles can coexist in a real cache: line fragmentation, mapping conflicts and other data can prevent residency.",
+    "workedExample": "Solve for T, then check the neighbours:\n\n```formula\n3 × T^2 × 8 B ≤ 49,152 B\nT^2 ≤ 49,152 / 24 = 2,048\nT ≤ √(2,048) ≈ 45.25\n3 × 45^2 × 8 B = 48,600 B\n3 × 46^2 × 8 B = 50,784 B\nwhere\nT: the tile edge, in elements\nT^2: T × T, the elements in one tile\n√: square root: the number that, multiplied by itself, gives the value inside\n≤: less than or equal to\n≈: approximately equal to\nB: byte, 8 bits\nIn words: 24 bytes per unit of T squared must fit in 49,152 bytes, so T can be at most 45; 45 gives 48,600 bytes, and 46 would need 50,784, too many.\n```\n\nThe largest whole number is 45. This necessary byte-budget check does not prove that strided tiles can coexist in a real cache: line fragmentation, mapping conflicts and other data can prevent residency.",
     "link": {
       "title": "Loop nest optimization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Loop_nest_optimization"
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. AoS: body *i* occupies bytes 64i..64i+63, exactly one line. Touching `energy` loads the whole line.\n\n```\n1,000,000 x 64 B = 64 MB\nuseful: 4 / 64 = 6.25%\n```\n\n2. SoA: `energy[]` is contiguous, 16 per line.\n\n```\n1,000,000 x 4 B = 4 MB\nlines = 62,500\n```\n\n3. 16× fewer incoming bytes in this model. Dense storage can also make vectorisation easier, subject to the operation and compiler. Use SoA (or hot/cold splitting) for passes over one or two fields.",
+    "workedExample": "1. AoS: each 64-byte body occupies exactly one line. Touching `energy` loads the whole line.\n2. SoA: `energy[]` is contiguous, 16 floats per line.\n\n```formula\nD_AoS = N × B_line\nD_AoS = 1,000,000 × 64 B = 64 MB\nD_SoA = N × s\nD_SoA = 1,000,000 × 4 B = 4 MB\nL_SoA = D_SoA / B_line = 62,500\nwhere\nD_AoS: bytes brought into the cache with AoS\nD_SoA: bytes brought into the cache with SoA\nL_SoA: lines filled with SoA\nN: the number of bodies, 1,000,000\nB_line: the cache line size, 64 bytes\ns: the size of one float, 4 bytes\nB: byte, 8 bits\nMB: megabyte, 1,000,000 bytes\nIn words: AoS pulls in a whole 64-byte line for each 4-byte energy value (6.25% useful); SoA pulls in only the energy values themselves.\n```\n\n3. 64 MB / 4 MB = 16× fewer incoming bytes in this model. Dense storage can also make vectorisation easier, subject to the operation and compiler. Use SoA (or hot/cold splitting) for passes over one or two fields.",
     "link": {
       "title": "AoS and SoA — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/AoS_and_SoA"
@@ -259,7 +259,7 @@
       },
       {
         "text": "100% unpadded; about 1/64 padded",
-        "explanation": "Correct. Stride 4,096 = 2^12 leaves set bits 6–11 unchanged, so all 64 lines fight for 8 ways and LRU evicts each before reuse. Padding by 64 B spreads the 64 rows over 64 different sets; each line then misses once and serves the next 63 columns: 64 / 4,096 = 1/64."
+        "explanation": "Correct. A 4,096-byte stride (64 sets × 64 bytes) leaves set-index bits 6–11 unchanged, so all 64 lines fight for 8 ways and LRU evicts each before reuse. Padding by 64 B spreads the 64 rows over 64 different sets; each line then misses once and serves the next 63 columns: 64 / 4,096 = 1/64."
       },
       {
         "text": "12.5% unpadded; 1.6% padded",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. L1: 32,768 / (64 × 8) = 64 sets, set index = address bits 6–11.\n2. Unpadded stride 4,096 B: adding 4,096 changes only bits ≥ 12. **All 64 rows → same set.**\n3. One set holds 8 lines. Column `j` loads 64 lines cyclically through 8 ways; by column `j+1`, row 0's line was evicted long ago. Every access misses: 4,096 / 4,096 = **100%** (simulated exactly).\n4. Padded stride 4,160 = 4,096 + 64: each row moves one set further. 64 rows → 64 different sets, 1 line each.\n5. Each line holds 64 pixels = 64 columns, so it misses once and hits 63 times: 64 misses / 4,096 = **1/64 ≈ 1.6%**.",
+    "workedExample": "Find the number of sets and which set each address uses:\n\n```formula\nN_sets = S_cache / (B_line × W)\nN_sets = 32,768 B / (64 B × 8) = 64\nI_set = ⌊A / B_line⌋ mod N_sets\nwhere\nN_sets: the number of sets in the L1\nS_cache: the L1 capacity, 32 KiB = 32,768 bytes\nB_line: the line size, 64 bytes\nW: the associativity, 8 ways (lines per set)\nI_set: the set an address maps to\nA: the byte address\n⌊ ⌋: floor: round down to a whole number\nmod: the remainder after division\nB: byte, 8 bits\nIn words: there are 64 sets, and the line number wrapped round 64 picks the set; that is address bits 6 to 11.\n```\n\n1. So the set index is address bits 6–11 (bits 0–5 are the byte within the line).\n2. Unpadded stride 4,096 B: adding 4,096 changes only bit 12 and above. **All 64 rows → same set.**\n3. One set holds 8 lines. Column `j` loads 64 lines cyclically through 8 ways; by column `j+1`, row 0's line was evicted long ago. Every access misses: 4,096 / 4,096 = **100%** (simulated exactly).\n4. Padded stride 4,160 = 4,096 + 64: each row moves one set further. 64 rows → 64 different sets, 1 line each.\n5. Each line holds 64 one-byte pixels = 64 columns, so it misses once and hits 63 times:\n\n```formula\nr_miss = M / R\nr_miss = 64 / 4,096 = 1/64 ≈ 1.6%\nwhere\nr_miss: the miss rate over the first 64 columns\nM: misses, one per row line: 64\nR: accesses, 64 rows × 64 columns = 4,096\n≈: approximately equal to\n%: per cent, parts per hundred\nIn words: 64 misses out of 4,096 accesses is one miss in 64.\n```\n\nPadded: **1/64 ≈ 1.6%**.",
     "link": {
       "title": "Memory part 5: What programmers can do (LWN)",
       "url": "https://lwn.net/Articles/255364/"
@@ -281,19 +281,19 @@
     "id": "cache-arch-friendly-code-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "For n = 1024 doubles, unblocked `ikj` matrix multiply has about 0.25 misses per iteration. Use an ideal model with aligned packed tiles, sufficient associativity/capacity to retain all three tiles, no interference or prefetch traffic, and no retained data between tile steps. With T = 32, each step loads each line of three cold 32 × 32 tiles once and does 32³ iterations. About how many line fills does the blocked version need in total?",
+    "prompt": "For 1024 × 1024 matrices of doubles, unblocked `ikj` matrix multiply has about 0.25 misses per iteration. Use an ideal model with aligned packed tiles, sufficient associativity/capacity to retain all three tiles, no interference or prefetch traffic, and no retained data between tile steps. With 32 × 32 tiles, each step loads each line of three cold 32 × 32 tiles once and does 32 × 32 × 32 = 32,768 iterations. About how many line fills does the blocked version need in total?",
     "options": [
       {
         "text": "About 268 million",
-        "explanation": "That is the *unblocked* count: 0.25 × 1024³ = 268,435,456."
+        "explanation": "That is the *unblocked* count: 0.25 × 1,073,741,824 iterations = 268,435,456."
       },
       {
         "text": "About 33.5 million",
-        "explanation": "This divides the unblocked count by 8, as if blocking only improved spatial locality. It improves reuse by a factor of order T."
+        "explanation": "This divides the unblocked count by 8, as if blocking only improved spatial locality. It improves reuse by a factor that grows with the tile edge (about 21 for 32 × 32 tiles)."
       },
       {
         "text": "About 12.6 million, roughly 21× fewer",
-        "explanation": "Correct. There are (1024/32)³ = 32,768 tile steps, each loading 3 × 1,024 doubles / 8 per line = 384 lines: 32,768 × 384 = 12,582,912."
+        "explanation": "Correct. There are 32 × 32 × 32 = 32,768 tile steps (1024 / 32 = 32 tiles along each of the three loops), each loading 3 × 1,024 doubles / 8 per line = 384 lines: 32,768 × 384 = 12,582,912."
       },
       {
         "text": "About 0.4 million",
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Iterations: 1024³ = 1,073,741,824.\n2. Unblocked: 0.25 × 1,073,741,824 = 268,435,456 fills.\n3. Blocked: number of tile steps = (1024/32)³ = 32³ = 32,768.\n4. Per step: 3 tiles × 32 × 32 doubles = 3,072 doubles = 384 lines.\n\n```\n32,768 x 384 = 12,582,912\nratio = 268,435,456 / 12,582,912\n      = 21.3\n```\n\n5. Per iteration: 384 / 32,768 = 3/256 ≈ 0.0117 misses, vs 0.25. In general the reduction is about 8T/12 = 2T/3 for this loop order.",
+    "workedExample": "Count the unblocked fills, then the blocked ones:\n\n```formula\nF_u = n^3 × m_iter\nF_u = 1024^3 × 0.25 = 268,435,456\nS = (n / T)^3 = 32^3 = 32,768\nL = 3 × T^2 × s / B_line\nL = 3 × 32^2 × 8 B / 64 B = 384\nF_b = S × L\nF_b = 32,768 × 384 = 12,582,912\nF_u / F_b ≈ 21.3\nwhere\nF_u: line fills for the unblocked ikj multiply\nF_b: line fills for the blocked multiply\nn: the matrix size (n × n), 1024\nn^3: n × n × n = 1,073,741,824 iterations\nm_iter: unblocked misses per iteration, 0.25\nS: the number of tile steps\nT: the tile edge, 32 elements\nL: lines loaded per tile step (three cold tiles)\ns: the size of one double, 8 bytes\nB_line: the line size, 64 bytes\n≈: approximately equal to\nB: byte, 8 bits\nIn words: 32,768 tile steps that each load 384 lines need about 12.6 million fills, about 21 times fewer than the 268 million of the unblocked loop.\n```\n\nPer iteration that is 384 / 32,768 ≈ 0.0117 misses, against 0.25. In general, for this loop order and model:\n\n```formula\nm_b = (3 × T^2 / 8) / T^3\nm_b = 3 / (8 × T)\ng = m_iter / m_b\ng = 0.25 × 8 × T / 3 = 2 × T / 3\ng = 2 × 32 / 3 ≈ 21.3\nwhere\nm_b: blocked misses per iteration: each tile step loads 3 × T^2 / 8 lines and does T^3 iterations\nT: the tile edge, in elements\nT^2: T × T, the doubles in one tile\nT^3: T × T × T, the iterations in one tile step\n8: doubles per 64-byte line\ng: how many times fewer fills blocking needs\nm_iter: unblocked misses per iteration, 0.25\n≈: approximately equal to\nIn words: the saving grows in proportion to the tile edge: doubling T roughly doubles the reduction, as long as the three tiles still fit.\n```",
     "link": {
       "title": "Loop nest optimization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Loop_nest_optimization"

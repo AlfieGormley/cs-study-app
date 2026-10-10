@@ -51,11 +51,32 @@ A common general-purpose hierarchy is shown below. Exact capacities and latencie
 
 ## Locality: why a small cache works
 
-If a program used every byte of its memory equally and at random, a 32 KiB cache in front of 16 GiB of DRAM would hit about 0.0002% of the time. Programs with useful locality can do much better than this independent uniform-access model. Two common forms of locality explain why.
+Imagine a program that used every byte of its memory equally and at random. Then the chance that a given access finds its data in the cache is simply the fraction of memory the cache can hold:
+
+```formula
+h_rand ≈ C_cache / C_mem
+h_rand ≈ 32 KiB / 16 GiB
+h_rand ≈ 2^15 B / 2^34 B
+h_rand ≈ 1 / 524,288 ≈ 0.0002 %
+where
+h_rand: the hit rate under purely random, uniform access: the fraction of accesses that find their data in the cache
+C_cache: the cache's capacity, here 32 KiB
+C_mem: the capacity of the memory behind it, here 16 GiB of DRAM
+KiB: kibibyte, 1,024 bytes (2^10 B)
+GiB: gibibyte, 1,073,741,824 bytes (2^30 B)
+B: byte, 8 bits
+2^15: 15 copies of 2 multiplied together, 32,768; 32 KiB is 32 × 1,024 = 32,768 bytes
+2^34: 34 copies of 2 multiplied together; 16 GiB is 16 × 2^30 bytes
+≈: approximately equal to
+%: per cent, parts per hundred
+In words: if every byte were equally likely, a cache holding one 524,288th of memory would hit only about two times in a million accesses.
+```
+
+This independent uniform-access model is a worst case that real programs rarely resemble. Programs with useful locality can do much better. Two common forms of locality explain why.
 
 ### Temporal locality
 
-**If you used something recently, you will probably use it again soon.** Loop counters, the top of the stack, a hot function's instructions, the root of a B-tree, a running total: all are touched over and over.
+**If you used something recently, you will probably use it again soon.** Loop counters, the top of the stack, a hot function's instructions, the root of a B-tree, an accumulating total: all are touched over and over.
 
 A cache exploits temporal locality by **keeping recently used data** and evicting data that has not been used for a while.
 
@@ -65,8 +86,22 @@ A cache exploits temporal locality by **keeping recently used data** and evictin
 
 A cache exploits spatial locality by moving data in fixed-size blocks called **cache lines**, not single bytes. This module normally assumes **64-byte lines** and 4-byte ints; real line sizes vary, including 128-byte examples. A fill supplies other ints in the same line, not necessarily the next 15: that depends on the accessed int's position. Later accesses still have lookup costs.
 
+How many values one line holds is the line size divided by the size of each value:
+
+```formula
+n_line = L / s
+n_line = 64 B / 8 B = 8
+n_line = 64 B / 4 B = 16
+where
+n_line: how many values of one type fit in one cache line
+L: the cache line size, in bytes (B); 64 B here
+s: the size of one value, in bytes; 8 B for a double (second line), 4 B for a 32-bit int (third line)
+B: byte, 8 bits
+In words: a 64-byte line holds 8 doubles or 16 ints, so one fetch brings in that many neighbours at once.
 ```
- one 64-byte line = 8 x 8-byte doubles
+
+```
+ one 64-byte line holds 8 doubles (8 B each)
  +----+----+----+----+----+----+----+----+
  | d0 | d1 | d2 | d3 | d4 | d5 | d6 | d7 |
  +----+----+----+----+----+----+----+----+
@@ -74,19 +109,52 @@ A cache exploits spatial locality by moving data in fixed-size blocks called **c
      d1..d7: hits
 ```
 
-> [!example] Summing an array
-> Summing 1,000,000 4-byte ints walks 4 MB in order. For a line-aligned array, a cold demand-only cache with no interfering evictions fills 62,500 lines: 6.25% misses over 1,000,000 scalar loads. An unaligned start can add a line. Prefetching and interference change demand miss counts.
+Summing an array shows how much this saves. Summing 1,000,000 4-byte ints walks 4 MB in order. Take a line-aligned array (it starts exactly on a line boundary) and a cold cache that starts empty, fetches only on demand, and suffers no interfering evictions. Every line then misses exactly once, on its first int:
+
+```formula
+N_lines = S_array / L
+N_lines = 4,000,000 B / 64 B = 62,500
+m = N_lines / N_loads
+m = 62,500 / 1,000,000 = 0.0625
+m = 6.25 %
+where
+N_lines: the number of cache lines the array covers, and so the number of misses
+S_array: the array's size in bytes: 1,000,000 ints × 4 B
+L: the cache line size, 64 bytes
+N_loads: the number of scalar loads, one per int: 1,000,000
+m: the miss rate, misses divided by accesses
+B: byte, 8 bits
+%: per cent, parts per hundred
+In words: each 64-byte line holds 16 ints, so only one load in 16 misses: 6.25 %.
+```
+
+This is a model, not a measurement. An unaligned start can add a line. Prefetching and interference change demand miss counts.
 
 ## Hits, misses and the working set
 
 Some vocabulary used throughout this module:
 
-- **Hit**: the data is in this level. **Miss**: it is not, and the request goes to the next level down.
-- **Hit rate** = hits / accesses. **Miss rate** = 1 − hit rate.
+- **Cache hit** (hit): the data is in this level. **Cache miss** (miss): it is not, and the request goes to the next level down.
+- **Hit rate** and **miss rate**: the fractions of accesses that hit and miss (formulas below).
 - **Miss penalty**: the extra time a miss costs (the time to get the line from below).
 - **Working set**: the data a program touches over a short window of time. Fitting in a level makes reuse possible, but set conflicts, other activity, coherence and replacement policy can still evict data. Exceeding capacity can increase misses.
 
-The working set is why performance graphs often show **cliffs**. A carefully controlled repeated-access benchmark may show transitions near cache capacities. Streaming bandwidth, prefetching and access dependencies can make the curve quite different.
+Every access either hits or misses, so the two rates always add up to 1:
+
+```formula
+h = N_hits / N_acc
+m = 1 − h
+where
+h: the hit rate, a fraction from 0 to 1 (often written as a percentage)
+m: the miss rate, a fraction from 0 to 1
+N_hits: the number of accesses that hit in this level
+N_acc: the total number of accesses to this level
+In words: the hit rate is the share of accesses that found their data here, and the miss rate is everything else.
+```
+
+For example, 950 hits out of 1,000 accesses is a hit rate of 0.95 (95 %) and a miss rate of 0.05 (5 %). These are rates for one level: an L2 miss rate here counts only the accesses that reached L2 (the AMAT lesson calls this the local miss rate, and also defines a global one).
+
+The working set is why performance graphs often show **performance cliffs**. A carefully controlled repeated-access benchmark may show transitions near cache capacities. Streaming bandwidth, prefetching and access dependencies can make the curve quite different.
 
 ```
 time per
@@ -126,7 +194,7 @@ def shuffled():
     return total
 ```
 
-In CPython, a list contains references to objects. Sequentially reading the reference array has spatial locality; shuffled indices scatter those accesses and can increase cache misses. Object allocation, shared objects, interpreter work, the extra index array and cache size affect the result. Run a controlled benchmark rather than assuming a fixed slowdown.
+In CPython, a list contains references to objects. Sequentially reading the reference array has spatial locality; shuffled indices scatter those accesses and can increase cache misses. Object allocation, shared objects, interpreter work, the extra array of indices and cache size affect the result. Run a controlled benchmark rather than assuming a fixed slowdown.
 
 > A universal 5–10× slowdown and interpreter nanoseconds-per-iteration figure are omitted because no matching runtime, machine and benchmark were verified.
 
@@ -139,8 +207,8 @@ In CPython, a list contains references to objects. Sequentially reading the refe
 
 ## Pitfalls
 
-- **Assuming the big-O tells the whole story.** Two O(n) algorithms can differ by 10× because one streams memory and the other jumps around.
-- **Benchmarking with tiny inputs.** If the test data fits in L1, you are measuring the fast path. Production data that spills to DRAM behaves differently.
+- **Assuming the big-O tells the whole story.** Two O(n) algorithms (time growing in proportion to n, the number of elements) can differ by 10× because one streams memory and the other jumps around.
+- **Benchmarking with tiny inputs.** If the test data fits in L1, you are measuring the fast path. Production data that overflows into DRAM behaves differently.
 - **Assuming 64-byte lines everywhere.** Line sizes vary by processor and cache level. Query the target (`sysctl hw.cachelinesize` on macOS, `getconf LEVEL1_DCACHE_LINESIZE` on Linux) rather than hard-coding it in portable code.
 
 ## Key takeaways

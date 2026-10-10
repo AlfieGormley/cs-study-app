@@ -86,8 +86,8 @@ Without E (the simpler MSI protocol), a single-threaded program that reads then 
 
 ## Variants used in real chips
 
-- **MOESI**, used in some processor coherence designs: adds **Owned**: dirty but shared. A core in M that is snooped by a reader moves to O and keeps supplying the data, while retaining responsibility for the dirty data. This can defer a backing-level write-back for read-shared dirty data.
-- **MESIF**, used in some processor coherence designs: adds **Forward**: among several S copies, one is designated F and is the one that answers requests, so a read gets one response rather than many.
+- **MOESI**, used in some processor coherence designs: adds an **Owned (O) state**: dirty but shared. A core in M that is snooped by a reader moves to O and keeps supplying the data, while retaining responsibility for the dirty data. This can defer a backing-level write-back for read-shared dirty data.
+- **MESIF**, used in some processor coherence designs: adds a **Forward (F) state**: among several S copies, one is designated F and is the one that answers requests, so a read gets one response rather than many.
 - Arm's AMBA CHI interconnects use their own state names with equivalent ideas (unique/shared, clean/dirty).
 
 ## Snooping vs directories
@@ -95,7 +95,7 @@ Without E (the simpler MSI protocol), a single-threaded program that reads then 
 How does a write find all the copies it must invalidate?
 
 - **Snooping**: every request is broadcast and every cache checks its tags. Simple and fast with a few cores on a shared bus, but broadcast traffic grows with core count.
-- **Directory**: a structure (often alongside the L3 or memory controller) tracks actual or possible sharers of a line. A write can target those candidates instead of broadcasting to every cache. Scales to many cores and sockets.
+- **Directory**: a structure (often alongside the L3 or memory controller) tracks actual or possible sharers of a line. A write can target those candidates instead of broadcasting to every cache. Scales to many cores and CPU sockets.
 
 Modern many-core chips mix the two: **snoop filters** (Intel) and directory caches track which cores *might* hold a line, so most requests avoid broadcasting. An inclusive L3 can act as a natural snoop filter: if a line is absent from that inclusive L3, it cannot be resident in the upper caches covered by the inclusion guarantee.
 

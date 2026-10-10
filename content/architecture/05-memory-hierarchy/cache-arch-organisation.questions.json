@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "64",
-        "explanation": "64 is the number of bytes in a line. The offset needs enough bits to *number* 64 bytes, which is log2 64."
+        "explanation": "64 is the number of bytes in a line. The offset needs enough bits to *number* 64 bytes, which takes 6 bits."
       },
       {
         "text": "8",
@@ -15,7 +15,7 @@
       },
       {
         "text": "6",
-        "explanation": "Correct. 2^6 = 64, so 6 bits select any byte within a 64-byte line."
+        "explanation": "Correct. Six bits give 64 different patterns (0 to 63), so they can select any byte within a 64-byte line."
       },
       {
         "text": "12",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The offset picks one byte inside a line.\n\n1. Bytes per line: 64.\n2. Bits needed to number 0..63: log2 64 = **6**.\n3. Check: 6 bits give values 000000 to 111111 = 0 to 63. ✔\n\nGeneral rule: offset bits = log2(line size). 32 B → 5, 64 B → 6, 128 B → 7.",
+    "workedExample": "The offset picks one byte inside a line, so it needs just enough bits to give every byte in the line its own number. Each extra bit doubles how many numbers you can make, so count the doublings:\n\n```formula\nb = log_2(L)\nb = log_2(64) = 6\nwhere\nb: the width of the offset field, in bits\nL: the line size, in bytes; here 64\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number; log_2(64) = 6 because 2 × 2 × 2 × 2 × 2 × 2 = 64\nIn words: a 64-byte line needs a 6-bit offset, because six bits are exactly enough to number 64 bytes.\n```\n\nCheck: 6 bits give the patterns 000000 to 111111, which are 0 to 63. ✔\n\nThe same rule gives 5 offset bits for 32-byte lines, 6 for 64-byte lines and 7 for 128-byte lines. It only comes out as a whole number because line sizes are powers of two.",
     "link": {
       "title": "Cache placement policies — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_placement_policies"
@@ -44,8 +44,8 @@
         "explanation": "That describes a *fully associative* cache, where there is one set containing every line."
       },
       {
-        "text": "One of E locations within its set",
-        "explanation": "That is an E-way set-associative cache. Direct-mapped is the special case E = 1."
+        "text": "One of several locations within its set",
+        "explanation": "That is a set-associative cache with several ways per set. Direct-mapped is the special case of one way per set."
       },
       {
         "text": "It depends on the size of the line",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Think of associativity as \"ways per set\":\n\n| Organisation | Places per line |\n|---|---|\n| Direct-mapped | 1 |\n| E-way | E |\n| Fully associative | all |\n\nDirect-mapped = 1-way. The index field computes the single slot, so there is no choice to make and no replacement policy is needed: an allocating miss replaces the valid occupant of that slot, if any.",
+    "workedExample": "Think of associativity as \"ways per set\":\n\n| Organisation | Places per line |\n|---|---|\n| Direct-mapped | 1 |\n| Set-associative | one per way in its set |\n| Fully associative | all |\n\nDirect-mapped = 1-way. The index field computes the single slot, so there is no choice to make and no replacement policy is needed: an allocating miss replaces the valid occupant of that slot, if any.",
     "link": {
       "title": "Cache placement policies — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_placement_policies"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Use sets = capacity / (line size × ways):\n\n```\n32,768 / (64 x 8)\n= 32,768 / 512\n= 64 sets\n```\n\nSo the index field is log2 64 = 6 bits, and with a 6-bit offset that is 12 bits total, which neatly matches a 4 KiB page offset.",
+    "workedExample": "The lines are grouped into sets of 8 (one per way), so divide the capacity by the bytes one whole set holds:\n\n```formula\nS = C / (L × E)\nS = 32,768 B / (64 B × 8)\nS = 32,768 B / 512 B = 64\ns = log_2(S) = log_2(64) = 6\nwhere\nS: the number of sets (a plain count)\nC: the capacity in bytes of data; 32 KiB = 32,768 bytes\nL: the line size, 64 bytes\nE: the associativity: ways (lines) per set, 8\ns: the width of the index field, in bits\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number; 2 × 2 × 2 × 2 × 2 × 2 = 64, so log_2(64) = 6\nB: byte, 8 bits\nKiB: kibibyte, 1,024 bytes\nIn words: 32 KiB of 64-byte lines is 512 lines; 8 to a set makes 64 sets, numbered by a 6-bit index.\n```\n\nWith a 6-bit offset as well, index plus offset is 12 bits, which neatly matches the 12-bit offset of a 4 KiB (4,096-byte) page.",
     "link": {
       "title": "CPU cache — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/CPU_cache"
@@ -97,7 +97,7 @@
     "options": [
       {
         "text": "Tag 0x6, index 34, offset 12",
-        "explanation": "Correct. Offset = 0x1A2C mod 16 = 12; index = (6,700 div 16) mod 64 = 418 mod 64 = 34; tag = 6,700 div 1,024 = 6."
+        "explanation": "Correct. 0x1A2C is 6,700. Its low 4 bits give offset 12, the next 6 bits give index 34, and the bits above give tag 6."
       },
       {
         "text": "Tag 0x1A, index 2, offset 12",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Lines = 1,024 / 16 = 64; direct-mapped, so 64 sets.\n2. Field widths: offset 4, index 6, tag 32 − 10 = 22.\n3. 0x1A2C in binary:\n\n```\n0001 1010 0010 1100\ntag    |index |off\n000110 100010 1100\n  = 6    = 34  = 12\n```\n\n4. Check with arithmetic: 0x1A2C = 6,700.\n   - 6,700 mod 16 = 12 (offset)\n   - 6,700 div 16 = 418; 418 mod 64 = 34 (index)\n   - 6,700 div 1,024 = 6 (tag)",
+    "workedExample": "1. Work out the geometry and the width of each field:\n\n```formula\nN = C / L = 1,024 B / 16 B = 64\nS = N / E = 64 / 1 = 64\nb = log_2(16) = 4\ns = log_2(64) = 6\nt = m − s − b = 32 − 6 − 4 = 22\nwhere\nN: the number of lines in the cache\nC: the capacity, 1 KiB = 1,024 bytes\nL: the line size, 16 bytes\nS: the number of sets\nE: ways per set; 1, because the cache is direct-mapped\nb: offset width, in bits\ns: index width, in bits\nt: tag width, in bits\nm: the address width, 32 bits\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number (2 × 2 × 2 × 2 = 16, so log_2(16) = 4)\nB: byte, 8 bits\nKiB: kibibyte, 1,024 bytes\nIn words: 64 one-line sets need a 6-bit index, 16-byte lines need a 4-bit offset, and the other 22 address bits form the tag.\n```\n\n2. Write 0x1A2C in binary and cut it from the right: 4 offset bits, then 6 index bits, then the tag:\n\n```\n0001 1010 0010 1100\ntag    |index |off\n000110 100010 1100\n  = 6    = 34  = 12\n```\n\n3. Check with arithmetic. 0x1A2C is 6,700 in decimal:\n\n```formula\nA = 0x1A2C = 6,700\no = A mod 16 = 12\nn_L = ⌊A / 16⌋ = 418\ni = n_L mod 64 = 34\ng = ⌊A / 1,024⌋ = 6\nwhere\nA: the byte address; 0x means hexadecimal (base 16)\no: the offset: which byte within the 16-byte line\nn_L: the line number: which 16-byte chunk of memory the address is in\ni: the set index, 0 to 63\ng: the tag value\nmod: the remainder after dividing; 6,700 mod 16 = 12 because 6,700 = 418 × 16 + 12\n⌊ ⌋: floor: round down to a whole number\n1,024: 16 bytes × 64 sets, the span of addresses covered by offset and index together; dividing by it removes those 10 bits\nIn words: the remainder after dividing by the line size is the offset, the line number wrapped round the 64 sets is the index, and what is left above both is the tag.\n```",
     "link": {
       "title": "Cache placement policies — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_placement_policies"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Lines = 32,768 / 64 = 512; sets = 512 / 8 = 64.\n2. Offset 6 bits, index 6 bits, tag 48 − 12 = 36 bits.\n3. Index + offset = 12 bits = 3 hex digits: `678`.\n\n```\n0x678 = 0110 0111 1000\nindex  = 011001 = 25\noffset = 111000 = 56\n```\n\n4. Tag = the remaining 9 hex digits: `0x7FFE12345` (36 bits).",
+    "workedExample": "1. Work out the field widths:\n\n```formula\nN = C / L = 32,768 B / 64 B\nN = 512\nS = N / E = 512 / 8 = 64\nb = log_2(64) = 6\ns = log_2(64) = 6\nt = m − s − b = 48 − 6 − 6 = 36\nwhere\nN: the number of lines in the cache\nC: the capacity, 32 KiB = 32,768 bytes\nL: the line size, 64 bytes\nS: the number of sets\nE: ways per set, 8\nb: offset width, in bits\ns: index width, in bits\nt: tag width, in bits\nm: the physical address width, 48 bits\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number; log_2(64) = 6\nB: byte, 8 bits\nKiB: kibibyte, 1,024 bytes\nIn words: 64-byte lines need 6 offset bits, 64 sets need 6 index bits, and the remaining 36 of the 48 address bits are the tag.\n```\n\n2. Index plus offset is 12 bits, which is exactly 3 hex digits (4 bits each): `678`.\n\n```\n0x678 = 0110 0111 1000\nindex  = 011001 = 25\noffset = 111000 = 56\n```\n\n3. The tag is the remaining 9 hex digits: `0x7FFE12345` (36 bits).",
     "link": {
       "title": "CPU cache — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/CPU_cache"
@@ -157,7 +157,7 @@
     "options": [
       {
         "text": "Tag 29, index 11, offset 6",
-        "explanation": "Correct. 2 MiB / 64 B = 32,768 lines; / 16 ways = 2,048 sets = 2^11. Tag = 46 − 11 − 6 = 29."
+        "explanation": "Correct. 32,768 lines in 16 ways is 2,048 sets, which needs 11 index bits; 64-byte lines need 6 offset bits, leaving 29 of the 46 address bits for the tag."
       },
       {
         "text": "Tag 25, index 15, offset 6",
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Lines = 2,097,152 / 64 = 32,768.\n2. Sets = 32,768 / 16 = **2,048** = 2^11, so index = **11** bits.\n3. Offset = log2 64 = **6** bits.\n4. Tag = 46 − 11 − 6 = **29** bits.\n\nSanity check: 2^(index + offset) × ways = 2^17 × 16 = 2^21 = 2 MiB. ✔",
+    "workedExample": "Count lines, then sets, then turn each count into a number of bits:\n\n```formula\nN = C / L = 2,097,152 B / 64 B\nN = 32,768\nS = N / E = 32,768 / 16 = 2,048\ns = log_2(2,048) = 11\nb = log_2(64) = 6\nt = m − s − b = 46 − 11 − 6 = 29\nwhere\nN: the number of lines in the cache\nC: the capacity, 2 MiB = 2,097,152 bytes\nL: the line size, 64 bytes\nS: the number of sets\nE: ways per set, 16\ns: index width, in bits\nb: offset width, in bits\nt: tag width, in bits\nm: the physical address width, 46 bits\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number; 2,048 is 11 copies of 2 multiplied together, so log_2(2,048) = 11\nB: byte, 8 bits\nMiB: mebibyte, 1,048,576 bytes\nIn words: 2,048 sets need an 11-bit index and 64-byte lines a 6-bit offset; the tag takes the other 29 bits.\n```\n\nSanity check: the index and offset together number every byte of one way, and the ways multiply that up to the whole capacity:\n\n```formula\nC = 2^(s + b) × E\nC = 2^17 × 16 = 2^21 = 2,097,152 B\nwhere\nC: the capacity this geometry gives, in bytes\n2^(s + b): s + b copies of 2 multiplied together: the bytes in one way; 2^17 = 131,072\ns: index width, 11 bits\nb: offset width, 6 bits\nE: ways per set, 16\n2^21: 21 copies of 2 multiplied together, 2,097,152 = 2 MiB\nB: byte, 8 bits\nIn words: 128 KiB per way times 16 ways is 2 MiB, so the split is consistent. ✔\n```",
     "link": {
       "title": "Cache placement policies — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_placement_policies"
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Offset 4 bits, index 2 bits, tag 2 bits. Index = (addr div 16) mod 4.\n\n| Addr | Set | Tag | Result |\n|---|---|---|---|\n| 0x00 | 0 | 0 | miss |\n| 0x14 | 1 | 0 | miss |\n| 0x40 | 0 | 1 | miss, evicts tag 0 |\n| 0x04 | 0 | 0 | miss, evicts tag 1 |\n| 0x18 | 1 | 0 | **hit** |\n| 0x54 | 1 | 1 | miss, evicts tag 0 |\n| 0x10 | 1 | 0 | miss |\n\n1 hit. As a 2-way cache (2 sets), 0x04, 0x18 and 0x10 would all hit: 3 hits. The extra misses here are conflict misses.",
+    "workedExample": "Split the 8-bit address, then find each access's set and tag:\n\n```formula\nb = log_2(16) = 4\ns = log_2(4) = 2\nt = 8 − 4 − 2 = 2\ni = ⌊A / 16⌋ mod 4\ng = ⌊A / 64⌋\nwhere\nb: offset width, in bits, for 16-byte lines\ns: index width, in bits, for 4 sets\nt: tag width, in bits, from an 8-bit address\ni: the set index, 0 to 3\ng: the tag value\nA: the byte address being accessed\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number; log_2(16) = 4\n⌊ ⌋: floor: round down to a whole number; ⌊A / 16⌋ is the line number\nmod: the remainder after dividing; 5 mod 4 = 1\n64: 16-byte lines × 4 sets, the bytes covered by offset and index together\nIn words: the line number wrapped round the 4 sets gives the set; how many whole 64-byte stretches the address is past 0 gives the tag. For 0x54 (84): line 5, set 1, tag 1.\n```\n\n| Addr | Set | Tag | Result |\n|---|---|---|---|\n| 0x00 | 0 | 0 | miss |\n| 0x14 | 1 | 0 | miss |\n| 0x40 | 0 | 1 | miss, evicts tag 0 |\n| 0x04 | 0 | 0 | miss, evicts tag 1 |\n| 0x18 | 1 | 0 | **hit** |\n| 0x54 | 1 | 1 | miss, evicts tag 0 |\n| 0x10 | 1 | 0 | miss |\n\n1 hit. As a 2-way cache (2 sets), 0x04, 0x18 and 0x10 would all hit: 3 hits. The extra misses here are conflict misses.",
     "link": {
       "title": "Cache placement policies — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_placement_policies"
@@ -255,7 +255,7 @@
     "options": [
       {
         "text": "2,432 bytes (about 7.4% of the data capacity)",
-        "explanation": "Correct. Tag = 36 bits; per line 36 + 1 + 1 = 38 bits. 512 lines × 38 = 19,456 bits = 2,432 bytes; 2,432 / 32,768 ≈ 7.4%."
+        "explanation": "Correct. 36 tag bits plus a valid and a dirty bit is 38 bits per line; 512 lines need 19,456 bits, which is 2,432 bytes, about 7.4% of 32,768 bytes."
       },
       {
         "text": "512 bytes (one byte per line)",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Sets = 64, so index 6 bits; offset 6 bits.\n2. Tag = 48 − 6 − 6 = 36 bits.\n3. Metadata per line = 36 + 1 (valid) + 1 (dirty) = 38 bits.\n4. Lines = 512.\n\n```\n512 x 38 = 19,456 bits\n19,456 / 8 = 2,432 bytes\n2,432 / 32,768 = 7.4%\n```\n\nA design may add replacement state (for example, 7 tree-PLRU bits per 8-way set), coherence bits and ECC/parity. Physical array layout also adds implementation-dependent overhead.",
+    "workedExample": "1. Find the tag width:\n\n```formula\nS = C / (L × E)\nS = 32,768 B / (64 B × 8) = 64\ns = log_2(64) = 6\nb = log_2(64) = 6\nt = m − s − b = 48 − 6 − 6 = 36\nwhere\nS: the number of sets\nC: the data capacity, 32 KiB = 32,768 bytes\nL: the line size, 64 bytes\nE: ways per set, 8\ns: index width, in bits\nb: offset width, in bits\nt: tag width, in bits\nm: the physical address width, 48 bits\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number; log_2(64) = 6\nB: byte, 8 bits\nKiB: kibibyte, 1,024 bytes\nIn words: with 6 index and 6 offset bits taken out of a 48-bit address, each tag is 36 bits.\n```\n\n2. Every line (every way of every set) stores its own tag, valid bit and dirty bit:\n\n```formula\nM_L = t + 1 + 1 = 38 bits\nN = C / L = 32,768 / 64 = 512\nM = N × M_L\nM = 512 × 38 = 19,456 bits\nM = 19,456 / 8 = 2,432 B\nf = 2,432 B / 32,768 B ≈ 0.074\nwhere\nM_L: metadata bits per line: tag plus valid bit plus dirty bit\nt: tag width, 36 bits\n1: one valid bit, then one dirty bit\nN: the number of lines, 512\nC: the data capacity, 32,768 bytes\nL: the line size, 64 bytes\nM: total metadata for the whole cache\nf: metadata as a fraction of the data capacity\n8: bits per byte\n≈: approximately equal to (rounded)\nbits: binary digits, each 0 or 1\nB: byte, 8 bits\nIn words: 38 bits for each of 512 lines is 2,432 bytes, about 7.4% on top of the 32 KiB of data.\n```\n\nA design may add replacement state (for example, 7 tree-PLRU bits per 8-way set), coherence bits and ECC/parity. Physical array layout also adds implementation-dependent overhead.",
     "link": {
       "title": "CPU cache — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/CPU_cache"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. 0x18000 − 0x10000 = 0x8000 = 32 KiB, the direct-mapped cache's size. Addresses that differ by a multiple of the cache size share an index.\n2. **Direct-mapped** (512 sets): `a[i]` loads a line into set *k*; `b[i]` maps to set *k* too and evicts it; `a[i+1]` (same line as `a[i]`) misses again... Every one of the 128 accesses misses.\n3. **2-way** (256 sets, 16 KiB per way): still same set, but 2 ways hold one line of `a` and one of `b`.\n   - Lines touched: 64 × 8 B / 64 B = 8 per array, 16 total.\n   - Misses = 16, accesses = 128 → **12.5%**.\n\nThis is the classic conflict-miss pathology, and why compilers and allocators sometimes pad arrays.",
+    "workedExample": "1. 0x18000 − 0x10000 = 0x8000 = 32 KiB, the direct-mapped cache's size. Addresses that differ by a multiple of the cache size share an index.\n2. **Direct-mapped** (512 sets): `a[i]` loads a line into set *k*; `b[i]` maps to set *k* too and evicts it; `a[i+1]` (same line as `a[i]`) misses again... Every one of the 128 accesses misses.\n3. **2-way** (256 sets, 16 KiB per way): still the same set, but 2 ways hold one line of `a` and one of `b`, so each line misses only on its first touch.\n\n```formula\nS_1 = 32,768 B / (64 B × 1) = 512\nS_2 = 32,768 B / (64 B × 2) = 256\nN = 2 × 64 × 8 B / 64 B = 16\nr = N / A_n = 16 / 128\nr = 0.125 = 12.5 %\nwhere\nS_1: sets in the direct-mapped (1-way) cache\nS_2: sets in the 2-way cache\nN: distinct 64-byte lines touched: 2 arrays × 64 doubles × 8 bytes each, divided by 64 bytes per line\nA_n: total accesses, 2 × 64 = 128\nr: the miss rate of the 2-way cache: misses divided by accesses\n%: per cent, hundredths\nB: byte, 8 bits\nIn words: the two arrays cover 16 lines; with room for both in each set, only those 16 first touches miss out of 128 accesses, which is 12.5%.\n```\n\nThis is the classic conflict-miss pathology, and why compilers and allocators sometimes pad arrays.",
     "link": {
       "title": "CPU caches, Ulrich Drepper (LWN)",
       "url": "https://lwn.net/Articles/252125/"
@@ -331,7 +331,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "48 KiB / (64 B × 12) = 64 sets. Six set bits plus six offset bits fit in the unchanged 12-bit offset of a 4 KiB page. A 48 KiB/6-way alternative would have 128 sets and use bit 12 in the index. Its virtual bit 12 is available early, but need not equal physical bit 12, so aliases require additional handling. Adding ways is one design choice, not the only way to build a larger VIPT cache. A vendor-generation catalogue is absent because those precise configurations have not been reliably verified here.",
+    "workedExample": "Count the sets for each design and compare the index plus offset bits with the page offset:\n\n```formula\nS = C / (L × E)\nS = 49,152 B / (64 B × 12) = 64\ns + b = 6 + 6 = 12\nP = log_2(4,096) = 12\nS_6 = 49,152 B / (64 B × 6) = 128\nwhere\nS: sets in the 48 KiB, 12-way design\nC: the capacity, 48 KiB = 49,152 bytes\nL: the line size, 64 bytes\nE: ways per set, 12\ns: index width, log_2(64) = 6 bits\nb: offset width, log_2(64) = 6 bits\nP: page-offset bits in a 4 KiB (4,096-byte) page, the bits translation never changes\nS_6: sets in a 48 KiB, 6-way alternative\nlog_2: logarithm base 2: how many 2s you multiply together to reach the number\nB: byte, 8 bits\nKiB: kibibyte, 1,024 bytes\nIn words: 12 ways keeps 64 sets, so index plus offset stays at 12 bits, inside the page offset; 6 ways would need 128 sets and a 7-bit index reaching bit 12.\n```\n\nSix set-index bits plus six offset bits fit in the unchanged 12-bit offset of a 4 KiB page. The 6-way alternative uses bit 12 in the index. Its virtual bit 12 is available early, but need not equal physical bit 12, so aliases require additional handling. Adding ways is one design choice, not the only way to build a larger VIPT cache. A vendor-generation catalogue is absent because those precise configurations have not been reliably verified here.",
     "link": {
       "title": "CPU cache — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/CPU_cache"
